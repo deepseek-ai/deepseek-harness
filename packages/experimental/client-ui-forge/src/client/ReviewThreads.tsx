@@ -20,8 +20,6 @@ type Translate = PropsLocale<typeof NS>['t']
 
 /** Reads, actions, and identities every thread card of one changes view shares. */
 export interface ThreadActions {
-  /** Login of the signed-in user, or null when the host names none. */
-  readonly viewer: string | null
   /** Login of the change request's author, or null when the host hides it. */
   readonly author: string | null
   /** Quote the whole thread in the main input without sending it; false when the input refused it. */
@@ -142,7 +140,9 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
   const focused = actions.focused?.id === thread.id && actions.focused.revision !== foldedAt
   const unfolded = open || !thread.resolved || focused
   const side = place.kind === 'line' ? place.side : thread.side
-  const range = place.kind === 'line' ? anchorRange(place.side, place) : null
+  const original = place.kind === 'outdated' && thread.original !== null ? thread.original : null
+  // The composer names an outdated thread by the lines it was written on, as its label does.
+  const range = place.kind === 'line' ? anchorRange(place.side, place) : original !== null ? anchorRange(thread.side, original) : null
   const commit = writtenOn(thread)
   const first = thread.comments[0]
   const url = first?.url ?? null
@@ -153,10 +153,9 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
       <button type="button" className={css.link} aria-expanded={false} onClick={() => { setOpen(true) }}>{t('thread.expand')}</button>
     </div>
   }
-  const original = place.kind === 'outdated' && thread.original !== null ? thread.original : null
   const label = original !== null ? t('thread.originally', { range: anchorRange(thread.side, original) }) : range ?? t('thread.fileLevel')
   return <section className={css.card} data-forge-thread={thread.id} data-side={side} data-split={split ? '' : undefined}
-    data-resolved={thread.resolved ? '' : undefined} aria-label={label}>
+    data-resolved={thread.resolved ? '' : undefined} aria-label={label} tabIndex={-1}>
     <div className={css.header}>
       <span className={css.place}>
         {label}

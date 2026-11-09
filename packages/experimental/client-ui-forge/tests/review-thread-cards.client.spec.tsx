@@ -26,7 +26,7 @@ afterEach(() => {
 
 function actions(overrides: Partial<ThreadActions> = {}): ThreadActions {
   return {
-    viewer: 'octo', author: 'octo', focused: null,
+    author: 'octo', focused: null,
     addToInput: vi.fn(() => true), openLink: vi.fn(), readText: vi.fn(async (): Promise<RemoteResult<string>> => ({ ok: true, value: 'a\nb\nc' })),
     inputFailed: vi.fn(),
     ...overrides,
@@ -111,6 +111,9 @@ describe('ThreadCard', () => {
     const card = view.getByRole('region', { name: 'Originally R2–3' })
     expect(card.textContent).toContain(`Originally R2–3 · on ${OLD.slice(0, 7)}`)
     expect([...card.querySelectorAll('[class*="excerptLine"]')].map(line => line.textContent)).toEqual(['@@ -1 +1,3 @@', ' a', '+b', '+c'])
+    // The quote names the lines the thread was written on, as the card does.
+    fireEvent.click(view.getByRole('button', { name: en['review.addToInput'] }))
+    expect(shared.addToInput).toHaveBeenCalledWith(expect.objectContaining({ id: 'old' }), 'R2–3')
     fireEvent.click(view.getByRole('button', { name: en['thread.viewOriginal'] }))
     expect(shared.readText).toHaveBeenCalledWith(OLD, 'src/a.ts')
     expect(view.getByText(en['thread.originalLoading'])).toBeDefined()

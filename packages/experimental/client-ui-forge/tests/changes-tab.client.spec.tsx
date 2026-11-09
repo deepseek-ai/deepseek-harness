@@ -928,10 +928,11 @@ describe('ChangesTab layout', () => {
     expect(m.store.getSnapshot().byTab[TAB]?.navigated).toBe(3)
   })
 
-  it('says when a scope has no changes', async () => {
-    const m = mount({ setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ base: null, files: [], omitted: 0 })) } })
+  it('says when a scope has no changes, where a navigation to a file scrolls nothing', async () => {
+    const m = mount({ params: { path: 'src/app.ts' }, setup: (faces) => { faces.localDiff.mockResolvedValue(ok({ base: null, files: [], omitted: 0 })) } })
     await settle()
     expect(m.view.getByText(en['diff.empty'])).toBeTruthy()
+    expect(scrolled).not.toHaveBeenCalled()
     expect(m.view.getByRole('button', { name: 'All 0 files' }).hasAttribute('disabled')).toBe(true)
     expect(m.view.getByRole('button', { name: en['diff.expandAll'] }).hasAttribute('disabled')).toBe(true)
     expect(m.view.queryByRole('status')).toBeNull()
@@ -1684,7 +1685,7 @@ describe('ChangesTab review threads', () => {
     line('missing', 'src/missing.ts', 'R', 1),
     line('missing-no-url', 'src/missing.ts', 'R', 2, { comments: [reviewComment({ url: null })] }),
   ]
-  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false }
+  const REVIEW: ForgeReviewData = { headSha: HEAD, threads: THREADS, truncated: false }
   const reviewed = (review: ForgeReviewData = REVIEW) => (faces: Faces): void => {
     faces.changeRequestDiff.mockImplementation(async () => ok({ ...CHANGE, files: FILES }))
     faces.changeRequestReview.mockImplementation(async () => ok(review))
@@ -1702,7 +1703,7 @@ describe('ChangesTab review threads', () => {
   it('reads threads at the head of the latest status and places them on rows, gaps, files, and outdated sections', async () => {
     const m = mount({ source, setup: reviewed() })
     await settle()
-    expect(m.faces.changeRequestReview).toHaveBeenCalledWith(URL7, HEAD, expect.any(AbortSignal))
+    expect(m.faces.changeRequestReview).toHaveBeenCalledWith(URL7, HEAD, false, expect.any(AbortSignal))
     const app = m.section('src/app.ts')
     expect(following(m, 'on-row')).toBe('const y = 4')
     expect(following(m, 'old-side', 'L')).toBe('const w = 12')
@@ -1803,6 +1804,7 @@ describe('ChangesTab review threads', () => {
       fireEvent.click(list.querySelector('[data-forge-thread-item="on-row"]')!)
       expect(m.view.queryByRole('complementary')).toBeNull()
       expect(scrolled.mock.contexts).toContain(card(m, 'on-row'))
+      expect(document.activeElement).toBe(card(m, 'on-row'))
     } finally {
       style.remove()
     }
@@ -1829,6 +1831,44 @@ describe('ChangesTab review threads', () => {
     expect(following(m, 'at-head')).toBe('const y = 4')
   })
 
+  it('chooses all commits for a thread on a file the chosen commits do not change, rather than opening it on the host', async () => {
+    const two = '2'.repeat(40)
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestDiff.mockImplementation(async (_url, commits) =>
+        ok(commits === null ? CHANGE : { ...CHANGE, headSha: commits.to, files: [APP] }))
+      faces.changeRequestReview.mockImplementation(async () => ok({ ...REVIEW, threads: [line('notes', 'docs/notes.txt', 'R', 2)] }))
+    } })
+    await settle()
+    m.store.actions.committed(TAB, { from: two, to: two })
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-diff-file="docs/notes.txt"]')).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: 'Review threads, 1 in total' }))
+    fireEvent.click(m.view.getByRole('complementary').querySelector('[data-forge-thread-item="notes"]')!)
+    expect(m.store.getSnapshot().byTab[TAB]?.commits).toBeNull()
+    expect(m.faces.openLink).not.toHaveBeenCalled()
+    scrolled.mockClear()
+    await settle()
+    expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
+  })
+
+  it('stops a later jump to a file at its header once a thread jump there has ended', async () => {
+    const m = mount({ source, setup: reviewed() })
+    await settle()
+    fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'app.ts has 4 unresolved threads; go to the next one' }))
+    await settle()
+    scrolled.mockClear()
+    fireEvent.click(within(m.view.getByRole('navigation')).getByRole('button', { name: 'src/app.ts' }))
+    await settle()
+    expect(scrolled.mock.contexts).toEqual([m.section('src/app.ts')])
+  })
+
+  it('keeps the thread list for a truncated read that kept no thread, so its note stays reachable', async () => {
+    const m = mount({ source, setup: reviewed({ ...REVIEW, threads: [], truncated: true }) })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Review threads, 0 in total' }))
+    expect(within(m.view.getByRole('complementary')).getByText(/^Too many threads; showing the first 0/)).toBeDefined()
+  })
+
   it('shows threads only at the head the diff and the latest status name, and reports a failed read with a retry', async () => {
     const m = mount({ source, setup: (faces) => { faces.changeRequestReview.mockResolvedValue(REFUSED.reviewFailed) } })
     await settle()
@@ -1836,10 +1876,13 @@ describe('ChangesTab review threads', () => {
     m.faces.changeRequestReview.mockResolvedValue(ok({ ...REVIEW, threads: [line('on-row', 'src/app.ts', 'R', 4)] }))
     fireEvent.click(within(m.view.getByText('Could not read GitHub threads: GitHub is down').closest('[role="status"]')!).getByRole('button', { name: en.retry }))
     await settle()
+    // A refresh asks the host to read past the threads it keeps; the next status does not.
+    expect(m.faces.changeRequestReview).toHaveBeenLastCalledWith(URL7, HEAD, true, expect.any(AbortSignal))
     expect(card(m, 'on-row')).not.toBeNull()
     m.faces.changeRequestReview.mockResolvedValue(REFUSED.staleHead)
     act(() => { m.panel.set({ state: ready({ changeRequests: [polledAt(2)] }), disconnected: false }) })
     await settle()
+    expect(m.faces.changeRequestReview).toHaveBeenLastCalledWith(URL7, HEAD, false, expect.any(AbortSignal))
     expect(card(m, 'on-row')).not.toBeNull()
     m.faces.changeRequestReview.mockResolvedValue(REFUSED.reviewFailed)
     act(() => { m.panel.set({ state: ready({ changeRequests: [polledAt(3)] }), disconnected: false }) })

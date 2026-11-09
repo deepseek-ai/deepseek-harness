@@ -184,8 +184,9 @@ async function base() {
     changeRequestCommits: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeCommitList | null> =>
       ({ ok: true, value: COMMITS })),
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
-    changeRequestReview: vi.fn(async (_sessionId: SessionId, _url: string, headSha: string, _signal?: AbortSignal): Read<ForgeReviewData> =>
-      ({ ok: true, value: { headSha, viewer: 'octo', threads: [], truncated: false } })),
+    changeRequestReview: vi.fn(async (
+      _sessionId: SessionId, _url: string, headSha: string, _fresh: boolean, _signal?: AbortSignal,
+    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, threads: [], truncated: false } })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
@@ -833,9 +834,9 @@ describe('mountForgePanel changes view', () => {
     expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, 'refs/heads/topic', signal)
     expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
-    expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), signal))
-      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false } })
-    expect(f.forgePanel.changeRequestReview).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), signal)
+    expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal))
+      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), threads: [], truncated: false } })
+    expect(f.forgePanel.changeRequestReview).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal)
     expect(view.viewedFiles).toBe(f.changes(S1).viewedFiles)
     expect(view.viewedFiles).not.toBe(f.changes(S2).viewedFiles)
     view.reconnect()

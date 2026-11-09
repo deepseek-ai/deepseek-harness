@@ -16,6 +16,14 @@
 
 .card { padding: 10px 12px; }
 
+/* A card a jump from a covering thread list focused; a pointer jump shows no ring. */
+.card:focus { outline: none; }
+
+.card:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
 .card[data-split][data-side="R"],
 .folded[data-split][data-side="R"] {
   margin-inline-start: clamp(10px, calc(100% - 740px), calc(50% + 10px));

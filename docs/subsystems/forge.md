@@ -349,9 +349,12 @@ type ForgeCommentId = Branded<'ForgeCommentId'>
 ```
 
 ```ts type-equiv
-/** Consecutive lines of one file at one commit. */
+/** Consecutive lines on one side of a diff whose new side is one commit. */
 interface ForgeAnchor {
-  /** Full object name of the commit whose file the lines number. */
+  /**
+   * Full object name of the commit the diff's new side shows: new-side (`R`) lines number this commit's file, and
+   * old-side (`L`) lines number the file at the diff's base.
+   */
   readonly commit: string
   /** First line, inclusive. */
   readonly startLine: number
@@ -405,9 +408,9 @@ interface ForgeReviewThread {
   readonly side: 'L' | 'R'
   /** Whether the thread is on lines or on the whole file. */
   readonly subject: 'line' | 'file'
-  /** Lines at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
+  /** Lines in the diff that ends at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
   readonly current: ForgeAnchor | null
-  /** Lines at the commit the thread was written on; null for a file thread. */
+  /** Lines in the diff that ended at the commit the thread was written on; null for a file thread. */
   readonly original: ForgeAnchor | null
   /** Diff hunk the host recorded when the thread was written, ending at its last line; null when it recorded none. */
   readonly diffHunk: string | null
@@ -423,8 +426,6 @@ interface ForgeReviewThread {
 interface ForgeReviewData {
   /** Head commit the threads were read at; `current` positions number its files. */
   readonly headSha: string
-  /** Login of the signed-in user the provider read as, or null when the host does not name one. */
-  readonly viewer: string | null
   /** Threads in host order, at most the provider's limit. */
   readonly threads: readonly ForgeReviewThread[]
   /** Whether the change request has more threads than `threads` holds. */
@@ -721,7 +722,7 @@ type ForgeChangeRequestStatesFrame =
 
 The changes view reads through the same Remote. `localDiff` reads one `ForgeLocalScope` of the Session's checkout, and `changeRequestDiff` reads a bound change request at the head of its latest status through the provider's `diff`, which returns a patch only for that head commit, or the `ForgeCommitRange` it names through the provider's `compare`; both return files that the Host parsed into `ForgeDiffFile` hunks, each with its review layer and change digest. `localCommits` and `changeRequestCommits` list the commits a range can name, the latter as null when the provider does not read commits. `localText` and `changeRequestText` read the new side of one file, which supplies the unchanged lines between hunks. Each inspection also sizes the `branch` scope as `ForgePanelState.local` for the panel's local changes card, always against the automatic fork point. A `branch` scope whose `base` names a ref compares with the merge base of HEAD and that branch instead; `diffBases` lists the branches the view offers, with the automatic fork point. When the head moved past the latest status, the provider returns `stale` and `ctx.forge.diff` polls the change request at once, once per head commit; `changeRequestDiff` rejects with `forgePanel/stale-head` and caches nothing, and the changes view keeps loading until a later status arrives, then reads again at that status's head. Review comments therefore always address the commit whose lines the view shows.
 
-`changeRequestReview(session, url, headSha)` reads the threads of a bound change request at the head of the diff the view shows and refuses another head with `forgePanel/stale-head`, `forgePanel/review-unsupported` for a provider without review reads, and `forgePanel/review-failed` otherwise. It keeps one read per change request in memory, keyed by head commit and the status's update time and bounded by `maxCachedReviewBytes`, and reads again once the kept read is `reviewRefreshMs` old: on GitHub a new comment or reply changes a pull request's update time, but resolving a thread does not. The changes view asks again at every status it receives while visible, and overlays the threads on the files the [panel README](../../packages/experimental/client-ui-forge/README.md#use-this-package) describes.
+`changeRequestReview(session, url, headSha, fresh)` reads the threads of a bound change request at the head of the diff the view shows and refuses another head with `forgePanel/stale-head`, `forgePanel/review-unsupported` for a provider without review reads, and `forgePanel/review-failed` otherwise. It keeps one read per change request in memory, keyed by head commit and the status's update time and bounded by `maxCachedReviewBytes`, and reads again once the kept read is `reviewRefreshMs` old or when `fresh` asks for it, as the first read after the reader refreshes the view does: on GitHub a new comment or reply changes a pull request's update time, but resolving a thread does not. The changes view asks again at every status it receives while visible, and overlays the threads on the files the [panel README](../../packages/experimental/client-ui-forge/README.md#use-this-package) describes.
 
 ```ts type-equiv
 /**
@@ -1306,11 +1307,13 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
  * at the same head commit and update time are reused from memory, for any Session, until they are
- * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age shows threads resolved
- * since, which do not change a GitHub pull request's update time.
+ * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
+ * shows threads resolved since, which do not change a GitHub pull request's update time.
  * @param session - Session the change request is bound to.
  * @param url - binding URL of the change request.
  * @param headSha - head commit of the displayed diff.
+ * @param fresh - whether to read from the host even when threads at this head and update time are kept, as after the
+ * reader refreshes the view; the result replaces the kept threads.
  * @param signal - request cancellation.
  * @returns the threads at `headSha`, with `current` positions numbering the files of that diff.
  * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
@@ -1318,7 +1321,7 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * `forgePanel/review-unsupported` when the provider cannot read reviews; `forgePanel/review-failed` before the
  * status was read and when the host does not provide the threads otherwise.
  */
-@Remote async changeRequestReview(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeReviewData>
+@Remote async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>
 
 /**
  * Publish a line comment or completed review for a visible Session binding.

@@ -25,9 +25,8 @@ const THREAD_FIELDS = `id isOutdated isResolved path diffSide startDiffSide line
 
 const THREAD_PAGE = `pageInfo { hasNextPage endCursor } nodes { ${THREAD_FIELDS} }`
 
-/** First thread page with the head and the viewer; variables `owner` and `name` are strings, `number` and `first` integers. */
+/** First thread page with the head; variables `owner` and `name` are strings, `number` and `first` integers. */
 export const REVIEW_QUERY = `query($owner: String!, $name: String!, $number: Int!, $first: Int!) {
-  viewer { login }
   repository(owner: $owner, name: $name) { pullRequest(number: $number) { id headRefOid reviewThreads(first: $first) { ${THREAD_PAGE} } } }
 }`
 
@@ -85,10 +84,9 @@ const threadSchema = z.object({
 
 const threadPageSchema = z.object({ pageInfo: pageInfoSchema, nodes: z.array(threadSchema) })
 
-const firstPageSchema = z.object({ data: z.object({
-  viewer: z.object({ login: z.string() }).nullable(),
-  repository: z.object({ pullRequest: z.object({ id: z.string(), headRefOid: z.string(), reviewThreads: threadPageSchema }) }),
-}) })
+const pullRequestSchema = z.object({ id: z.string(), headRefOid: z.string(), reviewThreads: threadPageSchema })
+
+const firstPageSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: pullRequestSchema.nullable() }).nullable() }) })
 
 const nextPageSchema = z.object({ data: z.object({ node: z.object({ headRefOid: z.string(), reviewThreads: threadPageSchema }) }) })
 
@@ -98,8 +96,8 @@ type ThreadNode = z.infer<typeof threadSchema>
 type CommentNode = z.infer<typeof commentSchema>
 
 /**
- * Read the review threads of a pull request while its head is `headSha`. The first page also names the head and the
- * signed-in user; every following thread page names the head again, so a head that moves during the read returns
+ * Read the review threads of a pull request while its head is `headSha`. The first page also names the head; every
+ * following thread page names the head again, so a head that moves during the read returns
  * `stale`, while a thread's comment pages do not. Threads are read up to `maxReviewThreads`, each with all of its
  * comments. A later page that would bring the pages read, measured as JSON, past `maxOutputBytes` is dropped with the
  * threads after it, and the result is marked truncated; `read` fails a first page whose output alone passes the limit.
@@ -127,14 +125,14 @@ export async function readReviewThreads(
   if ('code' in first) return first
   const parsed = firstPageSchema.safeParse(first.body)
   if (!parsed.success) return unexpected
-  const pull = parsed.data.data.repository.pullRequest
+  const pull = parsed.data.data.repository?.pullRequest
+  if (pull == null) return { code: 'not-found', message: `pull request ${ref.number} was not found` }
   const moved = stale(pull.headRefOid)
   if (moved !== undefined) return moved
   let bytes = first.bytes
   let page = pull.reviewThreads
   const threads: ForgeReviewThread[] = []
-  const viewer = parsed.data.data.viewer?.login ?? null
-  const result = (truncated: boolean): ForgeReviewData => ({ headSha, viewer, threads, truncated })
+  const result = (truncated: boolean): ForgeReviewData => ({ headSha, threads, truncated })
   const cursors = new Set<string>()
   for (;;) {
     for (const node of page.nodes.slice(0, limits.maxReviewThreads - threads.length)) {

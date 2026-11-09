@@ -7,8 +7,9 @@ const a = 'fake:a#1' as ChangeRequestKey
 const b = 'fake:b#2' as ChangeRequestKey
 const c = 'fake:c#3' as ChangeRequestKey
 
-function review(viewer: string): ForgeReviewData {
-  return { headSha: 'a'.repeat(40), viewer, threads: [], truncated: false }
+/** A read with no threads, told apart by its head, whose length sets its size. */
+function review(head: string): ForgeReviewData {
+  return { headSha: head, threads: [], truncated: false }
 }
 
 const size = Buffer.byteLength(JSON.stringify(review('x')))

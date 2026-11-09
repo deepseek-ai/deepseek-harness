@@ -134,7 +134,7 @@ describe('forge registry', () => {
 
     await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal))
       .resolves.toEqual({ code: 'unsupported', message: 'This provider does not support review reads' })
-    const review: ForgeReviewData = { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false }
+    const review: ForgeReviewData = { headSha: 'a'.repeat(40), threads: [], truncated: false }
     const readReview = vi.fn(async () => review)
     Object.assign(provider, { readReview })
     await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal)).resolves.toBe(review)

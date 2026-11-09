@@ -50,8 +50,7 @@ const run = promisify(execFile)
  * and the matching diagnostic as GitHub's HTTP 406 refusal. The raw contents API
  * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
  * request 7 serves `commits.json`, oldest first. The review thread read serves
- * `threads.json` as its one page of threads, with the viewer `octo`, or no threads
- * without it. Every invocation is appended to `calls.jsonl`.
+ * `threads.json` as its one page of threads, or no threads without it. Every invocation is appended to `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -172,10 +171,10 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     } } } } }))
     process.exit(0)
   }
-  if (query.includes('viewer { login }')) {
+  if (query.includes('{ id headRefOid reviewThreads(first: $first)')) {
     const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
     const threads = existsSync(join(here, 'threads.json')) ? JSON.parse(readFileSync(join(here, 'threads.json'), 'utf8')) : []
-    process.stdout.write(JSON.stringify({ data: { viewer: { login: 'octo' }, repository: { pullRequest: { id: 'pull-' + number,
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number,
       headRefOid: pulls[number].headRefOid, reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: threads } } } } }))
     process.exit(0)
   }
@@ -1949,7 +1948,7 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
   expect(quotes).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'review-thread-message.expected.md'), quotes.join('').trimEnd(), MODE)
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
-  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('viewer { login }')))
+  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('{ id headRefOid reviewThreads(first: $first)')))
   expect(reads.length).toBeGreaterThan(0)
   expect(reads[0]).toEqual(expect.arrayContaining(['owner=octo', 'name=demo', 'number=7', 'first=100']))
   expect(tripwire.pageErrors).toEqual([])

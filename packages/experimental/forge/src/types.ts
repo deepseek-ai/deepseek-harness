@@ -169,9 +169,12 @@ export type ForgeThreadId = Branded<'ForgeThreadId'>
 /** Opaque host identity of one review comment. */
 export type ForgeCommentId = Branded<'ForgeCommentId'>
 
-/** Consecutive lines of one file at one commit. */
+/** Consecutive lines on one side of a diff whose new side is one commit. */
 export interface ForgeAnchor {
-  /** Full object name of the commit whose file the lines number. */
+  /**
+   * Full object name of the commit the diff's new side shows: new-side (`R`) lines number this commit's file, and
+   * old-side (`L`) lines number the file at the diff's base.
+   */
   readonly commit: string
   /** First line, inclusive. */
   readonly startLine: number
@@ -219,9 +222,9 @@ export interface ForgeReviewThread {
   readonly side: 'L' | 'R'
   /** Whether the thread is on lines or on the whole file. */
   readonly subject: 'line' | 'file'
-  /** Lines at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
+  /** Lines in the diff that ends at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
   readonly current: ForgeAnchor | null
-  /** Lines at the commit the thread was written on; null for a file thread. */
+  /** Lines in the diff that ended at the commit the thread was written on; null for a file thread. */
   readonly original: ForgeAnchor | null
   /** Diff hunk the host recorded when the thread was written, ending at its last line; null when it recorded none. */
   readonly diffHunk: string | null
@@ -235,8 +238,6 @@ export interface ForgeReviewThread {
 export interface ForgeReviewData {
   /** Head commit the threads were read at; `current` positions number its files. */
   readonly headSha: string
-  /** Login of the signed-in user the provider read as, or null when the host does not name one. */
-  readonly viewer: string | null
   /** Threads in host order, at most the provider's limit. */
   readonly threads: readonly ForgeReviewThread[]
   /** Whether the change request has more threads than `threads` holds. */

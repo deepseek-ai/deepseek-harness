@@ -251,7 +251,8 @@ function registerUi(ctx: Context): void {
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
       addThreadToInput: (thread, url, range) => addThreadToInput(sessionId, thread, url, range),
-      changeRequestReview: (url, headSha, signal) => ctx.remote.forgePanel.changeRequestReview(sessionId, url, headSha, signal),
+      changeRequestReview: (url, headSha, fresh, signal) =>
+        ctx.remote.forgePanel.changeRequestReview(sessionId, url, headSha, fresh, signal),
       reviewQueue: ({ id, signal }) => {
         let queue = store.reviews.get(signal)
         if (queue === undefined) {

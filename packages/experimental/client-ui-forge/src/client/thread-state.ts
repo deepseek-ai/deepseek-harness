@@ -1,6 +1,6 @@
 /** Reads the review threads of the change request a changes view shows and places them in its files. */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ForgeReviewData, ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { LineThread } from './ReviewThreads.tsx'
@@ -20,47 +20,48 @@ export interface ThreadReadInput {
   readonly statusAt: number | null
   /** Changes on each refresh. */
   readonly attempt: number
-  /** Read the threads at a head commit. */
-  readonly read: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
+  /** Read the threads at a head commit; `fresh` skips the threads the host keeps. */
+  readonly read: (url: string, headSha: string, fresh: boolean, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
 }
 
 /** The last threads read and why the latest read failed. */
 export interface ThreadReadState {
   /** Threads of the last successful read for the URL, at any head, or null. */
   readonly review: ForgeReviewData | null
-  /** Message of the latest failed read, or null. */
+  /** Message of the latest failed read, or null, also when the provider cannot read reviews. */
   readonly failure: string | null
-  /** Whether the provider cannot read reviews, so the view shows no threads and no failure. */
-  readonly unsupported: boolean
 }
 
 /**
  * Read the threads at the head of each status while the view is visible. A read refused because the head moved
- * keeps the previous threads; the next status names the new head and reads again.
+ * keeps the previous threads; the next status names the new head and reads again. The first read after a refresh
+ * asks the host to skip the threads it keeps, which a resolved thread leaves unchanged.
  * @param input - the change request and the reader.
  * @returns the last threads and the latest failure.
  */
 export function useThreadRead(input: ThreadReadInput): ThreadReadState {
   const { visible, url, head, updatedAt, statusAt, attempt, read } = input
-  const [state, setState] = useState<ThreadReadState & { readonly url: string | null }>(
-    { url: null, review: null, failure: null, unsupported: false })
+  const [state, setState] = useState<ThreadReadState & { readonly url: string | null }>({ url: null, review: null, failure: null })
+  const readAttempt = useRef(attempt)
   useEffect(() => {
     if (!visible || url === null || head === null) return
+    const fresh = readAttempt.current !== attempt
+    readAttempt.current = attempt
     const controller = new AbortController()
-    void read(url, head, controller.signal).then((result) => {
+    void read(url, head, fresh, controller.signal).then((result) => {
       if (controller.signal.aborted) return
       if (result.ok) {
-        setState({ url, review: result.value, failure: null, unsupported: false })
+        setState({ url, review: result.value, failure: null })
         return
       }
       const { code, message } = result.error
       if (code === 'forgePanel/stale-head') return
       setState(previous => ({ url, review: previous.url === url ? previous.review : null,
-        failure: code === 'forgePanel/review-unsupported' ? null : message, unsupported: code === 'forgePanel/review-unsupported' }))
+        failure: code === 'forgePanel/review-unsupported' ? null : message }))
     })
     return () => { controller.abort() }
   }, [visible, url, head, updatedAt, statusAt, attempt, read])
-  return state.url === url ? state : { review: null, failure: null, unsupported: false }
+  return state.url === url ? state : { review: null, failure: null }
 }
 
 /** Threads of one file grouped by where they show, and how many of them are unresolved. */

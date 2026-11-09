@@ -86,7 +86,7 @@ export class ForgePanelController extends TypertRemoteService {
     maxCommits: z.number().default(250),
     testPaths: z.array(z.string()).default([]),
     interfacePaths: z.array(z.string()).default([]),
-    maxCachedReviewBytes: z.number().default(4_194_304),
+    maxCachedReviewBytes: z.number().default(16_777_216),
     reviewRefreshMs: z.number().default(60_000),
   })
 
@@ -466,11 +466,13 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
    * at the same head commit and update time are reused from memory, for any Session, until they are
-   * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age shows threads resolved
-   * since, which do not change a GitHub pull request's update time.
+   * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
+   * shows threads resolved since, which do not change a GitHub pull request's update time.
    * @param session - Session the change request is bound to.
    * @param url - binding URL of the change request.
    * @param headSha - head commit of the displayed diff.
+   * @param fresh - whether to read from the host even when threads at this head and update time are kept, as after the
+   * reader refreshes the view; the result replaces the kept threads.
    * @param signal - request cancellation.
    * @returns the threads at `headSha`, with `current` positions numbering the files of that diff.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
@@ -479,7 +481,7 @@ export class ForgePanelController extends TypertRemoteService {
    * status was read and when the host does not provide the threads otherwise.
    */
   @Remote
-  async changeRequestReview(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeReviewData> {
+  async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData> {
     signal.throwIfAborted()
     const { ref, update } = this.bound(session, url)
     if (update === null || !('snapshot' in update)) {
@@ -491,7 +493,7 @@ export class ForgePanelController extends TypertRemoteService {
     const key = changeRequestKey(ref)
     const version = JSON.stringify([headSha, update.snapshot.updatedAt])
     const readAt = Date.now()
-    const kept = this.reviews.get(key, version, readAt)
+    const kept = fresh ? undefined : this.reviews.get(key, version, readAt)
     if (kept !== undefined) return kept
     const review = await this.home.forge.readReview(ref, headSha, signal)
     if ('code' in review) throw reviewError(review)

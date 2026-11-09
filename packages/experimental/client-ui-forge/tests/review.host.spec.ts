@@ -29,7 +29,7 @@ async function opened(config: Parameters<typeof bench>[1] = {}): Promise<{ opene
 
 function review(headSha: string, path = 'src/a.ts'): ForgeReviewData {
   return {
-    headSha, viewer: 'octo', truncated: false,
+    headSha, truncated: false,
     threads: [{
       id: 'thread-1' as ForgeThreadId, path, side: 'R', subject: 'line', resolved: false, diffHunk: '@@ -1 +1 @@\n-old\n+new',
       current: { commit: headSha, startLine: 1, endLine: 1 }, original: { commit: headSha, startLine: 1, endLine: 1 }, comments: [],
@@ -51,17 +51,33 @@ describe('forgePanel change request reviews', () => {
     shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await follower.until(state => polledAt(state, pullUrl(7)))
 
-    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, signal)).resolves.toEqual(review(HEAD))
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
     const other = panel.ctx.sessions.create(SessionId('forge-review-other'), { meta: { cwd: repo } })
     panel.ctx.forgeSession.track(other, pullUrl(7))
-    await expect(panel.ctx.forgePanel.changeRequestReview(other, pullUrl(7), HEAD, signal)).resolves.toEqual(review(HEAD))
+    await expect(panel.ctx.forgePanel.changeRequestReview(other, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
     expect(readReview).toHaveBeenCalledTimes(1)
 
     panel.provider.overrides.set(7, { updatedAt: '2026-11-07T05:00:00Z' })
     await panel.ctx.forgePanel.refresh(panel.session, signal)
     await follower.until(state => polledAt(state, pullUrl(7), HEAD, '2026-11-07T05:00:00Z'))
     readReview.mockResolvedValueOnce(review(HEAD, 'src/b.ts'))
-    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, signal))
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal))
+      .resolves.toMatchObject({ threads: [{ path: 'src/b.ts' }] })
+    expect(readReview).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads from the host for a fresh read and keeps its result for later reads', async () => {
+    const { opened: panel, follower } = await opened()
+    const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
+    Object.assign(panel.provider, { readReview })
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await follower.until(state => polledAt(state, pullUrl(7)))
+
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    readReview.mockResolvedValueOnce(review(HEAD, 'src/b.ts'))
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, true, signal))
+      .resolves.toMatchObject({ threads: [{ path: 'src/b.ts' }] })
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal))
       .resolves.toMatchObject({ threads: [{ path: 'src/b.ts' }] })
     expect(readReview).toHaveBeenCalledTimes(2)
   })
@@ -73,9 +89,9 @@ describe('forgePanel change request reviews', () => {
     shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await follower.until(state => polledAt(state, pullUrl(7)))
 
-    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, signal)
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
     await new Promise(resolve => setTimeout(resolve, 5))
-    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, signal)
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
     expect(readReview).toHaveBeenCalledTimes(2)
   })
 
@@ -87,13 +103,13 @@ describe('forgePanel change request reviews', () => {
     shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await follower.until(state => polledAt(state, pullUrl(7)))
 
-    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), pushed, signal))
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), pushed, false, signal))
       .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: `The change request head moved from ${pushed} to ${HEAD}` })
     expect(readReview).not.toHaveBeenCalled()
 
     panel.provider.overrides.set(7, { headSha: pushed })
     const fetches = panel.provider.fetches.length
-    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, signal))
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal))
       .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: `head moved to ${pushed}` })
     await follower.until(state => polledAt(state, pullUrl(7), pushed))
     expect(panel.provider.fetches.length).toBe(fetches + 1)
@@ -108,7 +124,8 @@ describe('forgePanel change request reviews', () => {
     ])
     await follower.until(state => polledAt(state, pullUrl(7))
       && state.changeRequests.some(entry => entry.url === pullUrl(8) && entry.update !== null && 'failure' in entry.update))
-    const read = (url: string): Promise<ForgeReviewData> => panel.ctx.forgePanel.changeRequestReview(panel.session, url, HEAD, signal)
+    const read = (url: string): Promise<ForgeReviewData> =>
+      panel.ctx.forgePanel.changeRequestReview(panel.session, url, HEAD, false, signal)
 
     await expect(read(pullUrl(9))).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
     await expect(read(pullUrl(8))).rejects.toMatchObject({ code: 'forgePanel/review-failed', message: 'The change request status has not been read yet' })

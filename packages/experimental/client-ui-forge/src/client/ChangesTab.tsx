@@ -28,7 +28,7 @@ import type {
   ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
 import type {
-  ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread,
+  ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
@@ -62,6 +62,12 @@ type Translate = PropsLocale<typeof NS>['t']
 /** Kind of a local scope. */
 type ScopeKind = ForgeLocalScope['kind']
 
+/** A file the view scrolls to once, and the thread card it centers there with whether that card takes the focus. */
+interface Wanted {
+  readonly path: string
+  readonly center: { readonly id: ForgeThreadId; readonly focus: boolean } | null
+}
+
 /** Business face of the changes tab body. */
 export interface ChangesTabInjected {
   /** Append a frozen comment to the main input without submitting it. */
@@ -93,7 +99,9 @@ export interface ChangesTabInjected {
   /** Read one file of a change request at a commit. */
   readonly changeRequestText: (url: string, commit: string, path: string) => Promise<RemoteResult<string>>
   /** Read the review threads of a change request at the head of its latest status; `signal` aborts the read. */
-  readonly changeRequestReview: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
+  readonly changeRequestReview: (
+    url: string, headSha: string, fresh: boolean, signal: AbortSignal,
+  ) => Promise<RemoteResult<ForgeReviewData>>
   /** Quote a whole review thread of the change request at `url` in the main input without submitting it. */
   readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean
   /** Open a URL outside the app. */
@@ -483,7 +491,7 @@ export function ChangesTab({
     }
   }
   const choices = useStore(store => store.byTab[tab.id])
-  const [wanted, setWanted] = useState<string | null>(null)
+  const [wanted, setWanted] = useState<Wanted | null>(null)
   const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
   const [treePosition, setTreePosition] = useState<FileTreePosition>('left')
   const [treeWidth, setTreeWidth] = useState(0)
@@ -497,7 +505,7 @@ export function ChangesTab({
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
-    setWanted(path)
+    setWanted({ path, center: null })
   }, [choices, navigation.revision, navigation.params, actions, tab.id])
   // The tab's choices end with its record.
   useEffect(() => {
@@ -615,23 +623,27 @@ export function ChangesTab({
   useLayoutEffect(() => {
     if (!tab.visible || wanted === null || data === null) return
     // A file the lens or the test switch hides is shown before the view scrolls to it.
-    const hidden = allFiles.find(file => file.path === wanted && !shownBy(file, lens, hideTests))
+    const hidden = allFiles.find(file => file.path === wanted.path && !shownBy(file, lens, hideTests))
     if (hidden !== undefined) {
       if (lens !== 'all') actions.lensed(tab.id, 'all')
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
       return
     }
-    const section = sections.current.get(wanted)
+    const section = sections.current.get(wanted.path)
     section?.scrollIntoView({ block: 'start' })
     // A thread the reader opened from the thread list or a file's unresolved count centers inside its file, which the jump
-    // expanded and revealed.
-    /* v8 ignore next 2 -- a focused thread's file is drawn and its card unfolded, so both are found. */
-    const card = focus === null ? undefined : [...section?.querySelectorAll<HTMLElement>('[data-forge-thread]') ?? []]
-      .find(element => element.dataset.forgeThread === focus.id)
-    card?.scrollIntoView({ block: 'center' })
+    // expanded and revealed; the jump ends here, so a later jump to the file stops at its header.
+    const { center } = wanted
+    if (center !== null) {
+      /* v8 ignore next 4 -- a centered thread's file is drawn and its card unfolded, so both are found. */
+      const card = [...section?.querySelectorAll<HTMLElement>('[data-forge-thread]') ?? []]
+        .find(element => element.dataset.forgeThread === center.id)
+      card?.scrollIntoView({ block: 'center' })
+      if (center.focus) card?.focus({ preventScroll: true })
+    }
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
-  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id, focus])
+  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
@@ -711,7 +723,6 @@ export function ChangesTab({
   const orphanRecords = absentPaths.map(path => <OrphanReviews key={path} path={path} actions={recordActions} t={t} />)
 
   const threadActions: ThreadActions | null = review === null || data?.kind !== 'change' ? null : {
-    viewer: review.viewer,
     author: prAuthor,
     addToInput: (thread, range) => addThreadToInput(thread, data.url, range),
     openLink,
@@ -730,29 +741,33 @@ export function ChangesTab({
       allFiles.find(file => file.path === path))
     const next = order[(order.findIndex(({ thread }) => thread.id === focus?.id) + 1) % order.length]
     /* v8 ignore next -- the count that calls this shows only while the file has an unresolved thread. */
-    if (next !== undefined) openThread(next)
+    if (next !== undefined) openThread(next, false)
   }
   /** Close the thread list at the reader's request and return the focus to its toggle. */
   const closeThreadList = (): void => {
     setThreadList(value => ({ ...value, open: false }))
     threadsToggle.current?.focus()
   }
-  /** Show a thread from the list: all commits for a thread the chosen ones do not hold, then its file, unfolded and centered. */
-  const openThread = ({ thread, place }: PlacedThread): void => {
-    const url = thread.comments[0]?.url ?? null
-    if (!allFiles.some(file => file.path === thread.path)) {
+  /**
+   * Show a thread: all commits for a thread the chosen ones do not hold, whose diff holds the file of every thread with a
+   * position at the head, then its file, with the thread unfolded and centered; `focusCard` moves the focus to it. A
+   * thread on a file the shown changes lack opens on the host.
+   */
+  const openThread = ({ thread, place }: PlacedThread, focusCard: boolean): void => {
+    if (place.kind === 'elsewhere') actions.committed(tab.id, null)
+    else if (!allFiles.some(file => file.path === thread.path)) {
+      const url = thread.comments[0]?.url ?? null
       if (url !== null) openLink(url)
       return
     }
-    if (place.kind === 'elsewhere') actions.committed(tab.id, null)
     setFocus(value => ({ id: thread.id, revision: (value?.revision ?? 0) + 1 }))
     setRevealed(value => new Set([...value, thread.path]))
-    jump(thread.path)
+    jump(thread.path, { id: thread.id, focus: focusCard })
   }
-  const jump = (path: string): void => {
+  const jump = (path: string, center: Wanted['center'] = null): void => {
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
-    setWanted(path)
+    setWanted({ path, center })
   }
   /**
    * The file being read: the file last jumped to while the scroll stays there, else the first file whose section still
@@ -801,7 +816,7 @@ export function ChangesTab({
     const section = sections.current.get(file.path)
     const viewport = scrollport.current
     if (viewed && section !== undefined && viewport !== null
-      && section.getBoundingClientRect().top < viewport.getBoundingClientRect().top) setWanted(file.path)
+      && section.getBoundingClientRect().top < viewport.getBoundingClientRect().top) setWanted({ path: file.path, center: null })
     // A new mark collapses the file through its default; clearing a mark expands it.
     setChosen(({ [file.path]: _choice, ...value }) => viewed ? value : { ...value, [file.path]: true })
   }
@@ -964,7 +979,8 @@ export function ChangesTab({
             <HideTestsSwitch hidden={hideTests} toggle={() => { actions.toggledTests(tab.id) }} t={t} />
           </span>}
           <span className={css.spacer} />
-          {review !== null && review.threads.length > 0 && (
+          {/* A truncated read keeps the list, whose footer says so, even when it kept no thread. */}
+          {review !== null && (review.threads.length > 0 || review.truncated) && (
             <button ref={threadsToggle} type="button" className={css.threadsToggle} aria-pressed={threadList.open} data-forge-threads-toggle=""
               aria-label={t('thread.listAria', { count: review.threads.length })}
               onClick={() => { setThreadList(value => ({ ...value, open: !value.open, claim: !value.open })) }}>
@@ -1036,8 +1052,9 @@ export function ChangesTab({
             filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }}
             claim={threadList.claim} claimed={() => { setThreadList(value => ({ ...value, claim: false })) }}
             open={(entry, covering) => {
+              // A list that covers the files closes and hands the focus to the thread it opens, which it would cover.
               if (covering) setThreadList(value => ({ ...value, open: false }))
-              openThread(entry)
+              openThread(entry, covering)
             }}
             openLink={openLink} close={closeThreadList} t={t} />
         )}
