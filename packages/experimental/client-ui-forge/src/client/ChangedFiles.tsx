@@ -1,11 +1,11 @@
 /** Changed-file navigation shared by the toolbar menu and wide diff pane, with a disclosure column on every row. */
-import { useMemo, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { FileTypeIcon, IconChevronDownOutlineRegular, IconFolderCloseRegular, Input, Menu, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
 import { Counts } from './DiffFile.tsx'
-import { changedFileTree, filterFileTree, type ChangedFileNode } from './file-tree.ts'
+import { changedFileTree, filesInTreeOrder, filterFileTree, type ChangedFileNode } from './file-tree.ts'
 import type { NS } from './locales.ts'
 import css from './ChangedFiles.module.css'
 
@@ -63,6 +63,23 @@ function Rows({ nodes, depth, props }: {
 }
 
 /**
+ * Scroll only the row container to show a row that is not wholly visible; a visible row stays where it is.
+ * `scrollIntoView` would also scroll every scrollable ancestor, moving the menu card or the page behind it, and
+ * its `container` option is not yet supported widely enough, so the offset is measured here.
+ * @param container - the scrolling rows.
+ * @param row - the row to show.
+ * @param align - `center` places the row mid-view with its neighbors; `nearest` scrolls by the least distance.
+ */
+function revealRow(container: HTMLElement, row: HTMLElement, align: 'center' | 'nearest'): void {
+  const top = container.getBoundingClientRect().top + container.clientTop
+  const bottom = top + container.clientHeight
+  const box = row.getBoundingClientRect()
+  if (box.top >= top && box.bottom <= bottom) return
+  if (align === 'center') container.scrollTop += (box.top + box.bottom - top - bottom) / 2
+  else container.scrollTop += box.top < top ? box.top - top : box.bottom - bottom
+}
+
+/**
  * Render searchable directory navigation without reading file contents.
  * @param props - changed files, per-tab choices, navigation actions, and localized copy.
  * @returns the search field and matching branches.
@@ -70,11 +87,36 @@ function Rows({ nodes, depth, props }: {
 export function ChangedFiles(props: ChangedFilesProps): ReactNode {
   const tree = useMemo(() => changedFileTree(props.files), [props.files])
   const nodes = useMemo(() => filterFileTree(tree, props.state.query), [tree, props.state.query])
+  const order = useMemo(() => filesInTreeOrder(tree), [tree])
+  const selectedIndex = order.findIndex(file => file.path === props.state.selected)
+  const rows = useRef<HTMLDivElement>(null)
+  const query = useRef(props.state.query)
+  // A changed filter shows its results from the top.
+  useLayoutEffect(() => {
+    if (query.current === props.state.query) return
+    query.current = props.state.query
+    const container = rows.current
+    /* v8 ignore next -- the ref is attached before layout effects run. */
+    if (container === null) return
+    container.scrollTop = 0
+  }, [props.state.query])
+  const mounted = useRef(false)
+  // The toolbar menu mounts these rows at the top on every opening, so mounting centers the selected file. Later, a
+  // file step in the diff, or files arriving or reordering around a selection, scrolls by the least distance; a
+  // refresh that keeps the selected file's position leaves the reader's scroll alone.
+  useLayoutEffect(() => {
+    const align = mounted.current ? 'nearest' : 'center'
+    mounted.current = true
+    const container = rows.current
+    const row = container?.querySelector<HTMLElement>('[aria-current="true"]')
+    if (container == null || row == null) return
+    revealRow(container, row, align)
+  }, [props.state.selected, selectedIndex])
   return <div className={css.root} data-forge-file-tree="">
     <div className={css.search}><Input className={clsx(css.searchInput)} aria-label={props.t('diff.filterFiles')} placeholder={props.t('diff.filterFiles')}
       value={props.state.query} onChange={(event) => { props.filter(event.target.value) }}
       onKeyDown={(event) => { if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation() }} /></div>
-    <div className={css.rows}>
+    <div ref={rows} className={css.rows}>
       {nodes.length === 0 ? <div className={css.empty}>{props.t('diff.noMatchingFiles')}</div> : <Rows nodes={nodes} depth={0} props={props} />}
     </div>
   </div>

@@ -62,6 +62,19 @@ export function apply(ctx: ClientContext): void {
         preferNewPane: true,
       })
     },
+    async prepareCatalog(parentSessionId: SessionId) {
+      await ctx.sessions.refreshProjections(parentSessionId)
+      const parent = ctx.sessions.list.getSnapshot().projectionsBySession[parentSessionId]
+      if (parent?.state !== 'ready') return
+      for (const entry of parent.values.subagentCatalog ?? []) {
+        if (entry.mode === 'external') continue
+        const state = ctx.sessions.list.getSnapshot()
+        if (state.byId[entry.id]?.formatStatus === 'migration-required'
+          || state.projectionsBySession[entry.id]?.state === 'migration-required'
+          || state.projectionsBySession[entry.id]?.state === 'error') continue
+        await ctx.sessions.refreshProjections(entry.id)
+      }
+    },
     refreshProjection(parentSessionId: SessionId) {
       void ctx.sessions.refreshProjections(parentSessionId)
     },

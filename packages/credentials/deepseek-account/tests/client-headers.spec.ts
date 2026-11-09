@@ -1,6 +1,6 @@
 /** Platform client identity headers derived from one call's metadata. */
 import { expect, it } from 'vitest'
-import { platformClientHeaders } from '../src/index.ts'
+import { platformClientHeaders } from '../src/client-metadata.ts'
 
 it.each([
   ['darwin', 'desktop-mac'], ['win32', 'desktop-win'], [null, 'web'],

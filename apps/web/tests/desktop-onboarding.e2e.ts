@@ -51,21 +51,21 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     screenshots = undefined
     root = await mkdtemp(join(tmpdir(), 'dsh-desktop-onboarding-'))
     server = createServer((request, response) => {
-      if (request.url === '/api/v0/users/get_unnotified_bonuses') {
+      if (request.url === '/api/v0/users/notifications/list') {
         bonusReads++
         response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: bonusOffered ? [{
-          order_id: '88888888-8888-4888-8888-888888888888', campaign: 'dsh_login_bonus',
-          amount: '5.00', currency: 'CNY', granted_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 86_400_000).toISOString(), msg: '已赠送您 5.00 元 DSH 体验赠金。',
-        }] : [] } }))
+        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: { next_poll_after: 600, notifications: bonusOffered ? [{
+          id: '88888888-8888-4888-8888-888888888888', type: 'account.bonus_granted',
+          created_at: new Date().toISOString(), title: '赠金已到账', actions: [],
+          display_until: new Date(Date.now() + 86_400_000).toISOString(), body: '已赠送您 5.00 元 DSH 体验赠金。',
+        }] : [] } } }))
         return
       }
-      if (request.url === '/api/v0/users/ack_bonus_notified') {
+      if (request.url === '/api/v0/users/notifications/events') {
         bonusAcks++
         bonusOffered = false
         response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: null } }))
+        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: { acked: true } } }))
         return
       }
       if (request.url !== '/auth-api/v0/users/current' && request.url !== '/api/v0/users/get_user_summary') {
@@ -85,7 +85,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     if (address === null || typeof address === 'string') throw new Error('fixture server address unavailable')
     origin = `http://127.0.0.1:${address.port}`
     const overlay = join(root, 'account.patch.yml')
-    await writeFile(overlay, `- id: deepseek-account\n  config:\n    platformOrigin: ${origin}\n    allowLoopbackHttp: true\n`)
+    await writeFile(overlay, `- id: deepseek-account\n  config:\n    platformOrigin: ${origin}\n    harnessOrigin: ${origin}\n    allowLoopbackHttp: true\n`)
     scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, extraOverlayPath: overlay })
     await scaffold.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), async () => ({
       kind: 'grant', payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },

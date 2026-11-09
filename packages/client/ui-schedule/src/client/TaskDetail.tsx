@@ -215,10 +215,13 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
     ? JSON.stringify(draft) !== JSON.stringify({ ...initial, cwd: initial.cwd || projects.defaultCwd }) : storedDirty
   const issue = dirty ? taskDraftIssue(draft, changes) : undefined
   const valid = issue === undefined
-  const [actionPending, setPending] = useState(false)
+  const [actionPending, setPending] = useState<'toggle' | 'run' | 'delete' | null>(null)
   const [actionFailure, setFailure] = useState<HostEditFailure | HostRunFailure | null>(null)
   const saving = cached?.pending === true
-  const pending = actionPending || saving
+  const pending = actionPending !== null || saving
+  // A pause, resume, or run would otherwise flash its controls grey between two enabled states.
+  const actionHold = actionPending === 'toggle' || actionPending === 'run'
+  const nativeHold = pending && !actionHold
   const failure = !pending && dirty && base !== undefined && task !== undefined && base.updatedAt !== task.updatedAt
     ? 'host.conflict' : actionFailure ?? cached?.failure ?? null
   const [menuOpen, setMenuOpen] = useState(false)
@@ -281,18 +284,20 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
     } else props.actions.setDraft(key, { base, draft, failure: outcome.failed, ...(task === undefined ? { initial } : {}) })
   }
   const setActive = async (task: ScheduleCatalogEntry): Promise<void> => {
-    setPending(true)
+    // The toggle stays focusable while busy, so a second press is ignored here instead of by `disabled`.
+    if (busy) return
+    setPending('toggle')
     const outcome = await hostActions.edit({ id: task.id, action: 'update', patch: { active: task.status !== 'active' }, expectedUpdatedAt: task.updatedAt ?? null })
     if (!mounted.current) return
-    setPending(false)
+    setPending(null)
     setFailure(outcome === 'saved' ? null : outcome.failed)
   }
   const run = async (id: ScheduleId): Promise<void> => {
     setMenuOpen(false)
-    setPending(true)
+    setPending('run')
     const outcome = await hostActions.run(id)
     if (!mounted.current) return
-    setPending(false)
+    setPending(null)
     setFailure(outcome === 'queued' ? null : outcome.failed)
   }
 
@@ -321,8 +326,10 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
           </div>}
         <div className={css.detailActions}>
           {task !== undefined && <><Tooltip label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} side="bottom" delayMs={500} portal>
-            <span><Button size="sm" className={css.detailIconButton} disabled={busy || dirty || executionActive || task.status === 'ended' || !props.authoritative}
-              aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')} onClick={() => { void setActive(task) }}>
+            {/* Native disabling while busy would flash the not-allowed cursor and dimmed icon for the length of the request. */}
+            <span><Button size="sm" className={css.detailIconButton} disabled={dirty || executionActive || task.status === 'ended' || !props.authoritative}
+              aria-disabled={busy || undefined} aria-label={t(task.status === 'active' ? 'host.pause' : 'host.resume')}
+              onClick={() => { void setActive(task) }}>
               {task.status === 'active' ? <IconPauseOutlineRegular /> : <IconPlayOutlineRegular />}
             </Button></span>
           </Tooltip>
@@ -346,7 +353,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
             </MenuItemButton>
           </Menu></>}
           {onClose !== undefined && <Button size="sm" className={css.detailIconButton} aria-label={t(task === undefined ? 'host.closeCreate' : 'detail.close')}
-            disabled={pending} onClick={onClose}><IconCloseOutlineRegular /></Button>}
+            disabled={nativeHold} aria-disabled={actionHold || undefined}
+            onClick={() => { if (!actionHold) onClose() }}><IconCloseOutlineRegular /></Button>}
         </div>
       </div>
       <div ref={scrollRef} className={clsx(css.detailScroll, tab === 'records' && css.detailRecords)} role={task === undefined ? undefined : 'tabpanel'}
@@ -380,7 +388,7 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
           </div> : failure === 'host.executionPending' ? <p className={css.detailNotice} role="status">{t(failure)}</p>
             : failure !== null && <p className={css.saveFailure} role="alert">{t(failure)}</p>}
           <TaskEditorFields draft={draft} onChange={setDraft}
-            disabled={pending || executionActive || deletingTask}
+            disabled={pending || executionActive || deletingTask} held={actionHold}
             projects={projects} original={base} t={t} />
           {draft.target === 'new'
             && <NewSessionLimit load={hostActions.loadNewSessionInterval} t={t} />}
@@ -404,8 +412,8 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
       </footer>}
       {(tab === 'rule' || dirty) && <footer className={css.saveFooter}>
         <span className={css.saveNotice}>{dirty ? t('rule.unsaved') : ''}</span>
-        <Button disabled={pending || task !== undefined && !dirty && failure === null}
-          onClick={() => { reset(); if (task === undefined) onClose?.() }}>{t('rule.cancel')}</Button>
+        <Button disabled={nativeHold || task !== undefined && !dirty && failure === null} aria-disabled={actionHold || undefined}
+          onClick={() => { if (actionHold) return; reset(); if (task === undefined) onClose?.() }}>{t('rule.cancel')}</Button>
         <Button variant="primary" disabled={busy || !dirty || !valid || failure === 'host.conflict'
           || task !== undefined && (!props.authoritative || executionActive)}
         onClick={() => { void save() }}>{t(saving ? task === undefined ? 'host.creating' : 'rule.saving' : task === undefined ? 'host.create' : 'rule.save')}</Button>
@@ -418,12 +426,12 @@ function TaskDetailView(props: TaskDetailProps): ReactNode {
         <Button data-modal-autofocus onClick={() => { onConfirm(null) }}>{t('delete.cancel')}</Button>
         <Button disabled={busy} onClick={() => {
           onConfirm(null)
-          setPending(true)
+          setPending('delete')
           // The refresh that drops the row lands before the outcome, so the owner retains the task until then.
           props.onRetainTask(task)
           void onDelete(task.id).then((outcome) => {
             if (!mounted.current) return
-            setPending(false)
+            setPending(null)
             if (outcome === 'deleted') { props.actions.clearDraft(key); onDeleted() }
             else props.onRetainTask(null)
           })

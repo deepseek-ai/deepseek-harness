@@ -37,17 +37,21 @@ function toolData(isError: boolean) {
 }
 
 function appendEvent(session: Session, event: SessionEvent) {
-  const append = session.append.bind(session) as (
-    type: SessionEvent['type'], data: unknown, metadata?: unknown,
-  ) => SessionEvent
-  return append(event.type, event.data, {
+  return Reflect.apply(session.append.bind(session), session, [event.type, event.data, {
     ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
     ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
-  })
+  }]) as SessionEvent
 }
 
 const entryPaths: Record<string, (event: SessionEvent) => unknown> = {
   append: (event: SessionEvent) => appendEvent(Session.create(id), event),
+  batch: (event: SessionEvent) => {
+    const session = Session.create(id)
+    return Reflect.apply(session.append.bind(session), session, [[[event.type, event.data, {
+      ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
+      ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
+    }]]]) as readonly SessionEvent[]
+  },
   seed: (event: SessionEvent) => Session.create(id, [event]),
   restore: (event: SessionEvent) => Session.fromRestore(id, [event], { ...header }, SessionLogOffset(0), 'detached'),
   adopt: adoptSessionEvent,
@@ -290,7 +294,7 @@ describe('canonical event-local surface metadata', () => {
       surfaceOp: { opaque: ['not', 'placement'] }, sourceEventSeqs: { opaque: [null, true] },
     } as unknown as SessionEvent
     for (const [path, accept] of Object.entries(entryPaths)) {
-      if (path === 'append') continue
+      if (path === 'append' || path === 'batch') continue
       expect(() => accept(structuredClone(event))).not.toThrow()
     }
     const session = Session.create(id, [event])

@@ -3,6 +3,20 @@ import Testing
 import CoreGraphics
 @testable import CuaNative
 
+@Test func unavailableAXHoverHonorsConnectionPolicyBeforeRequestFlags() throws {
+    for (connection, request): (Bool?, Bool?) in [(nil, nil), (nil, false), (false, nil), (false, true)] {
+        do {
+            try AXHover.requireSystemPointer(connectionSetting: connection, requestSetting: request)
+            Issue.record("An unapproved request was allowed to move the pointer")
+        } catch let failure as NativeFailure {
+            #expect(failure.code == "HOVER_UNAVAILABLE")
+            #expect(failure.message.contains("No input was sent"))
+        }
+    }
+    try AXHover.requireSystemPointer(connectionSetting: true, requestSetting: nil)
+    try AXHover.requireSystemPointer(connectionSetting: nil, requestSetting: true)
+}
+
 @Test func systemHoverRequiresTheForegroundUnobscuredTarget() throws {
     let owner = ProcessIdentity(pid: 42, startedSeconds: 1, startedMicroseconds: 0)
     let bounds = WindowBounds(x: 100, y: 100, width: 400, height: 300)

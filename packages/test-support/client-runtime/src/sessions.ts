@@ -163,6 +163,14 @@ export class FixtureSession implements SessionFace {
   }
 
   /**
+   * Fail-loud stub; supply `consumeOlder` on the fixture's session face to exercise it.
+   * @returns never — always throws.
+   */
+  consumeOlder(): never {
+    throw new Error(`test session "${this.sessionId}": consumeOlder is not stubbed — supply it on the fixture's session face`)
+  }
+
+  /**
    * Fail-loud stub; supply `loadThrough` on the fixture's session face to exercise it.
    * @returns never — always throws.
    */

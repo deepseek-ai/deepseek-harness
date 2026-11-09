@@ -372,13 +372,14 @@ describe.each([
     expect((await run('typeof retained')).value).toBe('undefined')
   })
 
-  it('rejects a packaged host without a persistent bootstrap during provider loading', async () => {
+  it('accepts an embedded carrier for a packaged host', async () => {
     const previous = Object.getOwnPropertyDescriptor(process, 'pkg')
     try {
       Object.defineProperty(process, 'pkg', { configurable: true, value: {} })
-      await expect(setup()).rejects.toThrow('requires a node-script launch')
-      const { runtime } = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
-      expect(runtime.programFormat).toBe(format)
+      const embedded = await setup()
+      expect(embedded.runtime.programFormat).toBe(format)
+      const scripted = await setup({ launch: { kind: 'node-script', executable: process.execPath, bootstrapPath: join(process.cwd(), 'persistent-process.js') } })
+      expect(scripted.runtime.programFormat).toBe(format)
     } finally {
       if (previous === undefined) Reflect.deleteProperty(process, 'pkg')
       else Object.defineProperty(process, 'pkg', previous)

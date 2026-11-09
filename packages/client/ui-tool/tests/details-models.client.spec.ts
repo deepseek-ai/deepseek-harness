@@ -93,20 +93,20 @@ describe('control detail adapters', () => {
     const agents = details('list_agents', 'lead [running] — root agent\nreviewer/checker [inactive] — Check tests\nold-id [unavailable]')
     expect(agents?.summary).toBe('3 agents')
     expect(agents?.items).toEqual([
-      { title: 'lead', subtitle: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
-      { title: 'reviewer/checker', subtitle: 'Check tests', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
+      { title: 'root agent', subtitle: 'lead', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'Check tests', subtitle: 'reviewer/checker', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
       { title: 'old-id', badge: { label: 'Unavailable', tone: 'neutral' }, fields: [] },
     ])
     const historical = details('list_agents', 'a1 [running] — Build\na2 [ready] parent=a1 depth=1 — Review\na3 [diagnostic: corrupt] parent=a1 depth=1', { scope: 'descendants' })
     expect(historical?.summary).toBe('3 agents')
     expect(historical?.items).toEqual([
-      { title: 'a1', subtitle: 'Build', badge: { label: 'Running', tone: 'info' }, fields: [] },
-      { title: 'a2', subtitle: 'Review', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
+      { title: 'Build', subtitle: 'a1', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'Review', subtitle: 'a2', badge: { label: 'Ready', tone: 'neutral' }, fields: [] },
       { title: 'a3', badge: { label: 'diagnostic: corrupt', tone: 'neutral' }, fields: [] },
     ])
     const structured = details('list_agents', JSON.stringify([{ name: 'lead', status: 'running', description: 'root agent' }, { name: 'reviewer', status: 'inactive' }]))
     expect(structured?.items).toEqual([
-      { title: 'lead', description: 'root agent', badge: { label: 'Running', tone: 'info' }, fields: [] },
+      { title: 'root agent', subtitle: 'lead', badge: { label: 'Running', tone: 'info' }, fields: [] },
       { title: 'reviewer', badge: { label: 'Inactive', tone: 'warning' }, fields: [] },
     ])
     expect(details('list_agents', 'reviewer running')).toBeNull()
