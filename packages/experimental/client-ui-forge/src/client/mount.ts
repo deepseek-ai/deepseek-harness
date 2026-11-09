@@ -252,6 +252,7 @@ function registerUi(ctx: Context): void {
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
       addThreadToInput: (thread, url, range) => addThreadToInput(sessionId, thread, url, range),
       changeRequestReview: (url, headSha, signal) => ctx.remote.forgePanel.changeRequestReview(sessionId, url, headSha, signal),
+      changeRequestReviewWrite: (url, write) => ctx.remote.forgePanel.changeRequestReviewWrite(sessionId, url, write),
       reviewQueue: ({ id, signal }) => {
         let queue = store.reviews.get(signal)
         if (queue === undefined) {
@@ -275,7 +276,7 @@ function registerUi(ctx: Context): void {
       copyPath,
       createChangeRequest: () => { createChangeRequest(sessionId) },
       report: (key, params) => {
-        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' ? 'success' : 'failure',
+        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' || key === 'review.discarded' ? 'success' : 'failure',
           ...params === undefined ? {} : { params } })
       },
     }

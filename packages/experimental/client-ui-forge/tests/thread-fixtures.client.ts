@@ -6,7 +6,7 @@ import type { ForgeDiffFile, ForgeDiffHunk } from '../src/types.ts'
 let comments = 0
 
 /**
- * Build a comment by `reviewer` that has a web page.
+ * Build a comment by `reviewer` that has a web page and that the signed-in user may not change.
  * @param overrides - fields to replace.
  * @returns the comment.
  */
@@ -19,12 +19,15 @@ export function reviewComment(overrides: Partial<ForgeReviewComment> = {}): Forg
     createdAt: '2026-11-05T08:00:00Z',
     pending: false,
     url: `https://github.com/octo/demo/pull/7#discussion_r${comments}`,
+    viewerCanEdit: false,
+    viewerCanDelete: false,
     ...overrides,
   }
 }
 
 /**
- * Build an unresolved new-side thread on line 3 of `src/a.ts`, written at the head `a…a` and placed there, with one comment.
+ * Build an unresolved new-side thread on line 3 of `src/a.ts`, written at the head `a…a` and placed there, with one comment,
+ * that the signed-in user may neither reply to nor resolve.
  * @param overrides - fields to replace.
  * @returns the thread.
  */
@@ -38,6 +41,8 @@ export function reviewThread(overrides: Partial<ForgeReviewThread> = {}): ForgeR
     original: { commit: 'a'.repeat(40), startLine: 3, endLine: 3 },
     diffHunk: '@@ -1,3 +1,3 @@\n a\n-b\n+B',
     resolved: false,
+    viewerCanReply: false,
+    viewerCanResolve: false,
     comments: [reviewComment()],
     ...overrides,
   }

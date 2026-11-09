@@ -20,6 +20,8 @@ export interface ThreadReadInput {
   readonly statusAt: number | null
   /** Changes on each refresh. */
   readonly attempt: number
+  /** Changes after each write that may have changed the threads, which the Host no longer answers from memory. */
+  readonly revision: number
   /** Read the threads at a head commit. */
   readonly read: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
 }
@@ -41,7 +43,7 @@ export interface ThreadReadState {
  * @returns the last threads and the latest failure.
  */
 export function useThreadRead(input: ThreadReadInput): ThreadReadState {
-  const { visible, url, head, updatedAt, statusAt, attempt, read } = input
+  const { visible, url, head, updatedAt, statusAt, attempt, revision, read } = input
   const [state, setState] = useState<ThreadReadState & { readonly url: string | null }>(
     { url: null, review: null, failure: null, unsupported: false })
   useEffect(() => {
@@ -59,7 +61,7 @@ export function useThreadRead(input: ThreadReadInput): ThreadReadState {
         failure: code === 'forgePanel/review-unsupported' ? null : message, unsupported: code === 'forgePanel/review-unsupported' }))
     })
     return () => { controller.abort() }
-  }, [visible, url, head, updatedAt, statusAt, attempt, read])
+  }, [visible, url, head, updatedAt, statusAt, attempt, revision, read])
   return state.url === url ? state : { review: null, failure: null, unsupported: false }
 }
 

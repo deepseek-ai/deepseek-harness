@@ -22,13 +22,14 @@ import {
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { fileAddressFor, pathPartsOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeCommitRange, ForgeDiffFile, ForgeLocalCommits, ForgeLocalDiff,
   ForgeLocalScope, ForgePanelChangeRequest, ForgePanelState,
 } from '../types.ts'
 import type {
-  ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread,
+  ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
@@ -49,7 +50,7 @@ import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
-import type { FileThreads, ThreadActions, ThreadFocus } from './ReviewThreads.tsx'
+import type { FileThreads, ThreadActions, ThreadFocus, ThreadWrite } from './ReviewThreads.tsx'
 import { inFileOrder, type ThreadFilter } from './review-threads.ts'
 import { usePlacedThreads, useThreadRead, type PlacedThread } from './thread-state.ts'
 import { ThreadList } from './ThreadList.tsx'
@@ -94,6 +95,8 @@ export interface ChangesTabInjected {
   readonly changeRequestText: (url: string, commit: string, path: string) => Promise<RemoteResult<string>>
   /** Read the review threads of a change request at the head of its latest status; `signal` aborts the read. */
   readonly changeRequestReview: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeReviewData>>
+  /** Write to the review threads or the pending review of a change request; never retries a write. */
+  readonly changeRequestReviewWrite: (url: string, write: ForgeReviewWrite) => Promise<RemoteResult<ForgeReviewWriteResult>>
   /** Quote a whole review thread of the change request at `url` in the main input without submitting it. */
   readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean
   /** Open a URL outside the app. */
@@ -433,7 +436,7 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
  */
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
-  changeRequestText, changeRequestCommits, changeRequestReview, viewedFiles,
+  changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
   openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
@@ -481,6 +484,40 @@ export function ChangesTab({
       reviewRunning.current = false
       setReviewBusy(false)
     }
+  }
+  // Every write that may have changed the threads reads them again; writes run one at a time, so a write that starts a
+  // pending review settles before the next write looks for one.
+  const [reviewRevision, setReviewRevision] = useState(0)
+  const writing = useRef<Promise<unknown>>(Promise.resolve())
+  const writeReview = (url: string, write: ForgeReviewWrite): Promise<string | undefined> => {
+    const run = async (): Promise<string | undefined> => {
+      const response = await changeRequestReviewWrite(url, write)
+      if (!response.ok) {
+        if (response.error.code === 'forgePanel/not-bound') return t('thread.writeFailed', { message: response.error.message })
+        setReviewRevision(value => value + 1)
+        return t('thread.writeUnknown')
+      }
+      const result = response.value
+      if (result.ok) {
+        setReviewRevision(value => value + 1)
+        return undefined
+      }
+      switch (result.code) {
+        case 'unsupported': return t('thread.writeUnsupported')
+        case 'failed':
+          setReviewRevision(value => value + 1)
+          return t('thread.writeFailed', { message: result.message })
+        case 'stale': return t('thread.writeStale')
+        case 'unknown':
+          setReviewRevision(value => value + 1)
+          return t('thread.writeUnknown')
+        /* v8 ignore next -- closed ForgeReviewWriteResult code union exhaustiveness guard */
+        default: return assertNever(result.code, 'ForgeReviewWriteResult.code')
+      }
+    }
+    const next = writing.current.then(run, run)
+    writing.current = next
+    return next
   }
   const choices = useStore(store => store.byTab[tab.id])
   const [wanted, setWanted] = useState<string | null>(null)
@@ -575,7 +612,7 @@ export function ChangesTab({
   const prHead = entry?.snapshot?.headSha ?? null
   const prAuthor = entry?.snapshot?.author ?? null
   const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
-    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, read: changeRequestReview })
+    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision, read: changeRequestReview })
   const review = data?.kind === 'change' && threadRead.review !== null && threadRead.review.headSha === prHead
     && (data.commits !== null || data.headSha === prHead) ? threadRead.review : null
   const placed = usePlacedThreads(review, data?.kind === 'change' ? { head: prHead ?? '', end: data.headSha, commits: data.commits } : null)
@@ -689,15 +726,60 @@ export function ChangesTab({
     return list
   }
 
-  // A review addresses the head commit, so it is submitted from the view of the whole change request.
+  // A review addresses the head commit, so it is submitted from the view of the whole change request. A pending review on
+  // the code host is submitted or discarded there; without one, the summary and any comment drafts kept in the browser
+  // are published as one review.
+  const pendingReview = review?.pendingReview ?? null
+  // Logins compare without case, as GitHub's do.
+  const ownChangeRequest = review?.viewer != null && prAuthor !== null && review.viewer.toLowerCase() === prAuthor.toLowerCase()
+  const finishWrite = async (send: () => Promise<string | undefined>, done: ForgePanelKey): Promise<void> => {
+    if (reviewRunning.current) return
+    reviewRunning.current = true
+    setReviewBusy(true)
+    setReviewError(null)
+    try {
+      const failure = await send()
+      if (failure !== undefined) {
+        setReviewError(failure)
+        return
+      }
+      report(done)
+      setReviewOpen(false)
+    } finally {
+      reviewRunning.current = false
+      setReviewBusy(false)
+    }
+  }
   const reviewForm = tab.visible && data !== null && reviewOpen && data.kind === 'change' && data.commits === null && <SubmitReview queue={queue}
-    url={data.url} headSha={data.headSha} busy={reviewBusy} error={reviewError} close={() => { setReviewOpen(false) }}
+    url={data.url} headSha={data.headSha} pending={pendingReview} own={ownChangeRequest} busy={reviewBusy} error={reviewError}
+    close={() => { setReviewOpen(false) }}
     check={() => { openLink(data.url) }} reconcile={() => { queue.finish(false); setReviewError(null) }}
     submit={() => {
       const latest = queue.getSnapshot()
-      void publishReview(data.url, { kind: 'review', headSha: data.headSha, event: latest.event,
-        body: latest.body, comments: latest.comments.map(item => item.comment) }, url => queue.finish(true, url))
+      if (pendingReview === null) {
+        void publishReview(data.url, { kind: 'review', headSha: data.headSha, event: latest.event,
+          body: latest.body, comments: latest.comments.map(item => item.comment) }, url => queue.finish(true, url))
+        return
+      }
+      void finishWrite(async () => {
+        const failure = await writeReview(data.url, { kind: 'submit-pending', headSha: data.headSha, review: pendingReview.id,
+          event: latest.event, body: latest.body })
+        if (failure === undefined && !queue.finish(true)) report('review.saveFailed')
+        return failure
+      }, 'review.submitted')
+    }}
+    discard={pendingReview === null ? undefined : () => {
+      void finishWrite(() => writeReview(data.url, { kind: 'discard-pending', headSha: data.headSha, review: pendingReview.id }), 'review.discarded')
     }} t={t} />
+
+  /** Add a comment to the pending review on the code host at the head the comment was selected on. */
+  const addPending = (selection: ReviewSelection): Promise<string | undefined> => {
+    if (selection.source.kind !== 'change') return Promise.resolve(t('review.stale'))
+    const { path, side, startLine, endLine, body } = selection.comment
+    return writeReview(selection.source.url, { kind: 'add-pending', headSha: selection.source.headSha, comment: { path, side, startLine, endLine, body } })
+  }
+  // Only the whole change request takes new comments for its pending review, once the threads say the user may review.
+  const pendingComments = data?.kind === 'change' && data.commits === null && review?.viewerCanReview === true ? { queue: addPending } : {}
 
   const recordActions: ReviewActions = {
     source: shownSource ?? (source.kind === 'local'
@@ -718,6 +800,11 @@ export function ChangesTab({
     readText: (commit, path) => changeRequestText(data.url, commit, path),
     inputFailed: () => { report('thread.inputFailed') },
     focused: focus,
+    writes: {
+      write: (write: ThreadWrite) => writeReview(data.url, { ...write, headSha: review.headSha }),
+      reviewStarted: review.pendingReview !== null,
+      canReview: review.viewerCanReview,
+    },
   }
   const threadsOf = (path: string): FileThreads | undefined => {
     const group = placed.files.get(path)
@@ -869,11 +956,12 @@ export function ChangesTab({
               file={file}
               review={{ source: reviewSourceOf(data),
                 addToInput: addReviewToInput,
-                records: queue, openLink, reviewStarted: reviewState.comments.length > 0,
+                records: queue, openLink, reviewStarted: pendingReview !== null,
                 onQuoted: (selection) => { if (!queue.recordAgent(selection)) report('review.saveFailed') },
                 publishingBlocked: reviewState.uncertain !== null,
-                ...data.kind === 'local' || data.commits !== null ? {} : {
-                  queue: selection => queue.add(selection),
+                ...pendingComments,
+                // GitHub refuses a comment published on its own while the user has a pending review.
+                ...data.kind === 'local' || data.commits !== null || pendingReview !== null ? {} : {
                   publish: selection => selection.source.kind === 'change'
                     ? publishReview(selection.source.url, { kind: 'comment', headSha: selection.source.headSha, comment: selection.comment },
                       url => queue.published(selection, url))
@@ -939,7 +1027,8 @@ export function ChangesTab({
         ? <LocalHeader state={state} scope={scope} base={base} missing={failed === 'forgePanel/base-missing'} visible={tab.visible}
           diffBases={diffBases} choose={(next) => { actions.based(tab.id, next) }} commitMenu={commitMenu}
           createChangeRequest={createChangeRequest} t={t} />
-        : <ChangeHeader url={source.url} entry={entry} openLink={openLink} commitMenu={commitMenu} reviewCount={reviewState.comments.length}
+        : <ChangeHeader url={source.url} entry={entry} openLink={openLink} commitMenu={commitMenu}
+          reviewCount={(pendingReview?.comments ?? 0) + reviewState.comments.length}
           reviewDisabled={data === null || changeCommits !== null} onReview={() => { setReviewOpen(true) }} t={t} />}
       {!reviewOpen && reviewState.error !== null && <Notice>{t(reviewState.error === 'load' ? 'review.loadFailed' : 'review.saveFailed')}</Notice>}
       {!reviewOpen && reviewState.uncertain !== null && !reviewBusy && source.kind === 'change' && <div className={css.reviewNotice} role="alert">
