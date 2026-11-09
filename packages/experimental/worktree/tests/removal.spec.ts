@@ -94,6 +94,34 @@ describe('safe worktree removal', () => {
     await expect(git(root, 'worktree', 'remove', worktree.path)).rejects.toThrow('working trees containing submodules cannot be moved or removed')
   })
 
+  it('removes a checkout whose submodule was never initialized there, as Git does', async () => {
+    const root = await repository()
+    disposers.push(() => rm(root, { recursive: true, force: true }))
+    const source = await repository()
+    disposers.push(() => rm(source, { recursive: true, force: true }))
+    await git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', source, 'nested')
+    await git(root, 'commit', '-m', 'submodule')
+    const ctx = await harness(root)
+    disposers.push(() => ctx.fiber.dispose())
+    const agent = testAgent(ctx, root)
+    const worktree = await ctx.worktrees.create(agent, { name: 'archive-me' })
+    expect(await git(worktree.path, 'ls-files', '--stage', 'nested')).toMatch(/^160000 /)
+    expect(await remove(ctx, agent, worktree)).toBe(true)
+    await expect(access(worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('leaves a committed embedded repository to Git, which refuses the removal', async () => {
+    const { ctx, agent, worktree } = await fixture()
+    const source = await repository()
+    disposers.push(() => rm(source, { recursive: true, force: true }))
+    await git(worktree.path, 'clone', source, 'nested')
+    await git(worktree.path, 'add', '-A')
+    await git(worktree.path, 'commit', '-m', 'embedded repository')
+    expect(await git(worktree.path, 'status', '--porcelain')).toBe('')
+    await expect(remove(ctx, agent, worktree)).rejects.toThrow('working trees containing submodules cannot be moved or removed')
+    await access(join(worktree.path, 'nested', 'tracked.txt'))
+  })
+
   it('removes a checkout that holds only ignored files, as Git does without force', async () => {
     const { ctx, agent, worktree } = await fixture()
     await git(worktree.path, 'config', 'core.excludesFile', join(worktree.repositoryRoot, 'exclude'))

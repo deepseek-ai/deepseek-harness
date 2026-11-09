@@ -1584,7 +1584,8 @@ export interface Config {
   graceMs?: number
   /**
    * Maximum captured bytes per subprocess output stream; archive inspection
-   * streams `git status` and the worktree listing, so it bounds only their stderr.
+   * streams `git status`, and inspection and restoration stream the worktree
+   * listing, so it bounds only their stderr.
    */
   maxOutputBytes?: number
 }

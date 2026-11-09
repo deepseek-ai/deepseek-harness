@@ -9,7 +9,7 @@ description: "归档 Session 可以删除其干净的工作树并保留分支，
 
 ## 变更
 
-归档 Session 以前会保留检出目录。工作树服务现在把它创建的每个检出目录记录为 `plugin:worktree/created` Session 事件；当创建它的 Session 被归档时，若没有未归档的 Session 引用该目录、创建者的策略不是只读，且 Git 未发现跟踪文件改动、未跟踪文件、子模块仓库、锁或分离 HEAD，就用不带 force 的 `git worktree remove` 删除它。`node_modules` 之类被忽略的文件，以及 `git status` 不报告的 skip-worktree 或 assume-unchanged 文件改动，都不会保留目录，Git 会丢弃它们。分支和提交仍会保留。服务的 `retainOnArchive` 设置默认关闭，开启后改为保留所有检出目录。本版本之前创建的检出目录没有该事件，不会被扫描；更早归档的 Session 也不会。参见[工作树服务](../../../../packages/experimental/worktree/README.zh.md)。
+归档 Session 以前会保留检出目录。工作树服务现在把它创建的每个检出目录记录为 `plugin:worktree/created` Session 事件；当创建它的 Session 被归档时，若没有未归档的 Session 引用该目录、创建者的策略不是只读，且 Git 未发现跟踪文件改动、未跟踪文件、已初始化的子模块、锁或分离 HEAD，就用不带 force 的 `git worktree remove` 删除它。`node_modules` 之类被忽略的文件，以及 `git status` 不报告的 skip-worktree 或 assume-unchanged 文件改动，都不会保留目录，Git 会丢弃它们。含已提交内嵌仓库的检出目录会被 Git 拒绝删除，因此保留，归档提示显示清理失败。分支和提交仍会保留。服务的 `retainOnArchive` 设置默认关闭，开启后改为保留所有检出目录。本版本之前创建的检出目录没有该事件，不会被扫描；更早归档的 Session 也不会。参见[工作树服务](../../../../packages/experimental/worktree/README.zh.md)。
 
 Forge bundle 为面板和 `create_worktree` 工具挂载同一个 `worktree` 服务。隔离第二个服务的 `forge-worktree` 行与 `optional-forge-panel` 组已移除；面板是顶层的 `forge-panel` 行。
 

@@ -1,4 +1,4 @@
-/** Bounded, cancellable commands under the calling Session's existing file policy. */
+/** Cancellable commands under the calling Session's existing file policy, whose stdout is collected within a bound or streamed. */
 
 import type { Readable } from 'node:stream'
 import type { Context } from '@deepseek-ai/cordis'
@@ -70,7 +70,9 @@ export async function runCommand(
  * field to `onField` as it arrives instead of retaining the output, so the size
  * of stdout is unbounded and `maxOutputBytes` limits only stderr. An
  * unterminated remainder is ignored. A false return from `onField` terminates
- * the command, whose exit status is then not checked; otherwise only status 0 succeeds.
+ * the command, whose outcome is then not checked, even when the provider
+ * rejects it for a launch cancelled before acknowledgement; otherwise only
+ * status 0 succeeds.
  * @param ctx - subprocess and sandbox providers in the same execution world.
  * @param config - complete process resource limits.
  * @param policy - unchanged calling Session policy.
@@ -105,11 +107,16 @@ export async function scanCommand(
         break
       }
     }
-    if (stopped) child.terminate()
+    if (stopped) {
+      child.terminate()
+      await Promise.allSettled([child.done])
+      timeout.signal.throwIfAborted()
+      return true
+    }
     const outcome = await child.done
     timeout.signal.throwIfAborted()
-    if (!stopped) allowedExitCode(outcome, child.collected.stderr as SubprocessOutputReader, [0])
-    return stopped
+    allowedExitCode(outcome, child.collected.stderr as SubprocessOutputReader, [0])
+    return false
   } finally {
     child.terminate()
     await Promise.allSettled([child.done])

@@ -55,7 +55,8 @@ export async function checkoutIdentity(
 
 /**
  * Find the registration of `target` among the source repository's worktrees.
- * The listing grows with the number of worktrees and is scanned as it arrives.
+ * The listing grows with the number of worktrees; it is streamed without an
+ * output limit, and its entries are kept in memory while `target` is resolved.
  * @param ctx - execution-world filesystem provider.
  * @param request - saved checkout identity.
  * @param target - resolved checkout directory.
@@ -111,7 +112,8 @@ export async function removeCheckout(
  * are not counted, nor are edits to skip-worktree or assume-unchanged files,
  * which `git status` hides; `git worktree remove` discards both. A checkout
  * whose administrative directory holds submodule repositories is ineligible,
- * as Git refuses to remove it.
+ * as Git refuses to remove it; a committed embedded repository is not
+ * inspected, so Git's refusal of that removal rejects.
  * @param ctx - execution-world filesystem provider.
  * @param directory - configured relative worktree pool.
  * @param request - saved checkout identity.
