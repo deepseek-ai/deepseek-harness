@@ -26,7 +26,7 @@ import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-question
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, LlmError, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
@@ -671,7 +671,7 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
     await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
     const saved = vi.spyOn(f.ctx.attachments, 'saveImages')
     const resolve = vi.spyOn(f.ctx.llm, 'resolveModelInfo')
-    if (route === 'provider-error') resolve.mockRejectedValue(new Error('model lookup failed'))
+    if (route === 'provider-error') resolve.mockRejectedValue(new LlmError('model lookup failed', 'UNKNOWN_MODEL'))
     else resolve.mockResolvedValue({ provider: 'image-fixture', id: 'vision', name: 'Vision',
       ...route === 'text-only' ? { inputModalities: ['text'] } : {},
     })
@@ -679,10 +679,10 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
     const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain(route === 'unresolved' ? 'model route could not be resolved'
-      : route === 'provider-error' ? 'model lookup failed' : 'declare image input')
+      : route === 'provider-error' ? 'model lookup failed' : 'IMAGE_MODEL_UNSUPPORTED: CUA screenshots require model')
     expect(result.error?.info).toEqual(route === 'unresolved'
       ? { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
-      : route === 'provider-error' ? undefined : { name: 'NativeError', code: 'IMAGE_MODEL_UNSUPPORTED' })
+      : route === 'provider-error' ? { name: 'LlmError', code: 'UNKNOWN_MODEL' } : { name: 'NativeError', code: 'IMAGE_MODEL_UNSUPPORTED' })
     expect(native.request).not.toHaveBeenCalled()
     expect(saved).not.toHaveBeenCalled()
   },

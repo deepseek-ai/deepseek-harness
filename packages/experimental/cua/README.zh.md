@@ -37,7 +37,7 @@ kind: "package-reference"
 
 观察方法会输出并返回结果。使用 `void await app.getAccessibilityTree()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。`window.getScreenshot()` 返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。
 
-`tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `IMAGE_MODEL_UNSUPPORTED`；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
+`tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `IMAGE_MODEL_UNSUPPORTED`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
