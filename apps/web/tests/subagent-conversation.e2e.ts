@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { zstdCompressSync } from 'node:zlib'
-import type { Browser, Locator, Page } from 'playwright'
+import type { Browser, Locator, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
@@ -90,6 +90,15 @@ function childFixture(source: string, fixtureId: string, withContinuation: boole
  */
 async function showSubagentsSection(page: Page): Promise<Locator> {
   return (await showSessionPanel(page)).locator(SUBAGENTS_SECTION)
+}
+
+/** Whether a response answers the projection read of one Session. */
+function projectionReadOf(sessionId: SessionId): (response: Response) => boolean {
+  return (response) => {
+    if (!response.url().endsWith('/api/session/projections')) return false
+    const body = response.request().postDataJSON() as { payload: { args: { request: { sessionId: SessionId } } } }
+    return body.payload.args.request.sessionId === sessionId
+  }
 }
 
 async function waitForAgentToSettle(scaffold: WebScaffold, id: SessionId): Promise<void> {
@@ -377,6 +386,62 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     if (failures.length > 1) throw new AggregateError(failures, 'subagent Web teardown failed')
   })
 
+  it('retries a failed cold catalog and discovers descendants through the breadcrumb switcher', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-unread-catalog'))
+    // The Session panel reads nothing when it shows; the child's switcher is the explicit activation of the parent's level.
+    const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
+    const trigger = hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true })
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
+    await trigger.waitFor()
+    // A reload forgets every catalog read while the child conversation stays open.
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await trigger.waitFor({ timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    const projections = vi.spyOn(scaffold.ctx.sessionController, 'projections')
+    const menu = page.locator('[data-subagent-panel]')
+    const tree = menu.getByRole('tree', { name: 'Subagent sessions' })
+    try {
+      const childUrl = page.url()
+      await page.locator('[data-composer-input]').first().hover()
+      const reads = apiCalls.filter(path => path === '/api/session/projections').length
+      await trigger.hover()
+      await tree.getByRole('treeitem', { name: new RegExp(LABEL) }).waitFor()
+      // The open child's own conversation supplies its catalog; its sibling's stays unread until activation.
+      expect(await tree.getByRole('button', { name: `Expand ${ONE_SHOT_LABEL} descendants`, exact: true }).count()).toBe(0)
+      expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(reads)
+      await page.route('**/api/session/projections', route => route.abort('failed'), { times: 1 })
+      await trigger.click()
+      const retry = tree.getByRole('button', { name: 'Retry', exact: true })
+      await retry.waitFor()
+      expect(projections).not.toHaveBeenCalled()
+      const siblingsRead = page.waitForResponse(projectionReadOf(oneShotId))
+      await retry.click()
+      await (await siblingsRead).finished()
+      await retry.waitFor({ state: 'detached' })
+      const expand = tree.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true })
+      await expand.waitFor()
+      expect(projections.mock.calls.map(([request]) => request.sessionId)).toEqual(expect.arrayContaining([parentId, oneShotId]))
+      expect(projections.mock.calls.some(([request]) => request.sessionId === grandchildId)).toBe(false)
+      const descendantsRead = page.waitForResponse(projectionReadOf(grandchildId))
+      await expand.click()
+      await (await descendantsRead).finished()
+      const grandchild = tree.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) })
+      await grandchild.waitFor()
+      expect(await grandchild.getAttribute('aria-expanded')).toBeNull()
+      expect(page.url()).toBe(childUrl)
+      expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
+      expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
+      await page.keyboard.press('Escape')
+      await menu.waitFor({ state: 'detached' })
+    } finally {
+      await page.unroute('**/api/session/projections')
+      projections.mockRestore()
+      await hierarchy.getByRole('button').first().click()
+      await trigger.waitFor({ state: 'detached' })
+    }
+  })
+
   it('lists direct subagents by label in the reference menu', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-reference-title'))
     expect(liveReferenceOptions.some(text => text.includes(LABEL))).toBe(true)
@@ -438,7 +503,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
         }
         expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${CHILD_NAME} `)
         expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
-        expect(await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).count()).toBe(1)
+        await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
         expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
         expect(page.url()).toBe(originalUrl)
         expect(await page.getByRole('tooltip').filter({ hasText: LABEL }).count()).toBe(0)
@@ -451,9 +516,35 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
-  it('recovers a current-format cold child catalog cache miss without activating either level', async () => {
+  it('expands locally available cold catalogs without requesting or activating either level', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/web-e2e-subagent-tree'))
+    // From a fresh page, the child's switcher prepares the parent's level and the child's; back in the parent, the
+    // panel expands both from the catalogs those reads left, requesting nothing more.
+    const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
+    const trigger = hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true })
+    await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
+    await trigger.waitFor()
+    const warningStart = tripwire.warnings.length
+    await page.reload({ waitUntil: 'load' })
+    await trigger.waitFor({ timeout: 30_000 })
+    acknowledgeReloadConnectionLoss(tripwire, warningStart)
+    const siblingsRead = page.waitForResponse(projectionReadOf(oneShotId))
+    await trigger.click()
+    await (await siblingsRead).finished()
+    const menu = page.locator('[data-subagent-panel]')
+    const expand = menu.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true })
+    await expand.waitFor()
+    const descendantsRead = page.waitForResponse(projectionReadOf(grandchildId))
+    await expand.click()
+    await (await descendantsRead).finished()
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'detached' })
+    await hierarchy.getByRole('button').first().click()
+    await trigger.waitFor({ state: 'detached' })
+    await page.locator('[data-composer-input]').first().hover()
     const catalogTree = (await showSubagentsSection(page)).getByRole('tree', { name: 'Subagent sessions' })
+    await catalogTree.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
+    const catalogReads = apiCalls.filter(path => path === '/api/session/projections').length
     expect(await catalogTree.evaluate((element) => {
       const rect = element.getBoundingClientRect()
       const hit = document.elementFromPoint(rect.left + 8, rect.top + 8)
@@ -463,6 +554,10 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       name: `Expand ${ONE_SHOT_LABEL} descendants`,
     })
     expect(await oneShotDisclosure.count()).toBe(0)
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/disclosures.expected.md', import.meta.url)),
+      await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd), MODE,
+    )
     const oneShotRow = page.getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) })
     expect(await oneShotRow.locator('[data-state="done"]').count()).toBe(1)
     expect(await oneShotRow.getByText('~6mo 12d', { exact: true }).count()).toBe(1)
@@ -511,17 +606,12 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       expect(await page.getByText(PARENT_PROMPT, { exact: true }).isVisible()).toBe(true)
       expect(await page.locator('[data-sidebar-chat]').count()).toBe(0)
     }
-    const observe = vi.spyOn(scaffold.ctx.sessionQuery, 'observeSession')
-    try {
-      const projections = page.waitForResponse(response => new URL(response.url()).pathname === '/api/session/projections')
-      await clickDisclosureGutter(3)
-      await projections
-      await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor({ timeout: 15_000 })
-      expect(observe.mock.calls.some(([id]) => id === childId)).toBe(true)
-      expect(observe.mock.calls.some(([id]) => id === grandchildId)).toBe(false)
-    } finally {
-      observe.mockRestore()
-    }
+    await clickDisclosureGutter(3)
+    const grandchildRow = page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) })
+    await grandchildRow.waitFor({ timeout: 15_000 })
+    expect(await catalogTree.getByText('Loading subagents…', { exact: true }).count()).toBe(0)
+    expect(await grandchildRow.getAttribute('aria-expanded')).toBeNull()
+    expect(await grandchildRow.getByRole('button', { name: `Expand ${NESTED_LABEL} descendants` }).count()).toBe(0)
     await clickDisclosureGutter(26)
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor({ state: 'detached' })
     expect(await childRow.getAttribute('aria-expanded')).toBe('false')
@@ -580,9 +670,9 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(TREE_EXPECTED, snapshot, MODE)
+    expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(catalogReads)
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).getByText(grandchildId, { exact: true }).click()
     await page.getByText(NESTED_PROMPT).waitFor()
-    const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
     await hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true }).waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
     expect(scaffold.ctx.agents.get(grandchildId)).toBeUndefined()
@@ -1005,10 +1095,9 @@ describe('web e2e: migration-required subagent catalog', () => {
       const tree = page.locator(SUBAGENTS_SECTION).getByRole('tree', { name: 'Subagent sessions' })
       const childRow = tree.getByRole('treeitem', { name: new RegExp(childLabel) })
       await childRow.waitFor()
-      await expect.poll(() => childRow.textContent()).toContain('Migration required')
       await expect.poll(() => childRow.getByRole('button', { name: `Expand ${childLabel} descendants`, exact: true }).count()).toBe(0)
       expect(await childRow.getAttribute('aria-expanded')).toBeNull()
-      expect(await childRow.textContent()).toContain('Migration required')
+      expect(await childRow.textContent()).not.toContain('Migration required')
       expect(await childRow.textContent()).not.toContain('unknown mode')
       expect(await childRow.getByRole('button', { name: `Open ${childLabel} in sidebar`, exact: true }).isEnabled()).toBe(true)
       expect(await tree.getByRole('treeitem').count()).toBe(1)
@@ -1026,7 +1115,7 @@ describe('web e2e: migration-required subagent catalog', () => {
       await showSessionPanel(page)
       const grandchildRow = tree.getByRole('treeitem', { name: new RegExp(grandchildLabel) })
       await grandchildRow.waitFor()
-      expect(await grandchildRow.textContent()).toContain('Migration required')
+      expect(await grandchildRow.textContent()).not.toContain('Migration required')
       expect(await grandchildRow.getAttribute('aria-expanded')).toBeNull()
       expect(await grandchildRow.getByRole('button', { name: `Expand ${grandchildLabel} descendants`, exact: true }).count()).toBe(0)
       expect(projections).not.toHaveBeenCalled()

@@ -63,7 +63,7 @@ function agentFor(ctx: Context, session: Session): Agent {
   return agent
 }
 
-async function fixture(options: { cache?: boolean; retainOnArchive?: boolean } = {}) {
+async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; maxOutputBytes?: number } = {}) {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-archive-')))
   cleanups.push(() => rm(temporary, { recursive: true, force: true }))
   const root = await repository(temporary)
@@ -87,7 +87,8 @@ async function fixture(options: { cache?: boolean; retainOnArchive?: boolean } =
   ctx.provide('storageDomain', domain)
   if (options.cache === true) await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 1_000, writeIntervalMs: 60_000 })
   await ctx.plugin(WorkspaceRegistry)
-  const worktrees = ctx.plugin(WorktreeService, options.retainOnArchive === undefined ? {} : { retainOnArchive: options.retainOnArchive })
+  const { cache: _cache, ...config } = options
+  const worktrees = ctx.plugin(WorktreeService, config)
   await worktrees
   const session = ctx.sessions.create(SessionId('archive-owner'), { meta: { cwd: root } })
   const agent = agentFor(ctx, session)
@@ -135,6 +136,39 @@ describe('archive-triggered worktree cleanup', () => {
     await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(f.root, 'rev-parse', f.worktree.branch)).toBe(head)
     expect(f.ctx.workspaceRegistry.archivedSessionIds).toContain(f.session.id)
+  })
+
+  it('removes a clean checkout whose file listing exceeds maxOutputBytes', async () => {
+    const f = await fixture({ maxOutputBytes: 1_024 })
+    for (let index = 0; index < 64; index++) {
+      await writeFile(join(f.worktree.path, `file-${String(index).padStart(3, '0')}-${'x'.repeat(24)}.txt`), `${index}\n`)
+    }
+    await git(f.worktree.path, 'add', '.')
+    await git(f.worktree.path, 'commit', '-m', 'many files')
+    expect((await git(f.worktree.path, 'ls-files', '-z')).length).toBeGreaterThan(1_024)
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'removed' })
+    await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('retains a checkout whose status output exceeds maxOutputBytes instead of failing', async () => {
+    const f = await fixture({ maxOutputBytes: 1_024 })
+    for (let index = 0; index < 64; index++) {
+      await writeFile(join(f.worktree.path, `untracked-${String(index).padStart(3, '0')}-${'x'.repeat(24)}.txt`), `${index}\n`)
+    }
+    expect((await git(f.worktree.path, 'status', '--porcelain', '-z', '--untracked-files=all')).length).toBeGreaterThan(1_024)
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'retained' })
+    await access(join(f.worktree.path, 'untracked-000-xxxxxxxxxxxxxxxxxxxxxxxx.txt'))
+  })
+
+  it('removes a clean checkout when the worktree listing exceeds maxOutputBytes', async () => {
+    const f = await fixture({ maxOutputBytes: 1_024 })
+    for (let index = 0; index < 8; index++) await git(f.root, 'worktree', 'add', '--detach', join(f.temporary, `extra-${index}`))
+    expect((await git(f.root, 'worktree', 'list', '--porcelain', '-z')).length).toBeGreaterThan(1_024)
+    await f.ctx.workspaceRegistry.archiveSession(f.session.id)
+    expect(await settled(f)).toMatchObject({ status: 'removed' })
+    await expect(access(f.worktree.path)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('returns from admission before the inspection runs', async () => {

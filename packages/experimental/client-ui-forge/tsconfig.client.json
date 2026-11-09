@@ -7,6 +7,7 @@
   },
   "include": [
     "src/client",
+    "src/commit-range.ts",
     "src/css-modules.d.ts",
     "src/types.ts"
   ],

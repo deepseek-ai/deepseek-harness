@@ -3,7 +3,9 @@ import { useMemo } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
-import { CatalogTree, deriveCatalogs, progressOf, type Catalogs, type SubagentCatalogInjected } from './SubagentCatalog.tsx'
+import {
+  CatalogTree, deriveCatalogs, levelPreparer, progressOf, type Catalogs, type SubagentCatalogInjected,
+} from './SubagentCatalog.tsx'
 import css from './SubagentCatalog.module.css'
 
 /** Full props of the subagents section. */
@@ -42,16 +44,19 @@ function useCatalogs({ useSessions, useSessionStatus }: Pick<SubagentsSectionPro
 
 /**
  * Render the Session's subagent tree. The section renders nothing while the
- * Session has no subagents and no failed catalog read. Opening a subagent
+ * Session has no subagents and no failed catalog read. Showing it reads
+ * nothing: rows offer expansion from locally known catalogs, and expanding a
+ * branch or retrying a failed read prepares that level. Opening a subagent
  * closes the panel's overlay.
  * @param props - Session hooks, panel owner values, catalog actions, and copy.
  * @returns the section body, or null with nothing to show.
  */
 export function SubagentsSection({
-  sessionId, dismissOverlay, useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t,
+  sessionId, dismissOverlay, useSessions, useSessionStatus, openChild, openChildAside, prepareCatalog, t,
 }: SubagentsSectionProps) {
   const { catalogs, summaries } = useCatalogs({ useSessions, useSessionStatus })
   const catalog = catalogs[sessionId]
+  const prepareLevel = useMemo(() => levelPreparer(prepareCatalog), [prepareCatalog])
   if (catalog === undefined || (catalog.state !== 'error' && catalog.entries.length === 0)) return null
   return (
     <div className={css.sectionBody} data-subagents-section="">
@@ -62,7 +67,7 @@ export function SubagentsSection({
         summaries={summaries}
         openChild={openChild}
         openChildAside={openChildAside}
-        refreshProjection={refreshProjection}
+        prepareLevel={prepareLevel}
         onOpened={dismissOverlay}
         t={t}
       />

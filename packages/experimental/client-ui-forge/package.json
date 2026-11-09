@@ -72,7 +72,8 @@
     "diff": "^9.0.0",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-storage-domain": "workspace:*"
+    "@deepseek-ai/dsh-storage-domain": "workspace:*",
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -116,6 +117,7 @@
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@testing-library/react": "^16.3.3",
+    "@types/picomatch": "^4.0.3",
     "clsx": "^2.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

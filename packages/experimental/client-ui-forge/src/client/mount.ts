@@ -18,6 +18,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ReviewQueue } from './review-queue.ts'
+import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { AttentionIndicator, type AttentionIndicatorInjected } from './AttentionIndicator.tsx'
@@ -63,6 +64,7 @@ function openLink(url: string): void {
 interface SessionStores {
   readonly panel: PanelSource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
+  readonly viewed: ViewedFiles
   /** Refresh unless an automatic refresh of this Session ran within {@link AUTO_REFRESH_MIN_MS}. */
   readonly refreshIfStale: () => void
   readonly release: () => void
@@ -122,7 +124,10 @@ function registerUi(ctx: Context): void {
         refreshedAt = now
         void refreshOf(sessionId)()
       }
-      store = { panel, reviews: new WeakMap(), refreshIfStale, release: () => { void dispose() } }
+      store = {
+        panel, reviews: new WeakMap(), viewed: new ViewedFiles(sessionId), refreshIfStale,
+        release: () => { void dispose() },
+      }
       stores.set(sessionId, store)
     }
     return store
@@ -259,7 +264,10 @@ function registerUi(ctx: Context): void {
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       diffBases: (query, signal) => ctx.remote.forgePanel.diffBases(sessionId, query, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
-      changeRequestDiff: (url, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, signal),
+      localCommits: (base, signal) => ctx.remote.forgePanel.localCommits(sessionId, base, signal),
+      changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
+      changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
+      viewedFiles: store.viewed,
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
       reviewQueue: ({ id, signal }) => {

@@ -54,6 +54,8 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',
     parameters: {},
+    // Catalog observations are read-only and release their Session handles.
+    isConcurrencySafe: () => true,
     output: {
       schema: {
         type: 'array',

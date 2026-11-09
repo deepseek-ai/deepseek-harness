@@ -16,7 +16,7 @@ import css from './SubagentCatalog.module.css'
 
 /** One Session's direct subagents with their live activity. */
 export type SubagentCatalogSnapshot = Omit<SessionProjectionSnapshot, 'values' | 'state'> & {
-  state: 'loading' | 'ready' | 'migration-required' | 'error'
+  state: 'idle' | 'loading' | 'ready' | 'migration-required' | 'error'
   entries: (SessionProjectionMap['subagentCatalog'][number] & { activity: 'running' | 'inactive' })[]
 }
 
@@ -28,6 +28,8 @@ export type SubagentCatalogInjected = {
   openChild: (address: SubagentAddress) => void
   openChildAside: (address: SubagentAddress) => void
   refreshProjection: (parentSessionId: SessionId) => void
+  /** Read this catalog and its direct children after explicit activation or retry. */
+  prepareCatalog: (parentSessionId: SessionId) => Promise<void>
 }
 
 interface CatalogRowsProps {
@@ -170,9 +172,11 @@ function CatalogLoadingRows({ t }: { t: TranslateNS<typeof NS> }) {
   return <div className={css.notice}>{t('loading.label')}</div>
 }
 
-/** A child becomes a known leaf only after its own authoritative catalog loads empty. */
-function isKnownLeaf(catalog: SubagentCatalogSnapshot | undefined): boolean {
-  return catalog?.state === 'ready' && catalog.entries.length === 0
+/** Only confirmed child membership exposes a branch disclosure. */
+function canExpandCatalog(entry: SubagentCatalogSnapshot['entries'][number], catalogs: Catalogs, summaries: CatalogRowsProps['summaries']): boolean {
+  return entry.mode !== 'external' && (catalogs[entry.id]?.entries.length ?? 0) > 0
+    && summaries[entry.id]?.formatStatus !== 'migration-required'
+    && catalogs[entry.id]?.state !== 'migration-required'
 }
 
 /** The agent name unique among the row's siblings, or the Session ID for entries recorded without one. */
@@ -224,12 +228,12 @@ function CatalogRows({
     return () => { clearInterval(timer) }
   }, [running])
   const emptyLoading = catalog.state === 'loading' && catalog.entries.length === 0
-  const reserveDisclosure = catalog.entries.some(entry =>
-    entry.mode !== 'external' && !isKnownLeaf(catalogs[entry.id])
-    && summaries[entry.id]?.formatStatus !== 'migration-required'
-    && catalogs[entry.id]?.state !== 'migration-required')
+  const reserveDisclosure = catalog.entries.some(entry => canExpandCatalog(entry, catalogs, summaries))
   return (
     <>
+      {catalog.state === 'idle' && catalog.entries.length === 0 && (
+        <div className={css.notice}>{t('load.idle')}</div>
+      )}
       {emptyLoading && (
         <CatalogLoadingRows t={t} />
       )}
@@ -250,13 +254,10 @@ function CatalogRows({
         const external = entry.mode === 'external'
         const childCatalog = catalogs[entry.id]
         const isCurrent = entry.id === currentSessionId
-        const knownLeaf = external || isKnownLeaf(childCatalog)
         const requiresOpening = summaries[entry.id]?.formatStatus === 'migration-required'
           || childCatalog?.state === 'migration-required'
-        const canExpand = !knownLeaf && !requiresOpening
+        const canExpand = canExpandCatalog(entry, catalogs, summaries)
         const isExpanded = canExpand && expanded.has(entry.id)
-        const childLoading = childCatalog === undefined
-          || (childCatalog.state === 'loading' && childCatalog.entries.length === 0)
         const summary = summaries[entry.id]
         const description = entry.label || summary?.title
         const name = entryName(entry)
@@ -270,7 +271,7 @@ function CatalogRows({
           : completed
             ? t('activity.completed')
             : t('activity.inactive')
-        const secondary = [secondaryLabel, requiresOpening ? t('catalog.migrationRequired') : mode, activity]
+        const secondary = [secondaryLabel, mode, activity]
           .filter(value => value !== undefined)
           .join(' · ')
         const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)
@@ -357,7 +358,6 @@ function CatalogRows({
                   {secondaryLabel !== undefined && (
                     <span className={css.secondaryLabel}>{secondaryLabel}</span>
                   )}
-                  {requiresOpening && <span className={css.summary}>{t('catalog.migrationRequired')}</span>}
                 </span>
                 {metrics !== '' && (
                   <span className={css.metrics}>
@@ -398,31 +398,32 @@ function CatalogRows({
                   )}
               </div>
             </div>
-            {isExpanded && (
-              <div
-                role="group"
-                className={css.children}
-                aria-busy={childLoading || undefined}
-              >
-                {childCatalog === undefined
-                  ? <CatalogLoadingRows t={t} />
-                  : (
-                    <CatalogRows
-                      parentSessionId={entry.id}
-                      currentSessionId={currentSessionId}
-                      catalog={childCatalog}
-                      catalogs={catalogs}
-                      summaries={summaries}
-                      expanded={expanded}
-                      level={level + 1}
-                      openChild={openChild}
-                      openChildAside={openChildAside}
-                      refreshProjection={refreshProjection}
-                      toggleBranch={toggleBranch}
-                      closeCatalog={closeCatalog}
-                      t={t}
-                    />
-                  )}
+            {!isExpanded && !external && !requiresOpening && childCatalog?.state === 'error' && (
+              <div className={css.error} role="alert">
+                <span>{t('load.error')}</span>
+                <button type="button" className={css.refresh} onClick={() => { refreshProjection(entry.id) }}>
+                  <IconRefreshOutlineRegular size={14} />
+                  {t('retry')}
+                </button>
+              </div>
+            )}
+            {childCatalog !== undefined && isExpanded && (
+              <div role="group" className={css.children}>
+                <CatalogRows
+                  parentSessionId={entry.id}
+                  currentSessionId={currentSessionId}
+                  catalog={childCatalog}
+                  catalogs={catalogs}
+                  summaries={summaries}
+                  expanded={expanded}
+                  level={level + 1}
+                  openChild={openChild}
+                  openChildAside={openChildAside}
+                  refreshProjection={refreshProjection}
+                  toggleBranch={toggleBranch}
+                  closeCatalog={closeCatalog}
+                  t={t}
+                />
               </div>
             )}
           </div>
@@ -447,7 +448,7 @@ export function deriveCatalogs(
   return Object.fromEntries(Object.entries(projections).map(([id, snapshot]) => {
     const projected = snapshot.values.subagentCatalog
     const state = snapshot.state === 'idle'
-      ? projected === undefined ? 'loading' : 'ready'
+      ? projected === undefined ? 'idle' : 'ready'
       : snapshot.state === 'migration-required' && projected !== undefined ? 'ready' : snapshot.state
     return [id, {
       state,
@@ -472,6 +473,20 @@ export function progressOf(catalog: SubagentCatalogSnapshot, summaries: CatalogR
   return catalogProgress(catalog.entries, summaries, t)
 }
 
+/**
+ * Bind catalog preparation as a fire-and-forget level read; a rejection is
+ * logged, and the next activation or retry prepares the level again.
+ * @param prepareCatalog - the injected catalog action.
+ * @returns a callback that prepares one level.
+ */
+export function levelPreparer(prepareCatalog: SubagentCatalogInjected['prepareCatalog']): (sessionId: SessionId) => void {
+  return (sessionId) => {
+    void prepareCatalog(sessionId).catch((error: unknown) => {
+      console.error('[ui-subagent] catalog discovery failed:', error)
+    })
+  }
+}
+
 /** Props of one subagent tree. */
 export interface CatalogTreeProps {
   /** Session whose direct catalog roots the tree. */
@@ -483,7 +498,8 @@ export interface CatalogTreeProps {
   summaries: CatalogRowsProps['summaries']
   openChild: (address: SubagentAddress) => void
   openChildAside: (address: SubagentAddress) => void
-  refreshProjection: (parentSessionId: SessionId) => void
+  /** Read a level's catalog and its direct children; the tree calls it on branch expansion and retry. */
+  prepareLevel: (parentSessionId: SessionId) => void
   /** Called after a row opened a Session, so a surrounding popover or overlay can close. */
   onOpened: () => void
   /** Focus the first row on mount, as a keyboard-opened popover does. */
@@ -493,14 +509,14 @@ export interface CatalogTreeProps {
 
 /**
  * Render a subagent tree with expandable branches and roving arrow-key focus.
- * Expanding a branch refreshes that child's catalog; collapsing a branch also
- * collapses its descendants.
+ * A row offers expansion only after its own catalog has entries; expanding it
+ * prepares that level, and collapsing a branch also collapses its descendants.
  * @param props - catalog data, actions, and copy.
  * @returns the tree.
  */
 export function CatalogTree({
   rootSessionId, currentSessionId, catalog, catalogs, summaries,
-  openChild, openChildAside, refreshProjection, onOpened, focusFirst = false, t,
+  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, t,
 }: CatalogTreeProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
   const treeRef = useRef<HTMLDivElement>(null)
@@ -526,7 +542,7 @@ export function CatalogTree({
       return
     }
     setExpanded(current => new Set(current).add(childSessionId))
-    refreshProjection(childSessionId)
+    prepareLevel(childSessionId)
   }
 
   const navigate = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -554,7 +570,7 @@ export function CatalogTree({
         level={1}
         openChild={openChild}
         openChildAside={openChildAside}
-        refreshProjection={refreshProjection}
+        refreshProjection={prepareLevel}
         toggleBranch={toggleBranch}
         closeCatalog={onOpened}
         t={t}

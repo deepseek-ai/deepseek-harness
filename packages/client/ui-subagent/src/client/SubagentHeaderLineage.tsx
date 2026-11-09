@@ -7,7 +7,7 @@ import type { InjectFace, PropsLocale, PropsRuntime, TranslateNS } from '@deepse
 import { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
-  CatalogTree, deriveCatalogs, entryName, treeItems, type SubagentCatalogInjected, type SubagentCatalogSnapshot,
+  CatalogTree, deriveCatalogs, entryName, levelPreparer, treeItems, type SubagentCatalogInjected, type SubagentCatalogSnapshot,
 } from './SubagentCatalog.tsx'
 import css from './SubagentCatalog.module.css'
 
@@ -59,19 +59,21 @@ interface SwitcherProps extends InjectFace<SubagentCatalogInjected> {
  * Title-and-chevron dropdown over the parent's subagent tree. Hover opens it
  * after 150ms and leaving both surfaces closes it after 120ms; a click pins it
  * until an outside press or Escape. With `openTitle`, a click navigates to the
- * ancestor instead.
+ * ancestor instead. Hovering reads nothing; a pinning click or ArrowDown
+ * prepares the parent's level.
  * @param props - tree root, current Session, title, Session hooks, actions, and copy.
  * @returns the switcher.
  */
 function Switcher({
   rootSessionId, currentSessionId, displayTitle, openTitle,
-  useSessions, useSessionStatus, openChild, openChildAside, refreshProjection, t,
+  useSessions, useSessionStatus, openChild, openChildAside, prepareCatalog, t,
 }: SwitcherProps) {
   const projections = useSessions(state => state.projectionsBySession)
   const summaries = useSessions(state => state.byId)
   const statuses = useSessionStatus(value => value)
   const catalogs = useMemo(() => deriveCatalogs(projections, summaries, statuses), [projections, summaries, statuses])
-  const catalog: SubagentCatalogSnapshot = catalogs[rootSessionId] ?? { entries: [], state: 'loading', error: null }
+  const catalog: SubagentCatalogSnapshot = catalogs[rootSessionId] ?? { entries: [], state: 'idle', error: null }
+  const prepareLevel = levelPreparer(prepareCatalog)
   const [open, setOpen] = useState<'closed' | 'hover' | 'pinned' | 'keyboard'>('closed')
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -142,12 +144,14 @@ function Switcher({
             return
           }
           setOpen('pinned')
+          prepareLevel(rootSessionId)
           queueMicrotask(() => { menuRef.current?.focus() })
         }}
         onKeyDown={(event) => {
           if (event.key !== 'ArrowDown') return
           event.preventDefault()
           setOpen('keyboard')
+          prepareLevel(rootSessionId)
         }}
       >
         <span className={css.switcherTitle}>{title}</span>
@@ -184,7 +188,7 @@ function Switcher({
               summaries={summaries}
               openChild={openChild}
               openChildAside={openChildAside}
-              refreshProjection={refreshProjection}
+              prepareLevel={prepareLevel}
               onOpened={() => { close() }}
               focusFirst={open === 'keyboard'}
               t={t}
@@ -204,7 +208,7 @@ function Switcher({
  */
 export function SubagentHeaderLineage({
   lineageSessionId, displayTitle, openTitle,
-  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, t,
+  useSessions, useSession, useSessionStatus, openChild, openChildAside, refreshProjection, prepareCatalog, t,
 }: SubagentHeaderLineageProps) {
   const address = useSession(session => session.subagent?.address)
   const parentId = useSessions((state) => {
@@ -228,6 +232,7 @@ export function SubagentHeaderLineage({
       openChild={openChild}
       openChildAside={openChildAside}
       refreshProjection={refreshProjection}
+      prepareCatalog={prepareCatalog}
       t={t}
     />
   )

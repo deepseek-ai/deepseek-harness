@@ -188,22 +188,6 @@
       }
     },
     {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent": {
-            "type": "string",
-            "description": "The name of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent"
-        ]
-      }
-    },
-    {
       "name": "job_kill",
       "description": "Request cancellation of a running background job.",
       "parameters": {
@@ -841,22 +825,6 @@
           },
           "required": [
             "pattern"
-          ]
-        }
-      },
-      {
-        "name": "interrupt_agent",
-        "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "agent": {
-              "type": "string",
-              "description": "The name of an agent created under you: your direct child or a deeper descendant."
-            }
-          },
-          "required": [
-            "agent"
           ]
         }
       },
@@ -1505,22 +1473,6 @@
           },
           "required": [
             "pattern"
-          ]
-        }
-      },
-      {
-        "name": "interrupt_agent",
-        "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "agent": {
-              "type": "string",
-              "description": "The name of an agent created under you: your direct child or a deeper descendant."
-            }
-          },
-          "required": [
-            "agent"
           ]
         }
       },

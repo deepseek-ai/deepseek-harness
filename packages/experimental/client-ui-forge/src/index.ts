@@ -5,7 +5,10 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import type { ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeReviewRequest, ForgeReviewResult, MergeMethod } from '@deepseek-ai/dsh-experimental-forge'
+import type {
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeReviewRequest, ForgeReviewResult,
+  MergeMethod,
+} from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import { appendPluginRecord } from '@deepseek-ai/dsh-session'
@@ -20,15 +23,18 @@ import { gitIn, inspectCheckout, listBranches } from './git.ts'
 import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
 import {
-  aheadOf, BaseMissing, baseBranches, chosenForkPoint, DiffTooLarge, FilterConfigError, forkPoint, localDiff, localText, NoForkPoint,
+  aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, FilterConfigError, forkPoint,
+  localCommits, localDiff, localText, NoForkPoint,
 } from './local-diff.ts'
+import { rangeStart } from './commit-range.ts'
+import { ATTRIBUTES_PATH, FileLayers } from './layers.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
-  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope,
-  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
+  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeLocalCommits,
+  ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
@@ -42,8 +48,8 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Panel limits plus the branch listing limit and the worktree branch prefix. */
-type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly worktreePrefix: string }
+/** Panel limits plus the branch and commit listing limits and the worktree branch prefix. */
+type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly maxCommits: number; readonly worktreePrefix: string }
 
 /**
  * Serves the forge panel. Following a Session inspects the checkout of its
@@ -76,6 +82,9 @@ export class ForgePanelController extends TypertRemoteService {
     maxDiffBytes: z.number().default(8_388_608),
     maxUntrackedFiles: z.number().default(100),
     maxCachedDiffBytes: z.number().default(16_777_216),
+    maxCommits: z.number().default(250),
+    testPaths: z.array(z.string()).default([]),
+    interfacePaths: z.array(z.string()).default([]),
   })
 
   private readonly home: Context
@@ -84,6 +93,7 @@ export class ForgePanelController extends TypertRemoteService {
   private worktreeStates!: ProjectionHandle<ForgeWorktreeState>
   private creations!: WorktreeCreations
   private readonly patches: PatchCache
+  private readonly layers: FileLayers
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
   private readonly stopStates: () => Promise<void>
@@ -98,10 +108,14 @@ export class ForgePanelController extends TypertRemoteService {
         throw new Error(`forge-panel: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
       }
     }
-    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes'] as const) {
+    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes', 'maxCommits'] as const) {
       if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-panel: ${key} must be a positive integer`)
     }
     if (!branchPrefix(resolved.worktreePrefix)) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
+    for (const key of ['testPaths', 'interfacePaths'] as const) {
+      if (resolved[key].some(glob => glob.trim() === '')) throw new Error(`forge-panel: ${key} entries must not be empty`)
+    }
+    this.layers = new FileLayers(resolved.testPaths, resolved.interfacePaths)
     this.home = ctx
     this.config = resolved
     this.patches = new PatchCache(resolved.maxCachedDiffBytes)
@@ -272,7 +286,9 @@ export class ForgePanelController extends TypertRemoteService {
    * @returns the files, the base of the `branch` scope, and the untracked files left out.
    * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch
    * chosen for the `branch` scope does not exist; `forgePanel/no-fork-point` for the `branch` scope without
-   * a fork point; `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
+   * a fork point; `forgePanel/commits-missing` when chosen commits are not between the fork point and HEAD in order;
+   * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
+   * `forgePanel/filter-config-failed` when filter configuration cannot be read completely, before
    * any comparison; `forgePanel/diff-too-large` over `maxDiffBytes`; the Git error when Git fails.
    */
   @Remote
@@ -284,19 +300,42 @@ export class ForgePanelController extends TypertRemoteService {
     const created = this.worktreeState(session).created
     const fork = scope.kind !== 'branch' ? null
       : await diffing(scope.base === null ? forkPoint(git, inspection, created) : chosenForkPoint(git, scope.base))
-    return await diffing(localDiff(this.home, this.config, session, root, fork, scope, signal))
+    return await diffing(localDiff(this.home, this.config, session, root, fork, scope, this.layers, signal))
+  }
+
+  /**
+   * List the commits of the `branch` scope of the Session's current checkout, which the changes view can show one or
+   * several of instead of the whole scope.
+   * @param session - Session whose checkout is read.
+   * @param base - the base ref of the `branch` scope, or null for its automatic fork point.
+   * @param signal - request cancellation.
+   * @returns the newest `maxCommits` commits between the fork point and HEAD, oldest first, and HEAD's commit.
+   * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/base-missing` when the base branch does not
+   * exist; `forgePanel/no-fork-point` without a fork point; the Git error when Git fails or the listing exceeds `maxDiffBytes`.
+   */
+  @Remote
+  async localCommits(session: Session, base: string | null, signal: AbortSignal): Promise<ForgeLocalCommits> {
+    signal.throwIfAborted()
+    const inspection = await this.checkoutOf(session, signal)
+    const git = gitIn(this.home, { ...this.config, maxOutputBytes: this.config.maxDiffBytes }, session, inspection.checkout.root, signal)
+    const created = this.worktreeState(session).created
+    const fork = await diffing(base === null ? forkPoint(git, inspection, created) : chosenForkPoint(git, base))
+    if (fork === null) throw new RemoteError('forgePanel/no-fork-point', 'The checkout has no fork point to compare its branch with', {})
+    return await localCommits(git, fork, this.config.maxCommits)
   }
 
   /**
    * Read the new side of one changed file in a scope, which supplies the
-   * unchanged lines between its hunks: the index for `staged`, else the working tree.
+   * unchanged lines between its hunks: the index for `staged`, the last chosen commit for chosen commits of
+   * the `branch` scope, else the working tree.
    * @param session - Session whose checkout is read.
    * @param scope - the scope the diff was read in.
    * @param path - path relative to the checkout's top-level directory, as the diff names it.
    * @param signal - request cancellation.
    * @returns the text.
    * @throws `forgePanel/not-a-checkout` outside a checkout; `forgePanel/diff-too-large` over `maxDiffBytes`;
-   * an error for a path outside the checkout, binary content, or a failed read.
+   * `forgePanel/commits-missing` for a chosen commit that is not a full object name; an error for a path outside
+   * the checkout, binary content, or a failed read.
    */
   @Remote
   async localText(session: Session, scope: ForgeLocalScope, path: string, signal: AbortSignal): Promise<string> {
@@ -326,37 +365,65 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
-   * Read the changes of a change request of a Session as its code host
-   * computes them, at the head commit of its latest status. A patch already
-   * read at the same head commit and base branch is reused from memory, for
-   * any Session, until `maxCachedDiffBytes` evicts it.
+   * List the commits of a change request of a Session at its current head, which the changes view can show one or
+   * several of instead of the whole change request.
    * @param session - Session the change request is bound to.
    * @param url - binding URL of the change request.
    * @param signal - request cancellation.
-   * @returns the files, the head commit, each file's web page, and the commits the checkout has beyond the head.
+   * @returns the commits oldest first with the head they were read at, or null when the provider does not read commits.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
-   * `forgePanel/stale-head` when the head moved past the latest status, which is then polled again;
-   * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
-   * `forgePanel/diff-failed` before its status was read and when the host does not provide the diff otherwise.
+   * `forgePanel/diff-failed` when the host does not list them.
    */
   @Remote
-  async changeRequestDiff(session: Session, url: string, signal: AbortSignal): Promise<ForgeChangeRequestDiff> {
+  async changeRequestCommits(session: Session, url: string, signal: AbortSignal): Promise<ForgeCommitList | null> {
+    signal.throwIfAborted()
+    const list = await this.home.forge.commits(this.bound(session, url).ref, signal)
+    if (list !== undefined && 'code' in list) throw readError(list)
+    return list ?? null
+  }
+
+  /**
+   * Read the changes of a change request of a Session as its code host
+   * computes them, with each file's layer following the root `.gitattributes`
+   * of the commit the diff ends at. Without `commits` the diff covers the change
+   * request at the head commit of its latest status; a patch already read at the
+   * same head commit and base branch is reused from memory with its attributes, for
+   * any Session, until `maxCachedDiffBytes` evicts it. With `commits`, it covers those
+   * commits, from the first one's first parent to the last, and is read every time.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param commits - consecutive commits of the change request, or null for all of it.
+   * @param signal - request cancellation.
+   * @returns the files, the commit they end at, each file's web page, and the commits the checkout has beyond the head.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/commits-missing` when chosen commits are not among the change request's commits in order;
+   * `forgePanel/commits-not-linear` when a chosen commit's first parent is not the commit listed before it;
+   * `forgePanel/stale-head` without `commits` when the head moved past the latest status, which is then polled again;
+   * `forgePanel/diff-too-large` when the host or its provider refuses the diff over a size limit;
+   * `forgePanel/diff-failed` before its status was read, for a first chosen commit without a parent, and when the host
+   * does not provide the commits, the diff, or an existing `.gitattributes` otherwise.
+   */
+  @Remote
+  async changeRequestDiff(
+    session: Session, url: string, commits: ForgeCommitRange | null, signal: AbortSignal,
+  ): Promise<ForgeChangeRequestDiff> {
     signal.throwIfAborted()
     const { ref, update } = this.bound(session, url)
     if (update === null || !('snapshot' in update)) {
       throw new RemoteError('forgePanel/diff-failed', 'The change request status has not been read yet', {})
     }
+    if (commits !== null) return await this.commitsDiff(ref, commits, signal)
     const { headSha, headBranch, baseBranch } = update.snapshot
     const key = changeRequestKey(ref)
     const version = JSON.stringify([headSha, baseBranch])
-    let patch = this.patches.get(key, version)
-    if (patch === undefined) {
-      const read = await this.home.forge.diff(ref, headSha, signal)
-      if (typeof read !== 'string') throw readError(read)
+    let read = this.patches.get(key, version)
+    if (read === undefined) {
+      const patch = await this.home.forge.diff(ref, headSha, signal)
+      if (typeof patch !== 'string') throw readError(patch)
+      read = { patch, attributes: await this.attributesAt(ref, headSha, signal) }
       this.patches.set(key, version, read)
-      patch = read
     }
-    const files = parseDiff(patch)
+    const files = this.layers.classify(parseDiff(read.patch), read.attributes)
     let localAhead: number | null = null
     try {
       localAhead = await aheadOf(
@@ -606,6 +673,31 @@ export class ForgePanelController extends TypertRemoteService {
     return this.home.workingDirectory.get(session) === directory ? missing : null
   }
 
+  /** The changes of consecutive commits of a change request, from the first one's first parent to the last. */
+  private async commitsDiff(ref: ChangeRequestRef, commits: ForgeCommitRange, signal: AbortSignal): Promise<ForgeChangeRequestDiff> {
+    const list = await this.home.forge.commits(ref, signal)
+    if (list === undefined) throw new RemoteError('forgePanel/diff-failed', 'The code host provider does not read commits', {})
+    if ('code' in list) throw readError(list)
+    const start = rangeStart(list.commits, commits)
+    if (start === 'missing') throw new RemoteError('forgePanel/commits-missing', 'The chosen commits are no longer in the change request', {})
+    if (start === 'not-linear') throw new RemoteError('forgePanel/commits-not-linear', 'The chosen commits are not one run of first parents', {})
+    const parent = start.parent
+    if (parent === null) throw new RemoteError('forgePanel/diff-failed', 'The first chosen commit has no parent to compare with', {})
+    const patch = await this.home.forge.compare(ref, parent, commits.to, signal)
+    if (typeof patch !== 'string') throw readError(patch)
+    const files = this.layers.classify(parseDiff(patch), await this.attributesAt(ref, commits.to, signal))
+    const fileUrls = Object.fromEntries(files.map(file => [file.path, this.home.forge.fileUrl(ref, commits.to, file.path)]))
+    return { headSha: commits.to, files, localAhead: null, fileUrls }
+  }
+
+  /** The root `.gitattributes` of a change request's repository at a commit, empty when the commit has none. */
+  private async attributesAt(ref: ChangeRequestRef, commit: string, signal: AbortSignal): Promise<string> {
+    const attributes = await this.home.forge.fileText(ref, commit, ATTRIBUTES_PATH, signal)
+    if (typeof attributes === 'string') return attributes
+    if (attributes.code === 'not-found') return ''
+    throw readError(attributes)
+  }
+
   /** Inspect the checkout of the Session's current directory, which local diffs read. */
   private async checkoutOf(session: Session, signal: AbortSignal): Promise<Inspection> {
     const inspection = await inspectCheckout(this.home, this.config, session, this.home.workingDirectory.get(session), signal)
@@ -737,7 +829,8 @@ function readError(failure: ForgeFailure): RemoteError {
 }
 
 /**
- * Settle a diff read, reporting its size limit, its filter configuration, a missing fork point, and a missing base branch as Remote errors.
+ * Settle a diff read, reporting its size limit, its filter configuration, a missing fork point, a missing base branch, and chosen
+ * commits that are not on the branch as Remote errors.
  * @param reading - the read.
  * @returns what the read returned.
  */
@@ -749,6 +842,8 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
     if (error instanceof DiffTooLarge) throw new RemoteError('forgePanel/diff-too-large', error.message, {}, { cause: error })
     if (error instanceof NoForkPoint) throw new RemoteError('forgePanel/no-fork-point', error.message, {}, { cause: error })
     if (error instanceof BaseMissing) throw new RemoteError('forgePanel/base-missing', error.message, {}, { cause: error })
+    if (error instanceof CommitsMissing) throw new RemoteError('forgePanel/commits-missing', error.message, {}, { cause: error })
+    if (error instanceof CommitsNotLinear) throw new RemoteError('forgePanel/commits-not-linear', error.message, {}, { cause: error })
     throw error
   }
 }
