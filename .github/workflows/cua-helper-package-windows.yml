@@ -57,28 +57,11 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $commit = $env:GITHUB_SHA
           $sdk = (& dotnet --version).Trim()
-          $sourceFiles = @(
-            & git ls-files -- `
-              'packages/experimental/cua-windows/native' `
-              'packages/experimental/cua-windows/package.json' `
-              'scripts/cua-helper-windows' `
-              '.github/workflows/cua-helper-package-windows.yml' `
-              'package.json' 'pnpm-lock.yaml' 'pnpm-workspace.yaml'
-          ) | Sort-Object
-          $sourceBytes = [Collections.Generic.List[byte]]::new()
-          foreach ($file in $sourceFiles) {
-            $sourceBytes.AddRange([Text.Encoding]::UTF8.GetBytes("$file`0"))
-            $sourceBytes.AddRange([IO.File]::ReadAllBytes((Join-Path $PWD $file)))
-          }
-          $sourceDigest = [Convert]::ToHexString(
-            [Security.Cryptography.SHA256]::HashData($sourceBytes.ToArray())
-          ).ToLowerInvariant()
-          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$sourceDigest`n$sdk`nwin-x64")
+          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$commit`n$sdk`nwin-x64")
           $buildKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($keyBytes)).ToLowerInvariant()
           $files = [ordered]@{}
           Get-ChildItem $directory -Recurse -File | Sort-Object FullName | ForEach-Object {
-            if ($_.Name -eq 'cua-helper.json') { return }
-            $relative = [IO.Path]::GetRelativePath($directory, $_.FullName).Replace('\', '/')
+            $relative = [IO.Path]::GetRelativePath($directory, $_.FullName) -replace '\\', '/'
             $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           }
           # sha256 is the executable alias of files[dsh-cua-windows.exe].
@@ -86,7 +69,6 @@ jobs:
           $metadata = [ordered]@{
             schemaVersion = 1
             platform = 'windows'
-            sourceDigest = $sourceDigest
             buildKey = $buildKey
             version = $version
             commit = $commit
@@ -96,12 +78,9 @@ jobs:
             signing = 'unsigned'
             files = $files
           }
-          $metadataPath = Join-Path $directory 'cua-helper.json'
           $json = $metadata | ConvertTo-Json -Depth 5
-          [IO.File]::WriteAllText($metadataPath, "$json`n", [Text.UTF8Encoding]::new($false))
-          $outputPath = $env:GITHUB_OUTPUT
-          $outputLine = "build-key=$buildKey"
-          Add-Content -Path $outputPath -Value $outputLine -Encoding utf8
+          Set-Content -Path (Join-Path $directory 'cua-helper.json') -Value "$json`n" -NoNewline -Encoding utf8NoBOM
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "build-key=$buildKey`n" -NoNewline -Encoding utf8
       - name: Archive publish output
         run: Compress-Archive -Path dist/cua-helper-win-x64/* -DestinationPath dist/cua-helper-win-x64.zip
       - uses: actions/upload-artifact@v7.0.1
