@@ -61,9 +61,9 @@ export function apply(ctx: Context): void {
 
 | 界面 | 行为 |
 |---|---|
-| 区块 | 标题、状态、按钮、说明、附加行、失败信息和提示。区块发起的调用未返回，或 Host 流中断时，按钮不可用。失败时先显示注册方的文案，再显示其诊断项 |
+| 区块 | 标题、状态、按钮、说明、附加行、失败信息和提示。区块发起的调用未返回，或 Host 流中断时，按钮（包括确认框的按钮）不可用。失败时先显示注册方的文案，再显示其诊断项 |
 | 标题旁标签 | 显示 display 的 `badge`，只出现在已启用插件包的页面或其某一行的页面上，且只在 display 带有标签时显示 |
-| 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作。账号检查中或连接中时继续等待，已连接或不可用时自动关闭 |
+| 开启引导 | 插件包开启后，阶段为 `disconnected` 时打开；“连接”会打开插件包页面，并在 display 给出 `connect` 时启动该操作；Host 流中断时它不可用。账号检查中或连接中时继续等待，已连接或不可用时自动关闭 |
 | 提示 | 本浏览器的最新结果，不受插件面板生命周期限制：操作成功的文本，或带警告图标的共用失败文案 |
 
 ### 跟随操作
@@ -84,7 +84,7 @@ export function apply(ctx: Context): void {
 
 Host 一半 `ConnectorAccounts` 是一个 Remote 服务。`register()` 观察账号来源，每条 `watch` 流在每次变化后读取每个账号的条目，并合并在下一次读取前到达的变化：键和包、文案、`present(view)`、进行中的操作，以及带成功文本的最新结果。`start` 和 `cancel` 按键路由到该账号的来源。
 
-[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。按钮自己调用 Remote 的 `start` 和 `cancel`，并把启动的操作报告给 `BrowserAccounts`。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
+[`dsh-api-remotes`](../../api/remotes/README.zh.md) 挂载生成的 `connectorAccounts` Remote。浏览器一半通过 `BrowserAccounts` 打开一条 `watch` 流；它的一个 store 保存按键索引的 Host 账号、流是否在推送，以及最新提示，同时记住本浏览器发起的操作。它为页面注册一个 `plugins.detail.badge` 条目和一个 `shell.overlay` 提示，并为每个带包名的账号注册以包名为键的 `plugins.bundle.config` 和 `plugins.bundle.activation`，全部使用 `connectorAccount` 命名空间。各界面收到 `start` 和 `cancel` 两个回调：它们调用 Remote，在 Host 拒绝或调用没有回应时 reject；按钮等待回调结果，并把启动的操作报告给 `BrowserAccounts`。Host 撤下的账号会失去其插件包条目；卸载时撤下所有条目和流。
 
 | 文件 | 职责 |
 |---|---|
