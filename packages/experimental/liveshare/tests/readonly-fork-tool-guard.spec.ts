@@ -13,7 +13,7 @@ import {
   type ForkToolExecution,
 } from '../src/host/fork-tool-guard.ts'
 import { READ_ONLY_FORK_CEILING, WRITE_FORK_CEILING } from '../src/host/fork-policy.ts'
-import { denial } from './fork-denial.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
 import { forkToolDenial, type ForkToolDenial } from '../src/host/fork-errors.ts'
 
 const child = 'child-1'
@@ -271,7 +271,7 @@ describe('fork tool guard', () => {
     const guard = forkToolGuard(host, () => READ_ONLY_FORK_CEILING, describeTool)
 
     // The path check runs through the host's resolution, not a prefix comparison in the guard.
-    expect(guard(execution('read', { path: '/etc/passwd' }))).toEqual(denial(/may only read inside the workspace/u, 'FORK_PATH_OUTSIDE_WORKSPACE'))
+    expect(guard(execution('read', { path: '/etc/passwd' }))).toEqual(outsideDenial(/may only read inside the workspace/u))
     expect(refused).toContain('/etc/passwd')
     // Acting capabilities are refused before any path is even considered.
     for (const tool of ['bash', 'pwsh', 'cua', 'plugin_manager', 'schedule_create', 'write', 'edit', 'subagent']) {

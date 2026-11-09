@@ -29,7 +29,7 @@ import {
 import { ForkRegistry } from '../src/host/fork-registry.ts'
 import { SHARED_TOOL_PROFILES } from '../src/host/shared-tools.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
-import { denial } from './fork-denial.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
 import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 const child = 'child-1'
@@ -338,12 +338,12 @@ describe('fork enforcement wiring', () => {
       agent: { id: child },
       token: Symbol('another-execution'),
     }
-    expect(captured.guard?.(other)).toEqual(denial(/workspace/u, 'FORK_PATH_OUTSIDE_WORKSPACE'))
+    expect(captured.guard?.(other)).toEqual(outsideDenial(/workspace/u))
 
     // A path the resolution did not confirm is refused for that same execution.
     const outside: ForkToolExecution = { ...inside, arguments: { file_path: '/etc/passwd' } }
     await captured.preExecute?.(outside, () => Promise.resolve({ kind: 'allow' }))
-    expect(captured.guard?.(outside)).toEqual(denial(/workspace/u, 'FORK_PATH_OUTSIDE_WORKSPACE'))
+    expect(captured.guard?.(outside)).toEqual(outsideDenial(/workspace/u))
   })
 
   it('refuses a child whose scope cannot register the confined read, and keeps the prompt gate closed', async () => {

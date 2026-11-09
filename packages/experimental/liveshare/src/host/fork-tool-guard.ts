@@ -3,23 +3,22 @@
  *
  * It is registered on one child's context, so it speaks for that child alone: it refuses anything the
  * ceiling does not permit, and it decides paths through the host's real filesystem authorization
- * rather than by comparing strings or trusting a tool name. The return value is the reason string the
- * tool runtime expects, and a refusal is monotonic — nothing downstream can turn it back into an
- * allow.
+ * rather than by comparing strings or trusting a tool name. A refusal is a `ToolGuard` denial: the
+ * model-facing reason with the structured error identity the tool runtime records, and it is
+ * monotonic — nothing downstream can turn it back into an allow.
  */
 
 import { forkToolDecision, type ForkToolDecision, type ForkToolRefusal } from './fork-ceiling.ts'
-import { forkToolDenial, type ForkToolDenial, type LiveshareForkDeniedCode } from './fork-errors.ts'
+import { forkToolDenial, outsideWorkspaceDenial, type ForkToolDenial, type LiveshareForkDeniedCode } from './fork-errors.ts'
+import type { ForkCeiling } from './fork-policy.ts'
 
-/** The recorded code for each refusal a fork tool decision names. */
-const REFUSAL_CODES: Readonly<Record<ForkToolRefusal, LiveshareForkDeniedCode>> = {
+/** The recorded code for each grant refusal a fork tool decision names; a path outside the workspace is a filesystem refusal. */
+const REFUSAL_CODES: Readonly<Record<Exclude<ForkToolRefusal, 'fork-path-outside-workspace'>, LiveshareForkDeniedCode>> = {
   'fork-ceiling-uninstalled': 'FORK_LIMITS_UNINSTALLED',
   'fork-tool-not-permitted': 'FORK_TOOL_NOT_PERMITTED',
   'fork-child-mismatch': 'FORK_CHILD_MISMATCH',
-  'fork-path-outside-workspace': 'FORK_PATH_OUTSIDE_WORKSPACE',
   'fork-paths-unknown': 'FORK_PATHS_UNKNOWN',
 }
-import type { ForkCeiling } from './fork-policy.ts'
 
 /** One tool execution as the runtime presents it to a guard. */
 export interface ForkToolExecution {
@@ -175,7 +174,10 @@ export function forkToolGuard(
       ...describe(execution),
       ...(execution.token === undefined ? {} : { token: execution.token }),
     }, ports)
-    return decision.ok ? undefined : forkToolDenial(decision.message, REFUSAL_CODES[decision.code])
+    if (decision.ok) return undefined
+    return decision.code === 'fork-path-outside-workspace'
+      ? outsideWorkspaceDenial(decision.message)
+      : forkToolDenial(decision.message, REFUSAL_CODES[decision.code])
   }
 }
 

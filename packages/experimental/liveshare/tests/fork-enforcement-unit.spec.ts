@@ -13,7 +13,7 @@ import {
   preflightForkChild,
 } from '../src/host/fork-enforcement.ts'
 import type { ForkEnforcementFailure } from '../src/host/fork-enforcement.ts'
-import { denial } from './fork-denial.ts'
+import { denial, outsideDenial } from './fork-denial.ts'
 import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 interface RegisteredTool {
@@ -243,7 +243,7 @@ describe('confined fork tools', () => {
 
     h.target.authorized = () => true
     expect(guard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }))
-      .toEqual(denial('may only read inside the workspace', 'FORK_PATH_OUTSIDE_WORKSPACE'))
+      .toEqual(outsideDenial('may only read inside the workspace'))
 
     // A definition visible from both registries is trusted even though this host did not install it.
     const visible = harness({ read })
@@ -251,7 +251,7 @@ describe('confined fork tools', () => {
     visible.forks.enforcedCeiling.mockReturnValue(READ_ONLY_FORK_CEILING)
     const visibleGuard = visible.guard()
     expect(visibleGuard?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }))
-      .toEqual(denial('may only read inside the workspace', 'FORK_PATH_OUTSIDE_WORKSPACE'))
+      .toEqual(outsideDenial('may only read inside the workspace'))
     expect(visibleGuard?.({ name: 'write', arguments: {}, agent: { id: 'child-1' } }))
       .toEqual(denial('may not use write', 'FORK_TOOL_NOT_PERMITTED'))
 
@@ -275,7 +275,7 @@ describe('confined fork tools', () => {
       ((value: Record<string, unknown>, next: () => unknown) => Promise<unknown>) | undefined
     await preExecute?.({ token, arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' } }, () => 'next')
     expect(h.guard()?.({ name: 'read', arguments: { file_path: 'inside.ts' }, agent: { id: 'child-1' }, token }))
-      .toEqual(denial('may only read inside the workspace', 'FORK_PATH_OUTSIDE_WORKSPACE'))
+      .toEqual(outsideDenial('may only read inside the workspace'))
   })
 
   it('admits the PTC transport for a fork child while nested calls stay separately judged', () => {
@@ -692,12 +692,12 @@ describe('source-session sandbox', () => {
     const narrowing = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: vi.fn().mockReturnValueOnce(true).mockReturnValue(false) } })
     expect(installSourceSessionAccess(narrowing.target as never).writeConfined).toBe(true)
     await expect(narrowing.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
 
     const blocked = sourceHarness({ tools: ['read', 'write'], writeGate: { mayWrite: () => false } })
     installSourceSessionAccess(blocked.target as never)
     await expect(blocked.installed.get('write')!.execute({ file_path: 'inside.ts', content: 'x' }, { signal: undefined }))
-      .rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
+      .rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
 
     h.target.write = { mayWrite: () => true }
     const result = await confined.execute({ file_path: 'inside.ts', content: 'hello' }, { signal: undefined })
@@ -743,7 +743,7 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(closedEdit.target as never)
     await expect(closedEdit.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
     // The replacement's own argument check refuses arguments it cannot read.
     await expect(edit.execute('not a record', { signal: undefined })).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS', message: expect.stringContaining('replacing non-empty text') as string })
 
@@ -755,7 +755,7 @@ describe('source-session sandbox', () => {
     installSourceSessionAccess(narrowing.target as never)
     await expect(narrowing.installed.get('edit')!.execute({
       file_path: 'inside.ts', old_string: 'a', new_string: 'b',
-    }, { signal: undefined })).rejects.toMatchObject({ name: 'FsError', code: 'FS_SANDBOX_DENIED', message: expect.stringContaining('does not allow writing') as string })
+    }, { signal: undefined })).rejects.toMatchObject({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED', message: expect.stringContaining('does not allow writing') as string })
     expect(narrowing.fs.editText).not.toHaveBeenCalled()
   })
 

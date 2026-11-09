@@ -265,7 +265,7 @@ export function installSourceSessionAccess(target: SourceSessionAccess): SourceS
       await target.refreshAuthorization?.()
       // The Session's current shares decide, not the tier the layer was installed for: a share can
       // narrow to view while this layer stays mounted.
-      if (!gate.mayWrite()) throw new FsError('this share does not allow writing this Session', 'FS_SANDBOX_DENIED')
+      if (!gate.mayWrite()) throw new LiveshareForkDeniedError('this share does not allow writing this Session', 'FORK_TOOL_NOT_PERMITTED')
       const input = isRecord(args) ? args : {}
       const requested = input.file_path
       const content = input.content
@@ -282,7 +282,7 @@ export function installSourceSessionAccess(target: SourceSessionAccess): SourceS
       const policy = target.resolvePolicy()
       // The shares can narrow while the intent awaited: the final refresh above reads the new state, so
       // ask the gate again before anything is written instead of trusting the earlier verdict.
-      if (!gate.mayWrite()) throw new FsError('this share does not allow writing this Session', 'FS_SANDBOX_DENIED')
+      if (!gate.mayWrite()) throw new LiveshareForkDeniedError('this share does not allow writing this Session', 'FORK_TOOL_NOT_PERMITTED')
       const outcome = await fs.writeText(candidate, content, intent, exec.signal, policy)
       // The published version is this caller's own next basis, exactly as the shipped write records it:
       // without it a second write of the same file would meet a policy that saw nothing since the read.
@@ -302,7 +302,7 @@ export function installSourceSessionAccess(target: SourceSessionAccess): SourceS
     register(FORK_EDIT_TOOL, deploymentEdit, async (args, exec) => {
       if (!confined(exec)) return await deploymentEdit.execute(args, exec)
       await target.refreshAuthorization?.()
-      if (!gate.mayWrite()) throw new FsError('this share does not allow writing this Session', 'FS_SANDBOX_DENIED')
+      if (!gate.mayWrite()) throw new LiveshareForkDeniedError('this share does not allow writing this Session', 'FORK_TOOL_NOT_PERMITTED')
       const edit = sharedEditArguments(args)
       if (edit === undefined) {
         throw new ToolArgsError(['a shared session may only edit a named file by replacing non-empty text'])
@@ -314,7 +314,7 @@ export function installSourceSessionAccess(target: SourceSessionAccess): SourceS
       const intent = await context.waterfall('fs/edit-intent', candidate, exec, () => undefined)
       await target.refreshAuthorization?.()
       const policy = target.resolvePolicy()
-      if (!gate.mayWrite()) throw new FsError('this share does not allow writing this Session', 'FS_SANDBOX_DENIED')
+      if (!gate.mayWrite()) throw new LiveshareForkDeniedError('this share does not allow writing this Session', 'FORK_TOOL_NOT_PERMITTED')
       const outcome = await fs.editText(
         candidate,
         { oldString: edit.oldString, newString: edit.newString, replaceAll: edit.replaceAll },
