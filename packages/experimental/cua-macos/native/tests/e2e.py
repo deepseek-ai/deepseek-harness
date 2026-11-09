@@ -200,7 +200,9 @@ def main():
                 helper.eof()
                 print("PASS: coordinate observation, application snapshot, and selected-window rejection")
                 return
-            first = call("getState", primary_params)
+            limited = call("getState", {**primary_params, "maxElements": 1})
+            assert limited["truncated"] and "maxElements=1" in limited["tree"], limited
+            first = call("getState", {**primary_params, "maxElements": 100000, "maxDepth": 512})
             second = call("getState", secondary_params)
             assert "Increment secondary" not in first["tree"], first
             assert "Increment primary" not in second["tree"], second
