@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
+import { CANDIDATES_QUERY } from '../src/overview.ts'
+import { VIEWED_QUERY } from '../src/viewed.ts'
 import { GitHubProvider } from '../src/provider.ts'
 import type { GitHubLimits } from '../src/provider.ts'
 import { checkRun, demo, pull, pullRequestNode, threadPage } from './fixtures.ts'
@@ -25,7 +27,7 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
   return { exitCode, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr }
 }
 
-const limits: GitHubLimits = { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250 }
+const limits: GitHubLimits = { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000 }
 
 function provider(run: GhRunner): GitHubProvider {
   return new GitHubProvider(run, ['github.com', 'GHE.corp.example'], limits)
@@ -705,4 +707,135 @@ it('rejects readiness, actions, and content reads for an unconfigured host witho
   await expect(subject.commits(unsafe, signal)).rejects.toThrow(invalid)
   await expect(subject.compare(unsafe, 'a'.repeat(40), 'b'.repeat(40), signal)).rejects.toThrow(invalid)
   expect(gh.calls).toEqual([])
+})
+
+describe('GitHub provider overview and viewed marks', () => {
+  const HEAD = 'f'.repeat(40)
+  const unconfigured = pull(1, { ...demo, host: 'gitlab.com' })
+  const node = { data: { repository: { pullRequest: { id: 'PR_1', headRefOid: HEAD, baseRefOid: 'e'.repeat(40) } } } }
+  /** A double whose GraphQL reads answer `reads` by query and whose writes take their body from standard input. */
+  function double(
+    reads: (query: string) => unknown,
+    write: (body: { query: string; variables: unknown }) => GhOutput = body => output({ data: { [/\{\s*(\w+)\(input:/.exec(body.query)?.[1] ?? '']: {} } }),
+  ) {
+    const inputs: unknown[] = []
+    const calls: string[][] = []
+    const run: GhRunner = async (args, _signal, input) => {
+      calls.push([...args])
+      if (args.includes('--input')) {
+        const body = JSON.parse(input ?? '') as { query: string; variables: unknown }
+        inputs.push(body)
+        return write(body)
+      }
+      if (args[1] === 'graphql') return output(reads(args.find(arg => arg.startsWith('query='))?.slice('query='.length) ?? ''))
+      return output('')
+    }
+    return { run, inputs, calls }
+  }
+
+  it('reads viewed marks through the files listing, bounded by maxViewedFiles', async () => {
+    const gh = double(query => query === VIEWED_QUERY ? { data: { repository: { pullRequest: { headRefOid: HEAD, files: {
+      totalCount: 1, pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ path: 'a.ts', viewerViewedState: 'VIEWED' }],
+    } } } } } : {})
+    const subject = new GitHubProvider(gh.run, ['github.com'], { ...limits, maxViewedFiles: 7 })
+    await expect(subject.viewedFiles(pull(1), HEAD, signal)).resolves.toEqual({ headSha: HEAD, files: { 'a.ts': 'viewed' }, truncated: false })
+    expect(gh.calls[0]).toContain('first=7')
+  })
+
+  it('writes a viewed mark as JSON on standard input, never in the arguments', async () => {
+    const gh = double(() => node)
+    await expect(provider(gh.run).setViewed(pull(1), { path: 'src/$(x).ts', viewed: true, headSha: HEAD }, signal)).resolves.toBeUndefined()
+    expect(gh.calls[1]).toEqual(['api', 'graphql', '--hostname', 'github.com', '--input', '-'])
+    expect(gh.inputs[0]).toMatchObject({ variables: { id: 'PR_1', path: 'src/$(x).ts' } })
+    expect(gh.calls.flat().some(arg => arg.includes('$(x)'))).toBe(false)
+  })
+
+  it.each([
+    ['a refusing GraphQL error', output({ data: null, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }),
+      { code: 'failed', message: 'Resource not accessible by integration' }],
+    ['a GraphQL error that leaves the outcome unknown', output({ data: null, errors: [{ message: 'Something went wrong' }] }),
+      { code: 'failed', message: 'Something went wrong' }],
+    ['a refusal without a body', output('', 1, 'gh: Bad credentials (HTTP 401)'), { code: 'failed', message: 'gh: Bad credentials (HTTP 401)' }],
+    ['a body that is not GraphQL', output({ message: 'Not Found' }), { code: 'failed', message: 'unexpected GitHub response to unmarkFileAsViewed' }],
+  ])('reports a mutation refused or not confirmed with %s as failed', async (_label, answer, failure) => {
+    const gh = double(() => node, () => answer)
+    await expect(provider(gh.run).setViewed(pull(1), { path: 'a', viewed: false, headSha: HEAD }, signal)).resolves.toEqual(failure)
+  })
+
+  it('reports a mutation as failed when gh cannot start', async () => {
+    let reads = 0
+    const run: GhRunner = async (args) => {
+      if (args.includes('--input')) throw new GhUnavailableError('gh could not start')
+      reads++
+      return output(node)
+    }
+    await expect(provider(run).setViewed(pull(1), { path: 'a', viewed: true, headSha: HEAD }, signal))
+      .resolves.toEqual({ code: 'failed', message: 'gh could not start' })
+    expect(reads).toBe(1)
+  })
+
+  it('requests reviews, lists candidates, and updates the branch through GraphQL', async () => {
+    const gh = double(query => query === CANDIDATES_QUERY
+      ? { data: { repository: { assignableUsers: { nodes: [{ login: 'mona', name: null, avatarUrl: null }] }, pullRequest: null } } }
+      : node)
+    const subject = provider(gh.run)
+    await expect(subject.requestReviews(pull(1), { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)).resolves.toBeUndefined()
+    await expect(subject.reviewerCandidates(pull(1), 'mo', signal)).resolves.toEqual([{ login: 'mona', name: null, avatarUrl: null, suggested: false }])
+    await expect(subject.updateBranch(pull(1), { method: 'rebase', headSha: HEAD }, signal)).resolves.toBeUndefined()
+    expect(gh.inputs.map(body => (body as { variables: unknown }).variables)).toEqual([
+      { input: { pullRequestId: 'PR_1', union: true, userLogins: ['mona'] } },
+      { input: { pullRequestId: 'PR_1', expectedHeadOid: HEAD, updateMethod: 'REBASE' } },
+    ])
+  })
+
+  it('reruns each workflow run with a failed Actions job once, after confirming the head', async () => {
+    const actions = (name: string, conclusion: string, run: number | null) => ({ ...checkRun(name, 'COMPLETED', conclusion),
+      checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: name, name } } } })
+    const contexts = [actions('lint', 'FAILURE', 41), actions('test', 'FAILURE', 41), actions('e2e', 'FAILURE', 42), actions('docs', 'SUCCESS', 43),
+      actions('other', 'FAILURE', null)]
+    const gh = fakeGh(args => args[1] === 'graphql' ? output({ data: { r0: { p0: pullRequestNode(1, {}, contexts) } } }) : output(''))
+    await expect(provider(gh.run).rerunChecks(pull(1), { headSha: HEAD }, signal)).resolves.toBeUndefined()
+    expect(gh.calls.filter(args => args[0] === 'api' && args[1] !== 'graphql')).toEqual([
+      ['api', '--hostname', 'github.com', '--method', 'POST', 'repos/octo/demo/actions/runs/41/rerun-failed-jobs'],
+      ['api', '--hostname', 'github.com', '--method', 'POST', 'repos/octo/demo/actions/runs/42/rerun-failed-jobs'],
+    ])
+  })
+
+  it('stops at the first refused rerun', async () => {
+    const failed = (run: number) => ({ ...checkRun(`job${run}`, 'COMPLETED', 'FAILURE'),
+      checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: `w${run}`, name: 'w' } } } })
+    const gh = fakeGh(args => args[1] === 'graphql' ? output({ data: { r0: { p0: pullRequestNode(1, {}, [failed(1), failed(2)]) } } })
+      : output({ message: 'Must have admin rights to Repository.' }, 1, 'gh: Must have admin rights to Repository. (HTTP 403)'))
+    await expect(provider(gh.run).rerunChecks(pull(1), { headSha: HEAD }, signal))
+      .resolves.toEqual({ code: 'failed', message: 'Must have admin rights to Repository.' })
+    expect(gh.calls.filter(args => args[4] === 'POST')).toHaveLength(1)
+  })
+
+  it.each([
+    ['a moved head', () => output({ data: { r0: { p0: pullRequestNode(1, { headRefOid: 'e'.repeat(40) }) } } }), { code: 'stale' }],
+    ['no failed Actions job', () => output({ data: { r0: { p0: pullRequestNode(1, {}, [checkRun('lint', 'COMPLETED', 'SUCCESS')]) } } }),
+      { code: 'failed', message: 'No failed GitHub Actions job of the head commit can be rerun' }],
+    ['an unreadable status', () => output('', 1, 'gh: HTTP 401: Bad credentials'), { code: 'unauthenticated' }],
+    ['a status read that failed', () => output({ data: { r0: { p0: null } } }), { code: 'failed', message: 'pull request not found' }],
+  ])('refuses a rerun after %s', async (_label, answer, failure) => {
+    await expect(provider(fakeGh(answer).run).rerunChecks(pull(1), { headSha: HEAD }, signal)).resolves.toMatchObject(failure)
+  })
+
+  it('refuses a rerun at a head that is not a full commit object name', async () => {
+    await expect(provider(fakeGh(() => output('')).run).rerunChecks(pull(1), { headSha: 'main' }, signal))
+      .rejects.toThrow('forge-github: invalid head commit "main"')
+  })
+
+  it('refuses every overview and viewed operation on an unconfigured host without running gh', async () => {
+    const gh = fakeGh(() => output(''))
+    const subject = provider(gh.run)
+    const failure = { code: 'failed', message: 'forge-github: host "gitlab.com" is not configured' }
+    await expect(subject.viewedFiles(unconfigured, HEAD, signal)).resolves.toEqual({ ...failure, code: 'unavailable' })
+    await expect(subject.setViewed(unconfigured, { path: 'a', viewed: true, headSha: HEAD }, signal)).resolves.toEqual(failure)
+    await expect(subject.rerunChecks(unconfigured, { headSha: HEAD }, signal)).resolves.toEqual(failure)
+    await expect(subject.requestReviews(unconfigured, { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)).resolves.toEqual(failure)
+    await expect(subject.reviewerCandidates(unconfigured, '', signal)).resolves.toEqual({ ...failure, code: 'unavailable' })
+    await expect(subject.updateBranch(unconfigured, { method: 'merge', headSha: HEAD }, signal)).resolves.toEqual(failure)
+    expect(gh.calls).toEqual([])
+  })
 })

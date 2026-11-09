@@ -18,7 +18,10 @@ export function checkRun(name: string, status: string, conclusion: string | null
     detailsUrl: `https://github.com/octo/demo/actions/runs/1/job/${name}`,
     startedAt: status === 'QUEUED' ? null : '2026-10-09T01:00:00Z',
     completedAt: status === 'COMPLETED' ? '2026-10-09T01:02:07Z' : null,
-    checkSuite: { app: { id: 'github-actions' }, workflowRun: workflow === null ? null : { event: 'pull_request', workflow: { id: workflow, name: workflow } } },
+    checkSuite: {
+      app: { id: 'github-actions' },
+      workflowRun: workflow === null ? null : { databaseId: 7, event: 'pull_request', workflow: { id: workflow, name: workflow } },
+    },
   }
 }
 
@@ -60,7 +63,13 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
     reviewDecision: null,
+    viewerCanUpdateBranch: false,
+    canBeRebased: false,
     reviewThreads: threadPage([true, false, false]),
+    reviewRequests: { totalCount: 0, nodes: [] },
+    latestReviews: { totalCount: 0, nodes: [] },
+    latestOpinionatedReviews: { totalCount: 0, nodes: [] },
+    closingIssuesReferences: { totalCount: 0, nodes: [] },
     commits: {
       nodes: [{
         commit: {
