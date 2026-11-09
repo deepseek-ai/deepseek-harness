@@ -2,7 +2,7 @@ version: 1
 scenario: mcp-empty-ptc
 profile: headless
 composition: mcp-empty-ptc
-recording: authored
+recording: live
 header:
   class: mcp-empty-ptc
   pin: true
