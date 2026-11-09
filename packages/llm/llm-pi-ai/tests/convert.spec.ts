@@ -940,6 +940,18 @@ describe('mapStopReason / mapUsage', () => {
   })
 
   it.each([
+    // A gateway 500 that relays its upstream's 401 in the body, as the Anthropic SDK renders it.
+    ['500 {"error":{"origin":"upstream","message":"upstream returned an error response: User not found.","type":"upstream_error","code":"upstream_response_error","upstream":{"provider":"custom","status":401,"body":{"error":{"type":"<nil>","message":"User not found."},"type":"error"}}}}', 'SERVER'],
+    ['502 {"error":{"message":"upstream status 400"}}', 'SERVER'],
+    ['404 {"error":{"message":"upstream status 403"}}', 'PI_AI_ERROR'],
+    ['401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}', 'AUTH'],
+    ['429 Too Many Requests: slow down', 'RATE_LIMIT'],
+  ] as const)('classifies %s by its leading response status', (errorMessage, code) => {
+    expect(mapStopReason(assistant({ stopReason: 'error', errorMessage })))
+      .toMatchObject({ kind: 'error', failure: { code } })
+  })
+
+  it.each([
     'other side closed',
     'HTTP2 request did not get a response',
     'WebSocket closed unexpectedly',
