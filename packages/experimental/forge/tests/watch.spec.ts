@@ -223,6 +223,22 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
   })
 
+  it('passes the base commit of the latest status to a diff read at its head only', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1), { baseSha: 'e'.repeat(40) }))
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    const diff = vi.spyOn(provider, 'diff')
+    const signal = new AbortController().signal
+
+    await context.forge.diff(ref(1), 'a'.repeat(40), signal)
+    await context.forge.diff(ref(1), 'f'.repeat(40), signal)
+    await context.forge.diff(ref(2), 'a'.repeat(40), signal)
+
+    expect(diff.mock.calls.map(call => call[3])).toEqual(['e'.repeat(40), undefined, undefined])
+  })
+
   it('polls a watched change request at once after a diff read finds a newer head, and only then', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))

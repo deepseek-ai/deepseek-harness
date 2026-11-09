@@ -242,7 +242,8 @@ export class ForgeService extends Service {
    * computes them. The first `stale` failure at a head commit polls a watched
    * change request again at once, so its next status names the current head;
    * later stale reads at the same commit wait for the regular poll, which
-   * bounds the reads while the host's answers disagree.
+   * bounds the reads while the host's answers disagree. When the latest status of a watched change request names
+   * `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.
    * @param ref - change request served by a registered provider.
    * @param headSha - head commit the patch must describe, usually the head of the latest status.
    * @param signal - cancellation of the read.
@@ -250,8 +251,10 @@ export class ForgeService extends Service {
    * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
    */
   async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const latest = this.watches.get(changeRequestKey(ref))?.latest
+    const base = latest !== undefined && 'snapshot' in latest && latest.snapshot.headSha === headSha ? latest.snapshot.baseSha : undefined
     const result = await this.invoke(this.registration(ref.repository.forge), signal,
-      (provider, operation) => provider.diff(ref, headSha, operation))
+      (provider, operation) => provider.diff(ref, headSha, operation, base))
     const watch = this.watches.get(changeRequestKey(ref))
     if (typeof result !== 'string' && result.code === 'stale' && watch !== undefined && watch.staleHead !== headSha) {
       watch.staleHead = headSha

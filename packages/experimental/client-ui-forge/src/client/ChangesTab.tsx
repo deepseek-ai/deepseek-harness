@@ -5,6 +5,9 @@
  * layout. The view reads the changes when it opens, on each navigation, on
  * refresh, and when the change request's head or the checkout's `branch`
  * scope summary changes; a read keeps the previous changes on screen until it settles.
+ * File sections receive values that keep their identity across renders, so a
+ * render of the view redraws only the sections whose own values changed, and
+ * an expanded file draws its lines once its section comes near the scrollport.
  */
 
 import {
@@ -39,7 +42,8 @@ import type { ChangesLens, createChangesStore } from './changes-store.ts'
 import { CommitMenu } from './CommitMenu.tsx'
 import { HideTestsSwitch, LensControl, LensMenu, LENSES, ViewedProgress } from './ReviewControls.tsx'
 import { viewedStateOf, type ViewedFiles, type ViewedMarks } from './viewed-files.ts'
-import { Counts, DiffFile, type DiffFileAction } from './DiffFile.tsx'
+import { Counts, DiffFile, type DiffFileAction, type DiffFileHandlers } from './DiffFile.tsx'
+import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
@@ -564,7 +568,7 @@ export function ChangesTab({
   const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests)), [allFiles, lens, hideTests])
   const lensCounts = useMemo(() => Object.fromEntries(LENSES.map(item => [item,
     allFiles.filter(file => shownBy(file, item, hideTests)).length])) as Record<ChangesLens, number>, [allFiles, hideTests])
-  const shownSource = data === null ? null : reviewSourceOf(data)
+  const shownSource = useMemo(() => data === null ? null : reviewSourceOf(data), [data])
   const viewedKey = shownSource === null ? '' : viewedSourceOf(shownSource)
   const marks = useSyncExternalStore(viewedFiles.subscribe, () => viewedFiles.marksOf(viewedKey))
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
@@ -582,7 +586,12 @@ export function ChangesTab({
   const expandedByDefault = (file: ForgeDiffFile): boolean => initial.has(file.path) && viewedStateOf(marks, file.path, file.digest) !== 'viewed'
   const isExpanded = (file: ForgeDiffFile): boolean => chosen[file.path] ?? expandedByDefault(file)
   const sections = useRef(new Map<string, HTMLElement>())
-  const scrollport = useRef<HTMLDivElement>(null)
+  const scrollport = useRef<HTMLDivElement | null>(null)
+  const reach = useMemo(() => new SectionReach(), [])
+  const attachScrollport = useCallback((element: HTMLDivElement | null) => {
+    scrollport.current = element
+    reach.attach(element)
+  }, [reach])
   // A short final file cannot align with the viewport top; retain its jump until the reader scrolls away.
   const jumpPosition = useRef<{ readonly data: ChangesData; readonly top: number } | null>(null)
   useLayoutEffect(() => {
@@ -594,6 +603,7 @@ export function ChangesTab({
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
       return
     }
+    // The browser's scroll anchoring keeps the section in place while the sections above it draw their lines.
     sections.current.get(wanted)?.scrollIntoView({ block: 'start' })
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
@@ -751,6 +761,58 @@ export function ChangesTab({
     markViewed(data, file, viewedStateOf(marks, file.path, file.digest) !== 'viewed')
   }
 
+  // What the section handlers and comment actions read when they run, replaced on every render. The assignment happens
+  // during render rather than in an effect because the file menus read their actions while this same render draws them;
+  // an effect would hand them the previous diff's links. A render React discards leaves values derived from the same
+  // props and state, which the retried render assigns again.
+  const live = useRef({ data, expandedByDefault, expand, markViewed, fileActions, publishReview, report, t })
+  live.current = { data, expandedByDefault, expand, markViewed, fileActions, publishReview, report, t }
+  const handlers = useMemo((): DiffFileHandlers => ({
+    toggle: (file) => {
+      const byDefault = live.current.expandedByDefault(file)
+      setChosen(value => ({ ...value, [file.path]: !(value[file.path] ?? byDefault) }))
+    },
+    reveal: (path) => { setRevealed(value => new Set([...value, path])) },
+    expand: (file, index) => {
+      const { data: owner, expand: open } = live.current
+      /* v8 ignore next -- sections render only while changes are loaded */
+      if (owner !== null) open(owner, file, index)
+    },
+    view: (file, viewed) => {
+      const { data: owner, markViewed: mark } = live.current
+      /* v8 ignore next -- sections render only while changes are loaded */
+      if (owner !== null) mark(owner, file, viewed)
+    },
+    actions: (file) => {
+      const { data: owner, fileActions: list } = live.current
+      /* v8 ignore next -- sections render only while changes are loaded */
+      return owner === null ? [] : list(owner, file)
+    },
+    section: (path, element) => {
+      if (element === null) sections.current.delete(path)
+      else sections.current.set(path, element)
+    },
+    reach,
+  }), [reach])
+  const reviewStarted = reviewState.comments.length > 0
+  const publishingBlocked = reviewState.uncertain !== null
+  // Comments on a commit range or on local changes go to the input only; a whole change request also takes GitHub comments.
+  const publishable = data?.kind === 'change' && data.commits === null
+  const fileReview = useMemo((): ReviewActions | undefined => shownSource === null ? undefined : {
+    source: shownSource,
+    addToInput: addReviewToInput,
+    records: queue, openLink, reviewStarted,
+    onQuoted: (selection) => { if (!queue.recordAgent(selection)) live.current.report('review.saveFailed') },
+    publishingBlocked,
+    ...publishable ? {
+      queue: selection => queue.add(selection),
+      publish: selection => selection.source.kind === 'change'
+        ? live.current.publishReview(selection.source.url, { kind: 'comment', headSha: selection.source.headSha, comment: selection.comment },
+          url => queue.published(selection, url))
+        : Promise.resolve(live.current.t('review.stale')),
+    } : {},
+  }, [shownSource, addReviewToInput, queue, openLink, reviewStarted, publishingBlocked, publishable])
+
   let body: ReactNode
   if (data === null) {
     if (state === null && snapshot?.disconnected) {
@@ -784,7 +846,7 @@ export function ChangesTab({
     body = <div className={css.files}>{orphanRecords}<div className={css.centered}>{t('lens.empty')}</div></div>
   } else {
     body = (
-      <div ref={scrollport} className={css.files} data-forge-changes-scroll="" role="region"
+      <div ref={attachScrollport} className={css.files} data-forge-changes-scroll="" role="region"
         aria-label={t('diff.allFiles', { count: files.length })} aria-keyshortcuts="ArrowLeft ArrowRight V" tabIndex={0}
         onKeyDown={navigateFiles} onScroll={(event) => {
           if (jumpPosition.current?.top !== event.currentTarget.scrollTop) jumpPosition.current = null
@@ -796,38 +858,18 @@ export function ChangesTab({
               key={path}
               visible={tab.visible}
               file={file}
-              review={{ source: reviewSourceOf(data),
-                addToInput: addReviewToInput,
-                records: queue, openLink, reviewStarted: reviewState.comments.length > 0,
-                onQuoted: (selection) => { if (!queue.recordAgent(selection)) report('review.saveFailed') },
-                publishingBlocked: reviewState.uncertain !== null,
-                ...data.kind === 'local' || data.commits !== null ? {} : {
-                  queue: selection => queue.add(selection),
-                  publish: selection => selection.source.kind === 'change'
-                    ? publishReview(selection.source.url, { kind: 'comment', headSha: selection.source.headSha, comment: selection.comment },
-                      url => queue.published(selection, url))
-                    : Promise.resolve(t('review.stale')),
-                },
-              }}
+              review={fileReview}
               expanded={isExpanded(file)}
-              onToggle={() => { setChosen(value => ({ ...value, [path]: !(value[path] ?? expandedByDefault(file)) })) }}
               large={drawnLines(file) > LARGE_FILE_LINES}
               revealed={revealed.has(path)}
-              onReveal={() => { setRevealed(value => new Set([...value, path])) }}
               text={current.texts[path]}
               open={current.open[path] ?? NO_GAPS}
-              onExpand={(index) => { expand(data, file, index) }}
               split={split}
               wrap={wrap}
               badge={badgeOf(file, data, t)}
               tooltip={pathTooltipOf(file, t)}
-              actions={fileActions(data, file)}
               viewed={viewedStateOf(marks, path, file.digest)}
-              onViewed={(viewed) => { markViewed(data, file, viewed) }}
-              sectionRef={(element) => {
-                if (element === null) sections.current.delete(path)
-                else sections.current.set(path, element)
-              }}
+              handlers={handlers}
               t={t}
             />
           )

@@ -3,6 +3,7 @@ import Schema from '@deepseek-ai/schemastery'
 
 /** Shared configuration fields extended by native platform providers. */
 export const CuaConfigFields = {
+  requireSystemPointerApproval: Schema.boolean().default(true),
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),

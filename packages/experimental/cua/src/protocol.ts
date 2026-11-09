@@ -34,50 +34,62 @@ const imageBase64 = z.string().min(1).refine(value => Buffer.from(value, 'base64
   message: 'Expected canonical base64 image data',
 })
 
-/** Model-submittable operation parameters; Host resource fields and private continuations are separate. */
-export const Request = z.discriminatedUnion('method', [
-  operation('getCapabilities', {}), operation('listApps', {}),
-  operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
-  operation('getApp', { selector: z.string().min(1) }),
-  operation('activate', app),
-  operation('show', { ...app, windowId: id.optional() }),
-  operation('listWindows', app),
-  operation('getState', { ...app, windowId: id.optional(),
-    includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
-    details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
-  }),
-  operation('listActions', snapshot),
-  operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
-  operation('invoke', snapshot),
-  z.object({ method: z.literal('mouseMove'), params: z.union([
-    z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
-  ]) }).strict(),
-  z.object({ method: z.literal('click'), params: z.union([
-    z.object({ ...snapshot, ...click }).strict(),
-    z.object({ ...absoluteCoordinate, ...click }).strict(),
-    z.object({ ...relativeCoordinate, ...click }).strict(),
-  ]) }).strict(),
-  operation('setValue', { ...snapshot, value: jsonValue }),
-  operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
-    selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
-  operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
-  operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
-  operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
-  operation('sendKeyEvent', { ...app, windowId: id.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
-  z.object({ method: z.literal('scroll'), params: z.union([
-    z.object({ ...absoluteCoordinate,
-      deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
-    z.object({ ...relativeCoordinate,
-      deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
-  ]) }).strict(),
-  z.object({ method: z.literal('drag'), params: z.union([
-    z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(false).optional(),
-      fromX: point, fromY: point, toX: point, toY: point }).strict(),
-    z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: relativeCoordinate.relative,
-      fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
-  ]) }).strict(),
-  operation('screenshot', window),
-])
+/** Shared hover target variants. Providers may add options without replacing a target or its coordinate mode. */
+export const MouseMoveTargets = [
+  z.object(snapshot).strict(), z.object(absoluteCoordinate).strict(), z.object(relativeCoordinate).strict(),
+] as const
+
+function requestSchema<T extends z.ZodType>(hover: T) {
+  return z.discriminatedUnion('method', [
+    operation('getCapabilities', {}), operation('listApps', {}),
+    operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
+    operation('getApp', { selector: z.string().min(1) }),
+    operation('activate', app),
+    operation('show', { ...app, windowId: id.optional() }),
+    operation('listWindows', app),
+    operation('getState', { ...app, windowId: id.optional(),
+      includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
+      details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
+    }),
+    operation('listActions', snapshot),
+    operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
+    operation('invoke', snapshot),
+    z.object({ method: z.literal('mouseMove'), params: hover }).strict(),
+    z.object({ method: z.literal('click'), params: z.union([
+      z.object({ ...snapshot, ...click }).strict(),
+      z.object({ ...absoluteCoordinate, ...click }).strict(),
+      z.object({ ...relativeCoordinate, ...click }).strict(),
+    ]) }).strict(),
+    operation('setValue', { ...snapshot, value: jsonValue }),
+    operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
+      selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
+    operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
+    operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
+    operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
+    operation('sendKeyEvent', { ...app, windowId: id.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
+    z.object({ method: z.literal('scroll'), params: z.union([
+      z.object({ ...absoluteCoordinate,
+        deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
+      z.object({ ...relativeCoordinate,
+        deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
+    ]) }).strict(),
+    z.object({ method: z.literal('drag'), params: z.union([
+      z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: z.literal(false).optional(),
+        fromX: point, fromY: point, toX: point, toY: point }).strict(),
+      z.object({ ...window, ...pointer, snapshotId: z.string().min(1).optional(), relative: relativeCoordinate.relative,
+        fromX: relativePoint, fromY: relativePoint, toX: relativePoint, toY: relativePoint }).strict(),
+    ]) }).strict(),
+    operation('screenshot', window),
+  ])
+}
+
+/** Portable model operations, including standard hover without a system-pointer option. */
+export const Request = requestSchema(z.union(MouseMoveTargets))
+
+/** Model operations for providers that can move the user's system pointer. */
+export const SystemPointerRequest = requestSchema(z.union(MouseMoveTargets.map(target => target.extend({
+  useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
+}))))
 
 /** Resource parameters supplied by the Host, never accepted from model tool arguments. */
 export const NativeResourceParameters = {
@@ -136,6 +148,8 @@ export const CapabilitiesResult = z.object({
   platform: z.string(), permissions: z.object({ accessibility: z.boolean(), screenRecording: z.boolean() }),
   /** Whether the provider supports application-level accessibility observations. */
   appLevelAccessibility: z.boolean(),
+  /** Whether mouseMove accepts an explicit request to move the system pointer. */
+  systemPointer: z.boolean().default(false),
   /** Scopes that support keyboard input. */
   keyboard: z.array(z.enum(['app', 'window'])),
   sessionLocked: z.boolean().nullable(),

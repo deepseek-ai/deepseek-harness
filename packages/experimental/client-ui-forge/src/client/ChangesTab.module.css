@@ -567,6 +567,12 @@
   font: var(--dsw-font-markdown-code-block);
 }
 
+/* An expanded file the reader has not scrolled near yet: one 22px row (`.line`) per drawn line, so the scroll
+   range and the positions of the files below stay close to their drawn values. */
+.unreached {
+  height: calc(var(--forge-rows) * 22px);
+}
+
 /* One intrinsic-width track paints every unwrapped unified row across the scrolled width. */
 .code:not([data-wrap]):not([data-split]) {
   display: grid;
