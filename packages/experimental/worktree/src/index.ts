@@ -381,6 +381,8 @@ async function assertBranchName(run: GitRun, directory: string, branch: string, 
 /**
  * Add retained-artifact context to a failure without changing its routable identity:
  * a `HarnessError` keeps its `name` and `code`, and caller cancellation stays an `AbortError`.
+ * A `HarnessError` subclass other than `WorktreeError` is rebuilt as a plain `HarnessError`, so
+ * callers route on `name` and `code` rather than on `instanceof` the original subclass.
  * @param context - operation summary placed before the original message.
  * @param error - failure thrown after allocation began.
  * @param signal - operation cancellation.
