@@ -528,6 +528,13 @@
   }
 }
 
+/* While its write is in flight or the host's marks could not be read, the mark keeps its place and shows it cannot change. */
+.viewed[data-disabled],
+.viewed[data-disabled] input {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
 .viewed:has(input:focus-visible) {
   outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -1px;
