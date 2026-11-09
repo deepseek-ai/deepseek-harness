@@ -106,6 +106,7 @@ Session 在所创建的 worktree 中工作时，`localDiff` 以它的 `baseCommi
 | [`src/client/thread-state.ts`](src/client/thread-state.ts) | 读取讨论并确定它们在所显示变更中的位置 |
 | [`src/review-cache.ts`](src/review-cache.ts) | 保存在内存中的评审讨论 |
 | [`src/client/host-viewed.ts`](src/client/host-viewed.ts) | 代码托管平台保存的已审阅标记，以及正在保存的标记 |
+| [`src/client/menu-search.ts`](src/client/menu-search.ts) | 菜单顶部搜索框的按键处理 |
 | [`src/client/FileLabel.tsx`](src/client/FileLabel.tsx) | 变更文件的标签：文件名在前，目录在后 |
 | [`src/client/WorktreeToggle.tsx`](src/client/WorktreeToggle.tsx) | 新会话的工作树选项 |
 | [`src/client/WorktreeProgress.tsx`](src/client/WorktreeProgress.tsx) | worktree 创建卡片与 worktree 缺失卡片 |

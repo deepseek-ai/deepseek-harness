@@ -22,6 +22,7 @@ import { formatDuration } from './format.ts'
 import { CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { checkCounts, checkDuration } from './status.ts'
+import { searchFieldKeyDown } from './menu-search.ts'
 import css from './ForgeTab.module.css'
 import overview from './ChangeRequestOverview.module.css'
 
@@ -470,12 +471,7 @@ function ReviewerSearch({ url, list, choose, t }: {
       <div className={overview.menuSearch}>
         <Input ref={search} icon={<IconSearchOutlineRegular size={14} />} value={query} aria-label={t('reviewers.search')}
           placeholder={t('reviewers.search')} onChange={(event) => { setQuery(event.target.value) }}
-          onKeyDown={(event) => {
-            if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation()
-            if (event.key !== 'Enter' || event.nativeEvent.isComposing || first === undefined) return
-            event.preventDefault()
-            choose(first.login)
-          }} />
+          onKeyDown={(event) => { searchFieldKeyDown(event, first === undefined ? undefined : () => { choose(first.login) }) }} />
       </div>
       <div className={overview.menuRows}>{body}</div>
     </>

@@ -106,6 +106,7 @@ The browser entry mounts the Remote, then the UI. One stream per Session feeds t
 | [`src/client/thread-state.ts`](src/client/thread-state.ts) | Thread reads and their places in the shown changes |
 | [`src/review-cache.ts`](src/review-cache.ts) | Review threads kept in memory |
 | [`src/client/host-viewed.ts`](src/client/host-viewed.ts) | Viewed marks the code host keeps, with marks being saved |
+| [`src/client/menu-search.ts`](src/client/menu-search.ts) | Keys of the search field at the top of a menu |
 | [`src/client/FileLabel.tsx`](src/client/FileLabel.tsx) | Changed file label: name, then directory |
 | [`src/client/WorktreeToggle.tsx`](src/client/WorktreeToggle.tsx) | New Session worktree option |
 | [`src/client/WorktreeProgress.tsx`](src/client/WorktreeProgress.tsx) | Worktree creation and removed-worktree card |

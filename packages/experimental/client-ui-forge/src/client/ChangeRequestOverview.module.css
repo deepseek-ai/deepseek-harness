@@ -35,6 +35,7 @@
   justify-content: center;
   box-sizing: border-box;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-interactive-bg-active);
   color: var(--dsw-alias-label-secondary);
   font-size: 10px;
