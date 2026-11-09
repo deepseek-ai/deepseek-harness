@@ -306,14 +306,14 @@
                     "type": "boolean"
                   },
                   "maxElements": {
-                    "type": "integer",
+                    "type": "number",
                     "minimum": 1,
-                    "maximum": 10000
+                    "multipleOf": 1
                   },
                   "maxDepth": {
-                    "type": "integer",
+                    "type": "number",
                     "minimum": 1,
-                    "maximum": 100
+                    "multipleOf": 1
                   }
                 },
                 "required": [
