@@ -96,6 +96,10 @@ it('projects shared controls and macOS signing without adding signing to the sha
   }
   expect(CuaConfig({})).toMatchObject({ maxElements: 2000, maxDepth: 25 })
   expect(NativeProvider.Config({})).toMatchObject({ maxElements: 5000, maxDepth: 50 })
+  const limits = { maxElements: 100000, maxDepth: 512 }
+  expect(NativeProvider.Config(limits)).toMatchObject(limits)
+  expect(() => NativeProvider.Config({ maxElements: 100001 })).toThrow()
+  expect(() => NativeProvider.Config({ maxDepth: 513 })).toThrow()
   expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
   expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({

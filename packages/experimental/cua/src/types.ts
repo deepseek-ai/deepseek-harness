@@ -38,9 +38,9 @@ export interface CuaObservationOptions { emit?: boolean }
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
-  /** Maximum nodes visited for this read, from 1 to 10000. Omission uses the provider setting. */
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
   maxElements?: number
-  /** Maximum traversal depth for this read, from 1 to 100. Omission uses the provider setting. */
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
   maxDepth?: number
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean

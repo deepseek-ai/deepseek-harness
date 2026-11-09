@@ -7,7 +7,8 @@ const id = z.number().int().positive().max(2 ** 32 - 1)
 const pid = z.number().int().positive().max(2 ** 31 - 1)
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
-const traversalLimits = z.object({
+const traversalLimit = z.number().min(1).multipleOf(1)
+const nativeTraversalLimits = z.object({
   maxElements: z.number().int().min(1).max(10000),
   maxDepth: z.number().int().min(1).max(100),
 }).strict()
@@ -54,7 +55,7 @@ function requestSchema<T extends z.ZodType>(hover: T) {
     operation('getState', { ...app, windowId: id.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
-      ...traversalLimits.partial().shape,
+      maxElements: traversalLimit.optional(), maxDepth: traversalLimit.optional(),
     }),
     operation('listActions', snapshot),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
@@ -98,10 +99,10 @@ export const SystemPointerRequest = requestSchema(z.union(MouseMoveTargets.map(t
 
 /** Native resource fields. The Host fills omitted observation limits from the provider configuration. */
 export const NativeResourceParameters = {
-  getState: traversalLimits,
+  getState: nativeTraversalLimits,
   drag: z.object({ durationMs: z.number().int().min(1).max(5000), steps: z.number().int().min(1).max(240) }).strict(),
   paste: z.object({ maxClipboardBytes: z.number().int().min(1024), pasteReadTimeoutMs: z.number().int().min(1).max(2 ** 31 - 1),
-    ...traversalLimits.shape,
+    ...nativeTraversalLimits.shape,
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }

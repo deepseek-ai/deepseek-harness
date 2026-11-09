@@ -21,6 +21,16 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'invalid', method: 'setValue', params: target })).toBe(false)
   })
 
+  it('enforces macOS tree budgets at native admission', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    const read = (maxElements: number, maxDepth: number) => ({
+      id: 'tree', method: 'getState', params: { appHandle: 'app', maxElements, maxDepth },
+    })
+    expect(validate(read(100000, 512))).toBe(true)
+    expect(validate(read(100001, 512))).toBe(false)
+    expect(validate(read(100000, 513))).toBe(false)
+  })
+
   it('rejects a key array at both model and native pressKey admission', () => {
     const request = { method: 'pressKey', params: { appHandle: 'app', key: ['w', 'd'] } }
     expect(Request.safeParse(request).success).toBe(false)

@@ -173,13 +173,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
   const retainedWindow = await retainedApp.getWindow(7)
-  await retainedApp.getAccessibilityTree({ maxDepth: 60 })
-  expect(await retainedWindow.getAccessibilityTree({ maxElements: 4000, emit: false })).toContain('Count: 1')
+  await retainedApp.getAccessibilityTree({ maxDepth: 512 })
+  expect(await retainedWindow.getAccessibilityTree({ maxElements: 100000, emit: false })).toContain('Count: 1')
   await retainedWindow.getAccessibilityTree({ emit: false })
   const reads = (await readEvents()).filter(event => event.method === 'getState').slice(-3)
   expect(reads.map(event => event.params)).toEqual([
-    { appHandle: retainedApp.appHandle, maxElements: 5000, maxDepth: 60 },
-    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 4000, maxDepth: 50 },
+    { appHandle: retainedApp.appHandle, maxElements: 5000, maxDepth: 512 },
+    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 100000, maxDepth: 50 },
     { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 5000, maxDepth: 50 },
   ])
   const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
