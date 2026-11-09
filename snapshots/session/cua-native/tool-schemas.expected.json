@@ -306,11 +306,13 @@
                     "type": "boolean"
                   },
                   "maxElements": {
+                    "description": "Maximum nodes to visit on this read. Omission uses the provider setting.",
                     "type": "number",
                     "minimum": 1,
                     "multipleOf": 1
                   },
                   "maxDepth": {
+                    "description": "Maximum depth to traverse on this read. Omission uses the provider setting.",
                     "type": "number",
                     "minimum": 1,
                     "multipleOf": 1

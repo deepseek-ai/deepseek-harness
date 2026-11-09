@@ -155,7 +155,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
   const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
-  const guidance = `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const guidance = `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
