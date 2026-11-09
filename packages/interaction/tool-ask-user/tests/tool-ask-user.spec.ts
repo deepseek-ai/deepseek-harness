@@ -554,16 +554,11 @@ describe('ask_user_question tool', () => {
     expect(result).toMatchObject({
       isError: true,
       content: [{ type: 'text', text: 'Error: timed questions require a live agent' }],
-      error: { info: { name: 'UserQuestionError', code: 'CALLER_NOT_LIVE' } },
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
     })
   })
 
-  it.each([
-    // The integer schema rejects a fraction before the tool body's range check.
-    { timeout: 0, info: { name: 'UserQuestionError', code: 'BAD_TIMEOUT' } },
-    { timeout: 1.5, info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
-    { timeout: 2_147_484, info: { name: 'UserQuestionError', code: 'BAD_TIMEOUT' } },
-  ])('rejects invalid timeout $timeout', async ({ timeout, info }) => {
+  it.each([0, 1.5, 2_147_484])('rejects invalid timeout %s', async (timeout) => {
     const ctx = await setup({ mode: 'timed', timeout: -1 })
 
     const result = await executeToolFixture(ctx, {
@@ -576,7 +571,7 @@ describe('ask_user_question tool', () => {
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ type: 'text' })
     expect(result.content[0]?.type === 'text' ? result.content[0].text : '').toMatch(/timeout.*integer/i)
-    expect(result.error?.info).toEqual(info)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects duplicate question ids before dispatching a timed call', async () => {
@@ -596,8 +591,8 @@ describe('ask_user_question tool', () => {
 
     expect(result).toMatchObject({
       isError: true,
-      content: [{ type: 'text', text: 'Error: question id "scope" must be unique within this call' }],
-      error: { info: { name: 'UserQuestionError', code: 'DUPLICATE_QUESTION_ID' } },
+      content: [{ type: 'text', text: 'Error: invalid arguments: question id "scope" must be unique within this call' }],
+      error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
     })
     expect(answerer).not.toHaveBeenCalled()
   })

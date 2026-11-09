@@ -629,7 +629,7 @@ describe('dsh-tool-workflow', () => {
       const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('run_in_background is disabled')
-      expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'UNSUPPORTED_OPTION' })
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
 
     it('advertises the background semantics in the parameter', async () => {
