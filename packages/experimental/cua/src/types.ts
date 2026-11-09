@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -17,23 +17,6 @@ type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { m
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Stored screenshot returned to a program for explicit inspection. */
 export type CuaProgramImage = { readonly path: string; readonly width: number; readonly height: number }
-/** Encoded model-request image with the format, pixel dimensions and window reported by the Host. */
-export type CuaScreenshot = Pick<z.output<typeof ScreenshotResult>, 'mimeType' | 'pixelWidth' | 'pixelHeight' | 'windowId'> & {
-  bytes: Uint8Array
-}
-/** Optional output owned by the caller; persistence and image admission are external. */
-export interface CuaObservationSink {
-  /**
-   * Emit text.
-   * @param value - observed application state.
-   */
-  text(value: string): void | Promise<void>
-  /**
-   * Emit an image.
-   * @param screenshot - encoded image and its validated format, dimensions and window.
-   */
-  image(screenshot: CuaScreenshot): void | Promise<void>
-}
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
 /** Full observations of the requested content; each read replaces the application's current snapshot. */
@@ -184,14 +167,13 @@ export interface CuaSurface {
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
  * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
  */
-export interface CuaWindow<TImage = CuaScreenshot> extends CuaSurface {
+export interface CuaWindow extends CuaSurface {
   readonly windowId: number
   /**
    * Capture the selected window.
-   * @param options - emission options.
-   * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
+   * @returns Stored Image with a readable path and pixel dimensions, ready for explicit inspection.
    */
-  getScreenshot(options?: CuaObservationOptions): Promise<TImage>
+  getScreenshot(): Promise<CuaProgramImage>
   /**
    * Request a mouse move to an element or a point without pressing a button.
    * The provider reports the route and whether the system pointer moved.
@@ -226,7 +208,7 @@ export interface CuaWindow<TImage = CuaScreenshot> extends CuaSurface {
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
 /** Application-level accessibility, window discovery and scope-dependent input operations. */
-export interface CuaApp<TImage = CuaScreenshot> extends CuaSurface {
+export interface CuaApp extends CuaSurface {
   readonly appHandle: CuaAppHandle
   /**
    * Activate this application explicitly, potentially changing the user's focused app and Space.
@@ -244,10 +226,10 @@ export interface CuaApp<TImage = CuaScreenshot> extends CuaSurface {
    * @param windowId - ID obtained from getWindows.
    * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
    */
-  getWindow(windowId: number): Promise<CuaWindow<TImage>>
+  getWindow(windowId: number): Promise<CuaWindow>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
-export interface CuaApi<TImage = CuaScreenshot> {
+export interface CuaApi {
   /**
    * Inspect permissions without requesting them.
    * @param options - output options.
@@ -278,5 +260,5 @@ export interface CuaApi<TImage = CuaScreenshot> {
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
    * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
-  getApp(selector: string): Promise<CuaApp<TImage>>
+  getApp(selector: string): Promise<CuaApp>
 }

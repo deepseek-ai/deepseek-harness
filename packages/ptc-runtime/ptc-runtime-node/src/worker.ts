@@ -33,7 +33,7 @@ interface Evaluation {
   pending: number
   pendingBytes: number
   admit(text: string): void
-  image(image: PtcImage): void
+  image(attachment: PtcImage['attachment']): void
   finish(error?: PtcRunFailure, value?: PtcJsonValue, discard?: boolean): void
 }
 
@@ -53,8 +53,7 @@ export class ProgramWorker {
   private termination: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
-  private readonly images = new Map<string, PtcImage>()
-  private readonly imageIds = new WeakMap<PtcImage, string>()
+  private readonly images = new Map<string, PtcImage['attachment']>()
   private readonly controller = new AbortController()
   closed = false
 
@@ -160,14 +159,14 @@ export class ProgramWorker {
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
         }
       },
-      image: (image) => {
+      image: (attachment) => {
         if (overflowed || evaluation.settled) return
-        if (!output.admitImage({ afterLog: logs.length, image })) {
+        if (!output.admitImage({ afterLog: logs.length, attachment })) {
           overflowed = true
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
           return
         }
-        images.push({ afterLog: logs.length, image })
+        images.push({ afterLog: logs.length, attachment })
       },
       finish: (error, value, discard = false) => {
         if (evaluation.settled) return
@@ -297,13 +296,9 @@ export class ProgramWorker {
   }
 
   private registerImage(image: PtcImage): PtcImageWire {
-    let id = this.imageIds.get(image)
-    if (id === undefined) {
-      id = randomUUID()
-      this.imageIds.set(image, id)
-      this.images.set(id, image)
-    }
-    return { kind: 'image', id, path: image.path, width: image.width, height: image.height }
+    const id = randomUUID()
+    this.images.set(id, image.attachment)
+    return { kind: 'image', id, path: image.path, width: image.attachment.width, height: image.attachment.height }
   }
 
   private async start(cwd: string): Promise<void> {

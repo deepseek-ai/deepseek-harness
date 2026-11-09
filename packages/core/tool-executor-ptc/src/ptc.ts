@@ -257,7 +257,6 @@ function renderRunOutput(
   value: RunCodeOutput,
   guidance: string,
   images: PtcImageOutput[] = [],
-  imageRefs?: Pick<WeakMap<PtcImage, Extract<ContentBlock, { type: 'image' }>['attachment']>, 'get'>,
 ): ContentBlock[] {
   const content: ContentBlock[] = []
   const appendText = (text: string): void => { if (text.length > 0) content.push({ type: 'text', text }) }
@@ -265,9 +264,7 @@ function renderRunOutput(
   for (const output of images) {
     appendText(value.logs.slice(position, output.afterLog).join('\n'))
     position = output.afterLog
-    const attachment = imageRefs?.get(output.image)
-    if (attachment === undefined) throw new Error('Inspected image is unavailable')
-    content.push({ type: 'image', attachment })
+    content.push({ type: 'image', attachment: output.attachment })
   }
   const remaining = value.logs.slice(position)
   if (value.result !== undefined) remaining.push(renderValue(value.result))
@@ -325,7 +322,6 @@ export function createRunCodeTool(
   }
 
   type ImageRef = Extract<ContentBlock, { type: 'image' }>['attachment']
-  const imageRefs = new WeakMap<PtcImage, ImageRef>()
   const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; images: PtcImageOutput[] }>()
   const programImage = (ref: ImageRef): PtcImage => {
     const attachments = ctx.get('attachments')
@@ -333,9 +329,7 @@ export function createRunCodeTool(
     const access = attachments === undefined || fs === undefined ? undefined
       : resolveImageAttachmentAccess(attachments, path => fs.processPathFromHostPath(path), ref)
     if (access === undefined) throw new Error('Image storage must expose a readable path in the program filesystem')
-    const image = new PtcImage(access.readonlyPath, ref.width, ref.height)
-    imageRefs.set(image, ref)
-    return image
+    return new PtcImage(access.readonlyPath, ref)
   }
   const stateOwners = new WeakMap<object, WeakSet<PtcRuntime>>()
   const definition = defineTool({
@@ -749,9 +743,6 @@ export function createRunCodeTool(
           }
 
           if (result.images !== undefined && result.images.length > 0) {
-            for (const output of result.images) {
-              if (!imageRefs.has(output.image)) throw new Error('Runtime returned an image outside this executor')
-            }
             inspections.set(exec, { images: result.images })
           }
           if (result.error) {
@@ -791,14 +782,10 @@ export function createRunCodeTool(
       if (selected === undefined) return undefined
       if (result.isError) {
         if (selected.value !== undefined) return undefined
-        return [...result.content, ...selected.images.map((output) => {
-          const attachment = imageRefs.get(output.image)
-          if (attachment === undefined) throw new Error('Inspected image is unavailable')
-          return { type: 'image' as const, attachment }
-        })]
+        return [...result.content, ...selected.images.map(output => ({ type: 'image' as const, attachment: output.attachment }))]
       }
       if (selected.value === undefined || !isDeepStrictEqual(selected.value, result.value)) return undefined
-      return renderRunOutput(selected.value, escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode), selected.images, imageRefs)
+      return renderRunOutput(selected.value, escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode), selected.images)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.

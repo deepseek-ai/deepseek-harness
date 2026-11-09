@@ -1,4 +1,5 @@
 /** Image values carried by program bindings and explicit inspection output. */
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { PtcJsonValue } from './types.ts'
 
 /** A stored image readable from the program's execution environment. */
@@ -6,21 +7,17 @@ export class PtcImage {
   readonly [key: string]: PtcJsonValue
   /** Absolute attachment file path readable in the execution world. */
   readonly path: string
-  /** Stored pixel width. */
-  readonly width: number
-  /** Stored pixel height. */
-  readonly height: number
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>
 
   /**
    * Describe one immutable image file in the execution world.
    * @param path - Absolute path to the stored image.
-   * @param width - Stored pixel width.
-   * @param height - Stored pixel height.
+   * @param attachment - Reference to the immutable stored image.
    */
-  constructor(path: string, width: number, height: number) {
+  constructor(path: string, attachment: ImageAttachmentRef) {
     this.path = path
-    this.width = width
-    this.height = height
+    this.attachment = attachment
     Object.freeze(this)
   }
 }
@@ -29,6 +26,6 @@ export class PtcImage {
 export interface PtcImageOutput {
   /** Number of text entries emitted before this image. */
   afterLog: number
-  /** Host-issued image selected by the program. */
-  image: PtcImage
+  /** Stored image selected by the program. */
+  attachment: ImageAttachmentRef
 }

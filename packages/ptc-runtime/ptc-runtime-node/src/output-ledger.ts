@@ -24,7 +24,9 @@ export class OutputLedger {
   /** Admit an image descriptor against the same outer-output budget as text. */
   admitImage(output: PtcImageOutput): boolean {
     const overhead = this.imageEntries === 0 ? 2 : 1
-    const bytes = jsonValueBytesUpTo({ afterLog: output.afterLog, image: output.image }, this.maxBytes - this.bytes - overhead)
+    const bytes = jsonValueBytesUpTo(
+      { afterLog: output.afterLog, attachment: { ...output.attachment } }, this.maxBytes - this.bytes - overhead,
+    )
     if (bytes === undefined) return false
     this.bytes += bytes + overhead
     this.imageEntries += 1
