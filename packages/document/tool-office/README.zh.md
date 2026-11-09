@@ -52,6 +52,8 @@ kind: "package-reference"
 
 转换和重算结果给出 Office 套件私有[输出存储](../office-kit/README.zh.md#use-this-package)中位于 Harness 主目录下的一个文件；模型用 shell 复制它，因此文件落在哪里由 shell 的沙箱和审批决定。文件系统后端无法读取 Host 文件时（例如 SSH 工作区），这两个工具在转换前即失败；渲染不受影响。
 
+失败的调用在 `tool/result` 上记录结构化的 `name` 和 `code`。Office 套件的失败转为带对应 `OfficeToolErrorCode` 的 `OfficeToolError`，并把 `OfficeKitError` 保留为 `cause`：`OFFICE_UNAVAILABLE`（Office 服务不存在时也是它）、`OFFICE_BUSY`、`OFFICE_INPUT_TOO_LARGE`、`OFFICE_OUTPUT_TOO_LARGE`、`OFFICE_INVALID_DOCUMENT`、`OFFICE_UNSUPPORTED_FORMAT`、`OFFICE_INVALID_REQUEST`、`OFFICE_INVALID_OUTPUT`、`OFFICE_TIMEOUT`、`OFFICE_SOURCE_CHANGED`，套件代码 `failed` 对应 `OFFICE_CONVERSION_FAILED`。工具自身也抛出 `OfficeToolError`：渲染出的图片超过存储的单图字节上限时为 `OFFICE_OUTPUT_TOO_LARGE`，执行环境读不到转换输出时为 `OFFICE_UNSUPPORTED_REMOTE_WORKSPACE`，模型路由未声明图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`。schema 无法表达的参数检查（包括操作不接受的输入扩展名）抛出 `ToolArgsError`（`INVALID_ARGS`），消息带 `invalid arguments: ` 前缀。不在 Agent step 中调用、没有附件存储或无法解析模型路由时抛出 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）。输入不存在时抛出 `FsError` `FS_NOT_FOUND`，输入不是普通文件时为 `FS_NOT_REGULAR_FILE`，其他文件系统失败保留各自的 `FsError` 代码。附件存储的拒绝保留其 `AttachmentError` 代码，并在消息前加上操作和路径。其他失败（包括取消）原样传递。
+
 每个请求都以 `foreground` 优先级进入 Office 套件的共享队列，与打开的预览同级。前台工作先于后台预热执行，并可驱逐排队中的后台任务，因此推测性预览不会饿死工具调用；工具调用与打开的预览按到达顺序共享准入。
 
 -----
