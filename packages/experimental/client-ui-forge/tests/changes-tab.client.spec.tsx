@@ -1520,9 +1520,9 @@ describe('line review actions', () => {
     expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledOnce()
   })
   it('refuses a local reference passed to the pending review callback', async () => {
-    const renderDiff = DiffFileModule.DiffFile
+    const renderDiff = DiffFileModule.DiffFile.type
     let queue: ReviewActions['queue']
-    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
       queue = props.review?.queue
       return renderDiff(props)
     })
