@@ -61,7 +61,7 @@ dsh --profile cua-mcp --print-client-config codex >> ~/.codex/config.toml
 dsh --profile cua-mcp --print-client-config claude-code | sh
 ```
 
-在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。在其他 Host 上 profile 没有提供方也能启动，两个工具都返回指出缺少提供方的错误。
+在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。本 profile 没有权限页面，因此要在「系统设置 → 隐私与安全性」中添加 helper 应用来授予这两项权限：源码检出在 `packages/experimental/cua-macos/native/.build/prepared/<arch>/<build>/` 下准备 `DSH Computer Use Dev.app`，其中 `current.json` 记录当前选中的构建；已安装的包附带 `DSH Computer Use.app`。两项权限都授予之前，`await cua.getCapabilities()` 会报告缺失的标志，应用操作会失败；桌面处于锁定状态时这些操作以 `SESSION_LOCKED` 失败。在其他 Host 上 profile 没有提供方也能启动，两个工具都返回指出缺少提供方的错误。
 
 ### 你会得到什么
 
@@ -122,7 +122,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 #### Token 影响
 
-API 参考每个连接或每次重置增加约 11,000 个字符。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；生成的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。
+使用当前 macOS 提供方时，首个结果每个连接或每次重置增加约 15,000 个字符：2,200 个字符的执行规则与 12,800 个字符的 API 参考，按仓库四字符/token 估算约 3,800 token。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；生成的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。
 
 #### KV Cache 影响
 

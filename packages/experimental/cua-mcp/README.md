@@ -61,7 +61,7 @@ dsh --profile cua-mcp --print-client-config codex >> ~/.codex/config.toml
 dsh --profile cua-mcp --print-client-config claude-code | sh
 ```
 
-On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. On other Hosts the profile starts without a provider, and both tools return an error naming the missing provider.
+On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. This profile has no permission page, so grant both in System Settings → Privacy & Security by adding the helper application: a source checkout prepares `DSH Computer Use Dev.app` under `packages/experimental/cua-macos/native/.build/prepared/<arch>/<build>/`, where `current.json` names the selected build; an installed package ships `DSH Computer Use.app`. Until both are granted, `await cua.getCapabilities()` reports the missing flags and application operations fail; a locked desktop fails them with `SESSION_LOCKED`. On other Hosts the profile starts without a provider, and both tools return an error naming the missing provider.
 
 ### What you get
 
@@ -122,7 +122,7 @@ The connected harness's model sees two tools and the server instructions from `t
 
 #### Token effect
 
-The API reference adds about 11,000 characters once per connection or reset. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the generated Codex configuration raises the `cua_run_code` budget to 25,000 tokens.
+The first result adds about 15,000 characters once per connection or reset with the current macOS provider: 2,200 characters of execution rules and 12,800 of API reference, about 3,800 tokens by the repository's four-character estimate. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the generated Codex configuration raises the `cua_run_code` budget to 25,000 tokens.
 
 #### KV Cache effect
 
