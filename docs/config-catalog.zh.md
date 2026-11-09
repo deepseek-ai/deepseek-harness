@@ -1123,6 +1123,13 @@ export interface Config {
    * `testPaths` and before the built-in rules.
    */
   interfacePaths?: string[]
+  /** Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit and update time. */
+  maxCachedReviewBytes?: number
+  /**
+   * Age in milliseconds at which review threads kept in memory are read from the code host again; a GitHub pull
+   * request's update time does not change when a thread is resolved.
+   */
+  reviewRefreshMs?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
@@ -1188,7 +1195,7 @@ export type SourceSigning = 'ad-hoc' | {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:279`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:366`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1222,9 +1229,12 @@ export interface Config {
   hosts?: string[]
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
-  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
+  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
   maxOutputBytes?: number
-  /** Most review threads counted per pull request in one status read; a pull request with more reports a lower bound. */
+  /**
+   * Most review threads counted per pull request in one status read, which reports a lower bound past it, and read in
+   * one review read, which reports itself truncated past it.
+   */
   maxReviewThreads?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number

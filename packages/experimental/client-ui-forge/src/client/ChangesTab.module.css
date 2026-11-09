@@ -333,6 +333,7 @@
 }
 
 .body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -865,3 +866,69 @@
 .code[data-single-side]:not([data-wrap]) .line { grid-template-columns: var(--forge-number-width) 1.4em max-content; }
 .reviewFile { padding: 12px 0; }
 .reviewFile > h3 { margin: 0 10px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+
+/* The unresolved thread count of a file opens the thread list at the file. */
+.threadCount {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Drawn inside the button, since the file title clips what overflows it. */
+.threadCount:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  .threadCount:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent); }
+}
+
+/* A view narrower than 480px shows the count alone. */
+.threadCountNumber { display: none; }
+
+@container forge-changes (max-width: 479px) {
+  .threadCountText { display: none; }
+  .threadCountNumber { display: inline; }
+}
+
+/* Opens the thread list; pressed while the list shows. */
+.threadsToggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.threadsToggle[aria-pressed='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+
+@media (hover: hover) {
+  .threadsToggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+.threadsTotal {
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}

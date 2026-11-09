@@ -50,6 +50,8 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 提交评审时先检查 PR 当前的 head，再通过 REST API 发布单条行内评论或一次完整评审，并显式指定 `commit_id`。多行评论携带所属侧及包含端点的起止行号。评审结论为“评论”“批准”或“请求更改”。JSON 请求正文通过标准输入传递。provider 不会重试写操作；发送后的超时、异常响应或服务端错误会返回结果不明，由调用方到 GitHub 核对。检查与写入之间到来的新提交可能让已明确定位到旧提交的评审过时；GitHub 的这些接口不提供原子的 head 前置条件。
 
+`readReview` 用一次 GraphQL 查询读取评审讨论，同时读出 `headRefOid`；head 不是所请求的提交时返回 `stale`。讨论按每页最多 100 个分页读取，直到读满 `maxReviewThreads` 个；第一页之后的每一页讨论都会再次读取 head，因此读取期间有新的推送时返回 `stale`。每个讨论的评论都会经评论分页全部读出，评论分页不读取 head；讨论第一条评论的提交和 `diffHunk` 只读一次。所有页面按 JSON 计合计不得超过 `maxOutputBytes`：之后的某一页会超出上限时，该页及其后的讨论被丢弃，结果标记为 `truncated`，与讨论数超过 `maxReviewThreads` 时相同；第一页的输出本身超过上限时，读取以 `too-large` 失败。行级讨论只有在 GitHub 报告它未过期、带有 `line`，且第一条评论的 `commit` 就是 head 时，才得到 `current` 位置：force-push 之后写在旧提交上的评论保留的 `line` 是那个旧提交的行号，GitHub 也可能在标记讨论过期的同时保留它的 `line`。`original` 取自第一条评论 `originalCommit` 上的 `originalLine` 和 `originalStartLine`；`subjectType: FILE` 的讨论两者都没有。起始行在 diff 另一侧的范围只保留最后一行。没有评论的讨论会被略去。GitHub 上不存在该 PR 或仓库时，读取返回 `not-found`，与读取提交列表时相同。REST 的 `position` 无法区分已过期的讨论，因此不读取。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -66,6 +68,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 | [`src/provider.ts`](src/provider.ts) | URL 映射、按主机分组与失败分类 |
 | [`src/graphql.ts`](src/graphql.ts) | 构造查询，并校验和映射响应 |
 | [`src/compare.ts`](src/compare.ts) | 经 compare API 读取两个提交之间的补丁，供所有 diff 读取共用 |
+| [`src/threads.ts`](src/threads.ts) | 读取评审讨论、分页，并映射到 head 位置与原始位置 |
 | [`src/gh.ts`](src/gh.ts) | 在宿主上执行 `gh`，清理环境变量并施加限制 |
 | [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL，并校验写入请求的名称与提交 |
 
@@ -96,11 +99,11 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 <a id="known-limitations-and-deferred-work"></a>
 
 - **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
-- **评审讨论上限**——每次状态读取每个 pull request 最多统计 `maxReviewThreads` 个评审讨论；超出时 `unresolvedThreads` 只是下限，由 `threadsTruncated` 标出。
+- **评审讨论上限**——每次状态读取每个 pull request 最多统计、每次评审读取最多读取 `maxReviewThreads` 个评审讨论；超出时 `unresolvedThreads` 只是下限，由 `threadsTruncated` 标出，评审读取的结果标记为 `truncated`。
 - **批次时限**——评审讨论很多的 pull request 的续页会拉长其主机的轮询批次；批次超过 `ctx.forge` 的 `fetchTimeoutMs` 时，批次内每个 pull request 都报告 `unavailable`，而不只是讨论很多的那个。
 - **基准分支被改写**——diff 从 head 与 GitHub 在 pull request 最后一次更新时记录的基准提交的合并基准开始。基准分支被强制推送后，该合并基准可能不同于 GitHub pull request 页面使用的合并基准，因此在 pull request 更新前，补丁可能多出或缺少提交。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
-- **速率限制**——每次轮询为每个主机消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。
+- **速率限制**——每次轮询为每个主机消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。
 - **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
 
 <a id="dev-note"></a>

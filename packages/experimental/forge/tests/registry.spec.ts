@@ -1,6 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
+import type { ForgeReviewData } from '../src/types.ts'
 import { demo, FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 let ctx: Context | undefined
@@ -123,6 +124,21 @@ describe('forge registry', () => {
     await expect(ctx.forge.compare(ref(3), 'a'.repeat(40), 'b'.repeat(40), signal)).resolves.toBe('diff --git a/x b/x')
     expect(commits).toHaveBeenCalledWith(ref(3), expect.any(AbortSignal))
     expect(compare).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), 'b'.repeat(40), expect.any(AbortSignal))
+  })
+
+  it('delegates review reads to the provider of their forge and reports a provider without them as unsupported', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider does not support review reads' })
+    const review: ForgeReviewData = { headSha: 'a'.repeat(40), threads: [], truncated: false }
+    const readReview = vi.fn(async () => review)
+    Object.assign(provider, { readReview })
+    await expect(ctx.forge.readReview(ref(3), 'a'.repeat(40), signal)).resolves.toBe(review)
+    expect(readReview).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), expect.any(AbortSignal))
   })
 
   it('delegates change request actions to the provider of their forge and returns its outcome', async () => {

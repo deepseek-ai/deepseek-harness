@@ -3,7 +3,7 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
-  ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
+  ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
@@ -17,6 +17,7 @@ import {
 import type { PageResult, SnapshotPages } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
+import { readReviewThreads } from './threads.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 
@@ -34,9 +35,9 @@ const NOT_ACCEPTABLE = '406'
 
 /** Bounds on what one read retains or counts. */
 export interface GitHubLimits {
-  /** Maximum combined JSON bytes retained by an explicit check read. */
+  /** Maximum combined JSON bytes retained by an explicit check read or a review read. */
   readonly maxOutputBytes: number
-  /** Most review threads counted per pull request in one status read. */
+  /** Most review threads counted per pull request in one status read, and read in one review read. */
   readonly maxReviewThreads: number
   /** Most commits one commit listing returns. */
   readonly maxCommits: number
@@ -54,9 +55,20 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
+   * Read the review threads of a pull request at `headSha` through GraphQL, each page naming the head it was read at.
+   * @see readReviewThreads
+   */
+  async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+    return await readReviewThreads(this.graphql, ref, headSha, this.limits, signal)
+  }
+
+  /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check bytes, counted review threads, and listed commits.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, and listed commits.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))

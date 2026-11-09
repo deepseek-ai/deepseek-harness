@@ -121,9 +121,9 @@ export interface ForgeFailure {
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
    * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
-   * a later status can succeed; `unavailable`: any other failure.
+   * a later status can succeed; `unsupported`: the provider does not offer the read; `unavailable`: any other failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unsupported' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -167,6 +167,87 @@ export type ForgeReviewRequest = {
   | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
   | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
 )
+
+/** Opaque host identity of one review thread. */
+export type ForgeThreadId = Branded<'ForgeThreadId'>
+
+/** Opaque host identity of one review comment. */
+export type ForgeCommentId = Branded<'ForgeCommentId'>
+
+/** Consecutive lines on one side of a diff whose new side is one commit. */
+export interface ForgeAnchor {
+  /**
+   * Full object name of the commit the diff's new side shows: new-side (`R`) lines number this commit's file, and
+   * old-side (`L`) lines number the file at the diff's base.
+   */
+  readonly commit: string
+  /** First line, inclusive. */
+  readonly startLine: number
+  /** Last line, inclusive. */
+  readonly endLine: number
+}
+
+/** Account that wrote a review comment. */
+export interface ForgeCommentAuthor {
+  /** Login as the host spells it. */
+  readonly login: string
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether the account is an app or bot rather than a person. */
+  readonly bot: boolean
+}
+
+/** One comment of a review thread. */
+export interface ForgeReviewComment {
+  /** Host identity of the comment. */
+  readonly id: ForgeCommentId
+  /** Author, or null when the account no longer exists. */
+  readonly author: ForgeCommentAuthor | null
+  /** Markdown source as the author wrote it; it may contain raw HTML, which readers must not render as HTML. */
+  readonly body: string
+  /** ISO 8601 time the comment was created. */
+  readonly createdAt: string
+  /** Whether the comment belongs to the signed-in user's review that is not submitted yet, which only that user sees. */
+  readonly pending: boolean
+  /** Web page of the comment, or null when the host reports none. */
+  readonly url: string | null
+}
+
+/**
+ * One review thread on a file of a change request. A line thread has two positions: `original` on the commit it was
+ * written on, and `current` on the head commit of the read. `current` is null once the host no longer places the
+ * thread on the head commit, as after later commits changed its lines.
+ */
+export interface ForgeReviewThread {
+  /** Host identity of the thread. */
+  readonly id: ForgeThreadId
+  /** Repository-relative path the thread is on. */
+  readonly path: string
+  /** Old (`L`) or new (`R`) side of the diff the lines number. */
+  readonly side: 'L' | 'R'
+  /** Whether the thread is on lines or on the whole file. */
+  readonly subject: 'line' | 'file'
+  /** Lines in the diff that ends at the head commit of the read, whose `commit` is that head; null for an outdated or file thread. */
+  readonly current: ForgeAnchor | null
+  /** Lines in the diff that ended at the commit the thread was written on; null for a file thread. */
+  readonly original: ForgeAnchor | null
+  /** Diff hunk the host recorded when the thread was written, ending at its last line; null when it recorded none. */
+  readonly diffHunk: string | null
+  /** Whether the thread is marked resolved. */
+  readonly resolved: boolean
+  /** Comments oldest first; the first starts the thread. */
+  readonly comments: readonly ForgeReviewComment[]
+}
+
+/** Review threads of a change request read at one head commit. */
+export interface ForgeReviewData {
+  /** Head commit the threads were read at; `current` positions number its files. */
+  readonly headSha: string
+  /** Threads in host order, at most the provider's limit. */
+  readonly threads: readonly ForgeReviewThread[]
+  /** Whether the change request has more threads than `threads` holds. */
+  readonly truncated: boolean
+}
 
 /** Result of a review write; unknown outcomes must be checked on the host before another submission. */
 export type ForgeReviewResult =
@@ -225,6 +306,12 @@ export interface ForgeProvider {
   readonly forge: string
   /** Publish a comment or completed review. Omission declares that this provider cannot write reviews. */
   submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+  /**
+   * Read the review threads of a change request at head commit `headSha`. The threads are returned only when the
+   * read names `headSha` as the head; once the head is another commit, the read resolves to a `stale` failure.
+   * Omission declares that this provider cannot read reviews.
+   */
+  readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */

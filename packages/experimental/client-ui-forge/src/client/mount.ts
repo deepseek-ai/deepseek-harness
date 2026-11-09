@@ -7,19 +7,21 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, type QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
+import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ReviewQueue } from './review-queue.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
+import { formatThreadQuote, threadQuoteSummary } from './review-threads.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -147,16 +149,22 @@ function registerUi(ctx: Context): void {
       () => { notices.report('toast.promptFailed') },
     )
   }
-  const addReviewToInput = (sessionId: SessionId, selection: ReviewSelection): boolean => {
+  /** Insert one quote into the Session's main input, numbering it after the quotes of the same heading already there. */
+  const quoteInInput = (sessionId: SessionId, heading: RegExp, quote: (index: number) => string, summary: QuoteSummary): boolean => {
     const scope = ctx.sessions.scope(sessionId)
     const conversation = scope?.get('conversation')
     if (scope === undefined || conversation === undefined) return false
     const input = conversation.input.for(scope)
-    const numbers = Array.from(input.state.getSnapshot().draft.matchAll(/(?:^|\n)(?:> )?## User Comment (\d+)/g), match => Number(match[1]))
-    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1), reviewQuoteSummary(selection.comment))) return false
+    const numbers = Array.from(input.state.getSnapshot().draft.matchAll(heading), match => Number(match[1]))
+    if (!input.insertQuote(quote(Math.max(0, ...numbers) + 1), summary)) return false
     input.focus()
     return true
   }
+  const addReviewToInput = (sessionId: SessionId, selection: ReviewSelection): boolean => quoteInInput(sessionId,
+    /(?:^|\n)(?:> )?## User Comment (\d+)/g, index => formatReviewComment(selection, index), reviewQuoteSummary(selection.comment))
+  const addThreadToInput = (sessionId: SessionId, thread: ForgeReviewThread, url: string, range: string | null): boolean =>
+    quoteInInput(sessionId, /(?:^|\n)(?:> )?## Review Thread (\d+)/g, index => formatThreadQuote(thread, url, index),
+      threadQuoteSummary(thread, range))
   /** How toasts name a change request: its number, else its title, else its URL. */
   const nameOf = (entry: ForgePanelChangeRequest): string => {
     const number = numberOf(entry)
@@ -242,6 +250,9 @@ function registerUi(ctx: Context): void {
       viewedFiles: store.viewed,
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
+      addThreadToInput: (thread, url, range) => addThreadToInput(sessionId, thread, url, range),
+      changeRequestReview: (url, headSha, fresh, signal) =>
+        ctx.remote.forgePanel.changeRequestReview(sessionId, url, headSha, fresh, signal),
       reviewQueue: ({ id, signal }) => {
         let queue = store.reviews.get(signal)
         if (queue === undefined) {

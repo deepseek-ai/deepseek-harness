@@ -428,6 +428,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeChangeRequestDiff: 'forge.md',
   ForgeCommit: 'forge.md',
   ForgeCommitList: 'forge.md',
+  ForgeReviewData: 'forge.md',
   ForgeCommitRange: 'forge.md',
   ForgeFileLayer: 'forge.md',
   ForgeChangeRequestStatesFrame: 'forge.md',

@@ -49,8 +49,8 @@ const run = promisify(execFile)
  * `pr-N.diff`, or, when `pr-N.refused` exists, fails with that JSON error body
  * and the matching diagnostic as GitHub's HTTP 406 refusal. The raw contents API
  * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
- * request 7 serves `commits.json`, oldest first. Every invocation is appended to
- * `calls.jsonl`.
+ * request 7 serves `commits.json`, oldest first. The review thread read serves
+ * `threads.json` as its one page of threads, or no threads without it. Every invocation is appended to `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -169,6 +169,13 @@ if (args[0] === 'api' && args[1] === 'graphql') {
         author: { name: 'Octo', user: { login: 'octo' } }, parents: { nodes: [{ oid: commit.parent }] },
       } })),
     } } } } }))
+    process.exit(0)
+  }
+  if (query.includes('{ id headRefOid reviewThreads(first: $first)')) {
+    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
+    const threads = existsSync(join(here, 'threads.json')) ? JSON.parse(readFileSync(join(here, 'threads.json'), 'utf8')) : []
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number,
+      headRefOid: pulls[number].headRefOid, reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: threads } } } } }))
     process.exit(0)
   }
   if (query.includes('pullRequest(number: $number)')) {
@@ -1853,6 +1860,104 @@ it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a 
   await local.getByRole('button', { name: '分层透镜：全部', exact: true }).click()
   await expect.poll(() => page.getByRole('menu').getByRole('menuitem').allTextContents()).toEqual(['全部1', '接口0', '实现0', '测试1'])
   await page.keyboard.press('Escape')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** One review thread node of pull request 7 as the GraphQL thread read returns it, its comments by `lin` then `octo`. */
+function threadNode(
+  id: string, fields: Record<string, unknown>, bodies: readonly string[], commit: string = HEAD7,
+): Record<string, unknown> {
+  return {
+    id, isOutdated: false, isResolved: false, path: 'src/panel.ts', diffSide: 'RIGHT', startDiffSide: null, line: null, startLine: null,
+    originalLine: null, originalStartLine: null, subjectType: 'LINE', ...fields,
+    root: { nodes: [{ diffHunk: '@@ -1,5 +1,5 @@\n export const n1 = 1\n-export const n2 = 2\n+export const n2 = \'two\'',
+      commit: { oid: commit }, originalCommit: { oid: commit } }] },
+    comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: bodies.map((body, index) => ({
+      id: `${id}-${index}`, state: 'SUBMITTED', createdAt: '2026-10-09T00:00:00Z', url: `${PULL}#discussion_${id}_${index}`, body,
+      author: { __typename: 'User', login: index === 0 ? 'lin' : 'octo', avatarUrl: null },
+    })) },
+  }
+}
+
+/** Threads of pull request 7: on new line 2, on old line 15, resolved on new line 15, outdated, and on the whole of `docs/panel.md`. */
+const THREADS = [
+  threadNode('on-line', { line: 2, originalLine: 2 }, ['Why **two**?', 'It reads better.']),
+  threadNode('old-side', { diffSide: 'LEFT', line: 15, originalLine: 15 }, ['The old fifteen was a number.']),
+  threadNode('resolved', { isResolved: true, line: 15, originalLine: 15 }, ['Settled.']),
+  threadNode('outdated', { isOutdated: true, originalLine: 9 }, ['This line moved.'], 'f'.repeat(40)),
+  threadNode('whole-file', { path: 'docs/panel.md', subjectType: 'FILE' }, ['Add a screenshot.']),
+]
+
+it.skipIf(MODE === 'record')('overlays the review threads of a change request and opens them from the thread list', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-threads', 'follow-up')
+  await writeFile(join(root, 'threads.json'), JSON.stringify(THREADS))
+  // Comments were written two hours before the browser's clock, so their relative times stay fixed.
+  await page.clock.setFixedTime(Date.parse('2026-10-09T02:00:00Z'))
+  const { view, sessionId } = await openReview(page, scaffold)
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const onLine = panel.locator('[data-forge-thread="on-line"]')
+  await onLine.getByText('two', { exact: true }).waitFor({ timeout: 20_000 })
+  // The thread follows the row of its last line, under the new side.
+  expect(await onLine.evaluate(card => card.previousElementSibling?.querySelector('[data-new-line]')?.textContent)).toBe('export const n2 = \'two\'')
+  expect(await panel.locator('[data-forge-thread="old-side"]').evaluate(card => card.previousElementSibling?.querySelector('[data-old-line]')?.textContent))
+    .toBe('export const n15 = 15')
+  await panel.locator('[data-forge-thread="resolved"]').getByText('已解决的讨论 · lin', { exact: true }).waitFor()
+  await panel.locator('[data-forge-outdated-threads]').getByText('1 条讨论已过期：所在代码已被后续提交修改', { exact: true }).waitFor()
+  await view.locator('[data-forge-diff-file="docs/panel.md"] [data-forge-thread="whole-file"]').getByText('文件级讨论', { exact: true }).waitFor()
+  const count = panel.getByRole('button', { name: 'panel.ts 有 3 条未解决的讨论，跳到下一条', exact: true })
+  await count.waitFor()
+  await view.getByRole('navigation').getByTitle('3 条未解决的讨论', { exact: true }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'review-threads.expected.md'),
+    await captureStableAria(page, '[data-forge-diff-file="src/panel.ts"]', scaffold.workspaceCwd), MODE)
+
+  // The count steps through the file's unresolved threads in display order: R2, L15, then the outdated one.
+  const centered = async (id: string): Promise<boolean> => await panel.locator(`[data-forge-thread="${id}"]`).evaluate((card) => {
+    const viewport = card.closest('[data-forge-changes-scroll]')!.getBoundingClientRect()
+    const box = card.getBoundingClientRect()
+    return box.top + box.height / 2 > viewport.top && box.top + box.height / 2 < viewport.bottom
+  })
+  for (const id of ['on-line', 'old-side', 'outdated']) {
+    await count.click()
+    await expect.poll(() => centered(id)).toBe(true)
+  }
+  expect(await view.locator('[data-forge-thread-list]').count()).toBe(0)
+
+  await view.getByRole('button', { name: '讨论列表，共 5 个', exact: true }).click()
+  const list = view.getByRole('complementary', { name: '讨论列表，共 5 个' })
+  await expect.poll(() => list.getByRole('radio', { checked: true }).allTextContents()).toEqual(['未解决4'])
+  await expect.poll(() => list.locator('[data-forge-thread-item]').evaluateAll(items => items.map(item => item.getAttribute('data-forge-thread-item'))))
+    .toEqual(['whole-file', 'on-line', 'old-side', 'outdated'])
+  await list.getByRole('radio', { name: /^已解决/ }).click()
+  await list.locator('[data-forge-thread-item="resolved"]').click()
+  // Opening a resolved thread unfolds it inside its file, and the docked list stays.
+  await panel.locator('[data-forge-thread="resolved"]').getByText('Settled.', { exact: true }).waitFor()
+  await list.getByRole('radio', { name: /^全部/ }).click()
+  await expect.poll(() => list.locator('[data-forge-thread-item]').count()).toBe(5)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-list.expected.md'),
+    await captureStableAria(page, '[data-forge-thread-list]', scaffold.workspaceCwd), MODE)
+  // A view narrower than 480px gives the list the files' whole width and closes it before opening a thread.
+  await view.evaluate((element) => { element.style.width = '420px'; element.style.flex = 'none' })
+  await expect.poll(() => list.evaluate(element => [getComputedStyle(element).position, element.getBoundingClientRect().width]))
+    .toEqual(['absolute', 420])
+  await list.locator('[data-forge-thread-item="on-line"]').click()
+  await list.waitFor({ state: 'detached' })
+  await view.evaluate((element) => { element.style.width = ''; element.style.flex = '' })
+
+  await onLine.getByRole('button', { name: '添加到输入框', exact: true }).click()
+  await page.locator('[data-composer-input]').first().getByText('panel.ts R2', { exact: true }).first().waitFor()
+  const sent = scaffold.whenTurnSettled()
+  await page.locator('[data-composer-input]').first().press('Enter')
+  await sent
+  await page.getByText(FOLLOW_UP_REPLY, { exact: true }).waitFor()
+  // The quoted thread reaches the model only inside the ordinary logged user message.
+  const quotes = (await readPersistedEvents(scaffold, sessionId)).flatMap(event => event.type === 'user/message'
+    ? event.data.content.flatMap(block => block.type === 'text' && block.text.includes('## Review Thread') ? [block.text] : []) : [])
+  expect(quotes).toHaveLength(1)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-message.expected.md'), quotes.join('').trimEnd(), MODE)
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
+  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('{ id headRefOid reviewThreads(first: $first)')))
+  expect(reads.length).toBeGreaterThan(0)
+  expect(reads[0]).toEqual(expect.arrayContaining(['owner=octo', 'name=demo', 'number=7', 'first=100']))
   expect(tripwire.pageErrors).toEqual([])
 })
 

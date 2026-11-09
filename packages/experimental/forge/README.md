@@ -48,6 +48,8 @@ Reaching `fetchTimeoutMs` aborts the fetch signal with `FORGE_FETCH_TIMEOUT`. Pr
 
 Providers may implement `submitReview` to publish a line comment or a completed review at an explicit head commit. The registry returns unsupported when that capability is absent and refreshes watched status after a submission. Successful writes return their web URL; failures distinguish changed heads, refusals, and unknown outcomes. Callers must reconcile unknown outcomes before another submission. Pending drafts belong to the consumer, not the polling registry.
 
+Providers may implement `readReview` to read a change request's review threads at one head commit. `readReview(ref, headSha, signal)` returns `ForgeReviewData`, the threads with each line thread's position at the head and at the commit it was written on, only when the read names `headSha` as the head; otherwise `stale`, which polls a watched change request at once, once per head commit shared with stale diff reads. The registry returns an `unsupported` failure when the provider lacks the method.
+
 -----
 
 <a id="understand-the-implementation"></a>

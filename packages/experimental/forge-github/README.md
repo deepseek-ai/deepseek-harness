@@ -50,6 +50,8 @@ A pull request is `mergeReady` when it is open, not a draft, GitHub reports its 
 
 Review submission checks the current pull request head, then posts a single inline comment or one completed review through the REST API with an explicit `commit_id`. Multiline comments carry their side and inclusive start and end lines. Review decisions are Comment, Approve, and Request changes. JSON request bodies travel on stdin. The provider never retries a mutation: a timeout, unexpected response, or server error after dispatch returns an unknown outcome that the caller must reconcile on GitHub. A commit arriving between the check and the write can make the explicitly addressed review outdated; GitHub does not offer an atomic head precondition on these endpoints.
 
+`readReview` reads review threads with one GraphQL query that names `headRefOid`, and returns `stale` when the head is not the requested commit. It reads threads in pages of up to 100 until it has read `maxReviewThreads` of them, each thread page after the first naming the head again, so a push during the read returns `stale`; it reads every comment of each thread through comment pages, which do not name the head, and the commits and `diffHunk` of a thread's first comment once. All pages together, measured as JSON, must fit `maxOutputBytes`: a later page that would pass it is dropped with the threads after it, and the result is marked `truncated`, as when more than `maxReviewThreads` threads exist; a first page whose output alone passes it fails the read as `too-large`. A thread on lines gets a `current` position only when GitHub reports it not outdated, with a `line`, and its first comment's `commit` is the head: a comment written on an earlier commit after a force-push keeps a `line` that numbers that commit, and GitHub can mark a thread outdated while keeping its `line`. `original` comes from `originalLine` and `originalStartLine` at the first comment's `originalCommit`; `subjectType: FILE` threads have neither. A range whose start is on the other side of the diff keeps its last line. Threads without comments are left out. A pull request or repository GitHub does not have makes the read `not-found`, as it does the commit listing. REST's `position` does not tell outdated threads apart and is not read.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -66,6 +68,7 @@ A fetch groups references by host and sends one initial `gh api graphql` query p
 | [`src/provider.ts`](src/provider.ts) | URL mapping, host grouping, and failure classification |
 | [`src/graphql.ts`](src/graphql.ts) | Query construction and response validation and mapping |
 | [`src/compare.ts`](src/compare.ts) | Patch between two commits through the compare API, shared by every diff read |
+| [`src/threads.ts`](src/threads.ts) | Review thread read, pagination, and mapping onto head and original positions |
 | [`src/gh.ts`](src/gh.ts) | Host `gh` execution with environment scrubbing and limits |
 | [`src/urls.ts`](src/urls.ts) | Remote URL and pull request URL parsing, and validation of inlined names and commits |
 
@@ -96,11 +99,11 @@ None. Provider output reaches only host-side watchers.
 <a id="known-limitations-and-deferred-work"></a>
 
 - **GitHub CLI on the host** — `gh` must be installed and signed in for each configured host; tokens in environment variables are not forwarded. Hosts missing from `hosts` are never read, including references retained across configuration changes. A status fetch returns `unavailable` for those references; a head lookup rejects before starting `gh`.
-- **Review thread bound** — a status read counts at most `maxReviewThreads` review threads per pull request; beyond it `unresolvedThreads` is a lower bound that `threadsTruncated` marks.
+- **Review thread bound** — a status read counts, and a review read reads, at most `maxReviewThreads` review threads per pull request; beyond it `unresolvedThreads` is a lower bound that `threadsTruncated` marks, and a review read is `truncated`.
 - **Batch deadline** — continuation pages of a pull request with many review threads lengthen its host's polling batch; a batch that outlives `ctx.forge`'s `fetchTimeoutMs` reports `unavailable` for every pull request in it, not only for the one with many threads.
 - **Rewritten base branch** — the diff starts from the merge base of the head and the base commit GitHub recorded at the pull request's last update. After the base branch is force-pushed, that merge base can differ from the one GitHub's pull request view uses, so the patch can include or omit commits until the pull request is updated.
 - **No fork discovery** — head lookups exclude pull requests whose head is in another repository.
-- **Rate limits** — every poll costs one GraphQL query per host, plus one query per further page of 100 review threads, and a complete check read one more query per further page of 100 check records; every diff read costs one GraphQL query and one REST request, and a second REST request when the base commit changed after the latest status. All count against the signed-in account’s rate limit.
+- **Rate limits** — every poll costs one GraphQL query per host, plus one query per further page of 100 review threads, and a complete check read one more query per further page of 100 check records; every diff read costs one GraphQL query and one REST request, and a second REST request when the base commit changed after the latest status. All count against the signed-in account’s rate limit. A review read costs one GraphQL query per page of 100 threads and one more per further page of 100 comments in a thread.
 - **No merge queue** — a base branch that requires a merge queue refuses a direct merge, and the provider never queues one.
 
 <a id="dev-note"></a>

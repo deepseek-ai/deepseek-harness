@@ -1,0 +1,247 @@
+/* Review thread cards share the inline review form's card material; comment rows follow the conversation's 13px detail size. */
+.card,
+.folded {
+  box-sizing: border-box;
+  width: calc(100% - 20px);
+  max-width: 720px;
+  margin: 10px;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-family: Inter, var(--dsw-font-family);
+  white-space: normal;
+}
+
+.card { padding: 10px 12px; }
+
+/* A card a jump from a covering thread list focused; a pointer jump shows no ring. */
+.card:focus { outline: none; }
+
+.card:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.card[data-split][data-side="R"],
+.folded[data-split][data-side="R"] {
+  margin-inline-start: clamp(10px, calc(100% - 740px), calc(50% + 10px));
+}
+
+.card[data-resolved] {
+  /* An elevated surface: the excerpt and the file at that commit scroll inside it, so the thumb takes the l2 pair,
+     which inherits down to them (see ui-theme styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.folded {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.folded > svg { flex: none; color: var(--dsw-alias-state-success-primary); }
+
+.foldedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.place {
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.spacer { flex: 1; }
+
+/* Text actions inside a card: no fill, accent ink, the same height as the tags beside them. */
+.link {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.link:disabled { color: var(--dsw-alias-label-dimmed); cursor: default; }
+
+.link:focus-visible {
+  border-radius: var(--dsw-radius-xs);
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .link:not(:disabled):hover { text-decoration: underline; }
+}
+
+.turned { transform: rotate(-90deg); }
+
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.comment {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 500;
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  corner-shape: round;
+  object-fit: cover;
+}
+
+.commentMain {
+  flex: 1;
+  min-width: 0;
+}
+
+.commentHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.login { font-weight: 500; overflow-wrap: anywhere; }
+
+.time { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+
+.body {
+  min-width: 0;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 10px -8px -4px;
+}
+
+/* The end of the recorded hunk, drawn like the diff rows it came from. */
+.excerpt,
+.original {
+  margin-bottom: 10px;
+  overflow-x: auto;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  font: var(--dsw-font-markdown-code-block);
+}
+
+.excerptLine,
+.originalLine {
+  min-height: 20px;
+  padding: 0 10px;
+  line-height: 20px;
+  white-space: pre;
+}
+
+.excerptHeader { color: var(--dsw-alias-label-tertiary); }
+
+.added { background: var(--dsw-alias-file-diff-added-bg); }
+
+.deleted { background: var(--dsw-alias-file-diff-deleted-bg); }
+
+.original {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.originalLine {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 12px;
+}
+
+.originalNumber {
+  min-width: 3ch;
+  color: var(--dsw-alias-label-tertiary);
+  text-align: right;
+  user-select: none;
+}
+
+.marked { background: var(--dsw-alias-interactive-bg-hover); }
+
+.originalNote {
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-family: Inter, var(--dsw-font-family);
+}
+
+/* Outdated threads of one file, after its lines. */
+.outdated {
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  padding-bottom: 2px;
+}
+
+.outdatedHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  font-family: Inter, var(--dsw-font-family);
+}
+
+/* A changes view narrower than 480px gives the code more width; the query names no container, since CSS Modules rename
+   a container name per file, and the nearest inline-size container is the changes view. */
+@container (max-width: 479px) {
+  .card,
+  .folded,
+  .card[data-split][data-side="R"],
+  .folded[data-split][data-side="R"] {
+    width: calc(100% - 12px);
+    margin: 6px;
+  }
+}

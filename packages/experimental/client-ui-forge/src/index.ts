@@ -6,8 +6,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeReviewRequest, ForgeReviewResult,
-  MergeMethod,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeReviewData, ForgeReviewRequest,
+  ForgeReviewResult, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
@@ -30,6 +30,7 @@ import { rangeStart } from './commit-range.ts'
 import { ATTRIBUTES_PATH, FileLayers } from './layers.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
 import { PatchCache } from './patch-cache.ts'
+import { ReviewCache } from './review-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
@@ -85,6 +86,8 @@ export class ForgePanelController extends TypertRemoteService {
     maxCommits: z.number().default(250),
     testPaths: z.array(z.string()).default([]),
     interfacePaths: z.array(z.string()).default([]),
+    maxCachedReviewBytes: z.number().default(16_777_216),
+    reviewRefreshMs: z.number().default(60_000),
   })
 
   private readonly home: Context
@@ -94,6 +97,7 @@ export class ForgePanelController extends TypertRemoteService {
   private creations!: WorktreeCreations
   private readonly patches: PatchCache
   private readonly layers: FileLayers
+  private readonly reviews: ReviewCache
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
   private readonly stopStates: () => Promise<void>
@@ -102,13 +106,13 @@ export class ForgePanelController extends TypertRemoteService {
     super(ctx, 'forgePanel')
     const resolved = config as Required<Config>
     if (resolved.gitCommand.trim().length === 0) throw new Error('forge-panel: gitCommand must not be empty')
-    for (const key of ['gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs'] as const) {
+    for (const key of ['gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs', 'reviewRefreshMs'] as const) {
       const value = resolved[key]
       if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
         throw new Error(`forge-panel: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
       }
     }
-    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes', 'maxCommits'] as const) {
+    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes', 'maxCommits', 'maxCachedReviewBytes'] as const) {
       if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-panel: ${key} must be a positive integer`)
     }
     if (!branchPrefix(resolved.worktreePrefix)) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
@@ -119,6 +123,7 @@ export class ForgePanelController extends TypertRemoteService {
     this.home = ctx
     this.config = resolved
     this.patches = new PatchCache(resolved.maxCachedDiffBytes)
+    this.reviews = new ReviewCache(resolved.maxCachedReviewBytes, resolved.reviewRefreshMs)
     this.stopPanels = ctx.effect(() => async () => {
       const panels = [...this.panels.values()]
       this.panels.clear()
@@ -454,6 +459,44 @@ export class ForgePanelController extends TypertRemoteService {
     const text = await this.home.forge.fileText(this.bound(session, url).ref, commit, path, signal)
     if (typeof text !== 'string') throw readError(text)
     return text
+  }
+
+  /**
+   * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
+   * at the same head commit and update time are reused from memory, for any Session, until they are
+   * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
+   * shows threads resolved since, which do not change a GitHub pull request's update time.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param headSha - head commit of the displayed diff.
+   * @param fresh - whether to read from the host even when threads at this head and update time are kept, as after the
+   * reader refreshes the view; the result replaces the kept threads.
+   * @param signal - request cancellation.
+   * @returns the threads at `headSha`, with `current` positions numbering the files of that diff.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the latest status or the host names another head, which a host answer polls again;
+   * `forgePanel/review-unsupported` when the provider cannot read reviews; `forgePanel/review-failed` before the
+   * status was read and when the host does not provide the threads otherwise.
+   */
+  @Remote
+  async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData> {
+    signal.throwIfAborted()
+    const { ref, update } = this.bound(session, url)
+    if (update === null || !('snapshot' in update)) {
+      throw new RemoteError('forgePanel/review-failed', 'The change request status has not been read yet', {})
+    }
+    if (update.snapshot.headSha !== headSha) {
+      throw new RemoteError('forgePanel/stale-head', `The change request head moved from ${headSha} to ${update.snapshot.headSha}`, {})
+    }
+    const key = changeRequestKey(ref)
+    const version = JSON.stringify([headSha, update.snapshot.updatedAt])
+    const readAt = Date.now()
+    const kept = fresh ? undefined : this.reviews.get(key, version, readAt)
+    if (kept !== undefined) return kept
+    const review = await this.home.forge.readReview(ref, headSha, signal)
+    if ('code' in review) throw reviewError(review)
+    this.reviews.set(key, version, review, readAt)
+    return review
   }
 
   /**
@@ -848,7 +891,27 @@ function readError(failure: ForgeFailure): RemoteError {
     case 'stale': return new RemoteError('forgePanel/stale-head', failure.message, {})
     case 'not-found':
     case 'unauthenticated':
+    case 'unsupported':
     case 'unavailable': return new RemoteError('forgePanel/diff-failed', failure.message, {})
+    /* v8 ignore next -- closed ForgeFailure code union exhaustiveness guard */
+    default: return assertNever(failure.code, 'ForgeFailure.code')
+  }
+}
+
+/**
+ * Report why the code host did not provide review threads.
+ * @param failure - the provider's failure.
+ * @returns `forgePanel/stale-head` for a head that moved, `forgePanel/review-unsupported` for a provider without
+ * review reads, else `forgePanel/review-failed`, with the provider's message.
+ */
+function reviewError(failure: ForgeFailure): RemoteError {
+  switch (failure.code) {
+    case 'stale': return new RemoteError('forgePanel/stale-head', failure.message, {})
+    case 'unsupported': return new RemoteError('forgePanel/review-unsupported', failure.message, {})
+    case 'not-found':
+    case 'unauthenticated':
+    case 'too-large':
+    case 'unavailable': return new RemoteError('forgePanel/review-failed', failure.message, {})
     /* v8 ignore next -- closed ForgeFailure code union exhaustiveness guard */
     default: return assertNever(failure.code, 'ForgeFailure.code')
   }
