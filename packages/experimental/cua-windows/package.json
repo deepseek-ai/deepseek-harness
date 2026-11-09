@@ -19,6 +19,7 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
+    "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json"
   },
   "license": "MIT",
@@ -71,6 +72,7 @@
     "@deepseek-ai/cordis-plugin-timer": "workspace:~"
   },
   "files": [
+    "locale/*.json",
     "lib/index.js",
     "native/bin",
     "lib/types/**/*.d.ts",
