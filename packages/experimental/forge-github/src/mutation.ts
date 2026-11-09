@@ -34,8 +34,8 @@ export type MutationResult =
   | { readonly ok: false; readonly code: 'failed' | 'unknown'; readonly message: string }
 
 /**
- * Runs one mutation on `host` through {@link sendMutation}; resolves to undefined once GitHub applied it, or to a
- * `failed` action failure when GitHub refused it or did not confirm it.
+ * Runs one mutation on `host` through {@link sendMutation}; resolves to undefined once GitHub applied it, to a `failed`
+ * action failure when GitHub refused it, or to an `unknown` one when GitHub did not confirm it.
  */
 export type GraphqlWriter = (host: string, mutation: GraphqlMutation, signal: AbortSignal) => Promise<ForgeActionFailure | undefined>
 

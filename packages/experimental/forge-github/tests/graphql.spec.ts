@@ -508,7 +508,9 @@ describe('overview mapping', () => {
     ['a head that can also be rebased', { canBeRebased: true }, ['merge', 'rebase']],
     ['a conflicting head', { mergeable: 'CONFLICTING' }, []],
     ['a closed pull request', { state: 'CLOSED' }, []],
-    ['a head the viewer may not update', { viewerCanUpdateBranch: false }, []],
+    // GitHub answers false both for a head that is up to date and for one the viewer may not update.
+    ['a head up to date or one the viewer may not update', { viewerCanUpdateBranch: false }, []],
+    ['a head behind its base whose merge state is blocked', { mergeStateStatus: 'BLOCKED' }, ['merge']],
   ])('offers branch updates for %s', async (_label, overrides, updates) => {
     expect((await single(pullRequestNode(1, { viewerCanUpdateBranch: true, ...overrides }))).branchUpdates).toEqual(updates)
   })

@@ -493,7 +493,8 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - request cancellation.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
    * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
-   * reason when the host refuses, cannot be reached, or keeps no viewed marks.
+   * reason when the host refuses, cannot be reached, or keeps no viewed marks; `forgePanel/action-unknown` when the host
+   * did not confirm whether it saved the mark.
    */
   @Remote
   async setFileViewed(session: Session, url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void> {
@@ -640,7 +641,8 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - request cancellation.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
    * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
-   * reason when the host refuses, cannot be reached, or reruns no checks.
+   * reason when the host refuses, cannot be reached, or reruns no checks; `forgePanel/action-unknown` when the host did
+   * not confirm whether it started the rerun.
    */
   @Remote
   async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void> {
@@ -657,7 +659,8 @@ export class ForgePanelController extends TypertRemoteService {
    * @param reviewers - the reviewers to ask, by kind and login.
    * @param signal - request cancellation.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
-   * `forgePanel/action-failed` with the host's reason when the host refuses, cannot be reached, or requests no reviews.
+   * `forgePanel/action-failed` with the host's reason when the host refuses, cannot be reached, or requests no reviews;
+   * `forgePanel/action-unknown` when the host did not confirm whether it requested the reviews.
    */
   @Remote
   async requestReviews(
@@ -698,7 +701,8 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - request cancellation.
    * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
    * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's reason when
-   * the host refuses, cannot be reached, or updates no branches.
+   * the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not
+   * confirm whether it started the update.
    */
   @Remote
   async updateBranch(session: Session, url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void> {
@@ -1133,7 +1137,9 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
  * @returns the Remote error to throw.
  */
 function actionError(failure: ForgeActionFailure): RemoteError {
-  return new RemoteError(failure.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/action-failed', failure.message, {})
+  const code = failure.code === 'stale' ? 'forgePanel/stale-head' : failure.code === 'unknown' ? 'forgePanel/action-unknown'
+    : 'forgePanel/action-failed'
+  return new RemoteError(code, failure.message, {})
 }
 
 /**

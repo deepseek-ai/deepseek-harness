@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GraphqlReader } from '../src/commits.ts'
 import type { GraphqlWriter } from '../src/mutation.ts'
 import {
-  CANDIDATES_QUERY, gitHubReviewerCandidates, REQUEST_REVIEWS_MUTATION, requestGitHubReviews, UPDATE_BRANCH_MUTATION, updateGitHubBranch,
+  CANDIDATES_QUERY, gitHubReviewerCandidates, REQUEST_BOT_REVIEWS_MUTATION, REQUEST_REVIEWS_MUTATION, requestGitHubReviews,
+  UPDATE_BRANCH_MUTATION, updateGitHubBranch,
 } from '../src/overview.ts'
 import { pullRequestNode } from '../src/pull-request-node.ts'
 import { pull } from './fixtures.ts'
@@ -44,25 +45,69 @@ describe('pull request node reads', () => {
 })
 
 describe('review requests', () => {
-  it('adds users, bots with the bot suffix, and teams by login to the requests GitHub holds', async () => {
+  it('asks users and teams by node id, then bots by login with the bot suffix, adding to the requests GitHub holds', async () => {
     const write = vi.fn<GraphqlWriter>(async () => undefined)
     const reviewers = [
       { kind: 'user' as const, login: 'mona' }, { kind: 'bot' as const, login: 'copilot' }, { kind: 'bot' as const, login: 'helper[bot]' },
-      { kind: 'team' as const, login: 'octo/forge' },
+      { kind: 'team' as const, login: 'octo/forge' }, { kind: 'user' as const, login: 'lin' },
     ]
-    await expect(requestGitHubReviews(reader(node()).read, write, pull(7), { reviewers }, signal)).resolves.toBeUndefined()
-    expect(write).toHaveBeenCalledWith('github.com', { query: REQUEST_REVIEWS_MUTATION, field: 'requestReviewsByLogin', variables: { input: {
-      pullRequestId: 'PR_7', union: true, userLogins: ['mona'], botLogins: ['copilot[bot]', 'helper[bot]'], teamSlugs: ['octo/forge'],
-    } } }, signal)
+    const ids = { data: { u0: { id: 'U_mona' }, u1: { id: 'U_lin' }, t0: { team: { id: 'T_forge' } } } }
+    const lookup = reader(node(), ids)
+    await expect(requestGitHubReviews(lookup.read, write, pull(7), { reviewers }, signal)).resolves.toBeUndefined()
+    // Names travel as variables, never inside the query text.
+    expect(lookup.calls[1]).toEqual(['api', 'graphql', '--hostname', 'github.com', '-f',
+      'query=query($u0: String!, $u1: String!, $o0: String!, $t0: String!) { u0: user(login: $u0) { id } u1: user(login: $u1) { id } '
+        + 't0: organization(login: $o0) { team(slug: $t0) { id } } }',
+      '-f', 'u0=mona', '-f', 'u1=lin', '-f', 'o0=octo', '-f', 't0=forge'])
+    expect(write.mock.calls.map(call => call[1])).toEqual([
+      { query: REQUEST_REVIEWS_MUTATION, field: 'requestReviews',
+        variables: { input: { pullRequestId: 'PR_7', union: true, userIds: ['U_mona', 'U_lin'], teamIds: ['T_forge'] } } },
+      { query: REQUEST_BOT_REVIEWS_MUTATION, field: 'requestReviewsByLogin',
+        variables: { input: { pullRequestId: 'PR_7', union: true, botLogins: ['copilot[bot]', 'helper[bot]'] } } },
+    ])
   })
 
-  it('names only the kinds it requests, at any head', async () => {
+  it('names only the kinds it requests, at any head, and stops at a refusal', async () => {
     const write = vi.fn<GraphqlWriter>(async () => ({ code: 'failed', message: 'Could not resolve user' }))
-    await expect(requestGitHubReviews(reader(node('e'.repeat(40))).read, write, pull(7), { reviewers: [{ kind: 'user', login: 'mona' }] }, signal))
+    const mixed = [{ kind: 'user' as const, login: 'mona' }, { kind: 'bot' as const, login: 'copilot' }]
+    await expect(requestGitHubReviews(reader(node('e'.repeat(40)), { data: { u0: { id: 'U_mona' } } }).read, write, pull(7), { reviewers: mixed }, signal))
       .resolves.toEqual({ code: 'failed', message: 'Could not resolve user' })
-    expect(write.mock.calls[0]?.[1].variables).toEqual({ input: { pullRequestId: 'PR_7', union: true, userLogins: ['mona'] } })
-    await requestGitHubReviews(reader(node()).read, write, pull(7), { reviewers: [{ kind: 'team', login: 'octo/forge' }] }, signal)
-    expect(write.mock.calls[1]?.[1].variables).toEqual({ input: { pullRequestId: 'PR_7', union: true, teamSlugs: ['octo/forge'] } })
+    expect(write).toHaveBeenCalledOnce()
+    expect(write.mock.calls[0]?.[1].variables).toEqual({ input: { pullRequestId: 'PR_7', union: true, userIds: ['U_mona'] } })
+    await requestGitHubReviews(reader(node(), { data: { t0: { team: { id: 'T_forge' } } } }).read, write, pull(7),
+      { reviewers: [{ kind: 'team', login: 'octo/forge' }] }, signal)
+    expect(write.mock.calls[1]?.[1].variables).toEqual({ input: { pullRequestId: 'PR_7', union: true, teamIds: ['T_forge'] } })
+    const bots = reader(node())
+    await requestGitHubReviews(bots.read, write, pull(7), { reviewers: [{ kind: 'bot', login: 'copilot' }] }, signal)
+    expect(bots.calls).toHaveLength(1)
+    expect(write.mock.calls[2]?.[1].field).toBe('requestReviewsByLogin')
+  })
+
+  it.each([
+    ['an unknown user', [{ kind: 'user' as const, login: 'ghost' }], { data: { u0: null } }, 'GitHub has no user ghost'],
+    ['a hidden team', [{ kind: 'team' as const, login: 'octo/secret' }], { data: { t0: { team: null } } }, 'GitHub shows the signed-in user no team octo/secret'],
+    ['an unexpected lookup', [{ kind: 'user' as const, login: 'mona' }], { errors: [] }, 'unexpected GitHub response to the reviewer lookup'],
+  ])('refuses %s without writing', async (_label, reviewers, ids, message) => {
+    const write = vi.fn<GraphqlWriter>()
+    await expect(requestGitHubReviews(reader(node(), ids).read, write, pull(7), { reviewers }, signal)).resolves.toEqual({ code: 'failed', message })
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a refused lookup', new Error('rate limited'), { code: 'failed', message: 'rate limited' }],
+    ['a lookup without sign-in', new Error('signed out'), { code: 'unauthenticated', message: 'signed out' }],
+  ])('passes on %s', async (_label, failure, expected) => {
+    const write = vi.fn<GraphqlWriter>()
+    await expect(requestGitHubReviews(reader(node(), failure).read, write, pull(7), { reviewers: [{ kind: 'user', login: 'mona' }] }, signal))
+      .resolves.toEqual(expected)
+  })
+
+  it.each(['octo', 'octo/', '/forge', 'octo/forge/extra'])('refuses team %s, which is not named organization/slug, without reading', async (login) => {
+    const write = vi.fn<GraphqlWriter>()
+    const none = reader()
+    await expect(requestGitHubReviews(none.read, write, pull(7), { reviewers: [{ kind: 'team', login }] }, signal))
+      .resolves.toEqual({ code: 'failed', message: `Team ${JSON.stringify(login)} is not named organization/slug` })
+    expect(none.calls).toEqual([])
   })
 
   it('refuses an empty request without reading, and a failed node read without writing', async () => {

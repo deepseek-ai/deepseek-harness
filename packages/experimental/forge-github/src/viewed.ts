@@ -32,7 +32,7 @@ export const UNMARK_VIEWED_MUTATION = `mutation($id: ID!, $path: String!) {
   unmarkFileAsViewed(input: { pullRequestId: $id, path: $path }) { clientMutationId }
 }`
 
-const STATES: Readonly<Record<string, ForgeViewedState>> = { VIEWED: 'viewed', UNVIEWED: 'unviewed', DISMISSED: 'dismissed' }
+const STATES: ReadonlyMap<string, ForgeViewedState> = new Map([['VIEWED', 'viewed'], ['UNVIEWED', 'unviewed'], ['DISMISSED', 'dismissed']])
 
 const pageSchema = z.object({
   data: z.object({
@@ -70,7 +70,8 @@ export async function readViewed(
 ): Promise<ForgeViewedFiles | ForgeFailure> {
   const { host, owner, name } = checkedRepository(ref)
   if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
-  const files: Record<string, ForgeViewedState> = {}
+  // A map keeps a path such as `__proto__`, which assignment to a plain object drops.
+  const files = new Map<string, ForgeViewedState>()
   let listed = 0
   const cursors = new Set<string>()
   let cursor: string | null = null
@@ -90,9 +91,12 @@ export async function readViewed(
     // GitHub answers null for the files of a pull request whose diff it cannot list.
     if (pull.files === null) return { code: 'unavailable', message: 'GitHub did not list the pull request files' }
     const { totalCount, pageInfo: { hasNextPage, endCursor }, nodes } = pull.files
-    for (const node of nodes) files[node.path] = STATES[node.viewerViewedState] ?? 'unviewed'
+    for (const node of nodes) files.set(node.path, STATES.get(node.viewerViewedState) ?? 'unviewed')
     listed += nodes.length
-    if (!hasNextPage || listed >= limit) return { headSha: pull.headRefOid, files, truncated: totalCount > listed }
+    // `fromEntries` defines each path as an own property, `__proto__` included.
+    if (!hasNextPage || listed >= limit) {
+      return { headSha: pull.headRefOid, files: Object.fromEntries(files), truncated: totalCount > listed }
+    }
     if (endCursor === null || cursors.has(endCursor)) return { code: 'unavailable', message: 'GitHub file pagination did not advance' }
     cursors.add(endCursor)
     cursor = endCursor

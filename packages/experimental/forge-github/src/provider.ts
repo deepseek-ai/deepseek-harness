@@ -272,8 +272,10 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
-   * Rerun every workflow run with a failed GitHub Actions job on the head commit through the REST API; GitHub reruns
-   * its failed jobs with the jobs that depend on them. Other checks name no rerun.
+   * Rerun every finished workflow run with a failed GitHub Actions job on the head commit through the REST API; GitHub
+   * reruns its failed jobs with the jobs that depend on them. A run with a check still pending waits, as GitHub offers
+   * no rerun of a run in progress. Every eligible run is tried, and a refusal of one is reported with the others' outcome.
+   * Other checks name no rerun.
    */
   async rerunChecks(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
     const { host, owner, name } = checkedRepository(ref)
@@ -286,17 +288,29 @@ export class GitHubProvider implements ForgeProvider {
       return { code: 'stale', message: `the pull request head moved from ${request.headSha} to ${snapshot.headSha}` }
     }
     const endpoint = `repos/${owner}/${name}/actions`
-    const runs = new Set<number>()
+    const failed = new Set<number>()
+    const running = new Set<number>()
     for (const check of snapshot.checks) {
-      const run = check.state === 'failure' && check.rerun !== null ? actionsRunOf(check.rerun) : undefined
-      if (run !== undefined) runs.add(run)
+      const run = check.rerun === null ? undefined : actionsRunOf(check.rerun)
+      if (run === undefined) continue
+      if (check.state === 'failure') failed.add(run)
+      else if (check.state === 'pending') running.add(run)
     }
-    if (runs.size === 0) return { code: 'failed', message: 'No failed GitHub Actions job of the head commit can be rerun' }
+    const runs = [...failed].filter(run => !running.has(run))
+    if (runs.length === 0) {
+      return { code: 'failed', message: failed.size === 0 ? 'No failed GitHub Actions job of the head commit can be rerun'
+        : 'Every workflow run with a failed job is still running; rerun it once it finishes' }
+    }
+    const refusals: string[] = []
     for (const run of runs) {
       const refused = await this.act(['api', '--hostname', host, '--method', 'POST', `${endpoint}/runs/${run}/rerun-failed-jobs`], signal)
-      if (refused !== undefined) return refused
+      if (refused === undefined) continue
+      if (refused.code === 'unauthenticated') return refused
+      // The head was checked before the first request, so a conflict here names no new commit.
+      refusals.push(`run ${run}: ${refused.message}`)
     }
-    return undefined
+    return refusals.length === 0 ? undefined
+      : { code: 'failed', message: `GitHub refused to rerun ${refusals.length} of ${runs.length} workflow runs: ${refusals.join('; ')}` }
   }
 
   async requestReviews(
@@ -372,13 +386,12 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
-   * Run one GraphQL mutation with its query and variables as JSON on standard input, never in arguments. A refusal, a
-   * `gh` that cannot start, a body that is not GraphQL, and GraphQL errors become failures; the write is never retried.
+   * Run one GraphQL mutation through {@link sendMutation}, which never retries it: a refusal or a `gh` that cannot
+   * start is `failed`, and an answer that does not confirm the outcome is `unknown`.
    */
-  /** Every refusal and every unconfirmed outcome fails: these mutations set a state, so trying again is safe. */
   private readonly mutate: GraphqlWriter = async (host, mutation, signal) => {
     const sent = await sendMutation(this.gh, host, mutation, signal)
-    return sent.ok ? undefined : { code: 'failed', message: sent.message }
+    return sent.ok ? undefined : { code: sent.code, message: sent.message }
   }
 
   /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */

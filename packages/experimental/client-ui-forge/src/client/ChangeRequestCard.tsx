@@ -90,7 +90,6 @@ const ROLLUP: Record<ChecksRollup, CheckState> = {
   failure: 'failure',
 }
 
-
 /** The unresolved thread count, with `+` when the provider counted only some threads. */
 function threadCount(snapshot: ChangeRequestSnapshot, locale: string): string {
   const count = snapshot.unresolvedThreads.toLocaleString(locale)
@@ -100,8 +99,6 @@ function threadCount(snapshot: ChangeRequestSnapshot, locale: string): string {
 function failureOf(entry: ForgePanelChangeRequest): ForgeFailure | undefined {
   return entry.update !== null && 'failure' in entry.update ? entry.update.failure : undefined
 }
-
-
 
 function DiffSize({ snapshot, locale }: { readonly snapshot: ChangeRequestSnapshot; readonly locale: string }): ReactNode {
   return (

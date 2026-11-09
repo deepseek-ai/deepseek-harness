@@ -48,7 +48,10 @@ export interface ChangeRequestCheck {
   readonly startedAt: string | null
   /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
   readonly completedAt: string | null
-  /** Identity a rerun of this check names, or null when the provider cannot rerun it, as for a commit status. */
+  /**
+   * Identity a rerun of this check names, or null when the provider cannot rerun it, as for a commit status. Checks that
+   * name one identity rerun together, and their failed checks can be rerun once none of them is pending.
+   */
   readonly rerun: ForgeCheckId | null
 }
 
@@ -142,7 +145,8 @@ export interface ChangeRequestSnapshot {
   readonly mergeMethods: readonly MergeMethod[]
   /**
    * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
-   * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot.
+   * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
+   * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
    */
   readonly branchUpdates: readonly BranchUpdateMethod[]
   /** Aggregate review outcome. */
@@ -406,13 +410,15 @@ export type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 
-/** Why a provider could not change a change request. */
+/** Why a provider could not change a change request, or could not confirm that it did. */
 export interface ForgeActionFailure {
   /**
    * `unauthenticated`: credentials are missing or rejected; `stale`: the head
-   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached, so nothing changed;
+   * `unknown`: the request reached the host but its answer did not confirm the outcome, so the change may have been
+   * applied and must be checked on the host before it is tried again.
    */
-  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  readonly code: 'unauthenticated' | 'stale' | 'failed' | 'unknown'
   /** Human-readable cause, usually the host's own message. */
   readonly message: string
 }
@@ -551,9 +557,9 @@ export interface ForgeProvider {
    */
   setViewed?(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /**
-   * Rerun the failed checks of the head commit that name a `rerun`, while the head is still `request.headSha`,
-   * resolving to undefined once the host accepted the rerun. Omission declares that the provider reruns no checks, and
-   * its snapshots then name none.
+   * Rerun the failed checks of the head commit that name a `rerun` none of whose checks is pending, while the head is
+   * still `request.headSha`, resolving to undefined once the host accepted every rerun. Omission declares that the
+   * provider reruns no checks, and its snapshots then name none.
    */
   rerunChecks?(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /**

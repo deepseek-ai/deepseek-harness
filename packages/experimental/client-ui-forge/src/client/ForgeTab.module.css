@@ -616,7 +616,6 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-
 /* The name of a fact row, read by assistive technology before its value. */
 .visuallyHidden {
   position: absolute;

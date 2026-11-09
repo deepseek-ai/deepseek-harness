@@ -754,10 +754,10 @@ describe('GitHub provider overview and viewed marks', () => {
     ['a refusing GraphQL error', output({ data: null, errors: [{ type: 'FORBIDDEN', message: 'Resource not accessible by integration' }] }),
       { code: 'failed', message: 'Resource not accessible by integration' }],
     ['a GraphQL error that leaves the outcome unknown', output({ data: null, errors: [{ message: 'Something went wrong' }] }),
-      { code: 'failed', message: 'Something went wrong' }],
+      { code: 'unknown', message: 'Something went wrong' }],
     ['a refusal without a body', output('', 1, 'gh: Bad credentials (HTTP 401)'), { code: 'failed', message: 'gh: Bad credentials (HTTP 401)' }],
-    ['a body that is not GraphQL', output({ message: 'Not Found' }), { code: 'failed', message: 'unexpected GitHub response to unmarkFileAsViewed' }],
-  ])('reports a mutation refused or not confirmed with %s as failed', async (_label, answer, failure) => {
+    ['a body that is not GraphQL', output({ message: 'Not Found' }), { code: 'unknown', message: 'unexpected GitHub response to unmarkFileAsViewed' }],
+  ])('reports a mutation answered with %s as refused or as of unknown outcome', async (_label, answer, failure) => {
     const gh = double(() => node, () => answer)
     await expect(provider(gh.run).setViewed(pull(1), { path: 'a', viewed: false, headSha: HEAD }, signal)).resolves.toEqual(failure)
   })
@@ -777,13 +777,13 @@ describe('GitHub provider overview and viewed marks', () => {
   it('requests reviews, lists candidates, and updates the branch through GraphQL', async () => {
     const gh = double(query => query === CANDIDATES_QUERY
       ? { data: { repository: { assignableUsers: { nodes: [{ login: 'mona', name: null, avatarUrl: null }] }, pullRequest: null } } }
-      : node)
+      : query.startsWith('query($u0') ? { data: { u0: { id: 'U_mona' } } } : node)
     const subject = provider(gh.run)
     await expect(subject.requestReviews(pull(1), { reviewers: [{ kind: 'user', login: 'mona' }] }, signal)).resolves.toBeUndefined()
     await expect(subject.reviewerCandidates(pull(1), 'mo', signal)).resolves.toEqual([{ login: 'mona', name: null, avatarUrl: null, suggested: false }])
     await expect(subject.updateBranch(pull(1), { method: 'rebase', headSha: HEAD }, signal)).resolves.toBeUndefined()
     expect(gh.inputs.map(body => (body as { variables: unknown }).variables)).toEqual([
-      { input: { pullRequestId: 'PR_1', union: true, userLogins: ['mona'] } },
+      { input: { pullRequestId: 'PR_1', union: true, userIds: ['U_mona'] } },
       { input: { pullRequestId: 'PR_1', expectedHeadOid: HEAD, updateMethod: 'REBASE' } },
     ])
   })
@@ -801,14 +801,31 @@ describe('GitHub provider overview and viewed marks', () => {
     ])
   })
 
-  it('stops at the first refused rerun', async () => {
-    const failed = (run: number) => ({ ...checkRun(`job${run}`, 'COMPLETED', 'FAILURE'),
-      checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: `w${run}`, name: 'w' } } } })
-    const gh = fakeGh(args => args[1] === 'graphql' ? output({ data: { r0: { p0: pullRequestNode(1, {}, [failed(1), failed(2)]) } } })
-      : output({ message: 'Must have admin rights to Repository.' }, 1, 'gh: Must have admin rights to Repository. (HTTP 403)'))
+  it('tries every finished run after a refusal, leaves runs still in progress alone, and reports the refusals', async () => {
+    const check = (name: string, run: number, status: string, conclusion: string | null) => ({ ...checkRun(name, status, conclusion),
+      checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: run, event: 'pull_request', workflow: { id: `w${run}`, name } } } })
+    const contexts = [check('lint', 1, 'COMPLETED', 'FAILURE'), check('test', 2, 'COMPLETED', 'FAILURE'), check('build', 3, 'COMPLETED', 'FAILURE'),
+      check('e2e', 3, 'IN_PROGRESS', null)]
+    // A conflict names no new commit here, since the head was checked first.
+    const gh = fakeGh(args => args[1] === 'graphql' ? output({ data: { r0: { p0: pullRequestNode(1, {}, contexts) } } })
+      : args[5]?.includes('/runs/1/') === true ? output({ message: 'Conflict' }, 1, 'gh: Conflict (HTTP 409)') : output(''))
     await expect(provider(gh.run).rerunChecks(pull(1), { headSha: HEAD }, signal))
-      .resolves.toEqual({ code: 'failed', message: 'Must have admin rights to Repository.' })
-    expect(gh.calls.filter(args => args[4] === 'POST')).toHaveLength(1)
+      .resolves.toEqual({ code: 'failed', message: 'GitHub refused to rerun 1 of 2 workflow runs: run 1: Conflict' })
+    expect(gh.calls.filter(args => args[4] === 'POST').map(args => args[5])).toEqual([
+      'repos/octo/demo/actions/runs/1/rerun-failed-jobs', 'repos/octo/demo/actions/runs/2/rerun-failed-jobs',
+    ])
+  })
+
+  it('stops at a rerun refused for credentials, and refuses when every run with a failure still runs', async () => {
+    const check = (name: string, status: string, conclusion: string | null) => ({ ...checkRun(name, status, conclusion),
+      checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 5, event: 'pull_request', workflow: { id: 'w', name: 'w' } } } })
+    const finished = fakeGh(args => args[1] === 'graphql' ? output({ data: { r0: { p0: pullRequestNode(1, {}, [check('lint', 'COMPLETED', 'FAILURE')]) } } })
+      : output({ message: 'Bad credentials' }, 1, 'gh: Bad credentials (HTTP 401)'))
+    await expect(provider(finished.run).rerunChecks(pull(1), { headSha: HEAD }, signal)).resolves.toMatchObject({ code: 'unauthenticated' })
+    const running = fakeGh(() => output({ data: { r0: { p0: pullRequestNode(1, {}, [check('lint', 'COMPLETED', 'FAILURE'), check('e2e', 'QUEUED', null)]) } } }))
+    await expect(provider(running.run).rerunChecks(pull(1), { headSha: HEAD }, signal))
+      .resolves.toEqual({ code: 'failed', message: 'Every workflow run with a failed job is still running; rerun it once it finishes' })
+    expect(running.calls.filter(args => args[4] === 'POST')).toEqual([])
   })
 
   it.each([

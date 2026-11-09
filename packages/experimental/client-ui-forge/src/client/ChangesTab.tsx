@@ -692,6 +692,7 @@ export function ChangesTab({
     ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
   const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
     if (failure.kind === 'stale') report('viewed.syncStale')
+    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
     else report('viewed.syncFailed', { message: failure.message })
   })
   const marks = host?.marks ?? localMarks

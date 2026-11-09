@@ -1920,6 +1920,10 @@ describe('forgePanel actions', () => {
     requestReviews.mockResolvedValueOnce({ code: 'failed', message: 'Could not resolve user' })
     await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Could not resolve user' })
+    // An outcome the host did not confirm keeps its own code, so the reader is told to check it there.
+    requestReviews.mockResolvedValueOnce({ code: 'unknown', message: 'Something went wrong' })
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'Something went wrong' })
     for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
       await expect(opened.ctx.forgePanel.rerunChecks(opened.session, url, { headSha: head }, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
       await expect(opened.ctx.forgePanel.requestReviews(opened.session, url, reviewers, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })

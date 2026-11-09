@@ -170,8 +170,9 @@ if (args[0] === 'api' && args[1] === 'graphql' && args.includes('--input')) {
     }
     state.viewed = { ...state.viewed, [variables.path]: field === 'unmarkFileAsViewed' ? 'UNVIEWED' : 'VIEWED' }
     payload = { clientMutationId: null }
-  } else if (field === 'requestReviewsByLogin') {
-    state.requested = [...new Set([...state.requested ?? [], ...variables.input.userLogins ?? []])]
+  } else if (field === 'requestReviews') {
+    // The reviewer lookup names each user \`user-<login>\`.
+    state.requested = [...new Set([...state.requested ?? [], ...(variables.input.userIds ?? []).map(id => id.slice('user-'.length))])]
     payload = { clientMutationId: null }
   } else if (field === 'updatePullRequestBranch') {
     if (variables.input.expectedHeadOid !== 'a'.repeat(40)) {
@@ -279,6 +280,11 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       totalCount: paths.length, pageInfo: { hasNextPage: false, endCursor: null },
       nodes: paths.map(path => ({ path, viewerViewedState: marks[path] ?? 'UNVIEWED' })),
     } } } } }))
+    process.exit(0)
+  }
+  if (query.includes('user(login: $u0)')) {
+    const users = Object.fromEntries(args.flatMap(arg => /^u\\d+=/.test(arg) ? [[arg.split('=')[0], { id: 'user-' + arg.slice(arg.indexOf('=') + 1) }]] : []))
+    process.stdout.write(JSON.stringify({ data: users }))
     process.exit(0)
   }
   if (query.includes('assignableUsers')) {
@@ -2398,10 +2404,10 @@ it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state 
   await page.getByText('已请求 mona 评审 #7', { exact: true }).waitFor()
   await review.click()
   await menu.getByRole('menuitem', { name: '重新请求 zhou-dev 评审', exact: true }).click()
-  await expect.poll(async () => (await mutationsOf(root)).filter(entry => entry.field === 'requestReviewsByLogin').map(entry => entry.variables.input))
+  await expect.poll(async () => (await mutationsOf(root)).filter(entry => entry.field === 'requestReviews').map(entry => entry.variables.input))
     .toEqual([
-      { pullRequestId: 'pull-7', union: true, userLogins: ['mona'] },
-      { pullRequestId: 'pull-7', union: true, userLogins: ['zhou-dev'] },
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-mona'] },
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-zhou-dev'] },
     ])
 
   // The linked issues take one row, each a link named by its number with its title in the name.

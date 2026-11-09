@@ -53,7 +53,9 @@ describe('rerunning failed checks', () => {
   it('offers to rerun the failed checks that name a rerun, and runs one rerun at a time', async () => {
     const done = Promise.withResolvers<undefined>()
     const rerunChecks = vi.fn<NonNullable<ChangeRequestActions['rerunChecks']>>(() => done.promise)
-    const b = card(snapshot(7, { checks: [failed], checksRollup: 'failure', canRerunChecks: true }), { rerunChecks })
+    // A check still running under another rerun leaves this one free.
+    const running = check('e2e', { state: 'pending', rerun: 'actions:8' as ForgeCheckId })
+    const b = card(snapshot(7, { checks: [failed, running], checksRollup: 'failure', canRerunChecks: true }), { rerunChecks })
     const row = b.item.querySelector('[data-forge-checks]') as HTMLElement
     fireEvent.click(row)
     fireEvent.click(screen.getByRole('menuitem', { name: en['checks.rerunFailed'] }))
@@ -68,6 +70,8 @@ describe('rerunning failed checks', () => {
   it.each([
     ['the viewer may not rerun checks', { canRerunChecks: false }, true],
     ['no failed check names a rerun', { checks: [check('lint', { state: 'failure' }), check('test', { rerun: 'actions:7' as ForgeCheckId })] }, true],
+    ['every failed check waits for a check of its rerun still in progress',
+      { checks: [failed, check('e2e', { state: 'pending', rerun: 'actions:7' as ForgeCheckId })] }, true],
     ['the surface cannot rerun checks', {}, false],
   ])('does not offer it when %s', (_label, overrides, withAction) => {
     const b = card(snapshot(7, { checks: [failed], checksRollup: 'failure', canRerunChecks: true, ...overrides }),
@@ -206,6 +210,30 @@ describe('reviewers', () => {
     expect(requestReviews).not.toHaveBeenCalled()
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(requestReviews).toHaveBeenCalledWith(b.subject, [{ kind: 'user', login: 'lin' }])
+  })
+
+  it('chooses nothing with Enter until the listing of the current query arrives', async () => {
+    const requestReviews = vi.fn<NonNullable<ChangeRequestActions['requestReviews']>>(async () => {})
+    const bob = Promise.withResolvers<readonly ForgeReviewerCandidate[]>()
+    const reviewerCandidates = vi.fn<NonNullable<ChangeRequestActions['reviewerCandidates']>>()
+      .mockResolvedValueOnce([{ login: 'alice', name: null, avatarUrl: null, suggested: true }])
+      .mockReturnValueOnce(bob.promise)
+    const b = card(snapshot(7, { canRequestReviews: true }), { requestReviews, reviewerCandidates })
+    fireEvent.click(b.item.querySelector('[data-forge-review]') as HTMLElement)
+    fireEvent.click(screen.getByRole('menuitem', { name: en['reviewers.requestMore'] }))
+    await wait()
+    const field = screen.getByRole('textbox', { name: en['reviewers.search'] })
+    fireEvent.change(field, { target: { value: 'bob' } })
+    // The earlier listing is gone at once, before the search delay ends.
+    expect(screen.getByRole('status').textContent).toBe(en['reviewers.loading'])
+    expect(screen.queryByRole('menuitem', { name: /alice/ })).toBeNull()
+    fireEvent.keyDown(field, { key: 'Enter' })
+    await wait(200)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(requestReviews).not.toHaveBeenCalled()
+    await act(async () => { bob.resolve([{ login: 'bob', name: null, avatarUrl: null, suggested: false }]); await Promise.resolve() })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(requestReviews).toHaveBeenCalledWith(b.subject, [{ kind: 'user', login: 'bob' }])
   })
 
   it('reports an empty or failed listing, retries, and ignores a listing that arrives after the menu closed', async () => {

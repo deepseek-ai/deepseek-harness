@@ -452,6 +452,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/stale-head': Record<string, never>
     /** The code host refused the change or could not be reached; the message gives the host's reason. */
     'forgePanel/action-failed': Record<string, never>
+    /** The code host did not confirm whether it applied the change, which must be checked there before trying again. */
+    'forgePanel/action-unknown': Record<string, never>
     /** The Session's directory is not inside a Git checkout, so it has no local changes. */
     'forgePanel/not-a-checkout': Record<string, never>
     /**

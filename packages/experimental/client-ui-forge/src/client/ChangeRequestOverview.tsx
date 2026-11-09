@@ -149,6 +149,17 @@ export interface ChecksRowProps {
 }
 
 /**
+ * Whether a failed check names a rerun that none of the checks sharing it still waits for, as a rerun of checks in
+ * progress cannot start.
+ * @param checks - the checks of the head commit.
+ * @returns whether a rerun of failed checks can start.
+ */
+function rerunnable(checks: readonly ChangeRequestCheck[]): boolean {
+  const running = new Set(checks.flatMap(check => check.state === 'pending' && check.rerun !== null ? [check.rerun] : []))
+  return checks.some(check => check.state === 'failure' && check.rerun !== null && !running.has(check.rerun))
+}
+
+/**
  * Render the checks outcome as a row whose menu lists the failed, running, and cancelled checks by group, offers to
  * rerun the failed ones, and lists the passed and skipped ones on request. A list the poll read only in part is
  * completed while the menu is open.
@@ -181,8 +192,7 @@ export function ChecksRow({ entry, snapshot, openLink, readChecks, rerunChecks, 
     return <div className={css.row}><RowParts label={t('change.row.checks')} icon={<CheckGlyph state="neutral" />} value={t('change.ci.none')} opens={false} /></div>
   }
   const counts = checkCounts(displayed.checks)
-  const rerun = displayed.state === 'open' && displayed.canRerunChecks
-    && displayed.checks.some(check => check.state === 'failure' && check.rerun !== null) ? rerunChecks : undefined
+  const rerun = displayed.state === 'open' && displayed.canRerunChecks && rerunnable(displayed.checks) ? rerunChecks : undefined
   const groups = (list: readonly CheckGroup[]): { readonly group: CheckGroup; readonly checks: ChangeRequestCheck[] }[] =>
     list.map(group => ({ group, checks: displayed.checks.filter(check => groupOf(check) === group) }))
       .filter(({ checks }) => checks.length > 0)
@@ -393,8 +403,9 @@ function ReviewerLine({ reviewer, headSha, t }: {
   )
 }
 
-/** The accounts a reviewer search listed, or that the listing failed. */
-type Listing = { readonly ok: true; readonly value: readonly ForgeReviewerCandidate[] } | { readonly ok: false }
+/** The accounts a reviewer search listed for `query`, or that the listing failed. */
+type Listing = { readonly query: string } & (
+  { readonly ok: true; readonly value: readonly ForgeReviewerCandidate[] } | { readonly ok: false })
 
 /** The searchable account list of a review request: the host's suggestions first, then accounts matching the search. */
 function ReviewerSearch({ url, list, choose, t }: {
@@ -411,8 +422,8 @@ function ReviewerSearch({ url, list, choose, t }: {
     const controller = new AbortController()
     const timer = setTimeout(() => {
       list(url, query, controller.signal).then(
-        (value) => { if (!controller.signal.aborted) setListing({ ok: true, value }) },
-        () => { if (!controller.signal.aborted) setListing({ ok: false }) },
+        (value) => { if (!controller.signal.aborted) setListing({ query, ok: true, value }) },
+        () => { if (!controller.signal.aborted) setListing({ query, ok: false }) },
       )
     }, query === '' ? 0 : SEARCH_DELAY_MS)
     return () => {
@@ -425,11 +436,14 @@ function ReviewerSearch({ url, list, choose, t }: {
     const frame = requestAnimationFrame(() => { search.current?.focus() })
     return () => { cancelAnimationFrame(frame) }
   }, [])
-  const candidates = listing !== null && listing.ok ? listing.value : []
+  // A listing of an earlier query is never shown or chosen from, so Enter cannot request a review from an account the
+  // current query no longer names.
+  const current = listing !== null && listing.query === query ? listing : null
+  const candidates = current !== null && current.ok ? current.value : []
   let body: ReactNode
-  if (listing === null) {
+  if (current === null) {
     body = <div className={overview.menuStatus} role="status"><StateDot state="ongoing" />{t('reviewers.loading')}</div>
-  } else if (!listing.ok) {
+  } else if (!current.ok) {
     body = (
       <div className={overview.menuStatus} role="status">
         <span>{t('reviewers.loadFailed')}</span>

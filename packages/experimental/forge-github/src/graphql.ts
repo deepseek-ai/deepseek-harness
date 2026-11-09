@@ -536,6 +536,10 @@ function toSnapshot(
     mergeReady: settings !== undefined && MERGERS.has(settings.viewerPermission ?? '') && node.state === 'OPEN' && !node.isDraft
       && MERGEABLE_NOW.has(node.mergeStateStatus),
     mergeMethods: settings === undefined ? [] : mergeMethods(settings),
+    // GitHub's `viewerCanUpdateBranch` is false while the head is up to date as well as when the viewer may not update
+    // it; `mergeStateStatus` cannot tell a head behind its base, as BLOCKED and the other states take precedence over
+    // BEHIND. `canBeRebased` reports whether the pull request can be rebase merged, which follows the repository's rebase
+    // merge setting, so rebase is offered only where a rebase merge is allowed.
     branchUpdates: !open || !node.viewerCanUpdateBranch || node.mergeable === 'CONFLICTING' ? []
       : node.canBeRebased ? ['merge', 'rebase'] : ['merge'],
     reviewDecision: reviewDecision(node.reviewDecision),

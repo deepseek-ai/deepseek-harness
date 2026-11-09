@@ -1500,7 +1500,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async setFileViewed(session: Session, url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void>',
         description: 'Set or clear the signed-in user\'s viewed mark on one file of a change request of a Session.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'request', description: 'the file, its mark, and the head commit of the shown diff.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or keeps no viewed marks.'],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or keeps no viewed marks; `forgePanel/action-unknown` when the host did not confirm whether it saved the mark.'],
       },
       {
         signature: '@Remote async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>',
@@ -1538,13 +1538,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>',
         description: 'Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user saw; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'request', description: 'the head commit whose checks the user saw.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or reruns no checks.'],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or reruns no checks; `forgePanel/action-unknown` when the host did not confirm whether it started the rerun.'],
       },
       {
         signature: '@Remote async requestReviews( session: Session, url: string, reviewers: readonly Pick<ChangeRequestReviewer, \'kind\' | \'login\'>[], signal: AbortSignal, ): Promise<void>',
         description: 'Request reviews of a change request of a Session from more reviewers; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'reviewers', description: 'the reviewers to ask, by kind and login.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or requests no reviews.'],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or requests no reviews; `forgePanel/action-unknown` when the host did not confirm whether it requested the reviews.'],
       },
       {
         signature: '@Remote async reviewerCandidates(session: Session, url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]>',
@@ -1557,7 +1557,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: '@Remote async updateBranch(session: Session, url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void>',
         description: 'Bring the base branch\'s new commits into the head branch of a change request of a Session while its head is still `headSha`; the change request is polled again once the host answers.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'method', description: 'merge commit or rebase.' }, { name: 'headSha', description: 'head commit the user confirmed.' }, { name: 'signal', description: 'request cancellation.' }],
-        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or updates no branches.'],
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host\'s reason when the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not confirm whether it started the update.'],
       },
       {
         signature: '@Remote async requestWorktree(session: Session, from: string | null, signal: AbortSignal): Promise<void>',
@@ -6744,7 +6744,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeActionFailure',
-    declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\' | \'unknown\';\n    readonly message: string;\n}',
   },
   {
     name: 'ForgeAnchor',

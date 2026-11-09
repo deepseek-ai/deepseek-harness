@@ -44,6 +44,13 @@ describe('viewed file reads', () => {
     expect(calls[1]?.slice(-2)).toEqual(['-f', 'cursor=files-1'])
   })
 
+  it('keeps paths that name object properties, such as __proto__ and constructor, with their own states', async () => {
+    const { read } = reader(page([['__proto__', 'VIEWED'], ['constructor', 'UNVIEWED'], ['toString', 'constructor']], { total: 3 }))
+    const result = await readViewed(read, pull(7), HEAD, 3_000, signal)
+    if ('code' in result) throw new Error(result.message)
+    expect(Object.entries(result.files)).toEqual([['__proto__', 'viewed'], ['constructor', 'unviewed'], ['toString', 'unviewed']])
+  })
+
   it('stops at the limit and reports the rest as truncated', async () => {
     const { read, calls } = reader(page([['src/a.ts', 'VIEWED'], ['src/b.ts', 'UNVIEWED']], { total: 5, next: 'files-1' }))
     await expect(readViewed(read, pull(7), HEAD, 2, signal)).resolves.toEqual({

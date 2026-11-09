@@ -94,6 +94,7 @@ const REFUSED = {
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
   stale: { ok: false, error: new RemoteError('forgePanel/stale-head', 'Head branch was modified', {}) },
   refused: { ok: false, error: new RemoteError('forgePanel/action-failed', 'Pull Request is not mergeable', {}) },
+  unknown: { ok: false, error: new RemoteError('forgePanel/action-unknown', 'Something went wrong', {}) },
 } satisfies Record<string, RemoteResult<never>>
 
 function isTabFace(value: Record<string, unknown>): value is Record<string, unknown> & ForgeTabInjected {
@@ -634,6 +635,7 @@ describe('mountForgePanel change request actions', () => {
   it.each([
     ['confirms it', OK, { key: 'toast.markedReady', tone: 'success', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.markReadyFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('marks a draft ready through the Remote and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.markReady.mockResolvedValueOnce(result)
@@ -647,6 +649,7 @@ describe('mountForgePanel change request actions', () => {
     ['confirms it', OK, { key: 'toast.merged', tone: 'success', params: { name: '#7' } }],
     ['says a moved head needs another look', REFUSED.stale, { key: 'toast.mergeStale', tone: 'failure', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.mergeFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('merges through the Remote with the confirmed head and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.merge.mockResolvedValueOnce(result)
@@ -664,6 +667,7 @@ describe('mountForgePanel overview actions', () => {
     ['confirms it', OK, { key: 'toast.rerunRequested', tone: 'success', params: { name: '#7' } }],
     ['says a moved head needs another look', REFUSED.stale, { key: 'toast.rerunStale', tone: 'failure', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.rerunFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('reruns failed checks through the Remote and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.rerunChecks.mockResolvedValueOnce(result)
@@ -676,6 +680,7 @@ describe('mountForgePanel overview actions', () => {
   it.each([
     ['confirms it', OK, { key: 'toast.reviewRequested', tone: 'success', params: { name: '#7', login: 'mona, lin' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.reviewRequestFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('requests reviews through the Remote and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.requestReviews.mockResolvedValueOnce(result)
@@ -700,6 +705,7 @@ describe('mountForgePanel overview actions', () => {
     ['confirms it', OK, { key: 'toast.branchUpdated', tone: 'success', params: { name: '#7' } }],
     ['says a moved head needs another look', REFUSED.stale, { key: 'toast.branchUpdateStale', tone: 'failure', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.branchUpdateFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('updates the branch through the Remote with the confirmed head and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.updateBranch.mockResolvedValueOnce(result)
