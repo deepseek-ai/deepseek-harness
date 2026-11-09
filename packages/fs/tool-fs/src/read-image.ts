@@ -119,7 +119,7 @@ export function imageMediaTypeForPath(filePath: string): ImageMediaType | undefi
  * @param exec - the tool-execution context supplying the calling agent.
  * @param requestedPath - the raw, not-yet-resolved path rendered in refusal messages.
  * @throws ToolContextUnavailableError when no Agent route or `llm` service is available.
- * @throws ImageInputError `IMAGE_UNSUPPORTED_MODEL` when the route does not declare image input.
+ * @throws ImageInputError `MODEL_DOES_NOT_SUPPORT_IMAGES` when the route does not declare image input.
  */
 export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution, requestedPath: string): Promise<void> {
   const routed = exec.agent?.session.requestHeader()?.config
@@ -133,7 +133,7 @@ export async function assertImageCapableRoute(ctx: Context, exec: ToolExecution,
   if (active.inputModalities === undefined || !active.inputModalities.includes('image')) {
     throw new ImageInputError(
       `cannot read "${requestedPath}" as an image: model "${model}" does not declare image input; switch to an image-capable model to read images`,
-      'IMAGE_UNSUPPORTED_MODEL',
+      'MODEL_DOES_NOT_SUPPORT_IMAGES',
     )
   }
 }
