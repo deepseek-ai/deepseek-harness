@@ -61,6 +61,8 @@ The `minimal` agent preset uses a persistent shell, the `read_image` tool, and a
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them.
 
+The `standard`, `cordis`, and `ptc` presets set `config.interrupt: false` on their `tool-subagent-control` rows. To expose `interrupt_agent`, including in Team mode, override the relevant preset declaration as described in the [migration steps](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.md); changing the disabled Host row does not change preset tools.
+
 <a id="public-deployments"></a>
 ### Listening, trust, and public deployments
 

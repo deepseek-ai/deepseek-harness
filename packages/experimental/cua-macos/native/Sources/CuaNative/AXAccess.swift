@@ -419,6 +419,10 @@ final class AXAccess {
     }
     /// Resolve an exact AX window or sheet without enabling accessibility or traversing its controls.
     func windowBounds(_ id: UInt32, owner: ProcessIdentity) throws -> WindowBounds? {
+        guard let node = try windowElement(id, owner: owner) else { return nil }
+        return try bounds(node)
+    }
+    func windowElement(_ id: UInt32, owner: ProcessIdentity) throws -> AXUIElement? {
         let app = AXUIElementCreateApplication(owner.pid)
         var windows = try children(app, "AXWindows")
         if let focused = try element(app, "AXFocusedWindow"), !windows.contains(where: { CFEqual($0, focused) }) {
@@ -427,9 +431,9 @@ final class AXAccess {
         for window in windows {
             let role = try string(window, "AXRole")
             guard role == "AXWindow" || role == "AXSheet" else { continue }
-            if try windowID(window) == id { return try bounds(window) }
+            if try windowID(window) == id { return window }
             for sheet in try children(window) where try string(sheet, "AXRole") == "AXSheet" {
-                if try windowID(sheet) == id { return try bounds(sheet) }
+                if try windowID(sheet) == id { return sheet }
             }
         }
         return nil
@@ -639,7 +643,7 @@ final class AXAccess {
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
     }
 
-    func enclosingWindow(_ element: AXUIElement, owner: ProcessIdentity) throws -> WindowInfo {
+    func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {
         var current: AXUIElement? = element
         var visited: [AXUIElement] = []
         for _ in 0..<100 {
@@ -648,12 +652,37 @@ final class AXAccess {
             visited.append(node)
             let role = try string(node, "AXRole")
             if role == "AXWindow" || role == "AXSheet", let id = try windowID(node) {
-                return try WindowGeometry.resolve(owner: owner, windowID: id) { try bounds(node) }
+                return (node, id)
             }
             current = try self.element(node, "AXParent")
         }
-        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Element has no app-owned window or sheet; refresh getAccessibilityTree")
+        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Pointer input requires an enclosing window or sheet. For a menu item’s default action, use app.invoke(id)")
     }
+    /// A system file panel renders in its host window but receives input in the panel service's window.
+    func filePanelRecipient(_ node: AXUIElement, owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> (process: ProcessIdentity, windowID: UInt32)? {
+        guard ["open-panel", "save-panel"].contains(try string(node, "AXIdentifier") ?? "") else { return nil }
+        guard let hostID = try windowID(node) else { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has no window ID") }
+        _ = try NativePlatform.ownedWindow(owner.pid, hostID)
+        var recipient: (ProcessIdentity, UInt32)?
+        for child in try children(node) {
+            guard let id = try windowID(child), let window = NativePlatform.windows(allLayers: true).first(where: { $0.windowID == id }), window.pid != owner.pid else { continue }
+            guard catalog.application(window.pid)?.bundleID == "com.apple.appkit.xpc.openAndSavePanelService" else {
+                throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel refers to an unsupported remote process")
+            }
+            let process = try NativePlatform.identity(window.pid)
+            if let old = recipient, old.0 != process || old.1 != id { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has ambiguous remote recipients") }
+            recipient = (process, id)
+        }
+        guard let (process, id) = recipient else { throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel has no ready input recipient") }
+        var focus = try element(AXUIElementCreateApplication(process.pid), "AXFocusedWindow")
+        for _ in 0..<100 {
+            guard let focused = focus else { break }
+            if try windowID(focused) == id { try NativePlatform.verify(process); return (process, id) }
+            focus = try element(focused, "AXParent")
+        }
+        throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel focus changed; observe fresh state")
+    }
+
     func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")
         var visited: [AXUIElement] = []
@@ -661,28 +690,7 @@ final class AXAccess {
             guard let node = current else { return owner }
             if visited.contains(where: { CFEqual($0, node) }) { break }
             visited.append(node)
-            if ["open-panel", "save-panel"].contains(try string(node, "AXIdentifier") ?? "") {
-                guard let hostID = try windowID(node) else { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has no window ID") }
-                _ = try NativePlatform.ownedWindow(owner.pid, hostID)
-                var recipient: (ProcessIdentity, UInt32)?
-                for child in try children(node) {
-                    guard let id = try windowID(child), let window = NativePlatform.windows(allLayers: true).first(where: { $0.windowID == id }), window.pid != owner.pid else { continue }
-                    guard catalog.application(window.pid)?.bundleID == "com.apple.appkit.xpc.openAndSavePanelService" else {
-                        throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel refers to an unsupported remote process")
-                    }
-                    let process = try NativePlatform.identity(window.pid)
-                    if let old = recipient, old.0 != process || old.1 != id { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has ambiguous remote recipients") }
-                    recipient = (process, id)
-                }
-                guard let (process, id) = recipient else { throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel has no ready input recipient") }
-                var focus = try element(AXUIElementCreateApplication(process.pid), "AXFocusedWindow")
-                for _ in 0..<100 {
-                    guard let focused = focus else { break }
-                    if try windowID(focused) == id { try NativePlatform.verify(process); return process }
-                    focus = try element(focused, "AXParent")
-                }
-                throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel focus changed; observe fresh state")
-            }
+            if let panel = try filePanelRecipient(node, owner: owner, catalog: catalog) { return panel.process }
             current = try element(node, "AXParent")
         }
         throw NativeFailure(code: "PANEL_NOT_READY", message: "Focused accessibility ancestry exceeds the traversal limit")

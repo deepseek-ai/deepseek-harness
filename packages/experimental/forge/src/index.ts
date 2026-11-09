@@ -6,7 +6,7 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
-  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
+  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config, ForgeCommitList,
   ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from './types.ts'
 
@@ -258,6 +258,36 @@ export class ForgeService extends Service {
       this.refresh(ref)
     }
     return result
+  }
+
+  /**
+   * List the commits of a change request at its current head.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns the commits, why the host did not provide them, or undefined when the provider does not read commits.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure | undefined> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve(undefined) : provider.commits(ref, operation))
+  }
+
+  /**
+   * Read the changes between two commits of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param base - full object name of the commit compared from.
+   * @param head - full object name of a commit that descends from `base`.
+   * @param signal - cancellation of the read.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it; a provider that
+   * does not read commits returns `unavailable`.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve({ code: 'unavailable', message: 'This provider does not read commits' } as const)
+        : provider.compare(ref, base, head, operation))
   }
 
   /**

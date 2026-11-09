@@ -7,7 +7,7 @@ struct RequestParameters: Sendable {
     init(_ request: NativeRequest) throws {
         guard let values = request.params.object else { throw Self.invalid("params must be an object") }
         guard let allowed = Self.fields[request.method] else { throw NativeFailure(code: "UNSUPPORTED", message: "Unsupported native operation: \(request.method)") }
-        if ["typeText", "pressKey", "paste"].contains(request.method), values["windowId"] != nil {
+        if ["typeText", "pressKey", "sendKeyEvent", "paste"].contains(request.method), values["windowId"] != nil {
             throw Self.invalid("macOS keyboard input follows application focus; use the App object")
         }
         guard Set(values.keys).isSubset(of: allowed) else { throw Self.invalid("Unknown operation parameter") }

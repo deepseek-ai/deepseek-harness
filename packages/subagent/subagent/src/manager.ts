@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
 import type {} from '@deepseek-ai/dsh-working-directory'
-import type { Context } from '@deepseek-ai/cordis'
+import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
@@ -173,6 +173,12 @@ export class SubagentManager {
     }, session => host.identityOf(session))
     ctx.on('agent/disposed', ({ agent }) => {
       this.closingRoots.delete(agent)
+      const activation = this.resident.get(agent.id)
+      if (activation?.kind === 'local' && activation.handle.agent === agent) {
+        void this.close(activation, () => this.finishDisposal(activation, false)).catch((error: unknown) => {
+          this.reportTeardownFailure(activation, error)
+        })
+      }
     })
     ctx.effect(function* (this: SubagentManager) {
       yield scope.dispose
@@ -1089,12 +1095,16 @@ export class SubagentManager {
         { cause: new AggregateError(failures) },
       )
     }
+    if (failure !== undefined && result.stopReason === 'completed' && child !== undefined
+      && (child.inbox.nextStep.length > 0 || child.inbox.nextTurn.length > 0)) {
+      result = { ...result, stopReason: 'error' }
+    }
     this.resident.delete(childId)
     activation.releaseSlot()
     const terminal: SubagentResult = failure === undefined ? result : { output: [], stopReason: 'error' }
     this.notifySettlement(activation, result)
     // The sole end publication follows resource release and parent notification,
-    // before result delivery. Cleanup failure changes the event, not the captured result.
+    // before result delivery.
     this.host.emitLifecycle('subagent/end', {
       ...this.runInfo(activation),
       stopReason: terminal.stopReason,
@@ -1111,7 +1121,8 @@ export class SubagentManager {
     try {
       const parentId = activation.ancestors.at(-1) as SessionId
       const parent = this.ctx.agents.get(parentId)
-      if (parent === undefined || this.rootOf(parent) !== activation.root) return
+      if (parent === undefined || parent.ctx.fiber.state !== FiberState.ACTIVE
+        || this.rootOf(parent) !== activation.root) return
       const message = createSettlementMessage(
         activation.childId, agentAddress(activation.path, activation.childId), terminal,
         activation.kind === 'local', activation.kind === 'local' && activation.omitClosingText,

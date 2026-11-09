@@ -11,7 +11,9 @@ import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { ChangeRequestSnapshot, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestSnapshot, ForgeCommitList, ForgeReviewRequest, ForgeReviewResult,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -36,7 +38,7 @@ import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/Workt
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
   ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
-  ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -46,6 +48,7 @@ const S2 = SessionId('s2')
 const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
 const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
+const COMMITS: ForgeCommitList = { headSha: 'a'.repeat(40), commits: [], truncated: false }
 
 afterEach(() => {
   localStorage.clear()
@@ -172,8 +175,13 @@ async function base() {
     changeRequestChecks: vi.fn(async (
       _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
     ): Read<ChangeRequestSnapshot> => ({ ok: true, value: snapshot(7) })),
-    changeRequestDiff: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeChangeRequestDiff> =>
-      ({ ok: true, value: CHANGE })),
+    changeRequestDiff: vi.fn(async (
+      _sessionId: SessionId, _url: string, _commits: ForgeCommitRange | null, _signal?: AbortSignal,
+    ): Read<ForgeChangeRequestDiff> => ({ ok: true, value: CHANGE })),
+    localCommits: vi.fn(async (_sessionId: SessionId, _base: string | null, _signal?: AbortSignal): Read<ForgeLocalCommits> =>
+      ({ ok: true, value: COMMITS })),
+    changeRequestCommits: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeCommitList | null> =>
+      ({ ok: true, value: COMMITS })),
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
@@ -726,7 +734,7 @@ describe('mountForgePanel changes view', () => {
   it('inserts numbered frozen quotes in the originating Session without sending a message', async () => {
     const f = await fixture()
     try {
-      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
       const scope = f.sessions.scope(S1)!
       let draft = ''
       const focus = vi.fn(), send = vi.fn()
@@ -756,7 +764,7 @@ describe('mountForgePanel changes view', () => {
     try {
       const view = f.changes(S1)
       if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
-      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
+      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
     } finally { await f.dispose() }
   })
   it('immediately closes an already-aborted occurrence and reports failed removal', async () => {
@@ -773,8 +781,8 @@ describe('mountForgePanel changes view', () => {
     const f = await fixture()
     const lifetime = new AbortController()
     const tab = { id: 'review-tab' as TabId, signal: lifetime.signal }
-    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null }
-      : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40) },
+    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null, commits: null }
+      : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40), commits: null },
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)
     queue.recordAgent(selection)
@@ -805,12 +813,18 @@ describe('mountForgePanel changes view', () => {
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })
     expect(await view.diffBases('rel', signal)).toEqual({ ok: true, value: { automatic: null, remote: [], local: [] } })
     expect(f.forgePanel.diffBases).toHaveBeenCalledWith(S1, 'rel', signal)
-    expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: CHANGE })
+    expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', null, signal)).toEqual({ ok: true, value: CHANGE })
     expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
     expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)
     expect(f.forgePanel.localText).toHaveBeenCalledWith(S1, { kind: 'staged' }, 'src/a.ts')
-    expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', null, signal)
     expect(f.forgePanel.changeRequestText).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')
+    expect(await view.localCommits('refs/heads/topic', signal)).toEqual({ ok: true, value: COMMITS })
+    expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, 'refs/heads/topic', signal)
+    expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
+    expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(view.viewedFiles).toBe(f.changes(S1).viewedFiles)
+    expect(view.viewedFiles).not.toBe(f.changes(S2).viewedFiles)
     view.reconnect()
     expect(f.forgePanel.follow).not.toHaveBeenCalled()
     await f.dispose()

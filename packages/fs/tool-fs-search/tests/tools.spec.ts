@@ -259,6 +259,12 @@ describe('registration', () => {
     expect(glob?.description).toContain('sampled across top-level entries')
   })
 
+  it('declares glob and grep parallel-safe', async () => {
+    const { ctx } = await setup()
+    expect(ctx.tools.get('glob')?.isConcurrencySafe?.({ pattern: '*.ts' })).toBe(true)
+    expect(ctx.tools.get('grep')?.isConcurrencySafe?.({ pattern: 'x' })).toBe(true)
+  })
+
   it('stays pending until ctx.subprocess exists (inject)', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx)

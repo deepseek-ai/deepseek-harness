@@ -80,7 +80,7 @@ File hints produce warnings when two in-progress tasks plan to touch overlapping
 
 The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Task changes and Team mode changes do not end waits, add inbox input, or start idle Agents. Use `send_message` when an Agent needs to act on an update.
 
-An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
+When the [subagent control plugin](../../subagent/tool-subagent-control/README.md#use-this-package) enables `config.interrupt`, an ancestor can stop a descendant’s current turn with `interrupt_agent`. Built-in configurations disable this tool by default. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
 ### What success and failure look like
 

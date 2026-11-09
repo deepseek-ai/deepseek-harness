@@ -79,6 +79,7 @@
     "apps/web/tests/trajectory-virtualization.e2e.ts",
     "apps/web/tests/lifecycle-chrome.e2e.ts",
     "apps/web/tests/reasoning-preview.e2e.ts",
+    "apps/web/tests/reasoning-spacing.e2e.ts",
     "apps/web/tests/details-session-lifecycle.e2e.ts",
     "apps/web/tests/sessionless-header.e2e.ts",
     "apps/web/tests/document-preview.e2e.ts",

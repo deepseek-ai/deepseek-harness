@@ -127,6 +127,8 @@ export function registerListSubagentModels(
       schema: { type: 'string' },
       render: (_args, result) => [{ type: 'text', text: result }],
     },
+    // Route and model metadata reads do not mutate parent-agent state.
+    isConcurrencySafe: () => true,
     execute(args, exec) {
       return listSubagentModels(ctx, policyHandle, args, exec)
     },

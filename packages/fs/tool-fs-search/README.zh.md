@@ -52,6 +52,8 @@ kind: "package-reference"
 
 常规预算不进入面向模型的 schema：需要周边上下文的模型用 `read` 读取匹配文件，需要后续结果的模型遵循返回的 spill locator 检索提示。
 
+两个工具都选择与同批并行安全调用并发调度。搜索不记录文件观察，超出上限的 spill 在按模型顺序执行的 post-execute 阶段运行，工作目录恢复由工作目录服务按会话串行化。
+
 ### 配置
 
 `sampleOverCapGlobResults` 为必填；其余键是可选的搜索上限，默认值如下。
