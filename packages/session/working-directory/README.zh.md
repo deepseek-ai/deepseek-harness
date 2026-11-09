@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。
+Session 投影拥有当前目录，并通过 Session observation 暴露它，因此冷态读取方无需激活 Agent 即可使用；header 继续标识原始项目。每个 Session 的变更串行执行，通过文件系统 provider 验证，并检查取消状态与 Agent 生命周期，提交事件后排入用户上下文通知。若提交后通知入队失败，操作仍返回已提交的目录并记录警告；下一次请求或恢复仍会收到必需的目录上下文。提示词组装在发布必需的上下文条目前验证当前目录。已有进程与沙箱授权继续由各自的服务拥有。[服务实现](src/index.ts) 定义 API。失败均为 `WorkingDirectoryError`：路径为空或格式错误时为 `WORKING_DIRECTORY_INVALID`，请求切换到不存在的目录时为 `WORKING_DIRECTORY_NOT_FOUND`，当前目录与原始项目都不存在或服务已释放时为 `WORKING_DIRECTORY_UNAVAILABLE`。
 
 不发布 `./invariant` 伴生模块，因为服务从 Session 投影读取唯一的目录状态，并在使用时检查文件系统有效性。
 

@@ -5,6 +5,8 @@
  * @module @deepseek-ai/dsh-lsp-stdio/framing
  */
 
+import { LspError } from '@deepseek-ai/dsh-lsp'
+
 /** The header/body separator in the LSP base protocol. */
 const HEADER_SEPARATOR = '\r\n\r\n'
 
@@ -42,7 +44,8 @@ export class MessageDecoder {
    * Append a chunk and return every message body that is now complete.
    * @param chunk - raw bytes from the server's stdout.
    * @returns the parsed JSON bodies, in arrival order (possibly empty).
-   * @throws Error when a header is malformed or a body exceeds `maxMessageBytes`.
+   * @throws LspError `LSP_PROTOCOL_ERROR` when a header or body is malformed, or
+   *   `LSP_MESSAGE_TOO_LARGE` when a body exceeds `maxMessageBytes`.
    */
   push(chunk: Buffer): unknown[] {
     this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk])
@@ -60,17 +63,20 @@ export class MessageDecoder {
     const separator = this.buffer.indexOf(HEADER_SEPARATOR)
     if (separator < 0) {
       if (this.buffer.length > MAX_HEADER_BYTES) {
-        throw new Error(`LSP header exceeded ${MAX_HEADER_BYTES} bytes without a terminator`)
+        throw protocolError(`LSP header exceeded ${MAX_HEADER_BYTES} bytes without a terminator`)
       }
       return { ready: false }
     }
     if (separator > MAX_HEADER_BYTES) {
-      throw new Error(`LSP header exceeded ${MAX_HEADER_BYTES} bytes`)
+      throw protocolError(`LSP header exceeded ${MAX_HEADER_BYTES} bytes`)
     }
     const headerText = this.buffer.toString('ascii', 0, separator)
     const contentLength = parseContentLength(headerText)
     if (contentLength > this.maxMessageBytes) {
-      throw new Error(`LSP message length ${contentLength} exceeds the ${this.maxMessageBytes}-byte limit`)
+      throw new LspError(
+        `LSP message length ${contentLength} exceeds the ${this.maxMessageBytes}-byte limit`,
+        'LSP_MESSAGE_TOO_LARGE',
+      )
     }
     const bodyStart = separator + HEADER_SEPARATOR.length
     const bodyEnd = bodyStart + contentLength
@@ -81,7 +87,10 @@ export class MessageDecoder {
       return { ready: true, message: JSON.parse(body) }
     } catch (error) {
       /* v8 ignore next -- JSON.parse throws a SyntaxError (an Error); the String() fallback is defensive. */
-      throw new Error(`LSP message body was not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
+      throw protocolError(
+        `LSP message body was not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      )
     }
   }
 }
@@ -94,9 +103,14 @@ function parseContentLength(headerText: string): number {
     if (line.slice(0, colon).trim().toLowerCase() !== 'content-length') continue
     const value = Number(line.slice(colon + 1).trim())
     if (!Number.isInteger(value) || value < 0) {
-      throw new Error(`invalid Content-Length header: ${JSON.stringify(line)}`)
+      throw protocolError(`invalid Content-Length header: ${JSON.stringify(line)}`)
     }
     return value
   }
-  throw new Error(`LSP header block missing Content-Length: ${JSON.stringify(headerText)}`)
+  throw protocolError(`LSP header block missing Content-Length: ${JSON.stringify(headerText)}`)
+}
+
+/** A framing failure: the server's byte stream no longer follows the LSP base protocol. */
+function protocolError(message: string, options?: ErrorOptions): LspError {
+  return new LspError(message, 'LSP_PROTOCOL_ERROR', options)
 }

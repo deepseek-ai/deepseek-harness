@@ -76,6 +76,7 @@ const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'unauthenticated': 'change.failure.unauthenticated',
   'too-large': 'change.failure.unavailable',
   'stale': 'change.failure.unavailable',
+  'unsupported': 'change.failure.unavailable',
   'unavailable': 'change.failure.unavailable',
 }
 

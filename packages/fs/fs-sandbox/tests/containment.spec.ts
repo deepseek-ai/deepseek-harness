@@ -54,4 +54,12 @@ describe('filesystem sandbox containment', () => {
     await writeFile(blocker, 'not a directory')
     expect(await isPathUnder(join(blocker, 'child.txt'), allowed)).toBe(false)
   })
+
+  it('classifies an ancestor inspection fault as a filesystem error', async () => {
+    const root = join(base, 'root')
+    const loop = join(base, 'loop')
+    await mkdir(root)
+    await symlink(loop, loop)
+    await expect(isPathUnder(loop, root)).rejects.toMatchObject({ name: 'FsError', code: 'FS_IO_ERROR' })
+  })
 })

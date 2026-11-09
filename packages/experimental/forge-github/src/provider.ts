@@ -3,7 +3,8 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
-  ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
+  ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
+  MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
@@ -17,6 +18,8 @@ import {
 import type { PageResult, SnapshotPages } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
+import { writeGitHubReview } from './review-writes.ts'
+import { readReviewThreads } from './threads.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
 
@@ -34,9 +37,9 @@ const NOT_ACCEPTABLE = '406'
 
 /** Bounds on what one read retains or counts. */
 export interface GitHubLimits {
-  /** Maximum combined JSON bytes retained by an explicit check read. */
+  /** Maximum combined JSON bytes retained by an explicit check read or a review read. */
   readonly maxOutputBytes: number
-  /** Most review threads counted per pull request in one status read. */
+  /** Most review threads counted per pull request in one status read, and read in one review read. */
   readonly maxReviewThreads: number
   /** Most commits one commit listing returns. */
   readonly maxCommits: number
@@ -54,9 +57,31 @@ export class GitHubProvider implements ForgeProvider {
   }
 
   /**
+   * Read the review threads of a pull request at `headSha` through GraphQL, each page naming the head it was read at.
+   * @see readReviewThreads
+   */
+  async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return failure
+    if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
+    return await readReviewThreads(this.graphql, ref, headSha, this.limits, signal)
+  }
+
+  /**
+   * Write to the review threads or the pending review of a pull request through GraphQL mutations after a check of its head.
+   * @see writeGitHubReview
+   */
+  async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return { ok: false, code: 'failed', message: failure.message }
+    if (!isCommit(write.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(write.headSha)}`)
+    return await writeGitHubReview(this.graphql, this.gh, ref, write, signal)
+  }
+
+  /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check bytes, counted review threads, and listed commits.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, and listed commits.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
@@ -159,24 +184,44 @@ export class GitHubProvider implements ForgeProvider {
    * current head and the base commit GitHub recorded with it; a head other
    * than `headSha` returns `stale`. Otherwise the compare endpoint reads the
    * patch from the merge base of that base commit and `headSha`, as the pull
-   * request's own diff does, with both ends fixed.
+   * request's own diff does, with both ends fixed. Given the `base` the latest
+   * status recorded with `headSha`, the comparison from it runs while the
+   * GraphQL read confirms the head; a stale head or another base commit
+   * cancels that comparison and waits for it to end before the read returns.
    */
-  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure> {
     const { host, owner, name } = checkedRepository(ref)
     const failure = this.hostFailure(host)
     if (failure !== undefined) return failure
     if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
-    const output = await this.read([
-      'api', 'graphql', '--hostname', host,
-      '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
-    ], signal)
-    if (typeof output !== 'string') return output
-    const commits = mapPullRequestCommitsResponse(parseJson(output))
-    if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
-    if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
-      return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+    if (base !== undefined && !isCommit(base)) throw new Error(`forge-github: invalid base commit ${JSON.stringify(base)}`)
+    const compare = async (from: string, operation: AbortSignal): Promise<string | ForgeFailure> =>
+      await readComparison(async (args, inner) => await this.read(args, inner), ref.repository, from, headSha, operation)
+    const speculation = new AbortController()
+    const early = base === undefined ? undefined : { base, patch: compare(base, AbortSignal.any([signal, speculation.signal])) }
+    // The early comparison is observed here, so a cancelled or unused one never rejects unhandled.
+    const settled = early?.patch.then(() => undefined, () => undefined)
+    const discard = async (): Promise<void> => {
+      speculation.abort()
+      await settled
     }
-    return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, commits.base, headSha, signal)
+    try {
+      const output = await this.read([
+        'api', 'graphql', '--hostname', host,
+        '-f', `query=${PULL_REQUEST_COMMITS_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`,
+      ], signal)
+      if (typeof output !== 'string') return output
+      const commits = mapPullRequestCommitsResponse(parseJson(output))
+      if (commits === undefined) return { code: 'unavailable', message: 'unexpected GitHub response to the pull request commit read' }
+      if (commits.head.toLowerCase() !== headSha.toLowerCase()) {
+        return { code: 'stale', message: `the pull request head moved from ${headSha} to ${commits.head}` }
+      }
+      if (early?.base.toLowerCase() === commits.base.toLowerCase()) return await early.patch
+      await discard()
+      return await compare(commits.base, signal)
+    } finally {
+      await discard()
+    }
   }
 
   /** Read one file at a commit through the contents API in its raw form. */

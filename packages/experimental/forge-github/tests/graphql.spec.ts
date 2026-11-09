@@ -45,6 +45,13 @@ describe('snapshot query', () => {
 })
 
 describe('snapshot mapping', () => {
+  it.each([['missing', undefined], ['null', null], ['not a full commit', 'HEAD~1']])(
+    'keeps the status and leaves out the base commit when GitHub reports it %s', async (_case, baseRefOid) => {
+      const snapshot = await single(pullRequestNode(1, { baseRefOid }))
+      expect(snapshot).not.toHaveProperty('baseSha')
+      expect(snapshot.headSha).toBe('f'.repeat(40))
+    })
+
   it('maps the pull request fields into a provider-neutral snapshot', async () => {
     expect((await single(pullRequestNode(1, {}, [checkRun('lint', 'COMPLETED', 'SUCCESS')])))).toEqual({
       ref: pull(1),
@@ -56,6 +63,7 @@ describe('snapshot mapping', () => {
       headBranch: 'topic-1',
       headSha: 'f'.repeat(40),
       baseBranch: 'master',
+      baseSha: 'b'.repeat(40),
       additions: 128,
       deletions: 14,
       mergeability: 'mergeable',
