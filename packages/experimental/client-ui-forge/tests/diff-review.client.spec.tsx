@@ -163,7 +163,10 @@ it('opens the editor from a hover plus in one press, extending the range on its 
   expect(m.line('R5').getAttribute('aria-pressed')).toBe('false')
   fireEvent.pointerUp(window)
   expect(m.getByRole('region', { name: 'Comment on R3–4' })).toBeTruthy()
-  expect(m.container.querySelector('[data-review-add]')).toBeNull()
+  // The open editor leaves every hover plus for the next comment, and the range it froze keeps the highlight.
+  expect(m.container.querySelectorAll('[data-review-add]').length).toBeGreaterThan(0)
+  expect(m.line('R3').getAttribute('aria-pressed')).toBe('false')
+  expect(m.code('R', 3).closest('[data-diff-side]')!.className).toContain('selected')
   fireEvent.click(m.getByRole('button', { name: 'Cancel' }))
   fireEvent.pointerDown(plus('L2'), { button: 0 })
   fireEvent.pointerCancel(window)
@@ -277,4 +280,65 @@ it('keeps a text selection across a render that leaves the file unchanged', () =
   m.rerender(<DiffFile {...m.props} file={{ ...file, path: 'a.ts' }} wrap={false} />)
   expect(m.code('R', 3).firstChild).toBe(node)
   expect(document.getSelection()?.toString()).toBe(selected)
+})
+
+it('writes a left and a right comment at once, each under its own column of the row, and focuses an open range again', () => {
+  const m = mount()
+  const open = (name: string) => {
+    fireEvent.click(m.line(name))
+    fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+    return m.getByRole('region', { name: `Comment on ${name}` })
+  }
+  const left = open('L3')
+  const right = open('R3')
+  const row = left.closest<HTMLElement>('[data-forge-notes]')!
+  expect(right.closest('[data-forge-notes]')).toBe(row)
+  const [leftCell, rightCell] = Array.from(row.children)
+  expect(leftCell!.contains(left)).toBe(true)
+  expect(rightCell!.contains(right)).toBe(true)
+  // Each cell continues the background of its side's line.
+  expect(leftCell!.className).toContain('del')
+  expect(rightCell!.className).toContain('add')
+  expect(m.line('L3').getAttribute('aria-pressed')).toBe('false')
+  fireEvent.change(within(right).getByRole('textbox'), { target: { value: 'Draft' } })
+  open('R3')
+  expect(m.getAllByRole('region', { name: 'Comment on R3' })).toHaveLength(1)
+  expect(document.activeElement).toBe(within(right).getByRole('textbox'))
+  expect(within(right).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Draft')
+  fireEvent.click(within(left).getByRole('button', { name: 'Cancel' }))
+  expect(m.queryByRole('region', { name: 'Comment on L3' })).toBeNull()
+  expect(m.getByRole('region', { name: 'Comment on R3' })).toBe(right)
+})
+
+it('places side-by-side records in their columns and keeps an editor whose line stops drawing after the lines', () => {
+  const m = mount()
+  act(() => {
+    for (const side of ['L', 'R'] as const) m.records.recordAgent({ source, comment: { ...selectReviewLines(file, side, 3, 4)!, body: side } })
+  })
+  const threads = Array.from(m.container.querySelectorAll<HTMLElement>('[data-forge-review-thread]'))
+  expect(threads.map(thread => thread.closest('[data-forge-notes]'))).toEqual([threads[0]!.closest('[data-forge-notes]'), threads[0]!.closest('[data-forge-notes]')])
+  const cells = Array.from(threads[0]!.closest('[data-forge-notes]')!.children)
+  expect(threads.map(thread => cells.findIndex(cell => cell.contains(thread)))).toEqual([0, 1])
+  // The added blank line has no old line, so the left cell of its row is empty.
+  fireEvent.click(m.line('R5'))
+  fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+  const editor = m.getByRole('region', { name: 'Comment on R5' })
+  const [emptyCell] = Array.from(editor.closest('[data-forge-notes]')!.children)
+  expect(emptyCell!.className).toContain('empty')
+  expect(emptyCell!.querySelector('[data-forge-comments]')!.childElementCount).toBe(0)
+  const shorter = { ...file.hunks[0]!, newLines: 3, lines: file.hunks[0]!.lines.slice(0, -1) }
+  m.rerender(<DiffFile {...m.props} file={{ ...file, hunks: [shorter] }} />)
+  const code = m.container.querySelector('[data-review]')!
+  const rows = Array.from(code.children)
+  const moved = m.getByRole('region', { name: 'Comment on R5' })
+  expect(moved.parentElement).toBe(code)
+  expect(rows.indexOf(moved)).toBeGreaterThan(rows.findLastIndex(row => row.hasAttribute('data-diff-pair')))
+})
+
+it('labels the plus on the unified row that ends a right-side range', () => {
+  const m = mount({ split: false })
+  fireEvent.click(m.line('R4'))
+  expect(m.getByRole('button', { name: 'Add comment' })).toBeTruthy()
+  expect(m.container.querySelector('[data-review-add="R4"]')).toBeNull()
+  expect(m.container.querySelector('[data-review-add="R3"]')).not.toBeNull()
 })

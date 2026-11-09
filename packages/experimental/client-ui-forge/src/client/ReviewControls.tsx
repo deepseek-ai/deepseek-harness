@@ -159,8 +159,12 @@ export function HideTestsSwitch({ hidden, toggle, t }: PropsLocale<typeof NS> & 
   )
 }
 
+/** Radius of the compact progress ring, inside its 14px box with a 2px stroke. */
+const RING_RADIUS = 5.5
+
 /**
- * Render how many of the shown files the reader marked viewed, as a count and a bar.
+ * Render how many of the shown files the reader marked viewed: a label with a bar, and a ring with the bare count that a
+ * narrow toolbar shows instead (`data-forge-progress` names each form for the toolbar's styles).
  * @param props - the viewed and shown file counts, and copy.
  * @returns the progress, or nothing without shown files.
  */
@@ -169,13 +173,25 @@ export function ViewedProgress({ viewed, total, t }: PropsLocale<typeof NS> & {
   readonly total: number
 }): ReactNode {
   if (total === 0) return null
-  const label = t('viewed.progress', { viewed: String(viewed), total: String(total) })
+  const counts = { viewed: String(viewed), total: String(total) }
+  const label = t('viewed.progress', counts)
+  const circumference = 2 * Math.PI * RING_RADIUS
   return (
     <span className={css.progress} role="progressbar" aria-label={t('viewed.progressAria')} aria-valuemin={0} aria-valuemax={total}
       aria-valuenow={viewed} aria-valuetext={label} data-forge-viewed-progress={`${viewed}/${total}`}>
-      <span className={css.progressLabel}>{label}</span>
-      <span className={css.bar} aria-hidden="true">
-        <span className={css.fill} style={{ width: `${(viewed / total) * 100}%` }} />
+      <span className={css.progressForm} data-forge-progress="full">
+        <span className={css.progressLabel}>{label}</span>
+        <span className={css.bar} aria-hidden="true">
+          <span className={css.fill} style={{ width: `${(viewed / total) * 100}%` }} />
+        </span>
+      </span>
+      <span className={css.progressForm} data-forge-progress="compact">
+        <svg className={css.ring} viewBox="0 0 14 14" aria-hidden="true">
+          <circle className={css.ringTrack} cx="7" cy="7" r={RING_RADIUS} />
+          <circle className={css.ringFill} cx="7" cy="7" r={RING_RADIUS}
+            strokeDasharray={`${(viewed / total) * circumference} ${circumference}`} />
+        </svg>
+        {t('viewed.count', counts)}
       </span>
     </span>
   )

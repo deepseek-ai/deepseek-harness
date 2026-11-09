@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './fonts-dom.client.ts'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -1971,9 +1972,19 @@ describe('ChangesTab review threads', () => {
     return { ...bound, update: { key: 'github:github.com/octo/demo#7' as ChangeRequestKey, fetchedAt, snapshot: snapshot(7) } }
   }
   const card = (m: ReturnType<typeof mount>, id: string): HTMLElement | null => m.view.container.querySelector(`[data-forge-thread="${id}"]`)
+  /** The element a thread places among the rows: its card, or side by side, the row of comment cells that holds it. */
+  const placed = (m: ReturnType<typeof mount>, id: string): Element | null => {
+    const found = card(m, id)
+    return found?.closest('[data-forge-notes]') ?? found
+  }
   /** Code of the row a thread follows, on the side its lines number. */
   const following = (m: ReturnType<typeof mount>, id: string, side: 'L' | 'R' = 'R'): string | null =>
-    card(m, id)?.previousElementSibling?.querySelector(side === 'L' ? '[data-old-line]' : '[data-new-line]')?.textContent ?? null
+    placed(m, id)?.previousElementSibling?.querySelector(side === 'L' ? '[data-old-line]' : '[data-new-line]')?.textContent ?? null
+  /** The column of a side-by-side row that holds a thread: 0 for the left side, 1 for the right. */
+  const column = (m: ReturnType<typeof mount>, id: string): number => {
+    const found = card(m, id)!
+    return Array.from(found.closest('[data-forge-notes]')!.children).findIndex(cell => cell.contains(found))
+  }
 
   it('writes to a thread at the head of its read and reads the threads again', async () => {
     const writable = line('on-row', 'src/app.ts', 'R', 4, { viewerCanResolve: true })
@@ -1993,6 +2004,8 @@ describe('ChangesTab review threads', () => {
     const app = m.section('src/app.ts')
     expect(following(m, 'on-row')).toBe('const y = 4')
     expect(following(m, 'old-side', 'L')).toBe('const w = 12')
+    // Side by side, each thread sits in the column of the side its lines number.
+    expect([column(m, 'on-row'), column(m, 'old-side')]).toEqual([1, 0])
     expect(card(m, 'in-gap')?.previousElementSibling?.getAttribute('data-forge-diff-gap')).toBe('1')
     expect(card(m, 'resolved')?.textContent).toContain('Resolved thread · reviewer')
     // The count alone shows below 480px.
