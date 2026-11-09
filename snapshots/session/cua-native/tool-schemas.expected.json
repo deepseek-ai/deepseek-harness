@@ -484,6 +484,10 @@
                         "type": "string",
                         "minLength": 1,
                         "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -521,6 +525,10 @@
                         "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
                         "type": "boolean",
                         "const": false
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -561,6 +569,10 @@
                         "type": "boolean",
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1542,22 +1554,6 @@
         },
         "required": [
           "pattern"
-        ]
-      }
-    },
-    {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent": {
-            "type": "string",
-            "description": "The name of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent"
         ]
       }
     },

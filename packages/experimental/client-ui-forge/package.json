@@ -71,7 +71,8 @@
     "diff": "^9.0.0",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-storage-domain": "workspace:*"
+    "@deepseek-ai/dsh-storage-domain": "workspace:*",
+    "picomatch": "^4.0.7"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
@@ -115,7 +116,8 @@
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",
-    "@deepseek-ai/dsh-api-remote-access": "workspace:*"
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
+    "@types/picomatch": "^4.0.3"
   },
   "files": [
     "locale/*.json",

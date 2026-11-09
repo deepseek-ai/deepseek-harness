@@ -63,6 +63,18 @@ function fixture(options: {
 }
 
 describe('native helper transport', () => {
+  it('sends run cleanup after an interrupted native request has acknowledged its outcome', async () => {
+    const f = fixture()
+    const active = f.client.request('getState', {}, new AbortController().signal)
+    const release = f.client.requestCleanup('releaseHeldKeys', { runId: 'program' })
+    expect(f.requests).toHaveLength(1)
+    f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'paused' } })
+    await expect(active).rejects.toThrow('paused')
+    expect(f.requests.map(frame => frame.method)).toEqual(['getState', 'releaseHeldKeys'])
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await expect(release).resolves.toEqual({ dispatched: true })
+  })
+
   it('passes transport limits and connection deadlines to the shared channel', () => {
     const f = fixture({ maxRequestBytes: 4096, maxResponseBytes: 8192, timeoutMs: 1234 })
     expect(f.connect).toHaveBeenCalledExactlyOnceWith(f.owner, f.config)

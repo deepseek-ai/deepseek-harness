@@ -168,7 +168,7 @@ interface ConfinedArgv {
 
 ## 提供方与 fail-closed 错误
 
-`await ctx.sandbox.confine(argv, policy, signal)` 在执行环境中解析策略路径并返回 `ConfinedArgv`，没有可用后端时以 `SandboxUnavailableError`（错误码 `SANDBOX_UNAVAILABLE`）拒绝。可选信号可在启动前取消解析。消费方也可以在 spawn 或观察所返回的 argv 时对失败进行分类；该归因属于消费方约定。对于受限策略，静默的无隔离透传永远不合法。
+`await ctx.sandbox.confine(argv, policy, signal)` 在执行环境中解析策略路径并返回 `ConfinedArgv`，没有可用后端时以 `SandboxUnavailableError`（错误码 `SANDBOX_UNAVAILABLE`）拒绝，提供方无法为该模式准备主机状态时以 `SandboxPreparationError`（`SANDBOX_PREPARATION_FAILED`、`SANDBOX_INVALID_TEMP_ROOT`）拒绝。可选信号可在启动前取消解析。消费方也可以在 spawn 或观察所返回的 argv 时对失败进行分类；该归因属于消费方约定。对于受限策略，静默的无隔离透传永远不合法。
 
 提供方选择、探测、缓存和后端特定的强制执行报告归[本地提供方](../../packages/sandbox/sandbox-local/README.zh.md)所有。
 
@@ -226,6 +226,8 @@ A session's workspace root comes from the working-directory service when it is m
  * and processes keep their policy.
  * @param request - optional session, approved mode override, and root override.
  * @returns the fully resolved per-call mode, absolute workspace root, and extra writable directories.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the selected root is relative or
+ *   contains a NUL byte.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 

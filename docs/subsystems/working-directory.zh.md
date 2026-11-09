@@ -108,7 +108,8 @@ anchorsOf(session: Session): readonly string[]
  * A Session without a recorded project records the deployment fallback as its first anchor on its
  * first validation, and a recovery destination outside every anchor joins the anchors.
  * A notice failure is warned without reverting the committed state.
- * @throws when the original project is also unavailable, or when a `working-directory/access` listener rejects.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
+ *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
  */
 ensure(agent: Agent, signal?: AbortSignal): Promise<string>
 
@@ -122,7 +123,9 @@ ensure(agent: Agent, signal?: AbortSignal): Promise<string>
  * @param signal - cancellation before the durable change.
  * @returns the canonical absolute directory, committed before fulfillment.
  * A notice failure is warned; the next request still receives the committed directory.
- * @throws when the requested path is not an existing directory.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and
+ *   `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a
+ *   `working-directory/access` listener.
  */
 set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
 
@@ -136,7 +139,8 @@ set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
  * @returns the committed current directory and the workspace root selected after the commit;
  * the registered root is that root unless a more specific anchor already contains the directory.
  * A notice failure is warned; the next request still receives the committed directories.
- * @throws when either path is not an existing directory or the directory lies outside the root.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path or a directory outside
+ *   the root and `WORKING_DIRECTORY_NOT_FOUND` when either path is not an existing directory.
  */
 relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>
 
@@ -150,7 +154,8 @@ relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<Rel
  * @param source - Session whose current root may be passed on; the call leaves it unchanged.
  * @param options - canonical absolute directory to start in and cancellation before the durable change.
  * @returns the committed current directory and the workspace root selected after the commit.
- * @throws when `options.cwd` is not an existing directory, or when a `working-directory/access` listener rejects.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_NOT_FOUND` when `options.cwd` is not an existing
+ *   directory, or the rejection of a `working-directory/access` listener.
  */
 async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories>
 ```

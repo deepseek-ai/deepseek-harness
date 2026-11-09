@@ -263,6 +263,13 @@ describe('dsh-tool-team', () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
+    const teamTool = (name: string) => ctx.tools.get(name, scopeOf(lead.ctx))
+    expect(teamTool('team_task_get')?.isConcurrencySafe?.({ task_id: '1' })).toBe(true)
+    expect(teamTool('team_task_list')?.isConcurrencySafe?.({})).toBe(true)
+    for (const name of ['team_task_create', 'team_task_update']) {
+      expect(teamTool(name)).toBeDefined()
+      expect(teamTool(name)).not.toHaveProperty('isConcurrencySafe')
+    }
     const leadPrompt = renderPrompt(leadAssembly)
     expect(leadPrompt).toContain('Agent Teams is available in this session')
     expect(leadPrompt).toContain('Task readiness never starts an owner')

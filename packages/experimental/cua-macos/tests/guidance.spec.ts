@@ -27,13 +27,19 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
+  const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
+  expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
+  expect(GUIDANCE).toContain('returns, throws, or the user pauses')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent(')
+  expect(pressKey).toBe(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
+  expect(GUIDANCE).toContain('W down, D down, D up, W up')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
-  for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
+  for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE']) expect(hover).toContain(term)
   const click = GUIDANCE.split('\n').find(line => line.startsWith('- click('))
   expect(click).toContain('await app.getWindow(windowId), then call win.click(target)')
   expect(click).toContain('use app.invoke(id)')
   for (const step of ['call app.activate() first', 'outside the window', 'screenshot pixels', 'before typing or retrying']) expect(click).toContain(step)
-  for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'systemPointerHover', 'mouse-down']) {
+  for (const platformDetail of ['macOS', 'AXShowAlternateUI', 'AXRaise', 'HOVER_UNAVAILABLE', 'mouse-down']) {
     expect(COMMON_GUIDANCE).not.toContain(platformDetail)
   }
 })
@@ -66,7 +72,7 @@ it('inlines discovery, restoration, screenshot, and mouse-move return records', 
   for (const name of ['cua.getCapabilities', 'cua.listApps', 'cua.findApps', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'getScreenshot', 'mouseMove']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
-  expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
+  expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
   expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: true, pid: number }[]')
   expect(COMMON_GUIDANCE).toContain('({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[]')
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
@@ -135,5 +141,5 @@ it('documents facade initialization, emitted observations, and separate key argu
 })
 
 it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'sendKeyEvent', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
 })

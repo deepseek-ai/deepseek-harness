@@ -54,6 +54,7 @@ export function pullRequestNode(number: number, overrides: Record<string, unknow
     headRefName: `topic-${number}`,
     headRefOid: 'f'.repeat(40),
     baseRefName: 'master',
+    baseRefOid: 'b'.repeat(40),
     additions: 128,
     deletions: 14,
     mergeable: 'MERGEABLE',

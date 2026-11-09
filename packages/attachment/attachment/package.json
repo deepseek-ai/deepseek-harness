@@ -23,10 +23,12 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   }
 }

@@ -220,7 +220,7 @@ def main():
                 return result
 
             def check_hover():
-                if not args.alternate_hover:
+                if not args.alternate_hover or args.input_overlays:
                     call("activate", owner)
                     current = call("getState", primary_params)
                     window_element = next(element for element in current["elements"] if element["role"] == "AXWindow")
@@ -236,7 +236,7 @@ def main():
                     assert (after["cursorChanges"], after["hoverVisible"]) == (before["cursorChanges"], before["hoverVisible"]), after
 
                 def mouse_move(target):
-                    result = call("mouseMove", target if args.alternate_hover else {**target, "allowSystemPointer": True})
+                    result = call("mouseMove", target if args.alternate_hover else {**target, "useSystemPointer": True})
                     if not args.alternate_hover:
                         assert result["hoverRoute"] == "system-pointer" and result["systemPointerMoved"] is True, result
                     if args.alternate_hover:
@@ -271,11 +271,21 @@ def main():
                     mouse_move(target)
                     wait_state(lambda actual: actual["hoverVisible"], "Input-transparent overlay blocked hover")
                     before = cycle_overlay(2)
-                    call("mouseMove", {**target, "allowSystemPointer": True}, "FOREGROUND_REQUIRED")
+                    call("mouseMove", {**target, "useSystemPointer": True}, "FOREGROUND_REQUIRED")
                     after = wait_state(lambda actual: actual["cursorSamples"] >= before["cursorSamples"] + 2,
                                        "Pointer observation did not advance")
                     assert after["cursorChanges"] == before["cursorChanges"], "Rejected hover moved the system pointer"
+                    if args.alternate_hover:
+                        assert before["hoverVisible"] and after["hoverVisible"], "Rejected physical hover dismissed AX controls"
+                        assert after["defaultUIRequests"] == before["defaultUIRequests"], after
                     cycle_overlay(0)
+                    if args.alternate_hover:
+                        state = call("getState", primary_params)
+                        child = button_target(state, "Use native hover details")
+                        result = call("mouseMove", {**child, "windowId": primary["windowId"], "useSystemPointer": True})
+                        assert result["hoverRoute"] == "system-pointer" and result["systemPointerMoved"], result
+                        current = json.loads(state_path.read_text())
+                        assert current["hoverVisible"] and current["defaultUIRequests"] == before["defaultUIRequests"], current
                     mouse_move({**owner, "windowId": primary["windowId"], "x": 10, "y": 40})
                     wait_state(lambda actual: not actual["hoverVisible"], "Hover did not exit after removing the overlay")
 

@@ -61,7 +61,11 @@ describe('negotiatePositionEncoding', () => {
   })
 
   it('rejects any other encoding', () => {
-    expect(() => negotiatePositionEncoding('utf-8')).toThrow(/unsupported position encoding/)
+    expect(() => negotiatePositionEncoding('utf-8')).toThrow(expect.objectContaining({
+      name: 'LspError',
+      code: 'LSP_UNSUPPORTED_ENCODING',
+      message: expect.stringMatching(/unsupported position encoding "utf-8"/) as string,
+    }))
   })
 })
 
