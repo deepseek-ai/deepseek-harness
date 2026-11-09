@@ -63,7 +63,7 @@ func discoversNormalWindowsAndVisibleAuxiliaryWindows(layer: Int, onScreen: Bool
     let window = WindowInfo(windowID: 7, pid: 42, appName: "Fixture", title: "",
                             bounds: WindowBounds(x: 0, y: 0, width: width, height: 100),
                             isOnScreen: onScreen, onCurrentSpace: currentSpace, layer: layer)
-    #expect(window.isDiscoverable == expected)
+    #expect(window.json.object?["cacheOnly"] == (expected ? nil : .bool(true)))
     #expect(window.json.object?.keys.contains("layer") == false)
 }
 

@@ -146,10 +146,12 @@ struct WindowInfo: Sendable {
     }
 
     var json: JSONValue {
-        .object([
+        var record: [String: JSONValue] = [
             "windowId": .number(Double(windowID)),
             "appName": .string(appName), "title": .string(title), "bounds": bounds.json,
             "isOnScreen": .bool(isOnScreen), "onCurrentSpace": onCurrentSpace.map(JSONValue.bool) ?? .null,
-        ])
+        ]
+        if !isDiscoverable { record["cacheOnly"] = .bool(true) }
+        return .object(record)
     }
 }

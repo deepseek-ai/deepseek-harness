@@ -74,7 +74,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `findApps` | 从标准应用目录或绝对应用路径返回已安装匹配项 `{id, displayName, path, isRunning, pid?}`；发现过程不启动应用。 |
 | `getApp` | 运行中的选择返回 `{appHandle, pid, name, bundleId?, running: true, authorization}`。未运行的选择返回 `{appHandle, name, bundleId?, running: false, authorization}`，其中没有 `pid`，并等待 Host 授权。名称歧义会失败。 |
 | `launchApp` | 授权后的 Host 专用续接操作；不请求激活，等待应用启动完成后将句柄绑定到已核实的进程身份。 |
-| `listWindows` | 应用的普通窗口（包括隐藏窗口），以及在屏、尺寸大于零且未确定位于其他 Space 的辅助窗口，包含 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace}`。Space 归属可为 null。 |
+| `listWindows` | 返回应用在各层级的窗口。Host 使用私有的 `cacheOnly: true` 记录维护坐标，只在显式选中该目标时展示。清单包含全部普通窗口，以及在屏、尺寸大于零且未确定位于其他 Space 的辅助窗口，包含 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace}`。Space 归属可为 null。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和窗口发现失败仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |

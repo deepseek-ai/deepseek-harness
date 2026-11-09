@@ -272,7 +272,7 @@ actor AXWorker {
             let ids = Set(windows.map(\.windowID))
             snapshots = snapshots.filter { key, _ in key.appHandle != handle || (key.windowID.map { ids.contains($0) } ?? true) }
             observedWindowBounds[handle] = observedWindowBounds[handle]?.filter { ids.contains($0.key) }
-            return .result(.array(windows.filter(\.isDiscoverable).map(\.json)))
+            return .result(.array(windows.map(\.json)))
         }
         if method == "getState" {
             let windowID = try params.optionalWindowID()
@@ -325,7 +325,7 @@ actor AXWorker {
                 "windowId": window.map { .number(Double($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
-                "windows": .array(observedWindows.filter { $0.isDiscoverable || $0.windowID == window }.map(\.json)), "truncated": .bool(projection.truncated)]))
+                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
         case "screenshot":
             trace?.mark("screen-permission.begin")
             try NativePlatform.requireScreenRecording()

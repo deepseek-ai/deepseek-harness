@@ -83,7 +83,8 @@ def main():
                 wait_state(lambda value: value['count'] == 2)
                 os.kill(fixture.pid, signal.SIGUSR1)
                 wait_state(lambda value: not value['panelOnScreen'] and value['panelLayer'] > 0)
-                assert panel_id not in [w['windowId'] for w in helper.call('listWindows', owner)]
+                hidden = next(w for w in helper.call('listWindows', owner) if w['windowId'] == panel_id)
+                assert hidden.get('cacheOnly') is True, hidden
                 os.kill(fixture.pid, signal.SIGUSR1)
                 wait_state(lambda value: value['panelOnScreen'] and value['panelWindowId'] == panel_id)
                 assert panel_id in [w['windowId'] for w in helper.call('listWindows', owner)]

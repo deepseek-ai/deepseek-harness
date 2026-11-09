@@ -99,6 +99,13 @@ interface CuaExecution extends ToolExecution {
 }
 
 
+// Providers can retain geometry for a live window without listing it as a discovery candidate.
+const NativeWindows = WindowsResult.element.extend({ cacheOnly: z.literal(true).optional() }).array()
+const NativeState = StateResult.extend({ windows: NativeWindows })
+function discoveredWindows(windows: z.output<typeof NativeWindows>, selected?: number | null) {
+  return windows.flatMap(({ cacheOnly, ...window }) => !cacheOnly || window.windowId === selected ? [window] : [])
+}
+
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
@@ -295,14 +302,18 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       }
       if (method === 'getState') {
-        const state = StateResult.parse(result)
+        const state = NativeState.parse(result)
         if (state.appHandle !== parsedParams.appHandle || state.windowId !== (parsedParams.windowId ?? null)) {
           throw new NativeError('NATIVE_PROTOCOL', 'Native observation belongs to another application or window')
         }
         execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
-        return state
+        return { ...state, windows: discoveredWindows(state.windows, state.windowId) }
       }
-      if (method === 'listWindows') execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, WindowsResult.parse(result))
+      if (method === 'listWindows') {
+        const windows = NativeWindows.parse(result)
+        execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, windows)
+        return discoveredWindows(windows)
+      }
       return result
     }
     const tool: ToolDefinition = {

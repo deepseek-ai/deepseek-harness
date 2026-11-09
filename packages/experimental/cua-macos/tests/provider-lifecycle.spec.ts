@@ -545,8 +545,24 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
-  const windows = [{ windowId: 7, appName: 'Fixture', title: 'Window',
-    bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true, onCurrentSpace: true }]
+  const window = { windowId: 7, appName: 'Fixture', title: 'Window', bounds: metadata.bounds, isOnScreen: false, onCurrentSpace: true }
+  const hiddenPanel = { ...window, cacheOnly: true }
+  const minimizedDocument = { ...window, windowId: 8, title: 'Document' }
+  native.request.mockResolvedValueOnce([hiddenPanel, minimizedDocument])
+  const discovery = await f.execute('listWindows', { appHandle: 'app-one' })
+  expect(discovery.value).toEqual([minimizedDocument])
+  expect(discovery.content).toEqual([{ type: 'text', text: JSON.stringify([minimizedDocument]) }])
+  for (const windowId of [null, 7]) {
+    native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId, snapshotId: 'snapshot', tree: '',
+      windows: [hiddenPanel, minimizedDocument], truncated: false })
+    const state = await f.execute('getState', { appHandle: 'app-one', ...windowId === null ? {} : { windowId } })
+    expect(state.value).toMatchObject({ windows: windowId === null ? [minimizedDocument] : [window, minimizedDocument] })
+  }
+  native.request.mockResolvedValueOnce([{ ...window, isOnScreen: true }, minimizedDocument ])
+  await f.execute('listWindows', { appHandle: 'app-one' })
+  native.request.mockResolvedValueOnce({ dispatched: true })
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })).isError).toBe(false)
+  const windows = [{ ...window, bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true }]
   native.request.mockResolvedValueOnce(windows)
   const listed = await f.execute('listWindows', { appHandle: 'app-one' })
   expect(listed.isError).toBe(false)
