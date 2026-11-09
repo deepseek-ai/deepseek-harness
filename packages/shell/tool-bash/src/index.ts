@@ -16,18 +16,21 @@ import { FiberState } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { isAbsolute, sep } from 'node:path'
-import { defineTool, TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
+import { defineTool, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { JobError } from '@deepseek-ai/dsh-jobs'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { ESCALATION_TARGETS, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
+import { ESCALATION_TARGETS, SandboxEscalationError, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
+import { subprocessSpawnFailure } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import { processJob, processOutcome, processSources, ringDelta } from './background.ts'
+import type { ProcessJobHooks } from './background.ts'
 import { parseExitStatus, renderJobRead, renderPromoted, renderResult } from './render.ts'
 
 export const name = 'tool-bash'
@@ -72,13 +75,13 @@ interface BashToolArgs {
 
 function validateBashArgs(args: BashToolArgs, effectiveMode: SandboxMode | undefined): void {
   if (args.command.trim().length === 0) {
-    throw new Error('invalid command: expected a non-empty string')
+    throw new ToolArgsError(['invalid command: expected a non-empty string'])
   }
   if (args.description.trim().length === 0) {
-    throw new Error('invalid description: expected a non-empty string')
+    throw new ToolArgsError(['invalid description: expected a non-empty string'])
   }
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
-    throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
+    throw new ToolArgsError([`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`])
   }
   if (args.sandbox_permissions !== undefined && args.sandbox_permissions === effectiveMode) return
   const justification = args.sandbox_permissions === undefined && args.justification?.trim() === ''
@@ -185,11 +188,24 @@ function toolAborted(): HarnessError {
   return error
 }
 
+/**
+ * Report a launch or preparation rejection as this tool's failure. This
+ * call's cancellation reason stays as thrown so the registry records it as
+ * aborted; a platform spawn error is classified as a subprocess spawn failure
+ * with the original as `cause`; any other value, including a coded error,
+ * keeps its own identity.
+ */
+function launchFailure(error: unknown, signal: AbortSignal): unknown {
+  return signal.aborted && error === signal.reason ? error : subprocessSpawnFailure(error, 'bash')
+}
+
 /** A registered command: its id, the process once the starter spawned it, and the reason an outside kill gave. */
 interface StartedJob {
   readonly id: JobId
   readonly process: () => ShellExecution | undefined
   readonly stopped: () => string | undefined
+  /** The original error of a registration whose preparation failed before the process published. */
+  readonly failure: () => { error: unknown } | undefined
 }
 
 /** Canonical background-handle properties shared by the bash output union. */
@@ -232,7 +248,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     standingPolicy: SandboxExecutionPolicy | undefined,
   ): Promise<SandboxMode> => {
     if (escalationModes.length === 0) {
-      throw new Error('sandbox_permissions is not available in this composition (no sandboxing executor to escalate)')
+      throw new SandboxEscalationError(
+        'sandbox_permissions is not available in this composition (no sandboxing executor to escalate)',
+        'SANDBOX_ESCALATION_UNAVAILABLE',
+      )
     }
     const effectiveMode = (standingPolicy as SandboxExecutionPolicy).mode
     return approveEscalation(
@@ -266,6 +285,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     const startJob = (registry: JobRegistry, args: BashToolArgs, exec: ToolExecution, spec: ShellExecSpec): StartedJob => {
       let proc: ShellExecution | undefined
       let stopped: string | undefined
+      let hooks: ProcessJobHooks | undefined
       const id = registry.start({
         kind: 'bash',
         label: args.command,
@@ -273,25 +293,26 @@ export function apply(ctx: Context, config: Config = {}): void {
         ...exec.agent ? { owner: exec.agent.id } : {},
         output: processSources(() => proc),
         run: () => {
-          const hooks = processJob(
+          const job = processJob(
             async (signal) => {
               proc = await ctx.shell.execute({ ...spec, signal })
               return proc
             },
             started => processOutcome(started, escalationModes),
           )
+          hooks = job
           return {
-            done: hooks.done,
+            done: job.done,
             // A kill from outside this call (the human's, a parallel job_kill)
             // reaches the process here; its reason is what the model reads.
             cancel: (reason) => {
               stopped = reason
-              hooks.cancel(reason)
+              job.cancel(reason)
             },
           }
         },
       })
-      return { id, process: () => proc, stopped: () => stopped }
+      return { id, process: () => proc, stopped: () => stopped, failure: () => hooks?.failure() }
     }
     /** Wait on a registered foreground command until it settles or the timeout passes. */
     const waitOnJob = async (registry: JobRegistry, attached: StartedJob, exec: ToolExecution, spec: ShellExecSpec) => {
@@ -357,11 +378,14 @@ export function apply(ctx: Context, config: Config = {}): void {
       // the split streams and classification the foreground result needs.
       registry.remove(attached.id, owner)
       const process = attached.process()
-      // No process was published: the starter failed before the spawn, and the
-      // job's terminal detail is the failure the foreground projection would
-      // have rejected with.
-      if (process === undefined) throw new Error(view.detail)
-      const result = await process.result()
+      // No process was published: the starter failed before the spawn. The
+      // original error keeps its class and code, exactly as the foreground
+      // projection would have rejected; a kill before the spawn has only its detail.
+      if (process === undefined) {
+        const failure = attached.failure()
+        throw failure === undefined ? new Error(view.detail) : launchFailure(failure.error, exec.signal)
+      }
+      const result = await process.result().catch((error: unknown) => { throw launchFailure(error, exec.signal) })
       const stopped = attached.stopped()
       return { kind: 'foreground' as const, ...canonicalBashResult(result, spec.workdir), ...stopped !== undefined ? { stopped } : {} }
     }
@@ -498,10 +522,10 @@ export function apply(ctx: Context, config: Config = {}): void {
         if (args.run_in_background === true) {
           // Undeclared keys are allowed, so schema omission also needs enforcement.
           if (!backgroundEnabled) {
-            throw new Error('run_in_background is disabled for this deployment (enableRunInBackground: false)')
+            throw new JobError('run_in_background is disabled for this deployment (enableRunInBackground: false)', 'JOB_BACKGROUND_DISABLED')
           }
           if (jobs === undefined) {
-            throw new Error('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+            throw new ToolContextUnavailableError('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
           }
           // The caller owns cancellation until ctx.jobs commits detached ownership.
           if (exec.signal.aborted) throw toolAborted()
@@ -524,8 +548,12 @@ export function apply(ctx: Context, config: Config = {}): void {
           if (attached !== undefined) return waitOnJob(jobs, attached, exec, spec)
         }
         const spec = ctx.shell.resolve({ ...request, signal: exec.signal })
-        const foreground = await ctx.shell.execute(spec)
-        const result = await foreground.result()
+        let result: ShellRunResult
+        try {
+          result = await (await ctx.shell.execute(spec)).result()
+        } catch (error) {
+          throw launchFailure(error, exec.signal)
+        }
         if (result.aborted) throw toolAborted()
         return { kind: 'foreground' as const, ...canonicalBashResult(result, spec.workdir) }
       },

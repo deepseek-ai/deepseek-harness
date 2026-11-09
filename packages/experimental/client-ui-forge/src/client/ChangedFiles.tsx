@@ -25,6 +25,8 @@ export interface ChangedFilesProps extends PropsLocale<typeof NS> {
   readonly jump: (path: string) => void
   /** A menu row participates in the shared menu's keyboard walk. */
   readonly menu?: boolean
+  /** Unresolved host review threads by file path; files without any are absent. */
+  readonly threadCounts?: ReadonlyMap<string, number>
 }
 
 function Rows({ nodes, depth, props }: {
@@ -32,10 +34,11 @@ function Rows({ nodes, depth, props }: {
   readonly depth: number
   readonly props: ChangedFilesProps
 }): ReactNode {
-  const { state, toggle, jump, menu, t } = props
+  const { state, toggle, jump, menu, threadCounts, t } = props
   return nodes.map((node) => {
     const directory = node.kind === 'directory'
     const expanded = directory && (state.query.trim() !== '' || state.collapsed[node.path] !== true)
+    const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
     const label = node.kind === 'file' && node.file.previousPath !== null
       ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : node.path
     return <div key={node.path}>
@@ -54,6 +57,7 @@ function Rows({ nodes, depth, props }: {
           </span>
           {directory ? <IconFolderCloseRegular size={14} /> : <FileTypeIcon path={node.path} size={14} />}
           <span className={css.name}>{node.name}</span>
+          {threads > 0 && <span className={css.threads} title={t('thread.treeCount', { count: threads })}>{threads}</span>}
           {node.kind === 'file' && <Counts file={node.file} t={t} />}
         </button>
       </Tooltip>

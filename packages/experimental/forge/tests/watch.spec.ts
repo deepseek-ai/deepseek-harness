@@ -1,7 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ForgeService, { changeRequestKey } from '../src/index.ts'
-import type { ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ForgeFailure, ForgeRepository } from '../src/types.ts'
+import type {
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, ForgeFailure, ForgeRepository, ForgeReviewData,
+  ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId,
+} from '../src/types.ts'
 import { FakeProvider, forgeContext, provide, ref, snapshot } from './fake-provider.ts'
 
 const config = { activeIntervalMs: 1_000, idleIntervalMs: 5_000, maxBackoffMs: 6_000, fetchTimeoutMs: 500 }
@@ -278,6 +281,60 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(3)
 
     await context.forge.diff(ref(1), 'b'.repeat(40), signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
+  })
+
+  it('polls at once after a review read finds a newer head, sharing the once-per-head bound with diff reads', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1)))
+    const readReview = vi.fn(async (): Promise<ForgeReviewData | ForgeFailure> => ({ code: 'unavailable', message: 'down' }))
+    Object.assign(provider, { readReview })
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    const signal = new AbortController().signal
+
+    await context.forge.readReview(ref(1), 'a'.repeat(40), signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(1)
+    readReview.mockResolvedValue({ code: 'stale', message: 'the head moved' })
+    await expect(context.forge.readReview(ref(1), 'a'.repeat(40), signal)).resolves.toEqual({ code: 'stale', message: 'the head moved' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+    provider.readResult = { code: 'stale', message: 'the head moved' }
+    await context.forge.diff(ref(1), 'a'.repeat(40), signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+  })
+
+  it('polls at once after every review write the provider takes up, and after a stale one only once per head', async () => {
+    const provider = new FakeProvider()
+    provider.results.set(key, snapshot(ref(1)))
+    const writeReview = vi.fn(async (): Promise<ForgeReviewWriteResult> => ({ ok: true }))
+    Object.assign(provider, { writeReview })
+    const context = await setup(provider)
+    collect(context)
+    await vi.advanceTimersByTimeAsync(0)
+    const signal = new AbortController().signal
+    const write: ForgeReviewWrite = { kind: 'reply', headSha: 'a'.repeat(40), thread: 'thread-1' as ForgeThreadId, body: 'Done', pending: false }
+
+    await expect(context.forge.writeReview(ref(1), write, signal)).resolves.toEqual({ ok: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(2)
+    writeReview.mockResolvedValue({ ok: false, code: 'unknown', message: 'connection reset' })
+    await context.forge.writeReview(ref(1), write, signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(3)
+    writeReview.mockResolvedValue({ ok: false, code: 'stale', message: 'the head moved' })
+    await expect(context.forge.writeReview(ref(1), write, signal)).resolves.toEqual({ ok: false, code: 'stale', message: 'the head moved' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
+    await context.forge.writeReview(ref(1), write, signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
+    writeReview.mockResolvedValue({ ok: false, code: 'unsupported', message: 'no writes' })
+    await context.forge.writeReview(ref(1), write, signal)
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(4)
   })

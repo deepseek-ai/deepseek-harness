@@ -1,7 +1,7 @@
 /**
  * Review controls of the changes toolbar: the lens that keeps the files of one review layer, as a full-width
  * radio group above the file tree or as a menu where no tree shows; the switch that hides test files; and the
- * share of shown files the reader marked viewed.
+ * share of shown files the reader marked viewed. The thread list shares the segmented radio group.
  */
 
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -33,17 +33,35 @@ export interface LensProps extends PropsLocale<typeof NS> {
   readonly choose: (lens: ChangesLens) => void
 }
 
+/** One segment of a {@link SegmentedChoice}. */
+export interface Segment<Value extends string> {
+  /** Value the segment chooses. */
+  readonly value: Value
+  /** Localized label. */
+  readonly label: string
+  /** Count shown after the label, or null for none. */
+  readonly count: number | null
+  /** Localized hover text of a disabled segment, or null for an enabled one. */
+  readonly disabledTip: string | null
+}
+
 /**
- * Render the lens as a radio group whose segments share its width; arrow keys, Home, and End move between enabled lenses.
- * @param props - the lens, its counts, whether test files hide, the choose action, and copy.
+ * Render a radio group whose segments share its width, each with a count after its label; arrow keys, Home, and End
+ * move between enabled segments.
+ * @param props - the segments, the chosen value, the choose action, and the group's localized accessible name.
  * @returns the radio group.
  */
-export function LensControl({ lens, counts, hideTests, choose, t }: LensProps): ReactNode {
+export function SegmentedChoice<Value extends string>({ segments, value, choose, label }: {
+  readonly segments: readonly Segment<Value>[]
+  readonly value: Value
+  readonly choose: (value: Value) => void
+  readonly label: string
+}): ReactNode {
   const group = useRef<HTMLDivElement>(null)
-  const enabled = LENSES.filter(item => item !== 'test' || !hideTests)
+  const enabled = segments.filter(segment => segment.disabledTip === null).map(segment => segment.value)
   const move = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    const at = enabled.indexOf(lens)
-    let next: ChangesLens | undefined
+    const at = enabled.indexOf(value)
+    let next: Value | undefined
     switch (event.key) {
       case 'ArrowLeft': case 'ArrowUp': next = enabled[(at + enabled.length - 1) % enabled.length]; break
       case 'ArrowRight': case 'ArrowDown': next = enabled[(at + 1) % enabled.length]; break
@@ -53,26 +71,38 @@ export function LensControl({ lens, counts, hideTests, choose, t }: LensProps): 
     }
     event.preventDefault()
     event.stopPropagation()
-    /* v8 ignore next -- at most the test lens is disabled, so every key lands on an enabled lens */
+    /* v8 ignore next -- every caller keeps a segment enabled, so every key lands on one */
     if (next === undefined) return
     choose(next)
-    group.current?.querySelector<HTMLButtonElement>(`[data-forge-lens="${next}"]`)?.focus()
+    group.current?.querySelector<HTMLButtonElement>(`[data-segment="${next}"]`)?.focus()
   }
   return (
-    <div ref={group} role="radiogroup" aria-label={t('lens.aria')} className={css.lens}>
-      {LENSES.map((item) => {
-        const disabled = item === 'test' && hideTests
+    <div ref={group} role="radiogroup" aria-label={label} className={css.segmented}>
+      {segments.map((segment) => {
         const button = (
-          <button key={item} type="button" role="radio" className={css.segment} aria-checked={lens === item} disabled={disabled}
-            tabIndex={lens === item ? 0 : -1} data-forge-lens={item} onKeyDown={move} onClick={() => { choose(item) }}>
-            <span className={css.segmentLabel}>{t(LENS_LABEL[item])}</span>
-            <span className={css.count}>{disabled ? '' : counts[item]}</span>
+          <button key={segment.value} type="button" role="radio" className={css.segment} aria-checked={value === segment.value}
+            disabled={segment.disabledTip !== null} tabIndex={value === segment.value ? 0 : -1} data-segment={segment.value}
+            onKeyDown={move} onClick={() => { choose(segment.value) }}>
+            <span className={css.segmentLabel}>{segment.label}</span>
+            <span className={css.count}>{segment.count ?? ''}</span>
           </button>
         )
-        return disabled ? <Tooltip key={item} label={t('lens.testHidden')} side="bottom">{button}</Tooltip> : button
+        return segment.disabledTip === null ? button : <Tooltip key={segment.value} label={segment.disabledTip} side="bottom">{button}</Tooltip>
       })}
     </div>
   )
+}
+
+/**
+ * Render the lens as a radio group whose segments share its width.
+ * @param props - the lens, its counts, whether test files hide, the choose action, and copy.
+ * @returns the radio group.
+ */
+export function LensControl({ lens, counts, hideTests, choose, t }: LensProps): ReactNode {
+  // A disabled lens shows no count, since hidden test files are not counted.
+  return <SegmentedChoice label={t('lens.aria')} value={lens} choose={choose} segments={LENSES.map(item => item === 'test' && hideTests
+    ? { value: item, label: t(LENS_LABEL[item]), count: null, disabledTip: t('lens.testHidden') }
+    : { value: item, label: t(LENS_LABEL[item]), count: counts[item], disabledTip: null })} />
 }
 
 /**

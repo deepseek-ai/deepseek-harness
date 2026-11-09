@@ -22,7 +22,8 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const records = new ReviewQueue('diff-review')
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
   const handlers = {
-    toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn(), reach: new SectionReach(),
+    toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn(), nextThread: vi.fn(),
+    reach: new SectionReach(),
   }
   const props: DiffFileProps = { file, visible: true, expanded: true, large: false, revealed: false,
     text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
