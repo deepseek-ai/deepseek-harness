@@ -22,7 +22,7 @@ function serve(document: unknown) {
   return fetch
 }
 
-async function fixture() {
+async function fixture(indexes: readonly string[] = [URL_A]) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   class Manager extends Service {
@@ -31,7 +31,7 @@ async function fixture() {
     listVersionExemptions() { return { exemptions: {}, warnings: [] } }
   }
   await ctx.plugin(Manager)
-  await ctx.plugin(PluginMarket, { indexes: [URL_A], detailCacheDir: UNUSED_CACHE })
+  await ctx.plugin(PluginMarket, { indexes: [...indexes], detailCacheDir: UNUSED_CACHE })
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
@@ -156,6 +156,14 @@ it.each([
   const { call } = await fixture()
   const result = await call({ action: 'list_plugins', target: URL_A })
   expect(result.error?.info).toEqual({ name: 'PluginMarketError', code })
+})
+
+it('reports a configured index source with an invalid URL as PLUGIN_MARKET_INVALID_INDEX_URL', async () => {
+  serve(document)
+  const invalid = 'https://user:secret@market.example/index.json'
+  const { call } = await fixture([URL_A, invalid])
+  const result = await call({ action: 'list_plugins', target: invalid })
+  expect(result.error?.info).toEqual({ name: 'PluginMarketError', code: 'PLUGIN_MARKET_INVALID_INDEX_URL' })
 })
 
 it('keeps a HarnessError from the market and classifies any other failure', async () => {

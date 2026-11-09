@@ -9,10 +9,7 @@ import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
  * - `PLUGIN_MARKET_INVALID_INDEX_URL`: a configured index URL is invalid; only the user can fix the source.
  * - `PLUGIN_MARKET_FETCH_FAILED`: the index could not be fetched (network, timeout, redirect, status, or size).
  * - `PLUGIN_MARKET_INVALID_INDEX`: the fetched index document is invalid.
- * - `PLUGIN_MARKET_INVALID_QUERY`: a query field is out of range.
- * - `PLUGIN_MARKET_SETTINGS_UNAVAILABLE`: index sources cannot be saved in this composition.
- * - `PLUGIN_MARKET_PLUGIN_NOT_FOUND`: the index lists no such plugin or version.
- * - `PLUGIN_MARKET_DETAIL_UNAVAILABLE`: a plugin's detail document cannot be read.
+ * - `PLUGIN_MARKET_PLUGIN_NOT_FOUND`: the index lists no plugin with the requested name.
  * - `PLUGIN_MARKET_FAILED`: any other market failure; `cause` is the original error.
  */
 export const PLUGIN_MARKET_ERROR_CODES = [
@@ -20,10 +17,7 @@ export const PLUGIN_MARKET_ERROR_CODES = [
   'PLUGIN_MARKET_INVALID_INDEX_URL',
   'PLUGIN_MARKET_FETCH_FAILED',
   'PLUGIN_MARKET_INVALID_INDEX',
-  'PLUGIN_MARKET_INVALID_QUERY',
-  'PLUGIN_MARKET_SETTINGS_UNAVAILABLE',
   'PLUGIN_MARKET_PLUGIN_NOT_FOUND',
-  'PLUGIN_MARKET_DETAIL_UNAVAILABLE',
   'PLUGIN_MARKET_FAILED',
 ] as const
 
@@ -41,25 +35,25 @@ export class PluginMarketError extends HarnessError {
   }
 }
 
-/** Remote failure codes the market service declares. */
-type MarketRemoteCode = Extract<RemoteErrorCode, `plugin-market/${string}`>
+/**
+ * Remote failure codes `search` and `entry` reject with for a query the tool already validated;
+ * `invalid-query` cannot occur because the tool checks the same page bounds first.
+ */
+type ToolRemoteCode = Extract<RemoteErrorCode,
+  'plugin-market/unknown-index' | 'plugin-market/invalid-index-url' | 'plugin-market/fetch-failed' | 'plugin-market/invalid-index'>
 
-/** Tool code for each market Remote failure code. */
-const REMOTE_CODES: Readonly<Record<MarketRemoteCode, PluginMarketErrorCode>> = {
+/** Tool code for each Remote failure code the tool's market reads can reject with. */
+const REMOTE_CODES: Readonly<Record<ToolRemoteCode, PluginMarketErrorCode>> = {
   'plugin-market/unknown-index': 'PLUGIN_MARKET_INDEX_NOT_FOUND',
   'plugin-market/invalid-index-url': 'PLUGIN_MARKET_INVALID_INDEX_URL',
   'plugin-market/fetch-failed': 'PLUGIN_MARKET_FETCH_FAILED',
   'plugin-market/invalid-index': 'PLUGIN_MARKET_INVALID_INDEX',
-  'plugin-market/invalid-query': 'PLUGIN_MARKET_INVALID_QUERY',
-  'plugin-market/settings-unavailable': 'PLUGIN_MARKET_SETTINGS_UNAVAILABLE',
-  'plugin-market/unknown-plugin': 'PLUGIN_MARKET_PLUGIN_NOT_FOUND',
-  'plugin-market/detail-unavailable': 'PLUGIN_MARKET_DETAIL_UNAVAILABLE',
 }
 
 /**
  * Convert a market failure for the tool registry. A `HarnessError` keeps its
- * identity; an in-process market `RemoteError`, recognized by its declared
- * `plugin-market/*` code, keeps its message and becomes the matching code with
+ * identity; an in-process market `RemoteError` with one of the codes `search`
+ * and `entry` reject with keeps its message and becomes the matching code with
  * the Remote failure as `cause`; anything else is `PLUGIN_MARKET_FAILED`.
  * @param error - the rejection of a market service call.
  * @returns the failure to throw from the tool body.
@@ -69,7 +63,7 @@ export function pluginMarketToolError(error: unknown): HarnessError {
   if (!(error instanceof Error)) return new PluginMarketError(String(error), 'PLUGIN_MARKET_FAILED', { cause: error })
   const remoteCode = (error as { code?: unknown }).code
   const code = typeof remoteCode === 'string' && Object.hasOwn(REMOTE_CODES, remoteCode)
-    ? REMOTE_CODES[remoteCode as MarketRemoteCode]
+    ? REMOTE_CODES[remoteCode as ToolRemoteCode]
     : 'PLUGIN_MARKET_FAILED'
   return new PluginMarketError(error.message, code, { cause: error })
 }
