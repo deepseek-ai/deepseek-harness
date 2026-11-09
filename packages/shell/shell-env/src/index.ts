@@ -14,9 +14,12 @@ import z from '@deepseek-ai/schemastery'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
 import type { DshEnvironment, DshEnvironmentKey } from '@deepseek-ai/dsh-shell'
 import { DSH_HOME_ENV, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { ShellEnvError } from './error.ts'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 // Declares `Context.profileContext`, the launcher-provided profile the built-ins read.
 import type {} from '@deepseek-ai/dsh-app-boot'
+
+export { ShellEnvError, type ShellEnvErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -182,10 +185,13 @@ export class ShellEnvRegistry extends Service {
       for (const [rawKey, value] of Object.entries(resolved)) {
         const key = rawKey as DshEnvironmentKey
         if (!Object.hasOwn(contributor.variables, key)) {
-          throw new Error(`bash env contributor "${contributor.name}" returned undeclared key "${key}"`)
+          throw new ShellEnvError(`bash env contributor "${contributor.name}" returned undeclared key "${key}"`, 'SHELL_ENV_CONTRIBUTION_INVALID')
         }
         if (typeof value !== 'string') {
-          throw new Error(`bash env contributor "${contributor.name}" returned a non-string value for "${key}"`)
+          throw new ShellEnvError(
+            `bash env contributor "${contributor.name}" returned a non-string value for "${key}"`,
+            'SHELL_ENV_CONTRIBUTION_INVALID',
+          )
         }
         values[key] = value
       }

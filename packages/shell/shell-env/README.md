@@ -50,7 +50,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-Contributors must declare every key they return; returning an undeclared or non-string value fails the call. Registration is disposed with the registering plugin, so hot-reloading a plugin removes its facts.
+Contributors must declare every key they return; returning an undeclared or non-string value fails the call with `ShellEnvError` (`SHELL_ENV_CONTRIBUTION_INVALID`). Registration is disposed with the registering plugin, so hot-reloading a plugin removes its facts.
 
 ### Choosing the Harness home
 
@@ -87,6 +87,7 @@ This section explains the design decisions behind the registry and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, `ShellEnvRegistry` service, and the built-in facts |
+| [`src/error.ts`](src/error.ts) | `ShellEnvError` and its codes |
 
 ### Collection
 

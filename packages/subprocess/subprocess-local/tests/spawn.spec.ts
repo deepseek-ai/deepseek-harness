@@ -352,7 +352,7 @@ describe('spawnSubprocess', () => {
     expect(result.signal).toBe(process.platform === 'win32' ? null : 'SIGTERM')
   })
 
-  it('throws a stable Error when already aborted before spawn', () => {
+  it('throws a stable AbortError when already aborted before spawn', () => {
     for (const [reason, message] of [
       ['too late', 'aborted before spawn: too late'],
       [null, 'aborted before spawn: aborted'],
@@ -360,7 +360,7 @@ describe('spawnSubprocess', () => {
       const controller = new AbortController()
       controller.abort(reason)
       expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-        .toThrow(new Error(message))
+        .toThrow(expect.objectContaining({ name: 'AbortError', message }))
     }
 
     const controller = new AbortController()
@@ -370,7 +370,7 @@ describe('spawnSubprocess', () => {
       },
     })
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it('rejects with a spawn error for a nonexistent cwd', async () => {
@@ -1446,7 +1446,8 @@ describe('coverage seams 2', () => {
 
 describe('argv validation', () => {
   it('rejects an empty argv before spawning', () => {
-    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) }).toThrow(/non-empty program name/)
+    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) })
+      .toThrow(expect.objectContaining({ name: 'SubprocessError', code: 'SUBPROCESS_INVALID_ARGV' }))
   })
 
   it('rejects an empty program name before spawning', () => {
@@ -1468,7 +1469,7 @@ describe('abort edge cases', () => {
       removeEventListener() {},
     } as unknown as AbortSignal
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: bare })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it.skipIf(process.platform === 'win32')('reports the terminating signal of an externally self-killed command', async () => {

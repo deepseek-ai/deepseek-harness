@@ -9,9 +9,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
+import { TerminalError } from '@deepseek-ai/dsh-terminal'
 import type { TerminalReadResult, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 // TODO: Replace the file-search advice; arbitrary command output need not come from a searchable file.
 const TRUNCATED_MESSAGE = '<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>'
@@ -278,7 +279,7 @@ function persistentShells(ctx: Context, config: ResolvedConfig): PersistentShell
         })
         const result = await setup.done
         if (result.sessionStatus.kind === 'exited' || result.waitReason === 'timeout') {
-          throw new Error('persistent bash shell did not accept initialization')
+          throw new TerminalError('persistent bash shell did not accept initialization', 'INIT_REJECTED')
         }
         return spawned.sessionId
       } catch (error: unknown) {
@@ -428,9 +429,9 @@ function registerPersistentBash(ctx: Context, config: ResolvedConfig): void {
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     async execute(args, exec) {
-      if (args.command.trim().length === 0) throw new Error('command must be a non-empty string')
+      if (args.command.trim().length === 0) throw new ToolArgsError(['command must be a non-empty string'])
       const owner = exec.agent
-      if (owner === undefined) throw new Error('bash requires an owning agent session')
+      if (owner === undefined) throw new ToolContextUnavailableError('bash requires an owning agent session')
       return serialized(owner, async () => {
         if (exec.signal.aborted) return '' // ToolRuntime publishes ABORTED after settlement.
         return executeCommand(ctx, shells, owner, args.command, config, exec.signal)
