@@ -6,7 +6,7 @@ import { execa } from 'execa'
 import { expect, it } from 'vitest'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { expectNoRenderContext, officeCalls, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
+import { expectNoRenderContext, officeCalls, officeImages, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const runtime = process.env.DSH_PRIMARY_RUNTIME
@@ -63,12 +63,7 @@ it.skipIf(!process.env.DEEPSEEK_API_KEY || !runtime).each([{ format: 'docx', mod
       })
       const renders = officeCalls(events).filter(call => call.name === 'office_render')
       expect(renders.length, JSON.stringify(calls)).toBeGreaterThan(0)
-      const imageCallIds = new Set(mode === 'native' ? renders.map(call => call.callId)
-        : events.flatMap(event => event.type === 'tool/call' && event.data.name === 'run_code' ? [event.data.callId] : []))
-      const images = events.some(event => event.type === 'tool/result'
-        && imageCallIds.has(event.data.message.toolCallId) && !event.data.message.isError
-        && event.data.message.content.some(block => block.type === 'image'))
-      expect(images, JSON.stringify(calls)).toBe(true)
+      expect(officeImages(events).length, JSON.stringify(calls)).toBeGreaterThan(0)
     },
   })
 })
