@@ -1086,7 +1086,7 @@ describe('gate retries', () => {
 
   it('repeats a failed gate until a later attempt passes', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'run-gates-retry-'))
-    onTestFinished(() => rmSync(directory, { recursive: true, force: true }))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
     const marker = join(directory, 'attempts')
     const result = await runGateWithRetry(gate('fetch', {
       args: ['-e', [
