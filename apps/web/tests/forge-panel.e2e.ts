@@ -43,10 +43,14 @@ const run = promisify(execFile)
  * 7 with one failed and one passed check run, one unresolved thread, and a
  * required review, and pull request 9, an approved draft whose checks passed.
  * `gh pr ready 9` and the REST merge of pull request 9 change what later
- * queries report, through `state.json`. `gh pr diff N` prints `pr-N.diff`, or
- * fails with `pr-N.refused` on standard error when that file exists, and the raw
- * contents API serves `contents.json`, keyed by `path@commit`. Every invocation
- * is appended to `calls.jsonl`.
+ * queries report, through `state.json`, which can also move the head of pull
+ * request 9. The compare API serves `compare.json`, keyed by `base...head`, and
+ * otherwise, between a pull request's recorded base and its head, prints
+ * `pr-N.diff`, or, when `pr-N.refused` exists, fails with that JSON error body
+ * and the matching diagnostic as GitHub's HTTP 406 refusal. The raw contents API
+ * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
+ * request 7 serves `commits.json`, oldest first. Every invocation is appended to
+ * `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -87,13 +91,29 @@ if (args[0] === 'api' && args[4] === 'POST' && ['repos/octo/demo/pulls/7/comment
   process.stdout.write(JSON.stringify({ html_url: 'https://github.com/octo/demo/pull/7#pullrequestreview-1' }))
   process.exit(0)
 }
-if (args[0] === 'pr' && args[1] === 'diff') {
-  const refused = join(here, 'pr-' + args[2] + '.refused')
-  if (existsSync(refused)) {
-    process.stderr.write(readFileSync(refused, 'utf8'))
+const BASE = 'e'.repeat(40)
+const heads = () => ({ 7: 'a'.repeat(40), 9: state.head ?? 'b'.repeat(40) })
+if (args[0] === 'api' && args.includes('Accept: application/vnd.github.diff')) {
+  const [, range] = args.at(-1).split('/compare/')
+  const chosen = existsSync(join(here, 'compare.json')) ? JSON.parse(readFileSync(join(here, 'compare.json'), 'utf8'))[range] : undefined
+  if (chosen !== undefined) {
+    process.stdout.write(chosen)
+    process.exit(0)
+  }
+  const [base, head] = range.split('...')
+  const number = Object.entries(heads()).find(([, oid]) => oid === head)?.[0]
+  if (base !== BASE || number === undefined) {
+    process.stderr.write('gh: Not Found (HTTP 404)\\n')
     process.exit(1)
   }
-  await new Promise(resolve => process.stdout.write(readFileSync(join(here, 'pr-' + args[2] + '.diff'), 'utf8'), resolve))
+  const refused = join(here, 'pr-' + number + '.refused')
+  if (existsSync(refused)) {
+    const message = readFileSync(refused, 'utf8')
+    process.stdout.write(JSON.stringify({ message, errors: [{ resource: 'PullRequest', field: 'diff', code: 'too_large' }], status: '406' }))
+    process.stderr.write('gh: ' + message + ' (HTTP 406)\\n')
+    process.exit(1)
+  }
+  await new Promise(resolve => process.stdout.write(readFileSync(join(here, 'pr-' + number + '.diff'), 'utf8'), resolve))
   process.exit(0)
 }
 if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vnd.github.raw+json') {
@@ -120,24 +140,41 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   })
   const pulls = {
     7: {
-      number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
+      id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
       updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
-      reviewThreads: { nodes: [{ isResolved: false }] },
+      reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
         pageInfo: { hasNextPage: true, endCursor: 'checks-100' },
         nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
     },
     9: {
-      number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
+      id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
-      headRefName: 'feat/merge', headRefOid: state.head ?? 'b'.repeat(40), baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
-      mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED', reviewThreads: { nodes: [] },
+      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED',
+      reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
         pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
     },
+  }
+  if (query.includes('commits(first: $first')) {
+    const commits = existsSync(join(here, 'commits.json')) ? JSON.parse(readFileSync(join(here, 'commits.json'), 'utf8')) : []
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: 'a'.repeat(40), commits: {
+      totalCount: commits.length, pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: commits.map(commit => ({ commit: {
+        oid: commit.sha, messageHeadline: commit.title, authoredDate: '2026-10-08T00:00:00Z',
+        author: { name: 'Octo', user: { login: 'octo' } }, parents: { nodes: [{ oid: commit.parent }] },
+      } })),
+    } } } } }))
+    process.exit(0)
+  }
+  if (query.includes('pullRequest(number: $number)')) {
+    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, baseRefOid: BASE } } } }))
+    process.exit(0)
   }
   if (query.includes('node(id: $id)')) {
     process.stdout.write(JSON.stringify({ data: { node: { contexts: {
@@ -165,13 +202,14 @@ process.exit(1)
 /** Head commit of pull request 7 in the GitHub CLI double. */
 const HEAD7 = 'a'.repeat(40)
 
-/** What gh 2.100 prints for the diff of pull request 9 when GitHub refuses it for having over 300 files. */
-const PR9_REFUSAL = [
-  'could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using \'List pull '
-  + 'requests files\' API or locally cloning the repository instead. (https://api.github.com/repos/octo/demo/pulls/9)',
-  'PullRequest.diff too_large',
-  '',
-].join('\n')
+/** Patch of pull request 9: one line added to each of 301 files, more than the pull request diff endpoint accepts. */
+const PR9_DIFF = Array.from({ length: 301 }, (_, index) => [
+  `diff --git a/merge/m${index}.ts b/merge/m${index}.ts`, 'index 1111111..2222222 100644', `--- a/merge/m${index}.ts`, `+++ b/merge/m${index}.ts`,
+  '@@ -1 +1,2 @@', ' export {}', `+export const m${index} = ${index}`, '',
+].join('\n')).join('')
+
+/** Message of the double's HTTP 406 refusal, which it sends in the error body format GitHub uses for a diff over its size limit. */
+const PR9_REFUSAL = 'Sorry, the diff exceeded the size limit.'
 
 /** Line `n` of `src/panel.ts` before (`old`) or after (`new`) pull request 7, which changes lines 2 and 15 of its 20. */
 function panelLine(n: number, side: 'old' | 'new'): string {
@@ -203,6 +241,53 @@ const PR7_DIFF = [
   '+Shows the change requests of a Session.',
   '',
 ].join('\n')
+
+/** A patch section that adds `lines` as the new file `path`. */
+function addedSection(path: string, lines: readonly string[]): string[] {
+  return [`diff --git a/${path} b/${path}`, 'new file mode 100644', 'index 0000000..4444444', '--- /dev/null', `+++ b/${path}`,
+    `@@ -0,0 +1,${lines.length} @@`, ...lines.map(line => `+${line}`)]
+}
+
+/** Commits of pull request 7 in the review fixture, oldest first; the last is its head. */
+const REVIEW_COMMITS = [
+  { sha: '1'.repeat(40), parent: 'f'.repeat(40), title: 'Add the pull request panel' },
+  { sha: '2'.repeat(40), parent: '1'.repeat(40), title: 'Test the panel and translate it' },
+  { sha: HEAD7, parent: '2'.repeat(40), title: 'Publish the panel schema' },
+] as const
+
+/** New files of each review fixture commit after the first, which changes `src/panel.ts` and adds `docs/panel.md`. */
+const REVIEW_SECTIONS = {
+  test: [
+    ...addedSection('src/panel.spec.ts', ['it(\'shows the panel\', () => {})']),
+    ...addedSection('locale/zh.json', ['{ "title": "面板" }']),
+  ],
+  schema: [
+    ...addedSection('package.json', ['{ "name": "demo" }']),
+    ...addedSection('docs/schema.json', ['{ "type": "object" }']),
+  ],
+}
+
+/**
+ * Pull request 7 with review layers: `src/panel.ts` and `docs/panel.md` are implementation, `package.json` is
+ * interface, and the spec, the locale dictionary, which `.gitattributes` places in the test layer, and
+ * `docs/schema.json`, which it marks generated, are tests.
+ */
+const REVIEW_DIFF = [PR7_DIFF.trimEnd(), ...REVIEW_SECTIONS.test, ...REVIEW_SECTIONS.schema, ''].join('\n')
+
+/** Write the review fixture of pull request 7: its patch, commits, commit ranges, and root `.gitattributes`. */
+async function writeReviewFixture(root: string): Promise<void> {
+  await writeFile(join(root, 'pr-7.diff'), REVIEW_DIFF)
+  await writeFile(join(root, 'commits.json'), JSON.stringify(REVIEW_COMMITS))
+  await writeFile(join(root, 'compare.json'), JSON.stringify({
+    [`${'1'.repeat(40)}...${'2'.repeat(40)}`]: [...REVIEW_SECTIONS.test, ''].join('\n'),
+    [`${'1'.repeat(40)}...${HEAD7}`]: [...REVIEW_SECTIONS.test, ...REVIEW_SECTIONS.schema, ''].join('\n'),
+  }))
+  const contents = JSON.parse(await readFile(join(root, 'contents.json'), 'utf8')) as Record<string, string>
+  for (const commit of ['2'.repeat(40), HEAD7]) {
+    contents[`.gitattributes@${commit}`] = 'docs/schema.json linguist-generated\nlocale/*.json dsh-review-layer=test\n'
+  }
+  await writeFile(join(root, 'contents.json'), JSON.stringify(contents))
+}
 
 async function git(cwd: string, ...args: string[]): Promise<string> {
   const { stdout } = await run('git', args, { cwd, env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' } })
@@ -243,7 +328,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
   await writeFile(gh, GH)
   await chmod(gh, 0o755)
   await writeFile(join(root, 'pr-7.diff'), PR7_DIFF)
-  await writeFile(join(root, 'pr-9.refused'), PR9_REFUSAL)
+  await writeFile(join(root, 'pr-9.diff'), PR9_DIFF)
   const panelText = `${Array.from({ length: 20 }, (_, index) => panelLine(index + 1, 'new')).join('\n')}\n`
   await writeFile(join(root, 'contents.json'), JSON.stringify({ [`src/panel.ts@${HEAD7}`]: panelText }))
   const overlay = join(root, 'forge.patch.yml')
@@ -462,10 +547,14 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
-  expect(events.flatMap((event) => {
-    const record = pluginRecordOf(event)
-    return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
-  })).toEqual([{ action: 'reference', url: PULL }])
+  await expect.poll(async () => {
+    await scaffold.ctx.sessionPersistence.flush()
+    const boundEvents = await readPersistedEvents(scaffold, sessionId)
+    return boundEvents.flatMap((event) => {
+      const record = pluginRecordOf(event)
+      return record?.type === 'plugin:forge-session/binding' ? [record.data] : []
+    })
+  }).toEqual([{ action: 'reference', url: PULL }])
   const calls = (await readFile(join(project, '.fixture-bin', 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(calls).toContainEqual(['pr', 'view', '7', '--repo', 'octo/demo', '--json', 'url'])
   expect(tripwire.pageErrors).toEqual([])
@@ -1005,21 +1094,43 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(await reviewDialog.getByRole('radio', { name: '评论', exact: true }).isChecked()).toBe(true)
   await page.keyboard.press('Escape')
 
-  // GitHub refuses the diff of pull request 9 as too large, so its view offers the web page instead of a retry.
+  // Pull request 9 changes 301 files, more than the pull request diff endpoint accepts; the compare read shows every file.
   scaffold.ctx.forgeSession.track(session, DRAFT)
   await expect.poll(() => header.getAttribute('aria-pressed'), { timeout: 20_000 }).toBe('false')
   await header.click()
   const draft = page.locator(`[data-forge-change="${DRAFT}"]`)
   await draft.getByRole('button', { name: '展开 #9', exact: true }).click()
   await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })
-  const refused = page.locator('[data-forge-changes="change"]').filter({ hasText: 'Add the merge button' })
-  await refused.getByRole('status').filter({ hasText: '变更太大，无法在这里显示' }).waitFor({ timeout: 20_000 })
-  await refused.getByRole('button', { name: '在浏览器中查看', exact: true }).waitFor()
-  expect(await refused.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
+  const wide = page.locator('[data-forge-changes="change"]').filter({ hasText: 'Add the merge button' })
+  await wide.getByRole('region', { name: '全部 301 个文件', exact: true }).waitFor({ timeout: 20_000 })
+  expect(await wide.locator('[data-forge-diff-file]').count()).toBe(301)
+
+  // A push moves the head to a commit whose diff GitHub refuses over its size limit, so a newly opened view offers the web page
+  // instead of a retry.
+  await page.locator('[data-dockkit-tab]').filter({ hasText: '#9 的变更' }).locator('[data-dockkit-tab-close]').click()
+  await expect.poll(() => wide.count()).toBe(0)
+  await writeFile(join(root, 'state.json'), JSON.stringify({ ready: false, mergedAt: null, head: 'd'.repeat(40) }))
+  await writeFile(join(root, 'pr-9.refused'), PR9_REFUSAL)
+  scaffold.ctx.forge.refresh({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 })
+  await expect.poll(() => scaffold.ctx.forge.latest({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number: 9 }),
+    { timeout: 20_000 }).toMatchObject({ snapshot: { headSha: 'd'.repeat(40) } })
+  if (await header.getAttribute('aria-pressed') !== 'true') await header.click()
+  const expand = draft.getByRole('button', { name: '展开 #9', exact: true })
+  if (await expand.count() > 0) await expand.click()
+  await draft.getByRole('button', { name: '查看 #9 的变更：新增 30 行，删除 2 行', exact: true }).click({ timeout: 20_000 })
+  await wide.getByRole('status').filter({ hasText: '变更太大，无法在这里显示' }).waitFor({ timeout: 20_000 })
+  await wide.getByRole('button', { name: '在浏览器中查看', exact: true }).waitFor()
+  expect(await wide.getByRole('button', { name: '重试', exact: true }).count()).toBe(0)
 
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
-  expect(calls).toContainEqual(['pr', 'diff', '7', '--repo', 'github.com/octo/demo', '--color', 'never'])
-  expect(calls).toContainEqual(['pr', 'diff', '9', '--repo', 'github.com/octo/demo', '--color', 'never'])
+  const compared = (head: string) => [
+    'api', '--hostname', 'github.com', '--allow-escape-sequences', '-H', 'Accept: application/vnd.github.diff',
+    `repos/octo/demo/compare/${'e'.repeat(40)}...${head}`,
+  ]
+  expect(calls).toContainEqual(compared(HEAD7))
+  expect(calls).toContainEqual(compared('b'.repeat(40)))
+  expect(calls).toContainEqual(compared('d'.repeat(40)))
+  expect(calls.some(call => call[0] === 'pr' && call[1] === 'diff')).toBe(false)
   expect(calls).toContainEqual([
     'api', '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json', `repos/octo/demo/contents/src/panel.ts?ref=${HEAD7}`,
   ])
@@ -1602,5 +1713,186 @@ it.skipIf(MODE === 'record').each([120, 4000])('types a review comment beside %i
   await input.fill('检查边界条件')
   await file.getByRole('button', { name: '开始评审', exact: true }).click()
   await file.locator('[data-forge-review-thread="pending"]').getByText('检查边界条件', { exact: true }).waitFor()
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** Open the change request view of pull request 7 in full screen, its tree on the left. */
+async function openReview(page: Page, scaffold: WebScaffold): Promise<{ readonly view: ReturnType<Page['locator']>; readonly sessionId: SessionId }> {
+  const { settled } = await sendPrompt(page, scaffold)
+  const sessionId = await settled
+  const session = scaffold.ctx.sessions.get(sessionId)
+  if (session === undefined) throw new Error('Session must stay loaded')
+  scaffold.ctx.forgeSession.track(session, PULL)
+  await page.locator('[data-forge-header]').click()
+  await page.locator(`[data-forge-change="${PULL}"]`).getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
+  await page.getByRole('button', { name: '全屏', exact: true }).click()
+  const view = page.locator('[data-forge-changes="change"]')
+  await view.locator('[data-forge-diff-file="src/panel.ts"]').waitFor({ timeout: 20_000 })
+  return { view, sessionId }
+}
+
+/** Paths of the diff sections a changes view shows, in order. */
+async function shownPaths(view: ReturnType<Page['locator']>): Promise<(string | null)[]> {
+  return await view.locator('[data-forge-diff-file]').evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file')))
+}
+
+it.skipIf(MODE === 'record')('reviews a change request by layer, hides test files, marks files viewed, and views chosen commits', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-layers')
+  await writeReviewFixture(root)
+  const { view } = await openReview(page, scaffold)
+  const lens = view.getByRole('radiogroup', { name: '分层透镜', exact: true })
+  const tree = view.getByRole('navigation')
+  await expect.poll(() => lens.getByRole('radio').allTextContents()).toEqual(['全部6', '接口1', '实现2', '测试3'])
+  // The lens spans the file tree with the filter field's insets, and its divider continues the tree's border.
+  const [lensBox, fieldBox, cellBox, treeBox] = await Promise.all([
+    lens.boundingBox(), tree.locator('input').locator('xpath=..').boundingBox(), lens.locator('xpath=..').boundingBox(), tree.locator('xpath=..').boundingBox(),
+  ])
+  if (lensBox === null || fieldBox === null || cellBox === null || treeBox === null) throw new Error('Lens and tree must be visible')
+  expect([lensBox.x, lensBox.x + lensBox.width]).toEqual([fieldBox.x, fieldBox.x + fieldBox.width])
+  expect(cellBox.x + cellBox.width).toBe(treeBox.x + treeBox.width)
+
+  await lens.getByRole('radio', { name: /^接口/ }).click()
+  await expect.poll(() => shownPaths(view)).toEqual(['package.json'])
+  await lens.getByRole('radio', { name: /^测试/ }).click()
+  await expect.poll(() => shownPaths(view)).toEqual(['docs/schema.json', 'locale/zh.json', 'src/panel.spec.ts'])
+  await view.getByRole('switch', { name: '隐藏测试文件', exact: true }).click()
+  await expect.poll(() => shownPaths(view)).toEqual(['docs/panel.md', 'src/panel.ts', 'package.json'])
+  expect(await tree.getByRole('button', { name: 'src/panel.spec.ts', exact: true }).count()).toBe(0)
+  expect(await lens.getByRole('radio', { name: /^测试/ }).isDisabled()).toBe(true)
+
+  const progress = view.getByRole('progressbar', { name: '已审阅的文件', exact: true })
+  await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 0 / 3')
+  const docs = view.locator('[data-forge-diff-file="docs/panel.md"]')
+  await docs.getByRole('checkbox', { name: '将 panel.md 标记为已审阅', exact: true }).check()
+  await expect.poll(() => docs.getAttribute('data-expanded')).toBe(null)
+  await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 3')
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  await panel.getByText('export const n2 = \'two\'', { exact: true }).first().click()
+  await page.keyboard.press('v')
+  await expect.poll(() => panel.getAttribute('data-viewed')).toBe('viewed')
+  await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 2 / 3')
+  await compareOrRefreshGolden(join(EXPECTED, 'review-layers.expected.md'),
+    await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
+
+  await view.getByRole('switch', { name: '隐藏测试文件', exact: true }).click()
+  const commits = view.getByRole('button', { name: '查看的提交：全部提交', exact: true })
+  await commits.click()
+  const menu = page.locator('[data-forge-commit-menu]')
+  await expect.poll(() => menu.getByRole('menuitem').evaluateAll(rows => rows.map(row => row.querySelector('[data-forge-commit]')?.getAttribute('data-forge-commit') ?? 'all')))
+    .toEqual(['all', '1'.repeat(40), '2'.repeat(40), HEAD7])
+  await menu.locator(`[data-forge-commit="${'2'.repeat(40)}"]`).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['locale/zh.json', 'src/panel.spec.ts'])
+  expect(await view.getByRole('button', { name: '提交评审', exact: true }).isDisabled()).toBe(true)
+  await view.getByRole('button', { name: '查看的提交：2222222', exact: true }).click()
+  await page.locator(`[data-forge-commit="${HEAD7}"]`).click({ modifiers: ['Shift'] })
+  await view.getByRole('button', { name: `查看的提交：2222222…${HEAD7.slice(0, 7)}`, exact: true }).waitFor()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['docs/schema.json', 'locale/zh.json', 'src/panel.spec.ts', 'package.json'])
+  await expect.poll(() => lens.getByRole('radio').allTextContents()).toEqual(['全部4', '接口1', '实现0', '测试3'])
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
+  // The whole pull request is read from its recorded base; chosen commits are read from the first one's parent.
+  expect(calls.filter(args => args[0] === 'api' && args.includes('Accept: application/vnd.github.diff')).map(args => args.at(-1))
+    .filter(path => path?.includes(`/compare/${'e'.repeat(40)}...`) === false)).toEqual([
+    `repos/octo/demo/compare/${'1'.repeat(40)}...${'2'.repeat(40)}`, `repos/octo/demo/compare/${'1'.repeat(40)}...${HEAD7}`,
+  ])
+  await view.getByRole('button', { name: `查看的提交：2222222…${HEAD7.slice(0, 7)}`, exact: true }).click()
+  await page.locator('[data-forge-commit-menu]').getByRole('menuitem', { name: /^全部提交/ }).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toHaveLength(6)
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('viewed')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a mark when the file changes again, and views branch commits', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-review-local', 'normal', { branch: 'feat' })
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'main')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await mkdir(join(project, 'src'))
+  for (const [path, text, message] of [
+    ['src/app.ts', 'export const app = 1\n', 'Add the app'],
+    ['src/app.spec.ts', 'it(\'runs\', () => {})\n', 'Test the app'],
+  ] as const) {
+    await writeFile(join(project, path), text)
+    await git(project, 'add', path)
+    await git(project, 'commit', '--quiet', '-m', message)
+  }
+  await writeFile(join(project, 'notes.md'), 'note\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
+  await page.locator('[data-sidebar-right-guide]').getByRole('button', { name: /^代码审查和变更/ }).click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  const card = page.locator('[data-forge-local]')
+  await card.getByRole('button', { name: /^查看本会话的变更：3 个文件/ }).click({ timeout: 20_000 })
+  const local = page.locator('[data-forge-changes="local"]')
+  const app = local.locator('[data-forge-diff-file="src/app.ts"]')
+  await app.getByRole('checkbox', { name: '将 app.ts 标记为已审阅', exact: true }).check({ timeout: 20_000 })
+  await expect.poll(() => app.getAttribute('data-expanded')).toBe(null)
+
+  await page.reload()
+  await page.locator('[data-forge-changes="local"] [data-forge-diff-file="src/app.ts"]').waitFor({ timeout: 20_000 })
+  await expect.poll(() => app.getAttribute('data-viewed')).toBe('viewed')
+  expect(await app.getAttribute('data-expanded')).toBe(null)
+  await writeFile(join(project, 'src', 'app.ts'), 'export const app = 2\n')
+  await local.getByRole('button', { name: '刷新变更', exact: true }).click()
+  await expect.poll(() => app.getAttribute('data-viewed'), { timeout: 20_000 }).toBe('changed')
+  await app.getByText('有新改动', { exact: true }).waitFor()
+  await expect.poll(() => app.getAttribute('data-expanded')).toBe('')
+  expect(await app.getByRole('checkbox', { name: '将 app.ts 标记为已审阅', exact: true }).isChecked()).toBe(false)
+
+  await local.getByRole('button', { name: '查看的提交：全部提交', exact: true }).click()
+  const menu = page.locator('[data-forge-commit-menu]')
+  await menu.getByRole('menuitem', { name: /Test the app/ }).click()
+  await expect.poll(() => shownPaths(local), { timeout: 20_000 }).toEqual(['src/app.spec.ts'])
+  // Without the file tree beside the diff, the toolbar offers the lens as a menu.
+  await local.getByRole('button', { name: '分层透镜：全部', exact: true }).click()
+  await expect.poll(() => page.getByRole('menu').getByRole('menuitem').allTextContents()).toEqual(['全部1', '接口0', '实现0', '测试1'])
+  await page.keyboard.press('Escape')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu inside its card and its name under the pointer', async () => {
+  const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-narrow-header', 'normal', { branch: 'feat' })
+  const from = 'src/original-review-module-with-a-long-name.ts'
+  const to = 'src/renamed-review-module-with-an-even-longer-name.ts'
+  const body = Array.from({ length: 20 }, (_, index) => `export const value${index} = ${index}\n`).join('')
+  await mkdir(join(project, 'src'))
+  await writeFile(join(project, from), body)
+  await git(project, 'add', from)
+  await git(project, 'commit', '--quiet', '-m', 'Add the module')
+  // The base holds the old path, so the branch shows a rename.
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await git(project, 'mv', from, to)
+  await writeFile(join(project, to), `${body}export const extra = 1\n`)
+  await git(project, 'commit', '--quiet', '-am', 'Rename the module')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.getByRole('button', { name: '打开右侧边栏', exact: true }).click()
+  await page.locator('[data-sidebar-right-guide]').getByRole('button', { name: /^代码审查和变更/ }).click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^查看本会话的变更/ }).click({ timeout: 20_000 })
+  const local = page.locator('[data-forge-changes="local"]')
+  const name = 'renamed-review-module-with-an-even-longer-name.ts'
+  const file = local.locator(`[data-forge-diff-file="${to}"]`)
+  const viewed = file.getByRole('checkbox', { name: `将 ${name} 标记为已审阅`, exact: true })
+  await viewed.check({ timeout: 20_000 })
+  await writeFile(join(project, to), `${body}export const extra = 2\n`)
+  await local.getByRole('button', { name: '刷新变更', exact: true }).click()
+  await expect.poll(() => file.getAttribute('data-viewed'), { timeout: 20_000 }).toBe('changed')
+  await file.getByText('由 original-review-module-with-a-long-name.ts 重命名', { exact: true }).waitFor()
+
+  // The changed tag, the rename badge, and the long path compete for one narrow header with the counts and actions.
+  await page.setViewportSize({ width: 390, height: 780 })
+  const label = file.locator('[data-forge-file-label]')
+  const [card, mark, menu, labelBox] = await Promise.all([
+    file.boundingBox(), viewed.boundingBox(), file.getByRole('button', { name: `${name} 的更多操作`, exact: true }).boundingBox(), label.boundingBox(),
+  ])
+  if (card === null || mark === null || menu === null || labelBox === null) throw new Error('The header controls must be rendered')
+  expect(mark.x + mark.width).toBeLessThanOrEqual(card.x + card.width)
+  expect(menu.x + menu.width).toBeLessThanOrEqual(card.x + card.width)
+  expect(labelBox.width).toBeGreaterThan(40)
+  await label.hover()
+  await page.getByRole('tooltip').filter({ hasText: `${from} → ${to}` }).waitFor()
+  await viewed.check()
+  await expect.poll(() => file.getAttribute('data-viewed')).toBe('viewed')
   expect(tripwire.pageErrors).toEqual([])
 })

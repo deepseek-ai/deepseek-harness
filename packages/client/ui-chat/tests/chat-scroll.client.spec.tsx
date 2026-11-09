@@ -36,7 +36,7 @@ function ScrollHarness({ input, onMotion }: {
 
 function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInput> = {}) {
   let input: ChatScrollInput = {
-    ready: true,
+    isOpen: true,
     order: [],
     firstSeq: null,
     lastKey: null,
@@ -49,7 +49,7 @@ function mountScroll(deferCompletedTurns = true, initial: Partial<ChatScrollInpu
     transcriptView: 'verbose',
     loadedTurns: [],
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, historyLoadStatus: 'idle', consumeOlder: vi.fn(() => false),
     loadOlder: vi.fn(),
     loadThrough: vi.fn(async () => {}),
     chatScroll: { read: () => null, save: vi.fn() },
@@ -116,9 +116,9 @@ function mountRows(heights: readonly number[]) {
   }
   vi.stubGlobal('ResizeObserver', Observer)
   const input: ChatScrollInput = {
-    ready: true, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
+    isOpen: true, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
     steeringId: null, submissionId: null, submissionSteers: false, running: false, deferCompletedTurns: false,
-    transcriptView: 'standard', loadedTurns: [], hasMore: false, loadingOlder: false,
+    transcriptView: 'standard', loadedTurns: [], hasMore: false, loadingOlder: false, historyLoadStatus: 'idle', consumeOlder: vi.fn(() => false),
     loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
   }
   const view = render(<ScrollHarness input={input} onMotion={(motion) => { callbacks.motion = motion }}
@@ -287,9 +287,9 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
   let motion: FlowMotionRows | undefined
   const onMotion = (value: FlowMotionRows): void => { motion = value }
   let input: ChatScrollInput = {
-    ready: false, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
+    isOpen: false, order: [], firstSeq: null, lastKey: null, lastIsUser: false,
     steeringId: null, submissionId: null, submissionSteers: false, running: false, deferCompletedTurns: true,
-    transcriptView: 'detailed', loadedTurns: [], hasMore: false, loadingOlder: false,
+    transcriptView: 'detailed', loadedTurns: [], hasMore: false, loadingOlder: false, historyLoadStatus: 'idle', consumeOlder: vi.fn(() => false),
     loadOlder: vi.fn(), loadThrough: vi.fn(async () => {}), chatScroll: { read: () => null, save: vi.fn() },
   }
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: reduced })))
@@ -328,7 +328,7 @@ function mountVisibleFold(test: typeof visibleFoldCases[number], reduced: boolea
     offsetHeight: { get: contentHeight },
     getBoundingClientRect: { value: () => ({ top: -top, bottom: contentHeight() - top, height: contentHeight() }) },
   })
-  input = { ...input, ready: true }
+  input = { ...input, isOpen: true }
   view.rerender(<ScrollHarness input={input} onMotion={onMotion} />)
   top = test.top
   scrollTo.mockClear()
@@ -495,7 +495,7 @@ it('keeps one active fold when the local echo becomes its durable input', async 
 describe('Chat scroll collapse timing', () => {
   it.each(['resize', 'scroll', 'history', 'input', 'preference'] as const)(
     'waits for initial history before initializing a running view after %s', (change) => {
-      const h = mountScroll(true, { ready: false, running: true })
+      const h = mountScroll(true, { isOpen: false, running: true })
       expect(h.scroller.dataset.initialized).toBe('false')
       if (change === 'resize') h.resize()
       else if (change === 'scroll') fireEvent.scroll(h.scroller)
@@ -506,7 +506,7 @@ describe('Chat scroll collapse timing', () => {
       expect(h.scroller.scrollTop).toBe(0)
       expect(h.scrollTo).not.toHaveBeenCalled()
 
-      h.update({ ready: true })
+      h.update({ isOpen: true })
       expect(h.scroller.dataset.initialized).toBe('true')
       expect(h.scroller.scrollTop).toBe(600)
       expect(h.scrollTo).not.toHaveBeenCalled()

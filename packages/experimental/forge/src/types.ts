@@ -100,8 +100,10 @@ export interface ChangeRequestSnapshot {
   readonly checksRollup: ChecksRollup
   /** Whether the host reported more checks than `checks` contains. */
   readonly checksTruncated: boolean
-  /** Number of review threads that are not resolved. */
+  /** Number of counted review threads that are not resolved. */
   readonly unresolvedThreads: number
+  /** Whether the change request has more review threads than the provider counted, so `unresolvedThreads` is a lower bound. */
+  readonly threadsTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
@@ -113,9 +115,10 @@ export interface ForgeFailure {
   /**
    * `not-found`: the host does not expose it; `unauthenticated`: credentials are missing or rejected;
    * `too-large`: the host or the provider refuses an answer over its size limit, so reading again fails
-   * the same way; `unavailable`: any other failure.
+   * the same way; `stale`: the head is no longer the commit the read named, so reading again at the head of
+   * a later status can succeed; `unavailable`: any other failure.
    */
-  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'unavailable'
+  readonly code: 'not-found' | 'unauthenticated' | 'too-large' | 'stale' | 'unavailable'
   /** Human-readable cause. */
   readonly message: string
 }
@@ -176,6 +179,30 @@ export interface ForgeActionFailure {
   readonly message: string
 }
 
+/** One commit of a change request. */
+export interface ForgeCommit {
+  /** Full commit object name. */
+  readonly sha: string
+  /** Full object name of the first parent, or null for a root commit. */
+  readonly parent: string | null
+  /** First line of the commit message. */
+  readonly title: string
+  /** Author name or login as the host reports it, or null when it reports none. */
+  readonly author: string | null
+  /** ISO 8601 time the commit was authored. */
+  readonly authoredAt: string
+}
+
+/** The commits of a change request at one head commit. */
+export interface ForgeCommitList {
+  /** Head commit the list was read at. */
+  readonly headSha: string
+  /** Commits oldest first, ending with the head commit unless `truncated`. */
+  readonly commits: readonly ForgeCommit[]
+  /** Whether the change request has more commits than the provider lists; the listed ones are the oldest. */
+  readonly truncated: boolean
+}
+
 /** Whether a provider can reach one host with the current credentials. */
 export interface ForgeReadiness {
   /** `ready`, `unauthenticated` (sign-in needed), or `unavailable` (tool missing or host unreachable). */
@@ -214,12 +241,26 @@ export interface ForgeProvider {
   markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
   /** Merge a change request while its head is still `request.headSha`, resolving to undefined once merged. */
   merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
-  /** Read the changes of a change request as the host computes them, as one unified patch with `a/` and `b/` path prefixes. */
-  diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Read the changes of a change request at head commit `headSha` as the host computes them, as one unified
+   * patch with `a/` and `b/` path prefixes. A patch is returned only when it describes `headSha`; once the
+   * head is another commit, the read resolves to a `stale` failure.
+   */
+  diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Read the text of `path` at `commit` in the change request's repository. */
   fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /** Build the web page of `path` at `commit` in the change request's repository. */
   fileUrl(ref: ChangeRequestRef, commit: string, path: string): string
+  /**
+   * List the commits of a change request at its current head. A provider implements `commits` and `compare`
+   * together; omitting either declares that the change request can be read only as a whole.
+   */
+  commits?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure>
+  /**
+   * Read the changes from commit `base` to commit `head` in the change request's repository, as one unified patch
+   * with `a/` and `b/` path prefixes. Both are full object names; `head` descends from `base`.
+   */
+  compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
 }
 
 /**

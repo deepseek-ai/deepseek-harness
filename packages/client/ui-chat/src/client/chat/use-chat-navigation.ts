@@ -1,5 +1,6 @@
 /** Turn jumps and history-prepend anchoring, independent of DOM measurement. */
 import { useLayoutEffect, useState } from 'react'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
@@ -8,10 +9,12 @@ import type { ChatReading, ReadingSample } from './use-chat-reading.ts'
 import type { ChatViewport } from './use-chat-viewport.ts'
 
 /** History availability and loading operations for the committed Chat window. */
-export interface ChatNavigationInput extends Pick<ChatViewSlotProps, 'loadOlder' | 'loadThrough'> {
+export interface ChatNavigationInput extends Pick<ChatViewSlotProps, 'loadOlder' | 'loadThrough' | 'consumeOlder'> {
   readonly firstSeq: ChatNode['anchorSeq'] | null
   readonly hasMore: boolean
   readonly loadingOlder: boolean
+  readonly historyLoadStatus: SessionSnapshot['historyLoadStatus']
+  readonly isOpen: boolean
 }
 
 interface TurnJump {
@@ -22,23 +25,33 @@ interface TurnJump {
   repageHead: ChatNavigationInput['firstSeq']
 }
 
+type HistoryIntent = 'none' | 'auto' | 'manual'
+
 /** Owns one replaceable turn jump and the anchor retained while history loads. */
 export class ChatNavigation {
   private jump: TurnJump | null = null
   private settleFrame: number | null = null
+  private historyFrame: number | null = null
+  private historyIntent: HistoryIntent = 'none'
+  private historyRequested = false
 
   constructor(
     private readonly viewport: ChatViewport,
     private readonly reading: ChatReading,
     private input: ChatNavigationInput,
     private readonly onBusyTurn: (turn: number | null) => void,
+    private readonly onHistoryIntent: (intent: HistoryIntent) => void = () => {},
   ) {}
 
   /**
    * Adopt committed history availability without starting a request.
    * @param input - history state from the latest committed render.
    */
-  setInput(input: ChatNavigationInput): void { this.input = input }
+  setInput(input: ChatNavigationInput): void {
+    this.input = input
+    this.historyRequested = false
+    if (!input.isOpen || input.historyLoadStatus === 'error' || !input.hasMore) this.setHistoryIntent('none')
+  }
 
   /** Cancel navigation when opening a Chat view. */
   reset(): void {
@@ -48,10 +61,19 @@ export class ChatNavigation {
   /** Cancel local callbacks; late history completions cannot revive a task. */
   dispose(): void {
     this.clearTask()
+    if (this.historyFrame !== null) cancelAnimationFrame(this.historyFrame)
+    this.historyFrame = null
   }
 
   /** Release the jump, paging anchor, and busy indicator without cancelling shared history I/O. */
   cancel(): void {
+    this.setHistoryIntent('none')
+    this.clearTask()
+    this.onBusyTurn(null)
+  }
+
+  /** Release a jump after reader input without cancelling an accepted history click. */
+  readerInteracted(): void {
     this.clearTask()
     this.onBusyTurn(null)
   }
@@ -60,6 +82,7 @@ export class ChatNavigation {
     this.cancelFrame()
     this.jump = null
     this.viewport.stopPreserving()
+    this.viewport.cancelHistoryPrepend()
   }
 
   /**
@@ -90,12 +113,98 @@ export class ChatNavigation {
     this.request(jump)
   }
 
-  /** Request one older page while retaining the current semantic position. */
+  /** Request and consume one page, retaining the click until success, exhaustion, or failure. */
   readonly loadEarlier = (): void => {
     this.cancel()
-    this.viewport.beginPaging()
+    this.setHistoryIntent('manual')
     this.reading.pauseFollowing()
-    this.input.loadOlder()
+    if (this.input.historyLoadStatus === 'error') {
+      this.historyRequested = true
+      this.input.loadOlder()
+    } else this.requestHistoryCheck()
+  }
+
+  private setHistoryIntent(intent: HistoryIntent): void {
+    if (intent === this.historyIntent) return
+    this.historyIntent = intent
+    this.onHistoryIntent(intent)
+  }
+
+  /** Coalesce event-driven checks; waiting never schedules its own next frame. */
+  requestHistoryCheck(): void {
+    if (!this.input.isOpen || this.input.historyLoadStatus === 'error') return
+    if (this.historyIntent === 'none' && (this.input.historyLoadStatus !== 'idle'
+      || !this.input.hasMore || this.reading.followingTail)) return
+    if (this.historyFrame !== null || typeof requestAnimationFrame !== 'function') return
+    this.historyFrame = requestAnimationFrame(() => {
+      this.historyFrame = null
+      this.checkHistory()
+    })
+  }
+
+  private checkHistory(): void {
+    const input = this.input
+    if (!input.isOpen || this.jump !== null || this.historyRequested || input.loadingOlder) return
+    if (input.historyLoadStatus === 'error') return
+    if (input.historyLoadStatus === 'pendingConsumption') {
+      if (this.historyIntent === 'none') return
+      if (this.reading.followingTail && this.historyIntent === 'auto') {
+        this.setHistoryIntent('none')
+        return
+      }
+      if (this.historyIntent === 'manual') {
+        this.viewport.beginManualPaging()
+        this.reading.pauseFollowing()
+        this.consumeHistory('preserve')
+        return
+      }
+      const mode = this.viewport.historyConsumption()
+      switch (mode) {
+        case 'touch':
+        case 'inner-scroll':
+          return
+        case 'motion':
+        case 'pointer':
+        case 'unavailable':
+          this.setHistoryIntent('none')
+          return
+        case 'prepend':
+          if (!this.viewport.beginHistoryPrepend() && input.firstSeq !== null) {
+            this.setHistoryIntent('none')
+            return
+          }
+          break
+        case 'preserve':
+        case 'native':
+          break
+      }
+      if (mode === 'preserve') {
+        this.viewport.beginPreserving()
+        if (!this.viewport.preserving) this.viewport.beginPaging()
+        if (!this.viewport.preserving && input.firstSeq !== null) {
+          this.setHistoryIntent('none')
+          return
+        }
+        this.reading.pauseFollowing()
+      }
+      this.consumeHistory(mode)
+      return
+    }
+    if (!input.hasMore || this.historyIntent !== 'manual' && (this.reading.followingTail
+      || !this.viewport.confirmHistoryStart())) return
+    if (this.historyIntent === 'none') this.setHistoryIntent('auto')
+    this.historyRequested = true
+    input.loadOlder()
+  }
+
+  private consumeHistory(mode: 'native' | 'preserve' | 'prepend'): void {
+    this.historyRequested = true
+    if (this.input.consumeOlder()) this.setHistoryIntent('none')
+    else {
+      this.historyRequested = false
+      if (mode === 'preserve') this.viewport.stopPreserving()
+      if (mode === 'prepend') this.viewport.cancelHistoryPrepend()
+    }
   }
 
   /**
@@ -118,13 +227,6 @@ export class ChatNavigation {
     if (landing === null) return false
     this.reading.preservePosition(landing)
     return true
-  }
-
-  /** Retarget a still-loading page only after inner or outer reader scrolling ends. */
-  readerSettled(): void {
-    if (this.input.loadingOlder && this.jump === null && !this.viewport.preserving && !this.reading.followingTail) {
-      this.viewport.beginPreserving()
-    }
   }
 
   /** Land, retry, or complete the current jump against the committed window. */
@@ -197,10 +299,11 @@ export class ChatNavigation {
  */
 export function useChatNavigation(
   viewport: ChatViewport, reading: ChatReading, input: ChatNavigationInput,
-): { navigation: ChatNavigation; busyTurn: number | null } {
+): { navigation: ChatNavigation; busyTurn: number | null; historyPending: boolean; historyProcessing: boolean } {
   const [busyTurn, setBusyTurn] = useState<number | null>(null)
-  const [navigation] = useState(() => new ChatNavigation(viewport, reading, input, setBusyTurn))
+  const [historyIntent, setHistoryIntent] = useState<HistoryIntent>('none')
+  const [navigation] = useState(() => new ChatNavigation(viewport, reading, input, setBusyTurn, setHistoryIntent))
   useLayoutEffect(() => { navigation.setInput(input) }, [navigation, input])
   useLayoutEffect(() => () => { navigation.dispose() }, [navigation])
-  return { navigation, busyTurn }
+  return { navigation, busyTurn, historyPending: historyIntent === 'manual', historyProcessing: historyIntent !== 'none' }
 }

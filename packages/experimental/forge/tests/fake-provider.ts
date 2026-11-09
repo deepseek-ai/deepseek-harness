@@ -39,6 +39,7 @@ export function snapshot(target: ChangeRequestRef, overrides: Partial<ChangeRequ
     checksRollup: 'success',
     checksTruncated: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
     ...overrides,
@@ -110,8 +111,8 @@ export class FakeProvider implements ForgeProvider {
     return this.actionResult
   }
 
-  async diff(target: ChangeRequestRef): Promise<string | ForgeFailure> {
-    this.actions.push(`diff ${target.number}`)
+  async diff(target: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
+    this.actions.push(`diff ${target.number} ${headSha}`)
     return this.readResult
   }
 
