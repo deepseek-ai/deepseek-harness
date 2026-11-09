@@ -61,8 +61,8 @@ it.each([
   { scriptPersistence: true },
   { scriptPersistence: false },
 ])('rejects explicit program evaluation settings %j', (unsupported) => {
-  expect(() => CuaConfig({ runCode: { runtime: { timeoutMs: 1000, ...unsupported } } })).toThrow()
-  expect(CuaConfig({ runCode: { runtime: { timeoutMs: 1000 } } }).runCode.runtime.timeoutMs).toBe(1000)
+  expect(() => CuaConfig({ standaloneRunCode: { runtime: { timeoutMs: 1000, ...unsupported } } })).toThrow()
+  expect(CuaConfig({ standaloneRunCode: { runtime: { timeoutMs: 1000 } } }).standaloneRunCode.runtime.timeoutMs).toBe(1000)
 })
 
 it('gives every other composed preset a program tool without changing the shared runtime', async () => {

@@ -4,7 +4,7 @@ import NodePtcRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/d
 import { RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 
 /** Resource bounds for the dedicated CUA program runtime and its nested tool calls. */
-export interface CuaRunCodeConfig {
+export interface CuaStandaloneRunCodeConfig {
   /** Node limits and launch settings; setting executionMode or scriptPersistence is rejected. */
   runtime: Omit<NodeRuntimeConfig, 'executionMode' | 'scriptPersistence'>
   /** Timeout-scaled tool-call allowance and maximum concurrent subcalls. */
@@ -18,7 +18,7 @@ const runtimeFields: Record<string, Schema> = {
 }
 
 /** Validate CUA program limits with the shared Node and executor defaults. */
-export const CuaRunCodeConfig: Schema<Partial<CuaRunCodeConfig>, CuaRunCodeConfig> = Schema.object({
+export const CuaStandaloneRunCodeConfig: Schema<Partial<CuaStandaloneRunCodeConfig>, CuaStandaloneRunCodeConfig> = Schema.object({
   runtime: Schema.object(runtimeFields).default({}),
   executor: RunCodeConfig.default({}),
 })
@@ -27,7 +27,7 @@ export const CuaRunCodeConfig: Schema<Partial<CuaRunCodeConfig>, CuaRunCodeConfi
 export const CuaConfigFields = {
   requireSystemPointerApproval: Schema.boolean().default(true),
   agentPreset: Schema.union([Schema.string().min(1), Schema.const(false)]).default('ptc'),
-  runCode: CuaRunCodeConfig.default({}),
+  standaloneRunCode: CuaStandaloneRunCodeConfig.default({}),
   allowedApps: Schema.array(Schema.object({
     id: Schema.string().pattern(/^[a-f0-9]{64}$/).required(),
     name: Schema.string().required(), executablePath: Schema.string().min(1),

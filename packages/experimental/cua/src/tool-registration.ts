@@ -52,7 +52,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
   return ctx.effect(function* () {
     const runtimeCtx = ctx.isolate('ptcRuntime')
     const runtime = runtimeCtx.plugin(NodePtcRuntime, {
-      ...config.runCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
+      ...config.standaloneRunCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
     })
     yield runtime.dispose
     const programs = runtimeCtx.plugin({
@@ -60,7 +60,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
       apply(consumer: Context) {
         const program = createRunCodeTool(consumer, {
           name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
-          tools: [tool], limits: config.runCode.executor,
+          tools: [tool], limits: config.standaloneRunCode.executor,
           initialization: `globalThis.cua ??= (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
         })
         const scopes = new Map<Agent, { scope: Scope; current?: { kind: 'raw' | 'program'; remove: () => void } }>()

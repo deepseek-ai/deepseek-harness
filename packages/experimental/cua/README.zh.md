@@ -33,9 +33,9 @@ kind: "package-reference"
 
 `cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，以最后一个表达式作为结果；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 
-通过提供方的 `runCode.runtime` 配置运行时资源和启动设置，通过 `runCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
+通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
 
-当 `agentPreset` 指定 preset 名称时，两种工具形态的注册都等待专用 Node 运行时及其所需服务，包括匹配 preset 的原始 `cua` 工具。无效的 `runCode.runtime` 设置或缺少服务可能阻止 Agent 创建。修正配置或补齐服务后重载提供方；也可以先关闭 Computer Use，再重试创建 Agent。`agentPreset: false` 注册原始 `cua`，不创建该运行时。
+当 `agentPreset` 指定 preset 名称时，两种工具形态的注册都等待专用 Node 运行时及其所需服务，包括匹配 preset 的原始 `cua` 工具。无效的 `standaloneRunCode.runtime` 设置或缺少服务可能阻止 Agent 创建。修正配置或补齐服务后重载提供方；也可以先关闭 Computer Use，再重试创建 Agent。`agentPreset: false` 注册原始 `cua`，不创建该运行时。
 
 初始化会保留 `globalThis.cua` 中除 `null` 和 `undefined` 以外的值。如果程序覆盖了这个全局对象，在一次 `cua_run_code` 调用中执行 `globalThis.cua = undefined`。下一次调用会在执行代码前重建它。随后通过恢复的对象重新选择应用和窗口。
 
@@ -150,7 +150,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 - 会话决定没有自动保留期限，也不会随对话删除而自动清理。撤销会移除许可，但保留撤销代次，用于拒绝旧句柄和先前尚未完成的审批。
 - 原生行为和桌面验证由各平台负责；支持的应用、输入限制和实测覆盖范围见对应提供方文档。
-- `agentPreset` 选择一个 preset ID，不检测执行器。ID 不匹配的自定义 PTC preset 会在外层 `run_code` 中获得 `tools.cua_run_code`。嵌套程序使用独立的 CUA 环境和 `runCode` 上限，同时仍受外层程序的截止时间和取消约束。将 `agentPreset` 设为该自定义 ID，可在其中使用原始 `tools.cua`；只有匹配的 ID 获得原始形态。
+- `agentPreset` 选择一个 preset ID，不检测执行器。ID 不匹配的自定义 PTC preset 会在外层 `run_code` 中获得 `tools.cua_run_code`。嵌套程序使用独立的 CUA 环境和 `standaloneRunCode` 上限，同时仍受外层程序的截止时间和取消约束。将 `agentPreset` 设为该自定义 ID，可在其中使用原始 `tools.cua`；只有匹配的 ID 获得原始形态。
 - `cua_run_code` 状态仅保存在内存中，且独立于 PTC 状态。进程丢失、Agent 销毁或提供方卸载都会丢弃它；应用授权仍独立保存。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。指针移动和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 元素 ID 是应用当前辅助功能快照中的不透明字符串。之后读取同一应用的任一窗口会替换当前快照，因此调用方必须使用最新树中的 ID；旧字符串可能被复用于另一个控件。截图或指针输入要求显式选择窗口。

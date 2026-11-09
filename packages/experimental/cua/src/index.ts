@@ -20,7 +20,7 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
-import { CuaConfigFields, type CuaRunCodeConfig } from './config.ts'
+import { CuaConfigFields, type CuaStandaloneRunCodeConfig } from './config.ts'
 import { installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { observeNativeWindows } from './native-observation.ts'
@@ -40,7 +40,7 @@ export interface CuaConfig {
   /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
-  runCode: CuaRunCodeConfig
+  standaloneRunCode: CuaStandaloneRunCodeConfig
   /** Legacy grants imported once into profile-scoped storage; later edits are ignored. */
   allowedApps: Array<Omit<CuaApplicationGrant, 'id'> & {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */

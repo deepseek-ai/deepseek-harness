@@ -58,7 +58,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | Give this preset raw `cua` and other composed presets `cua_run_code`; `false` registers raw `cua` globally. |
-| `runCode.runtime` / `runCode.executor` | shared Node / PTC limits | Resource, launch, and nested-call settings for the dedicated CUA runtime; see [CUA](../cua/README.md). |
+| `standaloneRunCode.runtime` / `standaloneRunCode.executor` | shared Node / PTC limits | Resource, launch, and nested-call settings for the dedicated CUA runtime; see [CUA](../cua/README.md). |
 | `allowedApps` | `[]` | Legacy path/signature grants, imported once for removal; they do not authorize new bundle-ID identities. |
 | `helperPath` | package-owned executable | Absolute executable inside the signed helper `.app`; a bare binary fails with `NATIVE_APPLICATION_REQUIRED`. |
 | `requireSystemPointerApproval` | `true` | Ask on the first explicit request to move the system pointer. With `false`, only explicitly requested moves use it. |
