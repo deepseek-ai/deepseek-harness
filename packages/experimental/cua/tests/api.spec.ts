@@ -912,3 +912,18 @@ it('forwards provider options while retaining the selected target and coordinate
     appHandle: 'app-17', snapshotId: 'snapshot-2', windowId: 23, x: 250, y: 750, relative: true, trackingMode: 'coarse',
   } })
 })
+
+it('forwards bounded traversal limits on a window-only provider', async () => {
+  const f = fixture()
+  f.setCapabilities({ ...capabilities, platform: 'windows', appLevelAccessibility: false })
+  const app = await f.api.getApp('Editor')
+  const win = await app.getWindow(23)
+  const before = f.dispatch.mock.calls.length
+  await expect(win.getAccessibilityTree({ maxDepth: 0 })).rejects.toThrow('maxDepth')
+  await expect(win.getAccessibilityTree({ maxElements: 1.5 })).rejects.toThrow('maxElements')
+  expect(f.dispatch).toHaveBeenCalledTimes(before)
+  await win.getAccessibilityTree({ maxDepth: 1, maxElements: 1 })
+  expect(f.dispatch).toHaveBeenLastCalledWith({
+    method: 'getState', params: { appHandle: app.appHandle, windowId: 23, maxDepth: 1, maxElements: 1 },
+  })
+})

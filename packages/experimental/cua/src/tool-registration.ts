@@ -1,4 +1,5 @@
 /** Agent-scoped CUA transports sharing a provider-owned persistent program runtime. */
+import { extname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
@@ -20,11 +21,14 @@ const programDescription = 'Run a TypeScript program to observe and operate desk
  * @param ctx Provider context owning native calls and registrations.
  * @param config Validated preset selection and dedicated runtime bounds.
  * @param tool Internal native tool; non-PTC Agents can reach it only through the program.
- * @param guidance Platform and shared CUA operation instructions.
+ * @param guidance Raw-tool operation instructions for the configured PTC preset.
+ * @param programGuidance Operation instructions available inside cua_run_code.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
-export function installCuaTools(ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string): () => void | Promise<void> {
-  const bridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
+export function installCuaTools(
+  ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string, programGuidance: string,
+): () => void | Promise<void> {
+  const bridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
   const prompt = { name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
@@ -75,7 +79,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
             scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
           }
           const remove = register(entry.scope.ctx, kind === 'raw' ? tool : program,
-            kind === 'raw' ? rawPrompt : { ...prompt, text: guidance })
+            kind === 'raw' ? rawPrompt : { ...prompt, text: programGuidance })
           entry.current = { kind, remove }
         }
         consumer.on('agent/created', ({ agent }) => { sync(agent) })

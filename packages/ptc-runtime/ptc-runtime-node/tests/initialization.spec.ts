@@ -87,6 +87,7 @@ describe('Node REPL initialization', () => {
     const controller = new AbortController()
     onTestFinished(() => { controller.abort(); pendingBinding.resolve(null) })
     const program = vi.fn(async () => null)
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const pending = run('await tools.program({})', {
       initialization: 'try { await tools.wait({}) } catch {} finally { kept++ }',
       timeoutMs: action === 'timeout' ? 200 : null,
@@ -96,12 +97,18 @@ describe('Node REPL initialization', () => {
     try {
       await entered.promise
       if (action === 'abort') controller.abort()
+      else vi.advanceTimersByTime(200)
       const result = await pending
       expect(result.error?.kind).toBe(action)
       expect(result.error?.message).toContain('retained variables were preserved')
       expect(program).not.toHaveBeenCalled()
       expect((await run('kept')).value).toBe(2)
-    } finally { controller.abort(); pendingBinding.resolve(null); await pending }
+    } finally {
+      controller.abort()
+      pendingBinding.resolve(null)
+      vi.useRealTimers()
+      await pending
+    }
   })
 
   it('keeps one elapsed deadline across initialization and user execution', async () => {

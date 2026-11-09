@@ -42,6 +42,10 @@ export interface CuaAxOptions extends CuaObservationOptions {
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
+  maxDepth?: number
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
@@ -103,8 +107,8 @@ export interface CuaSurface {
   /**
    * Read the full accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
-   * @param options - emission, menu expansion and field detail options.
-   * @returns Full accessibility tree text with element ids, subject to the provider's traversal limits.
+   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAxOptions): Promise<string>
   /**

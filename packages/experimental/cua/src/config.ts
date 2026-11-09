@@ -5,15 +5,17 @@ import { RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 
 /** Resource bounds for the dedicated CUA program runtime and its nested tool calls. */
 export interface CuaRunCodeConfig {
-  /** Node runtime limits and launch settings; evaluation always uses a retained REPL. */
+  /** Node limits and launch settings; setting executionMode or scriptPersistence is rejected. */
   runtime: Omit<NodeRuntimeConfig, 'executionMode' | 'scriptPersistence'>
   /** Timeout-scaled tool-call allowance and maximum concurrent subcalls. */
   executor: RunCodeConfig
 }
 
-const runtimeFields = Object.fromEntries(Object.entries(NodePtcRuntime.Config.dict as Record<string, Schema>).filter(
-  ([key]) => key !== 'executionMode' && key !== 'scriptPersistence',
-))
+const runtimeFields: Record<string, Schema> = {
+  ...NodePtcRuntime.Config.dict,
+  executionMode: Schema.never().hidden(),
+  scriptPersistence: Schema.never().hidden(),
+}
 
 /** Validate CUA program limits with the shared Node and executor defaults. */
 export const CuaRunCodeConfig: Schema<Partial<CuaRunCodeConfig>, CuaRunCodeConfig> = Schema.object({

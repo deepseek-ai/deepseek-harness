@@ -18,9 +18,12 @@ export interface Config {
   hosts?: string[]
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
-  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
+  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
   maxOutputBytes?: number
-  /** Most review threads counted per pull request in one status read; a pull request with more reports a lower bound. */
+  /**
+   * Most review threads counted per pull request in one status read, which reports a lower bound past it, and read in
+   * one review read, which reports itself truncated past it.
+   */
   maxReviewThreads?: number
   /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
   maxCommits?: number

@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
-import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
+import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
@@ -147,7 +147,7 @@ export async function runNodeMain(
           else programEvaluator.evaluate(data.initialization, (result) => {
             if (!result.ok || !acceptsCalls(evaluation)) { finish(result); return }
             if (logs.overflowed) {
-              evaluation.finish({ error: { kind: 'output-limit', message: `outer output exceeded ${data.maxOutputBytes} bytes` } })
+              evaluation.finish(outputLimit(data.maxOutputBytes))
               return
             }
             runProgram()

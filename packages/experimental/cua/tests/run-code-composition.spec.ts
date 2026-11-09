@@ -151,7 +151,7 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(model.requests).toHaveLength(4)
   expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
-  expect(results.map(result => result.isError)).toEqual([false, false, true])
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false, true])
   const first = z.object({ visits: z.number(), bindings: z.array(z.string()), app: z.string(), window: z.number(), pid: z.number() })
     .parse(JSON.parse(results[0]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
   expect(first).toMatchObject({ visits: 1, bindings: ['cua'], app: 'fixture-app', window: 7 })
@@ -183,6 +183,18 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(ctx.ptcRuntime.retainsState).toBe(false)
 })
 
+it('recreates the automatic facade after a program clears an overwritten global', async () => {
+  const { agent, run } = await setup([
+    'var previousCua = cua; globalThis.cua = 42; globalThis.cua = undefined; "cleared"',
+    '({ ready: typeof cua.getApp === "function", replaced: cua !== previousCua })',
+  ])
+  await run()
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false])
+  expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
+    .toEqual({ ready: true, replaced: true })
+})
+
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {
   const { ctx, native, agent, provider, run } = await setup([
     'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); process.pid',
@@ -200,7 +212,13 @@ it('settles an in-flight native call before releasing the provider connection an
     if (event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-program-2') native.events.push('subcall-settled')
   })
   const completed = run()
-  await started
+  await Promise.race([
+    started,
+    completed.then(() => {
+      const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+      throw new Error(`CUA turn ended before the held native click: ${JSON.stringify(results)}`)
+    }),
+  ])
   const first = agent.session.deriveMessages().find(message => message.role === 'tool')
   const pid = z.number().int().positive().parse(JSON.parse(first!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
   expect(() => process.kill(pid, 0)).not.toThrow()

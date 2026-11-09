@@ -77,9 +77,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Maximum nodes admitted by a native accessibility snapshot. */
+  /** Default node limit when an accessibility read omits maxElements. */
   maxElements: number
-  /** Maximum depth traversed by a native accessibility snapshot. */
+  /** Default depth limit when an accessibility read omits maxDepth. */
   maxDepth: number
 }
 
@@ -129,6 +129,8 @@ export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
   guidance: string
+  /** Instructions for cua_run_code; omission reuses the shared guidance. */
+  programGuidance?: string
   capabilities: CuaStartupCapabilities
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
@@ -161,8 +163,12 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const systemPointer = backend.capabilities.systemPointer === true
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
-  const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
-  const guidance = `${instructions}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const formatGuidance = (text: string): string => {
+    const instructions = systemPointer ? withSystemPointerGuidance(text) : text
+    return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  }
+  const guidance = formatGuidance(backend.guidance)
+  const programGuidance = formatGuidance(backend.programGuidance ?? backend.guidance)
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
@@ -238,7 +244,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
             maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
@@ -374,7 +380,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
       },
     }
-    yield installCuaTools(ctx, config, tool, guidance)
+    yield installCuaTools(ctx, config, tool, guidance, programGuidance)
   }, 'dsh-cua.runtime')
 }
 

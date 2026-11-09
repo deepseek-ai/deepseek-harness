@@ -167,7 +167,9 @@ def main():
                 time.sleep(0.025)
             primary_params = {**owner, "windowId": primary["windowId"], "maxElements": 300, "maxDepth": 20}
             secondary_params = {**owner, "windowId": secondary["windowId"], "maxElements": 300, "maxDepth": 20}
-            first = call("getState", primary_params)
+            limited = call("getState", {**primary_params, "maxElements": 1})
+            assert limited["truncated"] and "maxElements=1" in limited["tree"], limited
+            first = call("getState", {**primary_params, "maxElements": 100000, "maxDepth": 512})
             second = call("getState", secondary_params)
             assert "Increment secondary" not in first["tree"], first
             assert "Increment primary" not in second["tree"], second

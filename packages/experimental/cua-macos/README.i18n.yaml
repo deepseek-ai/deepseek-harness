@@ -15,8 +15,8 @@
   en: 1777e7bf6785f986
   zh: e3daac1074ebb74d
 /deepseek-ai-dsh-experimental-cua-macos/use-this-package:
-  en: 55ec2bb2174539a4
-  zh: 1e8f6e0ae60f888d
+  en: e064ed59c279b503
+  zh: 53e1c7b22510f8ec
 /deepseek-ai-dsh-experimental-cua-macos/use-this-package/connect-an-external-execution-environment:
   en: 19e71de51338e374
   zh: afb6820bdbac2443
@@ -33,20 +33,20 @@
   en: ab7cba4a42334ab9
   zh: f77cd9d84624b6c2
 /deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/what-the-model-sees:
-  en: ce580e2ea6ba5f1a
-  zh: e06e87453f5332a0
-/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/what-the-model-sees/operation-guidance-verbatim:
-  en: 2dbc22ffd1f8a717
-  zh: d4458872e75305d9
+  en: 0acecc785a72c0c2
+  zh: db46d8eb88f9620c
+/deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/what-the-model-sees/ptc-operation-guidance-verbatim:
+  en: 9142df90fd94ef91
+  zh: cad17384c7f7452b
 /deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/token-effect:
-  en: ab52b46d874fa8b9
-  zh: e87d3620ef77cb06
+  en: f49bbb1f447feb1d
+  zh: 664edf0f704caab6
 /deepseek-ai-dsh-experimental-cua-macos/model-experience/native-application-operations/kv-cache-effect:
   en: a2c9acb5a4320dda
   zh: e8d1586af60215c4
 /deepseek-ai-dsh-experimental-cua-macos/known-limitations-and-deferred-work:
-  en: c032cae568a6248b
-  zh: 3cc7a3e4d3d20579
+  en: 791f3b5da2e8826d
+  zh: 9fdab4ccba5ed76a
 /deepseek-ai-dsh-experimental-cua-macos/known-limitations-and-deferred-work/dev-note:
   en: b836f01bd0bceb4a
   zh: 8122fa08b2aa95fa
