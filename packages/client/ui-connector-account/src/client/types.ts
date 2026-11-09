@@ -28,8 +28,13 @@ export interface ConnectorAccountsRemote {
 /** The face every surface entry injects. */
 export interface ConnectorAccountFace {
   hooks: { connectorAccounts: HostObservable<ConnectorAccountsState> }
-  /** The Remote the buttons call directly. */
-  readonly remote: Pick<ConnectorAccountsRemote, 'start' | 'cancel'>
+  /**
+   * Start an operation of an account on the Host. Resolves to the operation the Host started, and rejects when the Host
+   * refuses or the call does not answer.
+   */
+  readonly start: (key: string, operation: string) => Promise<ConnectorOperationId>
+  /** Cancel an account's operation on the Host; rejects like `start`. */
+  readonly cancel: (key: string, id: ConnectorOperationId) => Promise<void>
   /** Pick the active language's entry of a registrant's text. */
   readonly resolveText: (text: LocalizedText) => string
   /** Remember an operation this browser started: its authorization page opens here, and its success is reported here. */
