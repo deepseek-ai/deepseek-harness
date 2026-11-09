@@ -138,10 +138,8 @@ else:
 `], { cwd })
         expect(verified.exitCode).toBe(0)
         if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
-        const imageBlocks = events.flatMap(event => event.type === 'tool/result'
-          ? event.data.message.content.filter(block => block.type === 'image')
-          : event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
-            ? event.data.content.filter(block => block.type === 'image') : [])
+        const imageBlocks = events.flatMap(event => event.type === 'tool/result' && !event.data.message.isError
+          ? event.data.message.content.filter(block => block.type === 'image') : [])
         for (const block of imageBlocks) {
           const stored = await readImageFile(join(imageRoot, 'attachments/v1'), block.attachment)
           const pixels = await execa(python!, ['-c', previewPixels], { input: Buffer.from(stored.data) })
@@ -172,8 +170,9 @@ else:
         const visibleImage = mode === 'native'
           ? results.some(result => !result.isError && reads.some(call => call.callId === result.toolCallId)
             && result.content.some(block => block.type === 'image'))
-          : events.some(event => event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
-            && event.data.content.some(block => block.type === 'image'))
+          : results.some(result => !result.isError
+            && calls.some(call => call.name === 'run_code' && call.callId === result.toolCallId)
+            && result.content.some(block => block.type === 'image'))
         expect(visibleImage).toBe(true)
       }
       if (!previewHasContent) {

@@ -1651,8 +1651,8 @@ describe('the run_code dispatch bridge', () => {
     ])
   })
 
-  it('keeps image-bearing sub-call results out of the conversation until inspected', async () => {
-    const { ctx, runtime } = await setup({ mode: 'ptc' })
+  it.each(['typescript', 'python'])('records image-bearing sub-call results for a %s runtime', async (language) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language } })
     ctx.tools.register(defineContentToolFixture({
       name: 'image_result',
       description: 'Return one durable image.',
@@ -1675,8 +1675,57 @@ describe('the run_code dispatch bridge', () => {
 
     const result = await runCode(ctx, 'program')
 
-    expect(result.additionalContexts).toBeUndefined()
+    if (language === 'typescript') expect(result.additionalContexts).toBeUndefined()
+    else expect(result.additionalContexts).toMatchObject([{
+      source: { kind: 'ptc-mode' },
+      content: [
+        { type: 'text', text: 'image result' },
+        { type: 'image', attachment: { attachmentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } },
+      ],
+    }])
     expect(result.content).toEqual([{ type: 'text', text: 'done' }])
+  })
+
+  it.each([
+    { name: 'read_image', count: 0, message: 'Image-producing tools must return exactly one image' },
+    { name: 'read_image', count: 2, message: 'Image-producing tools must return exactly one image' },
+    { name: 'cua', count: 2, message: 'Image-producing tools must return exactly one image' },
+    { name: 'read_image', count: 1, message: 'Image storage must expose a readable path in the program filesystem' },
+  ])('rejects $name with $count images when its program image is unavailable', async ({ name, count, message }) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.tools.register(defineContentToolFixture({
+      name, description: 'Return image content.', parameters: {},
+      execute: () => Promise.resolve(Array.from({ length: count }, () => ({
+        type: 'image' as const,
+        attachment: {
+          attachmentId: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as never,
+          mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1,
+        },
+      }))),
+    }))
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions[name]!({})
+      return { output: [] }
+    }
+
+    const result = await runCode(ctx, 'program')
+    expect(result.isError).toBe(true)
+    expect(result.content).toEqual([{ type: 'text', text: expect.stringContaining(message) as string }])
+  })
+
+  it('returns CUA text observations as program values', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.tools.register(defineContentToolFixture({
+      name: 'cua', description: 'Return a text observation.', parameters: {},
+      execute: () => Promise.resolve([{ type: 'text', text: 'Window selected' }]),
+    }))
+    runtime.behavior = async request => printed(await request.bindings[0]!.functions.cua!({}))
+
+    const result = await runCode(ctx, 'program')
+    expect(result.isError).toBe(false)
+    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify([{ type: 'text', text: 'Window selected' }], null, 2) }])
   })
 
   it('does not defer images removed by a nested post-execute decision', async () => {

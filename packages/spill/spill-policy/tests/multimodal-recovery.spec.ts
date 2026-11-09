@@ -198,18 +198,26 @@ describe('multimodal recovery through real providers', () => {
       ? 'await Promise.all([tools.ends({}), tools.middle({}), tools.small({})])'
       : '[await tools.ends({}), await tools.middle({}), await tools.small({})]'
     const result = await execute('run_code', {
-      code: `const [ends, middle, small] = ${calls}; inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));`,
+      code: `const [ends, middle, small] = ${calls};
+inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));
+const fs = await import('node:fs/promises');
+for (const [index, image] of [ends.content[1], ends.content[3]].entries()) {
+  const path = 'recovered-' + index + '.png';
+  await fs.writeFile(path, Buffer.from(image.data, 'base64'));
+  inspect(await tools.read_image({ file_path: path }));
+}`,
       description: 'Inspect independent image result budgets',
     })
     expect(result.isError).toBe(false)
     expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length })] })
     const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
-    expect(dispatches).toHaveLength(3)
+    expect(dispatches).toHaveLength(5)
     for (const dispatch of dispatches) expect(cost(dispatch.content)).toBeLessThanOrEqual(CAP)
     expect(dispatches.find(event => event.name === 'ends')?.content.filter(block => block.type === 'image')).toHaveLength(2)
     expect(textOf(dispatches.find(event => event.name === 'middle')!.content)).toContain('Omitted 1 images.')
     expect(dispatches.find(event => event.name === 'small')?.content).toEqual([text(SMALL)])
-    expect(result.additionalContexts).toHaveLength(2)
+    expect(imagesOf(result.content)).toHaveLength(2)
+    expect(imagesOf(result.additionalContexts?.flatMap(context => context.content) ?? [])).toEqual([])
     expect(await requestImages(result.content, result.additionalContexts)).toEqual(['red', 'blue'])
   })
 })

@@ -679,7 +679,7 @@ export function createRunCodeTool(
           if (runtime.language === 'typescript' && (name === 'read_image' || name === 'cua')) {
             const images = outcome.content.filter(block => block.type === 'image')
             const first = images[0]
-            if (images.length === 1 && first !== undefined) return programImage(first.attachment)
+            if (first !== undefined && images.length === 1) return programImage(first.attachment)
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
           }
           return outcome.value
