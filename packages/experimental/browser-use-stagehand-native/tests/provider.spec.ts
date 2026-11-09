@@ -132,6 +132,12 @@ it('reserves an attached browser for one live owner and rejects model connection
   expect(malformed.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: arguments.url: Invalid URL' }])
 })
 
+it('rejects invalid arguments before acquiring a browser', async () => {
+  await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
+  expect((await execute(first, 'navigate', { url: 'not a url' })).error?.info).toEqual(INVALID_ARGS)
+  expect(fixture.browsers).toEqual([])
+})
+
 it('uses its independent model for actions, observations, and a caller-selected extraction schema', async () => {
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
   expect((await execute(first, 'act', { instruction: 'Click the fixture button' })).isError).toBe(false)

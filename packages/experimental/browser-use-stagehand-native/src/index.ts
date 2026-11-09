@@ -181,10 +181,6 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
       description: descriptions[method],
       inputSchema: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(browserInputs[method])), type: 'object' },
       async call(args) {
-        const parsed = browserInputs[method].safeParse(args)
-        if (!parsed.success) {
-          throw new ToolArgsError(parsed.error.issues.map(issue => `${['arguments', ...issue.path].join('.')}: ${issue.message}`))
-        }
         const agent = ctx.agents.requireInitiator()
         const resource = await resources.get(agent)
         return resource.native.execute(method, args, resource.operationSignal)
@@ -197,6 +193,11 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
     const agent = exec.agent
     if (agent === undefined || ctx.agents.get(agent.id) !== agent) {
       throw new ToolContextUnavailableError('Stagehand browser tools require an exact live Agent')
+    }
+    // Arguments are checked before the browser is acquired, so an invalid first call launches nothing.
+    const parsed = browserInputs[exec.name.slice('stagehand_'.length) as BrowserMethod].safeParse(exec.arguments)
+    if (!parsed.success) {
+      throw new ToolArgsError(parsed.error.issues.map(issue => `${['arguments', ...issue.path].join('.')}: ${issue.message}`))
     }
     return resources.run(agent, exec.signal, async (resource, activeSignal) => {
       const upstreamSignal = exec.signal
