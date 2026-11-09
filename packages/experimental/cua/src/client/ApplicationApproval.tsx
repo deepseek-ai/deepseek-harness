@@ -5,18 +5,18 @@ import type {} from '@deepseek-ai/dsh-client-ui-user-questions/client'
 import type {} from '@deepseek-ai/dsh-client-ui-approval/client'
 
 /**
- * Select only the provider's fixed application question; other interactions keep their renderer.
+ * Select application access and mouse-control questions; other interactions keep their renderer.
  * @param pending The session's currently elected interaction.
- * @returns Its application decision, or null for another interaction.
+ * @returns Its Computer Use decision, or null for another interaction.
  */
 export function selectApplicationApproval(pending: ComposerChainProps['pendingInteraction']) {
   if (pending?.kind !== 'question' || pending.questions.length !== 1) return null
   const item = pending.questions[0] as (typeof pending.questions)[number]
-  if (item.id !== 'cua-app-access' || item.intent?.kind !== 'approval') return null
+  if ((item.id !== 'cua-app-access' && item.id !== 'cua-mouse-control') || item.intent?.kind !== 'approval') return null
   return { pending, item, intent: item.intent }
 }
 
-/** Composer bindings for an application decision and caller-owned localized copy. */
+/** Composer bindings for a Computer Use decision and caller-owned localized copy. */
 export type ApplicationApprovalProps = PropsRuntime<'conversation.composer'> & PropsRenderFactories & PropsLocale<'cuaPermissions'> & {
   matched: NonNullable<ReturnType<typeof selectApplicationApproval>>
   resolveText: (text: { en: string; [locale: string]: string }) => string
@@ -32,7 +32,7 @@ export function ApplicationApproval({ matched: { pending, item, intent }, resolv
   const answer = (label: string) => pending.answer({ answers: [{ id: item.id, selected: [label] }] })
   return renderFactorySlot('conversation.approval.card', {
     requestKey: pending.key,
-    warning: { label: t('approvalRisks'), title: t('approvalRiskTitle'), detail: t('approvalRiskNotice') },
+    ...(item.id === 'cua-app-access' ? { warning: { label: t('approvalRisks'), title: t('approvalRiskTitle'), detail: t('approvalRiskNotice') } } : {}),
     title: intent.display === undefined ? item.question : resolveText(intent.display.question),
     ...(item.detail === undefined ? {} : {
       description: intent.display?.detail === undefined ? item.detail : resolveText(intent.display.detail),

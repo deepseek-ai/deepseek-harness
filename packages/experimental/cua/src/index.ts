@@ -13,11 +13,13 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
+import { MouseControl } from './mouse-control.ts'
+import { withSystemPointerGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
-import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
 import { CuaConfigFields } from './config.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
@@ -34,6 +36,8 @@ export type { CuaStartupCapabilities } from './types.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
+  /** Ask once per live Session before an explicitly requested system-pointer move. */
+  requireSystemPointerApproval: boolean
   /** Register tools for Agents using this preset; defaults to ptc. False enables global registration. */
   agentPreset: string | false
   /** Legacy grants imported once into profile-scoped storage; later edits are ignored. */
@@ -147,7 +151,11 @@ export interface CuaBackend {
  */
 export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend): void {
   const { helperPath } = backend
-  const guidance = `${backend.guidance}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const systemPointer = backend.capabilities.systemPointer === true
+  const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
+  const requestSchema = systemPointer ? SystemPointerRequest : Request
+  const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
+  const guidance = `${instructions}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
@@ -207,13 +215,14 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       for (const result of [...await permissions, ...results, ...releases]) if (result.status === 'rejected') errors.push(result.reason)
       if (errors.length > 0) throw new AggregateError(errors, 'dsh-cua helper cleanup failed')
     }
-    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>) => {
+    const callNative = async (request: CuaOperation, execution: Readonly<CuaExecution>, useSystemPointer?: boolean) => {
       const { method, params: parsedParams } = request
       const params = execution.coordinates.parameters(request)
       const agent = execution.agent
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
+      if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -277,7 +286,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         const capabilities = backend.capabilities
         return {
           ...runtime,
-          platform: capabilities.platform,
+          platform: capabilities.platform, systemPointer,
           methods: [...capabilities.methods],
           appLevelAccessibility: capabilities.appLevelAccessibility,
           keyboard: [...capabilities.keyboard],
@@ -299,10 +308,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     const tool: ToolDefinition = {
       name: 'cua',
       description: 'Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.',
-      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(Request)), type: 'object' },
+      parameters: { ...z.record(z.string(), z.json()).parse(z.toJSONSchema(requestSchema)), type: 'object' },
       output: { schema: {}, render: renderResult },
       async execute(args, execution) {
-        const request = Request.parse(args)
+        const request = requestSchema.parse(args)
         const agent = executionAgent(execution)
         execution.signal.throwIfAborted()
         lifetime.signal.throwIfAborted()
@@ -335,14 +344,18 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
+          const route = request.method === 'mouseMove'
+            ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
+            : undefined
+          if (route?.prepare) owner.coordinates.parameters(request)
           const dispatch = async (signal: AbortSignal) => {
             const scoped = { ...execution, agent, signal, nativeClient, coordinates: owner.coordinates }
-            const result = await callNative(Request.parse(request), scoped)
+            const result = await callNative(request, scoped, route?.useSystemPointer)
             signal.throwIfAborted()
             return result
           }
           return 'appHandle' in request.params
-            ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch)
+            ? access.run(nativeClient, request.params.appHandle as CuaAppHandle, signal, dispatch, route?.prepare)
             : dispatch(signal)
         })()
         pending.set(operation, agent)
