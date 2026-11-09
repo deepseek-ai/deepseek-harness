@@ -118,12 +118,8 @@ it('ends a silent proxy connection and its Git child at the connection deadline'
   await transport.connected
   const result = await running
   expect(result?.kind).toBe('timeout')
-  // Git's termination status varies by platform; preserve the observed status, or the fallback when absent.
-  const childResult = await vi.mocked(subprocess.execa).mock.results.at(-1)!.value
-  expect(childResult.timedOut).toBe(true)
-  expect(result).toMatchObject({
-    exitCode: childResult.exitCode ?? 1, timedOut: true, argv: checkArgv('https://github.com/acme/plugin.git'),
-  })
+  // The result records the status the terminated Git is read as; only the streamed run reports no exit code.
+  expect(result).toMatchObject({ exitCode: 1, timedOut: true, argv: checkArgv('https://github.com/acme/plugin.git') })
   expect(result!.output).toContain('connection to github.com timed out after 3000ms')
   await transport.disconnected
   expect(transport.sockets.size).toBe(0)
