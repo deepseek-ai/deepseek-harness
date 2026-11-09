@@ -800,8 +800,8 @@ describe('sandbox escalation through the generic task producer', () => {
   it('rejects injected escalation without a sandbox and narrower escalation without prompting', async () => {
     const plain = await setup()
     const unavailable = await call(plain, 'bash', escalate)
-    expect(text(unavailable)).toContain('not available in this composition')
-    expect(unavailable).toMatchObject({ error: { info: { name: 'SandboxEscalationError', code: 'SANDBOX_ESCALATION_UNAVAILABLE' } } })
+    expect(text(unavailable)).toContain('invalid arguments: sandbox_permissions is not available in this composition')
+    expect(unavailable).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()

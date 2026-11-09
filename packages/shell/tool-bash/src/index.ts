@@ -24,7 +24,7 @@ import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
-import { ESCALATION_TARGETS, SandboxEscalationError, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
+import { ESCALATION_TARGETS, approveEscalation, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import { subprocessSpawnFailure } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { DSH_ENV_PREFIX } from '@deepseek-ai/dsh-shell'
@@ -248,10 +248,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     standingPolicy: SandboxExecutionPolicy | undefined,
   ): Promise<SandboxMode> => {
     if (escalationModes.length === 0) {
-      throw new SandboxEscalationError(
-        'sandbox_permissions is not available in this composition (no sandboxing executor to escalate)',
-        'SANDBOX_ESCALATION_UNAVAILABLE',
-      )
+      throw new ToolArgsError(['sandbox_permissions is not available in this composition (no sandboxing executor to escalate)'])
     }
     const effectiveMode = (standingPolicy as SandboxExecutionPolicy).mode
     return approveEscalation(
