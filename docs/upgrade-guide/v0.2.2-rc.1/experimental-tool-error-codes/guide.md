@@ -17,7 +17,7 @@ Code that handles these failures in-process sees these changes:
 - `StagehandDrainError` from `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` now extends `StagehandError` and has the code `STAGEHAND_CLEANUP_FAILED`.
 - `SessionResources.dispose()` from `@deepseek-ai/dsh-experimental-browser-use-runtime` rejects with `BrowserSessionError` (`BROWSER_CLEANUP_FAILED`) whose `cause` is the `AggregateError` it previously threw; `instanceof AggregateError` no longer matches.
 - Liveshare guard functions return `{ reason, info }` instead of a reason string.
-- Argument failures that now throw `ToolArgsError` show `invalid arguments: ` before the message the model sees, and a CUA screenshot request for a model without image input shows `IMAGE_MODEL_UNSUPPORTED: ` before its message.
+- Argument failures that now throw `ToolArgsError` show `invalid arguments: ` before the message the model sees, and a CUA screenshot request for a model without image input shows `MODEL_DOES_NOT_SUPPORT_IMAGES: ` before its message.
 
 ## Migration
 

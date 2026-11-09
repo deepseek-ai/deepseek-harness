@@ -137,7 +137,7 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) 
   const info = await llm.resolveModelInfo(provider, model, execution.signal)
   execution.signal.throwIfAborted()
   if (!info.inputModalities?.includes('image')) {
-    throw new NativeError('IMAGE_MODEL_UNSUPPORTED', `CUA screenshots require model "${model}" to declare image input`)
+    throw new NativeError('MODEL_DOES_NOT_SUPPORT_IMAGES', `CUA screenshots require model "${model}" to declare image input`)
   }
   return { attachments, target: (image: ImageAttachmentRef) => llm.imageRequestTarget(provider, model, image) }
 }

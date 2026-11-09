@@ -23,7 +23,7 @@ const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal(
  * Native refusal, transport failure, or host-side CUA refusal with a stable machine-readable code.
  * The helper supplies its own codes, such as `APP_ACCESS_DENIED` or `STALE_SNAPSHOT`, so consumers
  * tolerate unknown codes; the host adds `NATIVE_*` transport codes, application-access codes,
- * and `IMAGE_MODEL_UNSUPPORTED` for a screenshot requested by a model without image input.
+ * and `MODEL_DOES_NOT_SUPPORT_IMAGES` for a screenshot requested by a model without image input.
  */
 export class NativeError extends HarnessError {
   /**

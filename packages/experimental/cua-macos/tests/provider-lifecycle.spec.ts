@@ -679,10 +679,10 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
     const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain(route === 'unresolved' ? 'model route could not be resolved'
-      : route === 'provider-error' ? 'model lookup failed' : 'IMAGE_MODEL_UNSUPPORTED: CUA screenshots require model')
+      : route === 'provider-error' ? 'model lookup failed' : 'MODEL_DOES_NOT_SUPPORT_IMAGES: CUA screenshots require model')
     expect(result.error?.info).toEqual(route === 'unresolved'
       ? { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
-      : route === 'provider-error' ? { name: 'LlmError', code: 'UNKNOWN_MODEL' } : { name: 'NativeError', code: 'IMAGE_MODEL_UNSUPPORTED' })
+      : route === 'provider-error' ? { name: 'LlmError', code: 'UNKNOWN_MODEL' } : { name: 'NativeError', code: 'MODEL_DOES_NOT_SUPPORT_IMAGES' })
     expect(native.request).not.toHaveBeenCalled()
     expect(saved).not.toHaveBeenCalled()
   },

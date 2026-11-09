@@ -17,7 +17,7 @@ CUA、browser-use、Cua Driver、worktree、Ralph、终端、OAR 子 agent、Liv
 - `@deepseek-ai/dsh-experimental-browser-use-stagehand-native` 的 `StagehandDrainError` 现在继承 `StagehandError`，code 为 `STAGEHAND_CLEANUP_FAILED`。
 - `@deepseek-ai/dsh-experimental-browser-use-runtime` 的 `SessionResources.dispose()` 改为以 `BrowserSessionError`（`BROWSER_CLEANUP_FAILED`）拒绝，其 `cause` 是此前直接抛出的 `AggregateError`；`instanceof AggregateError` 不再成立。
 - Liveshare 的 guard 函数改为返回 `{ reason, info }`，不再返回原因字符串。
-- 改为抛出 `ToolArgsError` 的参数失败，模型看到的 message 前多了 `invalid arguments: `；为不支持图片输入的模型请求 CUA 截图时，message 前多了 `IMAGE_MODEL_UNSUPPORTED: `。
+- 改为抛出 `ToolArgsError` 的参数失败，模型看到的 message 前多了 `invalid arguments: `；为不支持图片输入的模型请求 CUA 截图时，message 前多了 `MODEL_DOES_NOT_SUPPORT_IMAGES: `。
 
 ## 迁移
 
