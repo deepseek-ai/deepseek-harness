@@ -304,6 +304,16 @@
                   "details": {
                     "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
+                  },
+                  "maxElements": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "maxDepth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
                   }
                 },
                 "required": [
