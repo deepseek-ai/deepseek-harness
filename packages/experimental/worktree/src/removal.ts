@@ -3,8 +3,23 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-fs'
 import type { RestoreWorktreeRequest } from './types.ts'
 
-/** Runs one Git command in the owner's confinement and reports its output. */
+/** Runs one Git command in the owner's confinement and reports its complete bounded output. */
 export type GitRead = (directory: string, args: string[]) => Promise<{ stdout: string; exitCode: number }>
+
+/**
+ * Runs one Git command in the owner's confinement and passes each
+ * NUL-terminated stdout field to `onField` without retaining the output;
+ * false from `onField` ends the command. Resolves true when `onField` ended it.
+ */
+export type GitScan = (directory: string, args: string[], onField: (field: string) => boolean) => Promise<boolean>
+
+/** The confined Git runners inspection and removal use. */
+export interface GitCommands {
+  /** Commands whose output stays small, read whole. */
+  readonly read: GitRead
+  /** Commands whose output grows with the repository or its worktrees, read as it arrives. */
+  readonly scan: GitScan
+}
 
 /** Resolved canonical locations of a recorded checkout that validation confirmed. */
 export interface CheckoutIdentity {
@@ -40,22 +55,31 @@ export async function checkoutIdentity(
 
 /**
  * Find the registration of `target` among the source repository's worktrees.
+ * The listing grows with the number of worktrees; it is streamed without an
+ * output limit, and its entries are kept in memory while `target` is resolved.
  * @param ctx - execution-world filesystem provider.
  * @param request - saved checkout identity.
  * @param target - resolved checkout directory.
- * @param run - bounded Git runner with the owner's policy.
+ * @param scan - streaming Git runner with the owner's policy.
  * @param signal - cancellation of the lookups.
  * @returns the porcelain fields of the matching entry, or undefined when none is registered.
  */
 export async function registration(
-  ctx: Context, request: RestoreWorktreeRequest, target: CheckoutIdentity['target'], run: GitRead, signal: AbortSignal,
+  ctx: Context, request: RestoreWorktreeRequest, target: CheckoutIdentity['target'], scan: GitScan, signal: AbortSignal,
 ): Promise<readonly string[] | undefined> {
-  const registered = await run(request.repositoryRoot, ['worktree', 'list', '--porcelain', '-z'])
-  for (const entry of registered.stdout.split('\0\0').map(entry => entry.split('\0'))) {
-    const registeredPath = entry.find(field => field.startsWith('worktree '))?.slice('worktree '.length)
-    if (registeredPath === undefined) continue
-    const recorded = await ctx.fs.resolve(registeredPath, { cwd: request.repositoryRoot, signal })
-    if (recorded.targetKey === target.targetKey) return entry
+  const entries: { path: string; fields: string[] }[] = []
+  // Each entry of the -z porcelain listing starts with its worktree line and ends with an empty field.
+  let fields: string[] = []
+  await scan(request.repositoryRoot, ['worktree', 'list', '--porcelain', '-z'], (field) => {
+    if (field.startsWith('worktree ')) {
+      fields = [field]
+      entries.push({ path: field.slice('worktree '.length), fields })
+    } else if (field.length > 0) fields.push(field)
+    return true
+  })
+  for (const entry of entries) {
+    const recorded = await ctx.fs.resolve(entry.path, { cwd: request.repositoryRoot, signal })
+    if (recorded.targetKey === target.targetKey) return entry.fields
   }
   return undefined
 }
@@ -67,51 +91,52 @@ export async function registration(
  * @param ctx - execution-world filesystem provider.
  * @param directory - configured relative worktree pool.
  * @param request - saved checkout identity.
- * @param run - bounded Git runner with the owner's policy.
+ * @param git - confined Git runners with the owner's policy.
  * @param signal - cancellation before or during removal.
  * @param admit - synchronous final admission after inspection; false retains the checkout.
  * @returns true when removed; false when inspection or admission retains it; Git failures reject.
  */
 export async function removeCheckout(
-  ctx: Context, directory: string, request: RestoreWorktreeRequest, run: GitRead, signal: AbortSignal, admit: () => boolean,
+  ctx: Context, directory: string, request: RestoreWorktreeRequest, git: GitCommands, signal: AbortSignal, admit: () => boolean,
 ): Promise<boolean> {
-  if (!await inspectRemoval(ctx, directory, request, run, signal)) return false
+  if (!await inspectRemoval(ctx, directory, request, git, signal)) return false
   signal.throwIfAborted()
   if (!admit()) return false
-  await run(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
+  await git.read(request.repositoryRoot, ['worktree', 'remove', '--', request.path])
   return true
 }
 
 /**
- * Verify checkout identity and account for every file that Git's non-force
- * removal would refuse: tracked changes, untracked files, hidden index flags,
- * and submodules. Ignored files are not counted; `git worktree remove` discards them.
+ * Verify checkout identity and that `git status` reports no tracked changes or
+ * untracked files; its output is read only up to the first entry. Ignored files
+ * are not counted, nor are edits to skip-worktree or assume-unchanged files,
+ * which `git status` hides; `git worktree remove` discards both. A checkout
+ * whose administrative directory holds submodule repositories is ineligible,
+ * as Git refuses to remove it; a committed embedded repository is not
+ * inspected, so Git's refusal of that removal rejects.
  * @param ctx - execution-world filesystem provider.
  * @param directory - configured relative worktree pool.
  * @param request - saved checkout identity.
- * @param run - bounded Git runner with the owner's policy.
+ * @param git - confined Git runners with the owner's policy.
  * @param signal - cancellation of inspection.
  * @returns false for an ineligible checkout; inspection failures reject.
  */
 export async function inspectRemoval(
-  ctx: Context, directory: string, request: RestoreWorktreeRequest, run: GitRead, signal: AbortSignal,
+  ctx: Context, directory: string, request: RestoreWorktreeRequest, git: GitCommands, signal: AbortSignal,
 ): Promise<boolean> {
   const { path, branch } = request
-  const identity = await checkoutIdentity(ctx, directory, request, run, signal)
+  const identity = await checkoutIdentity(ctx, directory, request, git.read, signal)
   if (identity === null) return false
   if ((await ctx.fs.lstat(path, undefined, signal))?.type !== 'directory') return false
-  const fields = await registration(ctx, request, identity.target, run, signal)
+  const fields = await registration(ctx, request, identity.target, git.scan, signal)
   // The primary registration is excluded even when the configured pool contains it.
   if (fields === undefined || !fields.includes(`branch refs/heads/${branch}`)
     || fields.some(field => field === 'detached' || field.startsWith('locked') || field.startsWith('prunable'))) return false
-  const head = await run(path, ['symbolic-ref', 'HEAD'])
+  const head = await git.read(path, ['symbolic-ref', 'HEAD'])
   if (head.stdout.trim() !== `refs/heads/${branch}`) return false
-  const status = await run(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=none'])
-  if (status.stdout.length !== 0) return false
-  // Git status deliberately hides skip-worktree and assume-unchanged files.
-  const flags = await run(path, ['ls-files', '-v', '-z'])
-  if (flags.stdout.split('\0').some(entry => entry.length > 0 && (entry[0] === 'S' || /^[a-z]/.test(entry)))) return false
-  const index = await run(path, ['ls-files', '--stage', '-z'])
-  if (index.stdout.split('\0').some(entry => entry.startsWith('160000 '))) return false
-  return true
+  const changed = await git.scan(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=none'], () => false)
+  if (changed) return false
+  // Git refuses removal whenever this directory exists, populated or not.
+  const modules = await git.read(path, ['rev-parse', '--git-path', 'modules'])
+  return await ctx.fs.lstat(modules.stdout.replace(/\r?\n$/, ''), { cwd: path }, signal) === undefined
 }
