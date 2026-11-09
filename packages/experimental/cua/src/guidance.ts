@@ -13,9 +13,9 @@ Setup and discovery:
 - cua.listApps(options?: { emit?: boolean }) -> { id: string, displayName: string, isRunning: true, pid: number }[] — enumerate running applications.
 - cua.findApps(query: string, options?: { emit?: boolean }) -> ({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[] — search installed applications, including stopped matches; only running matches carry pid.
 - cua.getState(options?: { emit?: boolean }) -> { apps: { id: string, displayName: string, isRunning: true, pid: number }[], browsers: [] } — summarize running applications; this is not an accessibility observation.
-- cua.getApp(selector: string) -> App — select an application by name, bundle ID, absolute path, or running PID string, obtain consent, launch in the background if needed, and read initial AX state silently; it does not activate the app.
+- cua.getApp(selector: string) -> App — select an application by name, bundle ID, absolute path, or running PID string, obtain consent, launch in the background if needed, and return without reading AX or activating the app.
 - app.getWindows(options?: { emit?: boolean }) -> { windowId: number, appName: string, title: string, bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null }[] — enumerate windows with global native bounds; null onCurrentSpace means unknown Space membership.
-- app.getWindow(windowId: number) -> Window — select one window and read its initial AX state silently; do this before any window screenshot or coordinate input.
+- app.getWindow(windowId: number) -> Window — select a window by an ID from getWindows without reading AX. Providers reject closed or foreign windows when operating on them.
 - app.activate() -> ActionResult — request explicit foreground activation; use only when foreground access is required.
 - app.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide the app and restore its selected, focused, main, or sole window without activation.
 - window.show() -> { dispatched: boolean, windowId: number | null, foregroundChanged: boolean | null } — unhide and restore that explicit window without activation.
@@ -23,7 +23,7 @@ Setup and discovery:
 ## Accessibility tree
 Available at app or window level depending on the platform.
 
-Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
+Read getAccessibilityTree explicitly before using element ids. Selection and screenshots do not read or replace the current AX snapshot. Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
 - getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
@@ -32,7 +32,7 @@ Element ids are opaque strings from the latest successful tree; the object facad
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
 ## Simulated mouse
-Use an explicit window for screenshots and pointer input.
+Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot(options?: { emit?: boolean }) -> { bytes: Uint8Array, mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', pixelWidth: number, pixelHeight: number, windowId: number } — capture the selected window as one encoded image; bytes is a JavaScript byte array, and mimeType identifies its encoding, so do not assume PNG.
 - ${hoverSignature} -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press.
@@ -47,7 +47,7 @@ Available at app or window level depending on the platform.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
 
-Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree and getWindow read through raw getState; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.`
+Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.`
 
 /**
  * Describe the system-pointer option for a provider that declares the capability.

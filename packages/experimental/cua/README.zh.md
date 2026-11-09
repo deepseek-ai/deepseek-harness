@@ -31,7 +31,7 @@ kind: "package-reference"
 
 挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会先报告，再释放该连接；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
@@ -41,7 +41,7 @@ kind: "package-reference"
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
-动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功观察窗口后，传入 `relative: true` 可使用 0～999 的整数坐标。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
+动作返回 `dispatched` 布尔值；`mouseMove` 还会返回 `hoverRoute` 和 `systemPointerMoved`，`show()` 还会返回 `windowId` 和 `foregroundChanged`。请读取新状态以验证结果。截图和指针操作只能通过显式窗口对象使用。坐标操作默认使用最近返回截图中的像素；成功读取覆盖该窗口的 AX 或取得截图后，传入 `relative: true` 可使用 0～999 的整数坐标。仅选择窗口不会建立该观察。数值除以 1000 后按窗口尺寸缩放，并限制在窗口内。Host 在返回截图前解析附件归一化和当前模型的图片缩放规则，再将输入换算为提供方的原生窗口坐标。窗口尺寸变化会使截图映射失效，绝对坐标遇到 `SCREENSHOT_REQUIRED` 时需要重新截图。窗口缩放后以 `WINDOW_CHANGED` 拒绝旧坐标；单纯移动窗口不改变窗口内坐标。
 
 `click(target, { holdMs: 800 })` 按住鼠标按钮 800 毫秒后松开。`holdMs` 仅适用于 `click`；它接受非负整数，双击时应用于每次按下；0 表示按下后立即松开，不额外等待。提供方配置 `maxClickHoldMs` 限制显式按住时长，默认 5000 毫秒。指定时长后使用鼠标事件；省略时保留普通点击行为。按住时间计入操作超时，取消或超时会松开按钮。已接收的输入无法撤销；辅助进程被强制终止时无法保证松开。
 
@@ -89,7 +89,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 [操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
-对象门面（[src/api.ts](src/api.ts)）构建共享的 `CuaSurface`，并从它派生 `CuaApp` 和 `CuaWindow`。派生工厂注入作用域参数以及该作用域的辅助功能和键盘检查；共享基类不为仅属于应用的能力分支。在单个 API 实例内，门面按 `appHandle` 保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它。`getWindow` 静默读取初始树；当 provider 报告应用级辅助功能时，`getApp` 也静默读取。之后每次 `getAccessibilityTree()` 在分派前使上一份快照失效，元素操作使用最新快照 ID。只有 `CuaWindow` 可以截图或发送指针输入。
+对象门面（[src/api.ts](src/api.ts)）构建共享的 `CuaSurface`，并从它派生 `CuaApp` 和 `CuaWindow`。派生工厂注入作用域参数以及该作用域的辅助功能和键盘检查；共享基类不为仅属于应用的能力分支。在单个 API 实例内，门面按 `appHandle` 保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它。选择对象不改变当前辅助功能快照。每次显式调用 `getAccessibilityTree()` 在分派前使上一份快照失效，元素操作使用最新快照 ID。只有 `CuaWindow` 可以截图或发送指针输入。
 
 提供方启动能力在安装时固定：平台、方法、应用级辅助功能、键盘作用域、浏览器支持和坐标空间。原生 `getCapabilities` RPC 只报告运行时权限和会话锁定状态；`installCua` 为模型可见结果合并两层。原生 RPC 仍是通用操作表示，而不是能力清单，因此 provider 指引说明其平台支持的动作。
 
