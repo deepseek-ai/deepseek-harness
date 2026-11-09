@@ -78,7 +78,6 @@ actor AXWorker {
     private let axTimeout: Float
     private let textEventInterval: Double
     private let maxClickHoldMs: Int
-    private let systemPointerHover: Bool?
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
     private let heldKeys: HeldKeys
@@ -87,14 +86,13 @@ actor AXWorker {
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil, heldKeys: HeldKeys = HeldKeys(),
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, heldKeys: HeldKeys = HeldKeys(),
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
         self.heldKeys = heldKeys
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
         self.maxClickHoldMs = maxClickHoldMs
-        self.systemPointerHover = systemPointerHover
         self.sessionState = sessionState
     }
     private func identifier(_ kind: String) throws -> String {
@@ -108,13 +106,13 @@ actor AXWorker {
         access = created
         return created
     }
-    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String, params: RequestParameters) throws -> Bool {
-        let requestSetting = try params.optionalBoolean("allowSystemPointer")
+    private func moveUsingAX(_ element: AXUIElement?, windowID: UInt32, handle: String) throws -> DriverOutcome {
         let hover = hovers[handle] ?? AXHover()
         hovers[handle] = hover
-        if try hover.move(to: element, in: windowID, access: ax()) { return true }
-        try AXHover.requireSystemPointer(connectionSetting: systemPointerHover, requestSetting: requestSetting)
-        return false
+        guard try hover.move(to: element, in: windowID, access: ax()) else {
+            throw NativeFailure(code: "HOVER_UNAVAILABLE", message: "No enabled element at this target or in its ancestors offers both AXShowAlternateUI and AXShowDefaultUI. No input was sent and the pointer did not move. Use click on an available control or performAction with an action from listActions.")
+        }
+        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
     }
     private func inputs() -> (KeyboardInput, WindowPointerInput) {
         if let keyboard, let pointer { return (keyboard, pointer) }
@@ -367,6 +365,7 @@ actor AXWorker {
             try ax().selectText(element(handle, params), text: params.string("text"), prefix: params.optionalString("prefix"),
                                 suffix: params.optionalString("suffix"), mode: params.optionalString("selectionType") ?? "text")
         case "click", "mouseMove":
+            let useSystemPointer = try params.optionalBoolean("useSystemPointer") ?? false
             let holdMs = params.contains("holdMs") ? try params.integer("holdMs", in: 0...maxClickHoldMs) : nil
             let button = try params.optionalString("mouseButton") ?? "left"
             let count = params.contains("clickCount") ? try params.integer("clickCount", in: 1...2) : 1
@@ -386,9 +385,7 @@ actor AXWorker {
                 }
                 if method == "mouseMove" {
                     _ = try NativePlatform.ownedWindow(identity.pid, enclosing.id)
-                    if try moveUsingAX(selected, windowID: enclosing.id, handle: handle, params: params) {
-                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
-                    }
+                    if !useSystemPointer { return try moveUsingAX(selected, windowID: enclosing.id, handle: handle) }
                 } else {
                     try ax().requireEnabled(selected)
                 }
@@ -405,12 +402,10 @@ actor AXWorker {
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
             if method == "mouseMove" {
                 try WindowPointerInput.validate(point, in: route)
-                if elementWindow == nil {
+                if !useSystemPointer {
                     var hit = try ax().element(at: CGPoint(x: window.bounds.x + point.x, y: window.bounds.y + point.y), owner: identity)
                     if let target = hit, try ax().windowID(target) != window.windowID { hit = nil }
-                    if try moveUsingAX(hit, windowID: window.windowID, handle: handle, params: params) {
-                        return .result(Self.mouseMoveResult(route: "accessibility", pointerMoved: false))
-                    }
+                    return try moveUsingAX(hit, windowID: window.windowID, handle: handle)
                 }
                 return .mouseMove(route, point)
             }

@@ -49,7 +49,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Failures and recovery
 
-The tool requires an Agent Session; a non-agent call fails with `LSP_WORKSPACE_REQUIRED` before any query. The working-directory service supplies and validates its current root. When no provider handles the file's extension, the query fails with `LSP_UNAVAILABLE`; malformed provider payloads remain structured `LSP_MALFORMED_RESPONSE` errors. These surface to the model as error tool results it can read and route on.
+An unknown operation, a blank `file_path`, or a coordinate that is not a positive integer fails with `ToolArgsError` `INVALID_ARGS` before any query. The tool requires an Agent Session; a non-agent call fails with `LSP_WORKSPACE_REQUIRED` before any query. The working-directory service supplies and validates its current root. When no provider handles the file's extension, the query fails with `LSP_UNAVAILABLE`; malformed provider payloads remain structured `LSP_MALFORMED_RESPONSE` errors. These and every provider failure surface to the model as error tool results that keep the failure's `name` and `code`; the [LSP navigation subsystem](../../../docs/subsystems/lsp.md#failures) lists the codes.
 
 -----
 

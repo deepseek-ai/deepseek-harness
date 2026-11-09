@@ -1,7 +1,7 @@
 /** Model-authored operation JSON cannot supply host configuration or bypass retained identities. */
 import { expect, it } from 'vitest'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from '../src/protocol.ts'
+import { CapabilitiesResult, NativeScreenshotResult, Request, ScreenshotResult, ShowResult, StateResult, SystemPointerRequest, WindowsResult } from '../src/protocol.ts'
 
 it('preserves opaque window IDs in requests and results', () => {
   const windowId = 'window-main'
@@ -203,7 +203,7 @@ it.each([true, false])('requires the reported application-level accessibility ca
     platform: 'macos', permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility,
     keyboard: ['app'], sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
   const { appLevelAccessibility: _omitted, ...missing } = capabilities
   expect(CapabilitiesResult.safeParse(missing).success).toBe(false)
 })
@@ -219,7 +219,7 @@ it.each([
     platform: 'windows', permissions: { accessibility: true, screenRecording: true }, appLevelAccessibility: false,
     keyboard, sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
-  expect(CapabilitiesResult.parse(capabilities)).toEqual(capabilities)
+  expect(CapabilitiesResult.parse(capabilities)).toEqual({ ...capabilities, systemPointer: false })
 })
 
 it.each([
@@ -240,4 +240,13 @@ it('requires keyboard scopes', () => {
     sessionLocked: false, methods: [], coordinateSpace: 'screenshot-pixels', browser: false,
   }
   expect(CapabilitiesResult.safeParse(capabilities).success).toBe(false)
+})
+
+it('admits the pointer option only in the system-pointer model schema and only as a boolean', () => {
+  const target = { appHandle: 'app', windowId: '1', x: 0, y: 0 }
+  const request = { method: 'mouseMove', params: { ...target, useSystemPointer: true } }
+  expect(Request.safeParse(request).success).toBe(false)
+  expect(SystemPointerRequest.safeParse(request).success).toBe(true)
+  expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)
+  expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, arbitraryField: true } }).success).toBe(false)
 })

@@ -67,6 +67,20 @@ describe('SandboxPolicyService', () => {
     }
   })
 
+  it('rejects a session cwd containing a NUL byte with SANDBOX_INVALID_ROOT', async () => {
+    const cwd = '/invalid\0session'
+    const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/ws' })
+    try {
+      expect(() => ctx.sandboxPolicy.resolve({ session: session('sess-invalid-cwd', cwd) })).toThrow(expect.objectContaining({
+        name: 'SandboxInvalidRootError',
+        code: 'SANDBOX_INVALID_ROOT',
+        message: `Invalid sandbox workspace root ${JSON.stringify(cwd)}: the Session working directory must be an absolute execution-world path without NUL bytes`,
+      }))
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('resolves the deployment policy for an agentless call', async () => {
     const ctx = await mounted({ mode: 'workspace-write', workspaceRoot: '/fallback' })
     expect(ctx.sandboxPolicy.resolve()).toEqual({
