@@ -1,6 +1,5 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import console from 'node:console'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
@@ -16,6 +15,7 @@ import { PROGRAM_PROTOCOL_VERSION, type ProgramResult, type HostMethods, type Pr
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperties = Object.defineProperties
 const capturedObjectFreeze = Object.freeze
+const nativeConsole = globalThis.console
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -150,7 +150,7 @@ export async function runNodeMain(
             })
             Object.defineProperty(evaluator.globals, 'Image', { configurable: true, enumerable: true, value: Image })
             if (format !== 'function-body') Object.defineProperty(evaluator.globals, 'console', {
-              configurable: true, enumerable: true, writable: true, value: console,
+              configurable: true, enumerable: true, writable: true, value: nativeConsole,
             })
           }
           for (const namespace of data.namespaces) {
