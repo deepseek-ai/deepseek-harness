@@ -64,7 +64,7 @@ func discoversNormalWindowsAndVisibleAuxiliaryWindows(layer: Int, onScreen: Bool
                             bounds: WindowBounds(x: 0, y: 0, width: width, height: 100),
                             isOnScreen: onScreen, onCurrentSpace: currentSpace, layer: layer)
     #expect(window.isDiscoverable == expected)
-    #expect(window.json["layer"] == nil)
+    #expect(window.json.object?.keys.contains("layer") == false)
 }
 
 @Test func separatesUnsupportedMethodsFromInvalidParameters() throws {
