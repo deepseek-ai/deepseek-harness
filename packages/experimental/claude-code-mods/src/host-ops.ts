@@ -78,7 +78,7 @@ const storeDomainSpec = defineDomain({
 })
 
 /** A call to a mod-registered tool that no `tool.call` hook answered; code `MOD_UNANSWERED`. */
-class ModUnansweredError extends HarnessError {
+export class ModUnansweredError extends HarnessError {
   constructor(message: string) {
     super(message, 'MOD_UNANSWERED')
     this.name = 'ModUnansweredError'
