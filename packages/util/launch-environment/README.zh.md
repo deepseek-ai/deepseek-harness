@@ -47,6 +47,8 @@ const endpoint = launchEnvironmentOf(ctx).get('DEEPSEEK_BASE_URL')?.value
 | `<invocation cwd>/.env` | harness 被启动于其中的项目；产品信任它配置自己的 agent（智能体） |
 | `$DSH_HOME/.env` | 用户自己的机器级默认值 |
 
+任一文件设置了决定进程如何启动或如何访问网络的变量名时，`dsh` 启动器会拒绝启动；[app-boot](../../boot/app-boot/README.zh.md) 说明了这些变量名，以及只有 `$DSH_HOME/.env` 可以设置的代理名与 DeepSeek 端点变量名。
+
 变量名按平台自身的规则匹配：POSIX 上精确匹配，Windows 上不区分大小写。在 Windows 上做大小写敏感的查找会选错层——shell 里的 `deepseek_api_key` 与项目 `.env` 里的 `DEEPSEEK_API_KEY` 对操作系统而言是同一个变量。
 
 ### 没有启动器引导这棵树时
