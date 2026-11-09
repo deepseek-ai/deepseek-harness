@@ -1271,9 +1271,23 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>',
-        description: 'Read the changes of a change request at one head commit as its host computes them. The first `stale` failure at a head commit polls a watched change request again at once, so its next status names the current head; later stale reads at the same commit wait for the regular poll, which bounds the reads while the host\'s answers disagree.',
+        description: 'Read the changes of a change request at one head commit as its host computes them. The first `stale` failure at a head commit polls a watched change request again at once, so its next status names the current head; later stale reads at the same commit wait for the regular poll, which bounds the reads while the host\'s answers disagree. When the latest status of a watched change request names `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'headSha', description: 'head commit the patch must describe, usually the head of the latest status.' }, { name: 'signal', description: 'cancellation of the read.' }],
         returns: 'one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>',
+        description: 'Read the review threads of a change request at one head commit. A `stale` failure polls a watched change request again as ForgeService.diff does.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'headSha', description: 'head commit the threads must be read at, usually the head of the displayed diff.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the threads read at `headSha`, or why the host did not provide them; `unsupported` when the provider cannot read reviews.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>',
+        description: 'Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls it as a stale read does.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'write', description: 'the write and the head commit the user saw.' }, { name: 'signal', description: 'cancellation of the write.' }],
+        returns: 'whether the host took the write; `unsupported` when the provider cannot write reviews, and `unknown` when the outcome must be checked on the host before the write is tried again.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
@@ -1434,10 +1448,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit; `forgePanel/diff-failed` when the host does not provide the file otherwise.'],
       },
       {
+        signature: '@Remote async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>',
+        description: 'Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read at the same head commit and update time are reused from memory, for any Session, until they are `reviewRefreshMs` old, `maxCachedReviewBytes` evicts them, or a review write through this panel drops them; a read again after that age, or a `fresh` read, shows threads resolved elsewhere since, which do not change a GitHub pull request\'s update time.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'headSha', description: 'head commit of the displayed diff.' }, { name: 'fresh', description: 'whether to read from the host even when threads at this head and update time are kept, as after the reader refreshes the view; the result replaces the kept threads.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'the threads at `headSha`, with `current` positions numbering the files of that diff.',
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/stale-head` when the latest status or the host names another head, which a host answer polls again; `forgePanel/review-unsupported` when the provider cannot read reviews; `forgePanel/review-failed` before the status was read and when the host does not provide the threads otherwise.'],
+      },
+      {
         signature: '@Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
-        description: 'Publish a line comment or completed review for a visible Session binding.',
+        description: 'Publish a line comment or completed review for a visible Session binding. The threads kept for the change request are dropped once the host answers, so the next read shows the comments.',
         parameters: [{ name: 'session', description: 'Session retaining the change request.' }, { name: 'url', description: 'visible binding URL.' }, { name: 'request', description: 'reviewed head, ranges, plain text, and explicit review decision.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.',
+      },
+      {
+        signature: '@Remote async changeRequestReviewWrite( session: Session, url: string, write: ForgeReviewWrite, signal: AbortSignal, ): Promise<ForgeReviewWriteResult>',
+        description: 'Write to the review threads or the pending review of a change request of a Session while its head is still the head the user saw. The threads kept for the change request are dropped once the host answers, so the next read shows the write, which a resolve does not show through a GitHub pull request\'s update time.',
+        parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'write', description: 'the write and the head commit of the threads the user saw.' }, { name: 'signal', description: 'request cancellation.' }],
+        returns: 'whether the host took the write; `stale` once the head moved, which polls the change request again, and `unknown` when the outcome must be checked on the host before the write is tried again.',
+        throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; an error for a write without text, a head that is not a commit object name, or an invalid line range.'],
       },
       {
         signature: '@Remote async markReady(session: Session, url: string, signal: AbortSignal): Promise<void>',
@@ -2672,6 +2700,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve the complete policy for one capability call. An approved explicit mode outranks the session\'s last `sandbox/mode` event, which outranks the deployment default. A session cwd is its workspace-write boundary; the configured root is the fallback for agentless calls and sessions without a cwd. Configured extra roots and this Session\'s active registrations are snapshotted together; existing operations and processes keep their policy.',
         parameters: [{ name: 'request', description: 'optional session and approved mode override.' }],
         returns: 'the fully resolved per-call mode and absolute workspace root.',
+        throws: ['`SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session\'s recorded cwd is relative or contains a NUL byte.'],
       },
       {
         signature: 'registerWritableRoot(session: Session, directory: string): () => void',
@@ -4602,14 +4631,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
         returns: 'the existing directory; recovery is committed before fulfillment. A notice failure is warned without reverting the committed state.',
-        throws: ['when the original project is also unavailable, or when a `working-directory/access` listener rejects.'],
+        throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
         description: 'Change one Session\'s directory without changing existing processes or permissions.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
-        throws: ['when the requested path is not an existing directory.'],
+        throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],
       },
     ],
   },
@@ -5899,7 +5928,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AttachmentError',
-    declaration: 'export class AttachmentError extends Error {\n    readonly code: AttachmentErrorCode;\n    constructor(message: string, code: AttachmentErrorCode, options?: ErrorOptions);\n}',
+    declaration: 'export class AttachmentError extends HarnessError {\n    override readonly code: AttachmentErrorCode;\n    constructor(message: string, code: AttachmentErrorCode, options?: ErrorOptions);\n}',
   },
   {
     name: 'AttachmentErrorCode',
@@ -6027,7 +6056,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChangeRequestSnapshot',
-    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
+    declaration: 'export interface ChangeRequestSnapshot {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly state: ChangeRequestState;\n    readonly draft: boolean;\n    readonly author: string | null;\n    readonly headBranch: string;\n    readonly headSha: string;\n    readonly baseBranch: string;\n    readonly baseSha?: string;\n    readonly additions: number;\n    readonly deletions: number;\n    readonly mergeability: Mergeability;\n    readonly mergeReady: boolean;\n    readonly mergeMethods: readonly MergeMethod[];\n    readonly reviewDecision: ReviewDecision;\n    readonly checks: readonly ChangeRequestCheck[];\n    readonly checksRollup: ChecksRollup;\n    readonly checksTruncated: boolean;\n    readonly unresolvedThreads: number;\n    readonly threadsTruncated: boolean;\n    readonly updatedAt: string;\n    readonly closedAt: string | null;\n}',
   },
   {
     name: 'ChangeRequestState',
@@ -6622,6 +6651,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeActionFailure {\n    readonly code: \'unauthenticated\' | \'stale\' | \'failed\';\n    readonly message: string;\n}',
   },
   {
+    name: 'ForgeAnchor',
+    declaration: 'export interface ForgeAnchor {\n    readonly commit: string;\n    readonly startLine: number;\n    readonly endLine: number;\n}',
+  },
+  {
     name: 'ForgeAutomaticBase',
     declaration: 'export interface ForgeAutomaticBase {\n    readonly name: string;\n    readonly worktree: boolean;\n}',
   },
@@ -6662,6 +6695,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeCheckoutState = {\n    readonly state: \'pending\';\n} | {\n    readonly state: \'none\';\n} | {\n    readonly state: \'failed\';\n    readonly message: string;\n} | {\n    readonly state: \'ready\';\n    readonly checkout: ForgeCheckout;\n};',
   },
   {
+    name: 'ForgeCommentAuthor',
+    declaration: 'export interface ForgeCommentAuthor {\n    readonly login: string;\n    readonly avatarUrl: string | null;\n    readonly bot: boolean;\n}',
+  },
+  {
+    name: 'ForgeCommentId',
+    declaration: 'export type ForgeCommentId = Branded<\'ForgeCommentId\'>;',
+  },
+  {
     name: 'ForgeCommit',
     declaration: 'export interface ForgeCommit {\n    readonly sha: string;\n    readonly parent: string | null;\n    readonly title: string;\n    readonly author: string | null;\n    readonly authoredAt: string;\n}',
   },
@@ -6687,7 +6728,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeFailure',
-    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'unavailable\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
   },
   {
     name: 'ForgeFileLayer',
@@ -6730,8 +6771,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgePanelWorktree {\n    readonly editable: boolean;\n    readonly blocker: ForgeWorktreeBlocker | null;\n    readonly request: ForgeWorktreeRequest | null;\n    readonly created: ForgeSessionWorktree | null;\n    readonly creation: ForgeWorktreeCreation | null;\n    readonly failure: ForgeWorktreeFailure | null;\n    readonly missing: ForgeMissingWorktree | null;\n    readonly restoration: ForgeWorktreeRestoration | null;\n    readonly waiting: ForgeWorktreeWaiting | null;\n}',
   },
   {
+    name: 'ForgePendingReview',
+    declaration: 'export interface ForgePendingReview {\n    readonly id: ForgeReviewId;\n    readonly comments: number;\n}',
+  },
+  {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | ForgeFailure>;\n    fileUrl(ref: ChangeRequestRef, commit: string, path: string): string;\n    commits?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure>;\n    compare?(ref: ChangeRequestRef, base: string, head: string, s /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
@@ -6742,16 +6787,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeRepository {\n    readonly forge: string;\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
   },
   {
+    name: 'ForgeReviewComment',
+    declaration: 'export interface ForgeReviewComment {\n    readonly id: ForgeCommentId;\n    readonly author: ForgeCommentAuthor | null;\n    readonly body: string;\n    readonly createdAt: string;\n    readonly pending: boolean;\n    readonly url: string | null;\n    readonly viewerCanEdit: boolean;\n    readonly viewerCanDelete: boolean;\n}',
+  },
+  {
+    name: 'ForgeReviewData',
+    declaration: 'export interface ForgeReviewData {\n    readonly headSha: string;\n    readonly viewer: string | null;\n    readonly threads: readonly ForgeReviewThread[];\n    readonly truncated: boolean;\n    readonly pendingReview: ForgePendingReview | null;\n    readonly viewerCanReview: boolean;\n}',
+  },
+  {
+    name: 'ForgeReviewEvent',
+    declaration: 'export type ForgeReviewEvent = \'comment\' | \'approve\' | \'request-changes\';',
+  },
+  {
+    name: 'ForgeReviewId',
+    declaration: 'export type ForgeReviewId = Branded<\'ForgeReviewId\'>;',
+  },
+  {
     name: 'ForgeReviewRequest',
-    declaration: 'export type ForgeReviewRequest = {\n    readonly headSha: string;\n} & ({\n    readonly kind: \'comment\';\n    readonly comment: ForgeLineComment;\n} | {\n    readonly kind: \'review\';\n    readonly event: \'comment\' | \'approve\' | \'request-changes\';\n    readonly body: string;\n    readonly comments: readonly ForgeLineComment[];\n});',
+    declaration: 'export type ForgeReviewRequest = {\n    readonly headSha: string;\n} & ({\n    readonly kind: \'comment\';\n    readonly comment: ForgeLineComment;\n} | {\n    readonly kind: \'review\';\n    readonly event: ForgeReviewEvent;\n    readonly body: string;\n    readonly comments: readonly ForgeLineComment[];\n});',
   },
   {
     name: 'ForgeReviewResult',
     declaration: 'export type ForgeReviewResult = {\n    readonly ok: true;\n    readonly url: string;\n} | {\n    readonly ok: false;\n    readonly code: \'unsupported\' | \'stale\' | \'failed\' | \'unknown\';\n    readonly message: string;\n};',
   },
   {
+    name: 'ForgeReviewThread',
+    declaration: 'export interface ForgeReviewThread {\n    readonly id: ForgeThreadId;\n    readonly path: string;\n    readonly side: \'L\' | \'R\';\n    readonly subject: \'line\' | \'file\';\n    readonly current: ForgeAnchor | null;\n    readonly original: ForgeAnchor | null;\n    readonly diffHunk: string | null;\n    readonly resolved: boolean;\n    readonly viewerCanReply: boolean;\n    readonly viewerCanResolve: boolean;\n    readonly comments: readonly ForgeReviewComment[];\n}',
+  },
+  {
+    name: 'ForgeReviewWrite',
+    declaration: 'export type ForgeReviewWrite = {\n    readonly headSha: string;\n} & ({\n    readonly kind: \'reply\';\n    readonly thread: ForgeThreadId;\n    readonly body: string;\n    readonly pending: boolean;\n} | {\n    readonly kind: \'resolve\';\n    readonly thread: ForgeThreadId;\n    readonly resolved: boolean;\n} | {\n    readonly kind: \'edit-comment\';\n    readonly comment: ForgeCommentId;\n    readonly body: string;\n} | {\n    readonly kind: \'delete-comment\';\n    readonly comment: ForgeCommentId;\n} | {\n    readonly kind: \'add-pending\';\n    readonly comment: ForgeLineComment;\n} | {\n    readonly kind: \'submit-pending\';\n    readonly review: ForgeReviewId;\n    readonly event: ForgeReviewEvent;\n    readonly body: string;\n} | {\n    readonly kind: \'discard-pending\';\n    readonly review: ForgeReviewId;\n});',
+  },
+  {
+    name: 'ForgeReviewWriteResult',
+    declaration: 'export type ForgeReviewWriteResult = {\n    readonly ok: true;\n} | {\n    readonly ok: false;\n    readonly code: \'unsupported\' | \'stale\' | \'failed\' | \'unknown\';\n    readonly message: string;\n};',
+  },
+  {
     name: 'ForgeSessionWorktree',
     declaration: 'export interface ForgeSessionWorktree {\n    readonly path: string;\n    readonly branch: string;\n    readonly from: string | null;\n    readonly baseCommit: string;\n    readonly repositoryRoot: string;\n}',
+  },
+  {
+    name: 'ForgeThreadId',
+    declaration: 'export type ForgeThreadId = Branded<\'ForgeThreadId\'>;',
   },
   {
     name: 'ForgeWorktreeBlocker',
@@ -6892,6 +6969,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GrantRecord',
     declaration: 'export interface GrantRecord {\n    readonly kind: \'grant\';\n    readonly payload: unknown;\n}',
+  },
+  {
+    name: 'HarnessError',
+    declaration: 'export class HarnessError extends Error {\n    readonly code: string;\n    constructor(message: string, code: string, options?: ErrorOptions);\n}',
   },
   {
     name: 'HookBudget',

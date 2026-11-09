@@ -43,7 +43,7 @@ import Darwin
         self.onFatal = onFatal
         worker = AXWorker(cancellation: cancellation, axTimeout: configuration.axTimeoutSeconds,
                           textEventInterval: configuration.textEventIntervalSeconds, maxClickHoldMs: configuration.maxClickHoldMs,
-                          systemPointerHover: configuration.systemPointerHover, heldKeys: scheduler.heldKeys)
+                          heldKeys: scheduler.heldKeys)
         input = JSONLInput(limit: configuration.maxRequestBytes, cancellation: cancellation, channel: channel)
         self.writer = writer
     }

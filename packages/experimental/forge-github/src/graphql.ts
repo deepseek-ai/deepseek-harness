@@ -32,7 +32,7 @@ const THREAD_FIELDS = 'pageInfo { hasNextPage endCursor } nodes { isResolved }'
 function pullRequestFields(threads: number): string {
   return `id number url title state isDraft updatedAt closedAt
   author { login }
-  headRefName headRefOid baseRefName additions deletions mergeable mergeStateStatus reviewDecision
+  headRefName headRefOid baseRefName baseRefOid additions deletions mergeable mergeStateStatus reviewDecision
   reviewThreads(first: ${threads}) { ${THREAD_FIELDS} }
   commits(last: 1) { nodes { commit { statusCheckRollup { id state contexts(first: ${PAGE_SIZE}) {
     ${CHECK_FIELDS}
@@ -132,6 +132,8 @@ const pullRequestSchema = z.object({
   headRefName: z.string(),
   headRefOid: z.string(),
   baseRefName: z.string(),
+  // Only the diff read's head start uses the base commit, so a missing or malformed one leaves the rest of the status intact.
+  baseRefOid: z.unknown().transform(value => typeof value === 'string' && isCommit(value) ? value : undefined),
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
   mergeable: z.string(),
@@ -466,6 +468,7 @@ function toSnapshot(
     headBranch: node.headRefName,
     headSha: node.headRefOid,
     baseBranch: node.baseRefName,
+    ...node.baseRefOid === undefined ? {} : { baseSha: node.baseRefOid },
     additions: node.additions,
     deletions: node.deletions,
     mergeability: mergeability(node.mergeable),

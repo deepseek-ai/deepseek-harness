@@ -1,5 +1,6 @@
 /** Live panel state of one followed Session, shared by all of its followers. */
 
+import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
@@ -230,6 +231,8 @@ export class SessionPanel {
   }
 
   private publish(next: ForgePanelState): void {
+    // A reinspection after a tool result usually finds the same checkout; equal states reach no follower.
+    if (isDeepStrictEqual(next, this.current)) return
     this.current = next
     for (const notify of [...this.followers]) notify()
   }

@@ -306,6 +306,8 @@ describe('forgePanel.follow', () => {
 
     expect(moved.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
     expect(opened.provider.probes).toEqual(['fake.test', 'other.test'])
+    // A new commit gives the next inspection a state of its own to publish.
+    await git(repo, 'commit', '--allow-empty', '-m', 'again')
     shellTurn(opened.session, 2, [{ callId: 'again', command: 'ls', output: '' }])
     await follower.next(state => state.checkout.state === 'ready')
     expect(follower.states.at(-1)?.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
@@ -724,6 +726,57 @@ describe('forgePanel change request diffs', () => {
     await reader(other).until(state => polled(state, pullUrl(7)))
     await expect(other.ctx.forgePanel.changeRequestDiff(other.session, pullUrl(7), null, signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'down' })
+  })
+
+  it('reads the patch and the .gitattributes together, and reports the patch\'s failure before the attributes failure', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => polled(state, pullUrl(7)))
+    const read = async (): Promise<unknown> => await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
+    const cancelled: string[] = []
+    // The patch read ends only after the attributes read has failed, so the attributes failure always comes first.
+    let attributesFailed = Promise.withResolvers<undefined>()
+    const later = <T>(value: T) => async (): Promise<T> => {
+      await attributesFailed.promise
+      return value
+    }
+
+    // Failed reads are not kept, so each case reads again.
+    const diff = vi.spyOn(opened.provider, 'diff').mockImplementation(later<string | ForgeFailure>({ code: 'too-large', message: 'diff over 300 files' }))
+    const text = vi.spyOn(opened.provider, 'fileText').mockImplementation(async () => {
+      attributesFailed.resolve(undefined)
+      return { code: 'unavailable', message: 'attributes down' }
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'diff over 300 files' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>({ code: 'stale', message: 'head moved' }))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'head moved' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>(PATCH))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'attributes down' })
+
+    // A failed patch read cancels the attributes read it no longer needs.
+    diff.mockResolvedValue({ code: 'unavailable', message: 'patch down' })
+    text.mockImplementation(async (_ref, _commit, _path, operation) => {
+      await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+      cancelled.push('attributes')
+      throw operation.reason
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'patch down' })
+    expect(cancelled).toEqual(['attributes'])
+
+    // The patch read finishes only once the attributes read has started, so reading them one after the other never ends.
+    const attributesStarted = Promise.withResolvers<undefined>()
+    diff.mockImplementation(async () => {
+      await attributesStarted.promise
+      return PATCH
+    })
+    text.mockImplementation(async () => {
+      attributesStarted.resolve(undefined)
+      return 'src/** linguist-generated\n'
+    })
+    await expect(read()).resolves.toMatchObject({ files: [{ path: 'src/a.ts', layer: 'test' }] })
   })
 
   it('lists the commits of a change request and reads consecutive ones from the first one\'s parent', async () => {
@@ -1726,18 +1779,35 @@ describe('forgePanel actions', () => {
     expect(settled).toBe(false)
     inspection.release()
     await inspected
-    await follower.next(() => true)
 
     const probe = Promise.withResolvers<ForgeReadiness>()
     opened.provider.readinessImpl = () => probe.promise
     settled = false
     const probed = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
-    await follower.next(() => true)
+    await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
     probe.resolve({ state: 'ready', message: null })
     await probed
     expect(opened.provider.probes).toHaveLength(3)
+  })
+
+  it('publishes nothing when a reinspection and a sign-in probe find what the panel already shows', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && state.readiness !== null)
+    await settle()
+    const published = follower.states.length
+    const inspections = opened.sandbox.calls.length
+
+    shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await settle()
+
+    expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
+    expect(opened.provider.probes).toHaveLength(2)
+    expect(follower.states).toHaveLength(published)
   })
 
   it('refreshes a Session outside a checkout without polling change requests that no provider serves', async () => {
@@ -1749,8 +1819,10 @@ describe('forgePanel actions', () => {
 
     await opened.ctx.forgePanel.refresh(opened.session, signal)
 
-    const refreshed = await follower.next(state => state.checkout.state === 'none')
-    expect(refreshed.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
+    // The refresh found the same state, which the panel already published.
+    const refreshed = follower.states.at(-1)
+    expect(refreshed?.checkout.state).toBe('none')
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])

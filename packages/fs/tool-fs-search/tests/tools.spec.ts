@@ -760,8 +760,14 @@ describe('glob results', () => {
 
   it('validates arguments (blank pattern, blank path)', async () => {
     const { ctx } = await setup()
-    expect(text(await call(ctx, 'glob', { pattern: '  ' }))).toContain('pattern must be a non-empty string')
-    expect(text(await call(ctx, 'glob', { pattern: '*', path: ' ' }))).toContain('path must be a non-empty string')
+    for (const [args, message] of [
+      [{ pattern: '  ' }, 'pattern must be a non-empty string'],
+      [{ pattern: '*', path: ' ' }, 'path must be a non-empty string'],
+    ] as const) {
+      const result = await call(ctx, 'glob', args)
+      expect(text(result)).toContain(message)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    }
   })
 
   it('threads a valid path through to the spawn as the plain search root element', async () => {
@@ -1106,16 +1112,23 @@ describe('grep results', () => {
     const result = await call(ctx, 'grep', args)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(message)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect(subprocess.spawns).toHaveLength(0)
   })
 
   it('validates arguments (empty pattern, blank path, bad include)', async () => {
     const { ctx } = await setup()
-    expect(text(await call(ctx, 'grep', { pattern: '' }))).toContain('pattern must be a non-empty string')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', path: '  ' }))).toContain('path must be a non-empty string')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '  ' }))).toContain('include must be a non-empty glob')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '!*.ts' }))).toContain('negated patterns')
-    expect(text(await call(ctx, 'grep', { pattern: 'x', include: '*.ts,*.js' }))).toContain('comma-separated list')
+    for (const [args, message] of [
+      [{ pattern: '' }, 'pattern must be a non-empty string'],
+      [{ pattern: 'x', path: '  ' }, 'path must be a non-empty string'],
+      [{ pattern: 'x', include: '  ' }, 'include must be a non-empty glob'],
+      [{ pattern: 'x', include: '!*.ts' }, 'negated patterns'],
+      [{ pattern: 'x', include: '*.ts,*.js' }, 'comma-separated list'],
+    ] as const) {
+      const result = await call(ctx, 'grep', args)
+      expect(text(result)).toContain(message)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    }
   })
 
   it('accepts a whitespace-only pattern (a legitimate regex) and brace alternation in include', async () => {

@@ -69,7 +69,7 @@ Linux ordinary and terminal cancellation preserves the observed termination sign
 
 ### What can go wrong
 
-An executable that cannot be resolved fails loud with a stable error. `done` rejects when spawn or provider failure prevents a direct outcome, and that rejection does not prove whether target execution began. `waitForExit()` rejects if the selected owner can no longer prove its range empty, and cleanup still attempts termination. A read past the retained tail is `lossy` and points at the spill file when one exists. A fallback process group or observed terminal session can miss a descendant that escapes before observation — see the limitations below.
+An executable that cannot be resolved fails loud with a stable error. `done` rejects when spawn or provider failure prevents a direct outcome, and that rejection does not prove whether target execution began: a platform spawn error stays the original Node error, while a Windows Job runner that fails after it started or breaks its IPC channel rejects with `SubprocessError` `SUBPROCESS_RUNNER_FAILED` or `SUBPROCESS_RUNNER_IPC_FAILED`. A terminal request on a host where node-pty cannot load throws `SUBPROCESS_PTY_UNAVAILABLE`. `waitForExit()` rejects if the selected owner can no longer prove its range empty, and cleanup still attempts termination. A read past the retained tail is `lossy` and points at the spill file when one exists. A fallback process group or observed terminal session can miss a descendant that escapes before observation — see the limitations below.
 
 -----
 

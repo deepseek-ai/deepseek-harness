@@ -15,8 +15,10 @@ import {
   listDirectory,
   probe,
   probeNoFollow,
+  readByteWindow,
   readForEdit,
   readTextForDiff,
+  readWholeBytes,
   readWholeText,
   resolveLocalTarget,
   restoreLineEndings,
@@ -979,6 +981,15 @@ describe('readForEdit + restoreLineEndings', () => {
     await expect(readForEdit(join(dir, 'bad'), join(dir, 'bad'))).rejects.toMatchObject({ code: 'FS_NOT_TEXT' })
   })
 
+  it('classifies a missing file and a directory read for editing', async () => {
+    await expect(readForEdit(join(dir, 'missing'), '~/missing')).rejects.toMatchObject({
+      name: 'FsError', code: 'FS_NOT_FOUND', message: 'cannot edit "~/missing": not found',
+    })
+    await expect(readForEdit(dir, '~/dir')).rejects.toMatchObject({
+      name: 'FsError', code: 'FS_NOT_REGULAR_FILE', message: 'cannot edit "~/dir": not a regular file',
+    })
+  })
+
   it('passes a live (non-aborted) signal through the read', async () => {
     const file = join(dir, 'a.txt')
     await writeFile(file, 'one\ntwo')
@@ -1034,4 +1045,43 @@ describe('atomic write failures', () => {
       expect(await readdir(dir)).toEqual([])
     },
   )
+})
+
+describe('Node errno classification', () => {
+  it('classifies metadata, resolution, and read faults on a symlink loop', async () => {
+    const loop = join(dir, 'loop')
+    await symlink(loop, loop)
+    const ioError = { name: 'FsError', code: 'FS_IO_ERROR' }
+    await expect(probe(loop)).rejects.toMatchObject(ioError)
+    await expect(resolveLocalTarget(dir, 'loop')).rejects.toMatchObject(ioError)
+    await expect(readWholeText(localTarget(loop))).rejects.toMatchObject(ioError)
+  })
+
+  it('classifies a regular file replaced by a directory after the raw-read stat', async () => {
+    const file = join(dir, 'swap.bin')
+    await writeFile(file, 'bytes')
+    const failure = await readWholeBytes(localTarget(file), undefined, 1024, {
+      inspectReadBytesAfterStat: async () => {
+        await unlink(file)
+        await mkdir(file)
+      },
+    }).then(() => undefined, (caught: unknown) => caught)
+    expect(failure).toBeInstanceOf(FsError)
+    expect(failure).toMatchObject({ name: 'FsError', code: 'FS_NOT_REGULAR_FILE', cause: expect.objectContaining({ code: 'EISDIR' }) as Error })
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('maps unreadable file content to FS_PERMISSION_DENIED', async () => {
+    const file = join(dir, 'locked.txt')
+    await writeFile(file, 'secret')
+    await chmod(file, 0o000)
+    try {
+      const denied = { name: 'FsError', code: 'FS_PERMISSION_DENIED', message: `cannot read "${file}": permission denied` }
+      await expect(readWholeText(localTarget(file))).rejects.toMatchObject(denied)
+      await expect(collect(streamWholeText(localTarget(file)))).rejects.toMatchObject(denied)
+      await expect(readByteWindow(localTarget(file), { offset: 0, length: 4 })).rejects.toMatchObject(denied)
+      await expect(readForEdit(file, file)).rejects.toMatchObject({ code: 'FS_PERMISSION_DENIED', message: `cannot edit "${file}": permission denied` })
+    } finally {
+      await chmod(file, 0o600)
+    }
+  })
 })

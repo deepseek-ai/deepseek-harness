@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -11,7 +11,7 @@ export type CuaSnapshotId = Branded<'CuaSnapshotId'>
 /** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
 export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export type CuaOperation = z.output<typeof Request>
+export type CuaOperation = z.output<typeof SystemPointerRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
@@ -42,6 +42,10 @@ export interface CuaAxOptions extends CuaObservationOptions {
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
+  maxDepth?: number
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
@@ -49,7 +53,7 @@ export type CuaCapabilities = z.output<typeof CapabilitiesResult>
 export type CuaStartupCapabilities = Pick<
   CuaCapabilities,
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
->
+> & { systemPointer?: boolean }
 /** App discovery result accepted by getApp. */
 export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
 /** An installed application match; running matches include a process identifier. */
@@ -103,8 +107,8 @@ export interface CuaSurface {
   /**
    * Read the full accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
-   * @param options - emission, menu expansion and field detail options.
-   * @returns Full accessibility tree text with element ids, subject to the provider's traversal limits.
+   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAxOptions): Promise<string>
   /**
@@ -196,10 +200,12 @@ export interface CuaWindow extends CuaSurface {
    * Returning and subsequent observations do not restore the previous pointer position.
    * Other input and application changes can interrupt the interaction; observe before continuing.
    * @param target - current element id or screenshot-local [x,y].
-   * @param options - coordinate mode; applies only to [x,y].
+   * @param options - Coordinate mode for points. Only providers reporting systemPointer accept useSystemPointer.
+   * True requests physical movement for this call only.
    * @returns dispatch evidence and the selected route; observe the resulting UI after any UI delay.
    */
-  mouseMove(target: CuaElementId | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
+  mouseMove(target: CuaElementId | readonly [number, number],
+    options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
    * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.

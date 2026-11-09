@@ -271,7 +271,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **不支持 `GenerateOptions.stop`**——pi-ai 的通用流式选项无法跨提供方保证停止序列行为。
 - **对话更新支持只来自已安装的 pi-ai 目录**——原生系统与工具更新需要目录模型的对话中 compat 标志，profile 不能设置这些标志。手工声明的路由与未标记的模型会以用户角色提醒接收后续系统文本，并在每次请求开头接收完整的当前工具列表。
 - **图片只在 user 与工具结果消息中被接受**——system、developer 或 assistant 历史中的图片在两条转换路径上都会以 `UNSUPPORTED_CONTENT` 失败。
-- **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态。
+- **提供方 HTTP 状态不可用**——pi-ai 错误事件不跨提供方暴露稳定 HTTP 状态，失败按错误文本分类。信息以 4xx 或 5xx 状态码开头时（Anthropic 与 OpenAI SDK 的错误即如此），状态码规则只读取该状态码。其他格式（如 `Mistral API error (<status>): <body>`）仍会匹配信息中任意位置引用的状态码；配额、限流与无效请求的措辞规则读取整条信息，因此网关在 5xx 响应体中转述上游的 `insufficient_quota` 或 `invalid_request_error` 时，会分类为不重试的 `QUOTA` 或 `INVALID_REQUEST`。
 - **重试策略由提供方自有，而非 SDK 重试**——pi-ai SDK 重试保持禁用，因此持久 agent（智能体）步骤与 `llm/retry` 事件拥有每个可见尝试，直接 `ctx.llm.stream()` 调用仍是单次尝试。
 - **流式 JSON 工具调用参数避免逐 delta 重复解析**——安装的 pi-ai 带有 [`patches/@earendil-works__pi-ai@1.3.0.patch`](../../../patches/@earendil-works__pi-ai@1.3.0.patch)，它移除了每个流适配器中对整段累计参数 JSON 的逐 delta 重新解析（上游 [earendil-works/pi#9265](https://github.com/earendil-works/pi/issues/9265)）；未打补丁时，数 MB 的参数流会在事件循环上消耗 O(n²) CPU，并使进程内所有会话停滞。完成事件提供解析后的参数；Responses 可能在参数完成和输出项完成时分别解析。本适配器只读取 delta 字符串与最终参数。每次升级 pi-ai 时都要重新应用或撤销该补丁。
 - **即使端点会接受，过期的 Anthropic thinking 也会被省略**——前缀检查取决于模型、账户和请求，而适配器无法观测这些因素，因此每次前缀变化以及每个不含 `prefixDigest` 的回放状态都会让模型失去这部分推理，Anthropic 会以输出 token 重新生成它。摘要覆盖 pi-ai 上下文对象，而不是线上请求体：对话中途切换认证或会改变线上请求的 compat 设置不会被检测到；改变 Anthropic 消息序列化的 pi-ai 升级需要在 [`src/prefix-binding.ts`](src/prefix-binding.ts) 中使用新的 `DIGEST_SEED`；本包构建这些对象的方式发生任何变化，都会使已记录的 thinking 被丢弃一次。

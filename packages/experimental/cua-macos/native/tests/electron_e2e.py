@@ -136,7 +136,7 @@ def main():
                     call('mouseMove', {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId'], 'x': 0}, 'INVALID_ARGUMENT')
                     hover_target = {**owner, 'snapshotId': state['snapshotId'], 'elementId': trigger['elementId']}
                     call('mouseMove', hover_target, 'HOVER_UNAVAILABLE')
-                    call('mouseMove', {**hover_target, 'allowSystemPointer': True})
+                    call('mouseMove', {**hover_target, 'useSystemPointer': True})
                     actual = wait_state(lambda actual: actual['popupOpen'], 'Hover did not reveal delayed information')
                     assert actual['pointerDowns'] == baseline and actual['lastMove'] == {'buttons': 0, 'trusted': True}, actual
                     state = observe()
@@ -151,13 +151,13 @@ def main():
                     target = {**owner, 'windowId': window_id,
                               'x': bounds[0] + bounds[2] / 2 - window['bounds']['x'],
                               'y': bounds[1] + bounds[3] / 2 - window['bounds']['y']}
-                    call('mouseMove', {**target, 'allowSystemPointer': True})
+                    call('mouseMove', {**target, 'useSystemPointer': True})
                     state = observe()
                     assert 'Hover information' in state['tree'], 'Moving into the popup dismissed it'
                     call('click', target)
                     actual = wait_state(lambda actual: actual['popupClicks'] == expected_clicks, 'Popup action did not receive its click')
                     assert actual['popupOpen'] and actual['pointerDowns'] == baseline + 1 and actual['popupClickTrusted'], actual
-                    call('mouseMove', {**owner, 'windowId': window_id, 'x': 10, 'y': 40, 'allowSystemPointer': True})
+                    call('mouseMove', {**owner, 'windowId': window_id, 'x': 10, 'y': 40, 'useSystemPointer': True})
                     wait_state(lambda actual: not actual['popupOpen'], 'Leaving the hover region did not close it')
                 hover_sequence()
                 helper.eof()

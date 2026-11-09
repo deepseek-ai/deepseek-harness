@@ -133,6 +133,7 @@ describe('BashTerminalBackend startup rollback', () => {
     controller.abort(abortReason)
     await expect(backend.spawn(spec(agent(ctx), controller.signal))).rejects.toBe(abortReason)
     await expect(backend.spawn(spec(agent(ctx)))).rejects.toThrow('empty argv')
+    await expect(backend.spawn(spec(agent(ctx)))).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_INVALID_ARGV' })
   })
 
   it('closes failed startup and aggregates cleanup failure', async () => {
@@ -157,8 +158,11 @@ describe('BashTerminalBackend startup rollback', () => {
     const aggregate = new BashTerminalBackend(ctx, config(), spawnTerminal, () => doublyFailed)
     await expect(aggregate.spawn(spec(agent(ctx)))).rejects.toEqual(expect.objectContaining({
       name: 'TerminalBackendCleanupError',
+      code: 'CLEANUP_FAILED',
       spawnError: startupFailure,
       cleanupError: cleanupFailure,
+      errors: [startupFailure, cleanupFailure],
+      cause: expect.objectContaining({ errors: [startupFailure, cleanupFailure] }) as AggregateError,
     } satisfies Partial<TerminalBackendCleanupError>))
   })
 
@@ -347,6 +351,7 @@ describe('BashTerminalBackend startup rollback', () => {
     await expect(confined.spawn(spec(agent(confinedCtx)))).rejects.toThrow(
       'sandbox mode "workspace-write" requires a ctx.sandbox provider in the execution world',
     )
+    await expect(confined.spawn(spec(agent(confinedCtx)))).rejects.toEqual(expect.objectContaining({ name: 'TerminalError', code: 'NO_SANDBOX' }))
   })
 
   it('forwards terminal allocation cancellation directly', async () => {
@@ -523,8 +528,10 @@ describe('BashTerminalBackend startup rollback', () => {
     }) as unknown as LocalPtySession
     const exited = new BashTerminalBackend(ctx, { ...config(), shellDialect: 'pwsh' }, async () => terminalHandle(), () => sessionFor('session_exit'))
     await expect(exited.spawn(spec(agent(ctx)))).rejects.toThrow('PTY shell exited during startup')
+    await expect(exited.spawn(spec(agent(ctx)))).rejects.toEqual(expect.objectContaining({ name: 'TerminalError', code: 'STARTUP_EXITED' }))
     const timedOut = new BashTerminalBackend(ctx, { ...config(), shellDialect: 'pwsh' }, async () => terminalHandle(), () => sessionFor('timeout'))
     await expect(timedOut.spawn(spec(agent(ctx)))).rejects.toThrow('did not reach readiness before startup timeout')
+    await expect(timedOut.spawn(spec(agent(ctx)))).rejects.toEqual(expect.objectContaining({ name: 'TerminalError', code: 'STARTUP_TIMEOUT' }))
   })
 
   it('bounds all pwsh startup retries with one deadline', async () => {
