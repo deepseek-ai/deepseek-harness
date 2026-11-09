@@ -19,9 +19,10 @@ import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
-import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult, StateResult, WindowsResult } from './protocol.ts'
+import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
 import { CuaConfigFields } from './config.ts'
 import { CuaCoordinates } from './coordinates.ts'
+import { observeNativeWindows } from './native-observation.ts'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
@@ -77,9 +78,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Maximum nodes admitted by a native accessibility snapshot. */
+  /** Default node limit when an accessibility read omits maxElements. */
   maxElements: number
-  /** Maximum depth traversed by a native accessibility snapshot. */
+  /** Default depth limit when an accessibility read omits maxDepth. */
   maxDepth: number
 }
 
@@ -98,13 +99,6 @@ interface CuaExecution extends ToolExecution {
   coordinates: CuaCoordinates
 }
 
-
-// Providers can retain geometry for a live window without listing it as a discovery candidate.
-const NativeWindows = WindowsResult.element.extend({ cacheOnly: z.literal(true).optional() }).array()
-const NativeState = StateResult.extend({ windows: NativeWindows })
-function discoveredWindows(windows: z.output<typeof NativeWindows>, selected?: number | null) {
-  return windows.flatMap(({ cacheOnly, ...window }) => !cacheOnly || window.windowId === selected ? [window] : [])
-}
 
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
@@ -162,7 +156,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
   const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
-  const guidance = `${instructions}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const guidance = `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
@@ -237,7 +231,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
             maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
@@ -301,18 +295,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           coordinateSpace: capabilities.coordinateSpace,
         }
       }
-      if (method === 'getState') {
-        const state = NativeState.parse(result)
-        if (state.appHandle !== parsedParams.appHandle || state.windowId !== (parsedParams.windowId ?? null)) {
-          throw new NativeError('NATIVE_PROTOCOL', 'Native observation belongs to another application or window')
-        }
-        execution.coordinates.observe(state.appHandle, state.windows, state.windowId ?? undefined)
-        return { ...state, windows: discoveredWindows(state.windows, state.windowId) }
-      }
-      if (method === 'listWindows') {
-        const windows = NativeWindows.parse(result)
-        execution.coordinates.observe(parsedParams.appHandle as CuaAppHandle, windows)
-        return discoveredWindows(windows)
+      if (request.method === 'getState' || request.method === 'listWindows') {
+        return observeNativeWindows(request, result, execution.coordinates)
       }
       return result
     }

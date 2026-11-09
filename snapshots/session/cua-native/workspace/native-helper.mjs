@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, panelOpen: false, panelCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -115,7 +115,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
   const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
   const panel = { ...window, windowId: 10, title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
-  const windows = () => [window, axlessWindow, transformedWindow, ...application.panelOpen ? [panel] : []]
+  const windows = () => [window, axlessWindow, transformedWindow, ...(application.panelVisibility === 'closed' ? [] :
+    [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
@@ -170,13 +171,16 @@ function createApplicationState(socket, record, application, captureBroker, conn
       const axless = params.windowId === 8
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
-      if (params.windowId === panel.windowId && application.panelOpen) return {
+      if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
         tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
         elements: [], windows: windows(), truncated: false,
       }
       if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }
+      if (params.maxElements === 1) return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
+        tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
+        elements: [], windows: windows(), truncated: true }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
         snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
@@ -223,7 +227,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
-    if (method === 'pressKey' && params.key === 'F8') application.panelOpen = true
+    if (method === 'pressKey' && params.key === 'F8') application.panelVisibility = 'visible'
+    if (method === 'pressKey' && params.key === 'F7' && application.panelVisibility !== 'closed') application.panelVisibility = 'hidden'
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true

@@ -134,7 +134,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const toolCalls = agent.session.snapshotEvents().filter(event => event.type === 'tool/call')
   expect(events.filter(event => event.event === 'call').map(event => event.requestId)).toEqual(toolCalls.map(event => event.data.callId))
   expect(events.find(event => event.event === 'state')?.count).toBe(1)
-  expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 5000, maxDepth: 50 })
   expect(events.find(event => event.method === 'click')?.params).toMatchObject({ holdMs: 800 })
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
@@ -173,7 +173,15 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
   const retainedWindow = await retainedApp.getWindow(7)
-  expect(await retainedWindow.getAccessibilityTree({ emit: false })).toContain('Count: 1')
+  await retainedApp.getAccessibilityTree({ maxDepth: 512 })
+  expect(await retainedWindow.getAccessibilityTree({ maxElements: 100000, emit: false })).toContain('Count: 1')
+  await retainedWindow.getAccessibilityTree({ emit: false })
+  const reads = (await readEvents()).filter(event => event.method === 'getState').slice(-3)
+  expect(reads.map(event => event.params)).toEqual([
+    { appHandle: retainedApp.appHandle, maxElements: 5000, maxDepth: 512 },
+    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 100000, maxDepth: 50 },
+    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 5000, maxDepth: 50 },
+  ])
   const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const peerApp = await objectApi(peer.agent).getApp('test.fixture')
   const peerWindow = await peerApp.getWindow(7)

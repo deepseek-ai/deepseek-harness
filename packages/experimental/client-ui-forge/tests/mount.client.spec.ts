@@ -12,7 +12,8 @@ import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
-  ChangeRequestSnapshot, ForgeCommitList, ForgeReviewRequest, ForgeReviewResult,
+  ChangeRequestSnapshot, ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
+  ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
@@ -31,6 +32,7 @@ import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
 import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
 import type { NoticeSource } from '../src/client/source.ts'
 import type { ReviewSelection } from '../src/client/review.ts'
+import { reviewThread } from './thread-fixtures.client.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
 import { WorktreeSettings } from '../src/client/WorktreeSettings.tsx'
 import type { WorktreeSettingsInjected, WorktreeSettings as WorktreeSettingsFields } from '../src/client/worktree-settings-form.ts'
@@ -183,6 +185,11 @@ async function base() {
     changeRequestCommits: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeCommitList | null> =>
       ({ ok: true, value: COMMITS })),
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
+    changeRequestReview: vi.fn(async (
+      _sessionId: SessionId, _url: string, headSha: string, _fresh: boolean, _signal?: AbortSignal,
+    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })),
+    changeRequestReviewWrite: vi.fn(async (_sessionId: SessionId, _url: string, _write: ForgeReviewWrite): Read<ForgeReviewWriteResult> =>
+      ({ ok: true, value: { ok: true } })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
@@ -750,9 +757,16 @@ describe('mountForgePanel changes view', () => {
       expect(insertQuote.mock.calls[0]?.[1]).toEqual({ label: 'a.ts R1', title: 'a.ts', detail: 'R1', body: 'Check this' })
       expect(resolve).toHaveBeenCalledWith(scope)
       expect(focus).toHaveBeenCalledTimes(2)
+      const thread = reviewThread({ path: 'src/a.ts' })
+      expect(view.addThreadToInput(thread, 'https://github.com/octo/demo/pull/7', 'R3')).toBe(true)
+      expect(view.addThreadToInput(thread, 'https://github.com/octo/demo/pull/7', 'R3')).toBe(true)
+      expect(insertQuote.mock.calls.slice(2).map(([text, summary]) => [text.split('\n')[0], summary?.label]))
+        .toEqual([['## Review Thread 1', 'a.ts R3'], ['## Review Thread 2', 'a.ts R3']])
+      insertQuote.mockClear()
+      focus.mockClear()
       insertQuote.mockReturnValueOnce(false)
       expect(view.addReviewToInput(selection)).toBe(false)
-      expect(focus).toHaveBeenCalledTimes(2)
+      expect(focus).not.toHaveBeenCalled()
       expect(send).not.toHaveBeenCalled()
       const request: ForgeReviewRequest = { kind: 'review', headSha: 'a', event: 'comment', body: 'Summary', comments: [] }
       expect(await view.submitReview('https://github.com/pr', request)).toMatchObject({ ok: true, value: { ok: true } })
@@ -786,7 +800,6 @@ describe('mountForgePanel changes view', () => {
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)
     queue.recordAgent(selection)
-    if (kind === 'change') queue.add(selection)
     queue.summarize('Summary', 'comment')
     const otherTab = { id: 'other-tab' as TabId, signal: new AbortController().signal }
     const other = f.changes(S1).reviewQueue(otherTab)
@@ -823,6 +836,12 @@ describe('mountForgePanel changes view', () => {
     expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, 'refs/heads/topic', signal)
     expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal))
+      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })
+    expect(f.forgePanel.changeRequestReview).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal)
+    const write = { kind: 'resolve', headSha: 'a'.repeat(40), thread: 'thread-1' as ForgeThreadId, resolved: true } as const
+    expect(await view.changeRequestReviewWrite('https://github.com/octo/demo/pull/7', write)).toEqual({ ok: true, value: { ok: true } })
+    expect(f.forgePanel.changeRequestReviewWrite).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', write)
     expect(view.viewedFiles).toBe(f.changes(S1).viewedFiles)
     expect(view.viewedFiles).not.toBe(f.changes(S2).viewedFiles)
     view.reconnect()
@@ -844,6 +863,8 @@ describe('mountForgePanel changes view', () => {
     expect(f.notice()).toMatchObject({ key: 'review.submitted', tone: 'success' })
     f.changes(S1).report('review.published')
     expect(f.notice()).toMatchObject({ key: 'review.published', tone: 'success' })
+    f.changes(S1).report('review.discarded')
+    expect(f.notice()).toMatchObject({ key: 'review.discarded', tone: 'success' })
 
     const writeText = vi.fn(async (_text: string) => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

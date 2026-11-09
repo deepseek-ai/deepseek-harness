@@ -88,11 +88,13 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
             panelSize = [panel.frame.width, panel.frame.height]
             buttonPoint = [rect.midX, panel.frame.height - rect.midY]
         }
+        let bounds = row?[kCGWindowBounds as String] as? [String: NSNumber]
         let closeRect = closeButton.convert(closeButton.bounds, to: nil)
         let data = try! JSONSerialization.data(withJSONObject: [
             "pid": getpid(), "mainWindowId": main.windowNumber, "panelWindowId": panelID,
             "panelLayer": row?[kCGWindowLayer as String] ?? -1,
             "panelOnScreen": row?[kCGWindowIsOnscreen as String] ?? false,
+            "serverSize": [bounds?["Width"]?.doubleValue ?? 0, bounds?["Height"]?.doubleValue ?? 0],
             "panelSize": panelSize, "buttonPoint": buttonPoint,
             "closePoint": [closeRect.midX, main.frame.height - closeRect.midY],
             "count": count, "resized": resized, "closed": closed,

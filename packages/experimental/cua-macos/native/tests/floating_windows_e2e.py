@@ -85,6 +85,10 @@ def main():
                 wait_state(lambda value: not value['panelOnScreen'] and value['panelLayer'] > 0)
                 hidden = next(w for w in helper.call('listWindows', owner) if w['windowId'] == panel_id)
                 assert hidden.get('cacheOnly') is True, hidden
+                app_state = helper.call('getState', params)
+                observed_hidden = next(w for w in app_state['windows'] if w['windowId'] == panel_id)
+                assert observed_hidden.get('cacheOnly') is True, observed_hidden
+                assert [observed_hidden['bounds'][axis] for axis in ('width', 'height')] == actual['panelSize'], observed_hidden
                 os.kill(fixture.pid, signal.SIGUSR1)
                 wait_state(lambda value: value['panelOnScreen'] and value['panelWindowId'] == panel_id)
                 assert panel_id in [w['windowId'] for w in helper.call('listWindows', owner)]
@@ -93,9 +97,16 @@ def main():
                 helper.call('getState', params)
                 helper.call('click', target)
                 wait_state(lambda value: value['count'] == 4)
+                os.kill(fixture.pid, signal.SIGUSR1)
+                wait_state(lambda value: not value['panelOnScreen'] and value['panelLayer'] > 0)
                 os.kill(fixture.pid, signal.SIGUSR2)
-                actual = wait_state(lambda value: value['resized'] and value['panelSize'] != actual['panelSize'])
+                resized = wait_state(lambda value: value['resized'] and not value['panelOnScreen']
+                                     and value['panelSize'] != actual['panelSize'])
+                os.kill(fixture.pid, signal.SIGUSR1)
+                actual = wait_state(lambda value: value['panelOnScreen'] and value['panelWindowId'] == panel_id
+                                    and value['serverSize'] == resized['panelSize'])
                 helper.call('click', target, 'WINDOW_CHANGED')
+                assert json.loads(state_path.read_text())['count'] == 4
                 fresh = helper.call('getState', panel)
                 helper.call('click', target, 'STALE_SNAPSHOT')
                 x, y = actual['buttonPoint']

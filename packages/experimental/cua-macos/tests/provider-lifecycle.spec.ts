@@ -94,6 +94,12 @@ it('projects shared controls and macOS signing without adding signing to the sha
   for (const field of ['sourceSigning', 'permissionPollIntervalMs', 'agentPreset', 'helperPath']) {
     expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
   }
+  expect(CuaConfig({})).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(NativeProvider.Config({})).toMatchObject({ maxElements: 5000, maxDepth: 50 })
+  const limits = { maxElements: 100000, maxDepth: 512 }
+  expect(NativeProvider.Config(limits)).toMatchObject(limits)
+  expect(() => NativeProvider.Config({ maxElements: 100001 })).toThrow()
+  expect(() => NativeProvider.Config({ maxDepth: 513 })).toThrow()
   expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
   expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({
@@ -558,15 +564,15 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
     const state = await f.execute('getState', { appHandle: 'app-one', ...windowId === null ? {} : { windowId } })
     expect(state.value).toMatchObject({ windows: windowId === null ? [minimizedDocument] : [window, minimizedDocument] })
   }
-  native.request.mockResolvedValueOnce([{ ...window, isOnScreen: true }, minimizedDocument ])
+  native.request.mockResolvedValueOnce([{ ...window, isOnScreen: true }, minimizedDocument])
   await f.execute('listWindows', { appHandle: 'app-one' })
   native.request.mockResolvedValueOnce({ dispatched: true })
   expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })).isError).toBe(false)
-  const windows = [{ ...window, bounds: { ...metadata.bounds, width: 2 }, isOnScreen: true }]
-  native.request.mockResolvedValueOnce(windows)
-  const listed = await f.execute('listWindows', { appHandle: 'app-one' })
-  expect(listed.isError).toBe(false)
-  expect(listed.value).toEqual(windows)
+  const resizedBounds = { ...metadata.bounds, width: 2 }
+  native.request.mockResolvedValueOnce([{ ...hiddenPanel, bounds: resizedBounds }])
+  expect((await f.execute('listWindows', { appHandle: 'app-one' })).value).toEqual([])
+  native.request.mockResolvedValueOnce([{ ...window, bounds: resizedBounds, isOnScreen: true }])
+  await f.execute('listWindows', { appHandle: 'app-one' })
   native.request.mockClear()
   const click = await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })
   expect(click.isError).toBe(true)
@@ -784,6 +790,7 @@ it('prepares the selected native component before registering CUA and creates no
 it('adds an installation-owned bridge URL when persistent PTC is available', async () => {
   const f = await setup()
   const text = async () => (await f.ctx.systemPrompt.assemble()).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
+  expect(await text()).toContain('AX read defaults: maxElements=64, maxDepth=8.')
   expect(await text()).not.toContain('Persistent PTC initialization:')
   await f.ctx.plugin(FileSystem)
   await f.ctx.plugin(Sandbox)
