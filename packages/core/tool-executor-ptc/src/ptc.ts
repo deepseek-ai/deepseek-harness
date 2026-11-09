@@ -676,6 +676,7 @@ export function createRunCodeTool(
           // only the binding name. Native content and internal error metadata
           // stay outside the program-facing failure contract.
           if (outcome.isError) throw new Error(outcome.message)
+          // FIXME: Let image-producing tools declare their program result adaptation.
           if (runtime.language === 'typescript' && (name === 'read_image' || name === 'cua')) {
             const images = outcome.content.filter(block => block.type === 'image')
             const first = images[0]
