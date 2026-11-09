@@ -310,7 +310,7 @@ describe('inline records', () => {
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const addToInput = vi.fn().mockReturnValue(false)
     const actions = { records, source: selection.source, addToInput }
-    const view = render(<ReviewThread thread={thread} actions={actions} locked={false} outdated={false} split t={t} />)
+    const view = render(<ReviewThread thread={thread} actions={actions} locked={false} outdated={false} t={t} />)
     fireEvent.click(view.getByRole('button', { name: 'Add to input' }))
     expect(view.getByRole('alert')).toHaveProperty('textContent', en['review.inputFailed'])
     fireEvent.click(view.getByRole('button', { name: 'Edit' }))
@@ -329,7 +329,7 @@ describe('inline records', () => {
     records.add(selection)
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const view = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records }}
-      locked={false} outdated split={false} t={t} />)
+      locked={false} outdated t={t} />)
     fireEvent.click(view.getByRole('button', { name: 'Edit' }))
     records.close()
     fireEvent.change(view.getByRole('textbox'), { target: { value: 'Not saved' } })
@@ -342,7 +342,7 @@ describe('inline records', () => {
   it('opens a published receipt and omits editing on immutable records', () => {
     const openLink = vi.fn()
     const view = render(<ReviewThread thread={{ key: 1, kind: 'published', selection, url: 'https://github.com/review' }}
-      actions={{ source: selection.source, addToInput: () => true, openLink }} locked={false} outdated={false} split={false} t={t} />)
+      actions={{ source: selection.source, addToInput: () => true, openLink }} locked={false} outdated={false} t={t} />)
     fireEvent.click(view.getByRole('button', { name: en['review.recheck'] }))
     expect(openLink).toHaveBeenCalledWith('https://github.com/review')
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull()

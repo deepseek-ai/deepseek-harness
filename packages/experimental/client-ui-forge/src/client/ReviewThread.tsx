@@ -28,12 +28,11 @@ export function useFileReview(actions: ReviewActions | undefined, path: string):
  * @param props - record, edit availability, source actions, and localized copy.
  * @returns one compact inline comment card.
  */
-export function ReviewThread({ thread, actions, locked, outdated, split, t }: PropsLocale<typeof NS> & {
+export function ReviewThread({ thread, actions, locked, outdated, t }: PropsLocale<typeof NS> & {
   readonly thread: Thread
   readonly actions: ReviewActions
   readonly locked: boolean
   readonly outdated: boolean
-  readonly split: boolean
 }): ReactNode {
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(thread.selection.comment.body)
@@ -43,8 +42,7 @@ export function ReviewThread({ thread, actions, locked, outdated, split, t }: Pr
   const range = reviewRange(comment)
   const status = thread.kind === 'pending' ? 'review.pending' : thread.kind === 'published' ? 'review.published' : 'review.quoted'
   const save = (): boolean => actions.records?.editThread(thread.key, body) === true
-  return <section className={css.thread} data-forge-review-thread={thread.kind} data-side={comment.side}
-    data-split={split ? '' : undefined} aria-label={t('review.range', { range })}>
+  return <section className={css.thread} data-forge-review-thread={thread.kind} data-side={comment.side} aria-label={t('review.range', { range })}>
     <div className={css.threadHeader}>
       <span className={css.author}>{t('review.yourComment')}</span>
       <span className={css.range}>{range}</span>

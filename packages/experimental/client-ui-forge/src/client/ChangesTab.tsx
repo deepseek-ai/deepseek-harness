@@ -51,6 +51,8 @@ import { drawnLines, matchesHunks, textLines } from './diff-rows.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
+import { ViewOptionsMenu } from './ViewOptionsMenu.tsx'
+import { observeToolbarFold } from './toolbar-fold.ts'
 import type { PanelSnapshot } from './source.ts'
 import { numberOf, openChangeRequestOf, TONE_LABEL, toneOf } from './status.ts'
 import css from './ChangesTab.module.css'
@@ -302,7 +304,7 @@ function ChangeHeader({ url, entry, openLink, commitMenu, reviewCount, reviewDis
       {number !== null && <span className={css.headerNumber}>{t('change.number', { number })}</span>}
       <span className={css.headerEnd}>
         {commitMenu}
-        <Button size="sm" variant="outline" className={css.reviewSubmit} disabled={reviewDisabled} onClick={onReview}>
+        <Button size="sm" variant="outline" className={css.headerAction} disabled={reviewDisabled} onClick={onReview}>
           {t('review.submit')}{reviewCount > 0 ? ` (${reviewCount})` : ''}
         </Button>
       </span>
@@ -353,7 +355,7 @@ function LocalHeader({ state, scope, base, missing, visible, diffBases, choose, 
       </>}
       {(scope === 'branch' || creatable) && <span className={css.headerEnd}>
         {scope === 'branch' && commitMenu}
-        {creatable && <Button size="sm" variant="outline" onClick={createChangeRequest}>{t('changes.local.create')}</Button>}
+        {creatable && <Button size="sm" variant="outline" className={css.headerAction} onClick={createChangeRequest}>{t('changes.local.create')}</Button>}
       </span>}
     </div>
   )
@@ -416,7 +418,7 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
   return <section className={css.reviewFile} data-forge-review-file={path}>
     <h3>{path}</h3>
     {state.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
-      actions={actions} locked={state.locked} outdated split={false} t={t} />)}
+      actions={actions} locked={state.locked} outdated t={t} />)}
   </section>
 }
 
@@ -587,6 +589,13 @@ export function ChangesTab({
   const isExpanded = (file: ForgeDiffFile): boolean => chosen[file.path] ?? expandedByDefault(file)
   const sections = useRef(new Map<string, HTMLElement>())
   const scrollport = useRef<HTMLDivElement | null>(null)
+  const toolbarRow = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const row = toolbarRow.current
+    /* v8 ignore next -- the toolbar row renders in every state of the view */
+    if (row === null) return
+    return observeToolbarFold(row)
+  }, [])
   const reach = useMemo(() => new SectionReach(), [])
   const attachScrollport = useCallback((element: HTMLDivElement | null) => {
     scrollport.current = element
@@ -887,6 +896,10 @@ export function ChangesTab({
   // The toolbar collapses every file while any is expanded, as the files on screen show, and expands every file otherwise.
   const anyExpanded = files.some(isExpanded)
   const expansionLabel = t(anyExpanded ? 'diff.collapseAll' : 'diff.expandAll')
+  const toggleExpansion = (): void => { setChosen(Object.fromEntries(files.map(file => [file.path, !anyExpanded]))) }
+  const toggleSplit = (): void => { actions.toggledSplit(tab.id) }
+  const toggleWrap = (): void => { actions.toggledWrap(tab.id) }
+  const toggleTests = (): void => { actions.toggledTests(tab.id) }
   const treeAction = t(treePosition === 'left' ? 'diff.moveFileTreeRight' : treePosition === 'right' ? 'diff.hideFileTree' : 'diff.showFileTreeLeft')
   let additions = 0
   let deletions = 0
@@ -921,40 +934,41 @@ export function ChangesTab({
       <div className={css.toolbar} data-tree={treeShown ? treePosition : 'hidden'} style={toolbarStyle}>
         {/* Above the file tree, the lens spans the tree's width; elsewhere a menu in the toolbar takes its place. */}
         {treeShown && <div className={css.lensCell}><LensControl {...lensProps} /></div>}
-        <div className={css.toolbarMain}>
+        <div ref={toolbarRow} className={css.toolbarMain}>
           {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
-          {tab.visible && <ChangedFilesMenu {...navigator} visible />}
+          {tab.visible && <span className={css.filesSlot}><ChangedFilesMenu {...navigator} visible /></span>}
           {tab.visible && allFiles.length > 0 && (
-            <span className={clsx(css.lensMenu, css.reviewRow)}><LensMenu {...lensProps} visible /></span>
+            <span className={css.lensMenu}><LensMenu {...lensProps} visible /></span>
           )}
-          {allFiles.length > 0 && <span className={css.reviewRow}>
-            <HideTestsSwitch hidden={hideTests} toggle={() => { actions.toggledTests(tab.id) }} t={t} />
+          {allFiles.length > 0 && <span className={css.foldTests}>
+            <HideTestsSwitch hidden={hideTests} toggle={toggleTests} t={t} />
           </span>}
-          <span className={css.spacer} />
-          <span className={clsx(css.progressSlot, css.reviewRow)}><ViewedProgress viewed={viewedCount} total={files.length} t={t} /></span>
-          {files.length > 0 && <span className={css.totals}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>}
+          <span className={css.spacer} data-fold-spacer="" />
+          <span className={css.progressSlot}><ViewedProgress viewed={viewedCount} total={files.length} t={t} /></span>
+          {files.length > 0 && (
+            <span className={clsx(css.totals, css.foldViews)}><Counts file={{ additions, deletions, binary: false }} t={t} /></span>
+          )}
           <span className={css.tools}>
             <Tooltip label={t('diff.refresh')} side="bottom">
-              <button type="button" className={css.tool} aria-label={t('diff.refresh')} onClick={refresh}>
+              <button type="button" className={clsx(css.tool, css.foldRefresh)} aria-label={t('diff.refresh')} onClick={refresh}>
                 <RefreshGlyph busy={rereading} size={16} />
               </button>
             </Tooltip>
             <Tooltip label={expansionLabel} side="bottom">
-              <button type="button" className={css.tool} data-expanded={anyExpanded ? '' : undefined} aria-label={expansionLabel}
-                disabled={files.length === 0}
-                onClick={() => { setChosen(Object.fromEntries(files.map(file => [file.path, !anyExpanded]))) }}>
+              <button type="button" className={clsx(css.tool, css.foldViews)} data-expanded={anyExpanded ? '' : undefined} aria-label={expansionLabel}
+                disabled={files.length === 0} onClick={toggleExpansion}>
                 <IconChevronsUpDownOutlineRegular />
               </button>
             </Tooltip>
             <Tooltip label={t(split ? 'diff.unified' : 'diff.split')} side="bottom">
-              <button type="button" className={css.tool} aria-pressed={split} aria-label={t('diff.splitAria')}
-                onClick={() => { actions.toggledSplit(tab.id) }}>
+              <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={split} aria-label={t('diff.splitAria')}
+                onClick={toggleSplit}>
                 <IconCompareSplitOutlineRegular className={css.compareIcon} />
               </button>
             </Tooltip>
             <Tooltip label={t(wrap ? 'diff.nowrap' : 'diff.wrap')} side="bottom">
-              <button type="button" className={css.tool} aria-pressed={wrap} aria-label={t('diff.wrapAria')}
-                onClick={() => { actions.toggledWrap(tab.id) }}>
+              <button type="button" className={clsx(css.tool, css.foldViews)} aria-pressed={wrap} aria-label={t('diff.wrapAria')}
+                onClick={toggleWrap}>
                 {wrap ? <IconNowrapFillRegular /> : <IconWrapFillRegular />}
               </button>
             </Tooltip>
@@ -967,8 +981,11 @@ export function ChangesTab({
                 </button>
               </Tooltip>
             </span>
+            <ViewOptionsMenu visible={tab.visible} options={{
+              anyExpanded, hasFiles: files.length > 0, toggleExpansion, split, toggleSplit, wrap, toggleWrap,
+              hideTests: allFiles.length > 0 ? hideTests : undefined, toggleTests, refresh,
+            }} t={t} />
           </span>
-          {allFiles.length > 0 && <span className={css.rowBreak} />}
         </div>
       </div>
       {data !== null && failed !== null && (
