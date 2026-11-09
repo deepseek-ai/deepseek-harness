@@ -1,5 +1,5 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from '../src/gh.ts'
 import type { GhOutput, GhRunner } from '../src/gh.ts'
 import { PULL_REQUEST_COMMITS_QUERY, THREADS_QUERY } from '../src/graphql.ts'
@@ -444,6 +444,55 @@ describe('GitHub provider reads', () => {
 
     await expect(provider(gh.run).diff(pull(7), head.toUpperCase(), signal)).resolves.toBe('diff --git a/x b/x\n')
     expect(gh.calls[1]?.at(-1)).toBe(`repos/octo/demo/compare/${base}...${head.toUpperCase()}`)
+  })
+
+  it('starts the comparison from the base the status recorded while it confirms the head', async () => {
+    const confirmed = Promise.withResolvers<GhOutput>()
+    const gh = fakeGh(args => args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)
+      ? confirmed.promise : output('diff --git a/x b/x\n'))
+
+    const read = provider(gh.run).diff(pull(7), head, signal, base)
+    await vi.waitFor(() => { expect(gh.calls).toHaveLength(2) })
+    expect(gh.calls.map(call => call.at(-1))).toContain(`repos/octo/demo/compare/${base}...${head}`)
+    confirmed.resolve(output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: base.toUpperCase() } } } }))
+
+    await expect(read).resolves.toBe('diff --git a/x b/x\n')
+    expect(gh.calls).toHaveLength(2)
+  })
+
+  it('cancels the early comparison and waits for it when the head moved, the base differs, or the head read fails', async () => {
+    const moved = 'e'.repeat(40)
+    for (const [answer, expected, compares] of [
+      [output({ data: { repository: { pullRequest: { headRefOid: pushed, baseRefOid: base } } } }),
+        { code: 'stale', message: `the pull request head moved from ${head} to ${pushed}` }, [base]],
+      [output({ data: { repository: { pullRequest: { headRefOid: head, baseRefOid: moved } } } }), 'diff --git a/y b/y\n', [base, moved]],
+      [output('', 1, 'gh: Something went wrong (HTTP 502)'), { code: 'unavailable', message: 'gh: Something went wrong (HTTP 502)' }, [base]],
+    ] as const) {
+      const calls: string[][] = []
+      const cancelled: string[] = []
+      const run: GhRunner = async (args, operation) => {
+        calls.push([...args])
+        if (args.includes(`query=${PULL_REQUEST_COMMITS_QUERY}`)) return answer
+        const range = String(args.at(-1))
+        if (range.includes(`${moved}...`)) return output('diff --git a/y b/y\n')
+        // The early comparison runs until the provider cancels it.
+        await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+        cancelled.push(range)
+        throw operation.reason
+      }
+
+      await expect(provider(run).diff(pull(7), head, signal, base)).resolves.toEqual(expected)
+      expect(calls.map(call => String(call.at(-1))).filter(target => target.includes('/compare/'))
+        .map(target => target.split('/compare/')[1]?.split('...')[0])).toEqual(compares)
+      expect(cancelled).toEqual([`repos/octo/demo/compare/${base}...${head}`])
+    }
+  })
+
+  it('refuses a base that is not a full commit object name before starting gh', async () => {
+    const gh = pinned()
+
+    await expect(provider(gh.run).diff(pull(7), head, signal, 'HEAD~1')).rejects.toThrow('forge-github: invalid base commit "HEAD~1"')
+    expect(gh.calls).toEqual([])
   })
 
   it('reports a head that moved past the requested commit as stale without reading the diff', async () => {

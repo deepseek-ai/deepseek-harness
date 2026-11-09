@@ -1,7 +1,9 @@
 /** Filesystem-seam source access for the generic stdio LSP provider. */
 
 import { Buffer } from 'node:buffer'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
+import { LspError } from '@deepseek-ai/dsh-lsp'
 import { throwIfAborted } from './abort.ts'
 
 /** A canonical workspace in the filesystem/subprocess execution world. */
@@ -28,6 +30,8 @@ export interface HostSource {
  * @param workspaceRoot - caller-supplied workspace path.
  * @param signal - optional cancellation around provider operations.
  * @returns stable identity plus process path and file URI.
+ * @throws FsError with the provider's code when resolution or `stat` fails, `FS_NOT_FOUND` when the
+ *   workspace is missing, or `FS_NOT_DIRECTORY` when it is not a directory.
  */
 export async function canonicalizeWorkspace(
   fs: FileSystem,
@@ -40,7 +44,7 @@ export async function canonicalizeWorkspace(
     target = await fs.resolve(workspaceRoot, signal === undefined ? {} : { signal })
   } catch (error: unknown) {
     throwIfAborted(signal)
-    throw new Error(`workspace root "${workspaceRoot}" cannot be resolved: ${messageOf(error)}`, { cause: error })
+    rethrowWithFsContext(error, `workspace root "${workspaceRoot}" cannot be resolved`)
   }
   throwIfAborted(signal)
   const info = await fs.stat(target, signal).catch((error: unknown) => {
@@ -48,8 +52,11 @@ export async function canonicalizeWorkspace(
     throw error
   })
   throwIfAborted(signal)
-  if (info?.type !== 'directory') {
-    throw new Error(`workspace root "${workspaceRoot}" is not a directory`)
+  if (info === undefined) {
+    throw new FsError(`workspace root "${workspaceRoot}" does not exist`, 'FS_NOT_FOUND')
+  }
+  if (info.type !== 'directory') {
+    throw new FsError(`workspace root "${workspaceRoot}" is not a directory`, 'FS_NOT_DIRECTORY')
   }
   return {
     target,
@@ -68,6 +75,9 @@ export async function canonicalizeWorkspace(
  * @param maxDocumentBytes - largest complete source accepted by this host.
  * @param signal - optional cancellation.
  * @returns canonical file URI and current text.
+ * @throws FsError with the provider's code when resolution or reading fails, or `FS_TOO_LARGE` when
+ *   the source exceeds `maxDocumentBytes`; LspError `LSP_FILE_OUTSIDE_WORKSPACE` when the source
+ *   resolves outside `workspace`.
  */
 export async function readHostSource(
   fs: FileSystem,
@@ -85,11 +95,11 @@ export async function readHostSource(
     })
   } catch (error: unknown) {
     throwIfAborted(signal)
-    throw new Error(`source "${filePath}" cannot be resolved: ${messageOf(error)}`, { cause: error })
+    rethrowWithFsContext(error, `source "${filePath}" cannot be resolved`)
   }
   throwIfAborted(signal)
   if (!fs.contains(workspace.target, target)) {
-    throw new Error(`source "${filePath}" resolves outside the workspace`)
+    throw new LspError(`source "${filePath}" resolves outside the workspace`, 'LSP_FILE_OUTSIDE_WORKSPACE')
   }
   const chunks: string[] = []
   let bytes = 0
@@ -105,11 +115,12 @@ export async function readHostSource(
     }
   } catch (error: unknown) {
     throwIfAborted(signal)
-    throw new Error(`source "${filePath}" could not be read: ${messageOf(error)}`, { cause: error })
+    rethrowWithFsContext(error, `source "${filePath}" could not be read`)
   }
   if (bytes > maxDocumentBytes) {
-    throw new Error(
+    throw new FsError(
       `source "${filePath}" exceeds the ${maxDocumentBytes}-byte limit; reading stopped after ${bytes} bytes`,
+      'FS_TOO_LARGE',
     )
   }
   throwIfAborted(signal)
@@ -119,6 +130,11 @@ export async function readHostSource(
   }
 }
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+/**
+ * Prefix a filesystem provider failure with the LSP operand while keeping its `FsError` code; any
+ * other thrown value is a provider defect and propagates unchanged.
+ */
+function rethrowWithFsContext(error: unknown, context: string): never {
+  if (!(error instanceof FsError)) throw error
+  throw new FsError(`${context}: ${error.message}`, error.code, { cause: error })
 }

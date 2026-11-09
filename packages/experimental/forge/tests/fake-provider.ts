@@ -111,7 +111,7 @@ export class FakeProvider implements ForgeProvider {
     return this.actionResult
   }
 
-  async diff(target: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
+  async diff(target: ChangeRequestRef, headSha: string, _signal: AbortSignal, _base?: string): Promise<string | ForgeFailure> {
     this.actions.push(`diff ${target.number} ${headSha}`)
     return this.readResult
   }

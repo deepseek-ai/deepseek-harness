@@ -78,7 +78,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 
 ### Failures and recovery
 
-Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
+Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes throw `ToolArgsError` with `INVALID_ARGS`.
 
 -----
 
