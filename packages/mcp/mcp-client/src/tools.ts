@@ -14,7 +14,8 @@
 
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import { specTypeSchemas, type Client, type ImageContent } from '@modelcontextprotocol/client'
+import { specTypeSchemas, type Client, type ImageContent, type JsonSchemaType, type Tool } from '@modelcontextprotocol/client'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/client/validators/ajv'
 import type { Context } from '@deepseek-ai/cordis'
 import { isImageAdmissionError } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageMediaType, SaveImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -23,7 +24,7 @@ import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepse
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
+import { describeError, McpLocalError, mcpRequestError, McpToolError } from './diagnostic.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -143,12 +144,21 @@ export async function syncTools(
   const response = client.getServerCapabilities()?.tools === undefined
     ? { tools: [] }
     : await client.listTools(undefined, { cacheMode: 'refresh', signal: opts.signal })
+  const outputValidators = new AjvJsonSchemaValidator()
   for (const tool of response.tools) {
     const publicName = publicToolName(opts.serverName, tool.name)
     if (definitions.has(publicName)) {
       throw new Error(
         `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
       )
+    }
+    // The bridge checks structured output itself: the SDK reports its local check as a
+    // ProtocolError indistinguishable from a server's JSON-RPC error.
+    const { outputSchema: _outputSchema, ...callDefinition } = tool
+    const outputCheck = compileOutputCheck(outputValidators, tool)
+    const invalidResult = (reason: string): McpToolError => {
+      const message = `Tool "${tool.name}" returned an invalid MCP result: ${reason}`
+      return new McpToolError(opts.redact === undefined ? message : opts.redact(message), 'MCP_INVALID_RESULT')
     }
     definitions.set(publicName, createMcpToolDefinition(ctx, {
       name: publicName,
@@ -162,14 +172,16 @@ export async function syncTools(
         if (opts.signal.aborted) {
           throw new McpToolError(`mcp-client(${opts.serverName}): server is disconnected`, 'MCP_SERVER_UNAVAILABLE')
         }
+        if (outputCheck !== undefined && 'compileError' in outputCheck) {
+          throw invalidResult(`its output schema cannot be compiled: ${outputCheck.compileError}`)
+        }
+        let result: Awaited<ReturnType<Client['callTool']>>
         try {
-          const result = await client.callTool(
+          result = await client.callTool(
             { name: tool.name, arguments: args },
             { signal: AbortSignal.any([execution.signal, opts.signal]),
-              timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
+              timeout: opts.toolCallTimeoutMs, toolDefinition: callDefinition },
           )
-          if (result.isError !== true || opts.redact === undefined) return result
-          return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
         } catch (error) {
           // The SDK reports an aborted signal as a request timeout; cancellation
           // and generation closure are reported as their own reasons instead.
@@ -177,6 +189,13 @@ export async function syncTools(
           opts.signal.throwIfAborted()
           throw mcpRequestError(error, `tool "${tool.name}"`, opts.redact)
         }
+        if (result.isError !== true) {
+          const failure = outputCheck === undefined ? undefined : outputCheck.check(result.structuredContent)
+          if (failure !== undefined) throw invalidResult(failure)
+          return result
+        }
+        if (opts.redact === undefined) return result
+        return { isError: true, content: [{ type: 'text', text: opts.redact(extractText(result.content as JsonValue[], tool.name)) }] }
       },
     }))
   }
@@ -200,6 +219,43 @@ export async function syncTools(
     throw new McpToolRegistrationError('MCP tool registration failed', { cause: error })
   }
   return disposers
+}
+
+/** A tool's compiled structured-output check, or why its advertised output schema cannot be compiled. */
+type OutputCheck = { compileError: string } | {
+  /**
+   * @param structured - `structuredContent` of a successful result.
+   * @returns why the value violates the advertised output schema, or undefined when it conforms.
+   */
+  check(structured: unknown): string | undefined
+}
+
+/**
+ * Compile one tool's advertised output schema with the validator the SDK uses on Node.
+ * @param validators - validator provider shared by one listing.
+ * @param tool - listed tool; a tool without `outputSchema` needs no check.
+ * @returns the check, a compile failure, or undefined without an output schema.
+ */
+function compileOutputCheck(validators: AjvJsonSchemaValidator, tool: Tool): OutputCheck | undefined {
+  if (tool.outputSchema === undefined) return undefined
+  let validate: ReturnType<AjvJsonSchemaValidator['getValidator']>
+  try {
+    // The listed schema is the wire object the SDK passes to the same provider; only its optional `$schema` typing differs.
+    validate = validators.getValidator(tool.outputSchema as JsonSchemaType)
+  } catch (error) {
+    return { compileError: describeError(error) }
+  }
+  return {
+    check(structured) {
+      if (structured === undefined) return 'the tool has an output schema but returned no structured content'
+      try {
+        const result = validate(structured)
+        return result.valid ? undefined : `structured content does not match the output schema: ${result.errorMessage}`
+      } catch (error) {
+        return `structured content could not be validated: ${describeError(error)}`
+      }
+    },
+  }
 }
 
 /** Fields read from canonical content, including policy-owned value replacements. */

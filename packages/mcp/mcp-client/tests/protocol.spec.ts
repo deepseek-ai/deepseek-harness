@@ -47,6 +47,27 @@ async function connect(server: McpServer, options?: { resources: true }): Promis
 }
 
 describe('modern MCP connections', () => {
+  it('reports structured output that violates the advertised schema as MCP_INVALID_RESULT', async () => {
+    // Raw handlers: McpServer validates its own output and would answer with an isError result instead.
+    const server = new McpServer({ name: 'structured', version: '1' }, { capabilities: { tools: {} } })
+    server.server.setRequestHandler('tools/list', () => ({ tools: [{
+      name: 'measure', inputSchema: { type: 'object' },
+      outputSchema: { type: 'object', properties: { size: { type: 'number' } }, required: ['size'] },
+    }] }))
+    server.server.setRequestHandler('tools/call', () => ({
+      content: [{ type: 'text', text: 'large' }],
+      structuredContent: { size: 'large' },
+    }))
+    const ctx = await connect(server)
+    const result = await executeToolFixture(ctx, {
+      name: 'mcp__fixture__measure', arguments: {}, callId: ToolCallId('measure'), signal: new AbortController().signal,
+    })
+    expect(result.error).toEqual({
+      message: 'Tool "measure" returned an invalid MCP result: structured content does not match the output schema: data/size must be number',
+      info: { name: 'McpToolError', code: 'MCP_INVALID_RESULT' },
+    })
+  })
+
   it('keeps a resource-only server connected without requesting tools', async () => {
     const server = new McpServer({ name: 'resources', version: '1' })
     server.registerResource('memo', 'memo://readme', {}, async () => ({

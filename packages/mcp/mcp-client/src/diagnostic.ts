@@ -45,7 +45,8 @@ export class McpLocalError extends HarnessError {
  * Every {@link McpToolError} code:
  * - `MCP_TOOL_ERROR`: the server answered the tool call with an `isError` result; the model may adjust its input.
  * - `MCP_UNSUPPORTED_TASK_EXECUTION`: the tool requires task-based execution, which the bridge does not support.
- * - `MCP_INVALID_RESULT`: the server's result violates the MCP result schema.
+ * - `MCP_INVALID_RESULT`: the server's result violates the MCP result schema or the tool's advertised output
+ *   schema, or that output schema cannot be compiled.
  * - `MCP_CONNECTION_CLOSED`: the connection closed while the request was in flight; its outcome is unknown.
  * - `MCP_TIMEOUT`: the request exceeded its deadline; its outcome is unknown.
  * - `MCP_SERVER_UNAVAILABLE`: the server was not connected, so the request was not sent.
