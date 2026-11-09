@@ -19,6 +19,7 @@ import type { JobId } from '@deepseek-ai/dsh-jobs'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import type { ShellExecution, ShellProcess } from '@deepseek-ai/dsh-shell'
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
+import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import { processSources, ringDelta } from '../src/background.ts'
@@ -279,10 +280,49 @@ describe('foreground commands as jobs', () => {
 
   it('a command whose start fails reports the failure as an error result and leaves no job behind', async () => {
     const ctx = await setup()
-    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(new Error('spawn bash ENOENT'))
+    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }))
     const result = await call(ctx, { command: 'true', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    expect(text(result)).toBe('Error: cannot start "bash": the program or the working directory does not exist (spawn bash ENOENT)')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a spawn that fails after the process published reports a coded failure and leaves no job behind', async () => {
+    const ctx = await setup()
+    const result = await call(ctx, { command: 'true', description: 'test command', workdir: join(spillDir, 'missing-workdir') })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a job stopped from outside before its process published reports the stop', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.shell, 'execute').mockImplementation(spec => new Promise((_resolve, reject) => {
+      spec.signal?.addEventListener('abort', () => { reject(new Error('preparation stopped')) }, { once: true })
+    }))
+    const pending = call(ctx, { command: 'ls', description: 'test command' })
+    await vi.waitFor(() => { expect(ctx.jobs.list()).toHaveLength(1) })
+    ctx.jobs.kill(ctx.jobs.list()[0]!.id, undefined, 'cancelled by the user')
+    const result = await pending
     expect(result.isError).toBe(true)
-    expect(text(result)).toBe('Error: spawn bash ENOENT')
+    expect((result.content[0] as { text: string }).text).toBe('Error: preparation stopped; cancelled by the user')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a coded preparation failure keeps its name and code through the job path', async () => {
+    const ctx = await setup()
+    vi.spyOn(ctx.shell, 'execute').mockRejectedValue(new SandboxUnavailableError('workspace-write', 'bwrap: setting up uid map: Permission denied'))
+    const result = await call(ctx, { command: 'true', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SandboxUnavailableError', code: 'SANDBOX_UNAVAILABLE' } },
+    })
+    expect(text(result)).toContain('Runner failure: bwrap: setting up uid map: Permission denied')
     expect(ctx.jobs.list()).toEqual([])
   })
 

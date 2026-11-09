@@ -47,7 +47,6 @@ function serve() {
   const server = createServer({ allowHalfOpen: true }, socket => {
     sockets.add(socket)
     let connected = false
-    let systemPointerHover
     const connectionId = ++connection
     const input = createInterface({ input: socket })
     const scopedRecord = (event, data = {}) => record(event, { connection: connectionId, ...data })
@@ -59,7 +58,6 @@ function serve() {
           socket.destroy()
           return
         }
-        systemPointerHover = request.config.systemPointerHover
         connected = true
         hadClient = true
         clearTimeout(startupDeadline)
@@ -73,7 +71,7 @@ function serve() {
       }
       let response
       try {
-        const result = call(request.id, request.method, request.params, systemPointerHover)
+        const result = call(request.id, request.method, request.params)
         if (result === undefined) return
         response = { id: request.id, result }
       } catch (error) {
@@ -124,7 +122,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let observationChanged = false
   let malformedScreenshot = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
-  function call(requestId, method, params, systemPointerHover) {
+  function call(requestId, method, params) {
     record('call', { requestId, method, params })
     if (method === 'applicationIcons') return Object.fromEntries(params.paths.map(path => [path, `data:image/png;base64,${png}`]))
     if (method === 'openPermissionSettings') return { opened: true }
@@ -172,6 +170,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
       if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
         tree: '', elements: [], windows: [axlessWindow], truncated: false }
+      if (params.maxElements === 1) return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
+        tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
+        elements: [], windows: [window], truncated: true }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
         snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
@@ -204,11 +205,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)
-        if (!alternate && !application.hovering) {
-          if (!(systemPointerHover ?? params.allowSystemPointer)) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
-          systemPointerMoved = true
-        }
-        application.hovering = alternate
+        systemPointerMoved = params.useSystemPointer === true
+        if (!systemPointerMoved && !alternate && !application.hovering) refuse('HOVER_UNAVAILABLE', 'No AX alternate UI at this target. No input was sent and the pointer did not move.')
+        application.hovering = !systemPointerMoved && alternate
       }
       else if (method === 'click' && params.windowId === 8) application.visualCount++
       else if (method === 'click') application.count++

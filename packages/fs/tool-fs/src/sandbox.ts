@@ -11,6 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { ESCALATION_TARGETS, approveEscalation, escalationHintMarker, sandboxDenialMarker, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -96,7 +97,7 @@ export class FsSandboxController {
       return standingPolicy
     }
     if (this.escalationModes.length === 0) {
-      throw new Error('sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)')
+      throw new ToolArgsError(['sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)'])
     }
     const policy = standingPolicy as SandboxExecutionPolicy
     const approvedMode = await approveEscalation(

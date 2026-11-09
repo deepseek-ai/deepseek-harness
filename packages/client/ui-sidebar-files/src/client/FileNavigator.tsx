@@ -41,7 +41,11 @@ export interface FileNavigatorInput {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotFactoryMap {
-    /** One pane's workspace tree with its width and show/hide state. */
+    /**
+     * One pane's workspace tree with its width and show/hide state. The host renders it as a direct child of
+     * the content row it shares with the body, and that row carries `data-files-navigator-row`, which the
+     * filled layout needs to hide the covered body.
+     */
     'sidebar.files.navigator': {
       scope: 'session'
       props: FileNavigatorInput

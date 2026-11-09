@@ -80,6 +80,7 @@ const node = (number) => ({
   headRefName: number === 7 ? 'feat' : 'other',
   headRefOid: 'a'.repeat(40),
   baseRefName: 'main',
+  baseRefOid: 'e'.repeat(40),
   additions: 1,
   deletions: 0,
   mergeable: 'MERGEABLE',

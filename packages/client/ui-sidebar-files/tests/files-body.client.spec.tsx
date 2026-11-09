@@ -56,6 +56,8 @@ describe('FilesBody', () => {
     expect([...header.querySelectorAll('button:not([data-files-auto-refresh])')].map(button => button.getAttribute('aria-label')))
       .toEqual([zh.reload, zh['search.placeholder']])
     const content = page.querySelector('[data-files-content]')!
+    // The filled layout's rule finds the row the navigator covers by this attribute.
+    expect(content.hasAttribute('data-files-navigator-row')).toBe(true)
     expect(content.children).toHaveLength(1)
     const navigator = content.firstElementChild!
     expect(navigator.getAttribute('data-files-navigator')).toBe(PANE)

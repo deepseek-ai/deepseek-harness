@@ -9,10 +9,10 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-On macOS, `win.mouseMove(target)` uses an enabled element or ancestor that advertises both `AXShowAlternateUI` and `AXShowDefaultUI`. Without that route, previous versions moved the visible system cursor. The default now returns `HOVER_UNAVAILABLE` before sending input.
+On macOS, `win.mouseMove(target)` uses an enabled element or ancestor that advertises both `AXShowAlternateUI` and `AXShowDefaultUI`. Without that route, previous versions moved the visible system cursor. The default now returns `HOVER_UNAVAILABLE` before sending input. By default, explicitly requesting the system pointer asks the user for this session.
 
 ## Migration
 
 1. For an available control, use its advertised action or click it directly. Use browser tools for web content that requires page hover.
-2. To restore visible pointer movement, set `systemPointerHover: true` in the `config` of the macOS provider entry (`id: cua`) in your profile's `cordis.patch.yml`. Preserve the entry's other settings. If you set `helperPath`, rebuild the custom helper so it accepts `systemPointerHover` in the connection handshake. Restart the profile.
-3. Call `win.mouseMove` on a foreground, unobscured control without AX alternate UI. The opt-in result reports `hoverRoute: "system-pointer"` and `systemPointerMoved: true`. Keep the default to avoid disturbing the user's cursor.
+2. If your profile sets `helperPath`, rebuild the custom helper to support the per-request `useSystemPointer` field and restart the profile.
+3. When the task requires physical movement, call `win.mouseMove(target, { useSystemPointer: true })` on an unobscured foreground target. After approval this move reports `systemPointerMoved: true`. Pass `useSystemPointer: true` again for each subsequent physical move. Closing the session or restarting DSH clears approval.
