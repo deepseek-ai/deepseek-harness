@@ -90,17 +90,18 @@ const SDK_ERROR_CODES: Partial<Record<SdkErrorCode, McpToolErrorCode>> = {
 /**
  * Classify one failed MCP request. An {@link McpLocalError}, such as the
  * generation's closure reason, keeps its identity; any other failure becomes
- * an {@link McpToolError} whose `message` carries the JSON-RPC or SDK code
- * and whose `cause` is the original failure.
+ * an {@link McpToolError} whose `message` carries the JSON-RPC or SDK code.
+ * Without `redact` the original failure is the `cause`; with `redact` no
+ * `cause` is attached, because the original text may contain secret values.
  * @param error - the request's rejection.
  * @param operation - names the request, such as `tool "echo"` or `resources/read`.
- * @param redact - removes secret values from the message; identity when templates are disabled.
+ * @param redact - removes secret values from the message when templates are enabled.
  * @returns the classified failure to throw.
  */
 export function mcpRequestError(
   error: unknown,
   operation: string,
-  redact: (text: string) => string = text => text,
+  redact?: (text: string) => string,
 ): HarnessError {
   if (error instanceof McpLocalError) return error
   let code: McpToolErrorCode = 'MCP_REQUEST_FAILED'
@@ -110,7 +111,10 @@ export function mcpRequestError(
     code = SDK_ERROR_CODES[error.code] ?? code
     detail = `${error.code}: ${error.message}`
   }
-  return new McpToolError(redact(`MCP ${operation} failed: ${detail}`), code, { cause: error })
+  const message = `MCP ${operation} failed: ${detail}`
+  return redact === undefined
+    ? new McpToolError(message, code, { cause: error })
+    : new McpToolError(redact(message), code)
 }
 
 /** Placeholder written in place of a known secret value. */

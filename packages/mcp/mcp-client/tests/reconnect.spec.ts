@@ -310,6 +310,15 @@ describe('reconnect supervisor', () => {
         message: 'MCP connection closed',
         info: { name: 'McpLocalError', code: 'MCP_CONNECTION_CLOSED' },
       })
+
+      // The closed generation's tools stay registered until re-sync; a new call is refused unsent.
+      const calls = mockCallTool.mock.calls.length
+      const unsent = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      expect(unsent.error).toEqual({
+        message: 'mcp-client(srv): server is disconnected',
+        info: { name: 'McpToolError', code: 'MCP_SERVER_UNAVAILABLE' },
+      })
+      expect(mockCallTool).toHaveBeenCalledTimes(calls)
     } finally {
       await handle.dispose()
     }

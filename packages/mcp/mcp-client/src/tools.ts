@@ -158,6 +158,10 @@ export async function syncTools(
       outputSchema: tool.outputSchema,
       taskRequired: tool.execution?.taskSupport === 'required',
       call: async (args, execution) => {
+        // The generation closed and its tools await re-sync; the SDK would refuse the request unsent.
+        if (opts.signal.aborted) {
+          throw new McpToolError(`mcp-client(${opts.serverName}): server is disconnected`, 'MCP_SERVER_UNAVAILABLE')
+        }
         try {
           const result = await client.callTool(
             { name: tool.name, arguments: args },

@@ -74,6 +74,16 @@ describe('local failure codes', () => {
     const closed = new McpLocalError('MCP connection closed', 'MCP_CONNECTION_CLOSED')
     expect(mcpRequestError(closed, 'resources/read', () => 'replaced')).toBe(closed)
   })
+
+  it('keeps the original failure as cause only when no redaction applies', () => {
+    const failure = new Error('rejected secret-value')
+    expect(mcpRequestError(failure, 'resources/read')).toMatchObject({
+      message: 'MCP resources/read failed: Error: rejected secret-value', cause: failure,
+    })
+    const redacted = mcpRequestError(failure, 'resources/read', text => text.replace('secret-value', '[redacted]'))
+    expect(redacted.message).toBe('MCP resources/read failed: Error: rejected [redacted]')
+    expect(redacted.cause).toBeUndefined()
+  })
 })
 
 describe('redactSecrets', () => {
