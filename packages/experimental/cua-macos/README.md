@@ -72,7 +72,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `maxClipboardBytes` | `33554432` | Maximum original clipboard bytes preserved during a paste; oversized contents reject before replacement. |
 | `pasteReadTimeoutMs` | `1000` | Clipboard read deadline after the Paste command returns; expiry reports `PASTE_NOT_CONSUMED`. |
 | `maxAppMatches` | `20` | Maximum installed-app search matches; broader queries reject and require a narrower name. |
-| `maxElements` / `maxDepth` | `5000` / `50` | Accessibility traversal limits. |
+| `maxElements` / `maxDepth` | `5000` / `50` | Defaults for tree reads. Each read can raise or lower either value. Paste menu discovery always uses the configured limits. [Rationale](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.md) |
 | `maxClickHoldMs` | `5000` | Maximum explicit click hold in milliseconds; accepts nonnegative integers. Zero only permits immediate release. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |

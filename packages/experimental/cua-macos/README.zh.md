@@ -72,7 +72,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
 | `pasteReadTimeoutMs` | `1000` | Paste 命令返回后等待剪贴板读取的上限；到期返回 `PASTE_NOT_CONSUMED`。 |
 | `maxAppMatches` | `20` | 已安装应用搜索的结果上限；范围过大的查询会被拒绝，需要缩小名称范围。 |
-| `maxElements` / `maxDepth` | `5000` / `50` | 辅助功能树遍历限制。 |
+| `maxElements` / `maxDepth` | `5000` / `50` | 读取树时的默认值。每次读取可单独调高或调低任一项。查找粘贴菜单始终使用配置值。[决策理由](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.zh.md) |
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |

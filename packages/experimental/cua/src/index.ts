@@ -77,9 +77,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Default node limit for accessibility reads and Paste menu discovery. */
+  /** Default node limit for accessibility reads and fixed node limit for Paste menu discovery. */
   maxElements: number
-  /** Default depth limit for accessibility reads and Paste menu discovery. */
+  /** Default depth limit for accessibility reads and fixed depth limit for Paste menu discovery. */
   maxDepth: number
 }
 
