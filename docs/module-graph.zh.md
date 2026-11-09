@@ -962,6 +962,7 @@ flowchart TD
   pkg_creation_recommendations --> pkg_skill
   pkg_creation_recommendations --> pkg_tools
   pkg_cua_mcp --> pkg_agent
+  pkg_cua_mcp --> pkg_app_boot
   pkg_cua_mcp --> pkg_attachment
   pkg_cua_mcp --> pkg_system_prompt
   pkg_cua_mcp --> pkg_tools
@@ -1839,7 +1840,7 @@ flowchart TD
 | [`workspace-changes`](../packages/deliverables/workspace-changes) | `deliverables` | [`agent`](../packages/core/agent), [`fs`](../packages/fs/fs), [`session`](../packages/core/session), [`subprocess`](../packages/subprocess/subprocess), [`tools`](../packages/core/tools) |
 | [`action-cards`](../packages/experimental/action-cards) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
 | [`creation-recommendations`](../packages/experimental/creation-recommendations) | `experimental` | [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`skill`](../packages/skill/skill), [`tools`](../packages/core/tools) |
-| [`cua-mcp`](../packages/experimental/cua-mcp) | `experimental` | [`agent`](../packages/core/agent), [`attachment`](../packages/attachment/attachment), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`cua-mcp`](../packages/experimental/cua-mcp) | `experimental` | [`agent`](../packages/core/agent), [`app-boot`](../packages/boot/app-boot), [`attachment`](../packages/attachment/attachment), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`experimental-browser-use-chrome-devtools-mcp`](../packages/experimental/browser-use-chrome-devtools-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-browser-use-playwright-mcp`](../packages/experimental/browser-use-playwright-mcp) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`working-directory`](../packages/session/working-directory) |
 | [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |

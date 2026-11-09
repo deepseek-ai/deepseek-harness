@@ -1,4 +1,5 @@
 /** Agent-scoped CUA transports sharing a provider-owned persistent program runtime. */
+import { extname } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
@@ -52,11 +53,16 @@ declare module '@deepseek-ai/cordis' {
  * @param ctx Provider context owning native calls and registrations.
  * @param config Validated preset selection and dedicated runtime bounds.
  * @param tool Internal native tool; non-PTC Agents can reach it only through the program.
- * @param guidance Platform and shared CUA operation instructions.
+ * @param guidance Raw-tool operation instructions for the configured PTC preset.
+ * @param programGuidance Operation instructions available inside cua_run_code.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
-export function installCuaTools(ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string): () => void | Promise<void> {
-  const bridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
+export function installCuaTools(
+  ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string, programGuidance: string,
+): () => void | Promise<void> {
+  // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
+  const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
+  const programBridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
   const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
@@ -65,7 +71,7 @@ export function installCuaTools(ctx: Context, config: CuaConfig, tool: ToolDefin
 Persistent PTC initialization:
 
 \`\`\`ts
-var { connectCua } = await import(${bridgeUrl});
+var { connectCua } = await import(${ptcBridgeUrl});
 var cua = connectCua(() => tools.cua, text => console.log(text));
 \`\`\``
   } }
@@ -78,7 +84,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
   return ctx.effect(function* () {
     const runtimeCtx = ctx.isolate('ptcRuntime')
     const runtime = runtimeCtx.plugin(NodePtcRuntime, {
-      ...config.runCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
+      ...config.standaloneRunCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
     })
     yield runtime.dispose
     const programs = runtimeCtx.plugin({
@@ -86,8 +92,8 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
       apply(consumer: Context) {
         const program = createRunCodeToolHandle(consumer, {
           name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
-          tools: [tool], limits: config.runCode.executor,
-          initialization: `globalThis.cua ??= (await import(${bridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
+          tools: [tool], limits: config.standaloneRunCode.executor,
+          initialization: `globalThis.cua ??= (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
         })
         // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
         consumer.provide('cuaPrograms', {
@@ -113,7 +119,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
             scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
           }
           const remove = register(entry.scope.ctx, kind === 'raw' ? tool : program.definition,
-            kind === 'raw' ? rawPrompt : { ...prompt, text: guidance })
+            kind === 'raw' ? rawPrompt : { ...prompt, text: programGuidance })
           entry.current = { kind, remove }
         }
         consumer.on('agent/created', ({ agent }) => { sync(agent) })

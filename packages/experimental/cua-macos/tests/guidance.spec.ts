@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
 import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
-import { GUIDANCE, PLATFORM_GUIDANCE } from '../src/guidance.ts'
+import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
@@ -10,6 +10,15 @@ const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
 const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'click', 'scroll', 'drag']
+
+it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
+  for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
+    expect(GUIDANCE).toContain(name)
+    expect(PROGRAM_GUIDANCE).not.toContain(name)
+  }
+  expect(PROGRAM_GUIDANCE).toContain('node:fs/promises')
+  expect(PROGRAM_GUIDANCE).toContain('session’s file tools')
+})
 
 it('keeps exactly three ordered operation headings', () => {
   const heads = COMMON_GUIDANCE.match(/^## .+$/gm)
@@ -63,7 +72,7 @@ it('enumerates every available method once in its catalog entry', () => {
 })
 
 it('documents option fields and return fields', () => {
-  for (const token of ['emit', 'includeMenus', 'details', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
+  for (const token of ['emit', 'includeMenus', 'details', 'maxElements', 'maxDepth', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
   for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'bytes', 'mimeType', 'pixelWidth', 'pixelHeight', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 

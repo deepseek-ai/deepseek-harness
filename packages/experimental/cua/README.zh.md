@@ -33,9 +33,13 @@ kind: "package-reference"
 
 `cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，以最后一个表达式作为结果；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 
-通过提供方的 `runCode.runtime` 配置运行时资源和启动设置，通过 `runCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，不能在其中覆盖 `executionMode` 和 `scriptPersistence`。这些设置不改变 profile 的共享 PTC 运行时。
+通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
+当 `agentPreset` 指定 preset 名称时，两种工具形态的注册都等待专用 Node 运行时及其所需服务，包括匹配 preset 的原始 `cua` 工具。无效的 `standaloneRunCode.runtime` 设置或缺少服务可能阻止 Agent 创建。修正配置或补齐服务后重载提供方；也可以先关闭 Computer Use，再重试创建 Agent。`agentPreset: false` 注册原始 `cua`，不创建该运行时。
+
+初始化会保留 `globalThis.cua` 中除 `null` 和 `undefined` 以外的值。如果程序覆盖了这个全局对象，在一次 `cua_run_code` 调用中执行 `globalThis.cua = undefined`。下一次调用会在执行代码前重建它。随后通过恢复的对象重新选择应用和窗口。
+
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会先报告，再释放该连接；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
@@ -95,7 +99,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 `cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。独立的初始化程序在同一环境中先安装 `cua`，再执行模型代码；单次提权执行也遵守此顺序。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`reset(agent)` 取消该 Agent 正在运行的程序，在不执行程序代码的情况下释放其保留环境，并保留应用授权和本机连接，下一次程序在新进程中重新创建 `cua`；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
 
-[操作 schema](src/protocol.ts) 定义模型参数，并单独声明 Host 专用字段。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
+[操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 
 对象门面（[src/api.ts](src/api.ts)）构建共享的 `CuaSurface`，并从它派生 `CuaApp` 和 `CuaWindow`。派生工厂注入作用域参数以及该作用域的辅助功能和键盘检查；共享基类不为仅属于应用的能力分支。在单个 API 实例内，门面按 `appHandle` 保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它。`getWindow` 静默读取初始树；当 provider 报告应用级辅助功能时，`getApp` 也静默读取。之后每次 `getAccessibilityTree()` 在分派前使上一份快照失效，元素操作使用最新快照 ID。只有 `CuaWindow` 可以截图或发送指针输入。
 
@@ -146,7 +150,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 - 会话决定没有自动保留期限，也不会随对话删除而自动清理。撤销会移除许可，但保留撤销代次，用于拒绝旧句柄和先前尚未完成的审批。
 - 原生行为和桌面验证由各平台负责；支持的应用、输入限制和实测覆盖范围见对应提供方文档。
-- `agentPreset` 按 preset ID 识别 PTC，不检测执行器。自定义 PTC preset 必须与该设置匹配，才能获得原始 `cua` 绑定。
+- `agentPreset` 选择一个 preset ID，不检测执行器。ID 不匹配的自定义 PTC preset 会在外层 `run_code` 中获得 `tools.cua_run_code`。嵌套程序使用独立的 CUA 环境和 `standaloneRunCode` 上限，同时仍受外层程序的截止时间和取消约束。将 `agentPreset` 设为该自定义 ID，可在其中使用原始 `tools.cua`；只有匹配的 ID 获得原始形态。
 - `cua_run_code` 状态仅保存在内存中，且独立于 PTC 状态。进程丢失、Agent 销毁或提供方卸载都会丢弃它；应用授权仍独立保存。
 - 持久变量不会在一组连续操作期间独占应用。其他 Agent 和用户可能改变其状态。指针移动和观察不恢复先前的鼠标位置；[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。
 - 元素 ID 是应用当前辅助功能快照中的不透明字符串。之后读取同一应用的任一窗口会替换当前快照，因此调用方必须使用最新树中的 ID；旧字符串可能被复用于另一个控件。截图或指针输入要求显式选择窗口。

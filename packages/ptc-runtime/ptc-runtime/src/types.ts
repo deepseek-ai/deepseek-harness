@@ -86,12 +86,12 @@ export interface PtcRunRequest {
   program: string
   /**
    * Optional source in the program's language and format, evaluated before it in
-   * the same environment after installing the current bindings. It runs on every execution, including fresh
-   * environments; callers must make repeated initialization safe. Its completion
-   * value is discarded, while logs, timeout, cancellation and output budgets are
-   * shared with the program. Failure prevents program execution without rolling
-   * back earlier effects. Omission runs only the program. Providers reject an
-   * explicit initialization during resolve when the selected mode cannot support it.
+   * the same environment after installing the current bindings. It runs on every
+   * execution, including fresh environments; callers must make repeated initialization
+   * safe. Its completion value is discarded, while logs, timeout, cancellation and
+   * output budgets are shared with the program. Failure prevents program execution
+   * without rolling back earlier effects. Omission runs only the program. Providers
+   * reject explicit initialization during resolve when the mode cannot support it.
    */
   initialization?: string
   /**

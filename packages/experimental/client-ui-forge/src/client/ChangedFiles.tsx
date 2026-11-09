@@ -25,6 +25,8 @@ export interface ChangedFilesProps extends PropsLocale<typeof NS> {
   readonly jump: (path: string) => void
   /** A menu row participates in the shared menu's keyboard walk. */
   readonly menu?: boolean
+  /** Unresolved host review threads by file path; files without any are absent. */
+  readonly threadCounts?: ReadonlyMap<string, number>
 }
 
 function Rows({ nodes, depth, props }: {
@@ -32,10 +34,11 @@ function Rows({ nodes, depth, props }: {
   readonly depth: number
   readonly props: ChangedFilesProps
 }): ReactNode {
-  const { state, toggle, jump, menu, t } = props
+  const { state, toggle, jump, menu, threadCounts, t } = props
   return nodes.map((node) => {
     const directory = node.kind === 'directory'
     const expanded = directory && (state.query.trim() !== '' || state.collapsed[node.path] !== true)
+    const threads = node.kind === 'file' ? threadCounts?.get(node.path) ?? 0 : 0
     const label = node.kind === 'file' && node.file.previousPath !== null
       ? t('diff.renamedPath', { from: node.file.previousPath, path: node.path }) : node.path
     return <div key={node.path}>
@@ -54,6 +57,7 @@ function Rows({ nodes, depth, props }: {
           </span>
           {directory ? <IconFolderCloseRegular size={14} /> : <FileTypeIcon path={node.path} size={14} />}
           <span className={css.name}>{node.name}</span>
+          {threads > 0 && <span className={css.threads} title={t('thread.treeCount', { count: threads })}>{threads}</span>}
           {node.kind === 'file' && <Counts file={node.file} t={t} />}
         </button>
       </Tooltip>
@@ -129,9 +133,12 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
  */
 export function ChangedFilesMenu({ visible, ...props }: ChangedFilesProps & { readonly visible: boolean }): ReactNode {
   const [open, setOpen] = useState(false)
-  return <Menu open={visible && open} portal dense align="start" listClassName={css.menu} onClose={() => { setOpen(false) }}
+  return <Menu open={visible && open} portal dense align="start" className={css.anchor} listClassName={css.menu} onClose={() => { setOpen(false) }}
     anchor={<button type="button" className={css.trigger} aria-haspopup="menu" aria-expanded={visible && open} disabled={props.files.length === 0}
-      onClick={() => { setOpen(value => !value) }}>{props.t('diff.allFiles', { count: props.files.length })}<IconChevronDownOutlineRegular size={12} /></button>}>
+      onClick={() => { setOpen(value => !value) }}>
+      <span className={css.triggerLabel}>{props.t('diff.allFiles', { count: props.files.length })}</span>
+      <IconChevronDownOutlineRegular size={12} className={css.triggerChevron} />
+    </button>}>
     <ChangedFiles {...props} menu jump={(path) => { setOpen(false); props.jump(path) }} />
   </Menu>
 }

@@ -58,7 +58,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | 字段 | 默认值 | 含义 |
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 为该 preset 提供原始 `cua`，为其他已组合的 preset 提供 `cua_run_code`；`false` 表示全局注册原始 `cua`。 |
-| `runCode.runtime` / `runCode.executor` | 共享 Node / PTC 上限 | 专用 CUA 运行时的资源、启动和嵌套调用设置；参见 [CUA](../cua/README.zh.md)。 |
+| `standaloneRunCode.runtime` / `standaloneRunCode.executor` | 共享 Node / PTC 上限 | 专用 CUA 运行时的资源、启动和嵌套调用设置；参见 [CUA](../cua/README.zh.md)。 |
 | `screenshotTarget` | 未设置 | 截图使用的固定 `{ longEdge, maxBytes }` 请求图片目标。未设置时按 Agent 的模型路由解析，该路由未声明图片输入时拒绝截图。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
@@ -74,7 +74,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
 | `pasteReadTimeoutMs` | `1000` | Paste 命令返回后等待剪贴板读取的上限；到期返回 `PASTE_NOT_CONSUMED`。 |
 | `maxAppMatches` | `20` | 已安装应用搜索的结果上限；范围过大的查询会被拒绝，需要缩小名称范围。 |
-| `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
+| `maxElements` / `maxDepth` | `5000` / `50` | 读取树时的默认值。每次读取可单独调高或调低任一项。查找粘贴菜单始终使用配置值。[决策理由](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.zh.md) |
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
@@ -91,7 +91,7 @@ CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用�
 
 原始 `getState` 操作返回经过校验的状态字段，以及按本次披露选项生成的完整文本。原生 helper 还返回供原生检查使用的结构化元素诊断数组，其中 `elementId` 是不透明字符串；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
-AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。详情不会绕过配置的节点数和深度上限；截断提示会指明触发的上限。
+AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。
 
 实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。调用 `performAction` 时使用 `listActions(elementId)` 返回的完整名称。
 
@@ -114,6 +114,8 @@ if (windows.length === 0) throw new Error("Open a TextEdit window first")
 const window = await app.getWindow(windows[0].windowId)
 void await window.getScreenshot()
 ```
+
+独立浮层有自己的窗口 ID。需要截图或点击浮层时，从 `app.getWindows()` 中选中它。
 
 使用 `cua` API 发现并选择应用（`listApps`、`getState`、`findApps`、`getApp`）；使用选定的应用来激活它、枚举其窗口并选择窗口。截图和指针输入都要求选择窗口，不只在存在多个窗口时才需要。`getApp` 和 `app.getWindow(windowId)` 静默读取初始树；根据观察到的标题与位置选择窗口。
 
@@ -175,9 +177,9 @@ AppKit 的 sheet 可以出现在文档窗口的树里，并有独立的窗口 ID
 
 #### 模型可见内容
 
-配置指定的 PTC preset 通过 `run_code` 获得一个定义各方法参数的 `cua` 操作工具。其他已组合的 preset 获得 `cua_run_code`，其中全局 `cua` 对象可直接使用，程序内只绑定 `tools.cua`。以下是本包逐字输出的操作指引；PTC 初始化及程序说明由[共享 CUA 包](../cua/README.zh.md#model-experience)按模式选择：
+配置指定的 PTC preset 通过 `run_code` 获得一个定义各方法参数的 `cua` 操作工具。其他已组合的 preset 获得 `cua_run_code`，其中全局 `cua` 对象可直接使用，程序内只绑定 `tools.cua`。下方逐字引用 PTC 操作指引，其中使用 `tools.write`、`tools.grep` 和 `tools.read` 处理较大的 AX 树。`cua_run_code` 版本使用 `node:fs/promises` 保存树，再在程序外直接调用普通会话工具搜索；初始化和程序说明由[共享 CUA 包](../cua/README.zh.md#model-experience)选择。
 
-##### 操作指导文本（原文）
+##### PTC 操作指引（原文）
 
 ```markdown
 macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. For pointer input on a sheet, select its window ID with app.getWindow(id). For menu items outside a window, use app.invoke(id). findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
@@ -204,7 +206,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the tree within the provider limits; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. If the tree reports maxElements or maxDepth truncation, select a narrower window or ask the user to raise the named macOS provider setting and read again. Capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory and print only the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it. Use element ids from the file only while that observation is current.
+- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
 - performAction(elementId: string, action: string, argument?: JsonValue) -> ActionResult — perform an observed action with an optional direct JSON argument.
@@ -235,13 +237,15 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 #### Token 影响
 
-启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。本包不将保留的对象序列化进提示。
+启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。本包不将保留的对象序列化进提示。窗口中有更多节点可读时，调高默认值或单次读取上限可能使进入模型的 AX 文本变长。每个可见辅助窗口（例如状态栏图标、菜单或工具提示）都会给 `getWindows()` 和原始 `getState` 的结果增加一条窗口记录。截图需要单独请求。
 
 #### KV Cache 影响
 
 工具结果追加到 Session 历史。修改插件配置或工具呈现方式可能改变请求前缀；保留应用对象不会改变已有历史。
 
 ## 已知限制与后续工作
+
+读取较大的树仍受原生操作超时（`timeoutMs`）、单次 AX 调用超时（`axTimeoutMs`）和响应大小限制（`maxResponseBytes`）约束。
 
 队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
 

@@ -23,6 +23,7 @@ const provider = {
       createChannel() { throw new Error('Scope tests must not start a native helper') },
       permissionParameters: (_method, permission, locale) => ({ permission, locale }),
       guidance: 'Fixture CUA guidance',
+      programGuidance: 'Fixture CUA program guidance',
       capabilities: {
         platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState'], appLevelAccessibility: true,
         keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels',
@@ -53,6 +54,16 @@ async function setup(presetIds = ['standard', 'ptc']) {
   })
   return { ctx, create }
 }
+
+it.each([
+  { executionMode: 'per-call' },
+  { executionMode: 'persistent-in-memory' },
+  { scriptPersistence: true },
+  { scriptPersistence: false },
+])('rejects explicit program evaluation settings %j', (unsupported) => {
+  expect(() => CuaConfig({ standaloneRunCode: { runtime: { timeoutMs: 1000, ...unsupported } } })).toThrow()
+  expect(CuaConfig({ standaloneRunCode: { runtime: { timeoutMs: 1000 } } }).standaloneRunCode.runtime.timeoutMs).toBe(1000)
+})
 
 it('gives every other composed preset a program tool without changing the shared runtime', async () => {
   const { ctx, create } = await setup(['standard', 'ptc', 'cordis', 'minimal', 'custom'])
@@ -101,8 +112,8 @@ it('selects one CUA transport for existing and new Agents and removes both on un
   await expect.poll(() => ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
   expect(ctx.tools.get('cua_run_code', existing.agent)).toBeUndefined()
   expect(ctx.get('ptcRuntime')).toBeUndefined()
-  expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
-    .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', text: 'Fixture CUA guidance\n\nMaximum click holdMs: 5000 ms.' }))
+  const { sections } = await ctx.systemPrompt.assemble({ scope: existing.agent })
+  expect(sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Fixture CUA guidance')
   await ctx.agentPresets.select(existing.agent, 'ptc')
   expect(ctx.tools.schemas(existing.agent).filter(tool => tool.name === 'cua')).toHaveLength(1)
   const fresh = await create('fresh', 'ptc')
@@ -110,8 +121,8 @@ it('selects one CUA transport for existing and new Agents and removes both on un
   await ctx.agentPresets.select(existing.agent, 'standard')
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeUndefined()
   await expect.poll(() => ctx.tools.get('cua_run_code', existing.agent)).toBeDefined()
-  expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
-    .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', text: 'Fixture CUA guidance\n\nMaximum click holdMs: 5000 ms.' }))
+  const standardSections = (await ctx.systemPrompt.assemble({ scope: existing.agent })).sections
+  expect(standardSections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Fixture CUA program guidance')
   await ctx.agentPresets.select(existing.agent, 'ptc')
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   await fresh.dispose()
