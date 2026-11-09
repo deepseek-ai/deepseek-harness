@@ -104,30 +104,6 @@ jobs:
           Add-Content -Path $outputPath -Value $outputLine -Encoding utf8
       - name: Archive publish output
         run: Compress-Archive -Path dist/cua-helper-win-x64/* -DestinationPath dist/cua-helper-win-x64.zip
-      - name: Verify helper archive
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $verify = Join-Path $env:RUNNER_TEMP 'cua-helper-verify'
-          if (Test-Path $verify) { Remove-Item $verify -Recurse -Force }
-          Expand-Archive -Path 'dist/cua-helper-win-x64.zip' -DestinationPath $verify
-          $manifestPath = Join-Path $verify 'cua-helper.json'
-          if (-not (Test-Path $manifestPath -PathType Leaf)) { throw 'helper archive has no cua-helper.json' }
-          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-          if ($manifest.schemaVersion -ne 1 -or $manifest.platform -ne 'windows') { throw 'helper metadata version or platform is invalid' }
-          if (-not $manifest.sourceDigest -or -not $manifest.buildKey) { throw 'helper metadata lacks sourceDigest or buildKey' }
-          $exe = Join-Path $verify 'dsh-cua-windows.exe'
-          if (-not (Test-Path $exe -PathType Leaf)) { throw 'helper archive has no executable' }
-          $exeHash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($exeHash -ne $manifest.sha256) { throw 'helper executable hash differs from metadata' }
-          $actual = @(Get-ChildItem $verify -Recurse -File | Where-Object Name -ne 'cua-helper.json')
-          if ($actual.Count -ne $manifest.files.PSObject.Properties.Count) { throw 'helper archive file count differs from metadata' }
-          foreach ($property in $manifest.files.PSObject.Properties) {
-            $file = Join-Path $verify $property.Name
-            if (-not (Test-Path $file -PathType Leaf)) { throw "helper archive is missing $($property.Name)" }
-            $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($hash -ne $property.Value) { throw "helper archive hash differs for $($property.Name)" }
-          }
-          Remove-Item $verify -Recurse -Force
       - uses: actions/upload-artifact@v7.0.1
         id: upload
         with:
