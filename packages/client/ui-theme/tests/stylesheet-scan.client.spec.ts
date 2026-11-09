@@ -11,15 +11,22 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-it('walks shipped package files and skips dot directories holding transient roots', () => {
+it('skips dot directories holding transient roots', () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-stylesheet-scan-'))
   roots.push(root)
-  mkdirSync(join(root, 'pkg'))
+  mkdirSync(join(root, 'pkg', 'nested'), { recursive: true })
   writeFileSync(join(root, 'pkg', 'package.json'), '{}')
+  writeFileSync(join(root, 'pkg', 'nested', 'package.json'), '{}')
   mkdirSync(join(root, '.typert-worker-failure-probe'))
   writeFileSync(join(root, '.typert-worker-failure-probe', 'package.json'), '{}')
 
   // The helper reports `/`-separated paths on every platform, so the Windows
-  // temporary root's separators must not reach the expectation.
-  expect(packageFiles(name => name === 'package.json', root)).toEqual([`${root.replaceAll('\\', '/')}/pkg/package.json`])
+  // temporary root's separators must not reach the expectation. Traversal
+  // reports the nested manifest before its parent, and directory order is not
+  // guaranteed, so both sides are compared sorted.
+  const normalized = root.replaceAll('\\', '/')
+  expect(packageFiles(name => name === 'package.json', root).sort()).toEqual([
+    `${normalized}/pkg/nested/package.json`,
+    `${normalized}/pkg/package.json`,
+  ])
 })
