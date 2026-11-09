@@ -404,7 +404,7 @@ export class PlanModeController extends Service {
 
   private planState(session: Session): PlanUnitState {
     if (this.planProjectionHandle === undefined) {
-      throw new ToolContextUnavailableError('plan mode is not ready; await plugin activation before running an agent')
+      throw new PlanModeError('plan mode is not ready; await plugin activation before running an agent', 'PLAN_STATE_UNAVAILABLE')
     }
     return this.planProjectionHandle.stateOf(session)
   }

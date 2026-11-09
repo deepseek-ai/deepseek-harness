@@ -1,8 +1,4 @@
-/**
- * Typed `exit_plan_mode` failures.
- *
- * @module @deepseek-ai/dsh-plan-mode/error
- */
+/** Typed plan-mode failures. @module */
 
 import { HarnessError } from '@deepseek-ai/dsh-error'
 
@@ -11,23 +7,21 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
  * - `PLAN_NOT_ACTIVE`: the caller's committed state is not plan mode; work without the exit tool.
  * - `PLAN_REVIEW_INTERRUPTED`: the plan-mode service was reloaded during the review; present the plan again.
  * - `PLAN_REVISION_REQUESTED`: the user chose to keep planning; revise the plan from the feedback in `message`.
+ * - `PLAN_STATE_UNAVAILABLE`: the plan projection reader is not registered yet; await plugin activation before running an agent.
  */
-const PLAN_MODE_ERROR_CODES = [
-  'PLAN_NOT_ACTIVE',
-  'PLAN_REVIEW_INTERRUPTED',
-  'PLAN_REVISION_REQUESTED',
-] as const
+export type PlanModeErrorCode =
+  | 'PLAN_NOT_ACTIVE'
+  | 'PLAN_REVIEW_INTERRUPTED'
+  | 'PLAN_REVISION_REQUESTED'
+  | 'PLAN_STATE_UNAVAILABLE'
 
-/** One plan-mode failure code. */
-export type PlanModeErrorCode = typeof PLAN_MODE_ERROR_CODES[number]
-
-/** Typed plan-mode failure; `code` is one of {@link PLAN_MODE_ERROR_CODES}. */
+/** Typed plan-mode failure; `code` is one {@link PlanModeErrorCode}. */
 export class PlanModeError extends HarnessError {
   override readonly code: PlanModeErrorCode
 
   /**
-   * @param message - model-facing reason and next step.
-   * @param code - failure class from {@link PLAN_MODE_ERROR_CODES}.
+   * @param message - reason and next step for the caller.
+   * @param code - failure class.
    * @param options - standard `cause` chaining.
    */
   constructor(message: string, code: PlanModeErrorCode, options?: ErrorOptions) {

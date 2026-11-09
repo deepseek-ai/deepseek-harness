@@ -45,7 +45,9 @@ describe('plan-mode activation', () => {
     agent.followup(prompt)
     await agent.whenIdle()
     expect(adapter.requests).toHaveLength(0)
-    expect(errors.some(error => error instanceof Error && /plan.*not ready/.test(error.message))).toBe(true)
+    expect(errors).toContainEqual(expect.objectContaining({
+      name: 'PlanModeError', code: 'PLAN_STATE_UNAVAILABLE', message: expect.stringMatching(/plan.*not ready/) as string,
+    }))
     expect(agent.session.snapshotEvents().filter(event => event.type === 'request/header')).toHaveLength(0)
 
     release.resolve(undefined)

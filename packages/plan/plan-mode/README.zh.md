@@ -94,7 +94,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 会话投影单元
 
-本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配会明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
+本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配、`/plan` 命令与 `exit_plan_mode` 会以 `PlanModeError` `PLAN_STATE_UNAVAILABLE` 明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
 
 该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。状态读取使用保留的句柄，注销后仍然可用。
 
@@ -104,7 +104,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`ctx.planMode` 服务、`plan:policy` 段落、`/plan` 命令、`exit_plan_mode` 工具 |
 | [`src/types.ts`](src/types.ts) | `plan` 投影 key 声明与 `PlanProjection` 协议值 |
-| [`src/error.ts`](src/error.ts) | `PlanModeError` 及其封闭 code 列表 |
+| [`src/error.ts`](src/error.ts) | `PlanModeError` 及其封闭 code 联合类型 |
 | [`src/client.ts`](src/client.ts) | types 出口的客户端命名空间再导出 |
 
 审批意图携带发起工具调用的标识，让 Web 客户端在审批关闭后重新打开同一份计划。完整 Markdown 保留在已有的原生调用或 PTC dispatch 日志中。
