@@ -32,6 +32,7 @@ function page(nodes: readonly unknown[], next: string | null = null): Record<str
 function commentNode(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id, state: 'SUBMITTED', createdAt: '2026-11-05T08:00:00Z', url: `https://github.com/octo/demo/pull/7#discussion_${id}`, body: `Body of ${id}`,
+    viewerCanUpdate: false, viewerCanDelete: false,
     author: { __typename: 'User', login: 'reviewer', avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48&v=4' },
     ...overrides,
   }
@@ -42,14 +43,20 @@ function threadNode(id: string, overrides: Record<string, unknown> = {}, root: R
   return {
     id, isOutdated: false, isResolved: false, path: 'src/a.ts', diffSide: 'RIGHT', startDiffSide: null,
     line: 12, startLine: null, originalLine: 12, originalStartLine: null, subjectType: 'LINE',
+    viewerCanReply: true, viewerCanResolve: true, viewerCanUnresolve: false,
     root: { nodes: [{ diffHunk: '@@ -10,2 +10,3 @@\n a\n+b\n c', commit: { oid: head }, originalCommit: { oid: head }, ...root }] },
     comments: page([commentNode(`${id}-1`)]),
     ...overrides,
   }
 }
 
-function firstPage(threads: Record<string, unknown>, headRefOid = head, viewer: unknown = { login: 'octo' }): Record<string, unknown> {
-  return { data: { viewer, repository: { pullRequest: { id: 'pull-7', headRefOid, reviewThreads: threads } } } }
+function firstPage(
+  threads: Record<string, unknown>, headRefOid = head, viewer: unknown = { login: 'octo' }, pull: Record<string, unknown> = {},
+  repository: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return { data: { viewer, repository: { isArchived: false, viewerPermission: 'READ', ...repository, pullRequest: {
+    id: 'pull-7', headRefOid, locked: false, reviews: { nodes: [] }, reviewThreads: threads, ...pull,
+  } } } }
 }
 
 function nextPage(threads: Record<string, unknown>, headRefOid = head): Record<string, unknown> {
@@ -84,16 +91,21 @@ describe('GitHub provider review threads', () => {
       headSha: head,
       viewer: 'octo',
       truncated: false,
+      pendingReview: null,
+      viewerCanReview: true,
       threads: [{
         id: 't1', path: 'src/a.ts', side: 'R', subject: 'line',
         current: { commit: head, startLine: 12, endLine: 12 },
         original: { commit: head, startLine: 12, endLine: 12 },
         diffHunk: '@@ -10,2 +10,3 @@\n a\n+b\n c',
         resolved: true,
+        viewerCanReply: true,
+        viewerCanResolve: false,
         comments: [{
           id: 't1-1', body: 'Body of t1-1', createdAt: '2026-11-05T08:00:00Z', pending: false,
           url: 'https://github.com/octo/demo/pull/7#discussion_t1-1',
           author: { login: 'reviewer', avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48&v=4', bot: false },
+          viewerCanEdit: false, viewerCanDelete: false,
         }],
       }],
     })
@@ -161,6 +173,51 @@ describe('GitHub provider review threads', () => {
     expect(result).toMatchObject({ threads: { length: 1 } })
   })
 
+  it('maps the permissions of the viewer on threads and comments, resolving an unresolved thread and unresolving a resolved one', async () => {
+    const gh = review(firstPage(page([
+      threadNode('open', { viewerCanReply: false, viewerCanResolve: true, viewerCanUnresolve: false, comments: page([
+        commentNode('mine', { viewerCanUpdate: true, viewerCanDelete: true }),
+      ]) }),
+      threadNode('settled', { isResolved: true, viewerCanResolve: false, viewerCanUnresolve: true }),
+    ])))
+
+    const result = await provider(gh.run).readReview(pull(7), head, signal)
+
+    expect(result).toMatchObject({ threads: [
+      { id: 'open', viewerCanReply: false, viewerCanResolve: true, comments: [{ id: 'mine', viewerCanEdit: true, viewerCanDelete: true }] },
+      { id: 'settled', viewerCanReply: true, viewerCanResolve: true },
+    ] })
+  })
+
+  it('reports the pending review the viewer authored with its commit and comment count', async () => {
+    const reviews = { nodes: [{ id: 'review-1', viewerDidAuthor: true, commit: { oid: older }, comments: { totalCount: 2 } }] }
+    const gh = review(firstPage(page([]), head, { login: 'octo' }, { reviews }))
+
+    await expect(provider(gh.run).readReview(pull(7), head, signal))
+      .resolves.toMatchObject({ pendingReview: { id: 'review-1', commit: older, comments: 2 } })
+  })
+
+  it.each([
+    ['another user authored', { id: 'review-2', viewerDidAuthor: false, commit: { oid: head }, comments: { totalCount: 1 } }],
+    ['names no commit', { id: 'review-3', viewerDidAuthor: true, commit: null, comments: { totalCount: 1 } }],
+  ] as const)('reports no pending review for one %s', async (_label, node) => {
+    const gh = review(firstPage(page([]), head, { login: 'octo' }, { reviews: { nodes: [node] } }))
+
+    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ pendingReview: null })
+  })
+
+  it.each([
+    ['an archived repository', {}, { isArchived: true, viewerPermission: 'ADMIN' }, false],
+    ['a locked conversation without write access', { locked: true }, { viewerPermission: 'TRIAGE' }, false],
+    ['a locked conversation without a known permission', { locked: true }, { viewerPermission: null }, false],
+    ['a locked conversation with write access', { locked: true }, { viewerPermission: 'WRITE' }, true],
+    ['an open conversation with read access', {}, { viewerPermission: 'READ' }, true],
+  ] as const)('reports whether the viewer can review in %s', async (_label, pullFields, repository, expected) => {
+    const gh = review(firstPage(page([]), head, { login: 'octo' }, pullFields, repository))
+
+    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ viewerCanReview: expected })
+  })
+
   it('reads the following thread and comment pages, asking only for the threads left under maxReviewThreads', async () => {
     const gh = review(
       firstPage(page([threadNode('t1', { comments: page([commentNode('c1')], 'comments-1') })], 'threads-1')),
@@ -198,7 +255,7 @@ describe('GitHub provider review threads', () => {
 
     const byComments = review(first, threads, comments)
     await expect(provider(byComments.run, { maxOutputBytes: size + 10 }).readReview(pull(7), head, signal))
-      .resolves.toEqual({ headSha: head, viewer: 'octo', threads: [], truncated: true })
+      .resolves.toEqual({ headSha: head, viewer: 'octo', threads: [], truncated: true, pendingReview: null, viewerCanReview: true })
 
     const commentBytes = JSON.stringify(comments['comments-1']).length
     const byThreads = review(first, threads, comments)

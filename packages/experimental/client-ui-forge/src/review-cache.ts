@@ -1,6 +1,6 @@
 /**
  * Review threads of change requests kept in memory, so the changes view reads them from the code host again only
- * after the change request's head or update time changes or the kept threads reach their age limit.
+ * after the change request's head or update time changes, the kept threads reach their age limit, or a review write drops them.
  */
 
 import { Buffer } from 'node:buffer'
@@ -18,11 +18,14 @@ interface Entry {
 
 /**
  * One read of review threads per change request, bounded by age and by the total UTF-8 size of the kept reads as
- * JSON; the least recently read change request leaves first.
+ * JSON; the least recently read change request leaves first. A read that started before a drop of any change request
+ * is not kept, so threads read before a write never replace the drop.
  */
 export class ReviewCache {
   private readonly entries = new Map<ChangeRequestKey, Entry>()
   private bytes = 0
+  /** Number of drops so far. */
+  private drops = 0
 
   /**
    * @param maxBytes - most UTF-8 bytes kept together; a larger read is not kept.
@@ -47,19 +50,25 @@ export class ReviewCache {
   }
 
   /**
+   * Name the cache's state when a read starts, for {@link ReviewCache.set}.
+   * @returns the token of the read.
+   */
+  token(): number {
+    return this.drops
+  }
+
+  /**
    * Keep a read in place of the change request's earlier one, then drop the least recently read change requests
-   * until the rest fit within `maxBytes`.
+   * until the rest fit within `maxBytes`. A read whose token a drop outdated is not kept.
    * @param key - the change request.
    * @param version - head commit and update time the threads were read at.
    * @param review - the threads.
    * @param readAt - epoch milliseconds when the read started.
+   * @param token - what {@link ReviewCache.token} returned when the read started.
    */
-  set(key: ChangeRequestKey, version: string, review: ForgeReviewData, readAt: number): void {
-    const previous = this.entries.get(key)
-    if (previous !== undefined) {
-      this.entries.delete(key)
-      this.bytes -= previous.bytes
-    }
+  set(key: ChangeRequestKey, version: string, review: ForgeReviewData, readAt: number, token: number): void {
+    if (token !== this.drops) return
+    this.forget(key)
     const bytes = Buffer.byteLength(JSON.stringify(review))
     if (bytes > this.maxBytes) return
     this.entries.set(key, { version, review, readAt, bytes })
@@ -69,5 +78,21 @@ export class ReviewCache {
       this.entries.delete(oldest)
       this.bytes -= entry.bytes
     }
+  }
+
+  /**
+   * Forget the threads kept for a change request, and every read in flight, after a write changed them.
+   * @param key - the change request.
+   */
+  drop(key: ChangeRequestKey): void {
+    this.drops += 1
+    this.forget(key)
+  }
+
+  private forget(key: ChangeRequestKey): void {
+    const previous = this.entries.get(key)
+    if (previous === undefined) return
+    this.entries.delete(key)
+    this.bytes -= previous.bytes
   }
 }

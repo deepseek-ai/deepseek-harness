@@ -2,7 +2,8 @@
 
 import { Buffer } from 'node:buffer'
 import type {
-  ChangeRequestRef, ForgeAnchor, ForgeCommentId, ForgeFailure, ForgeReviewComment, ForgeReviewData, ForgeReviewThread, ForgeThreadId,
+  ChangeRequestRef, ForgeAnchor, ForgeCommentId, ForgeFailure, ForgeReviewComment, ForgeReviewData, ForgeReviewId, ForgeReviewThread,
+  ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GraphqlReader } from './commits.ts'
@@ -11,7 +12,10 @@ import { checkedRepository, isCommit } from './urls.ts'
 /** Most nodes GitHub returns in one connection page. */
 const PAGE_SIZE = 100
 
-const COMMENT_FIELDS = 'id state createdAt url body author { __typename login avatarUrl(size: 48) }'
+/** Repository permissions that may comment on a locked conversation. */
+const WRITERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE'])
+
+const COMMENT_FIELDS = 'id state createdAt url body viewerCanUpdate viewerCanDelete author { __typename login avatarUrl(size: 48) }'
 
 const COMMENT_PAGE = `comments(first: ${PAGE_SIZE}, after: $cursor) { pageInfo { hasNextPage endCursor } nodes { ${COMMENT_FIELDS} } }`
 
@@ -20,15 +24,26 @@ const COMMENT_PAGE = `comments(first: ${PAGE_SIZE}, after: $cursor) { pageInfo {
  * first page of comments starts without a cursor.
  */
 const THREAD_FIELDS = `id isOutdated isResolved path diffSide startDiffSide line startLine originalLine originalStartLine subjectType
+  viewerCanReply viewerCanResolve viewerCanUnresolve
   root: comments(first: 1) { nodes { diffHunk commit { oid } originalCommit { oid } } }
   ${COMMENT_PAGE.replace(', after: $cursor', '')}`
 
 const THREAD_PAGE = `pageInfo { hasNextPage endCursor } nodes { ${THREAD_FIELDS} }`
 
-/** First thread page with the head and the viewer; variables `owner` and `name` are strings, `number` and `first` integers. */
+/**
+ * First thread page with the head, the viewer, whether the viewer may comment, and the viewer's pending review; variables
+ * `owner` and `name` are strings, `number` and `first` integers.
+ */
 export const REVIEW_QUERY = `query($owner: String!, $name: String!, $number: Int!, $first: Int!) {
   viewer { login }
-  repository(owner: $owner, name: $name) { pullRequest(number: $number) { id headRefOid reviewThreads(first: $first) { ${THREAD_PAGE} } } }
+  repository(owner: $owner, name: $name) {
+    isArchived viewerPermission
+    pullRequest(number: $number) {
+      id headRefOid locked
+      reviews(states: PENDING, first: 1) { nodes { id viewerDidAuthor commit { oid } comments { totalCount } } }
+      reviewThreads(first: $first) { ${THREAD_PAGE} }
+    }
+  }
 }`
 
 /** Following thread page with the head it was read at; variables `id` and `cursor` are strings, `first` an integer. */
@@ -62,6 +77,8 @@ const commentSchema = z.object({
   createdAt: z.string(),
   url: z.string().nullable(),
   body: z.string(),
+  viewerCanUpdate: z.boolean(),
+  viewerCanDelete: z.boolean(),
   author: z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() }).nullable(),
 })
 
@@ -79,15 +96,35 @@ const threadSchema = z.object({
   originalLine: z.number().int().nullable(),
   originalStartLine: z.number().int().nullable(),
   subjectType: z.string(),
+  viewerCanReply: z.boolean(),
+  viewerCanResolve: z.boolean(),
+  viewerCanUnresolve: z.boolean(),
   root: z.object({ nodes: z.array(z.object({ diffHunk: z.string(), commit: commitSchema, originalCommit: commitSchema })) }),
   comments: commentPageSchema,
 })
 
 const threadPageSchema = z.object({ pageInfo: pageInfoSchema, nodes: z.array(threadSchema) })
 
+const pendingSchema = z.object({
+  id: z.string(),
+  viewerDidAuthor: z.boolean(),
+  commit: commitSchema,
+  comments: z.object({ totalCount: z.number().int().nonnegative() }),
+})
+
 const firstPageSchema = z.object({ data: z.object({
   viewer: z.object({ login: z.string() }).nullable(),
-  repository: z.object({ pullRequest: z.object({ id: z.string(), headRefOid: z.string(), reviewThreads: threadPageSchema }) }),
+  repository: z.object({
+    isArchived: z.boolean(),
+    viewerPermission: z.string().nullable(),
+    pullRequest: z.object({
+      id: z.string(),
+      headRefOid: z.string(),
+      locked: z.boolean(),
+      reviews: z.object({ nodes: z.array(pendingSchema) }),
+      reviewThreads: threadPageSchema,
+    }),
+  }),
 }) })
 
 const nextPageSchema = z.object({ data: z.object({ node: z.object({ headRefOid: z.string(), reviewThreads: threadPageSchema }) }) })
@@ -127,14 +164,20 @@ export async function readReviewThreads(
   if ('code' in first) return first
   const parsed = firstPageSchema.safeParse(first.body)
   if (!parsed.success) return unexpected
-  const pull = parsed.data.data.repository.pullRequest
+  const repository = parsed.data.data.repository
+  const pull = repository.pullRequest
   const moved = stale(pull.headRefOid)
   if (moved !== undefined) return moved
   let bytes = first.bytes
   let page = pull.reviewThreads
   const threads: ForgeReviewThread[] = []
   const viewer = parsed.data.data.viewer?.login ?? null
-  const result = (truncated: boolean): ForgeReviewData => ({ headSha, viewer, threads, truncated })
+  const pending = pull.reviews.nodes.find(review => review.viewerDidAuthor)
+  const pendingReview = pending?.commit == null ? null
+    : { id: pending.id as ForgeReviewId, commit: pending.commit.oid, comments: pending.comments.totalCount }
+  // GitHub refuses every write to an archived repository, and comments on a locked conversation from anyone without write access.
+  const viewerCanReview = !repository.isArchived && (!pull.locked || WRITERS.has(repository.viewerPermission ?? ''))
+  const result = (truncated: boolean): ForgeReviewData => ({ headSha, viewer, threads, truncated, pendingReview, viewerCanReview })
   const cursors = new Set<string>()
   for (;;) {
     for (const node of page.nodes.slice(0, limits.maxReviewThreads - threads.length)) {
@@ -193,6 +236,8 @@ function toThread(node: ThreadNode, comments: readonly CommentNode[], head: stri
       ? anchor(root.originalCommit.oid, sameSide ? node.originalStartLine : null, node.originalLine) : null,
     diffHunk: root === undefined || root.diffHunk === '' ? null : root.diffHunk,
     resolved: node.isResolved,
+    viewerCanReply: node.viewerCanReply,
+    viewerCanResolve: node.isResolved ? node.viewerCanUnresolve : node.viewerCanResolve,
     comments: comments.map(toComment),
   }
 }
@@ -209,5 +254,7 @@ function toComment(node: CommentNode): ForgeReviewComment {
     createdAt: node.createdAt,
     pending: node.state === 'PENDING',
     url: node.url,
+    viewerCanEdit: node.viewerCanUpdate,
+    viewerCanDelete: node.viewerCanDelete,
   }
 }
