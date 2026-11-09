@@ -8,9 +8,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import TurndownService from 'turndown'
 import { gfm } from '@joplin/turndown-plugin-gfm'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolResult, WebFetchResultView } from '@deepseek-ai/dsh-tools'
-import { WebError, type WebFetchBody, type WebFetchResult } from '@deepseek-ai/dsh-web'
+import type { WebFetchBody, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { assertNever, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { EXTERNAL_WEB_CONTENT_NOTICE } from './trust.ts'
 
@@ -96,7 +96,7 @@ turndown.addRule('tableRowWithoutSpanExpansion', {
 
 /**
  * Validate value constraints the schema DSL can't express: a non-blank `url`.
- * Throws `WebError` with `WEB_INVALID_URL` otherwise. No timeout parameter — the tool-call budget
+ * Throws `ToolArgsError` otherwise. No timeout parameter — the tool-call budget
  * is deployment policy declared via `fetchTimeoutMs` config and enforced by
  * `@deepseek-ai/dsh-tool-call-timeout-policy`, not a model argument.
  *
@@ -104,7 +104,7 @@ turndown.addRule('tableRowWithoutSpanExpansion', {
  * @returns the arguments as the seam's request fields.
  */
 export function parseFetchArgs(args: { url: string }): { url: string } {
-  if (args.url.trim().length === 0) throw new WebError('url must be a non-empty string', 'WEB_INVALID_URL')
+  if (args.url.trim().length === 0) throw new ToolArgsError(['url must be a non-empty string'])
   return { url: args.url }
 }
 

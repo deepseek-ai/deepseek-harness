@@ -1027,7 +1027,9 @@ describe('dsh-tool-skill', () => {
     expect(disabled.isError).toBe(true)
     expect(modelOnly.isError).toBe(false)
     expect(unknown.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_FOUND' })
-    expect(invalid.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_INVALID_NAME' })
+    expect(invalid.error).toEqual({
+      message: 'invalid arguments: invalid skill name "Bad_Name"', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' },
+    })
     expect(disabled.error?.info).toEqual({ name: 'SkillError', code: 'SKILL_NOT_MODEL_INVOCABLE' })
     const unknownBlock = unknown.content[0]
     if (unknownBlock?.type !== 'text') throw new Error('expected text tool result')

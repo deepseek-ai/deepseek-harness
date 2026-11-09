@@ -4,14 +4,12 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
 
 /**
  * Every {@link SkillError} code:
- * - `SKILL_INVALID_NAME`: the requested name is not a kebab-case skill name; the model corrects it.
  * - `SKILL_NOT_FOUND`: no visible skill has the name, or it disappeared; the model picks another skill.
  * - `SKILL_NOT_MODEL_INVOCABLE`: the skill exists but its invocation policy excludes model calls.
  * - `SKILL_INVALID_DEFINITION`: a provider returned a candidate, definition, or catalog observation that violates the registry contract.
  * - `SKILL_READ_FAILED`: reading a skill file failed for a reason other than its absence; `cause` is the original error.
  */
 export const SKILL_ERROR_CODES = [
-  'SKILL_INVALID_NAME',
   'SKILL_NOT_FOUND',
   'SKILL_NOT_MODEL_INVOCABLE',
   'SKILL_INVALID_DEFINITION',

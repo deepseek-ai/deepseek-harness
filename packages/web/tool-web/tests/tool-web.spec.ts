@@ -400,7 +400,7 @@ describe('fetch formatting', () => {
 
   it('validates url (non-empty), no timeout parameter', () => {
     expect(() => parseFetchArgs({ url: ' ' })).toThrow('non-empty')
-    expect(() => parseFetchArgs({ url: ' ' })).toThrow(expect.objectContaining({ name: 'WebError', code: 'WEB_INVALID_URL' }))
+    expect(() => parseFetchArgs({ url: ' ' })).toThrow(expect.objectContaining({ name: 'ToolArgsError', code: 'INVALID_ARGS' }))
     expect(parseFetchArgs({ url: 'https://a.test' })).toEqual({ url: 'https://a.test' })
   })
 
@@ -782,7 +782,9 @@ describe('tool-web execution through the real registry', () => {
   it('reports hand-checked query and URL constraints with structured identity', async () => {
     const { fiber, call } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: searchProvider({ sources: [], truncated: false }) })
     expect((await call('web_search', { queries: [] })).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
-    expect((await call('web_fetch', { url: ' ' })).error?.info).toEqual({ name: 'WebError', code: 'WEB_INVALID_URL' })
+    expect((await call('web_fetch', { url: ' ' })).error).toEqual({
+      message: 'invalid arguments: url must be a non-empty string', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' },
+    })
     await fiber.dispose()
   })
 
