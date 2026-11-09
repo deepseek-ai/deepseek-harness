@@ -28,7 +28,6 @@ import z from '@deepseek-ai/schemastery'
 import { defineTool, TOOL_ABORTED, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, TerminalCallView, ToolDefinition, ToolExecution, ToolResult, ToolResultView } from '@deepseek-ai/dsh-tools'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import { JobError } from '@deepseek-ai/dsh-jobs'
 import type { JobId, JobRegistry, JobView } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-shell-env'
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -542,7 +541,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         if (args.run_in_background === true) {
           // Undeclared keys are allowed, so schema omission also needs enforcement.
           if (!backgroundEnabled) {
-            throw new JobError('run_in_background is disabled for this deployment (enableRunInBackground: false)', 'JOB_BACKGROUND_DISABLED')
+            throw new ToolArgsError(['run_in_background is disabled for this deployment (enableRunInBackground: false)'])
           }
           if (jobs === undefined) {
             throw new ToolContextUnavailableError('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
