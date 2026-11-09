@@ -1,7 +1,7 @@
 /** Typed `plugin_market` tool failures converted from the market service's Remote failures. */
 
 import { HarnessError } from '@deepseek-ai/dsh-error'
-import { remoteErrorOf, type RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
  * Every {@link PluginMarketError} code:
@@ -58,17 +58,18 @@ const REMOTE_CODES: Readonly<Record<MarketRemoteCode, PluginMarketErrorCode>> = 
 
 /**
  * Convert a market failure for the tool registry. A `HarnessError` keeps its
- * identity; a market `RemoteError` keeps its message and becomes the matching
- * code with the Remote failure as `cause`; anything else is `PLUGIN_MARKET_FAILED`.
+ * identity; an in-process market `RemoteError`, recognized by its declared
+ * `plugin-market/*` code, keeps its message and becomes the matching code with
+ * the Remote failure as `cause`; anything else is `PLUGIN_MARKET_FAILED`.
  * @param error - the rejection of a market service call.
  * @returns the failure to throw from the tool body.
  */
 export function pluginMarketToolError(error: unknown): HarnessError {
   if (error instanceof HarnessError) return error
-  const remote = remoteErrorOf(error)
-  const code = remote !== undefined && Object.hasOwn(REMOTE_CODES, remote.code)
-    ? REMOTE_CODES[remote.code as MarketRemoteCode]
+  if (!(error instanceof Error)) return new PluginMarketError(String(error), 'PLUGIN_MARKET_FAILED', { cause: error })
+  const remoteCode = (error as { code?: unknown }).code
+  const code = typeof remoteCode === 'string' && Object.hasOwn(REMOTE_CODES, remoteCode)
+    ? REMOTE_CODES[remoteCode as MarketRemoteCode]
     : 'PLUGIN_MARKET_FAILED'
-  const message = remote?.message ?? (error instanceof Error ? error.message : String(error))
-  return new PluginMarketError(message, code, { cause: error })
+  return new PluginMarketError(error.message, code, { cause: error })
 }

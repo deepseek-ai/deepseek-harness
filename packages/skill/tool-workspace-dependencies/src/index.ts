@@ -134,15 +134,23 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
  * Read and normalize build metadata without rewriting the source file.
  * @param root - Installed or bundled primary runtime directory.
  * @returns Validated top-level versions and target identifiers, including for legacy components manifests.
- * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when `runtime.json` is missing, unreadable, or invalid.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when `runtime.json` is missing or
+ *   invalid; other read failures, such as `EACCES`, propagate unchanged.
  */
 export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeManifest> {
+  let text: string
+  try {
+    text = await readFile(join(root, 'runtime.json'), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    throw invalidPayload('primary runtime: runtime.json is missing', error)
+  }
   let value: unknown
   try {
-    value = JSON.parse(await readFile(join(root, 'runtime.json'), 'utf8'))
+    value = JSON.parse(text)
   } catch (error) {
-    // readFile and JSON.parse reject only with Error instances.
-    throw invalidPayload(`primary runtime: cannot read runtime.json: ${(error as Error).message}`, error)
+    // JSON.parse rejects only with SyntaxError.
+    throw invalidPayload(`primary runtime: runtime.json is not valid JSON: ${(error as SyntaxError).message}`, error)
   }
   return parsePrimaryRuntime(value)
 }

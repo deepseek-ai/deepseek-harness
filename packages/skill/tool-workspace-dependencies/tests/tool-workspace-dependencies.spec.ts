@@ -20,7 +20,10 @@ import { copyPrimaryRuntime, installPrimaryRuntime, parsePrimaryRuntime, readPri
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
-  return { ...actual, rename: vi.fn(actual.rename), lstat: vi.fn(actual.lstat), cp: vi.fn(actual.cp), stat: vi.fn(actual.stat) }
+  return {
+    ...actual, rename: vi.fn(actual.rename), lstat: vi.fn(actual.lstat), cp: vi.fn(actual.cp),
+    stat: vi.fn(actual.stat), readFile: vi.fn(actual.readFile),
+  }
 })
 
 const INVALID_PAYLOAD = { name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_INVALID_PAYLOAD' }
@@ -223,8 +226,11 @@ it('rejects malformed metadata and incompatible targets', async () => {
   await expect(readPrimaryRuntime(source)).rejects.toMatchObject({ ...INVALID_PAYLOAD, cause: { code: 'ENOENT' } })
 })
 
-it('reports an unreadable payload entry as a preparation failure', async () => {
+it('propagates unreadable metadata and payload entries unchanged instead of blaming the payload', async () => {
   const { source } = await fixture()
+  const denied = Object.assign(new Error('metadata denied'), { code: 'EACCES' })
+  vi.mocked(fs.readFile).mockRejectedValueOnce(denied)
+  await expect(readPrimaryRuntime(source)).rejects.toBe(denied)
   vi.mocked(fs.stat).mockRejectedValueOnce(Object.assign(new Error('entry denied'), { code: 'EACCES' }))
   await expect(resolvePrimaryRuntime(source)).rejects.toThrow('entry denied')
 })
@@ -249,6 +255,11 @@ it('reports preparation failures with structured tool errors', async () => {
     await mkdir(dirname(root), { recursive: true })
     await mkdir(join(directory, 'outside'))
     await symlink(join(directory, 'outside'), root, process.platform === 'win32' ? 'junction' : 'dir')
+    vi.mocked(fs.readFile).mockRejectedValueOnce(Object.assign(new Error('metadata denied'), { code: 'EACCES' }))
+    expect(await call('unreadable')).toEqual({
+      message: 'primary runtime: preparation failed: metadata denied',
+      info: { name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_PREPARATION_FAILED' },
+    })
     const linked = await call('linked')
     expect(linked?.message).toContain('preparation failed: primary runtime: installation path is a filesystem link')
     expect(linked?.info).toEqual({ name: 'WorkspaceDependencyError', code: 'WORKSPACE_DEPENDENCY_PREPARATION_FAILED' })
