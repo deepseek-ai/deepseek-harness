@@ -248,6 +248,11 @@ function renderValue(value: JsonValue): string {
   return typeof value === 'string' ? value : renderJsonValue(value)
 }
 
+/** Whether a rejection is the caller's cancellation rather than a failure of its own. */
+function isCancellation(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))
+}
+
 /** Canonical value returned by the outer PTC mode transport. */
 type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandbox }
 
@@ -702,8 +707,8 @@ export function createRunCodeTool(
             result = await runtime.run(spec)
           } catch (error) {
             // Runtimes reject only contract misuse; a rejection without its own code becomes CODE_RUN_FAILED.
-            exec.signal.throwIfAborted()
-            if (error instanceof HarnessError) throw error
+            // The cancellation itself passes through for the registry to classify as ABORTED.
+            if (error instanceof HarnessError || isCancellation(error, callSignal)) throw error
             throw new CodeRunFailedError(`code run failed: ${toolErrorMessage(error)}`, 'CODE_RUN_FAILED', { cause: error })
           } finally {
             // Abort sub-dispatches and drain every in-flight dispatch before

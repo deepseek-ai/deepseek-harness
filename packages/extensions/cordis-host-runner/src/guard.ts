@@ -565,6 +565,20 @@ export class PluginToolError extends HarnessError {
 }
 
 /**
+ * Whether a value thrown by sandbox `execute` code is a `HarnessError` or the
+ * caller's cancellation. A Proxy whose traps throw is neither.
+ */
+function keepsIdentity(error: unknown, signal: AbortSignal): boolean {
+  try {
+    return error instanceof HarnessError
+      || (signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError')))
+  } catch {
+    // A trapped prototype or `name` read identifies neither a coded failure nor a cancellation.
+    return false
+  }
+}
+
+/**
  * Classify a value thrown by sandbox `execute` code. Sandbox errors come from
  * another realm, so their fields are read structurally rather than through `instanceof`.
  */
@@ -586,7 +600,7 @@ function pluginToolFailure(error: unknown): PluginToolError {
  * via a JSON round-trip. Non-JSON or wrong-shape output fails that call with
  * {@link PluginToolError} `PLUGIN_TOOL_INVALID_RESULT` instead of poisoning the session log, and a
  * value thrown by `execute` fails it with `PLUGIN_TOOL_FAILED` unless it is a `HarnessError` or
- * the call was cancelled.
+ * the caller's cancellation.
  * @param options - the standard `defineTool` options; `parameters` may be the ParameterSchemaSpec DSL or a JSON-Schema-style wrapper.
  * @returns the marker-tagged definition `harness.registerTool` (and the guarded `ctx.tools.register`) accepts.
  */
@@ -626,14 +640,15 @@ export function sandboxDefineTool(options: unknown): ToolDefinition {
       try {
         result = await rawExecute(args, exec)
       } catch (error) {
-        // Cancellation and host services' coded failures keep their own identity.
-        if (exec.signal.aborted || error instanceof HarnessError) throw error
+        // The cancellation and host services' coded failures keep their own identity.
+        if (keepsIdentity(error, exec.signal)) throw error
         throw pluginToolFailure(error)
       }
       try {
         return cloneJson(result, 'harness.defineTool execute result') as JsonValue
       } catch (error) {
-        throw new PluginToolError((error as Error).message, 'PLUGIN_TOOL_INVALID_RESULT', { cause: error })
+        // Getters and Proxy traps on the returned value run during the clone and may throw any value.
+        throw new PluginToolError(toolErrorMessage(error), 'PLUGIN_TOOL_INVALID_RESULT', { cause: error })
       }
     },
   })

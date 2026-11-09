@@ -176,8 +176,8 @@ export class CordisInspectRegistryService extends Service {
       try {
         data = await registration.query(methodName, input, { agent, signal })
       } catch (error) {
-        signal.throwIfAborted()
-        if (error instanceof HarnessError) throw error
+        // The cancellation itself passes through for the tool registry to classify as ABORTED.
+        if (error instanceof HarnessError || isCancellation(error, signal)) throw error
         throw new InspectError(
           `Host Cordis inspect ${providerId}.${methodName} failed: ${error instanceof Error ? error.message : String(error)}`,
           'INSPECT_FAILED', { cause: error },
@@ -302,6 +302,11 @@ export class CordisInspectRegistryService extends Service {
       this.pending.delete(requestId)
     }
   }
+}
+
+/** Whether a rejection is the caller's cancellation rather than a failure of its own. */
+function isCancellation(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))
 }
 
 function view(platform: CordisInspectPlatform, manifest: CordisInspectProviderManifest): CordisInspectProviderView {

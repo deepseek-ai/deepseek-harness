@@ -1925,6 +1925,25 @@ describe('the run_code dispatch bridge', () => {
     expect((await runCode(ctx, 'return 1')).error?.info).toEqual({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
   })
 
+  it('keeps a distinct runtime rejection after cancellation and passes the cancellation through', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    const cancelled = async (rejection: (reason: unknown) => unknown) => {
+      const controller = new AbortController()
+      runtime.behavior = () => {
+        controller.abort(new Error('caller cancelled'))
+        // The cancellation case rejects with the signal's own reason.
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+        return Promise.reject(rejection(controller.signal.reason))
+      }
+      return (await runCode(ctx, 'return 1', { signal: controller.signal })).error
+    }
+    expect((await cancelled(() => new PtcRuntimeError('persistent PTC environment cleanup is incomplete', 'PTC_RUNTIME_UNAVAILABLE')))?.info)
+      .toEqual({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
+    expect((await cancelled(() => new TypeError('cleanup observation failed')))?.info)
+      .toEqual({ name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' })
+    expect((await cancelled(reason => reason))?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+  })
+
   it('rejects a whitespace-only description with a structured isError', async () => {
     const { ctx } = await setup({ mode: 'ptc' })
     const result = await runCode(ctx, 'return 1', { description: '   ' })

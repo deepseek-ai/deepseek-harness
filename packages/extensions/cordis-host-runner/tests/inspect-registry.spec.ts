@@ -293,17 +293,24 @@ describe('Inspect query failure codes', () => {
     })
   })
 
-  it('keeps a Host provider HarnessError and reports cancellation as the signal reason', async () => {
+  it('keeps a Host provider HarnessError and its cancellation, and still classifies a distinct late failure', async () => {
     const coded = new InspectError('unknown entry id "x"', 'INSPECT_TARGET_NOT_FOUND')
-    const controller = new AbortController()
+    const reason = new Error('caller cancelled')
+    const late = new Error('cleanup failed')
+    let controller = new AbortController()
+    let thrown: unknown = coded
     disposers.push(registry.register({ manifest, query: async () => {
-      if (!controller.signal.aborted) throw coded
-      throw new Error('late failure')
+      if (thrown !== coded) controller.abort(reason)
+      throw thrown
     } }))
     await expect(host('Service', 'listService')).rejects.toBe(coded)
-    const reason = new Error('caller cancelled')
-    controller.abort(reason)
+    thrown = reason
     await expect(registry.query('host', 'Service', 'listService', {}, AGENT_A, controller.signal)).rejects.toBe(reason)
+    controller = new AbortController()
+    thrown = late
+    await expect(registry.query('host', 'Service', 'listService', {}, AGENT_A, controller.signal)).rejects.toMatchObject({
+      name: 'InspectError', code: 'INSPECT_FAILED', cause: late,
+    })
   })
 })
 

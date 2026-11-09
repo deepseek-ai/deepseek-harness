@@ -76,6 +76,22 @@ describe('dynamic tool execution failures', () => {
     const reason = new Error('cancelled')
     controller.abort(reason)
     await expect(run(() => Promise.reject(reason), controller.signal)).rejects.toBe(reason)
+    await expect(run(() => Promise.reject(new Error('cleanup failed')), controller.signal)).rejects.toMatchObject({
+      name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED', message: 'cleanup failed',
+    })
+  })
+
+  it('classifies hostile thrown values and results that throw during the clone', async () => {
+    const revocable = Proxy.revocable({}, {})
+    revocable.revoke()
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+    await expect(run(() => Promise.reject(revocable.proxy))).rejects.toMatchObject({ name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED' })
+    for (const thrown of ['getter failed', null]) {
+      const value = { get broken(): never { throw thrown } }
+      await expect(run(() => Promise.resolve(value))).rejects.toMatchObject({
+        name: 'PluginToolError', code: 'PLUGIN_TOOL_INVALID_RESULT', message: String(thrown),
+      })
+    }
   })
 })
 
