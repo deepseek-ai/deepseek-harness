@@ -38,6 +38,10 @@ export interface CuaObservationOptions { emit?: boolean }
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
+  /** Maximum nodes visited for this read, from 1 to 10000. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read, from 1 to 100. Omission uses the provider setting. */
+  maxDepth?: number
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
@@ -103,8 +107,8 @@ export interface CuaSurface {
   /**
    * Read the full accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
-   * @param options - emission, menu expansion and field detail options.
-   * @returns Full accessibility tree text with element ids, subject to the provider's traversal limits.
+   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAxOptions): Promise<string>
   /**

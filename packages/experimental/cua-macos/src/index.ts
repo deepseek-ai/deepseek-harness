@@ -43,6 +43,8 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  maxElements: CuaConfigFields.maxElements.default(5000),
+  maxDepth: CuaConfigFields.maxDepth.default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),

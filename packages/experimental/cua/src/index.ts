@@ -77,9 +77,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Maximum nodes admitted by a native accessibility snapshot. */
+  /** Default node limit for accessibility reads and Paste menu discovery. */
   maxElements: number
-  /** Maximum depth traversed by a native accessibility snapshot. */
+  /** Default depth limit for accessibility reads and Paste menu discovery. */
   maxDepth: number
 }
 
@@ -230,7 +230,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
             maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)

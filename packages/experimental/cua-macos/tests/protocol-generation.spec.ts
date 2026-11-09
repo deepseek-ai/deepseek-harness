@@ -29,7 +29,6 @@ describe('native protocol generation', () => {
   })
 
   it.each([
-    { method: 'getState', params: { appHandle: 'app', maxElements: 1 } },
     { method: 'drag', params: { appHandle: 'app', windowId: 1, fromX: 1, fromY: 1, toX: 2, toY: 2, steps: 1 } },
     { method: 'paste', params: { appHandle: 'app', text: 'text', maxClipboardBytes: 1024 } },
     { method: 'paste', params: { appHandle: 'app', text: 'text', pasteReadTimeoutMs: 1000 } },

@@ -7,6 +7,10 @@ const id = z.number().int().positive().max(2 ** 32 - 1)
 const pid = z.number().int().positive().max(2 ** 31 - 1)
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
+const traversalLimits = z.object({
+  maxElements: z.number().int().min(1).max(10000),
+  maxDepth: z.number().int().min(1).max(100),
+}).strict()
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
   modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
@@ -50,6 +54,7 @@ function requestSchema<T extends z.ZodType>(hover: T) {
     operation('getState', { ...app, windowId: id.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
+      ...traversalLimits.partial().shape,
     }),
     operation('listActions', snapshot),
     operation('performAction', { ...snapshot, action: z.string().min(1), argument: jsonValue.optional() }),
@@ -91,12 +96,12 @@ export const SystemPointerRequest = requestSchema(z.union(MouseMoveTargets.map(t
   useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
 }))))
 
-/** Resource parameters supplied by the Host, never accepted from model tool arguments. */
+/** Native resource fields. The Host fills omitted observation limits from the provider configuration. */
 export const NativeResourceParameters = {
-  getState: z.object({ maxElements: z.number().int().min(1).max(10000), maxDepth: z.number().int().min(1).max(100) }).strict(),
+  getState: traversalLimits,
   drag: z.object({ durationMs: z.number().int().min(1).max(5000), steps: z.number().int().min(1).max(240) }).strict(),
   paste: z.object({ maxClipboardBytes: z.number().int().min(1024), pasteReadTimeoutMs: z.number().int().min(1).max(2 ** 31 - 1),
-    maxElements: z.number().int().min(1).max(10000), maxDepth: z.number().int().min(1).max(100),
+    ...traversalLimits.shape,
   }).strict(),
   findApps: z.object({ maxAppMatches: z.number().int().min(1).max(1000) }).strict(),
 }
