@@ -246,9 +246,9 @@ describe('ThreadCard', () => {
       reviewComment({ author: { login: 'ci', avatarUrl: null, bot: true }, pending: true }),
       reviewComment({ author: null }),
     ] })
-    const view = render(<ThreadCard thread={thread} place={{ kind: 'line', side: 'R', startLine: 3, endLine: 3 }} actions={actions()} split t={t} />)
+    const view = render(<ThreadCard thread={thread} place={{ kind: 'line', side: 'R', startLine: 3, endLine: 3 }} actions={actions()} t={t} />)
     const card = view.container.querySelector('[data-forge-thread]')!
-    expect(card.getAttribute('data-split')).toBe('')
+    expect(card.getAttribute('data-side')).toBe('R')
     expect(card.querySelector('strong')?.textContent).toBe('bold')
     expect(card.textContent).not.toContain('<b>')
     expect(card.textContent).not.toContain('hidden')

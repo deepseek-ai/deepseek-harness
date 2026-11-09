@@ -133,9 +133,12 @@ export function ChangedFiles(props: ChangedFilesProps): ReactNode {
  */
 export function ChangedFilesMenu({ visible, ...props }: ChangedFilesProps & { readonly visible: boolean }): ReactNode {
   const [open, setOpen] = useState(false)
-  return <Menu open={visible && open} portal dense align="start" listClassName={css.menu} onClose={() => { setOpen(false) }}
+  return <Menu open={visible && open} portal dense align="start" className={css.anchor} listClassName={css.menu} onClose={() => { setOpen(false) }}
     anchor={<button type="button" className={css.trigger} aria-haspopup="menu" aria-expanded={visible && open} disabled={props.files.length === 0}
-      onClick={() => { setOpen(value => !value) }}>{props.t('diff.allFiles', { count: props.files.length })}<IconChevronDownOutlineRegular size={12} /></button>}>
+      onClick={() => { setOpen(value => !value) }}>
+      <span className={css.triggerLabel}>{props.t('diff.allFiles', { count: props.files.length })}</span>
+      <IconChevronDownOutlineRegular size={12} className={css.triggerChevron} />
+    </button>}>
     <ChangedFiles {...props} menu jump={(path) => { setOpen(false); props.jump(path) }} />
   </Menu>
 }

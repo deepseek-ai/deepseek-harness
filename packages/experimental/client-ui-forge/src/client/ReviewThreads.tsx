@@ -288,15 +288,13 @@ function Resolution({ thread, writes, t }: PropsLocale<typeof NS> & {
 /**
  * Render one thread: its place, every comment, its reply field, and its actions. A resolved thread folds into one row
  * until the reader unfolds it or jumps to it.
- * @param props - the thread, where it shows, the shared actions, the layout, and copy.
+ * @param props - the thread, where it shows, the shared actions, and copy.
  * @returns the thread card or its folded row.
  */
-export function ThreadCard({ thread, place, actions, split = false, t }: PropsLocale<typeof NS> & {
+export function ThreadCard({ thread, place, actions, t }: PropsLocale<typeof NS> & {
   readonly thread: ForgeReviewThread
   readonly place: ThreadPlace
   readonly actions: ThreadActions
-  /** Whether the card sits under the side of a side-by-side row that its lines number. */
-  readonly split?: boolean
 }): ReactNode {
   const [open, setOpen] = useState(false)
   // The jump the reader folded the thread after, which no longer unfolds it.
@@ -325,14 +323,14 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
   const url = first?.url ?? null
   const writes = actions.writes
   if (!unfolded) {
-    return <div className={css.folded} data-forge-thread={thread.id} data-side={side} data-split={split ? '' : undefined}>
+    return <div className={css.folded} data-forge-thread={thread.id} data-side={side}>
       <IconCheckOutlineRegular size={14} />
       <span className={css.foldedText}>{t('thread.resolvedRow', { author: first?.author?.login ?? t('thread.deletedAuthor') })}</span>
       <button type="button" className={css.link} aria-expanded={false} onClick={() => { setOpen(true) }}>{t('thread.expand')}</button>
     </div>
   }
   const label = original !== null ? t('thread.originally', { range: anchorRange(thread.side, original) }) : range ?? t('thread.fileLevel')
-  return <section className={css.card} data-forge-thread={thread.id} data-side={side} data-split={split ? '' : undefined}
+  return <section className={css.card} data-forge-thread={thread.id} data-side={side}
     data-resolved={thread.resolved ? '' : undefined} aria-label={label} tabIndex={-1}>
     <div className={css.header}>
       <span className={css.place}>
