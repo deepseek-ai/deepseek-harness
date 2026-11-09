@@ -32,7 +32,7 @@ import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
 
 const programs = [
-  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.click("0"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })',
+  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })',
   'globalThis.visits++; await win.getAccessibilityTree({emit:false}); await win.click("0"); ({ visits, sameCua: cua === initialCua, app: app.appHandle, window: win.windowId, tree: await win.getAccessibilityTree({emit:false}), pid: process.pid })',
   'await win.click("0")',
 ]
@@ -198,7 +198,7 @@ it('recreates the automatic facade when its environment is rebuilt', async () =>
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {
   const { ctx, native, agent, provider, run } = await setup([
-    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); process.pid',
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); process.pid',
     'await win.click("0")',
   ])
   const started = native.holdNextClick()

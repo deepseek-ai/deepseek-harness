@@ -35,11 +35,12 @@ it('uses the current tool binding when a retained app is called by another execu
   const cua = connectCua(() => current, text)
   const app = await cua.getApp('Editor')
   const window = await app.getWindow(23)
+  await window.getAccessibilityTree({ emit: false })
   const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true }))
   current = second
 
   await expect(window.click(element('0'))).resolves.toEqual({ dispatched: true })
-  expect(first).toHaveBeenCalledTimes(4)
+  expect(first).toHaveBeenCalledTimes(3)
   expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0', windowId: 23 } })
   expect(text).not.toHaveBeenCalled()
   current = first
@@ -80,6 +81,6 @@ it('returns screenshot bytes and metadata with one image-bearing tool call and n
   text.mockClear()
 
   expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
-  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'getState', 'getState', 'screenshot'])
+  expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'screenshot'])
   expect(text).not.toHaveBeenCalled()
 })
