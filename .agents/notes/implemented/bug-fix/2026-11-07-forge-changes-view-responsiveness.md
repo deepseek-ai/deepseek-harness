@@ -12,13 +12,13 @@ The forge changes view of a large change request froze the browser. Opening #798
 
 **Scoped `:has()` rules.** The navigator's covering rules name their row through `data-files-navigator-row`, which both hosts of `sidebar.files.navigator` set, so a DOM change outside such a row schedules no document-wide invalidation.
 
-**Sections draw what changed and what the reader reaches.** `ChangesTab` passes each memoized `DiffFile` values whose identity survives its renders: one handler object, one comment-actions object, and per-file strings and booleans. Tab visibility is a prop of every section, so a visibility change redraws them all; leaving the view measured +57 ms against reading it from a React context, which the client packages forbid business components to do. The scrollport's reach tracker travels in the handler object. An expanded file holds a 22 px row per drawn line until its section first comes within 1200 px of the scrollport, then draws its lines and keeps them. A jump keeps its target aligned for one second while nearby sections draw.
+**Sections draw what changed and what the reader reaches.** `ChangesTab` passes each memoized `DiffFile` values whose identity survives its renders: one handler object, one comment-actions object, and per-file strings and booleans. Tab visibility is a prop of every section, so a visibility change redraws them all; leaving the view measured +57 ms against reading it from a React context, which the client packages forbid business components to do. The scrollport's reach tracker travels in the handler object. An expanded file holds a 22 px row per drawn line until its section first comes within 1200 px of the scrollport, then draws its lines and keeps them. After a jump, the browser's scroll anchoring keeps the target in place while the sections above it draw.
 
 **Highlighting in the drawing render.** A section highlights its lines in the same render that draws them, as before, so the drawn text is always the file's current text and a native selection keeps its text nodes.
 
 **Fewer serial reads.** A panel state equal to the published one reaches no follower. `changeRequestDiff` reads the patch and `.gitattributes` together. Snapshots carry the base commit as `baseSha`; `ForgeService.diff` passes it to the provider, and forge-github starts the compare read while its GraphQL read confirms the head.
 
-**Pixel measurement.** Two parts measure layout in pixels, which CSS cannot replace. Whether a section is near the scrollport decides whether React renders its lines at all; `content-visibility` only skips layout and paint of nodes that already exist. Keeping a jumped-to section at the top needs its offset after each later layout change, since no CSS property scrolls a container to follow one child. The client packages offer no injected measurement hook, so both read the DOM directly, as the view's file navigation already does: the reach uses one `IntersectionObserver`, which measures off the main thread, and the pin reads two rectangles per frame for at most one second.
+**Pixel measurement.** Whether a section is near the scrollport decides whether React renders its lines at all, which CSS cannot express: `content-visibility` only skips layout and paint of nodes that already exist. The client packages offer no injected measurement hook, so one `IntersectionObserver` on the scrollport measures it off the main thread.
 
 ## Alternatives considered
 
@@ -29,6 +29,8 @@ The forge changes view of a large change request froze the browser. Opening #798
 **Deferred idle-time highlighting** drew plain text and applied tokens once the page was idle and the scrollport still. It kept fast scrolling smooth, but tokens carry their own text, so a file whose content changed at the same path showed its previous text until the next pass, and replacing the plain text nodes collapsed a selection made in the meantime. Against it, highlighting while drawing raised the blocking time of scrolling all of #7985 from 22 ms to 1,634 ms and its longest frame gap from 34 ms to 817 ms; other operations stayed within 0.1 s.
 
 **The CSS Custom Highlight API** would paint token colors over unchanged text nodes and keep deferral without either defect, but it cannot apply the themes' bold and italic, and its cost over tens of thousands of ranges is unmeasured.
+
+**Re-aligning a jumped-to section every frame for a second** kept the last file flush with the end of the list, but it also pulled back any scroll it did not start, such as one from find in page; scroll anchoring already holds every other target at the top.
 
 **Highlighting in a Web Worker** removes tokenization from the main thread entirely, including a heavy grammar's first use, but the shared highlighter in `ui-primitives` owns Shiki; moving it is a separate change for every consumer.
 

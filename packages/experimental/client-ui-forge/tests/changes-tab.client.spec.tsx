@@ -946,62 +946,6 @@ describe('ChangesTab layout', () => {
     expect(scrolled).toHaveBeenCalledWith({ block: 'start' })
   })
 
-  it('keeps a jumped-to file at the top while sections around it draw, until the reader scrolls, the tab hides, or a second passes', async () => {
-    const m = mount()
-    await settle()
-    const { viewport } = fileViewport(m)
-    Object.defineProperty(viewport, 'scrollHeight', { configurable: true, value: 1200 })
-    Object.defineProperty(viewport, 'clientHeight', { configurable: true, value: 300 })
-    const target = m.section('src/new.ts')
-    // Sections above the target draw after the jump and push it down by this much until it scrolls again.
-    let shift = 0
-    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, shift, 600, 200))
-    scrolled.mockImplementation(() => { shift = 0 })
-    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
-    try {
-      const jump = (): void => {
-        fireEvent.click(m.view.getByRole('button', { name: 'All 6 files' }))
-        fireEvent.click(m.view.getByRole('menuitem', { name: 'src/new.ts' }))
-      }
-      jump()
-      expect(scrolled).toHaveBeenCalledOnce()
-      shift = 80
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(2)
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(2)
-
-      // At the bottom of the list nothing can move the file higher.
-      viewport.scrollTop = 900
-      shift = 40
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(2)
-      viewport.scrollTop = 0
-
-      fireEvent.wheel(viewport)
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(2)
-
-      jump()
-      expect(scrolled).toHaveBeenCalledTimes(3)
-      act(() => { vi.advanceTimersByTime(1100) })
-      shift = 80
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(3)
-
-      // Hiding the tab ends the pin at once.
-      shift = 0
-      jump()
-      expect(scrolled).toHaveBeenCalledTimes(4)
-      act(() => { m.visibility.set(false) })
-      shift = 80
-      act(() => { vi.advanceTimersToNextFrame() })
-      expect(scrolled).toHaveBeenCalledTimes(4)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('scrolls once to the file each navigation names when its changes arrive', async () => {
     const m = mount({ params: { path: 'docs/gone.txt' } })
     expect(scrolled).not.toHaveBeenCalled()

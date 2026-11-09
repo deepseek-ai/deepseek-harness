@@ -1254,9 +1254,8 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await scroll.evaluate(element => document.activeElement === element)).toBe(true)
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
-  // The last file cannot reach the top, so the jump settles at the end of the list once the file has drawn its lines.
+  // The last file draws its lines after the jump, which can lengthen the list; read the position once it has.
   await c.locator('[data-review-code]').first().waitFor()
-  await expect.poll(() => scroll.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(1)
   const lastPosition = await scroll.evaluate(element => element.scrollTop)
   const lastBox = await c.boundingBox(), viewport = await scroll.boundingBox()
   if (lastBox === null || viewport === null) throw new Error('The last file and scroll viewport must be rendered')

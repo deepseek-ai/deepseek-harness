@@ -149,12 +149,6 @@ const OPEN_LINES = 5000
 
 const NO_GAPS: ReadonlySet<number> = new Set()
 
-/** How long, in milliseconds, a jumped-to file stays at the top while the sections around it draw. */
-const JUMP_PIN_MS = 1000
-
-/** Input that scrolls the file list, which ends a jump's pin. */
-const READER_SCROLL = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
-
 const SCOPE_LABEL: Record<ScopeKind, ForgePanelKey> = {
   branch: 'diff.scope.branch',
   uncommitted: 'diff.scope.uncommitted',
@@ -600,38 +594,6 @@ export function ChangesTab({
   }, [reach])
   // A short final file cannot align with the viewport top; retain its jump until the reader scrolls away.
   const jumpPosition = useRef<{ readonly data: ChangesData; readonly top: number } | null>(null)
-  const releasePin = useRef<(() => void) | null>(null)
-  /**
-   * Keep a jumped-to section at the top of the scrollport for {@link JUMP_PIN_MS}: the sections around it draw their
-   * lines after the jump, which moves it. Scrolling input from the reader, another jump, hiding the tab, or unmounting
-   * ends the pin. Each frame measures the section once, which covers every cause of movement, such as a section
-   * drawing its lines or a review card opening, without each one reporting it.
-   */
-  const pinJump = (port: HTMLElement, section: HTMLElement, owner: ChangesData): void => {
-    releasePin.current?.()
-    const until = performance.now() + JUMP_PIN_MS
-    let frame = 0
-    const release = (): void => {
-      cancelAnimationFrame(frame)
-      for (const type of READER_SCROLL) port.removeEventListener(type, release)
-      releasePin.current = null
-    }
-    const keep = (now: number): void => {
-      if (now > until) {
-        release()
-        return
-      }
-      const offset = section.getBoundingClientRect().top - port.getBoundingClientRect().top
-      if (Math.abs(offset) > 1 && port.scrollTop < port.scrollHeight - port.clientHeight - 1) {
-        section.scrollIntoView({ block: 'start' })
-        jumpPosition.current = { data: owner, top: port.scrollTop }
-      }
-      frame = requestAnimationFrame(keep)
-    }
-    for (const type of READER_SCROLL) port.addEventListener(type, release, { passive: true })
-    releasePin.current = release
-    frame = requestAnimationFrame(keep)
-  }
   useLayoutEffect(() => {
     if (!tab.visible || wanted === null || data === null) return
     // A file the lens or the test switch hides is shown before the view scrolls to it.
@@ -641,15 +603,11 @@ export function ChangesTab({
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
       return
     }
-    const section = sections.current.get(wanted)
-    section?.scrollIntoView({ block: 'start' })
+    // The browser's scroll anchoring keeps the section in place while the sections above it draw their lines.
+    sections.current.get(wanted)?.scrollIntoView({ block: 'start' })
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
-    if (section !== undefined && scrollport.current !== null) pinJump(scrollport.current, section, data)
     setWanted(null)
   }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
-  // A hidden tab has nothing to keep in place, and its scrollport measures as empty.
-  useEffect(() => { if (!tab.visible) releasePin.current?.() }, [tab.visible])
-  useEffect(() => () => { releasePin.current?.() }, [])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.
