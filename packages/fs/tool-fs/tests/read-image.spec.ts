@@ -326,9 +326,10 @@ describe('read_image happy path', () => {
   })
 
   it.each([
-    ['around', 'block'], ['around', 'replace'], ['around', 'recover'],
-    ['post', 'block'], ['post', 'replace'],
-  ] as const)('honors an outer %s %s decision after a program inspects an image', async (stage, decision) => {
+    ['around', 'block', 'success'], ['around', 'block', 'failure'],
+    ['around', 'redact', 'failure'], ['around', 'replace', 'success'], ['around', 'recover', 'failure'],
+    ['post', 'block', 'success'], ['post', 'block', 'failure'], ['post', 'replace', 'success'],
+  ] as const)('honors an outer %s %s decision after program %s with inspected images', async (stage, decision, outcome) => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ toolMode: 'ptc' })
     const runtime = ctx.ptcRuntime as FakeRuntime
@@ -337,13 +338,14 @@ describe('read_image happy path', () => {
       if (!(image instanceof PtcImage)) throw new Error('read_image must return an Image')
       return {
         output: [{ type: 'image', attachment: image.attachment }],
-        ...decision === 'recover' ? { error: { kind: 'exception' as const, message: 'program stopped' } } : {},
+        ...outcome === 'failure' ? { error: { kind: 'exception' as const, message: 'program stopped' } } : {},
       }
     }
     if (stage === 'around') {
       ctx.on('tools/execute', async (exec, next) => {
         const result = await next()
         if (exec.name !== RUN_CODE_NAME) return result
+        if (decision === 'redact') return { ...result, content: [{ type: 'text', text: 'image blocked' }] }
         return decision === 'block'
           ? { isError: true, error: { message: 'image blocked' }, content: [{ type: 'text', text: 'image blocked' }] }
           : { isError: false, value: { logs: ['image replaced'] }, content: [{ type: 'text', text: 'image replaced' }] }
@@ -361,8 +363,9 @@ describe('read_image happy path', () => {
       code: 'inspect(await tools.read_image({ file_path: "red.png" }))', description: 'Inspect an image',
     }, { ...agentOn('vision-model'), ctx })
 
-    expect(result.isError).toBe(decision === 'block')
-    expect(result.content).toEqual([{ type: 'text', text: decision === 'block' ? 'image blocked' : 'image replaced' }])
+    const blocked = decision === 'block' || decision === 'redact'
+    expect(result.isError).toBe(blocked)
+    expect(result.content).toEqual([{ type: 'text', text: blocked ? 'image blocked' : 'image replaced' }])
   })
 
   it.each(['exception', 'timeout'] as const)('preserves inspected text and image order after an %s', async (kind) => {

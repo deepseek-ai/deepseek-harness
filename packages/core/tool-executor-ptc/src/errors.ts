@@ -26,7 +26,8 @@ export class ToolCallLimitExceededError extends Error {
  * cancellation uses the shared `AbortError` / `ABORTED` tool outcome. Extends
  * {@link HarnessError} (`code: 'CODE_RUN_FAILED'`); the registry's execution
  * pipeline converts it into a structured `isError` result with the failure
- * kind. Captured text and images accompany the diagnostic so the model can self-correct.
+ * kind. Captured text and images accompany the original diagnostic;
+ * outer result replacements remain authoritative.
  */
 export class CodeRunFailedError extends HarnessError {
   constructor(message: string) {

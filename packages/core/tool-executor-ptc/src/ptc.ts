@@ -29,7 +29,7 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { PtcCalls } from './ptc-calls.ts'
 import { CodeRunFailedError, ToolCallLimitExceededError } from './errors.ts'
 import type { Config } from './config.ts'
-import type { ToolDefinition, ToolExecution, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
+import type { ToolDefinition, ToolExecution, ToolExecutionFailure, ToolExecutionResult, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from './types.ts'
 
 /** The model-facing name of the PTC mode tool. */
@@ -323,7 +323,11 @@ export function createRunCodeTool(
   }
 
   type ImageRef = Extract<ContentBlock, { type: 'image' }>['attachment']
-  const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; output: PtcOutput[] }>()
+  const inspections = new WeakMap<ToolExecution, {
+    value?: RunCodeOutput
+    failure?: Pick<ToolExecutionFailure, 'error' | 'content'>
+    output: PtcOutput[]
+  }>()
   const programImage = (ref: ImageRef): PtcImage => {
     const attachments = ctx.get('attachments')
     const fs = ctx.get('fs')
@@ -746,23 +750,31 @@ export function createRunCodeTool(
 
           const logs = result.output.flatMap(block => block.type === 'text' ? [block.text] : [])
           const hasImages = result.output.some(block => block.type === 'image')
-          if (hasImages) inspections.set(exec, { output: result.output })
           if (result.error) {
             const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
               ? runController.signal.reason : undefined
+            let failure: HarnessError
             if (result.error.kind === 'abort' && exec.signal.aborted && limitError === undefined) {
               const message = runtime.retainsState ? `tool call aborted: ${result.error.message}` : 'tool call aborted'
-              const error = new HarnessError(message, TOOL_ABORTED)
-              error.name = 'AbortError'
-              throw error
+              failure = new HarnessError(message, TOOL_ABORTED)
+              failure.name = 'AbortError'
+            } else {
+              const logsText = logs.length > 0 && !hasImages
+                ? `\nCaptured output:\n${logs.join('\n')}` : ''
+              const sandboxText = result.sandbox === undefined ? ''
+                : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
+              const failureText = limitError === undefined || limitError.message === result.error.message
+                ? result.error.message : `${limitError.message}\n${result.error.message}`
+              failure = new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
             }
-            const logsText = logs.length > 0 && !hasImages
-              ? `\nCaptured output:\n${logs.join('\n')}` : ''
-            const sandboxText = result.sandbox === undefined ? ''
-              : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
-            const failureText = limitError === undefined || limitError.message === result.error.message
-              ? result.error.message : `${limitError.message}\n${result.error.message}`
-            throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
+            if (hasImages) inspections.set(exec, {
+              failure: {
+                error: { message: failure.message, info: { name: failure.name, code: failure.code } },
+                content: [{ type: 'text', text: `Error: ${failure.message}` }],
+              },
+              output: result.output,
+            })
+            throw failure
           }
           const value: RunCodeOutput = {
             logs,
@@ -784,7 +796,7 @@ export function createRunCodeTool(
       inspections.delete(exec)
       if (selected === undefined) return undefined
       if (result.isError) {
-        if (selected.value !== undefined) return undefined
+        if (!isDeepStrictEqual(selected.failure, { error: result.error, content: result.content })) return undefined
         return [...result.content, ...renderRunOutput({ logs: [] }, '', selected.output)]
       }
       if (selected.value === undefined || !isDeepStrictEqual(selected.value, result.value)) return undefined
