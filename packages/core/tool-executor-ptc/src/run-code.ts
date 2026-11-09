@@ -19,8 +19,6 @@ export interface RunCodeToolOptions {
   readonly runtime: PtcRuntime
   /** Complete private binding set, with unique names; definitions need not be registered. */
   readonly tools: readonly ToolDefinition[]
-  /** Source evaluated before each program in the same environment; omitted runs only the program. */
-  readonly initialization?: string
   /** Nested-call limits; omitted fields use RunCodeConfig defaults. */
   readonly limits?: Partial<Config>
 }
@@ -31,7 +29,7 @@ export interface RunCodeToolOptions {
  * The owning context cancels and drains active Agent programs when disposed if the runtime
  * retains state or enforces a sandbox. Agent disposal releases retained runtime state.
  * @param ctx - Context with tools, lifecycle ownership, and policies; Agent calls also require workingDirectory.
- * @param options - Fixed runtime, tools, initialization, presentation, and configurable limits.
+ * @param options - Fixed runtime, tools, presentation, and configurable limits.
  * @returns An unregistered definition; register it in the owning scope with ctx.tools.register.
  * @throws Error if private tool names repeat or configured limits are invalid.
  */

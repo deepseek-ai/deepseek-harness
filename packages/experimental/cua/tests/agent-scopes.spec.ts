@@ -5,6 +5,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
+import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -132,9 +133,12 @@ it('selects one CUA transport for existing and new Agents and removes both on un
   await reloaded.dispose()
 })
 
-it('withdraws tools when a runtime dependency unloads and rebinds live Agents after reload', async () => {
+it('keeps initialization registered while program tools reload their directory dependency', async () => {
   const { ctx, create } = await setup()
+  const register = vi.spyOn(NodeRuntime.prototype, 'registerEnvironmentInitializer')
+  onTestFinished(() => { register.mockRestore() })
   await ctx.plugin(provider, {})
+  expect(register).toHaveBeenCalledOnce()
   const standard = await create('cua-dependency-standard', 'standard')
   const ptc = await create('cua-dependency-ptc', 'ptc')
   const previous = ctx.tools.get('cua_run_code', standard.agent)
@@ -147,6 +151,7 @@ it('withdraws tools when a runtime dependency unloads and rebinds live Agents af
   await ctx.plugin(WorkingDirectory)
   await expect.poll(() => ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
   expect(ctx.tools.get('cua_run_code', standard.agent)).not.toBe(previous)
+  expect(register).toHaveBeenCalledOnce()
   expect(ctx.tools.get('cua', ptc.agent)).toBeDefined()
   await ctx.agentPresets.select(standard.agent, 'ptc')
   expect(ctx.tools.get('cua_run_code', standard.agent)).toBeUndefined()

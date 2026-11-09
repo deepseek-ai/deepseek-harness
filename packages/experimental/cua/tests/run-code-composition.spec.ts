@@ -183,16 +183,17 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(ctx.ptcRuntime.retainsState).toBe(false)
 })
 
-it('recreates the automatic facade after a program clears an overwritten global', async () => {
+it('recreates the automatic facade when its environment is rebuilt', async () => {
   const { agent, run } = await setup([
-    'var previousCua = cua; globalThis.cua = 42; globalThis.cua = undefined; "cleared"',
-    '({ ready: typeof cua.getApp === "function", replaced: cua !== previousCua })',
+    'var previousCua = cua; "created"',
+    'process.exit(0)',
+    '({ ready: typeof cua.getApp === "function", previous: typeof previousCua })',
   ])
   await run()
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
-  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false])
-  expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
-    .toEqual({ ready: true, replaced: true })
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, true, false])
+  expect(JSON.parse(results[2]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
+    .toEqual({ ready: true, previous: 'undefined' })
 })
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {

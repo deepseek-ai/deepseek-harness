@@ -37,7 +37,7 @@ kind: "package-reference"
 
 当 `agentPreset` 指定 preset 名称时，两种工具形态的注册都等待专用 Node 运行时及其所需服务，包括匹配 preset 的原始 `cua` 工具。无效的 `standaloneRunCode.runtime` 设置或缺少服务可能阻止 Agent 创建。修正配置或补齐服务后重载提供方；也可以先关闭 Computer Use，再重试创建 Agent。`agentPreset: false` 注册原始 `cua`，不创建该运行时。
 
-初始化会保留 `globalThis.cua` 中除 `null` 和 `undefined` 以外的值。如果程序覆盖了这个全局对象，在一次 `cua_run_code` 调用中执行 `globalThis.cua = undefined`。下一次调用会在执行代码前重建它。随后通过恢复的对象重新选择应用和窗口。
+`cua` 在创建环境时安装一次。不要覆盖这个全局对象。需要重建损坏的环境时，在 `cua_run_code` 中执行 `process.exit(0)`；该次工具调用会因进程退出而返回失败。下一次调用启动新环境并恢复 `cua`。请重新创建其他变量，并重新选择应用和窗口。
 
 使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
@@ -97,7 +97,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 `agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。注册使用 `agent/created`、`agent-preset/selected` 事件和 Agent 拥有的作用域，也处理提供方加载前已存在的 Agent。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
-`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。独立的初始化程序在同一环境中先安装 `cua`，再执行模型代码；单次提权执行也遵守此顺序。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。
+`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。
 
 [操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 

@@ -21,6 +21,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
   const seen: Record<string, unknown>[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(true) },
+    initialized: async () => {},
     invoke: async (global, name, args) => {
       seen.push({ type: 'call', global, name, args })
       return encodePtcJsonWire(42)
@@ -41,7 +42,10 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
     })
   }
 
-  return { state, nativeEnvironment, run, seen, peer, main, close, host, setCall: (handler: HostMethods['invoke']) => { methods.invoke = handler } }
+  return { state, nativeEnvironment, run, seen, peer, main, close, host,
+    setCall: (handler: HostMethods['invoke']) => { methods.invoke = handler },
+    setInitialized: (handler: HostMethods['initialized']) => { methods.initialized = handler },
+  }
 }
 
 it('runs initialization before the program in the same REPL and discards its completion', async () => {
@@ -50,9 +54,9 @@ it('runs initialization before the program in the same REPL and discards its com
   const initialization = 'globalThis.helper ??= { read: () => tools.echo({}) }; console.log("initialize"); helper'
   expect(decodePtcJsonWire((await h.run('var saved = helper; await helper.read()', namespaces, 1024, initialization)).value)).toBe(42)
   h.setCall(async () => encodePtcJsonWire(43))
-  expect(decodePtcJsonWire((await h.run('({ value: await helper.read(), same: helper === saved })', namespaces, 1024, initialization)).value))
+  expect(decodePtcJsonWire((await h.run('({ value: await helper.read(), same: helper === saved })', namespaces)).value))
     .toEqual({ value: 43, same: true })
-  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize', 'initialize'])
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize'])
   expect(decodePtcJsonWire((await h.run('42', [], 1024, '')).value)).toBe(42)
 })
 
@@ -87,6 +91,53 @@ it('does not start the program when initialization catches a revoked binding', a
   await h.peer.revoke()
   expect(await first).toEqual({})
   expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+})
+
+it('waits for Host acceptance before starting the user program', async () => {
+  const h = await setup()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  const started = vi.fn()
+  Object.defineProperty(h.state, 'started', { value: started })
+  h.setInitialized(() => { entered.resolve(); return accepted.promise })
+  const pending = h.run('process.started(); 42', [], 1024, 'globalThis.helper = {}')
+  try {
+    await entered.promise
+    expect(started).not.toHaveBeenCalled()
+    accepted.resolve()
+    expect(decodePtcJsonWire((await pending).value)).toBe(42)
+    expect(started).toHaveBeenCalledOnce()
+  } finally { accepted.resolve(); await pending }
+})
+
+it('does not start the user program when Host acceptance rejects', async () => {
+  const h = await setup()
+  h.setInitialized(async () => { throw new Error('initialization was canceled') })
+  const result = await h.run('globalThis.programRan = true', [], 4096, 'globalThis.helper = {}')
+  expect(result.error?.kind).toBe('exception')
+  expect(result.error?.message).toContain('initialization was canceled')
+  expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+})
+
+it('checks revocation after accepting an initialization reply', async () => {
+  const h = await setup()
+  const request: PromiseWithResolvers<string> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setInitialized(() => accepted.promise)
+  const wire = rawPeer(h.host, (message) => {
+    if (typeof message === 'object' && message !== null && 'm' in message && message.m === 'initialized'
+      && 'i' in message && typeof message.i === 'string') request.resolve(message.i)
+  })
+  const pending = h.run('globalThis.programRan = true', [], 1024, 'globalThis.helper = {}')
+  try {
+    const id = await request.promise
+    await Promise.all([
+      wire.send({ t: 's', i: id }),
+      wire.send({ t: 'q', m: 'revoke', a: [] }),
+    ])
+    expect(await pending).toEqual({})
+    expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+  } finally { accepted.resolve(); wire.close(); await pending }
 })
 
 it('keeps an injected process local to the REPL while it runs and after it closes', async () => {

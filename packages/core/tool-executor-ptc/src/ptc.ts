@@ -694,7 +694,6 @@ export function createRunCodeTransport(
             }
             const spec = runtime.resolve({
               program: args.code,
-              ...options?.initialization === undefined ? {} : { initialization: options.initialization },
               ...exec.agent === undefined || policy?.mode !== standingPolicy?.mode ? {} : { stateOwner: exec.agent },
               bindings: [{
                 global: 'tools',

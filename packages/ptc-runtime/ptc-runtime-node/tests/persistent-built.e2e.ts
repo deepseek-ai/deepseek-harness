@@ -21,7 +21,8 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
         await ctx.plugin(NodeRuntime, resolvePersistentExecution(${JSON.stringify(programFormat)}))
         const stateOwner = {}
         const initialization = ${JSON.stringify(programFormat === 'repl' ? 'globalThis.helper ??= { value: 7 }; helper' : undefined)}
-        const run = (program, timeoutMs, bindings = []) => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, initialization, timeoutMs, bindings, stateOwner}))
+        if (initialization !== undefined) ctx.effect(() => ctx.ptcRuntime.registerEnvironmentInitializer(initialization))
+        const run = (program, timeoutMs, bindings = []) => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, timeoutMs, bindings, stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
         const initialized = await run('typeof helper === "undefined" ? null : helper.value')
         const second = await run('count += 2; console.log(path.basename("/a/b")); count')

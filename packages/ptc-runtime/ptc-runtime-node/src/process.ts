@@ -144,14 +144,20 @@ export async function runNodeMain(
             try { programEvaluator.evaluate(data.code, finish) } catch (error: unknown) { finish({ ok: false, error }) }
           }
           if (data.initialization === undefined) runProgram()
-          else programEvaluator.evaluate(data.initialization, (result) => {
-            if (!result.ok || !acceptsCalls(evaluation)) { finish(result); return }
-            if (logs.overflowed) {
-              evaluation.finish(outputLimit(data.maxOutputBytes))
-              return
-            }
-            runProgram()
-          })
+          else {
+            const initialized = Promise.withResolvers<Parameters<Parameters<ProgramEvaluator['evaluate']>[1]>[0]>()
+            void initialized.promise.then(async (result) => {
+              if (!result.ok || !acceptsCalls(evaluation)) { finish(result); return }
+              if (logs.overflowed) {
+                evaluation.finish(outputLimit(data.maxOutputBytes))
+                return
+              }
+              await connection.initialized()
+              if (!acceptsCalls(evaluation)) { finish({ ok: true, value: undefined }); return }
+              runProgram()
+            }).catch((error: unknown) => { finish({ ok: false, error }) })
+            programEvaluator.evaluate(data.initialization, initialized.resolve)
+          }
         } catch (error: unknown) {
           evaluation.finish(prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes))
         }

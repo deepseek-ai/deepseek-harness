@@ -46,7 +46,7 @@ const result = await ctx.ptcRuntime.run(spec)
 
 使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
 
-可选 `initialization` 在每次程序执行前，使用本次绑定准备同一个环境，包括新建环境。其完成值会被丢弃；日志、截止时间、取消和输出预算与程序共享。失败会阻止程序执行，但不回滚此前产生的效果。调用方必须保证重复初始化安全。不支持的提供方模式在解析时拒绝此选项；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
+`registerEnvironmentInitializer(program)` 注册一段源码，在每个新环境安装本次绑定后、执行用户代码前运行一次。必须在首次接纳运行前注册，且只允许注册一个初始化程序。初始化与首次运行共享日志、截止时间、取消和输出预算，其完成值会被丢弃。失败会阻止用户代码执行并丢弃环境，但不回滚外部效果。调用方负责管理返回的异步注销函数；它会取消已接纳的运行，等待这些运行结束，并释放环境。清理失败会阻止新的执行，直到重试注销成功。即使所有环境都已释放，首次接纳运行后仍不能注册。不支持的提供方和模式会拒绝注册；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
 
 ### 可移植地命名绑定
 

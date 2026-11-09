@@ -34,7 +34,6 @@ try {
   })
   const definition = createRunCodeTool(ctx, {
     name: 'program_probe', description: 'Run the probe program.', runtime, tools: [capability],
-    initialization: 'globalThis.probe = true',
   })
   const execution = {
     name: 'program_probe', callId: 'probe', rootCallId: 'probe', token: Symbol('probe'),
@@ -43,7 +42,6 @@ try {
   await assert.rejects(definition.execute({ code: 'probe', description: 'Check shared error identity' }, execution),
     error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_RUN_FAILED')
   runtime.run = async (spec) => {
-    assert.equal(spec.initialization, 'globalThis.probe = true')
     assert.deepEqual(Object.keys(spec.bindings[0].functions), ['private_probe'])
     return { logs: [], value: await spec.bindings[0].functions.private_probe({}) }
   }
