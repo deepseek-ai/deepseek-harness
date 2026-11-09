@@ -1,4 +1,4 @@
-import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { expect, it } from 'vitest'
 import { OutputLedger } from '../src/output-ledger.ts'
 
@@ -28,8 +28,8 @@ it('retains a bounded prefix when logs or a failure diagnostic exceed the limit'
 
 
 it('charges ordered image descriptors and text against one budget', () => {
-  const image = new PtcImage('/image.png', 8, 4)
-  const entry = { afterLog: 0, image }
+  const attachment = { attachmentId: AttachmentId('sha256:image'), mediaType: 'image/png' as const, bytes: 64, width: 8, height: 4 }
+  const entry = { afterLog: 0, attachment }
   const bytes = Buffer.byteLength(JSON.stringify([entry]))
   const ledger = new OutputLedger(bytes + 2)
   expect(ledger.admitImage(entry)).toBe(true)

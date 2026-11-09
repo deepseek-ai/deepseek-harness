@@ -1,3 +1,4 @@
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
@@ -31,8 +32,8 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
 
   it('emits selected images among text and objects and preserves immutable image properties', async () => {
     const { runtime } = await setup()
-    const before = new PtcImage('/images/before.png', 8, 4)
-    const after = new PtcImage('/images/after.png', 16, 8)
+    const before = new PtcImage('/images/before.png', { attachmentId: AttachmentId('sha256:before'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const after = new PtcImage('/images/after.png', { attachmentId: AttachmentId('sha256:after'), mediaType: 'image/png', bytes: 64, width: 16, height: 8 })
     const result = await runtime.run(runtime.resolve({
       program: `
         const before = await tools.before({});
@@ -53,19 +54,23 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(result.logs[1]).toBe('before { windowId: 23 }')
     expect(result.logs[2]).toContain('after [')
     expect(result.images).toEqual([
-      { afterLog: 2, image: before }, { afterLog: 3, image: after }, { afterLog: 3, image: before },
+      { afterLog: 2, attachment: before.attachment },
+      { afterLog: 3, attachment: after.attachment },
+      { afterLog: 3, attachment: before.attachment },
     ])
+    expect(result.images?.[0]?.attachment).toBe(before.attachment)
+    expect(result.images?.[1]?.attachment).toBe(after.attachment)
   })
 
   it('keeps uninspected images in the program and exposes image output before an exception', async () => {
     const { runtime } = await setup()
-    const image = new PtcImage('/images/selected.png', 8, 4)
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
     const bindings = [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }]
     const quiet = await runtime.run(runtime.resolve({ program: 'await tools.image({})', bindings, discardCompletion: true }))
     expect(quiet.images).toBeUndefined()
     expect(quiet.logs).toEqual([])
     const failed = await runtime.run(runtime.resolve({ program: 'inspect(await tools.image({})); throw new Error("after image")', bindings, discardCompletion: true }))
-    expect(failed.images).toEqual([{ afterLog: 0, image }])
+    expect(failed.images).toEqual([{ afterLog: 0, attachment: image.attachment }])
     expect(failed.error?.kind).toBe('exception')
   })
 
@@ -73,7 +78,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const { runtime } = await setup()
     if (!runtime.retainsState) return
     const stateOwner = {}
-    const image = new PtcImage('/images/retained.png', 8, 4)
+    const image = new PtcImage('/images/retained.png', { attachmentId: AttachmentId('sha256:retained'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
     const first = await runtime.run(runtime.resolve({
       program: 'var retainedImage = await tools.image({});', stateOwner, discardCompletion: true,
       bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
@@ -82,13 +87,13 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(first.images).toBeUndefined()
     const second = await runtime.run(runtime.resolve({ program: 'inspect(retainedImage)', stateOwner, discardCompletion: true, bindings: [] }))
     expect(second.error).toBeUndefined()
-    expect(second.images).toEqual([{ afterLog: 0, image }])
+    expect(second.images).toEqual([{ afterLog: 0, attachment: image.attachment }])
     await runtime.release(stateOwner)
   })
 
   it('bounds explicitly inspected image descriptors while allowing uninspected images', async () => {
     const { runtime } = await mountRuntime(new Context(), { ...mode, maxOutputBytes: 128 })
-    const image = new PtcImage('/images/' + 'x'.repeat(200), 8, 4)
+    const image = new PtcImage('/images/large.png', { attachmentId: AttachmentId('sha256:large'), mediaType: 'image/png', bytes: 64, width: 8, height: 4, name: 'x'.repeat(200) })
     const bindings = [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }]
     const quiet = await runtime.run(runtime.resolve({ program: 'await tools.image({})', bindings, discardCompletion: true }))
     expect(quiet.error).toBeUndefined()

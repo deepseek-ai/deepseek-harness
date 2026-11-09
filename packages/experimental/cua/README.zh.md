@@ -35,7 +35,7 @@ kind: "package-reference"
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会先报告，再释放该连接；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
-观察方法输出并返回结果。通过 `connectCua(() => tools.cua, text => inspect(text))` 连接 PTC 文本输出。`window.getScreenshot()` 返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 和 `height` 对应保存图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 选择展示截图；窗口 ID 从 `window.windowId` 读取。直接调用 `createCuaApi` 的宿主集成接收包含编码字节和 MIME 类型的 `CuaScreenshot`，并通过图片回调控制输出。
+观察方法输出并返回结果。通过 `connectCua(() => tools.cua, text => inspect(text))` 连接 PTC 文本输出。`window.getScreenshot()` 返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 和 `height` 对应保存图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 选择展示截图；窗口 ID 从 `window.windowId` 读取。`createCuaApi(dispatch, onText?)` 接收相同的程序分派器和文本回调。
 
 `tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 

@@ -1,15 +1,14 @@
 /** App and window behavior over a fixture operation dispatcher, without desktop access. */
-import { Buffer } from 'node:buffer'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
-import type { CuaApp, CuaCapabilities, CuaElementId, CuaOperation, CuaScreenshot, CuaWindow } from '../src/types.ts'
+import type { CuaApp, CuaCapabilities, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
-const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
+const IMAGE = Object.freeze({ path: '/images/screenshot.png', width: 1, height: 1 })
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
 const delivered = { dispatched: true }
@@ -23,7 +22,7 @@ function fixture(withSink = true) {
   let windows = [windowInfo(23)]
   let currentCapabilities: CuaCapabilities = capabilities
   let generation = 0
-  const sink = { text: vi.fn<(value: string) => void>(), image: vi.fn<(screenshot: CuaScreenshot) => void>() }
+  const sink = { text: vi.fn<(value: string) => void>() }
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return currentCapabilities
@@ -37,13 +36,13 @@ function fixture(withSink = true) {
         snapshotId: `snapshot-${++generation}`, tree: `Tree ${generation}`, truncated: false,
         windows: params.windowId === undefined ? windows : windows.filter(window => window.windowId === params.windowId),
       }
-      case 'screenshot': return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: params.windowId, bounds, coordinateSpace: 'screenshot-pixels' }
+      case 'screenshot': return IMAGE
       case 'listActions': return ['AXPress', 'AXShowMenu', 'AXTextArea.AXValue.Set']
       default: return delivered
     }
   })
   return {
-    dispatch, sink, api: createCuaApi(dispatch, withSink ? sink : undefined),
+    dispatch, sink, api: createCuaApi(dispatch, withSink ? sink.text : undefined),
     setWindows: (ids: number[]) => { windows = ids.map(windowInfo) },
     setWindowRecords: (records: ReturnType<typeof windowInfo>[]) => { windows = records },
     setCapabilities: (value: CuaCapabilities) => { currentCapabilities = value },
@@ -52,10 +51,6 @@ function fixture(withSink = true) {
 
 function state(overrides: Record<string, JsonValue> = {}): JsonValue {
   return { appHandle: selected.appHandle, windowId: null, snapshotId: 'changed', tree: 'Changed tree', windows: [windowInfo(23)], truncated: false, ...overrides }
-}
-
-function screenshot(overrides: Record<string, JsonValue> = {}): JsonValue {
-  return { mimeType: 'image/png', data: PNG, pixelWidth: 1, pixelHeight: 1, windowId: 23, bounds, coordinateSpace: 'screenshot-pixels', ...overrides }
 }
 
 describe('application discovery', () => {
@@ -81,13 +76,12 @@ describe('application discovery', () => {
     expectTypeOf<CuaApp>().not.toHaveProperty('pid')
     expect(app.appHandle).toBe('app-17')
     const window = await app.getWindow(23)
-    expect(await window.getScreenshot()).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
+    expect(await window.getScreenshot()).toEqual(IMAGE)
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual([
       'getCapabilities', 'listApps', 'getApp', 'getState', 'getState', 'screenshot',
     ])
     expect(await app.getWindows()).toEqual([windowInfo(23)])
     expect(f.sink.text).not.toHaveBeenCalled()
-    expect(f.sink.image).not.toHaveBeenCalled()
   })
 
   it('searches installed applications without turning ordinary discovery into an installed-app inventory', async () => {
@@ -162,7 +156,7 @@ describe('mouseMove across observations', () => {
     f.dispatch.mockClear()
     expect(await window.mouseMove(element('0'))).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     await window.getAccessibilityTree({ emit: false })
-    await window.getScreenshot({ emit: false })
+    await window.getScreenshot()
     expect(await window.mouseMove([30, 40])).toEqual({ ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false })
     expect(f.dispatch.mock.calls.map(([operation]) => operation)).toEqual([
       { method: 'mouseMove', params: { appHandle: 'app-17', snapshotId: 'snapshot-2', elementId: '0', windowId: 23 } },
@@ -401,7 +395,7 @@ describe('application and window observations', () => {
     f.dispatch.mockResolvedValueOnce(state({ windowId: 23, snapshotId: 'axless', tree: '', elements: [] }))
     const window = await app.getWindow(23)
     expect(f.sink.text).not.toHaveBeenCalled()
-    await expect(window.getScreenshot()).resolves.toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 23 })
+    await expect(window.getScreenshot()).resolves.toEqual(IMAGE)
     await window.click([10, 20])
     await window.scroll({ x: 10, y: 20, deltaLinesX: 0, deltaLinesY: -1 })
     await window.drag([10, 20], [30, 40])
@@ -570,12 +564,11 @@ describe('application and window observations', () => {
     await window.getScreenshot()
     expect(f.dispatch.mock.calls.slice(calls).map(([operation]) => operation.method)).toEqual(['screenshot'])
     expect(f.sink.text).not.toHaveBeenCalled()
-    expect(f.sink.image).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('screenshots', () => {
-  it('returns screenshot metadata independently of input point bounds and supports selective output', async () => {
+  it('returns the stored screenshot Image and emits selected accessibility text', async () => {
     const f = fixture()
     f.setWindows([23, 24])
     const app = await f.api.getApp('Editor')
@@ -584,34 +577,20 @@ describe('screenshots', () => {
     const tree = await window.getAccessibilityTree()
     const image = await window.getScreenshot()
     expect(tree).toBe('Tree 3')
-    expect(image).toEqual({ bytes: Uint8Array.from(Buffer.from(PNG, 'base64')), mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 24 })
+    expect(image).toBe(IMAGE)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'screenshot', params: { appHandle: 'app-17', windowId: 24 } })
     expect(f.sink.text).toHaveBeenCalledWith('Tree 3')
-    expect(f.sink.image).toHaveBeenCalledWith(image)
     await window.getAccessibilityTree({ emit: false })
-    await window.getScreenshot({ emit: false })
+    await window.getScreenshot()
     expect(f.sink.text).toHaveBeenCalledTimes(1)
-    expect(f.sink.image).toHaveBeenCalledTimes(1)
   })
 
-  it('rejects a screenshot from another window before emitting its image', async () => {
+  it.each([null, 'text only', {}, { path: '/image.png', width: 1 }])('rejects an invalid screenshot result %j', async (value) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)
-    f.dispatch.mockResolvedValueOnce(screenshot({ windowId: 24 }))
-    await expect(window.getScreenshot()).rejects.toThrow('belongs to another window')
-    expect(f.sink.image).not.toHaveBeenCalled()
-  })
-
-  it.each(['image/jpeg', 'image/webp', 'image/gif'])('preserves Host-admitted %s bytes and metadata in the return value and image sink', async (mimeType) => {
-    const f = fixture()
-    const app = await f.api.getApp('Editor')
-    const window = await app.getWindow(23)
-    const data = Buffer.from('admitted request image').toString('base64')
-    f.dispatch.mockResolvedValueOnce(screenshot({ mimeType, data, pixelWidth: 320, pixelHeight: 240 }))
-    const image = await window.getScreenshot()
-    expect(image).toEqual({ bytes: Uint8Array.from(Buffer.from(data, 'base64')), mimeType, pixelWidth: 320, pixelHeight: 240, windowId: 23 })
-    expect(f.sink.image).toHaveBeenCalledExactlyOnceWith(image)
+    f.dispatch.mockResolvedValueOnce(value)
+    await expect(window.getScreenshot()).rejects.toThrow('must return an Image')
   })
 
 })

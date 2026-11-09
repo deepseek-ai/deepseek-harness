@@ -33,6 +33,8 @@ Call `resolve(request)` followed by `run(spec)` with a program and binding names
 
 Set `discardCompletion: true` to omit the successful completion without JSON validation or serialization; captured logs and failures are still returned. The TypeScript tool executor selects this option for explicit program output, while workflow consumers retain completion values.
 
+Host bindings can return `new PtcImage(path, attachment)` to expose a stored image in Node programs. Explicit inspection returns the same attachment reference in `result.images`, positioned among logs by `afterLog`.
+
 ```text
 const spec = ctx.ptcRuntime.resolve({
   program: 'return await tools.add({ a: 1, b: 2 })',

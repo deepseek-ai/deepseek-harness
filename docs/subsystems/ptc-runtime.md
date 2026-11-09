@@ -186,7 +186,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## Captured output and the failure taxonomy
 
-Logs are plain strings. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. The Node provider also captures explicitly inspected images as `PtcImageOutput` entries, whose `afterLog` positions place them among text entries. Each host-issued `PtcImage` exposes a readable execution-world `path` and the stored pixel dimensions. The Node provider caps serialized logs, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+Logs are plain strings. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. The Node provider also captures explicitly inspected images as `PtcImageOutput` entries, whose `afterLog` positions place their attachment references among text entries. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized logs, image attachment references, and completion or diagnostic payloads together; overflow is an explicit failure.
 
 Failure kinds are **orthogonal outcomes reported independently** (per [defensive-patterns](../defensive-patterns/general.md)): a budget expiry is not an exception, an abort is not a timeout, and a substrate death (e.g. OOM) is neither:
 

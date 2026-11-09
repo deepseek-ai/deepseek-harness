@@ -24,7 +24,7 @@ CUA screenshots and `read_image` return ordinary `Image` values in TypeScript pr
    inspect(result)
    ```
 
-2. Update CUA bridge callbacks to `text => inspect(text)`.
+2. Update CUA bridge callbacks to `text => inspect(text)`. Direct `createCuaApi(dispatch, onText?)` callers supply a dispatcher that returns program Images for screenshots and pass the text callback as the second argument. Call `window.getScreenshot()` and pass its returned Image to `inspect`.
 3. For integrations that require console methods, set `enableConsole: true` on the `@deepseek-ai/dsh-ptc-runtime-node` provider row. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
 4. Run an updated program and verify that inspected values appear once and its final expression adds no output.
 

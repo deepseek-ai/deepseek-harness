@@ -305,8 +305,8 @@ describe('read_image happy path', () => {
       expect(value).toBeInstanceOf(PtcImage)
       if (!(value instanceof PtcImage)) throw new Error('read_image must return an Image')
       expect(await readFile(value.path)).toEqual(PNG_1X1)
-      expect([value.width, value.height]).toEqual([1, 1])
-      return { logs: ['before', 'after'], images: [{ afterLog: 1, image: value }] }
+      expect([value.attachment.width, value.attachment.height]).toEqual([1, 1])
+      return { logs: ['before', 'after'], images: [{ afterLog: 1, attachment: value.attachment }] }
     }
 
     const result = await call(ctx, RUN_CODE_NAME, {

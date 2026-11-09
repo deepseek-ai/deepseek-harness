@@ -186,7 +186,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是普通字符串。每个输出通道保留发出顺序；独立通道之间的交错取决于后端。Node 提供方还将显式展示的图片记录为 `PtcImageOutput`，通过 `afterLog` 将图片定位在文本条目之间。宿主创建的每个 `PtcImage` 提供执行环境可读取的 `path` 和已存储图片的像素尺寸。Node 提供方对序列化日志、图片描述以及完成值或诊断信息统一计算预算，超限会明确失败。
+日志是普通字符串。每个输出通道保留发出顺序；独立通道之间的交错取决于后端。Node 提供方还将显式展示的图片记录为 `PtcImageOutput`，通过 `afterLog` 将附件引用定位在文本条目之间。宿主绑定返回包含附件引用及执行环境可读取的 `path` 的 `PtcImage` 描述；程序接收包含该路径和已存储图片像素尺寸的 `Image`。Node 提供方对序列化日志、图片附件引用以及完成值或诊断信息统一计算预算，超限会明确失败。
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 
