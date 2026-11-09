@@ -1,6 +1,6 @@
 /** Session-owned Agent Teams summary and settings inside the model menu. */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { IconChevronRightOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
@@ -74,6 +74,7 @@ function RootTeamModePage({
   const mode = useProjection('agentTeam')
   const modelSelection = useProjection('modelSelection')
   const [pending, setPending] = useState(false)
+  const descriptionId = useId()
   if (mode === undefined) return null
   const select = (enabled: boolean): void => {
     if (!enabled && modelSelection !== undefined && modelSelection.lastUsed !== null) {
@@ -92,9 +93,9 @@ function RootTeamModePage({
     <div className={css.page}>
       <div className={css.row}>
         <span className={css.label}>{t('mode.label')}</span>
-        <Switch className={css.toggle} checked={mode.enabled} disabled={locked || pending || modelSelection === undefined} label={t('mode.label')} onChange={select} />
+        <Switch className={css.toggle} checked={mode.enabled} disabled={locked || pending || modelSelection === undefined} label={t('mode.label')} onChange={select} autoFocus describedBy={descriptionId} />
       </div>
-      <p className={css.description}>{t('mode.description')}</p>
+      <p id={descriptionId} className={css.description}>{t('mode.description')}</p>
     </div>
   )
 }

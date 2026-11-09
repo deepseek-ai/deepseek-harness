@@ -131,7 +131,7 @@ describe('web e2e: agent teamwork panel', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-info'))
     const trigger = page.getByRole('button', { name: /^Select model/u })
     await trigger.click()
-    const menu = page.getByRole('menu')
+    const menu = page.locator('[data-model-menu]')
     const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
     await summary.waitFor()
     const stateColor = await summary.getByText('Off', { exact: true }).evaluate(element => getComputedStyle(element).color)
@@ -146,7 +146,7 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await summary.locator('svg').evaluate(inspectArrow)).toEqual(await peerArrow.evaluate(inspectArrow))
     expect(await menu.getByRole('switch').count()).toBe(0)
     expect(await page.getByRole('button', { name: 'About agent teamwork', exact: true }).count()).toBe(0)
-    const rootSnapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
+    const rootSnapshot = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
     const original = await menu.elementHandle()
     if (original === null) throw new Error('Model menu is missing')
     try {
@@ -166,7 +166,7 @@ describe('web e2e: agent teamwork panel', () => {
         descriptionGap: element.parentElement!.nextElementSibling!.getBoundingClientRect().top
           - element.parentElement!.getBoundingClientRect().bottom,
       }))).toEqual({ rowBackground: 'rgba(0, 0, 0, 0)', focusVisible: true, outline: 'solid', descriptionGap: 0 })
-      const settingsSnapshot = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
+      const settingsSnapshot = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
       await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'info.expected.md'),
         `## Root\n\n${rootSnapshot}\n\n## Team settings\n\n${settingsSnapshot}`, MODE)
       await page.keyboard.press('Escape')
@@ -192,7 +192,7 @@ describe('web e2e: agent teamwork panel', () => {
     const viewport = page.viewportSize()!
     try {
       await openTeamSettings(page)
-      const menu = page.getByRole('menu')
+      const menu = page.locator('[data-model-menu]')
       const toggle = menu.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
       const description = menu.getByText('Coordinate work and progress across agents with a shared task board for better results on complex tasks, with correspondingly higher token costs.', { exact: true })
       await description.click()
@@ -867,7 +867,7 @@ describe('web e2e: agent teamwork panel', () => {
     await openConfirmation()
     const dialog = page.getByRole('dialog', { name: 'Disable agent teamwork?', exact: true })
     await assertWarningDialogLayout(dialog)
-    expect(await page.getByRole('menu', { name: 'Agent teamwork', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('group', { name: 'Agent teamwork', exact: true }).count()).toBe(0)
     expect(await page.getByRole('button', { name: /^Select model/u }).getAttribute('aria-expanded')).toBe('false')
     expect(await dialog.getByRole('checkbox').count()).toBe(0)
     expect(scaffold.ctx.agentTeams.isEnabled(agent)).toBe(true)
@@ -1091,7 +1091,7 @@ it('uses the Chinese collaboration name in the switch and disable confirmation',
     await page.getByText('通过共享任务板协调多个智能体的分工与进度，复杂任务表现更佳，token 开销也相应更高。', { exact: true }).waitFor()
     expect(await page.getByRole('tooltip').count()).toBe(0)
     expect(await toggle.evaluate(element => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)
-    const menu = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
+    const menu = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
     await toggle.click()
     const dialog = page.getByRole('dialog', { name: '确认关闭智能体团队协作？', exact: true })
     await dialog.waitFor()

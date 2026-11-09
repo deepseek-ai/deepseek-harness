@@ -17,8 +17,8 @@ export interface ModelLabelOwner {
   selected: boolean
 }
 
-/** A keyed contribution displayed as a second page of the model menu. */
-export interface ModelMenuPage {
+/** Data identifying a keyed contribution displayed as a second page of the model menu. */
+export interface ModelMenuPageRef {
   /** Registration key in conversation.input.model.page; also marks its root button's data-model-menu-page. */
   key: string
   /** Localized accessible name of the detail page. */
@@ -41,7 +41,7 @@ export type ModelMenuOptions = ModelMenuControls & {
    * Open page.key in conversation.input.model.page with page.title as its localized accessible name.
    * The root button's data-model-menu-page must match page.key for focus return.
    */
-  openPage: (page: ModelMenuPage) => void
+  openPage: (page: ModelMenuPageRef) => void
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -52,7 +52,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       scope: 'session'
       owner: ModelMenuOptions
     }
-    /** Plugin-owned content displayed as a model-menu detail page. */
+    /**
+     * Plugin-owned content displayed as a model-menu detail page.
+     * The page places its own initial focus, for example with `autoFocus`; without one,
+     * focus stays on the menu surface, where Escape and Shift+Tab still return to the root menu.
+     */
     'conversation.input.model.page': {
       kind: 'keyed'
       scope: 'session'

@@ -11,7 +11,7 @@ import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
 
-function setup() {
+function setup(autoFocus = true) {
   const directory = createSnapshotStore<ModelDirectoryState>({
     current: { provider: 'fixture', model: 'fixture' }, routable: true,
     groups: [{ id: 'fixture', name: 'Fixture', models: [{ id: 'fixture', name: 'Fixture' }] }],
@@ -29,7 +29,7 @@ function setup() {
       const controls = owner as object as OwnerOf<'conversation.input.model.page'>
       expect(options?.entryKey).toBe('fixture')
       return <><button type="button" role="switch" aria-checked="false" disabled={controls.locked}
-        onClick={change}>Fixture setting</button><p>Fixture explanation</p></>
+        autoFocus={autoFocus} onClick={change}>Fixture setting</button><p>Fixture explanation</p></>
     }
     return options?.fallback ?? null
   }
@@ -45,7 +45,7 @@ it('dispatches a keyed page and returns focus to its invoking summary on Escape'
   fireEvent.click(screen.getByRole('menuitem', { name: 'Fixture settings' }))
   const toggle = screen.getByRole('switch')
   expect(document.activeElement).toBe(toggle)
-  expect(screen.getByRole('menu', { name: 'Fixture settings' })).toBeTruthy()
+  expect(screen.getByRole('group', { name: 'Fixture settings' })).toBeTruthy()
   fireEvent.blur(toggle, { relatedTarget: null })
   expect(screen.getByText('Fixture explanation')).toBeTruthy()
   fireEvent.keyDown(toggle, { key: 'Escape' })
@@ -55,6 +55,25 @@ it('dispatches a keyed page and returns focus to its invoking summary on Escape'
   expect(trigger.getAttribute('aria-expanded')).toBe('false')
   expect(change).not.toHaveBeenCalled()
   expect(select).not.toHaveBeenCalled()
+})
+
+it('keeps focus on the page surface when the page places none, so Escape still returns', () => {
+  setup(false)
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Fixture settings' }))
+  const surface = screen.getByRole('group', { name: 'Fixture settings' })
+  expect(document.activeElement).toBe(surface)
+  fireEvent.keyDown(surface, { key: 'Escape' })
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Fixture settings' }))
+})
+
+it('closes a detail page on an outside touch press that dispatches no mousedown', () => {
+  const { trigger } = setup()
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Fixture settings' }))
+  fireEvent.blur(screen.getByRole('switch'), { relatedTarget: null })
+  fireEvent.pointerDown(screen.getByText('Fixture explanation'))
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.pointerDown(document.body)
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
 })
 
 it.each([false, true])('closes a detail page on Tab without changing its setting (shift: %s)', async (shiftKey) => {

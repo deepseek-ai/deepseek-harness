@@ -32,7 +32,7 @@ describe('Client inspect providers', () => {
       const options = await provider.query('listSubTree', { root: 'conversation.input.model.options' }, {} as never)
       const menuOwner = (options as typeof selected).selected.catalog.ownerProps.join('\n')
       expect(menuOwner).toContain('ModelMenuOptions')
-      expect(menuOwner).toContain('openPage: (page: ModelMenuPage) => void')
+      expect(menuOwner).toContain('openPage: (page: ModelMenuPageRef) => void')
     } finally {
       await fiber.dispose()
     }
