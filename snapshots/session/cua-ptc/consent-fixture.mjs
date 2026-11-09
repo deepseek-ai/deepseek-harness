@@ -1,4 +1,4 @@
-/** Own the bridge module and private native substitute; the replay owns its AX-failure marker through finally. */
+/** Own the bridge module and private native substitute; the replay owns its AX-failure markers through finally. */
 import { chmod, copyFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { startFixtureHost } from '../cua-native/fixture-host.mjs'

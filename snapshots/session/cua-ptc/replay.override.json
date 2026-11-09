@@ -71,6 +71,39 @@
       {
         "type": "block-start",
         "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "cua-ptc-writability",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const { writeFile, unlink } = await import('node:fs/promises');\\nconst { resolve } = await import('node:path');\\nconst { pathToFileURL } = await import('node:url');\\nconst { connectCua } = await import(pathToFileURL(resolve('cua-bridge.mjs')).href);\\nconst cua = connectCua(() => tools.cua);\\nconst app = await cua.getApp('test.fixture');\\nconst results = [];\\nfor (const attribute of ['AXValue', 'AXSelectedTextRange']) {\\n  await writeFile('fixture-ax-writability-failure', attribute);\\n  try {\\n    const tree = await app.getAccessibilityTree({ emit: false });\\n    const field = attribute === 'AXValue' ? 'valueWritable' : 'selectionWritable';\\n    if (!tree.includes(field + '=unknown') || tree.includes(field + '=true')) throw new Error('Unknown writability was lost');\\n    if (!tree.includes('Increment') || !tree.includes('Count:')) throw new Error('Other nodes were lost');\\n    let writeRefused = false;\\n    try {\\n      if (attribute === 'AXValue') await app.setValue('1', 'must not be written');\\n      else await app.selectText('1', 'Fixture');\\n    } catch (error) {\\n      if (!error.message.includes('writability of ' + attribute + ' failed with error -25200')) throw error;\\n      writeRefused = true;\\n    }\\n    if (!writeRefused) throw new Error('Write accepted with unknown writability');\\n    results.push({ attribute, unknown: true, otherNodesRetained: true, writeRefused });\\n  } finally { await unlink('fixture-ax-writability-failure'); }\\n}\\nreturn results;\",\"description\":\"Retain AX trees with unknown writability and reject writes\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
         "blockType": "text"
       },
       {
@@ -78,7 +111,7 @@
         "index": 0,
         "block": {
           "type": "text",
-          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot."
+          "text": "Received native CUA values and PNG screenshots through PTC. The object API captured a 90-byte PNG after two AX read failures and refused element input without an accessibility snapshot. Both writability probe failures left the tree readable with unknown fields and kept writes strict."
         }
       },
       {

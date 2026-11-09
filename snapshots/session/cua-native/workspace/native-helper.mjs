@@ -160,6 +160,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
     }
     if (method === 'listWindows') return [window, axlessWindow]
     if (params.windowId !== undefined && ![7, 8, 9].includes(params.windowId)) refuse('WINDOW_UNAVAILABLE', 'Window is closed or belongs to another application')
+    const writableFailureFile = new URL('./fixture-ax-writability-failure', import.meta.url)
+    const writableFailure = existsSync(writableFailureFile) ? readFileSync(writableFailureFile, 'utf8') : undefined
     if (method === 'getState') {
       snapshots.delete(params.windowId ?? null)
       if (params.windowId === undefined) observedWindows.clear()
@@ -177,7 +179,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
         tree: '', elements: [], windows: [axlessWindow], truncated: false }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
-        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
+        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=${writableFailure === 'AXValue' ? 'unknown' : 'true'} selectionWritable=${writableFailure === 'AXSelectedTextRange' ? 'unknown' : 'true'} value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         windows: [params.windowId === 9 ? transformedWindow : window], truncated: false }
@@ -203,6 +205,9 @@ function createApplicationState(socket, record, application, captureBroker, conn
     }
     if (['click', 'mouseMove', 'scroll', 'drag'].includes(method) && params.elementId === undefined
       && !observedWindows.has(params.windowId)) refuse('STALE_SNAPSHOT', 'Window has no observation; read getAccessibilityTree or take a screenshot before coordinate input')
+    if ((method === 'setValue' && writableFailure === 'AXValue') || (method === 'selectText' && writableFailure === 'AXSelectedTextRange')) {
+      refuse('NATIVE_ERROR', `Accessibility read writability of ${writableFailure} failed with error -25200`)
+    }
     if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
