@@ -28,7 +28,9 @@ const programDescription = 'Run a TypeScript program to observe and operate desk
 export function installCuaTools(
   ctx: Context, config: CuaConfig, tool: ToolDefinition, guidance: string, programGuidance: string,
 ): () => void | Promise<void> {
-  const bridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
+  // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
+  const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
+  const programBridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
   const prompt = { name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
@@ -37,7 +39,7 @@ export function installCuaTools(
 Persistent PTC initialization:
 
 \`\`\`ts
-var { connectCua } = await import(${bridgeUrl});
+var { connectCua } = await import(${ptcBridgeUrl});
 var cua = connectCua(() => tools.cua, text => console.log(text));
 \`\`\``
   } }
@@ -59,7 +61,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
         const program = createRunCodeTool(consumer, {
           name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
           tools: [tool], limits: config.runCode.executor,
-          initialization: `globalThis.cua ??= (await import(${bridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
+          initialization: `globalThis.cua ??= (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
         })
         const scopes = new Map<Agent, { scope: Scope; current?: { kind: 'raw' | 'program'; remove: () => void } }>()
         consumer.effect(() => async () => {

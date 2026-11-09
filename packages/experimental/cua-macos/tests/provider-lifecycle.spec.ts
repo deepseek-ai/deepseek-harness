@@ -901,7 +901,7 @@ it('adds an installation-owned bridge URL when persistent PTC is available', asy
   await f.ctx.plugin(Sandbox)
   await f.ctx.plugin(SandboxPolicy)
   await f.ctx.plugin(NodeRuntime, { executionMode: 'persistent-in-memory' })
-  expect(await text()).toContain(new URL('../../cua/src/bridge.ts', import.meta.url).href)
+  expect(await text()).toContain(new URL('../../cua/lib/bridge.js', import.meta.url).href)
 })
 
 it('keeps Cordis loading until preparation succeeds and reports preparation failure through the fiber', async () => {

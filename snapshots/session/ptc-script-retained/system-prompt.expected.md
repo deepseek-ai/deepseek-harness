@@ -92,7 +92,7 @@ Maximum click holdMs: 5000 ms.
 Persistent PTC initialization:
 
 ```ts
-var { connectCua } = await import("file://{{cwd}}/cua-runtime/src/bridge.ts");
+var { connectCua } = await import("file://{{cwd}}/cua-runtime/lib/bridge.js");
 var cua = connectCua(() => tools.cua, text => console.log(text));
 ```
 
