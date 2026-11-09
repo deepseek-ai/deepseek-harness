@@ -16,7 +16,7 @@ export function validateBindings(request: PtcRunRequest): Map<string, PtcBinding
       throw new Error(`dsh-ptc-runtime-node: binding global ${JSON.stringify(namespace.global)} is not a usable identifier`)
     }
     // RESERVED_BINDING_GLOBALS is the seam's shared backend-owned set:
-    // `console` is THIS backend's log-capture slot; the dunder entries exist
+    // `Harness` and `console` are this backend's output slots; the dunder entries exist
     // for the Python side — its seeded/wrapped slots plus the `__debug__`
     // compile-time constant — refused here too so the namespace list stays
     // portable across backends. The seam declaration is the single home for

@@ -43,6 +43,8 @@ The program is the body of an async Python function. Top-level await and return 
 
 包的默认导出是 `PythonPtcRuntime` 插件。其公开面还重新导出宿主侧协议词汇：`validateChildFrame`（重建每条入站帧）、无损 JSON codec 与计量器（`encodeJsonPlain`、`checkDoneValue`、`hasUnsafeIntegerToken`、`hasNonLosslessNumber`）、`logTruncationMarker`（共享截断标记文本），以及 `resolvePythonBin`（对照当前 `PATH` 的解释器查找）、`readProcessStart`（供测试用的进程启动统计）、`detachResidual`（已结算运行的资源清理测试 seam）与 `hostFrameParseCeiling`（给定堆上限可容纳的堆推导帧解析上限）。每个上限都是带默认值并经校验的 `Config` 字段：`cpuSeconds`（60）、`maxWallMs`（600000）、`addressSpaceMb`（512，Darwin 上不生效）、`maxLogBytes`（65536）、`maxValueBytes`（32768）、`graceMs`（3000）与 `pythonBin`（`python3`，在加载期解析、检查可执行性，在五秒强制终止期限内探测版本并固定）。每个子进程只接收 `TMPDIR`；环境中的凭证、`PATH`、`HOME` 与其他宿主状态均不可见。
 
+`resolve` 在启动 Python 进程前拒绝 `discardCompletion: true`。省略该选项或设为 false 时保留程序完成值。
+
 ### wire
 
 帧在子进程 fd 3 上以 JSON-lines 传输——每行一个对象——因此 stdout/stderr 留给程序自己的输出。子进程 → 宿主：`boot-ack`、`call`、`log`、`done`。宿主 → 子进程：`boot`（首帧，携带全部上限与命名空间声明）、`run`（`boot-ack` 之后，只携带程序体）与每个 `call` 一个 `reply`。伪造帧可在 `done` 上同时携带 `value` 与 `error`，因此消费方必须先检查 `error`，在它存在时忽略 `value`。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧追加到同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条 `'ab'` 条目而不是假换行（拆分计费算术见 fd-3 协议 Agent Note 的 wire-contract 一节）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。

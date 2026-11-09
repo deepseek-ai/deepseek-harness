@@ -20,7 +20,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     return { runtime, run, completion }
   }
 
-  it('renders each inspected argument independently and preserves format placeholders', async () => {
+  it('renders each inspected argument independently', async () => {
     const { run } = await setup()
     const result = await run('Harness.inspect("%s %d %j %%", "text", 7, { n: 1 }, [2, 3]);')
     expect(result.error).toBeUndefined()

@@ -93,7 +93,7 @@ AX observations show menu-bar entries by default. Use `app.getAccessibilityTree(
 
 Values and placeholders are separate. Named, stateful or actionable groups and scroll areas retain their own rows. Repeated names, descriptions and help text on one node are shown once. Values, placeholders and URLs keep their distinct meanings even when their text matches; body text shared by distinct nodes remains intact. Writability is explicit on relevant controls, including `AXIncrementor`; `unknown` means the system did not report it. Missing optional state fields do not imply false. UTF-16 ranges outside the observed value are marked unavailable. Compact tree labels can omit AppKit target and selector details. Pass the exact name returned by `listActions(elementId)` to `performAction`.
 
-Observations emit by default and also return their value. In persistent PTC, use `void await app.getAccessibilityTree()` for one emitted copy, or `emit:false` and one explicit print. Capturing a screenshot after an emitted tree can fail independently; retain the successful AX output.
+Observations emit through `Harness.inspect` by default and also return their value. Use `await app.getAccessibilityTree()` to emit an observation, or set `emit: false` to retain its value for later inspection. Capturing a screenshot after an emitted tree can fail independently; retain the successful AX output.
 
 Screenshot diagnostics use `[cua-screenshot]` records keyed by the tool request ID. Native phase records return over the originating Agent connection and cover window/AX geometry checks, system capture, PNG/Base64 encoding and response writing. Host debug logs add dispatch, reply and cleanup timings. Each request retains at most 8192 bytes of complete diagnostic records, with explicit truncation; screenshot failures append these records to the error for Session export. Records contain stages, timings and error codes, not window titles, AX text or image bytes.
 
@@ -105,7 +105,7 @@ To run through persistent PTC, add `--patch packages/experimental/cua-macos/exam
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
-const cua = connectCua(() => tools.cua, text => console.log(text))
+const cua = connectCua(() => tools.cua, text => Harness.inspect(text))
 const app = await cua.getApp("com.apple.TextEdit")
 const windows = await app.getWindows()
 if (windows.length === 0) throw new Error("Open a TextEdit window first")
@@ -182,7 +182,7 @@ macOS: accessibility tree operations are available at app or window level. Simul
 
 Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async; observation options default to { emit: true }, and emit: false suppresses sink output only, leaving returned values unchanged. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 
-In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global. Use void await for observations that emit, and never stringify screenshot image bytes.
+In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global. Observations emit through Harness.inspect; never stringify screenshot image bytes.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: number and the methods listed below for window level. Neither object carries pid.
 
