@@ -39,4 +39,5 @@ CUA screenshots and `read_image` return ordinary `Image` values in TypeScript pr
    ```
 
 3. For integrations that require console methods, set `enableConsole: true` on the `@deepseek-ai/dsh-ptc-runtime-node` provider row. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
-4. Run an updated program and verify that inspected values appear once and its final expression adds no output.
+4. Direct runtime consumers read `result.output`: text entries are `{ type: 'text', text }`, image entries are `{ type: 'image', attachment }`, and array order is display order.
+5. Run an updated program and verify that inspected values appear once and its final expression adds no output.

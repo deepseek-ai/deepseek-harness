@@ -1,7 +1,7 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
 import { randomUUID } from 'node:crypto'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcImageOutput } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
@@ -124,10 +124,9 @@ export class ProgramWorker {
       return output.failure([], failure)
     }
     this.stderr = ''
-    const output = this.output()
-    const logs: string[] = []
+    const ledger = this.output()
+    const output: PtcOutput[] = []
     let overflowed = false
-    const images: PtcImageOutput[] = []
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
       const phase = evaluation.completion !== undefined ? 'during execution' : 'before code started'
@@ -153,28 +152,27 @@ export class ProgramWorker {
       invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
       admit: (text) => {
         if (overflowed) return
-        if (!output.admit(text, logs)) {
+        if (!ledger.admit({ type: 'text', text }, output)) {
           overflowed = true
-          logs.push(text)
+          output.push({ type: 'text', text })
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
         }
       },
       image: (attachment) => {
         if (overflowed || evaluation.settled) return
-        if (!output.admitImage({ afterLog: logs.length, attachment })) {
+        if (!ledger.admit({ type: 'image', attachment }, output)) {
           overflowed = true
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
           return
         }
-        images.push({ afterLog: logs.length, attachment })
       },
       finish: (error, value, discard = false) => {
         if (evaluation.settled) return
         evaluation.settled = true
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
-        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
-          : error ? output.failure(logs, error) : output.success(logs, value)
+        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? ledger.limit(output)
+          : error ? ledger.failure(output, error) : ledger.success(output, value)
         const outcome = complete()
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
@@ -188,14 +186,14 @@ export class ProgramWorker {
           const completed = complete()
           // The final interruption diagnostic also consumes output budget.
           if (completed.error?.kind === 'output-limit' && preserved) drained = await this.terminate()
-          return drained ? completed : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
+          return drained ? completed : ledger.failure(output, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
         }
         void cleanup().then((completed) => {
           this.active = undefined
-          result.resolve(images.length > 0 && completed.error?.kind !== 'output-limit' ? { ...completed, images } : completed)
+          result.resolve(completed)
         }, (failure: unknown) => {
           this.active = undefined
-          result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
+          result.resolve(ledger.failure(output, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
         })
       },
     }

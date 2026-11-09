@@ -95,13 +95,11 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text and inspected images. Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
-  /** Images explicitly inspected by the program, ordered among captured text entries. */
-  images?: PtcImageOutput[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -186,7 +184,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是普通字符串。每个输出通道保留发出顺序；独立通道之间的交错取决于后端。Node 提供方还将显式展示的图片记录为 `PtcImageOutput`，通过 `afterLog` 将附件引用定位在文本条目之间。宿主绑定返回包含附件引用及执行环境可读取的 `path` 的 `PtcImage` 描述；程序接收包含该路径和已存储图片像素尺寸的 `Image`。Node 提供方对序列化日志、图片附件引用以及完成值或诊断信息统一计算预算，超限会明确失败。
+`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -206,13 +204,8 @@ declare class PtcImage {
 ```
 
 ```ts type-equiv
-/** One inspected image positioned among captured text entries. */
-interface PtcImageOutput {
-  /** Number of text entries emitted before this image. */
-  afterLog: number
-  /** Stored image selected by the program. */
-  attachment: ImageAttachmentRef
-}
+/** One captured text entry or explicitly inspected image, in emission order. */
+type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 ```
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：

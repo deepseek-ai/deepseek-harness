@@ -1022,7 +1022,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       try {
         input = bootstrapInput()
       } catch (error: unknown) {
-        return { logs: [], sandbox, error: { kind: 'worker-exit', message: `failed to read the python bootstrap: ${messageOf(error)}` } }
+        return { output: [], sandbox, error: { kind: 'worker-exit', message: `failed to read the python bootstrap: ${messageOf(error)}` } }
       }
       let confined: ConfinedArgv | undefined
       // Unbuffered native output stays observable before process-group teardown.
@@ -1045,7 +1045,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       return await pending
     } catch (error: unknown) {
       return {
-        logs: [], sandbox,
+        output: [], sandbox,
         error: controller.signal.aborted ? controller.signal.reason as PtcRunFailure
           : { kind: error instanceof SandboxUnavailableError ? 'sandbox-unavailable' : 'worker-exit', message: messageOf(error) },
       }
@@ -1176,7 +1176,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       }
     } catch (error: unknown) {
       complete()
-      return Promise.resolve({ logs: [], sandbox, error: {
+      return Promise.resolve({ output: [], sandbox, error: {
         kind: confined !== undefined && isRunnerSpawnFailure(error, argv[0], request.cwd) ? 'sandbox-unavailable' : 'worker-exit',
         message: `python spawn error: ${messageOf(error)}`,
       } })
@@ -2147,16 +2147,16 @@ export class PythonPtcRuntime extends PtcRuntime {
       let resolved = false
       // The decided terminal result for a live child, recorded by finish() and
       // read by the `close` handler that settles it once the pipes have drained.
-      let decided: Omit<PtcRunResult, 'logs'>
+      let decided: Omit<PtcRunResult, 'output'>
 
       // The single settlement point: resolve run() with the decided result and
       // mark the fiber quiescent. Idempotent — the first call wins, so a later
       // `close` after done/timeout/abort is absorbed as a no-op.
-      const settle = (result: Omit<PtcRunResult, 'logs'>): void => {
+      const settle = (result: Omit<PtcRunResult, 'output'>): void => {
         if (resolved) return
         resolved = true
         if (closeDeadline !== undefined) clearTimeout(closeDeadline)
-        resolve({ ...result, logs, sandbox: { ...sandbox } })
+        resolve({ ...result, output: logs.map(text => ({ type: 'text', text })), sandbox: { ...sandbox } })
         // Mark the fiber quiescent for THIS run: drop it from `live` and resolve
         // `finished` (what teardown awaits). Deferred until the process group is
         // actually empty — dropping from `live` before then would let a
@@ -2240,7 +2240,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         pollGroup()
       }
 
-      const finish = (result: Omit<PtcRunResult, 'logs'>): void => {
+      const finish = (result: Omit<PtcRunResult, 'output'>): void => {
         if (settled) return
         settled = true
         decided = result

@@ -80,7 +80,7 @@ class FakeRuntime extends PtcRuntime {
 
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
 
   run(request: PtcRunRequest): Promise<PtcRunResult> {
     return this.behavior(request)
@@ -307,7 +307,7 @@ describe('read_image happy path', () => {
       if (!(value instanceof PtcImage)) throw new Error('read_image must return an Image')
       expect(await readFile(value.path)).toEqual(PNG_1X1)
       expect([value.attachment.width, value.attachment.height]).toEqual([1, 1])
-      return { logs: ['before', 'after'], images: [{ afterLog: 1, attachment: value.attachment }] }
+      return { output: [{ type: 'text', text: 'before' }, { type: 'image', attachment: value.attachment }, { type: 'text', text: 'after' }] }
     }
 
     const result = await call(ctx, RUN_CODE_NAME, {
@@ -332,7 +332,7 @@ describe('read_image happy path', () => {
       const image = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
       if (!(image instanceof PtcImage)) throw new Error('read_image must return an Image')
       return {
-        logs: ['before', 'after'], images: [{ afterLog: 1, attachment: image.attachment }],
+        output: [{ type: 'text', text: 'before' }, { type: 'image', attachment: image.attachment }, { type: 'text', text: 'after' }],
         error: { kind, message: 'program stopped' },
       }
     }

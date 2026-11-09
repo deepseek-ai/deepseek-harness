@@ -88,7 +88,7 @@ class ProgramFixture extends PtcRuntime {
     expect(request.program).toBe('inspect(await tools.echo({ value: "ptc" }))')
     const value = await request.bindings[0]!.functions.echo!({ value: 'ptc' })
     if (typeof value !== 'string') throw new Error('expected a string echo result')
-    return { logs: [value] }
+    return { output: [{ type: 'text', text: value }] }
   }
 }
 

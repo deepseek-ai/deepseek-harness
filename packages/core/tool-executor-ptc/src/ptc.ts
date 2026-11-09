@@ -14,7 +14,7 @@ import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcImageOutput } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcRunResult, PtcRunSandbox, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import { approveEscalation, ESCALATION_TARGETS, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
@@ -44,27 +44,26 @@ interface RunCodeFlavor {
 }
 
 /** Keep tool-call rules here; the runtime owns evaluation syntax and state retention. */
-function runCodeFlavor(language: string, execution = {
+function runCodeFlavor(language: string, outputInstruction: string, execution = {
   programDescription: 'the program to execute',
-  outputInstruction: 'Curate the program output.',
   codeDescription: `The ${language} program to execute, following this tool's execution instructions.`,
 }): RunCodeFlavor {
   return {
     description: `Execute a ${language} program against the available tools. Takes two required arguments: `
       + `\`code\`, ${execution.programDescription}, and \`description\`, a short summary of what the program does. `
       + 'Call tools as `await tools.name(args)` per the declarations in the system prompt. '
-      + `${execution.outputInstruction}${language === 'TypeScript' ? ' Pass images to inspect to display them.' : ' Image-bearing subtool results are attached after the run.'}`,
+      + outputInstruction,
     codeDescription: execution.codeDescription,
   }
 }
 
-const TYPESCRIPT_FLAVOR = runCodeFlavor('TypeScript')
-const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', {
+const TYPESCRIPT_OUTPUT_INSTRUCTION = 'Show selected text and images with inspect(...values).'
+const TYPESCRIPT_FLAVOR = runCodeFlavor('TypeScript', TYPESCRIPT_OUTPUT_INSTRUCTION)
+const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', TYPESCRIPT_OUTPUT_INSTRUCTION, {
   programDescription: 'the BODY of an async function (erasable syntax only; top-level `await` and `return` work)',
-  outputInstruction: 'Show selected results with inspect(...values).',
   codeDescription: 'The program: the body of an async TypeScript function.',
 })
-const PYTHON_FLAVOR = runCodeFlavor('Python')
+const PYTHON_FLAVOR = runCodeFlavor('Python', 'Curate the program output. Image-bearing subtool results are attached after the run.')
 
 /** Languages with both a transport schema and an SDK renderer. */
 export type PtcSdkLanguage = 'typescript' | 'python'
@@ -256,17 +255,19 @@ type RunCodeOutput = { logs: string[]; result?: JsonValue; sandbox?: PtcRunSandb
 function renderRunOutput(
   value: RunCodeOutput,
   guidance: string,
-  images: PtcImageOutput[] = [],
+  output: PtcOutput[] = value.logs.map(text => ({ type: 'text', text })),
 ): ContentBlock[] {
   const content: ContentBlock[] = []
   const appendText = (text: string): void => { if (text.length > 0) content.push({ type: 'text', text }) }
-  let position = 0
-  for (const output of images) {
-    appendText(value.logs.slice(position, output.afterLog).join('\n'))
-    position = output.afterLog
-    content.push({ type: 'image', attachment: output.attachment })
+  const remaining: string[] = []
+  for (const block of output) {
+    if (block.type === 'text') remaining.push(block.text)
+    else {
+      appendText(remaining.join('\n'))
+      remaining.length = 0
+      content.push(block)
+    }
   }
-  const remaining = value.logs.slice(position)
   if (value.result !== undefined) remaining.push(renderValue(value.result))
   if (value.sandbox?.enforcement === 'partial') remaining.push('File sandbox enforcement is partial on this host.')
   if (value.sandbox?.denied) remaining.push(`The ${value.sandbox.mode} file sandbox denied an operation.${guidance}`)
@@ -322,7 +323,7 @@ export function createRunCodeTool(
   }
 
   type ImageRef = Extract<ContentBlock, { type: 'image' }>['attachment']
-  const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; images: PtcImageOutput[]; logs: string[] }>()
+  const inspections = new WeakMap<ToolExecution, { value?: RunCodeOutput; output: PtcOutput[] }>()
   const programImage = (ref: ImageRef): PtcImage => {
     const attachments = ctx.get('attachments')
     const fs = ctx.get('fs')
@@ -742,9 +743,9 @@ export function createRunCodeTool(
             await drainDispatches()
           }
 
-          if (result.images !== undefined && result.images.length > 0) {
-            inspections.set(exec, { images: result.images, logs: result.logs })
-          }
+          const logs = result.output.flatMap(block => block.type === 'text' ? [block.text] : [])
+          const hasImages = result.output.some(block => block.type === 'image')
+          if (hasImages) inspections.set(exec, { output: result.output })
           if (result.error) {
             const limitError = runController.signal.reason instanceof ToolCallLimitExceededError
               ? runController.signal.reason : undefined
@@ -754,8 +755,8 @@ export function createRunCodeTool(
               error.name = 'AbortError'
               throw error
             }
-            const logsText = result.logs.length > 0 && (result.images?.length ?? 0) === 0
-              ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
+            const logsText = logs.length > 0 && !hasImages
+              ? `\nCaptured output:\n${logs.join('\n')}` : ''
             const sandboxText = result.sandbox === undefined ? ''
               : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
             const failureText = limitError === undefined || limitError.message === result.error.message
@@ -763,13 +764,11 @@ export function createRunCodeTool(
             throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${failureText}${logsText}${sandboxText}${result.sandbox?.denied ? escalationGuidance(runtime.sandboxMode) : ''}`)
           }
           const value: RunCodeOutput = {
-            logs: result.logs,
+            logs,
             ...result.sandbox === undefined ? {} : { sandbox: result.sandbox },
             ...runtime.language !== 'typescript' && result.value !== undefined ? { result: result.value } : {},
           }
-          if (result.images !== undefined && result.images.length > 0) {
-            inspections.set(exec, { value, images: result.images, logs: result.logs })
-          }
+          if (hasImages) inspections.set(exec, { value, output: result.output })
           return value
         } finally {
           callSignal.removeEventListener('abort', onOuterAbort)
@@ -785,10 +784,10 @@ export function createRunCodeTool(
       if (selected === undefined) return undefined
       if (result.isError) {
         if (selected.value !== undefined) return undefined
-        return [...result.content, ...renderRunOutput({ logs: selected.logs }, '', selected.images)]
+        return [...result.content, ...renderRunOutput({ logs: [] }, '', selected.output)]
       }
       if (selected.value === undefined || !isDeepStrictEqual(selected.value, result.value)) return undefined
-      return renderRunOutput(selected.value, escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode), selected.images)
+      return renderRunOutput(selected.value, escalationGuidance(ctx.get('ptcRuntime')?.sandboxMode), selected.output)
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.

@@ -69,7 +69,7 @@ it.each([false, true])('advertises Script syntax and its selected retention %s',
   expect(runtime.executionInstructions.includes('Each call runs in a fresh Node process')).toBe(!scriptPersistence)
   const stateOwner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
-  expect(await run('let retained: number = 17; retained')).toMatchObject({ logs: [], value: 17 })
+  expect(await run('let retained: number = 17; retained')).toMatchObject({ output: [], value: 17 })
   expect(await run('typeof retained')).toMatchObject({ value: scriptPersistence ? 'number' : 'undefined' })
   await runtime.release(stateOwner)
   expect(await run('typeof retained')).toMatchObject({ value: 'undefined' })

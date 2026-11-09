@@ -133,12 +133,12 @@ The program is the body of an async Python function. Top-level await and return 
 - **binding 回复值没有 seam 级字节或深度上限**——`maxValueBytes` 只计量 done 帧的完成值；宽 binding 回复在宿主侧重建（`snapshotJsonValue` 遍历）并整帧编码，两侧都只受进程内存约束（与没有子进程侧预算的 binding 实参一样）。
 - **已发布 profile 均不挂载本提供方**——keyless `ptc-python-turn` 快照通过真实 Loader 替换 headless PTC 运行时；已发布 profile 使用沙箱 Node 进程后端。
 - **工作流执行需要 Node**——使用本 Python 提供方的组合禁用 `workflow-ptc`、`tool-workflow` 和 `tool-ralph`；工作流提供方在加载时拒绝不兼容的运行时。
-- **跨通道日志交错由后端决定**——Python stdout、stderr 与 fd-3 日志帧彼此独立传输；每个通道保留自身顺序，但它们在 `result.logs` 中的总顺序可能不同。
+- **跨通道日志交错由后端决定**——Python stdout、stderr 与 fd-3 日志帧彼此独立传输；每个通道保留自身顺序，但它们在 `result.output` 中的总顺序可能不同。
 - **需要 CPython 3.10 或更高版本**——配置的可执行文件会在加载期完成解析与版本探测；不受支持的解释器会在 `ctx.ptcRuntime` 注册前失败。
 - **执行限于本地 Unix 宿主**——解释器、工作目录与沙箱 runner 必须位于运行本插件的宿主上。提供方使用 POSIX 资源限制和进程组信号；不支持 Windows 或远程执行提供方。
 - **沙箱强制能力继承后端限制**——成功的程序也可能报告部分强制能力，文件约束不构成多租户隔离或完整的后代清理保证。
 - **诊断前缀省略包名中的 experimental 限定词**——标记 `[dsh-ptc-runtime-python] log capture truncated at <N> bytes` 独立于 npm 包名来标识本提供方。协议镜像检查 TypeScript 与 Python 的标记字节完全相同。
-- **`run()` 是一次性的**——`logs` 只有在 `PtcRunResult` resolve 后才能获得；没有为运行中程序产生的输出提供流式日志或进度接口。
+- **`run()` 是一次性的**——`output` 只有在 `PtcRunResult` resolve 后才能获得；没有为运行中程序产生的输出提供流式日志或进度接口。
 - **运行之间不保留状态**——每次请求都在全新子进程中执行；持久 REPL 风格内核在某个后端带来自己的日志方案之前保持延期。
 - **原始长度超过有效帧解析上限的 fd-3 帧会让本次运行以 worker-exit 结算**——上限为 64 MiB，或当宿主的配置堆无法安全解析接近上限的帧时更低（`hostFrameParseCeiling`）；`maxLogBytes`/`maxValueBytes` 在加载期被限制到同一上限，因此诚实子进程的帧总能放得下；模型构造的超过该上限的 binding 实参（一个在 seam 层没有预算的值）会触发同一上限——这是该 OOM 防护的已接受残余。
 - **停止读取回复的子进程会在回复积压超过 1024 帧时以 worker-exit 结算运行**——宿主每次写一条回复，管道满时等待 `drain`；只持续发送调用而不消费回复的子进程会让保留的积压（及其钉住的 binding 结果）一直增长到墙钟，因此积压上限让运行提前失败。binding 结果在 seam 层没有字节上限，所以这是计数上限而非字节上限。

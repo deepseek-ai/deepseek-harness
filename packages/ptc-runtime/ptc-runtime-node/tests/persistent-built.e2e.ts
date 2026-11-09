@@ -38,6 +38,6 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(result.exitCode, result.stderr).toBe(0)
     const observed = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '') as { first: { error?: unknown } }
     expect(observed.first.error).toBeUndefined()
-    expect(observed).toMatchObject({ second: { logs: ['b'], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { logs: [], value: 'undefined' } })
+    expect(observed).toMatchObject({ second: { output: [{ type: 'text', text: 'b' }], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { output: [], value: 'undefined' } })
   })
 })

@@ -562,7 +562,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const result = await runtime.run(runtime.resolve({ program: 'return 1', bindings: [], signal }))
     expect(result.error?.kind).toBe('abort')
     expect(result.error?.message).toContain('already-cancelled')
-    expect(result.logs).toEqual([])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
   })
 
   it('short-circuits on an already-aborted signal whose reason cannot be converted', async () => {
@@ -576,7 +576,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
     const result = await runtime.run(runtime.resolve({ program: 'return 1', bindings: [], signal }))
     expect(result.error?.kind).toBe('abort')
     expect(result.error?.message).toBe('<unrenderable rejection value>')
-    expect(result.logs).toEqual([])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
   })
 
   it('delivers packaged Python modules without exposing a writable bootstrap file', async () => {
@@ -671,7 +671,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
       const result = await runtime.run(runtime.resolve({ program: 'return 42', bindings: [] }))
       expect(result.error?.kind).toBe('worker-exit')
       expect(result.error?.message).toContain('failed to read the python bootstrap')
-      expect(result.logs).toEqual([])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
       expect(result.value).toBeUndefined()
     } finally {
       failNextReadOf.value = undefined
@@ -972,7 +972,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     expect(result.value).toEqual({ answer: 42 })
     // `print` in Python emits: text, ' ', text, '\n'. Concat the captured
     // fragments and assert the model-visible message survives.
-    expect(result.logs.join('')).toContain('hello 42')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('hello 42')
     // 15s: this is usually the suite's first real subprocess — a cold python3
     // start (interpreter + asyncio import) on a loaded CI runner can exceed
     // the 5s default alone; later tests reuse the warm page cache.
@@ -994,7 +994,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ tmpdir: tmpdir(), path: null, home: null, token: null })
-    expect(result.logs).toEqual([])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
   })
 
   it('bridges binding calls both ways and rejects the program-side call on a host rejection', async () => {
@@ -1269,7 +1269,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a b', 'c'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a b', 'c'])
   })
 
   it('flushes a print with no trailing newline', async () => {
@@ -1279,7 +1279,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['partial'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['partial'])
   })
 
   it('aggregates a large newline-free native write into one log entry, not one per pipe chunk', async () => {
@@ -1296,7 +1296,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['A'.repeat(size)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['A'.repeat(size)])
   })
 
   it('splits native output on its own newlines, one entry per line', async () => {
@@ -1308,7 +1308,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['one', 'two', 'three'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['one', 'two', 'three'])
   })
 
   it('preserves each native stream order while allowing backend-dependent interleaving', async () => {
@@ -1325,8 +1325,8 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.indexOf('stdout-one')).toBeLessThan(result.logs.indexOf('stdout-two'))
-    expect(result.logs.indexOf('stderr-one')).toBeLessThan(result.logs.indexOf('stderr-two'))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).indexOf('stdout-one')).toBeLessThan(result.output.filter(block => block.type === 'text').map(block => block.text).indexOf('stdout-two'))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).indexOf('stderr-one')).toBeLessThan(result.output.filter(block => block.type === 'text').map(block => block.text).indexOf('stderr-two'))
   })
 
   it('bounds a newline-free native flood by the ledger instead of buffering it whole', async () => {
@@ -1342,9 +1342,9 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(4096))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(4096))
     // The retained output is bounded by the budget, not the 2 MB flood.
-    expect(result.logs.join('').length).toBeLessThan(4096)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('').length).toBeLessThan(4096)
   })
 
   it('bounds a newline-free single-character Python write drip by the fragment cap, not OOM', async () => {
@@ -1369,7 +1369,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(4096))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(4096))
   })
 
   it('bounds a control-char-dense native residual by serialized cost, not raw length', async () => {
@@ -1387,7 +1387,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(4096))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(4096))
   })
 
   it('rejects an output budget that could breach addressSpaceMb during encode at load', async () => {
@@ -1460,7 +1460,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(4096))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(4096))
   })
 
   it('drops a second stray line in the same chunk once the first truncated the ledger', async () => {
@@ -1479,8 +1479,8 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(64))
-    expect(result.logs.join('\n')).not.toContain('SECOND')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(64))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('\n')).not.toContain('SECOND')
   })
 
   it('charges a broken multibyte sequence its U+FFFD bytes, split across pipe chunks', async () => {
@@ -1502,8 +1502,8 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.join('')).toContain('A')
-    expect(result.logs.join('')).toContain('�')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('A')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('�')
   })
 
   it('charges the exact serialized cost of short-escape and quote/backslash characters', async () => {
@@ -1519,7 +1519,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['\ta"b\\c\x01é'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['\ta"b\\c\x01é'])
   })
 
   it('fails a completion dict with a non-string key as invalid-output (no key coercion)', async () => {
@@ -2065,7 +2065,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['ab'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ab'])
   }, 15_000)
 
   it('keeps a SEALED open hold when the run ends with it still open', async () => {
@@ -2084,7 +2084,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['x' + 'a'.repeat(3000)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['x' + 'a'.repeat(3000)])
   }, 15_000)
 
   it('keeps a flushed unterminated line when the run ends with it still open', async () => {
@@ -2100,7 +2100,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['committed'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['committed'])
   }, 15_000)
 
   it('skips the hold for a zero-content open continuation', async () => {
@@ -2120,7 +2120,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['xy'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['xy'])
   }, 15_000)
 
   it('seals the open hold past MAX_PENDING_CHUNKS without changing the merged entry', async () => {
@@ -2142,7 +2142,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['x' + 'a'.repeat(3000) + 'y'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['x' + 'a'.repeat(3000) + 'y'])
   }, 15_000)
 
   it('bounds a forged open-frame flood against the log budget', async () => {
@@ -2162,7 +2162,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(60), logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(60), logTruncationMarker(64)])
   }, 15_000)
 
   it('commits a sealed open hold before the truncation marker', async () => {
@@ -2186,8 +2186,8 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs[0]).toBe('x' + 'a'.repeat(3000))
-    expect(result.logs[result.logs.length - 1]).toBe(logTruncationMarker(65536))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)[0]).toBe('x' + 'a'.repeat(3000))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)[result.output.filter(block => block.type === 'text').map(block => block.text).length - 1]).toBe(logTruncationMarker(65536))
   }, 15_000)
 
   it('commits a flushed open prefix before the truncation marker', async () => {
@@ -2204,7 +2204,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['committed', logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['committed', logTruncationMarker(64)])
   }, 15_000)
 
   it('drops a forged fd-3 frame with illegal UTF-8 instead of accepting a mangled value', async () => {
@@ -2241,7 +2241,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(60), logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(60), logTruncationMarker(64)])
   }, 15_000)
 
   it('bills a merged open entry once, not per fragment', async () => {
@@ -2262,7 +2262,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['x'.repeat(16)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['x'.repeat(16)])
   }, 15_000)
 
   it('admits a compliant merged entry whose closing frame fits the remaining budget', async () => {
@@ -2281,7 +2281,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(30) + 'b'.repeat(25)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(30) + 'b'.repeat(25)])
   }, 15_000)
 
   it('rejects an open frame that would overflow the ledger by one byte', async () => {
@@ -2301,7 +2301,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual([logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(64)])
   }, 15_000)
 
   it('bills the closing frame as the merged tail under an exact-fit budget', async () => {
@@ -2319,7 +2319,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(30) + 'b'.repeat(30)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(30) + 'b'.repeat(30)])
   }, 15_000)
 
   it('does not over-reject an exact-fit closing line while an open entry accumulates', async () => {
@@ -2344,7 +2344,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(29) + 'b'.repeat(30)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(29) + 'b'.repeat(30)])
   }, 15_000)
 
 
@@ -2364,7 +2364,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['a'.repeat(59), logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a'.repeat(59), logTruncationMarker(64)])
   }, 15_000)
 
   it('truncates when the closing frame of a merged entry overflows the budget', async () => {
@@ -2382,7 +2382,7 @@ describe('PythonPtcRuntime — programs and bindings', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs).toEqual(['x'.repeat(40), logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['x'.repeat(40), logTruncationMarker(64)])
   }, 15_000)
 
   it('keeps a float completion exact when the program mutates the decimal context', async () => {
@@ -2487,8 +2487,8 @@ describe('PythonPtcRuntime — programs and bindings', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('ok')
-    expect(result.logs).toContain('first')
-    expect(result.logs).toContain('second')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('first')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('second')
   })
 
   it('raises the declared errorClass with the member name on rejection', async () => {
@@ -3473,7 +3473,7 @@ describe('PythonPtcRuntime — budgets, termination, disposal', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('escaped')
-    expect(result.logs).toContain('leader-diagnostic-no-newline')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('leader-diagnostic-no-newline')
   }, 8000)
 
   it('closes the child stdin so a program read sees EOF instead of blocking', async () => {
@@ -3869,7 +3869,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    const markers = result.logs.filter(line => line.includes('log capture truncated at 128 bytes'))
+    const markers = result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated at 128 bytes'))
     expect(markers.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -4446,7 +4446,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
   }, 20_000)
 
   it('stops host capture at the child ledger truncation, keeping exactly one marker', async () => {
@@ -4473,11 +4473,11 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    const markers = result.logs.filter(line => line.includes('log capture truncated'))
+    const markers = result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated'))
     expect(markers).toHaveLength(1)
     // The marker is the LAST entry: nothing was retained after truncation.
-    expect(result.logs.at(-1)).toBe(markers[0])
-    expect(result.logs.join('\n')).not.toContain('AFTER')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(markers[0])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('\n')).not.toContain('AFTER')
   }, 20_000)
 
   it('keeps one marker when a program forges repeated truncation frames', async () => {
@@ -4500,13 +4500,13 @@ describe('PythonPtcRuntime — hostile peer', () => {
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
     // The non-boolean flag did not truncate, so its text was captured normally.
-    expect(result.logs).toContain('first')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('first')
     // The first genuine flag stopped capture and emitted the HOST's own marker;
     // the frame's own text is discarded, so neither payload appears.
-    expect(result.logs).not.toContain('MARK-A')
-    expect(result.logs).not.toContain('MARK-B')
-    expect(result.logs.at(-1)).toBe(logTruncationMarker(4096))
-    expect(result.logs.filter(line => line.includes('log capture truncated'))).toHaveLength(1)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).not.toContain('MARK-A')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).not.toContain('MARK-B')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).at(-1)).toBe(logTruncationMarker(4096))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated'))).toHaveLength(1)
   }, 20_000)
 
   it('discards the text of a forged truncation frame instead of retaining it', async () => {
@@ -4530,8 +4530,8 @@ describe('PythonPtcRuntime — hostile peer', () => {
     expect(result.value).toBe('done')
     // Only the host marker is kept, so the total stays orders of magnitude below
     // what the forgery carried — and below the cap it was trying to escape.
-    expect(result.logs).toEqual([logTruncationMarker(64)])
-    expect(result.logs.join('').length).toBeLessThan(forgedBytes / 1000)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('').length).toBeLessThan(forgedBytes / 1000)
   }, 30_000)
 
   it('coalesces unframed fd-3 fragments without recopying the sealed prefix', async () => {
@@ -4587,7 +4587,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toContain('after-trickle')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('after-trickle')
     // Sealing appends a finished block rather than re-merging everything held, so
     // each byte is copied once. Re-concatenating the whole buffer at every
     // threshold made the cumulative copy volume quadratic — 10 MiB trickled a
@@ -4654,9 +4654,9 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
     // The retained text is bounded by the budget, not the 1 MB the program wrote.
-    expect(result.logs.join('\n').length).toBeLessThan(4096)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('\n').length).toBeLessThan(4096)
   }, 20_000)
 
   it('discards empty writes instead of buffering one list slot each', async () => {
@@ -4679,7 +4679,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toEqual([])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
   }, 30_000)
 
   it('stops scanning a single-write newline flood once the log ledger truncates', async () => {
@@ -4695,7 +4695,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.filter(line => line.includes('log capture truncated'))).toHaveLength(1)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated'))).toHaveLength(1)
     expect(Date.now() - start).toBeLessThan(8_000)
   }, 15_000)
 
@@ -4722,7 +4722,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toEqual([logTruncationMarker(256)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(256)])
   }, 40_000)
 
   it('bounds a newline-free write against the already-buffered chunks before joining them', async () => {
@@ -4753,7 +4753,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toEqual([logTruncationMarker(256)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(256)])
   }, 40_000)
 
   it('bounds a newline-terminated write against the already-buffered chunks before joining them', async () => {
@@ -4780,7 +4780,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toEqual([logTruncationMarker(256)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(256)])
   }, 40_000)
 
   it('emits pending text on an explicit flush, before the run can be killed', async () => {
@@ -4800,7 +4800,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error?.kind).toBe('timeout')
-    expect(result.logs).toContain('before hang')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('before hang')
   }, 15_000)
 
   it('marks a dropped tail when the ledger lands on exactly zero remaining', async () => {
@@ -4825,10 +4825,10 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toContain('y'.repeat(100))
-    expect(result.logs.filter(line => line.includes('log capture truncated'))).toHaveLength(1)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('y'.repeat(100))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated'))).toHaveLength(1)
     // The dropped tail is not retained, but its loss is now reported.
-    expect(result.logs.some(line => line.includes('z'))).toBe(false)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('z'))).toBe(false)
   }, 15_000)
 
   it('keeps an admitted log within the serialized array envelope at the exact limit', async () => {
@@ -4850,9 +4850,9 @@ describe('PythonPtcRuntime — hostile peer', () => {
     expect(result.value).toBe('done')
     // The 60-character line was admitted; the 61-character line was not (a
     // single 'b' would also match the marker's "bytes", so check for the line).
-    expect(result.logs).toContain('a'.repeat(60))
-    expect(result.logs.some(line => line.includes('b'.repeat(61)))).toBe(false)
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('a'.repeat(60))
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('b'.repeat(61)))).toBe(false)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
   }, 15_000)
 
   it('rejects a log budget too small to serialize the truncation marker', async () => {
@@ -4877,10 +4877,10 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
     // Serialized (escaped) size of retained entries stays in the budget's
     // neighborhood: well under the ~30 kB an uncharged flood would retain.
-    const serialized = Buffer.byteLength(JSON.stringify(result.logs), 'utf8')
+    const serialized = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text)), 'utf8')
     expect(serialized).toBeLessThan(1024)
   })
 
@@ -4903,9 +4903,9 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.filter(line => line.includes('log capture truncated'))).toHaveLength(1)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(line => line.includes('log capture truncated'))).toHaveLength(1)
     // Nothing of the line itself was retained: the ledger refused the whole entry.
-    expect(result.logs.every(line => !line.includes(String.fromCharCode(0)))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).every(line => !line.includes(String.fromCharCode(0)))).toBe(true)
   }, 30_000)
 
   it('bounds a huge unterminated tail after an early newline without copying it whole', async () => {
@@ -4933,7 +4933,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
   }, 30_000)
 
   it('flushes logs before framing the value so their peaks do not add against RLIMIT_AS', async () => {
@@ -5368,8 +5368,8 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.length).toBeLessThanOrEqual(65)
-    expect(result.logs.some(line => line.includes('log capture truncated'))).toBe(true)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).length).toBeLessThanOrEqual(65)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).some(line => line.includes('log capture truncated'))).toBe(true)
   })
 
   it('reassembles multibyte UTF-8 split across stray-output pipe chunks', async () => {
@@ -5399,7 +5399,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    const text = result.logs.join('')
+    const text = result.output.filter(block => block.type === 'text').map(block => block.text).join('')
     expect(text).toContain('\u0900\u4f60\u597d\u{1f600}\u{10ffff}')
     expect(text).not.toContain('\ufffd')
   })
@@ -5421,7 +5421,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.join('')).toContain('�')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('�')
   })
 
   it('rejects reserved words of EITHER backend language as binding globals', async () => {
@@ -5452,8 +5452,8 @@ describe('PythonPtcRuntime — hostile peer', () => {
       bindings: [],
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs.join('')).toContain('stray stdout')
-    expect(result.logs.join('')).toContain('stray stderr')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('stray stdout')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('stray stderr')
   })
 
   it('flushes bytes written through sys.__stdout__/sys.__stderr__ before the done frame', async () => {
@@ -5483,8 +5483,8 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs.join('')).toContain('orig stdout')
-    expect(result.logs.join('')).toContain('orig stderr')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('orig stdout')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('orig stderr')
   }, 15_000)
 
   it('escalates to SIGKILL when the program traps SIGTERM and ignores the grace period', async () => {
@@ -5577,7 +5577,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('settled')
     // The frame was dropped as one truncation marker, not retained.
-    expect(result.logs).toEqual([logTruncationMarker(128)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(128)])
     // The escaped copy (~144 MiB) was never materialized.
     expect(process.memoryUsage().heapUsed - before).toBeLessThan(256 * 1024 * 1024)
   }, 90_000)
@@ -5598,7 +5598,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('settled')
-    expect(result.logs).toEqual([logTruncationMarker(64)])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([logTruncationMarker(64)])
   }, 8000)
 
   it('caps a forged done error.message from its code-unit prefix, never encoding the whole message', async () => {
@@ -5835,7 +5835,7 @@ describe('PythonPtcRuntime — hostile peer', () => {
     }))
     expect(result.error).toBeUndefined()
     expect(result.value).toBe('done')
-    expect(result.logs).toContain('after-cap-frames')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toContain('after-cap-frames')
   }, 120_000)
 
   it('rejects an oversized first frame that lands on the sealing threshold with a newline', async () => {

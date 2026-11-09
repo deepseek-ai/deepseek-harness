@@ -1284,8 +1284,8 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
-      "symbol": "PtcImageOutput",
-      "source": "packages/ptc-runtime/ptc-runtime/src/image.ts"
+      "symbol": "PtcOutput",
+      "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",

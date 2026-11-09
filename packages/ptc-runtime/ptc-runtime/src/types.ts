@@ -6,8 +6,11 @@
  * @module @deepseek-ai/dsh-ptc-runtime/src/types
  */
 
-import type { PtcImageOutput } from './image.ts'
+import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SandboxEnforcement, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
+
+/** One captured text entry or explicitly inspected image, in emission order. */
+export type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 
 /** Source evaluation form, independent of retained program state. */
 export type PtcProgramFormat = 'function-body' | 'repl' | 'script'
@@ -167,13 +170,11 @@ export interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text and inspected images. Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
-  /** Images explicitly inspected by the program, ordered among captured text entries. */
-  images?: PtcImageOutput[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }

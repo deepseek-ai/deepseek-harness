@@ -49,7 +49,7 @@ class FakeRuntime extends PtcRuntime {
 
   readonly language: string
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
   lastRequest?: PtcRunRequest
 
   constructor(ctx: Context, config: { language?: string } = {}) {
@@ -65,7 +65,7 @@ class FakeRuntime extends PtcRuntime {
 
 /** Output from a program that explicitly prints a selected JSON value. */
 function printed(value: JsonValue): PtcRunResult {
-  return { logs: [typeof value === 'string' ? value : JSON.stringify(value, null, 2)] }
+  return { output: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] }
 }
 
 interface SetupOptions {
@@ -239,7 +239,7 @@ describe('mode-aware wire contribution', () => {
               ctx.tools.register(definition, { when: () => true })
               await expect(functions.conditional!({})).rejects.toThrow('unknown tool "conditional"')
             }
-            return { logs: [] }
+            return { output: [] }
           }
           const result = await executeCall(ctx, {
             agent, toolSet, signal: testToolSignal, callId: ToolCallId('conditional-program'),
@@ -684,7 +684,7 @@ describe('the per-program tool-call limit', () => {
       await expect(echo({ value: 'rejected' })).rejects.toThrow(message)
       expect(request.signal?.aborted).toBe(true)
       await expect(echo({ value: 'caught the error' })).rejects.toThrow('run_code run is over')
-      return { logs: [], error: { kind: 'abort', message } }
+      return { output: [], error: { kind: 'abort', message } }
     }
     const result = await runCode(ctx, 'program', { agent })
     expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
@@ -717,7 +717,7 @@ describe('the per-program tool-call limit', () => {
       for (let n = 0; n < limit; n++) await echo({ value: String(n) })
       await expect(echo({ value: 'rejected' })).rejects.toThrow(`limit of ${limit} tool calls (4 per minute of its timeout); call ${limit + 1} was not dispatched`)
       expect(request.signal?.aborted).toBe(true)
-      return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
+      return { output: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
     expect((await runCode(ctx, 'program', { timeoutMs: requestedMs })).isError).toBe(true)
     expect(calls).toHaveLength(limit)
@@ -733,7 +733,7 @@ describe('the per-program tool-call limit', () => {
     const calls = registerEcho(ctx)
     runtime.behavior = async (request) => {
       for (let n = 0; n < 3; n++) await request.bindings[0]!.functions.echo!({ value: String(n) })
-      return { logs: [] }
+      return { output: [] }
     }
     expect((await runCode(ctx, 'program')).isError).toBe(false)
     expect(calls).toHaveLength(3)
@@ -765,7 +765,7 @@ describe('the per-program tool-call limit', () => {
       void functions.queued!({ value: 'queued' }).catch(() => { outcomes.push('queued abandoned') })
       await expect(functions.queued!({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls (1 per minute of its timeout); call 3 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
-      return { logs: [], error: { kind: 'abort', message: 'execution canceled' } }
+      return { output: [], error: { kind: 'abort', message: 'execution canceled' } }
     }
     const result = await runCode(ctx, 'program', { agent })
     expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
@@ -794,7 +794,7 @@ describe('the per-program tool-call limit', () => {
       await expect(echo({ value: 'excess' })).rejects.toThrow('limit of 2 tool calls')
       expect(request.signal?.aborted).toBe(true)
       if (cancelCaller) controller.abort('later caller cancellation')
-      return { logs: ['before termination'], error: failure }
+      return { output: [{ type: 'text', text: 'before termination' }], error: failure }
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.error).toMatchObject({ info: { code: 'CODE_RUN_FAILED' } })
@@ -823,7 +823,7 @@ describe('the per-program tool-call limit', () => {
       await expect(functions.fail!({})).rejects.toThrow('tool failed')
       await expect(functions.echo!({ value: 'rejected' })).rejects.toThrow('limit of 3 tool calls (3 per minute of its timeout); call 4 was not dispatched')
       expect(request.signal?.aborted).toBe(true)
-      return { logs: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
+      return { output: [], error: { kind: 'abort', message: String(request.signal?.reason) } }
     }
     expect((await runCode(ctx, 'program')).isError).toBe(true)
     expect(calls).toEqual([])
@@ -1233,7 +1233,7 @@ describe('the run_code dispatch bridge', () => {
       const first = await tools.echo!({ value: 'one' })
       const second = await tools.echo!({ value: 'two' })
       if (typeof first !== 'string' || typeof second !== 'string') throw new Error('echo returned a non-string')
-      return { logs: [`saw ${first}`, second] }
+      return { output: [{ type: 'text', text: `saw ${first}` }, { type: 'text', text: second }] }
     }
     const result = await runCode(ctx, 'const …: string = …', { agent })
     expect(result.isError).toBe(false)
@@ -1607,7 +1607,7 @@ describe('the run_code dispatch bridge', () => {
     runtime.behavior = async (request) => {
       const args = Object.assign(Object.create(null) as Record<string, unknown>, { value: 'x', nested: ['same'] })
       await request.bindings[0]!.functions.echo!(args)
-      return { logs: [] }
+      return { output: [] }
     }
     await runCode(ctx, 'program', { agent })
     expect(calls).toEqual([{ value: 'x', nested: ['same'] }])
@@ -1727,7 +1727,7 @@ describe('the run_code dispatch bridge', () => {
     })
     runtime.behavior = async (request) => {
       await request.bindings[0]!.functions.echo!({ value: 'x' })
-      return { logs: [], error: { kind: 'exception', message: 'program failed later' } }
+      return { output: [], error: { kind: 'exception', message: 'program failed later' } }
     }
 
     const result = await runCode(ctx, 'program')
@@ -1747,7 +1747,7 @@ describe('the run_code dispatch bridge', () => {
   ] as const)('reports a timeout %s with its captured output', async (phase, logs) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     runtime.behavior = () => Promise.resolve({
-      logs: [...logs],
+      output: logs.map(text => ({ type: 'text' as const, text })),
       error: { kind: 'timeout', message: `execution timed out ${phase} (300ms); retained variables were cleared` },
     })
     const result = await runCode(ctx, 'program')
@@ -1791,7 +1791,7 @@ describe('the run_code dispatch bridge', () => {
       await Promise.all(calls)
       // A real runtime would be terminated by the abort; the fake honors the
       // contract by reporting the abort as the run failure.
-      return { logs: [], error: { kind: 'abort', message: 'user-cancel' } }
+      return { output: [], error: { kind: 'abort', message: 'user-cancel' } }
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.isError).toBe(true)
@@ -1870,7 +1870,7 @@ describe('the run_code dispatch bridge', () => {
       const { agent, events } = fakeAgent()
       runtime.behavior = async (request) => {
         await request.bindings[0]!.functions.echo!({ value: 'blocked' })
-        return { logs: [] }
+        return { output: [] }
       }
 
       const result = await runCode(ctx, 'return await tools.echo({ value: "blocked" })', { agent })
@@ -1908,10 +1908,10 @@ describe('the run_code dispatch bridge', () => {
   })
 
   it.each([
-    ['logs only', { logs: ['printed'] }, 'printed'],
-    ['completion only', { logs: [], value: 'returned' }, '(run_code completed with no output)'],
-    ['logs plus completion', { logs: ['printed'], value: 'returned' }, 'printed'],
-    ['no output', { logs: [] }, '(run_code completed with no output)'],
+    ['logs only', { output: [{ type: 'text', text: 'printed' }] }, 'printed'],
+    ['completion only', { output: [], value: 'returned' }, '(run_code completed with no output)'],
+    ['logs plus completion', { output: [{ type: 'text', text: 'printed' }], value: 'returned' }, 'printed'],
+    ['no output', { output: [] }, '(run_code completed with no output)'],
   ] as [string, PtcRunResult, string][])('keeps %s in durable content without a result presenter', async (_name, output, text) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     runtime.behavior = () => Promise.resolve(output)
@@ -1929,7 +1929,7 @@ describe('the run_code dispatch bridge', () => {
   it('keeps a post-policy spill preview in durable content without a result presenter', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     const preview = 'HEAD\n\n(Omitted 100 bytes. Full formatted result stored at: /tmp/run-code.txt.)\n\nTAIL'
-    runtime.behavior = () => Promise.resolve({ logs: ['printed'], value: 'returned' })
+    runtime.behavior = () => Promise.resolve({ output: [{ type: 'text', text: 'printed' }], value: 'returned' })
     ctx.on('tools/post-execute', (exec, _result, next): Promise<PostToolDecision> => {
       if (exec.name !== RUN_CODE_NAME) return next()
       return Promise.resolve({ kind: 'accept', content: [{ type: 'text', text: preview }] })
@@ -1945,7 +1945,7 @@ describe('the run_code dispatch bridge', () => {
   it('keeps canonical failure content durable without a result presenter', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     runtime.behavior = () => Promise.resolve({
-      logs: ['captured before failure'],
+      output: [{ type: 'text', text: 'captured before failure' }],
       error: { kind: 'output-limit', message: 'outer output exceeded 8 bytes' },
     })
 
@@ -2088,7 +2088,7 @@ describe('the run_code dispatch bridge', () => {
     }))
     runtime.behavior = async (request) => {
       await request.bindings[0]!.functions.mutator!({ list: ['original'] })
-      return { logs: [] }
+      return { output: [] }
     }
     const result = await runCode(ctx, 'program', { agent })
     expect(result.isError).toBe(false)
@@ -2122,22 +2122,22 @@ describe('the run_code dispatch bridge', () => {
 
   it('renders Python completion values as pretty JSON while preserving strings raw', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc', runtime: { language: 'python' } })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: { n: 42, ok: true } })
+    runtime.behavior = () => Promise.resolve({ output: [], value: { n: 42, ok: true } })
     expect((await runCode(ctx, 'object')).content[0]).toEqual({ type: 'text', text: '{\n  "n": 42,\n  "ok": true\n}' })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: {} })
+    runtime.behavior = () => Promise.resolve({ output: [], value: {} })
     expect((await runCode(ctx, 'empty object')).content[0]).toEqual({ type: 'text', text: '{}' })
     const nested = { outer: [{ inner: true }] }
-    runtime.behavior = () => Promise.resolve({ logs: [], value: nested })
+    runtime.behavior = () => Promise.resolve({ output: [], value: nested })
     expect((await runCode(ctx, 'nested')).content[0]).toEqual({ type: 'text', text: JSON.stringify(nested, null, 2) })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: ['x', 2] })
+    runtime.behavior = () => Promise.resolve({ output: [], value: ['x', 2] })
     expect((await runCode(ctx, 'array')).content[0]).toEqual({ type: 'text', text: '[\n  "x",\n  2\n]' })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: [] })
+    runtime.behavior = () => Promise.resolve({ output: [], value: [] })
     expect((await runCode(ctx, 'empty array')).content[0]).toEqual({ type: 'text', text: '[]' })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: null })
+    runtime.behavior = () => Promise.resolve({ output: [], value: null })
     expect((await runCode(ctx, 'null')).content[0]).toEqual({ type: 'text', text: 'null' })
-    runtime.behavior = () => Promise.resolve({ logs: [], value: 'raw' })
+    runtime.behavior = () => Promise.resolve({ output: [], value: 'raw' })
     expect((await runCode(ctx, 'string')).content[0]).toEqual({ type: 'text', text: 'raw' })
-    runtime.behavior = () => Promise.resolve({ logs: [] })
+    runtime.behavior = () => Promise.resolve({ output: [] })
     const absent = await runCode(ctx, 'undefined')
     expect(absent.content[0]).toEqual({ type: 'text', text: '(run_code completed with no output)' })
     expect(absent.isError ? undefined : absent.value).toEqual({ logs: [] })
@@ -2152,7 +2152,7 @@ describe('the run_code dispatch bridge', () => {
       record: { first: true, second: null },
     }
     for (let depth = 0; depth < 5_000; depth++) value = [value]
-    runtime.behavior = () => Promise.resolve({ logs: [], value })
+    runtime.behavior = () => Promise.resolve({ output: [], value })
 
     const result = await runCode(ctx, 'deep result')
 
@@ -2169,7 +2169,7 @@ describe('the run_code dispatch bridge', () => {
     const calls = registerEcho(ctx)
     runtime.behavior = (request) => {
       // The fake honors the seam contract for an already-aborted signal.
-      if (request.signal?.aborted) return Promise.resolve({ logs: [], error: { kind: 'abort' as const, message: String(request.signal.reason) } })
+      if (request.signal?.aborted) return Promise.resolve({ output: [], error: { kind: 'abort' as const, message: String(request.signal.reason) } })
       return Promise.resolve(printed('unreachable'))
     }
     const controller = new AbortController()
@@ -2215,7 +2215,7 @@ describe('the run_code dispatch bridge', () => {
     const message = `execution canceled; retained variables were ${state}`
     runtime.behavior = async () => {
       controller.abort({ kind: 'user' })
-      return { logs: [], error: { kind: 'abort', message } }
+      return { output: [], error: { kind: 'abort', message } }
     }
     const result = await runCode(ctx, 'program', { signal: controller.signal })
     expect(result.error).toEqual({
@@ -2241,7 +2241,7 @@ describe('the run_code dispatch bridge', () => {
         expect(request.signal?.reason).toBe(controller.signal.reason)
         const reason: unknown = request.signal?.reason
         const message = reason instanceof Error ? reason.message : String(reason)
-        return { logs: [], error: { kind: 'abort', message } }
+        return { output: [], error: { kind: 'abort', message } }
       }
 
       const result = await runCode(ctx, 'program', { signal: controller.signal })
@@ -2267,7 +2267,7 @@ describe('the run_code dispatch bridge', () => {
     const controller = new AbortController()
     runtime.behavior = async () => {
       if (cancelled) controller.abort({ kind: 'user' })
-      return { logs: ['got this far'], error: failure }
+      return { output: [{ type: 'text', text: 'got this far' }], error: failure }
     }
 
     const result = await runCode(ctx, 'program', { signal: controller.signal })
@@ -2586,7 +2586,7 @@ describe('host environment reset', () => {
       void request.bindings[0]!.functions.blocked!({}).catch(() => {})
       return program.promise
     }
-    const release = vi.spyOn(runtime, 'release').mockImplementation(async () => { program.resolve({ logs: [], error: { kind: 'abort', message: 'environment disposed' } }) })
+    const release = vi.spyOn(runtime, 'release').mockImplementation(async () => { program.resolve({ output: [], error: { kind: 'abort', message: 'environment disposed' } }) })
     const running = runCode(ctx, 'await tools.blocked({}); while (true) {}', { agent })
     await toolStarted.promise
     let settled = false
@@ -2598,7 +2598,7 @@ describe('host environment reset', () => {
       cleanup.resolve(undefined)
       await resetting
       expect((await running).isError).toBe(true)
-    } finally { cleanup.resolve(undefined); program.resolve({ logs: [] }); await Promise.all([running, resetting]) }
+    } finally { cleanup.resolve(undefined); program.resolve({ output: [] }); await Promise.all([running, resetting]) }
   })
 
   it('reports failed cleanup, refuses further code, and allows explicit reset retry', async () => {
@@ -2650,7 +2650,7 @@ describe('PTC standing file policy and sandbox outcomes', () => {
   it('preserves partial enforcement and observed denial in successful output', async () => {
     const { ctx, runtime } = await setup()
     try {
-      runtime.behavior = async () => ({ logs: [], sandbox: { mode: 'read-only', enforcement: 'partial', denied: true } })
+      runtime.behavior = async () => ({ output: [], sandbox: { mode: 'read-only', enforcement: 'partial', denied: true } })
       const result = await runCode(ctx, 'return 1')
       expect(result.value).toEqual({ logs: [], sandbox: { mode: 'read-only', enforcement: 'partial', denied: true } })
       expect(result.content).toEqual([{ type: 'text', text: 'File sandbox enforcement is partial on this host.\nThe read-only file sandbox denied an operation.' }])
@@ -2663,7 +2663,7 @@ describe('PTC standing file policy and sandbox outcomes', () => {
   ])('includes the available sandbox facts with a failed program ($mode)', async (sandbox) => {
     const { ctx, runtime } = await setup()
     try {
-      runtime.behavior = async () => ({ logs: [], error: { kind: 'exception', message: 'failed' }, sandbox })
+      runtime.behavior = async () => ({ output: [], error: { kind: 'exception', message: 'failed' }, sandbox })
       const result = await runCode(ctx, 'throw new Error("failed")')
       expect(result.isError).toBe(true)
       const text = result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
@@ -2842,7 +2842,7 @@ describe('per-program execution controls', () => {
     let effects = 0
     runtime.behavior = () => {
       effects++
-      return Promise.resolve({ logs: ['first effect completed'],
+      return Promise.resolve({ output: [{ type: 'text', text: 'first effect completed' }],
         error: { kind: 'exception', message: 'access denied' },
         sandbox: { mode: 'read-only', denied: true, enforcement: 'full' } })
     }

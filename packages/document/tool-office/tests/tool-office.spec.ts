@@ -76,7 +76,7 @@ class CatalogAdapter extends LlmAdapter {
 class FakeRuntime extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
   resolve(request: PtcRunRequest): PtcRunSpec {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
@@ -653,7 +653,7 @@ describe('PTC dispatch', () => {
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
-      return { logs: [], value }
+      return { output: [], value }
     }
     const agent = { ...agentOn('vision'), ctx }
     await loadOffice(ctx, agent)

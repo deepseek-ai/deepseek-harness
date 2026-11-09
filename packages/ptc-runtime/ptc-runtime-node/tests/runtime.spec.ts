@@ -51,7 +51,7 @@ describe('Node program process', () => {
     const result = await run({ program: 'const n: number = 6; inspect("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ n: 42, cwd, env: {} })
-    expect(result.logs).toEqual(['ready'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ready'])
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
   })
 
@@ -115,7 +115,7 @@ describe('Node program process', () => {
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
     const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
-    expect(result).toMatchObject({ logs: [], value: 1 })
+    expect(result).toMatchObject({ output: [], value: 1 })
     expect(result.error).toBeUndefined()
   })
 
@@ -124,8 +124,8 @@ describe('Node program process', () => {
     const result = await run({ program: 'const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); return 42;', bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(42)
-    expect(result.logs.join('')).toContain('native-out你好')
-    expect(result.logs.join('')).toContain('native-err🙂')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-out你好')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-err🙂')
   })
 
   it.each(['throw new Error("broken")', 'enum E { A }'])('reports program failure for %s', async (program) => {
@@ -142,7 +142,7 @@ describe('Node program process', () => {
     const { run } = await setup({ maxOutputBytes: 80 })
     const result = await run({ program: 'inspect("x".repeat(500)); return 42;', bindings: [] })
     expect(result.error?.kind).toBe('output-limit')
-    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const bytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(bytes).toBeLessThanOrEqual(80)
   })
 
@@ -181,7 +181,7 @@ describe('Node program process', () => {
       controller.abort('stop')
       const result = await pending
       expect(result.error?.kind).toBe('abort')
-      expect(result.logs).toEqual(['before hot loop'])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before hot loop'])
     } finally { controller.abort(); await pending }
   })
 
@@ -323,10 +323,10 @@ describe('Node program process', () => {
 it('preserves empty console entries and bounds native output overflow', async () => {
   const { run } = await setup({ maxOutputBytes: 100 })
   const lines = await run({ program: 'inspect("a"); inspect(""); inspect("b")', bindings: [] })
-  expect(lines.logs).toEqual(['a', '', 'b'])
+  expect(lines.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a', '', 'b'])
   const overflow = await run({ program: 'const fs=await import("node:fs"); fs.writeSync(1,"HEAD-"+"x".repeat(100000));', bindings: [] })
   expect(overflow.error?.kind).toBe('output-limit')
-  expect(overflow.logs.join('')).toContain('HEAD-')
-  const bytes = Buffer.byteLength(JSON.stringify(overflow.logs)) + Buffer.byteLength(JSON.stringify(overflow.error?.message))
+  expect(overflow.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('HEAD-')
+  const bytes = Buffer.byteLength(JSON.stringify(overflow.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(overflow.error?.message))
   expect(bytes).toBeLessThanOrEqual(100)
 })

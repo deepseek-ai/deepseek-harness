@@ -18,7 +18,7 @@ class BindingProbe extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'in-process-test'
   behavior: (spec: PtcRunSpec) => Promise<PtcRunResult> = async spec => ({
-    logs: [JSON.stringify(Object.keys(spec.bindings[0]!.functions).sort())],
+    output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions).sort()) }],
   })
 
   resolve(request: PtcRunRequest): PtcRunSpec {
@@ -213,13 +213,13 @@ describe('MCP resource tools', () => {
       expect(await binding({ server: 'docs' })).toEqual({ resources: [] })
       remove()
       await expect(binding({ server: 'docs' })).rejects.toThrow('unknown tool')
-      return { logs: [] }
+      return { output: [] }
     }
     const result = await call(ctx, 'run_code', { code: 'invoke and remove provider', description: 'Use resource binding' })
     expect(result.isError).toBe(false)
     expect(request).toHaveBeenCalledOnce()
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('mcp')
-    runtime.behavior = async spec => ({ logs: [JSON.stringify(Object.keys(spec.bindings[0]!.functions))] })
+    runtime.behavior = async spec => ({ output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions)) }] })
     expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
       .toMatchObject({ isError: false, value: { logs: ['[]'] } })
   })

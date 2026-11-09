@@ -69,7 +69,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 ### 执行与结果
 
-`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
 `inspect(...values)` 独立渲染各个参数，以空格连接后追加一条捕获日志。默认没有 console 全局变量：直接访问会抛出 `ReferenceError`，而 `typeof console` 返回 `"undefined"`。设置 `enableConsole: true` 可通过同一个 inspection 函数提供五个 console 方法。默认配置下，程序可以自行声明 console 变量。
 

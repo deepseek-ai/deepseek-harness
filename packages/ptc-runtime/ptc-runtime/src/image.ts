@@ -21,11 +21,3 @@ export class PtcImage {
     Object.freeze(this)
   }
 }
-
-/** One inspected image positioned among captured text entries. */
-export interface PtcImageOutput {
-  /** Number of text entries emitted before this image. */
-  afterLog: number
-  /** Stored image selected by the program. */
-  attachment: ImageAttachmentRef
-}

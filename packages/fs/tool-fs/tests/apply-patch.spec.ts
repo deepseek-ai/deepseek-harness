@@ -163,7 +163,7 @@ class PatchPtcRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunSpec) {
-    return { logs: [JSON.stringify(await request.bindings[0]!.functions.apply_patch!({ input: this.patch }))] }
+    return { output: [{ type: 'text' as const, text: JSON.stringify(await request.bindings[0]!.functions.apply_patch!({ input: this.patch })) }] }
   }
 }
 

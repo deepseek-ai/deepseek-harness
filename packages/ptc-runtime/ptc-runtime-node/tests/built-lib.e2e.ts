@@ -72,13 +72,13 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
     expect(resultProcess.signal).toBeUndefined()
     expect(resultProcess.exitCode, resultProcess.stderr).toBe(0)
     const lastLine = resultProcess.stdout.trim().split('\n').at(-1) ?? ''
-    const result = JSON.parse(lastLine) as { value?: unknown; logs: string[]; error?: unknown }
+    const result = JSON.parse(lastLine) as { value?: unknown; output: { type: 'text'; text: string }[]; error?: unknown }
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({
       doubled: 42,
       failure: { typed: true, name: 'ToolCallError', toolName: 'fail', message: 'denied' },
       env: [],
     })
-    expect(result.logs).toContain('halfway 42')
+    expect(result.output).toContainEqual({ type: 'text', text: 'halfway 42' })
   })
 })

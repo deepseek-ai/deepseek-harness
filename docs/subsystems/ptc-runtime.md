@@ -95,13 +95,11 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text and inspected images. Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
-  /** Images explicitly inspected by the program, ordered among captured text entries. */
-  images?: PtcImageOutput[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -186,7 +184,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## Captured output and the failure taxonomy
 
-Logs are plain strings. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. The Node provider also captures explicitly inspected images as `PtcImageOutput` entries, whose `afterLog` positions place their attachment references among text entries. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized logs, image attachment references, and completion or diagnostic payloads together; overflow is an explicit failure.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -206,13 +204,8 @@ declare class PtcImage {
 ```
 
 ```ts type-equiv
-/** One inspected image positioned among captured text entries. */
-interface PtcImageOutput {
-  /** Number of text entries emitted before this image. */
-  afterLog: number
-  /** Stored image selected by the program. */
-  attachment: ImageAttachmentRef
-}
+/** One captured text entry or explicitly inspected image, in emission order. */
+type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 ```
 
 Failure kinds are **orthogonal outcomes reported independently** (per [defensive-patterns](../defensive-patterns/general.md)): a budget expiry is not an exception, an abort is not a timeout, and a substrate death (e.g. OOM) is neither:

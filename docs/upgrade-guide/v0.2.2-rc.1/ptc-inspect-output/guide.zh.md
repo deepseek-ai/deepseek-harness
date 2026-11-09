@@ -39,4 +39,5 @@ CUA 截图与 `read_image` 在 TypeScript 程序中返回普通 `Image`，其 `p
    ```
 
 3. 对于需要 console 方法的集成，在 `@deepseek-ai/dsh-ptc-runtime-node` 提供方配置行中设置 `enableConsole: true`。直接调用运行时的消费方可设置 `discardCompletion: true`，选择相同的显式输出行为。
-4. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。
+4. 直接消费运行时结果的调用方改为读取 `result.output`：文本条目为 `{ type: 'text', text }`，图片条目为 `{ type: 'image', attachment }`，数组顺序就是展示顺序。
+5. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。
