@@ -183,3 +183,48 @@ func consumedContainerMetadataPreservesStaleAndCommunicationErrors(role: String)
         try access.nodeObservation(attributes: ["AXRole": "AXGroup" as CFString, "AXChildren": try wrappedAXError(.illegalArgument)]) { _ in nil }.attribute("AXChildren")
     }
 }
+
+@Test(arguments: ["AXValue", "AXSelectedTextRange"])
+func observationRetainsUnknownWritabilityAndFollowingNodes(failedAttribute: String) throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    var lines: [String] = []
+    for title in ["Affected control", "Following control"] {
+        let writable = try AXAccess.observationWritability(role: "AXTextField") { name, discovery in
+            try access.attributeWritability(true, error: title == "Affected control" && name == failedAttribute ? .failure : .success,
+                                           name: name, forDiscovery: discovery)
+        }
+        let node = AXTextNode(index: nil, role: "AXTextField", title: title, value: "Text", description: nil,
+                              actions: [], enabled: true, valueWritable: writable.value, selectionWritable: writable.selection,
+                              selected: nil, selectedRange: nil, selectedText: nil)
+        lines.append(AXTextFormatter.line(node, level: 0))
+    }
+    let unknown = failedAttribute == "AXValue" ? "valueWritable" : "selectionWritable"
+    #expect(lines[0].contains("\(unknown)=unknown"))
+    #expect(!lines[0].contains("\(unknown)=true"))
+    #expect(lines[0].contains("Affected control"))
+    #expect(lines[1].contains("Following control"))
+    #expect(lines[1].contains("valueWritable=true selectionWritable=true"))
+    do {
+        _ = try access.attributeWritability(true, error: .failure, name: failedAttribute, forDiscovery: false)
+        Issue.record("Mutation admitted unknown writability")
+    } catch let error as NativeFailure {
+        #expect(error.accessibilityError == -25200)
+        #expect(error.code == "NATIVE_ERROR")
+    }
+}
+
+@Test(arguments: ["AXValue", "AXSelectedTextRange"])
+func observationWritabilityPreservesPermissionCommunicationAndInvalidElementErrors(attribute: String) {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    for code in [AXError.apiDisabled, .cannotComplete, .invalidUIElement, .illegalArgument] {
+        do {
+            _ = try AXAccess.observationWritability(role: "AXTextField") { name, discovery in
+                try access.attributeWritability(true, error: name == attribute ? code : .success, name: name, forDiscovery: discovery)
+            }
+            Issue.record("Observation hid an actionable AX error")
+        } catch let error as NativeFailure {
+            #expect(error.accessibilityError == code.rawValue)
+            #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
+        } catch { Issue.record("Unexpected error: \(error)") }
+    }
+}

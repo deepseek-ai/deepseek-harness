@@ -15,6 +15,7 @@
     "src/panel.ts",
     "src/parse.ts",
     "src/patch-cache.ts",
+    "src/review-cache.ts",
     "src/states.ts",
     "src/types.ts",
     "src/wildmatch.ts",

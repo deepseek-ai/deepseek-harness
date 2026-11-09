@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-cua-ax-traversal-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.md
+/agent-note-ax-traversal-defaults-and-per-read-limits:
+  en: 71a088b589135b94
+  zh: 40a0accb1f6d100b
+/agent-note-ax-traversal-defaults-and-per-read-limits/problem:
+  en: 18405553f792f64c
+  zh: 1b6891403539c2f8
+/agent-note-ax-traversal-defaults-and-per-read-limits/decision:
+  en: 89cb2b1f33b0551c
+  zh: b57839093a735c2a
+/agent-note-ax-traversal-defaults-and-per-read-limits/alternatives-considered:
+  en: c15d84e0bbb18b39
+  zh: 4799291d7a66fa04
+/agent-note-ax-traversal-defaults-and-per-read-limits/consequences:
+  en: 687f4ba2af13e847
+  zh: ae5777022619b71d

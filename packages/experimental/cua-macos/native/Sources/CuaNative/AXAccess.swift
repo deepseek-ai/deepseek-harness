@@ -208,6 +208,12 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "read writability of \(name)") }
         return value
     }
+    /// Observation keeps unsupported writability unknown; mutation callers use strict writable checks.
+    static func observationWritability(role: String, probe: (String, Bool) throws -> Bool?) rethrows -> (value: Bool?, selection: Bool?) {
+        let value = AXTextNode.valueRoles.contains(role) ? try probe("AXValue", true) : nil
+        let selection = AXTextNode.textRoles.contains(role) ? try probe("AXSelectedTextRange", true) : nil
+        return (value, selection)
+    }
     func requireEnabled(_ element: AXUIElement) throws {
         if try boolean(element, "AXEnabled") == false { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility element is disabled") }
     }
@@ -570,12 +576,16 @@ final class AXAccess {
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        func walk(_ element: AXUIElement, level: Int, depth: Int) throws {
+        var pending = roots.reversed().map { (element: $0, level: 0, depth: 0) }
+        func enqueueChildren(_ children: [AXUIElement], level: Int, depth: Int) {
+            for child in children.reversed() { pending.append((child, level, depth)) }
+        }
+        while let (element, level, depth) = pending.popLast() {
             try cancellation.check()
             let hash = CFHash(element)
-            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { return }
-            guard count < maxElements else { elementLimitReached = true; return }
-            guard depth <= maxDepth else { depthLimitReached = true; return }
+            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
+            guard count < maxElements else { elementLimitReached = true; break }
+            guard depth <= maxDepth else { depthLimitReached = true; continue }
             visited[hash, default: []].append(element)
             count += 1
             let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
@@ -586,10 +596,11 @@ final class AXAccess {
             let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
             let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
-            let valueWritable = AXTextNode.valueRoles.contains(role) ? try writable(element, "AXValue") : nil
+            let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
+            let valueWritable = writability.value
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = AXTextNode.textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : nil
+            let selectionWritable = writability.selection
             let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
             let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
             let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")
@@ -609,8 +620,8 @@ final class AXAccess {
                                   identifier: identifier, url: url, focused: focused, expanded: expanded)
             node.validateSelection()
             if node.transparent || (!addressable && !node.hasMeaning && role != "AXWindow" && role != "AXSheet") {
-                for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level, depth: depth + 1) }
-                return
+                enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level, depth: depth + 1)
+                continue
             }
             let index: Int? = addressable ? indexed.count : nil
             if let index { indexed[index] = element }
@@ -633,10 +644,9 @@ final class AXAccess {
                     "selectedRange": node.selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
                 ]))
             }
-            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; return }
-            for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }
+            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; continue }
+            enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level + 1, depth: depth + 1)
         }
-        for root in roots { try walk(root, level: 0, depth: 0) }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         let truncated = elementLimitReached || depthLimitReached
         if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }

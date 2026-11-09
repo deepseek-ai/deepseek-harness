@@ -135,12 +135,22 @@ enum NativePlatform {
         guard CGPreflightScreenCaptureAccess() else { throw NativeFailure(code: "PERMISSION_DENIED", message: "Screen Recording permission is required for the responsible host/helper") }
     }
     static func windows(allLayers: Bool = false) -> [WindowInfo] {
-        guard let rows = CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [[String: Any]] else { return [] }
-        let memberships = allLayers ? [:] : WindowSpaces().memberships(windowIDs: rows.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value })
+        let rows = windowRows().filter { allLayers || (($0[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0) == 0 }
+        return windowInfo(rows, includeSpaces: !allLayers)
+    }
+    /// App observations include floating panels and menus, with the same Space metadata as normal windows.
+    static func applicationWindows(_ pid: Int32) -> [WindowInfo] {
+        let rows = windowRows().filter { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid }
+        return windowInfo(rows, includeSpaces: true)
+    }
+    private static func windowRows() -> [[String: Any]] {
+        CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as? [[String: Any]] ?? []
+    }
+    private static func windowInfo(_ rows: [[String: Any]], includeSpaces: Bool) -> [WindowInfo] {
+        let memberships = includeSpaces
+            ? WindowSpaces().memberships(windowIDs: rows.compactMap { ($0[kCGWindowNumber as String] as? NSNumber)?.uint32Value }) : [:]
         return rows.compactMap { row in
-            let layer = (row[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0
-            guard allLayers || layer == 0,
-                  let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+            guard let id = (row[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
                   let pid = (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value else { return nil }
             let raw = row[kCGWindowBounds as String] as? [String: NSNumber] ?? [:]
             let bounds = WindowBounds(x: raw["X"]?.doubleValue ?? 0, y: raw["Y"]?.doubleValue ?? 0,
@@ -148,7 +158,7 @@ enum NativePlatform {
             return WindowInfo(windowID: id, pid: pid, appName: row[kCGWindowOwnerName as String] as? String ?? "",
                               title: row[kCGWindowName as String] as? String ?? "", bounds: bounds,
                               isOnScreen: (row[kCGWindowIsOnscreen as String] as? NSNumber)?.boolValue ?? false,
-                              onCurrentSpace: memberships[id]?.onCurrentSpace)
+                              onCurrentSpace: memberships[id]?.onCurrentSpace, layer: (row[kCGWindowLayer as String] as? NSNumber)?.intValue ?? 0)
         }
     }
     static func frontPID() -> Int32? { WindowSpaces().frontPID() }

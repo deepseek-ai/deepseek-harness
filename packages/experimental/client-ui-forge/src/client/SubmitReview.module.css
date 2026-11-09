@@ -13,3 +13,14 @@
 .decisions label:has(input:disabled) { cursor: default; opacity: 0.5; }
 .error { color: var(--dsw-alias-state-error-primary); overflow-wrap: anywhere; }
 .reconcile { display: flex; flex-wrap: wrap; gap: 8px; }
+.discard { margin-inline-end: auto; }
+.confirm {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md);
+  /* An elevated surface inside the scrolling dialog body, so anything that scrolls in it takes the l2 thumb pair
+     (see ui-theme styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
+.confirmText { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }

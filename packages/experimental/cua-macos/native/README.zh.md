@@ -74,7 +74,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 | `findApps` | 从标准应用目录或绝对应用路径返回已安装匹配项 `{id, displayName, path, isRunning, pid?}`；发现过程不启动应用。 |
 | `getApp` | 运行中的选择返回 `{appHandle, pid, name, bundleId?, running: true, authorization}`。未运行的选择返回 `{appHandle, name, bundleId?, running: false, authorization}`，其中没有 `pid`，并等待 Host 授权。名称歧义会失败。 |
 | `launchApp` | 授权后的 Host 专用续接操作；不请求激活，等待应用启动完成后将句柄绑定到已核实的进程身份。 |
-| `listWindows` | 应用所属普通窗口，包含 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace}`。Space 归属可为 null。 |
+| `listWindows` | WindowServer 返回所属窗口的 `{windowId, appName, title, bounds, isOnScreen, onCurrentSpace, cacheOnly?}`，Space 归属可能为 null。只有离屏、面积为零或已确定位于其他 Space 的辅助窗口带有 `cacheOnly: true`。Host 用这些记录更新尺寸，枚举时省略它们。窗口级观察仍可返回显式选中的目标，工具结果不含这个私有字段。 |
 | `getState` | `{appHandle, windowId, focusedWindowId, snapshotId, tree, elements, windows, truncated}`。应用级观察的 `windowId` 为 null。元素包含不透明字符串 `elementId`、role、title、value、description、identifier、bounds、actions 和 enabled 状态。元素边界为 null 或屏幕 point 单位的 [x, y, width, height]，窗口输入使用局部 point。这些结构化元素诊断供原生检查保留，模型工具投影会移除它们。不可用的可选描述属性为 null，无法取得的动作列表为空；权限、通信和窗口发现失败仍会拒绝观察。 |
 | `listActions` | 一个元素由 provider 定义的动作名数组；元素可以不声明任何动作。 |
 | `show` | `{dispatched: boolean, windowId, foregroundChanged}` 记录恢复分派。未选中窗口时 `windowId` 为 null；无法取得采样观察时 `foregroundChanged` 为 null。 |
@@ -96,6 +96,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 ## 观察与输入
 
 `getState` 可将 AX 遍历限定到应用所属窗口或嵌套 sheet 的 `windowId`。新的刷新或失败的刷新使同一应用/窗口范围的旧快照失效，其他窗口范围仍可使用。应用所属 CG 窗口没有匹配 AX 界面时，getState 返回空 tree/elements、truncated 为 false 的新快照，仍可截图和坐标输入。遍历后重新检查进程生命期、窗口归属、会话未锁定及辅助功能权限。窗口发现中的 APIDisabled 和通信错误仍会失败；不支持或缺失的可选 AX 属性可以产生空观察。不存在或属于其他应用的窗口不会返回空成功结果。遍历中 AX 元素失效会以 `STALE_SNAPSHOT` 拒绝整次读取，不发布部分树。应用变化后可以重新观察，但不重复输入。原生元素目标需要 `appHandle`、`snapshotId` 和字符串 `elementId`。`click` 和 `mouseMove` 可附带 `windowId`。它必须与元素所属窗口或 sheet 一致，对窗口级快照还必须与快照的窗口一致，否则在发送输入前返回 `STALE_SNAPSHOT`。坐标目标使用 `windowId`、`x`、`y`，可以附带来自该窗口或应用的快照。混用元素 ID 和坐标会返回 `INVALID_ARGUMENT`。Host 在发送请求前换算相对坐标，原生 JSONL 协议会拒绝 `relative` 字段。原生引用不跨 JSON 传递。刷新窗口列表会释放已关闭窗口的快照。进程身份、快照代次和窗口归属检查不会锁住桌面，用户或应用仍可同时改变状态。
+
+窗口隐藏本身不会使 AX 快照失效。刷新清单时，只有同一窗口 ID 仍存在且观察到的尺寸未变，才能继续使用此前截图的像素坐标。观察到尺寸变化后需要重新截图；窗口销毁后不能继续操作。清单中省略窗口不会阻止按已知 ID 发起输入。窗口归属、尺寸和输入检查仍然生效，成功分派不代表应用已接收。
 
 点击在元素中心或给定坐标发送鼠标按下和抬起事件。执行默认 AX 动作用 `invoke`，执行指定动作用 `performAction`。点击、滚动和拖动核实窗口归属和边界后，使用后台 PID/窗口定向输入。事件优先使用 SkyLight，不可用时使用公开的 PID 定向 API；已发送的事件不通过另一 API 重发。坐标是整个窗口左上角起算的 macOS point，包含标题栏。`deltaLinesY` 为正时显示上方内容，为负时显示下方内容；`deltaLinesX` 为正时显示左侧内容，为负时显示右侧内容。每个轴接受 -10 到 10 的整数，至少一个轴非零。helper 直接发送按行计量的滚轮事件。点击和拖动支持左、右、中键及 command/control/option/shift/fn 修饰键，只有左键支持双击。拖动在一个窗口中完成一次按下、移动、抬起，调用方显式提供 durationMs（1..5000）和 steps（1..240）。移动延迟按小数精度分配到各段，按下和抬起的固定等待及调度延迟另计。不存在隐式改用全局桌面输入的后备路径。
 
@@ -144,6 +146,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 在已解锁的 macOS GUI 会话中运行 `python3 packages/experimental/cua-macos/native/tests/application_consent_e2e.py --helper /absolute/helper`，需要可用的 Apple Swift 编译器。它创建并清理自己的 AppKit 应用和独立 GUI 进程，检查元数据替换、冷启动与直接启动、共用 Bundle ID、独立程序重启后的持久路径身份，以及删除运行中可执行文件后的选择行为。默认身份检查不需要辅助功能或屏幕录制权限。添加 `--desktop` 可读取完整测试应用的控件，通过状态文件验证 AX 按钮点击，截取窗口，并记录删除可执行文件后的观察结果；此模式要求已有两项系统权限。
 
 在 GUI 登录会话中运行 `python3 packages/experimental/cua-macos/native/tests/launcher_identity_e2e.py`，验证两个嵌套 GUI 启动器启动 helper 后，授权归属仍为 helper 自己，多条连接得到相同名称和图标。检查自行创建应用并清理 LaunchServices 注册，不申请辅助功能或屏幕录制权限。 运行 `python3 packages/experimental/cua-macos/native/tests/nested_application_e2e.py`，用独立签名的测试应用验证 helper 在外层 `.app` 之外保留签名发布、并发发布和服务退出。
+
+运行 `python3 packages/experimental/cua-macos/native/tests/floating_windows_e2e.py --helper /absolute/path/to/helper`，验证独立浮层的发现、截图、实际点击，以及隐藏、调整大小和销毁后的行为。
 
 构建并解锁 Mac 后运行 `python3 packages/experimental/cua-macos/native/tests/axless_e2e.py`，验证应用移除并恢复 AX 根节点的窗口。检查需要已有辅助功能/屏幕录制权限，会拒绝过期元素 ID，捕获无 AX 窗口，通过 fixture 状态文件核实坐标点击，并检查恢复。不会修改系统权限设置。
 
