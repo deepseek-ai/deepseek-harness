@@ -3,25 +3,30 @@
  *
  * An empty clause — a body whose statements, if any, are all bare `;` — must name the discarded
  * error, state in a comment why the error needs no handling, and wrap a `try` holding one
- * statement; a wider `try` hides statements whose failures the clause also discards.
+ * statement; a wider `try` hides statements whose failures the clause also discards. The reason
+ * comment may sit anywhere in the clause, between the `try` block and the `catch` keyword, or
+ * right after the clause on its closing line, before any further token.
  *
  * A body holding any other statement is out of scope: whether it handles the error is not
  * decidable from syntax, so `catch { "use strict" }` and similar no-ops stay legal and the
  * specification records that boundary. So is a file the parser cannot read past, which yields
- * whatever clauses it recovered; the typecheck covers tracked source.
+ * whatever clauses it recovered; the typecheck covers tracked source. A `try` holding one block or
+ * one compound statement, such as `if`, counts as one statement.
  *
- * Legacy clauses that break a condition are recorded in `scripts/empty-catch.baseline.json`.
- * Fixing one requires `--prune` to retire its entry, and a merge that brings recorded clauses
- * requires `--record <merged-ref>`.
+ * Legacy clauses that break a condition are recorded in `scripts/empty-catch.baseline.json`. A
+ * clause's identity covers its syntax tokens and its broken conditions, so turning a recorded
+ * one-statement `try` into a wider one or deleting a recorded reason is a new finding, while edits
+ * inside the `try` that keep its conditions are not. Moving a file that holds recorded clauses
+ * renames its baseline key in the same change.
  */
 
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import {
   countInventory,
   listInventorySources,
-  recordInventory,
   runInventoryGate,
   syntaxFingerprint,
   verifyInventory,
@@ -31,7 +36,7 @@ import {
 
 const root = resolve(import.meta.dirname, '..')
 
-/** Existing empty-clause counts, keyed by repository path and syntax fingerprint. */
+/** Existing empty-clause counts, keyed by repository path and clause fingerprint. */
 export type EmptyCatchBaseline = InventoryBaseline
 
 /** One condition of the rule that an empty clause breaks. */
@@ -43,7 +48,7 @@ export interface EmptyCatch {
   file: string
   /** One-based line of the `catch` keyword. */
   line: number
-  /** SHA-256 of the clause's syntax tokens, excluding comments and whitespace. */
+  /** SHA-256 of the clause's syntax tokens, excluding comments and whitespace, and its defects. */
   fingerprint: string
   /** Broken conditions in {@link EmptyCatchDefect} order. */
   defects: readonly EmptyCatchDefect[]
@@ -55,40 +60,24 @@ interface EmptyCatchScan {
   clauses: number
 }
 
-function scriptKind(file: string): ts.ScriptKind {
-  if (file.endsWith('.tsx')) return ts.ScriptKind.TSX
-  if (file.endsWith('.jsx')) return ts.ScriptKind.JSX
-  if (/\.(?:js|mjs|cjs)$/u.test(file)) return ts.ScriptKind.JS
-  return ts.ScriptKind.TS
-}
-
 /**
- * Whether the span holds a comment token.
- *
- * Scanning the span keeps a comment marker inside a string or template literal from counting.
- * @param text - the whole source file.
- * @param from - inclusive start offset of the span.
- * @param to - exclusive end offset of the span.
- * @returns `true` when the span holds a line or block comment.
- */
-function hasComment(text: string, from: number, to: number): boolean {
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.Standard, text.slice(from, to))
-  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
-    if (kind === ts.SyntaxKind.SingleLineCommentTrivia || kind === ts.SyntaxKind.MultiLineCommentTrivia) return true
-  }
-  return false
-}
-
-/**
- * Span that can carry a clause's reason: from just after the preceding token — a line above the
- * `catch` keyword belongs to the clause — through the end of the line closing its block.
+ * Whether a comment states the clause's reason: in the trivia before any token of the clause,
+ * which starts just after the `try` block so a line above the `catch` keyword belongs to it, or
+ * after the clause on its closing line before the next token. Reading parsed comment ranges keeps
+ * comment markers inside strings, templates and regular expressions from counting.
  * @param clause - the catch clause whose reason to look for.
- * @param text - the whole source file.
- * @returns inclusive start and exclusive end offsets.
+ * @param source - the file that owns the clause.
+ * @returns `true` when such a comment exists.
  */
-function reasonSpan(clause: ts.CatchClause, text: string): { from: number; to: number } {
-  const lineEnd = text.indexOf('\n', clause.end)
-  return { from: clause.getFullStart(), to: lineEnd === -1 ? text.length : lineEnd }
+function hasReason(clause: ts.CatchClause, source: ts.SourceFile): boolean {
+  const hasCommentAt = (position: number): boolean =>
+    (ts.getLeadingCommentRanges(source.text, position)?.length ?? 0) > 0
+    || (ts.getTrailingCommentRanges(source.text, position)?.length ?? 0) > 0
+  const visit = (node: ts.Node): boolean => {
+    if (ts.isJSDoc(node)) return true
+    return ts.isToken(node) ? hasCommentAt(node.pos) : node.getChildren(source).some(visit)
+  }
+  return visit(clause) || (ts.getTrailingCommentRanges(source.text, clause.end)?.length ?? 0) > 0
 }
 
 /** Names a binding pattern binds, so `catch ({})` names nothing. */
@@ -118,7 +107,7 @@ function nonEmptyStatements(block: ts.Block): readonly ts.Statement[] {
 
 function analyze(file: string, text: string): EmptyCatchScan {
   const normalized = file.replaceAll('\\', '/')
-  const source = ts.createSourceFile(normalized, text, ts.ScriptTarget.Latest, true, scriptKind(normalized))
+  const source = ts.createSourceFile(normalized, text, ts.ScriptTarget.Latest, true)
   const findings: EmptyCatch[] = []
   let clauses = 0
   const visit = (node: ts.Node): void => {
@@ -128,8 +117,7 @@ function analyze(file: string, text: string): EmptyCatchScan {
         const names = bindingNames(node)
         const defects: EmptyCatchDefect[] = []
         if (!names.some(name => name !== '_')) defects.push('unnamed')
-        const span = reasonSpan(node, text)
-        if (!hasComment(text, span.from, span.to)) defects.push('unexplained')
+        if (!hasReason(node, source)) defects.push('unexplained')
         if (!ts.isTryStatement(node.parent) || nonEmptyStatements(node.parent.tryBlock).length !== 1) {
           defects.push('wide-try')
         }
@@ -137,7 +125,9 @@ function analyze(file: string, text: string): EmptyCatchScan {
           findings.push({
             file: normalized,
             line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
-            fingerprint: syntaxFingerprint(node, source),
+            fingerprint: createHash('sha256')
+              .update(`${syntaxFingerprint(node, source)}:${defects.join(',')}`)
+              .digest('hex'),
             defects,
           })
         }
@@ -202,18 +192,6 @@ export function countEmptyCatches(findings: readonly EmptyCatch[]): EmptyCatchBa
  */
 export function verifyEmptyCatch(repoRoot: string, prune = false): number {
   return verifyInventory(gate, repoRoot, prune)
-}
-
-/**
- * Record the current clauses, after proving every clause the inventory does not allow already
- * exists at `ref`. A merge that lands recorded clauses is the only case that adds entries.
- * @param repoRoot - repository root to scan and write.
- * @param ref - a revision the repository contains, normally the merged target branch.
- * @returns the number of recorded clauses.
- * @throws when `ref` is not an ancestor of the current commit, or a newly allowed clause is absent at `ref`.
- */
-export function recordEmptyCatch(repoRoot: string, ref: string): number {
-  return recordInventory(gate, repoRoot, ref)
 }
 
 if (import.meta.filename === resolve(process.argv[1] ?? '')) {

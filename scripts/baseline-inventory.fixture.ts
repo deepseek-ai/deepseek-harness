@@ -30,15 +30,6 @@ export function gitFixture(root: string, ...args: string[]): void {
 }
 
 /**
- * Commit every change in a fixture repository.
- * @param root - fixture repository root.
- * @param message - commit message.
- */
-export function commitFixture(root: string, message: string): void {
-  gitFixture(root, 'commit', '--quiet', '--message', message)
-}
-
-/**
  * Create a temporary repository with one seed source file per scanned area and an empty inventory.
  * @param baselinePath - repository-relative inventory path the gate reads.
  * @param seed - contents of each area's seed source file.
@@ -48,9 +39,6 @@ export function createInventoryRepo(baselinePath: string, seed: string): string 
   const root = mkdtempSync(join(tmpdir(), 'dsh-inventory-'))
   roots.push(root)
   gitFixture(root, 'init', '--quiet')
-  // A runner without a global Git identity must still be able to commit this fixture.
-  gitFixture(root, 'config', 'user.email', 'fixture@example.com')
-  gitFixture(root, 'config', 'user.name', 'Fixture')
   for (const area of ['packages', 'apps', 'scripts', 'website']) {
     writeFixture(root, `${area}/seed.ts`, seed)
   }

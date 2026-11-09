@@ -2,24 +2,18 @@ import { readFileSync, symlinkSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  commitFixture,
   createInventoryRepo,
   gitFixture as git,
   removeInventoryRepos,
   writeFixture as write,
 } from './baseline-inventory.fixture.ts'
-import {
-  countEmptyCatches,
-  findEmptyCatches,
-  recordEmptyCatch,
-  scanEmptyCatches,
-  verifyEmptyCatch,
-} from './verify-empty-catch.ts'
+import { countEmptyCatches, findEmptyCatches, scanEmptyCatches, verifyEmptyCatch } from './verify-empty-catch.ts'
 
 const baselinePath = 'scripts/empty-catch.baseline.json'
 const sourcePath = 'packages/example/src/index.ts'
 const seed = 'try { run() } catch (_failure) { /* seed */ }\n'
 const broken = 'try { run() } catch {}\n'
+const recorded = 'try { run() } catch { /* reason */ }\n'
 
 afterEach(removeInventoryRepos)
 
@@ -53,6 +47,13 @@ describe('empty catch syntax', () => {
     ['a pattern binding only the discarded name', 'try { run() } catch ({ _ }) { /* already gone */ }', ['unnamed']],
     ['a nested clause inside a handled clause', 'try { run() } catch (error) { try { log() } catch {} }', ['unnamed', 'unexplained']],
     ['a comment marker inside a trailing string', 'try { run() } catch (_missing) {} finally { log("// not a comment") }', ['unexplained']],
+    ['a comment marker inside a trailing regular expression', 'try { run() } catch (_missing) {} finally { match(/[/*]/) }', ['unexplained']],
+    ['a comment trailing a finally block', 'try { run() } catch (_missing) {} finally { stop() } // Reported above.', ['unexplained']],
+    ['a comment after another statement on the closing line', 'try { run() } catch (_missing) {}; stop() // Stopped.', ['unexplained']],
+    ['a comment on the line after the clause', 'try { run() } catch (_missing) {}\n// Stopped.\nstop()', ['unexplained']],
+    ['a comment on the line after the clause with CRLF', 'try { run() } catch (_missing) {}\r\n// Stopped.\r\nstop()', ['unexplained']],
+    ['a comment marker inside a binding default regular expression', 'try { run() } catch ({ message = /[/*]/ }) {}', ['unexplained']],
+    ['a comment marker inside a binding default template', 'try { run() } catch ({ message = `${prefix}//` }) {}', ['unexplained']],
   ])('reports %s', (_name, text, expected) => {
     expect(defects('input.ts', text)).toEqual([expected])
   })
@@ -62,7 +63,12 @@ describe('empty catch syntax', () => {
     ['an ordinary binding name', 'try { run() } catch (error) { /* reported above */ }'],
     ['a reason on the line above the clause', 'try { run() }\n// The session may already be gone.\ncatch (_missing) {}'],
     ['a reason on the line closing the clause', 'try { run() } catch (_missing) {} // The session may already be gone.'],
-    ['a reason in the clause trailing a finally block', 'try { run() } catch (_missing) {} finally { stop() } // Reported above.'],
+    ['a reason on the line closing the clause with CRLF', 'try { run() } catch (_missing) {} // Already gone.\r\nstop()'],
+    ['a block comment above the clause', 'try { run() }\n/* The session may already be gone. */\ncatch (_missing) {}'],
+    ['a reason between the clause and a finally block', 'try { run() } catch (_missing) {} /* Reported above. */ finally { stop() }'],
+    // One block or compound statement counts as one statement, however much it holds.
+    ['a try holding one block', 'try { { first(); second() } } catch (_missing) { /* already gone */ }'],
+    ['a try holding one if statement', 'try { if (ready) { first(); second() } } catch (_missing) { /* already gone */ }'],
     ['a finally block', 'try { run() } catch (_missing) { /* already gone */ } finally { stop() }'],
     ['empty statements beside the try statement', 'try { ; run() } catch (_missing) { /* already gone */ }'],
     ['a destructured binding', 'try { run() } catch ({ message }) { /* reported above */ }'],
@@ -96,6 +102,16 @@ describe('empty catch syntax', () => {
     expect(findings[0]?.fingerprint).toMatch(/^[a-f0-9]{64}$/u)
   })
 
+  it('changes the fingerprint when a clause gains a defect', () => {
+    const [recorded] = findEmptyCatches('input.ts', 'try { run() } catch { /* already gone */ }')
+    const [widened] = findEmptyCatches('input.ts', 'try { first(); second() } catch { /* already gone */ }')
+    const [unexplained] = findEmptyCatches('input.ts', 'try { run() } catch {}')
+    expect(widened?.fingerprint).not.toBe(recorded?.fingerprint)
+    expect(unexplained?.fingerprint).not.toBe(recorded?.fingerprint)
+    expect(findEmptyCatches('input.ts', 'try { stop() } catch { /* already gone */ }')[0]?.fingerprint)
+      .toBe(recorded?.fingerprint)
+  })
+
   it('keeps syntax fingerprints through whitespace and comment edits', () => {
     const original = findEmptyCatches('input.ts', 'try { run() } catch (_missing) {}')
     const formatted = findEmptyCatches('input.ts', '\ntry {\n  /* retried above */ run()\n}\ncatch (\n_missing\n) {\n}\n')
@@ -123,13 +139,15 @@ describe('empty catch inventory', () => {
   })
 
   it.each([
-    ['additional clause', `${broken}${broken}`],
-    ['differently bound clause', 'try { stop() } catch (error) {}\n'],
-    ['unexplained clause', 'try { run() } catch (_missing) {}\n'],
-    ['wide try', 'try { first(); second() } catch (_missing) { /* reason */ }\n'],
-  ])('rejects an %s without changing the baseline', (_name, text) => {
+    ['another copy of a recorded clause', `${recorded}${recorded}`],
+    ['a differently bound clause', 'try { stop() } catch (error) {}\n'],
+    ['an unexplained clause', 'try { run() } catch (_missing) {}\n'],
+    ['a wide try', 'try { first(); second() } catch (_missing) { /* reason */ }\n'],
+    ['a recorded clause with a widened try', 'try { first(); second() } catch { /* reason */ }\n'],
+    ['a recorded clause without its reason', 'try { run() } catch {}\n'],
+  ])('rejects %s without changing the baseline', (_name, text) => {
     const root = fixture()
-    write(root, sourcePath, broken)
+    write(root, sourcePath, recorded)
     const baseline = recordBaseline(root)
     write(root, sourcePath, text)
     expect(() => verifyEmptyCatch(root)).toThrow(/verify-empty-catch: an empty catch/u)
@@ -137,7 +155,7 @@ describe('empty catch inventory', () => {
     expect(readFileSync(join(root, baselinePath), 'utf8')).toBe(baseline)
   })
 
-  it('keeps a recorded clause inside its file allowance when an identical shape moves', () => {
+  it('keeps a recorded clause inside its file allowance when only its try statement changes', () => {
     const root = fixture()
     write(root, sourcePath, broken)
     recordBaseline(root)
@@ -185,48 +203,6 @@ describe('empty catch inventory', () => {
     expect(readFileSync(join(root, baselinePath), 'utf8')).toBe('{}\n')
   })
 
-  // A merge that brings clauses recorded on the target branch is the one case where entries may
-  // be added, and only for clauses the named revision already carries.
-  it('records a merged clause and drops the entry it replaces', () => {
-    const root = fixture()
-    write(root, sourcePath, broken)
-    git(root, 'add', '.')
-    commitFixture(root, 'base')
-    // The target branch adds a clause; this branch merges it and fixes its own recorded clause.
-    git(root, 'checkout', '--quiet', '-b', 'target')
-    write(root, 'apps/landed.ts', broken)
-    git(root, 'add', '.')
-    commitFixture(root, 'landed')
-    git(root, 'checkout', '--quiet', '-')
-    git(root, 'merge', '--quiet', '--no-edit', 'target')
-    write(root, sourcePath, seed)
-    expect(recordEmptyCatch(root, 'target')).toBe(1)
-    expect(JSON.parse(readFileSync(join(root, baselinePath), 'utf8'))).toEqual(
-      countEmptyCatches(findEmptyCatches('apps/landed.ts', broken)),
-    )
-    expect(verifyEmptyCatch(root)).toBe(1)
-  })
-
-  it('refuses a clause the named revision does not carry', () => {
-    const root = fixture()
-    commitFixture(root, 'base')
-    write(root, sourcePath, broken)
-    expect(() => recordEmptyCatch(root, 'HEAD')).toThrow(/--record refuses findings absent at HEAD/u)
-    expect(readFileSync(join(root, baselinePath), 'utf8')).toBe('{}\n')
-  })
-
-  it('refuses a revision the branch does not contain', () => {
-    const root = fixture()
-    git(root, 'add', '.')
-    commitFixture(root, 'base')
-    git(root, 'checkout', '--quiet', '-b', 'side')
-    write(root, 'apps/side.ts', broken)
-    git(root, 'add', '.')
-    commitFixture(root, 'side')
-    git(root, 'checkout', '--quiet', '-')
-    expect(() => recordEmptyCatch(root, 'side')).toThrow(/--record needs a revision/u)
-  })
-
   // The shared inventory reader owns the complete malformed-input table; these two rows prove this
   // gate reads through it rather than around it.
   it.each([
@@ -242,7 +218,7 @@ describe('empty catch inventory', () => {
 })
 
 describe('empty catch source discovery', () => {
-  it('checks tracked source across areas, extensions and tests', () => {
+  it('checks tracked source across areas, extensions, tests and root configuration', () => {
     const root = fixture()
     const files = [
       'packages/example/src/input.ts',
@@ -253,6 +229,7 @@ describe('empty catch source discovery', () => {
       'apps/example/input.jsx',
       'scripts/input.mjs',
       'website/input.cjs',
+      'config.ts',
     ]
     for (const file of files) write(root, file, broken)
     git(root, 'add', '.')
