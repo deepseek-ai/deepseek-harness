@@ -898,6 +898,8 @@ def main() -> None:
         print("smoke-python-runtime: sdk-live passed")
         return
 
+    # SDK prompts without timeZone record the runtime process zone; pin it so snapshots match on every host.
+    os.environ["TZ"] = "UTC"
     with MockModel() as model:
         if args.scenario == "sdk-plugin-manager":
             assert args.exe is not None
