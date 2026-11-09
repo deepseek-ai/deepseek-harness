@@ -195,7 +195,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const screenshot = await peerWindow.getScreenshot()
   expect(screenshot).toMatchObject({ width: 1, height: 1 })
   expect((await readFile(screenshot.path)).toString('base64')).toBe(png)
-  await peerApp.getWindow(8)
+  await (await peerApp.getWindow(8)).getAccessibilityTree({ emit: false })
   const recovery = 'Snapshot belongs to window 8; read getAccessibilityTree on window 7'
   await expect(peerWindow.click(element('0'))).rejects.toThrow(recovery)
   await expect(peerWindow.mouseMove(element('0'))).rejects.toThrow(recovery)

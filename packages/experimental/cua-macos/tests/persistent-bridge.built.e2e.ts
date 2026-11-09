@@ -85,6 +85,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       const first = await run(`${initialization}
         var app = await cua.getApp("test.fixture");
         var win = await app.getWindow(7);
+        await win.getAccessibilityTree({ emit: false });
         await win.click("0");
         var shot = await win.getScreenshot();
         var { readFile } = await import("node:fs/promises");

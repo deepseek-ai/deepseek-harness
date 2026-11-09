@@ -120,6 +120,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
   const customScreenshot = existsSync(screenshotConfig) ? JSON.parse(readFileSync(screenshotConfig, 'utf8')) : undefined
   const snapshots = new Map()
+  const observedWindows = new Set()
   let acquired = false
   let generation = 0
   let observationChanged = false
@@ -161,12 +162,19 @@ function createApplicationState(socket, record, application, captureBroker, conn
       } }
     }
     if (method === 'listWindows') return windows()
+    if (params.windowId !== undefined && !windows().some(window => window.windowId === params.windowId)) refuse('WINDOW_UNAVAILABLE', 'Window is closed or belongs to another application')
+    const writableFailureFile = new URL('./fixture-ax-writability-failure', import.meta.url)
+    const writableFailure = existsSync(writableFailureFile) ? readFileSync(writableFailureFile, 'utf8') : undefined
     if (method === 'getState') {
       snapshots.delete(params.windowId ?? null)
+      if (params.windowId === undefined) observedWindows.clear()
+      else observedWindows.delete(params.windowId)
+      if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
         refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
       }
+      for (const id of params.windowId === undefined ? windows().map(window => window.windowId) : [params.windowId]) observedWindows.add(id)
       generation++
       const axless = params.windowId === 8
       const snapshotId = `${scope}-snapshot-${generation}`
@@ -182,7 +190,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
         elements: [], windows: windows(), truncated: true }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
-        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=true selectionWritable=true value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
+        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=${writableFailure === 'AXValue' ? 'unknown' : 'true'} selectionWritable=${writableFailure === 'AXSelectedTextRange' ? 'unknown' : 'true'} value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         focusedWindowId: window.windowId, windows: windows(), truncated: false }
@@ -198,19 +206,27 @@ function createApplicationState(socket, record, application, captureBroker, conn
       socket.write(JSON.stringify({ type: 'diagnostic', requestId, stage: 'capture-image.begin', elapsedMs: 1 }) + '\ninvalid screenshot response\n')
       return
     }
-    if (method === 'screenshot') return customScreenshot
-      ? { pixelWidth: customScreenshot.pixelWidth, pixelHeight: customScreenshot.pixelHeight, bounds: customScreenshot.bounds,
+    if (method === 'screenshot') {
+      observedWindows.add(params.windowId)
+      return customScreenshot
+        ? { pixelWidth: customScreenshot.pixelWidth, pixelHeight: customScreenshot.pixelHeight, bounds: customScreenshot.bounds,
         windowId: params.windowId, mimeType: 'image/png', coordinateSpace: 'window-points',
         data: readFileSync(new URL(customScreenshot.file, import.meta.url)).toString('base64') }
-      : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1,
-        bounds: params.windowId === panel.windowId ? panel.bounds : bounds, coordinateSpace: 'window-points' }
+        : { windowId: params.windowId, mimeType: 'image/png', data: png, pixelWidth: 1, pixelHeight: 1,
+          bounds: params.windowId === panel.windowId ? panel.bounds : bounds, coordinateSpace: 'window-points' }
+    }
+    if (['click', 'mouseMove', 'scroll', 'drag'].includes(method) && params.elementId === undefined
+      && !observedWindows.has(params.windowId)) refuse('STALE_SNAPSHOT', 'Window has no observation; read getAccessibilityTree or take a screenshot before coordinate input')
+    if ((method === 'setValue' && writableFailure === 'AXValue') || (method === 'selectText' && writableFailure === 'AXSelectedTextRange')) {
+      refuse('NATIVE_ERROR', `Accessibility read writability of ${writableFailure} failed with error -25200`)
+    }
     if (method === 'click' || method === 'setValue' || method === 'mouseMove') {
       const observed = params.snapshotId === undefined && params.elementId === undefined
         ? snapshots.get(params.windowId) ?? snapshots.get(null)
         : [...snapshots.values()].find(snapshot => snapshot.snapshotId === params.snapshotId)
-      if (!observed) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
-      if (params.windowId !== undefined && observed.windowId !== null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
-      if (observed.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
+      if (!observed && (params.snapshotId !== undefined || params.elementId !== undefined)) refuse('STALE_SNAPSHOT', 'Read fresh state before acting')
+      if (params.windowId !== undefined && observed?.windowId != null && observed.windowId !== params.windowId) refuse('STALE_SNAPSHOT', `Snapshot belongs to window ${observed.windowId}; read getAccessibilityTree on window ${params.windowId}`)
+      if (observed?.axless && params.elementId !== undefined) refuse('INVALID_ARGUMENT', 'Element id is absent from the selected snapshot')
       let systemPointerMoved = false
       if (method === 'mouseMove') {
         const alternate = params.elementId === '0' || (params.x >= 20 && params.x <= 40)

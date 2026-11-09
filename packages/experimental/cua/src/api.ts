@@ -86,9 +86,7 @@ export function createCuaApi(dispatch: CuaDispatch, onText?: (text: string) => v
       if (!request.success) throw new Error(`getApp ${requestIssueMessage(request.error.issues)}`)
       const capabilities = await currentCapabilities()
       const { appHandle } = AppResult.parse(await call('getApp', { selector }))
-      const app = objects.createCuaApp(appHandle, capabilities)
-      if (capabilities.appLevelAccessibility) await app.getAccessibilityTree({ emit: false })
-      return app
+      return objects.createCuaApp(appHandle, capabilities)
     },
   }
   return api
@@ -263,10 +261,10 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text
         await emit(onText, windows, options)
         return windows
       },
-      async getWindow(windowId): Promise<CuaWindow> {
-        const window = createCuaWindow(appHandle, windowId, capabilities)
-        await window.getAccessibilityTree({ emit: false })
-        return window
+      getWindow(windowId): Promise<CuaWindow> {
+        const result = WindowsResult.element.shape.windowId.safeParse(windowId)
+        if (!result.success) return Promise.reject(new Error(`getWindow ${requestIssueMessage(result.error.issues, ['params', 'windowId'])}`))
+        return Promise.resolve(createCuaWindow(appHandle, result.data, capabilities))
       },
     }
   }
