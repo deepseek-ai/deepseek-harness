@@ -141,7 +141,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   const pulls = {
     7: {
       id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
-      updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40),
+      updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40), baseRefOid: BASE,
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
@@ -152,7 +152,7 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     9: {
       id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
       isDraft: !state.ready, updatedAt: '2026-10-09T00:00:00Z', closedAt: state.mergedAt, author: { login: 'octo' },
-      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', additions: 30, deletions: 2, mergeable: 'MERGEABLE',
+      headRefName: 'feat/merge', headRefOid: heads()[9], baseRefName: 'main', baseRefOid: BASE, additions: 30, deletions: 2, mergeable: 'MERGEABLE',
       mergeStateStatus: state.ready ? 'CLEAN' : 'BLOCKED', reviewDecision: 'APPROVED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
@@ -1175,6 +1175,8 @@ it.skipIf(MODE === 'record')('retains a wrapped code line and tree width across 
     return { path: element.getAttribute('data-forge-diff-file'), line: line.dataset.newLine,
       offset: line.getBoundingClientRect().top - top, scrollTop: viewport.scrollTop }
   })
+  // An expanded file draws its lines once the reader scrolls near it.
+  await file.scrollIntoViewIfNeeded()
   await code.waitFor()
   for (const width of [240, 320]) {
     if (width === 320) {
@@ -1252,6 +1254,11 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   expect(await scroll.evaluate(element => document.activeElement === element)).toBe(true)
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => tree.getByRole('button', { name: 'README.md', exact: true }).getAttribute('aria-current')).toBe('true')
+  // The last file draws its lines after the jump, and scroll anchoring adjusts the position at the next layout.
+  await c.locator('[data-review-code]').first().waitFor()
+  await scroll.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => { requestAnimationFrame(() => { resolve() }) })
+  }))
   const lastPosition = await scroll.evaluate(element => element.scrollTop)
   const lastBox = await c.boundingBox(), viewport = await scroll.boundingBox()
   if (lastBox === null || viewport === null) throw new Error('The last file and scroll viewport must be rendered')

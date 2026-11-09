@@ -418,9 +418,7 @@ export class ForgePanelController extends TypertRemoteService {
     const version = JSON.stringify([headSha, baseBranch])
     let read = this.patches.get(key, version)
     if (read === undefined) {
-      const patch = await this.home.forge.diff(ref, headSha, signal)
-      if (typeof patch !== 'string') throw readError(patch)
-      read = { patch, attributes: await this.attributesAt(ref, headSha, signal) }
+      read = await this.patchAt(ref, headSha, async operation => await this.home.forge.diff(ref, headSha, operation), signal)
       this.patches.set(key, version, read)
     }
     const files = this.layers.classify(parseDiff(read.patch), read.attributes)
@@ -683,11 +681,39 @@ export class ForgePanelController extends TypertRemoteService {
     if (start === 'not-linear') throw new RemoteError('forgePanel/commits-not-linear', 'The chosen commits are not one run of first parents', {})
     const parent = start.parent
     if (parent === null) throw new RemoteError('forgePanel/diff-failed', 'The first chosen commit has no parent to compare with', {})
-    const patch = await this.home.forge.compare(ref, parent, commits.to, signal)
-    if (typeof patch !== 'string') throw readError(patch)
-    const files = this.layers.classify(parseDiff(patch), await this.attributesAt(ref, commits.to, signal))
+    const { patch, attributes } = await this.patchAt(
+      ref, commits.to, async operation => await this.home.forge.compare(ref, parent, commits.to, operation), signal,
+    )
+    const files = this.layers.classify(parseDiff(patch), attributes)
     const fileUrls = Object.fromEntries(files.map(file => [file.path, this.home.forge.fileUrl(ref, commits.to, file.path)]))
     return { headSha: commits.to, files, localAhead: null, fileUrls }
+  }
+
+  /**
+   * Read a patch that ends at `commit` together with the root `.gitattributes` at that commit. A failed patch read
+   * cancels the attributes read. Both reads end before the result: the patch's failure passes on first, and the
+   * attributes failure only after the patch was read, so the outcome does not depend on which read ends first.
+   * @param ref - change request whose repository holds the commit.
+   * @param commit - commit the patch ends at.
+   * @param readPatch - reads the patch under the given cancellation.
+   * @param signal - request cancellation.
+   * @returns the patch and the attributes text, empty when the commit has none.
+   * @throws the Remote error for a refused patch or attributes read, or `signal.reason` when it aborts.
+   */
+  private async patchAt(
+    ref: ChangeRequestRef, commit: string, readPatch: (signal: AbortSignal) => Promise<string | ForgeFailure>, signal: AbortSignal,
+  ): Promise<{ readonly patch: string; readonly attributes: string }> {
+    const unneeded = new AbortController()
+    const patch = readPatch(signal).then((result) => {
+      if (typeof result !== 'string') throw readError(result)
+      return result
+    })
+    const attributes = this.attributesAt(ref, commit, AbortSignal.any([signal, unneeded.signal]))
+    void patch.then(undefined, () => { unneeded.abort() })
+    const [text, rules] = await Promise.allSettled([patch, attributes])
+    if (text.status === 'rejected') throw text.reason
+    if (rules.status === 'rejected') throw rules.reason
+    return { patch: text.value, attributes: rules.value }
   }
 
   /** The root `.gitattributes` of a change request's repository at a commit, empty when the commit has none. */
