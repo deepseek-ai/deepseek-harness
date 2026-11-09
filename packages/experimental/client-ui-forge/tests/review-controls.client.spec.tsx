@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** Review controls of the changes view: the lens in both forms, the test file switch, viewed progress, and the commit picker. */
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeCommitList } from '@deepseek-ai/dsh-experimental-forge/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -15,7 +15,7 @@ const sha = (n: number): string => String(n).repeat(40)
 const COMMITS: ForgeCommitList = {
   headSha: sha(3),
   truncated: false,
-  commits: [1, 2, 3].map(n => ({ sha: sha(n), parent: n === 1 ? null : sha(n - 1), title: `commit ${n}`, author: 'octo', authoredAt: '2026-10-09T00:00:00Z' })),
+  commits: [1, 2, 3].map(n => ({ sha: sha(n), parent: n === 1 ? null : sha(n - 1), title: `commit ${n}`, author: 'octo', authoredAt: '2026-10-07T12:00:00Z' })),
 }
 
 afterEach(() => {
@@ -121,6 +121,10 @@ describe('HideTestsSwitch and ViewedProgress', () => {
 })
 
 describe('CommitMenu', () => {
+  // The rows name each commit's age; pin Date so the label does not follow the wall clock.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-10-09T12:00:00Z') }) })
+  afterEach(() => { vi.useRealTimers() })
+
   function mount(props: Partial<CommitMenuProps> = {}) {
     const list = props.list ?? vi.fn<CommitMenuProps['list']>(async () => ({ ok: true, value: COMMITS }))
     const choose = vi.fn<CommitMenuProps['choose']>()
@@ -151,7 +155,7 @@ describe('CommitMenu', () => {
     expect(m.list).toHaveBeenCalledTimes(1)
     const rows = m.rows()
     expect(rows[0]).toBe('All commits3 commits')
-    expect(rows.slice(1).map((row, index) => row.startsWith(`${sha(index + 1).slice(0, 7)}commit ${index + 1}`) && row.endsWith(' d ago'))).toEqual([true, true, true])
+    expect(rows.slice(1)).toEqual([1, 2, 3].map(n => `${sha(n).slice(0, 7)}commit ${n}${t('time.days', { n: 2 })}`))
     expect(within(document.body).getByText(en['commits.shiftHint'])).toBeDefined()
     expect(within(document.body).getByRole('menuitem', { name: /^All commits/ }).getAttribute('aria-current')).toBe('page')
     fireEvent.click(m.row(2))
