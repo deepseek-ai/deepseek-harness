@@ -6,7 +6,8 @@
  * refresh, and when the change request's head or the checkout's `branch`
  * scope summary changes; a read keeps the previous changes on screen until it settles.
  * File sections receive values that keep their identity across renders, so a
- * render of the view redraws only the sections whose own values changed.
+ * render of the view redraws only the sections whose own values changed, and
+ * an expanded file draws its lines once its section comes near the scrollport.
  */
 
 import {
@@ -42,7 +43,7 @@ import { CommitMenu } from './CommitMenu.tsx'
 import { HideTestsSwitch, LensControl, LensMenu, LENSES, ViewedProgress } from './ReviewControls.tsx'
 import { viewedStateOf, type ViewedFiles, type ViewedMarks } from './viewed-files.ts'
 import { Counts, DiffFile, type DiffFileAction, type DiffFileHandlers } from './DiffFile.tsx'
-import { SectionReach, SectionReachContext, ViewVisibleContext } from './section-reach.ts'
+import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
 import { changedFileTree, filesInTreeOrder } from './file-tree.ts'
 import { ChangedFilesMenu, type ChangedFilesProps, type ChangedFilesState } from './ChangedFiles.tsx'
@@ -604,7 +605,7 @@ export function ChangesTab({
    * Keep a jumped-to section at the top of the scrollport for {@link JUMP_PIN_MS}: the sections around it draw their
    * lines after the jump, which moves it. Scrolling input from the reader, another jump, hiding the tab, or unmounting
    * ends the pin. Each frame measures the section once, which covers every cause of movement, such as a section
-   * drawing its lines, deferred highlighting, or a review card opening, without each one reporting it.
+   * drawing its lines or a review card opening, without each one reporting it.
    */
   const pinJump = (port: HTMLElement, section: HTMLElement, owner: ChangesData): void => {
     releasePin.current?.()
@@ -833,7 +834,8 @@ export function ChangesTab({
       if (element === null) sections.current.delete(path)
       else sections.current.set(path, element)
     },
-  }), [])
+    reach,
+  }), [reach])
   const reviewStarted = reviewState.comments.length > 0
   const publishingBlocked = reviewState.uncertain !== null
   // Comments on a commit range or on local changes go to the input only; a whole change request also takes GitHub comments.
@@ -889,7 +891,6 @@ export function ChangesTab({
       <div ref={attachScrollport} className={css.files} data-forge-changes-scroll="" role="region"
         aria-label={t('diff.allFiles', { count: files.length })} aria-keyshortcuts="ArrowLeft ArrowRight V" tabIndex={0}
         onKeyDown={navigateFiles} onScroll={(event) => {
-          reach.scrolled()
           if (jumpPosition.current?.top !== event.currentTarget.scrollTop) jumpPosition.current = null
         }}>
         {files.map((file) => {
@@ -897,6 +898,7 @@ export function ChangesTab({
           return (
             <DiffFile
               key={path}
+              visible={tab.visible}
               file={file}
               review={fileReview}
               expanded={isExpanded(file)}
@@ -1024,9 +1026,7 @@ export function ChangesTab({
       {data?.kind === 'local' && data.omitted > 0 && <Notice>{t('diff.omitted', { count: data.omitted })}</Notice>}
       {reviewForm}
       <div className={css.body}>
-        <ViewVisibleContext.Provider value={tab.visible}>
-          <SectionReachContext.Provider value={reach}>{body}</SectionReachContext.Provider>
-        </ViewVisibleContext.Provider>
+        {body}
         {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
       </div>
     </div>

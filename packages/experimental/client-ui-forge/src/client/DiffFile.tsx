@@ -2,11 +2,11 @@
  * One file of the changes view: a sticky header with the path, badges, line
  * counts, and file actions, then its hunks unified or side by side with the
  * unchanged lines between them collapsed into rows that expand them. A section
- * draws its lines once it comes within reach of the scrollport and highlights
- * them when the page is next idle; it redraws only when its own props change.
+ * draws and highlights its lines once it comes within reach of the scrollport;
+ * it redraws only when its own props change.
  */
 
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { flushSync } from 'react-dom'
 import {
@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeDiffFile } from '../types.ts'
-import { drawnLines, segmentsOf, splitRows, type DiffRow, type DiffSegment, type SplitCell, type SplitRow } from './diff-rows.ts'
+import { drawnLines, segmentsOf, splitRows, type DiffRow, type SplitCell, type SplitRow } from './diff-rows.ts'
 import { codeSideAt, readCodeSelection } from './code-selection.ts'
 import { reviewMatches, selectReviewLines, type ReviewSelection } from './review.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
@@ -26,7 +26,7 @@ import reviewCss from './ReviewComposer.module.css'
 import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ViewedState } from './viewed-files.ts'
-import { SectionReachContext, ViewVisibleContext, whenIdle } from './section-reach.ts'
+import type { SectionReach } from './section-reach.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -59,10 +59,14 @@ export interface DiffFileHandlers {
   readonly actions: (file: ForgeDiffFile) => readonly DiffFileAction[]
   /** Receive a file's section element, which scrolling to the file targets, or null once it unmounts. */
   readonly section: (path: string, element: HTMLElement | null) => void
+  /** Tells each expanded section when it comes within reach of the scrollport, which draws its lines. */
+  readonly reach: SectionReach
 }
 
 /** Props of one file section. */
 export interface DiffFileProps {
+  /** Whether the owning tab is visible and may show temporary menus. */
+  readonly visible: boolean
   /** Comment destinations and the source being reviewed. */
   readonly review?: ReviewActions | undefined
   /** The file and its hunks. */
@@ -113,90 +117,26 @@ export function Counts({ file, t }: {
 
 const SIGN: Record<DiffRow['kind'], string> = { add: '+', del: '-', context: '' }
 
-/** Highlighted tokens of one side's lines by line number. */
-type SideSpans = Map<number, readonly HighlightSpan[]>
+/** Highlighted tokens of one side's lines by line number, or undefined while the grammar is unavailable. */
+type SideSpans = ReadonlyMap<number, readonly HighlightSpan[]> | undefined
 
-/** Highlighted tokens of a file's drawn lines on each side; a line without an entry draws as plain text. */
-interface FileSpans {
-  readonly old: SideSpans
-  readonly new: SideSpans
-}
+/** A segment ready to draw: collapsed lines, or rows with the tokens of each side. */
+type Prepared =
+  | { readonly kind: 'gap'; readonly index: number; readonly count: number | null }
+  | { readonly kind: 'rows'; readonly rows: readonly DiffRow[]; readonly old: SideSpans; readonly new: SideSpans }
 
-/** Lines highlighted as one fragment; a longer run splits here, where a token spanning the split restarts. */
-const HIGHLIGHT_CHUNK_LINES = 100
-
-/** Numbered lines of one side that are highlighted together. */
-interface HighlightChunk {
-  readonly side: 'old' | 'new'
-  readonly lines: readonly { readonly no: number; readonly text: string }[]
-}
-
-/** Split each run of rows of each side into fragments of at most {@link HIGHLIGHT_CHUNK_LINES} lines. */
-function highlightChunks(segments: readonly DiffSegment[]): HighlightChunk[] {
-  const chunks: HighlightChunk[] = []
-  for (const segment of segments) {
-    if (segment.kind === 'gap') continue
-    for (const side of ['old', 'new'] as const) {
-      const lines: { readonly no: number; readonly text: string }[] = []
-      for (const row of segment.rows) {
-        const no = row[side]
-        if (no !== null) lines.push({ no, text: row.text })
-      }
-      for (let at = 0; at < lines.length; at += HIGHLIGHT_CHUNK_LINES) {
-        chunks.push({ side, lines: lines.slice(at, at + HIGHLIGHT_CHUNK_LINES) })
-      }
-    }
+/** Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. */
+function sideSpans(rows: readonly DiffRow[], side: 'old' | 'new', highlighter: CodeHighlighter): SideSpans {
+  const numbered: { readonly no: number; readonly text: string }[] = []
+  for (const row of rows) {
+    const no = row[side]
+    if (no !== null) numbered.push({ no, text: row.text })
   }
-  return chunks
-}
-
-/** Highlight one fragment, so tokens spanning its lines keep their state, into `spans`. */
-function addChunkSpans(spans: FileSpans, chunk: HighlightChunk, highlighter: CodeHighlighter): void {
-  const highlighted = highlighter(chunk.lines.map(line => line.text).join('\n'))
-  /* v8 ignore next -- a grammar that reported ready stays registered, so its fragments always tokenize */
-  if (highlighted === undefined) return
+  if (numbered.length === 0) return new Map()
+  const highlighted = highlighter(numbered.map(line => line.text).join('\n'))
+  if (highlighted === undefined) return undefined
   // Shiki omits a final empty token row, so a final empty line gets no tokens.
-  for (const [index, line] of chunk.lines.entries()) spans[chunk.side].set(line.no, highlighted[index] ?? [])
-}
-
-/**
- * Highlight a file's drawn lines in idle time while the scrollport is still, once its language's grammar is ready:
- * each idle period highlights fragments while it lasts, at least one, and the lines take their tokens when the last
- * fragment is done. Until then, the lines keep the tokens of the previous pass, by line number, and new lines draw as
- * plain text. A grammar that loads for another language starts no pass.
- */
-function useFileSpans(path: string, segments: readonly DiffSegment[]): FileSpans | undefined {
-  const reach = useContext(SectionReachContext)
-  const highlighter = useCodeHighlighter(languageForPath(path))
-  // The highlighter changes whenever any grammar loads; the empty fragment tells whether this language's is ready.
-  const ready = highlighter('') !== undefined
-  const current = useRef(highlighter)
-  current.current = highlighter
-  const [spans, setSpans] = useState<FileSpans | undefined>(undefined)
-  useEffect(() => {
-    if (!ready) return
-    const chunks = highlightChunks(segments)
-    const pass: FileSpans = { old: new Map(), new: new Map() }
-    let next = 0
-    const step = (deadline: IdleDeadline | undefined): void => {
-      for (;;) {
-        const chunk = chunks[next]
-        if (chunk === undefined) {
-          setSpans(pass)
-          return
-        }
-        addChunkSpans(pass, chunk, current.current)
-        next++
-        if ((deadline?.timeRemaining() ?? 0) <= 0) break
-      }
-      cancel = later(step)
-    }
-    // Outside a changes view nothing scrolls the sections, so idle time alone gates the pass.
-    const later = reach === null ? whenIdle : (task: (deadline: IdleDeadline | undefined) => void) => reach.whenSettled(task)
-    let cancel = later(step)
-    return () => { cancel() }
-  }, [segments, ready, reach])
-  return spans
+  return new Map(numbered.map((line, index) => [line.no, highlighted[index] ?? []]))
 }
 
 function Code({ text, spans, old, next }: {
@@ -217,20 +157,16 @@ function pairKind(pair: SplitRow): 'context' | 'change' {
   return pair.left !== null && pair.left.kind === 'context' ? 'context' : 'change'
 }
 
-/** The composer of a new comment, shown with its menus only while the changes tab is visible. */
-function VisibleComposer(props: Omit<Parameters<typeof ReviewComposer>[0], 'visible'>): ReactNode {
-  return <ReviewComposer {...props} visible={useContext(ViewVisibleContext)} />
-}
-
 /** The hunks of one file with their collapsed and expanded unchanged lines. */
-function Lines({ file, text, open, handlers, split, wrap, review, comments, t }: Pick<DiffFileProps,
-  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 't'> & { readonly comments: FileReviewState }): ReactNode {
+function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, t }: Pick<DiffFileProps,
+  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 't'> & { readonly comments: FileReviewState }): ReactNode {
   const lines = typeof text === 'object' ? text : undefined
   const columns = split && file.additions > 0 && file.deletions > 0
   const singleSide = file.status === 'added' ? 'R' : file.status === 'deleted' ? 'L' : null
   let maximum = Math.max(1, lines?.length ?? 0, (lines?.length ?? 0) + file.deletions - file.additions)
   for (const hunk of file.hunks) maximum = Math.max(maximum, hunk.oldStart + hunk.oldLines - 1, hunk.newStart + hunk.newLines - 1)
   const style: CSSProperties & { '--forge-number-width': string } = { '--forge-number-width': `calc(${Math.max(2, String(maximum).length)}ch + 12px)` }
+  const highlighter = useCodeHighlighter(languageForPath(file.path))
   const [selection, setSelection] = useState<ReviewSelection | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const origin = useRef<{ side: 'L' | 'R'; line: number } | null>(null)
@@ -288,8 +224,9 @@ function Lines({ file, text, open, handlers, split, wrap, review, comments, t }:
       window.removeEventListener('pointercancel', finish)
     }
   }, [selecting, nativeSelection])
-  const segments = useMemo(() => segmentsOf(file, lines, open), [file, lines, open])
-  const spans = useFileSpans(file.path, segments)
+  const prepared = useMemo(() => segmentsOf(file, lines, open).map((segment): Prepared => segment.kind === 'gap'
+    ? segment
+    : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }), [file, lines, open, highlighter])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
     if (review === undefined || editing) return false
@@ -363,15 +300,15 @@ function Lines({ file, text, open, handlers, split, wrap, review, comments, t }:
       )}
     </span>
   }
-  const cell = (value: SplitCell | null, side: 'L' | 'R'): ReactNode => value === null
+  const cell = (value: SplitCell | null, spans: SideSpans, side: 'L' | 'R'): ReactNode => value === null
     ? <span className={clsx(css.cell, css.empty)} data-diff-side={side} />
     : <span className={clsx(css.cell, css[value.kind], selected(side, value.no) && (editing || nativeSide === null) && reviewCss.selected)}
       data-diff-side={side}>
-      {number(side, value.no, true)}<Code text={value.text} spans={(side === 'L' ? spans?.old : spans?.new)?.get(value.no)} old={side === 'L' ? value.no : null} next={side === 'R' ? value.no : null} />
+      {number(side, value.no, true)}<Code text={value.text} spans={spans?.get(value.no)} old={side === 'L' ? value.no : null} next={side === 'R' ? value.no : null} />
     </span>
   const rows: ReactNode[] = []
   let inserted = false
-  const editor = review === undefined || selection === null || !editing ? null : <VisibleComposer key="comment" selection={selection} split={columns}
+  const editor = review === undefined || selection === null || !editing ? null : <ReviewComposer key="comment" selection={selection} visible={visible} split={columns}
     actions={review} close={() => {
       const native = window.getSelection()
       if (root.current?.contains(native?.anchorNode ?? null) === true) native?.removeAllRanges()
@@ -392,7 +329,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, comments, t }:
   }
   const endsAt = (old: number | null, next: number | null): boolean => selection !== null
     && (selection.comment.side === 'L' ? old : next) === selection.comment.endLine
-  for (const [at, segment] of segments.entries()) {
+  for (const [at, segment] of prepared.entries()) {
     if (segment.kind === 'gap') {
       rows.push(<button key={`gap-${segment.index}`} type="button" className={css.gap} disabled={text === 'loading'}
         data-forge-diff-gap={segment.index} onClick={() => { handlers.expand(file, segment.index) }}>
@@ -403,7 +340,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, comments, t }:
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
           onPointerEnter={(event) => { extendAdd(event.buttons, pair.left?.no ?? null, pair.right?.no ?? null) }}>
-          {cell(pair.left, 'L')}{cell(pair.right, 'R')}
+          {cell(pair.left, segment.old, 'L')}{cell(pair.right, segment.new, 'R')}
         </div>)
         if (!inserted && endsAt(pair.left?.no ?? null, pair.right?.no ?? null)) {
           rows.push(editor)
@@ -418,7 +355,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, comments, t }:
         rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (selected('L', row.old) || selected('R', row.new)) && (editing || nativeSide === null) && reviewCss.selected)} data-diff-line={row.kind}
           onPointerEnter={(event) => { extendAdd(event.buttons, row.old, row.new) }}>
           {singleSide !== 'R' && number('L', row.old, row.kind === 'del' && !labeled)}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del' && !labeled)}<span className={css.sign}>{SIGN[row.kind]}</span>
-          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? spans?.old.get(row.old) : spans?.new.get(row.new)} />
+          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
         </div>)
         if (!inserted && endsAt(row.old, row.new)) {
           rows.push(editor)
@@ -476,20 +413,13 @@ function Body(props: DiffFileProps): ReactNode {
   return <Lines {...props} comments={comments} />
 }
 
-/** Props of a file's menu. */
-interface FileMenuProps {
+/** File actions live only while their owning tab is visible. */
+function FileMenu({ name, file, handlers, t }: {
   readonly name: string
   readonly file: ForgeDiffFile
   readonly handlers: DiffFileHandlers
   readonly t: Translate
-}
-
-/** File actions live only while their owning tab is visible, so hiding the tab closes the menu. */
-function FileMenu(props: FileMenuProps): ReactNode {
-  return useContext(ViewVisibleContext) ? <OpenableFileMenu {...props} /> : null
-}
-
-function OpenableFileMenu({ name, file, handlers, t }: FileMenuProps): ReactNode {
+}): ReactNode {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <Menu
@@ -536,15 +466,14 @@ function OpenableFileMenu({ name, file, handlers, t }: FileMenuProps): ReactNode
 function DiffFileSection(props: DiffFileProps): ReactNode {
   const { file, expanded, large, revealed, badge, tooltip, viewed, handlers, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
-  const reach = useContext(SectionReachContext)
   const element = useRef<HTMLElement | null>(null)
   const [reached, setReached] = useState(false)
-  const waiting = expanded && !reached && reach !== null && drawsLines(file, large, revealed)
+  const waiting = expanded && !reached && drawsLines(file, large, revealed)
   useEffect(() => {
     /* v8 ignore next -- React attaches the section before it runs effects */
     if (!waiting || element.current === null) return
-    return reach.observe(element.current, () => { setReached(true) })
-  }, [waiting, reach])
+    return handlers.reach.observe(element.current, () => { setReached(true) })
+  }, [waiting, handlers.reach])
   const sectionRef = useCallback((node: HTMLElement | null) => {
     element.current = node
     handlers.section(file.path, node)
@@ -580,7 +509,7 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
             onChange={(event) => { handlers.view(file, event.target.checked) }} />
           <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
         </label>
-        <FileMenu name={name} file={file} handlers={handlers} t={t} />
+        {props.visible && <FileMenu name={name} file={file} handlers={handlers} t={t} />}
       </div>
       {expanded && (waiting ? <div className={css.unreached} style={placeholder} data-forge-diff-unreached="" /> : <Body {...props} />)}
     </section>

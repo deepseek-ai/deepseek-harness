@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-/** File sections reach the scrollport once, and deferred highlighting waits for idle time. */
+/** File sections reach the scrollport once. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SectionReach, whenIdle } from '../src/client/section-reach.ts'
+import { SectionReach } from '../src/client/section-reach.ts'
 
 /** An IntersectionObserver double that records its options and the elements it watches. */
 class FakeObserver {
@@ -78,71 +78,5 @@ describe('SectionReach', () => {
     reach.attach(null)
     expect(second.disconnected).toBe(true)
     expect(FakeObserver.made).toHaveLength(2)
-  })
-})
-
-describe('SectionReach.whenSettled', () => {
-  it('waits for the scrollport to stay still before running deferred work, and can be cancelled while it waits', () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    try {
-      vi.stubGlobal('requestIdleCallback', undefined)
-      const reach = new SectionReach()
-      const settled = vi.fn()
-      reach.whenSettled(settled)
-      vi.advanceTimersByTime(0)
-      expect(settled).toHaveBeenCalledOnce()
-
-      reach.scrolled()
-      const held = vi.fn()
-      reach.whenSettled(held)
-      vi.advanceTimersByTime(0)
-      expect(held).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(100)
-      reach.scrolled()
-      vi.advanceTimersByTime(100)
-      expect(held).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(200)
-      expect(held).toHaveBeenCalledOnce()
-
-      reach.scrolled()
-      const cancelled = vi.fn()
-      const stop = reach.whenSettled(cancelled)
-      vi.advanceTimersByTime(0)
-      stop()
-      vi.advanceTimersByTime(500)
-      expect(cancelled).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-})
-
-describe('whenIdle', () => {
-  it('waits for an idle period, at most the timeout, and can be cancelled', () => {
-    const request = vi.fn<(task: () => void, options: { timeout: number }) => number>(() => 7)
-    const cancel = vi.fn()
-    vi.stubGlobal('requestIdleCallback', request)
-    vi.stubGlobal('cancelIdleCallback', cancel)
-    const task = vi.fn()
-    const stop = whenIdle(task)
-    expect(request).toHaveBeenCalledWith(task, { timeout: 500 })
-    stop()
-    expect(cancel).toHaveBeenCalledWith(7)
-  })
-
-  it('runs after queued work where the browser has no requestIdleCallback', () => {
-    vi.useFakeTimers()
-    try {
-      vi.stubGlobal('requestIdleCallback', undefined)
-      const ran = vi.fn()
-      whenIdle(ran)
-      const cancelled = vi.fn()
-      whenIdle(cancelled)()
-      vi.runAllTimers()
-      expect(ran).toHaveBeenCalledOnce()
-      expect(cancelled).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

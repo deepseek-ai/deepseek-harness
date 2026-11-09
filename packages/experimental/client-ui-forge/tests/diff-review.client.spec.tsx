@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /** Diff gestures, browser clipboard output, and retained comments at their captured lines. */
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { DiffFile, type DiffFileProps } from '../src/client/DiffFile.tsx'
 import { en } from '../src/client/locales.ts'
 import { ReviewQueue } from '../src/client/review-queue.ts'
+import { SectionReach } from '../src/client/section-reach.ts'
 import { selectReviewLines } from '../src/client/review.ts'
 import type { ReviewActions } from '../src/client/ReviewComposer.tsx'
 import type { ForgeDiffFile } from '../src/types.ts'
@@ -20,8 +21,10 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const addToInput = vi.fn().mockReturnValue(true)
   const records = new ReviewQueue('diff-review')
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
-  const handlers = { toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn() }
-  const props: DiffFileProps = { file, expanded: true, large: false, revealed: false,
+  const handlers = {
+    toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn(), reach: new SectionReach(),
+  }
+  const props: DiffFileProps = { file, visible: true, expanded: true, large: false, revealed: false,
     text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
     viewed: 'unviewed', handlers, review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
@@ -250,8 +253,27 @@ it('places left and right records in unified rows and retains outdated records f
   expect(within(m.container).getByRole('button', { name: /changed lines/ })).toBeTruthy()
 })
 
-it('highlights a section drawn outside a changes view once the page is idle', async () => {
+it('draws a file\'s highlighted lines in the same render, so a changed file never shows its previous text', () => {
+  const code = (text: string): ForgeDiffFile => ({ ...file, path: 'a.ts', additions: 1, deletions: 0, status: 'added',
+    hunks: [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: 1, lines: [`+${text}`] }] })
+  const m = mount({ file: code('const value = old()'), split: false })
+  const line = (): HTMLElement => m.code('R', 1)
+  expect(line().textContent).toBe('const value = old()')
+  expect(line().hasAttribute('data-diff-code')).toBe(true)
+
+  m.rerender(<DiffFile {...m.props} file={code('const value = renewed()')} split={false} />)
+  expect(line().textContent).toBe('const value = renewed()')
+  expect(line().hasAttribute('data-diff-code')).toBe(true)
+})
+
+it('keeps a text selection across a render that leaves the file unchanged', () => {
   const m = mount({ file: { ...file, path: 'a.ts' } })
-  expect(m.container.querySelector('[data-diff-code]')).toBeNull()
-  await waitFor(() => { expect(m.container.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
+  const start = m.code('R', 3)
+  const node = start.firstChild
+  act(() => { document.getSelection()!.setBaseAndExtent(start, 0, start, start.childNodes.length) })
+  const selected = document.getSelection()?.toString()
+  expect(selected).toBe('new first')
+  m.rerender(<DiffFile {...m.props} file={{ ...file, path: 'a.ts' }} wrap={false} />)
+  expect(m.code('R', 3).firstChild).toBe(node)
+  expect(document.getSelection()?.toString()).toBe(selected)
 })

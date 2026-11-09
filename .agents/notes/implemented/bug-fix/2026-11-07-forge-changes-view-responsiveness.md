@@ -12,9 +12,9 @@ The forge changes view of a large change request froze the browser. Opening #798
 
 **Scoped `:has()` rules.** The navigator's covering rules name their row through `data-files-navigator-row`, which both hosts of `sidebar.files.navigator` set, so a DOM change outside such a row schedules no document-wide invalidation.
 
-**Sections draw what changed and what the reader reaches.** `ChangesTab` passes each memoized `DiffFile` values whose identity survives its renders: one handler object, one comment-actions object, and per-file strings and booleans. Tab visibility reaches only the menus and the composer through a context. An expanded file holds a 22 px row per drawn line until its section first comes within 1200 px of the scrollport, then draws its lines and keeps them. A jump keeps its target aligned for one second while nearby sections draw.
+**Sections draw what changed and what the reader reaches.** `ChangesTab` passes each memoized `DiffFile` values whose identity survives its renders: one handler object, one comment-actions object, and per-file strings and booleans. Tab visibility is a prop of every section, so a visibility change redraws them all; leaving the view measured +57 ms against reading it from a React context, which the client packages forbid business components to do. The scrollport's reach tracker travels in the handler object. An expanded file holds a 22 px row per drawn line until its section first comes within 1200 px of the scrollport, then draws its lines and keeps them. A jump keeps its target aligned for one second while nearby sections draw.
 
-**Idle-time highlighting.** Lines draw as plain text and take their tokens once the page is idle and the scrollport has been still for 200 ms, so tokenization never interrupts a scroll in progress. A pass highlights 100-line fragments while each idle period lasts and runs again only when the file's segments change or its own language's grammar loads; the shared highlighter's identity, which changes on every grammar load, no longer triggers one.
+**Highlighting in the drawing render.** A section highlights its lines in the same render that draws them, as before, so the drawn text is always the file's current text and a native selection keeps its text nodes.
 
 **Fewer serial reads.** A panel state equal to the published one reaches no follower. `changeRequestDiff` reads the patch and `.gitattributes` together. Snapshots carry the base commit as `baseSha`; `ForgeService.diff` passes it to the provider, and forge-github starts the compare read while its GraphQL read confirms the head.
 
@@ -26,10 +26,14 @@ The forge changes view of a large change request froze the browser. Opening #798
 
 **Full virtualization that also unmounts far sections** would bound the DOM after long scrolls, but a section holds a comment draft and a text selection, which unmounting loses.
 
+**Deferred idle-time highlighting** drew plain text and applied tokens once the page was idle and the scrollport still. It kept fast scrolling smooth, but tokens carry their own text, so a file whose content changed at the same path showed its previous text until the next pass, and replacing the plain text nodes collapsed a selection made in the meantime. Against it, highlighting while drawing raised the blocking time of scrolling all of #7985 from 22 ms to 1,634 ms and its longest frame gap from 34 ms to 817 ms; other operations stayed within 0.1 s.
+
+**The CSS Custom Highlight API** would paint token colors over unchanged text nodes and keep deferral without either defect, but it cannot apply the themes' bold and italic, and its cost over tens of thousands of ranges is unmeasured.
+
 **Highlighting in a Web Worker** removes tokenization from the main thread entirely, including a heavy grammar's first use, but the shared highlighter in `ui-primitives` owns Shiki; moving it is a separate change for every consumer.
 
 **A provider-private cache of base commits** would avoid the optional `baseSha` field, but it adds retained state without an owner that knows when a change request stops being watched.
 
 ## Consequences
 
-Opening #7985 now takes 0.5 s of main-thread work instead of 5.2 s, and file jumps, filtering, polling, and Agent turns no longer produce long tasks. In exchange, the browser's find in page does not see lines of files the reader has not approached, highlighting restarts at 100-line fragment boundaries, so a multi-line comment or string crossing one can be mis-colored, and the first use of a slow grammar, such as C++, still produces a 400–550 ms long task while scrolling. A diff read costs a second compare request when the base commit changed after the latest status.
+Opening #7985 now takes 0.5 s of main-thread work instead of 5.2 s, and file jumps, filtering, polling, and Agent turns no longer produce long tasks. In exchange, the browser's find in page does not see lines of files the reader has not approached, and scrolling onto files in a slow grammar's language, such as C++, highlights them during the scroll, up to about 0.8 s of main-thread work when that grammar is first used. A diff read costs a second compare request when the base commit changed after the latest status.

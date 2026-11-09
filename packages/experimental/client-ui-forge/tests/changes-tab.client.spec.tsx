@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** The changes tab: reading each source and scope, the toolbar, file sections, unchanged lines, notices, and failures. */
 import { useSyncExternalStore } from 'react'
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -836,30 +836,6 @@ describe('ChangesTab drawing work', () => {
     }
   })
 
-  it('highlights a file in idle periods, as many fragments as each period allows, then draws the tokens at once', async () => {
-    // Idle periods with this much time left, in turn; afterwards each period has none.
-    const remaining = [5]
-    const periods: number[] = []
-    vi.stubGlobal('requestIdleCallback', (task: IdleRequestCallback) => setTimeout(() => {
-      const left = remaining.shift() ?? 0
-      periods.push(left)
-      task({ didTimeout: false, timeRemaining: () => left })
-    }, 0))
-    vi.stubGlobal('cancelIdleCallback', (id: number) => { clearTimeout(id) })
-    try {
-      const m = mount()
-      await settle()
-      const app = m.section('src/app.ts')
-      await waitFor(() => { expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
-      // The first period highlights both sides of the file's one run and still has time; the second finds nothing left.
-      expect(periods.slice(0, 2)).toEqual([5, 0])
-    } finally {
-      // Unmounting cancels pending passes through the stubbed canceller.
-      cleanup()
-      vi.unstubAllGlobals()
-    }
-  })
-
   it('leaves file sections undrawn while the reader filters the file list', async () => {
     // The memoized section draws through its inner component, which the spy counts.
     const draw = vi.spyOn(DiffFileModule.DiffFile, 'type')
@@ -883,8 +859,7 @@ describe('ChangesTab layout', () => {
     expect([...app.querySelectorAll('[data-diff-pair]')].map(pair => pair.getAttribute('data-diff-pair'))).toEqual([
       'context', 'change', 'change', 'context', 'context', 'change',
     ])
-    // Highlighting waits for the page to be idle.
-    await waitFor(() => { expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0) })
+    expect(app.querySelectorAll('[data-diff-code]').length).toBeGreaterThan(0)
     expect(m.section('docs/gone.txt').querySelector('[data-diff-code]')).toBeNull()
     expect(rowTexts(m.section('docs/gone.txt'))).toEqual(['bye'])
     expect(rowTexts(m.section('src/new.ts'))).toEqual(['export const added = 1', ''])
