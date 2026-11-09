@@ -44,12 +44,12 @@ export class SubagentDepthError extends SubagentError {
  * @param maxDepth - optional absolute cap the resolved depth must not exceed.
  * @returns the child's non-negative safe-integer depth.
  * @throws {SubagentDepthError} when the resolved depth exceeds `maxDepth`.
- * @throws {SubagentError} `DEPTH_EXCEEDED` when the resolved depth leaves the safe-integer range.
+ * @throws {SubagentError} `INVALID_DEPTH` when the resolved depth leaves the safe-integer range.
  */
 export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): number {
   const childDepth = delegationDepthOf(parent) + 1
   if (!Number.isSafeInteger(childDepth)) {
-    throw new SubagentError('subagent child depth exceeds the safe-integer range', 'DEPTH_EXCEEDED')
+    throw new SubagentError('subagent child depth exceeds the safe-integer range', 'INVALID_DEPTH')
   }
   if (maxDepth !== undefined && childDepth > maxDepth) {
     throw new SubagentDepthError(childDepth, maxDepth)
@@ -183,9 +183,9 @@ export const SUBAGENT_DELEGATION_CONTEXT
  * @param parent - creator for fresh delegation; absent during target-only restoration.
  * @param composition - independent preset and any overrides read from a historical descriptor.
  * @returns A promise when mounting an independent preset; otherwise completes synchronously.
- * @throws {SubagentError} `PRESET_UNAVAILABLE` when the preset service is absent or the
- *   child cannot join its creator's preset revision. An unknown or unloadable selected
- *   preset rejects with the registry's `RemoteError` code.
+ * @throws {SubagentError} `PRESET_UNAVAILABLE` when a preset is selected but the preset
+ *   service is absent. An unknown or unloadable selected preset rejects with the registry's
+ *   `RemoteError` code.
  */
 export function applyChildComposition(
   childCtx: Context,
@@ -201,18 +201,7 @@ export function applyChildComposition(
       applyChildOverrides(childCtx, composition)
     })
   }
-  if (parent !== undefined) {
-    try {
-      childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
-    } catch (error: unknown) {
-      // The registry cannot import this package, so its plain join failures are classified here.
-      throw new SubagentError(
-        'the child cannot join the parent agent\'s current preset revision',
-        'PRESET_UNAVAILABLE',
-        { cause: error },
-      )
-    }
-  }
+  if (parent !== undefined) childCtx.get('agentPresets')?.composeFrom(childCtx, parent.ctx)
   applyChildOverrides(childCtx, composition)
 }
 

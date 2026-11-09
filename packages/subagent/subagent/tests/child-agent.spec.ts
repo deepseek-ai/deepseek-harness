@@ -101,7 +101,7 @@ describe('delegation depth limits', () => {
     const parent = parentAgent()
     parent.options.subagentDepth = Number.MAX_SAFE_INTEGER
     expect(() => resolveChildDepth(parent, undefined)).toThrow(expect.objectContaining({
-      name: 'SubagentError', code: 'DEPTH_EXCEEDED', message: 'subagent child depth exceeds the safe-integer range',
+      name: 'SubagentError', code: 'INVALID_DEPTH', message: 'subagent child depth exceeds the safe-integer range',
     }))
   })
 })
