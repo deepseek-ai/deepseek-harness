@@ -187,8 +187,11 @@ export function threadQuoteSummary(thread: ForgeReviewThread, range: string | nu
  */
 export function formatThreadQuote(thread: ForgeReviewThread, url: string, index: number): string {
   const anchor = thread.current ?? thread.original
+  const lines = anchor === null ? '' : anchor.startLine === anchor.endLine ? `${anchor.startLine}` : `${anchor.startLine}-${anchor.endLine}`
+  // Old-side lines number the file at the diff's base, so the quote names the commit only as where that diff ends.
   const where = thread.subject === 'file' || anchor === null ? 'Lines: whole file'
-    : `Side: ${thread.side}\nLines: ${anchor.startLine === anchor.endLine ? anchor.startLine : `${anchor.startLine}-${anchor.endLine}`}\nCommit: ${anchor.commit}`
+    : thread.side === 'R' ? `Side: R\nLines: ${lines}\nCommit: ${anchor.commit}`
+      : `Side: L (old side: the lines number the file before the pull request's changes)\nLines: ${lines}\nDiff head: ${anchor.commit}`
   const state = [thread.resolved ? 'resolved' : 'unresolved', ...thread.subject === 'line' && thread.current === null ? ['outdated'] : []].join(', ')
   const fence = thread.diffHunk === null ? '' : '`'.repeat(Math.max(3, ...Array.from(thread.diffHunk.matchAll(/`+/g), match => match[0].length + 1)))
   const hunk = thread.diffHunk === null ? '' : `Diff hunk:\n${fence}diff\n${thread.diffHunk}\n${fence}\n`

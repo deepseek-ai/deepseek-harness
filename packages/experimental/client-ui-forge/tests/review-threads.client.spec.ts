@@ -116,6 +116,15 @@ describe('thread quotes', () => {
     ].join('\n'))
   })
 
+  it('names an old-side thread\'s lines as the file before the change and its commit as where the diff ends', () => {
+    const old = reviewThread({ side: 'L', current: { commit: HEAD, startLine: 15, endLine: 15 }, diffHunk: null })
+    expect(formatThreadQuote(old, 'https://github.com/octo/demo/pull/7', 1)).toBe([
+      '## Review Thread 1', 'File: src/a.ts', 'Side: L (old side: the lines number the file before the pull request\'s changes)', 'Lines: 15',
+      `Diff head: ${HEAD}`, 'State: unresolved', `Source: ${old.comments[0]?.url}`,
+      'Comments:', '@reviewer (2026-11-05T08:00:00Z):', '> First comment',
+    ].join('\n'))
+  })
+
   it('formats an outdated single line at the lines it was written on, and a file thread without lines or hunk', () => {
     const outdated = reviewThread({ current: null, resolved: true, original: { commit: OLD, startLine: 9, endLine: 9 }, diffHunk: null,
       comments: [reviewComment({ url: null })] })

@@ -112,19 +112,21 @@ const pendingSchema = z.object({
   comments: z.object({ totalCount: z.number().int().nonnegative() }),
 })
 
+const pullRequestSchema = z.object({
+  id: z.string(),
+  headRefOid: z.string(),
+  locked: z.boolean(),
+  reviews: z.object({ nodes: z.array(pendingSchema) }),
+  reviewThreads: threadPageSchema,
+})
+
 const firstPageSchema = z.object({ data: z.object({
   viewer: z.object({ login: z.string() }).nullable(),
   repository: z.object({
     isArchived: z.boolean(),
     viewerPermission: z.string().nullable(),
-    pullRequest: z.object({
-      id: z.string(),
-      headRefOid: z.string(),
-      locked: z.boolean(),
-      reviews: z.object({ nodes: z.array(pendingSchema) }),
-      reviewThreads: threadPageSchema,
-    }),
-  }),
+    pullRequest: pullRequestSchema.nullable(),
+  }).nullable(),
 }) })
 
 const nextPageSchema = z.object({ data: z.object({ node: z.object({ headRefOid: z.string(), reviewThreads: threadPageSchema }) }) })
@@ -135,8 +137,8 @@ type ThreadNode = z.infer<typeof threadSchema>
 type CommentNode = z.infer<typeof commentSchema>
 
 /**
- * Read the review threads of a pull request while its head is `headSha`. The first page also names the head and the
- * signed-in user; every following thread page names the head again, so a head that moves during the read returns
+ * Read the review threads of a pull request while its head is `headSha`. The first page also names the head; every
+ * following thread page names the head again, so a head that moves during the read returns
  * `stale`, while a thread's comment pages do not. Threads are read up to `maxReviewThreads`, each with all of its
  * comments. A later page that would bring the pages read, measured as JSON, past `maxOutputBytes` is dropped with the
  * threads after it, and the result is marked truncated; `read` fails a first page whose output alone passes the limit.
@@ -165,7 +167,8 @@ export async function readReviewThreads(
   const parsed = firstPageSchema.safeParse(first.body)
   if (!parsed.success) return unexpected
   const repository = parsed.data.data.repository
-  const pull = repository.pullRequest
+  const pull = repository?.pullRequest
+  if (repository == null || pull == null) return { code: 'not-found', message: `pull request ${ref.number} was not found` }
   const moved = stale(pull.headRefOid)
   if (moved !== undefined) return moved
   let bytes = first.bytes

@@ -155,18 +155,18 @@ describe('GitHub provider review threads', () => {
     ] })
   })
 
-  it('maps pending comments, bots, deleted authors, a missing viewer, and drops a thread without comments', async () => {
+  it('maps pending comments, bots, and deleted authors, and drops a thread without comments', async () => {
     const gh = review(firstPage(page([
       threadNode('t1', { comments: page([
         commentNode('c1', { author: { __typename: 'Bot', login: 'ci', avatarUrl: null } }),
         commentNode('c2', { state: 'PENDING', author: null, url: null }),
       ]) }),
       threadNode('empty', { comments: page([]) }, { diffHunk: '' }),
-    ]), head, null))
+    ])))
 
     const result = await provider(gh.run).readReview(pull(7), head, signal)
 
-    expect(result).toMatchObject({ viewer: null, threads: [{ id: 't1', comments: [
+    expect(result).toMatchObject({ threads: [{ id: 't1', comments: [
       { id: 'c1', author: { login: 'ci', avatarUrl: null, bot: true }, pending: false },
       { id: 'c2', author: null, pending: true, url: null },
     ] }] })
@@ -187,6 +187,12 @@ describe('GitHub provider review threads', () => {
       { id: 'open', viewerCanReply: false, viewerCanResolve: true, comments: [{ id: 'mine', viewerCanEdit: true, viewerCanDelete: true }] },
       { id: 'settled', viewerCanReply: true, viewerCanResolve: true },
     ] })
+  })
+
+  it('reports no viewer when GitHub names none', async () => {
+    const gh = review(firstPage(page([]), head, null))
+
+    await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ viewer: null })
   })
 
   it('reports the pending review the viewer authored with its commit and comment count', async () => {
@@ -278,7 +284,7 @@ describe('GitHub provider review threads', () => {
       { 'comments-1': { data: { node: { comments: page([], 'comments-1') } } } }, 'GitHub review comment pagination did not advance'],
     ['a comment page without a cursor', firstPage(page([threadNode('t1', { comments: { pageInfo: { hasNextPage: true, endCursor: null }, nodes: [] } })])),
       {}, {}, 'GitHub review comment pagination did not advance'],
-    ['an unexpected first page', { data: { repository: { pullRequest: null } } }, {}, {}, 'unexpected GitHub response to the review thread read'],
+    ['an unexpected first page', { data: { repository: { pullRequest: { id: 'pull-7' } } } }, {}, {}, 'unexpected GitHub response to the review thread read'],
     ['an unexpected thread page', firstPage(page([], 'threads-1')), {}, {}, 'unexpected GitHub response to the review thread read'],
     ['an unexpected comment page', firstPage(page([threadNode('t1', { comments: page([], 'comments-1') })])), {}, {},
       'unexpected GitHub response to the review thread read'],
@@ -286,6 +292,14 @@ describe('GitHub provider review threads', () => {
     const gh = review(first, later, comments)
 
     await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toEqual({ code: 'unavailable', message })
+  })
+
+  it.each([
+    ['a pull request', { data: { viewer: { login: 'octo' }, repository: { isArchived: false, viewerPermission: 'READ', pullRequest: null } } }],
+    ['a repository', { data: { viewer: { login: 'octo' }, repository: null } }],
+  ])('reports %s GitHub does not have as not-found, as the commit listing does', async (_label, first) => {
+    await expect(provider(review(first).run).readReview(pull(7), head, signal))
+      .resolves.toEqual({ code: 'not-found', message: 'pull request 7 was not found' })
   })
 
   it('passes on the failure of any page read and of a response that is not JSON', async () => {
