@@ -29,7 +29,13 @@
   margin-inline-start: clamp(10px, calc(100% - 740px), calc(50% + 10px));
 }
 
-.card[data-resolved] { background: var(--dsw-alias-bg-layer-2); }
+.card[data-resolved] {
+  /* An elevated surface: the excerpt and the file at that commit scroll inside it, so the thumb takes the l2 pair,
+     which inherits down to them (see ui-theme styles/scrollbar.css for the rebinding contract). */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  background: var(--dsw-alias-bg-layer-2);
+}
 
 .folded {
   display: flex;
@@ -114,6 +120,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
   font-weight: 500;
@@ -126,6 +133,7 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  corner-shape: round;
   object-fit: cover;
 }
 
