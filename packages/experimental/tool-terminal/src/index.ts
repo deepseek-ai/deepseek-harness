@@ -12,7 +12,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendOperation, TerminalSendResult, TerminalSessionId as TerminalSessionIdType, TerminalSignal } from '@deepseek-ai/dsh-terminal'
-import { JobError } from '@deepseek-ai/dsh-jobs'
+import type {} from '@deepseek-ai/dsh-jobs'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { sendSource } from './background.ts'
@@ -258,7 +258,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const id = sessionId(args)
       const request = { text: args.text, submit: args.submit ?? true }
       if (args.run_in_background === true) {
-        if (!enableRunInBackground) throw new JobError('background terminal sends are disabled by tool-terminal configuration', 'JOB_BACKGROUND_DISABLED')
+        if (!enableRunInBackground) throw new ToolArgsError(['run_in_background is disabled by tool-terminal configuration (enableRunInBackground: false)'])
         const jobs = ctx.get('jobs')
         if (jobs === undefined) throw new ToolContextUnavailableError('background terminal sends require @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
         let cancelRequested = false

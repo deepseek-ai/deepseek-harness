@@ -344,7 +344,7 @@ describe('tool-terminal foreground API', () => {
     await call(disabled.ctx, 'terminal_open', { type: 'stub' }, disabled.agent)
     expect((await call(disabled.ctx, 'terminal_send', {
       sessionId: 'pty-1', text: 'work', run_in_background: true,
-    }, disabled.agent)).error?.info).toEqual({ name: 'JobError', code: 'JOB_BACKGROUND_DISABLED' })
+    }, disabled.agent)).error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
 
     const defaults = await setupBase(false)
     ToolPty.apply(defaults.ctx)
