@@ -9,11 +9,22 @@ import type { GraphqlReader } from './commits.ts'
 import { GhUnavailableError, type GhOutput, type GhRunner } from './gh.ts'
 import { checkedRepository } from './urls.ts'
 
+/**
+ * Pull request fields every write checks: its id, its head, and its pending reviews. GitHub lists a pending review only
+ * to its author, who has at most one per pull request; the page reads the most GitHub returns, so the viewer's review is
+ * found by `viewerDidAuthor` even if another user's were listed first.
+ */
+const CHECKED_PULL = 'id headRefOid reviews(states: PENDING, first: 100) { nodes { id viewerDidAuthor } }'
+
 /** The pull request, its head, and the signed-in user's pending review; variables `owner` and `name` are strings, `number` an integer. */
 export const WRITE_CHECK_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) { id headRefOid reviews(states: PENDING, first: 1) { nodes { id viewerDidAuthor } } }
-  }
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { ${CHECKED_PULL} } }
+}`
+
+/** The same check plus the pull request that holds the thread or comment `target`, a string variable. */
+export const WRITE_TARGET_CHECK_QUERY = `query($owner: String!, $name: String!, $number: Int!, $target: ID!) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { ${CHECKED_PULL} } }
+  target: node(id: $target) { ... on PullRequestReviewThread { pullRequest { id } } ... on PullRequestReviewComment { pullRequest { id } } }
 }`
 
 /** Start a pending review at a commit, with the line threads of `threads`. */
@@ -60,13 +71,22 @@ const EVENTS = { comment: 'COMMENT', approve: 'APPROVE', 'request-changes': 'REQ
 /** HTTP statuses that mean GitHub refused the request, so it changed nothing. */
 const REFUSED = /\(HTTP (?:400|401|403|404|409|422)\)/
 
-const checkSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: z.object({
-  id: z.string(),
-  headRefOid: z.string(),
-  reviews: z.object({ nodes: z.array(z.object({ id: z.string(), viewerDidAuthor: z.boolean() })) }),
-}) }) }) })
+/**
+ * GraphQL error types that mean GitHub refused a mutation before applying it. An error without one of them, such as
+ * GitHub's "Something went wrong … may be the result of a timeout", leaves the outcome unknown.
+ */
+const REFUSALS: ReadonlySet<string> = new Set(['FORBIDDEN', 'INSUFFICIENT_SCOPES', 'NOT_FOUND', 'RATE_LIMITED', 'UNPROCESSABLE'])
 
-const graphqlErrors = z.object({ errors: z.array(z.object({ message: z.string() })).min(1) })
+const checkSchema = z.object({ data: z.object({
+  repository: z.object({ pullRequest: z.object({
+    id: z.string(),
+    headRefOid: z.string(),
+    reviews: z.object({ nodes: z.array(z.object({ id: z.string(), viewerDidAuthor: z.boolean() })) }),
+  }) }),
+  target: z.object({ pullRequest: z.object({ id: z.string() }).optional() }).nullable().optional(),
+}) })
+
+const graphqlErrors = z.object({ errors: z.array(z.object({ message: z.string(), type: z.string().optional() })).min(1) })
 
 /** One mutation and the payload field that holds its result. */
 interface Mutation {
@@ -82,11 +102,12 @@ const stringId = z.object({ id: z.string() })
 
 /**
  * Write to the review threads or the pending review of a pull request. One read first checks that the head is still
- * `write.headSha` and finds the signed-in user's pending review; a moved head returns `stale` without writing. A pending
- * reply or comment without a pending review starts one at `write.headSha`, so it takes two mutations. A reply at once is
- * refused with `failed` while the user has a pending review, since GitHub would add it to that review. Mutations send
- * their variables as JSON on stdin, and none is retried: a refusal GitHub reports returns `failed`, and an answer that
- * does not show whether GitHub applied a mutation returns `unknown`.
+ * `write.headSha`, finds the signed-in user's pending review, and, for a write to a thread or comment, that the pull
+ * request holds it; a moved head returns `stale` and a thread or comment elsewhere `failed`, both without writing. A
+ * pending reply without a pending review first starts an empty one at `write.headSha`; when the reply then fails, that
+ * empty review stays. A reply at once is refused with `failed` while the user has a pending review, since GitHub would
+ * add it to that review. Mutations send their variables as JSON on stdin, and none is retried: a refusal GitHub reports
+ * returns `failed`, and an answer that does not show whether GitHub applied a mutation returns `unknown`.
  * @param read - runs the check as one GraphQL request.
  * @param gh - bounded, cancellable GitHub CLI runner for the mutations.
  * @param ref - pull request, with an owner and name already checked for inlining.
@@ -99,14 +120,19 @@ export async function writeGitHubReview(
   read: GraphqlReader, gh: GhRunner, ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal,
 ): Promise<ForgeReviewWriteResult> {
   const { host, owner, name } = checkedRepository(ref)
+  const target = targetOf(write)
   const checked = await read(['api', 'graphql', '--hostname', host,
-    '-f', `query=${WRITE_CHECK_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `number=${ref.number}`], signal)
+    '-f', `query=${target === null ? WRITE_CHECK_QUERY : WRITE_TARGET_CHECK_QUERY}`, '-f', `owner=${owner}`, '-f', `name=${name}`,
+    '-F', `number=${ref.number}`, ...target === null ? [] : ['-f', `target=${target}`]], signal)
   if (!checked.ok) return { ok: false, code: 'failed', message: checked.failure.message }
   const parsed = checkSchema.safeParse(checked.body)
   if (!parsed.success) return { ok: false, code: 'failed', message: 'unexpected GitHub response to the pull request check' }
   const pull = parsed.data.data.repository.pullRequest
   if (pull.headRefOid.toLowerCase() !== write.headSha.toLowerCase()) {
     return { ok: false, code: 'stale', message: `the pull request head moved from ${write.headSha} to ${pull.headRefOid}` }
+  }
+  if (target !== null && parsed.data.data.target?.pullRequest?.id !== pull.id) {
+    return { ok: false, code: 'failed', message: `${target} is not a review thread or comment of pull request ${ref.number}` }
   }
   const pending = pull.reviews.nodes.find(review => review.viewerDidAuthor)?.id ?? null
   signal.throwIfAborted()
@@ -159,6 +185,21 @@ export async function writeGitHubReview(
   }
 }
 
+/** The thread or comment a write changes, or null for a write to the pull request's pending review. */
+function targetOf(write: ForgeReviewWrite): string | null {
+  switch (write.kind) {
+    case 'reply':
+    case 'resolve': return write.thread
+    case 'edit-comment':
+    case 'delete-comment': return write.comment
+    case 'add-pending':
+    case 'submit-pending':
+    case 'discard-pending': return null
+    /* v8 ignore next -- closed ForgeReviewWrite kind union exhaustiveness guard */
+    default: return assertNever(write, 'ForgeReviewWrite.kind')
+  }
+}
+
 /** The fields of a line thread in a pending review, for one side of the diff. */
 function draftThread(comment: ForgeLineComment): Readonly<Record<string, unknown>> {
   const side = comment.side === 'L' ? 'LEFT' : 'RIGHT'
@@ -172,7 +213,8 @@ function missingReview(review: ForgeReviewId): ForgeReviewWriteResult {
 
 /**
  * Send one mutation with its query and variables as JSON on stdin.
- * @returns the payload of `mutation.field`; `failed` when GitHub reports a refusal or `gh` cannot start, else `unknown`.
+ * @returns the payload of `mutation.field`; `failed` when GitHub reports a refusal by its HTTP status or GraphQL error
+ * type, or `gh` cannot start, else `unknown`.
  */
 async function sendMutation(gh: GhRunner, host: string, mutation: Mutation, signal: AbortSignal): Promise<Sent> {
   let output: GhOutput
@@ -189,7 +231,10 @@ async function sendMutation(gh: GhRunner, host: string, mutation: Mutation, sign
   const value = payload.success ? payload.data.data[mutation.field] : undefined
   if (value !== undefined && value !== null) return { ok: true, payload: value }
   const errors = graphqlErrors.safeParse(body)
-  if (errors.success) return { ok: false, code: 'failed', message: errors.data.errors.map(error => error.message).join('; ') }
+  if (errors.success) {
+    const refused = errors.data.errors.every(error => error.type !== undefined && REFUSALS.has(error.type))
+    return { ok: false, code: refused ? 'failed' : 'unknown', message: errors.data.errors.map(error => error.message).join('; ') }
+  }
   if (output.exitCode !== 0) {
     const message = output.stderr.trim() || output.stdout.trim() || `gh exited with ${output.exitCode}`
     return { ok: false, code: REFUSED.test(output.stderr) ? 'failed' : 'unknown', message }

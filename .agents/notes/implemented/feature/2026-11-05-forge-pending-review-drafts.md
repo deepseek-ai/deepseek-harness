@@ -24,7 +24,7 @@ GitHub measurements on a private test repository decided three rules. While the 
 
 **Recording drafts in the Session log.** The log records what reaches the model; review drafts are host state the model never sees, and other Sessions on the same pull request would not see them.
 
-**Retrying a write after an unknown outcome.** A lost response does not show whether GitHub applied the mutation; the view reads the threads again and asks the user to check them, as direct submission already does.
+**Retrying a write after an unknown outcome.** A lost response does not show whether GitHub applied the mutation. A submission of the pending review is kept as the write to reconcile, as a direct submission is, and blocks another submission until the user checks GitHub; a reply, resolution, or comment change reads the threads again and asks the user to check them before trying again.
 
 ## Consequences
 

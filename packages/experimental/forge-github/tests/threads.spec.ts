@@ -195,18 +195,19 @@ describe('GitHub provider review threads', () => {
     await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ viewer: null })
   })
 
-  it('reports the pending review the viewer authored with its commit and comment count', async () => {
-    const reviews = { nodes: [{ id: 'review-1', viewerDidAuthor: true, commit: { oid: older }, comments: { totalCount: 2 } }] }
+  it('reports the pending review the viewer authored with its comment count, after another user\'s', async () => {
+    const reviews = { nodes: [
+      { id: 'review-other', viewerDidAuthor: false, comments: { totalCount: 5 } },
+      { id: 'review-1', viewerDidAuthor: true, comments: { totalCount: 2 } },
+    ] }
     const gh = review(firstPage(page([]), head, { login: 'octo' }, { reviews }))
 
     await expect(provider(gh.run).readReview(pull(7), head, signal))
-      .resolves.toMatchObject({ pendingReview: { id: 'review-1', commit: older, comments: 2 } })
+      .resolves.toEqual(expect.objectContaining({ pendingReview: { id: 'review-1', comments: 2 } }))
   })
 
-  it.each([
-    ['another user authored', { id: 'review-2', viewerDidAuthor: false, commit: { oid: head }, comments: { totalCount: 1 } }],
-    ['names no commit', { id: 'review-3', viewerDidAuthor: true, commit: null, comments: { totalCount: 1 } }],
-  ] as const)('reports no pending review for one %s', async (_label, node) => {
+  it('reports no pending review for one another user authored', async () => {
+    const node = { id: 'review-2', viewerDidAuthor: false, comments: { totalCount: 1 } }
     const gh = review(firstPage(page([]), head, { login: 'octo' }, { reviews: { nodes: [node] } }))
 
     await expect(provider(gh.run).readReview(pull(7), head, signal)).resolves.toMatchObject({ pendingReview: null })

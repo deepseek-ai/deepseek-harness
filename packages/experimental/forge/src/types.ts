@@ -252,8 +252,6 @@ export interface ForgeReviewThread {
 export interface ForgePendingReview {
   /** Host identity of the review. */
   readonly id: ForgeReviewId
-  /** Full object name of the commit the review addresses. */
-  readonly commit: string
   /** Comments the review holds. */
   readonly comments: number
 }
@@ -306,7 +304,7 @@ export type ForgeReviewWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 
-/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+/** Result of a review submission; unknown outcomes must be checked on the host before another submission. */
 export type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }

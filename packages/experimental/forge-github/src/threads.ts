@@ -40,7 +40,7 @@ export const REVIEW_QUERY = `query($owner: String!, $name: String!, $number: Int
     isArchived viewerPermission
     pullRequest(number: $number) {
       id headRefOid locked
-      reviews(states: PENDING, first: 1) { nodes { id viewerDidAuthor commit { oid } comments { totalCount } } }
+      reviews(states: PENDING, first: 100) { nodes { id viewerDidAuthor comments { totalCount } } }
       reviewThreads(first: $first) { ${THREAD_PAGE} }
     }
   }
@@ -108,7 +108,6 @@ const threadPageSchema = z.object({ pageInfo: pageInfoSchema, nodes: z.array(thr
 const pendingSchema = z.object({
   id: z.string(),
   viewerDidAuthor: z.boolean(),
-  commit: commitSchema,
   comments: z.object({ totalCount: z.number().int().nonnegative() }),
 })
 
@@ -175,9 +174,9 @@ export async function readReviewThreads(
   let page = pull.reviewThreads
   const threads: ForgeReviewThread[] = []
   const viewer = parsed.data.data.viewer?.login ?? null
+  // GitHub lists a pending review only to its author; reading up to 100 finds the viewer's even if others were listed first.
   const pending = pull.reviews.nodes.find(review => review.viewerDidAuthor)
-  const pendingReview = pending?.commit == null ? null
-    : { id: pending.id as ForgeReviewId, commit: pending.commit.oid, comments: pending.comments.totalCount }
+  const pendingReview = pending === undefined ? null : { id: pending.id as ForgeReviewId, comments: pending.comments.totalCount }
   // GitHub refuses every write to an archived repository, and comments on a locked conversation from anyone without write access.
   const viewerCanReview = !repository.isArchived && (!pull.locked || WRITERS.has(repository.viewerPermission ?? ''))
   const result = (truncated: boolean): ForgeReviewData => ({ headSha, viewer, threads, truncated, pendingReview, viewerCanReview })

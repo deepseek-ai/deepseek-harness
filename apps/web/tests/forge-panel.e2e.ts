@@ -250,16 +250,17 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
     process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
       pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
-        reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, commit: { oid: current.pending.commit },
-          comments: { totalCount: pendingComments } }] },
+        reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
         reviewThreads: page(threads) } } } }))
     process.exit(0)
   }
   if (query.includes('reviews(states: PENDING')) {
     const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
     const pending = review().pending
+    // Every thread and comment the double serves belongs to the pull request it was read from.
+    const target = args.some(arg => arg.startsWith('target=')) ? { target: { pullRequest: { id: 'pull-' + number } } } : {}
     process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid,
-      reviews: { nodes: pending === null ? [] : [{ id: pending.id, viewerDidAuthor: true }] } } } } }))
+      reviews: { nodes: pending === null ? [] : [{ id: pending.id, viewerDidAuthor: true }] } } }, ...target } }))
     process.exit(0)
   }
   if (query.includes('pullRequest(number: $number)')) {

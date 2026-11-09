@@ -195,6 +195,25 @@ describe('ThreadCard writes', () => {
     expect(two.getByRole('group', { name: en['thread.deleteConfirm'] })).toBeTruthy()
   })
 
+  it('keeps a thread resolved elsewhere open while the reader writes a reply or an edit in it, then folds it', () => {
+    const open = reviewThread({ id: 't1' as ForgeThreadId, viewerCanReply: true, comments: [reviewComment({ viewerCanEdit: true })] })
+    const resolved = { ...open, resolved: true }
+    const view = render(<ThreadCard thread={open} place={LINE} actions={actions({ writes: writes() })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    fireEvent.change(view.getByRole('textbox'), { target: { value: 'Half written' } })
+    view.rerender(<ThreadCard thread={resolved} place={LINE} actions={actions({ writes: writes() })} t={t} />)
+    expect(view.getByRole('textbox')).toHaveProperty('value', 'Half written')
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }))
+    expect(view.getByText('Resolved thread · reviewer')).toBeTruthy()
+
+    fireEvent.click(view.getByRole('button', { name: 'Expand' }))
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Edit' }))
+    fireEvent.change(view.getByRole('textbox', { name: 'Edit comment' }), { target: { value: 'Reworded' } })
+    fireEvent.click(view.getByRole('button', { name: 'Collapse' }))
+    expect(view.getByRole('textbox', { name: 'Edit comment' })).toHaveProperty('value', 'Reworded')
+  })
+
   it('closes the comment menu without acting', () => {
     const write = vi.fn<ThreadWrites['write']>()
     const view = render(<ThreadCard thread={reviewThread({ comments: [reviewComment({ viewerCanEdit: true })] })} place={LINE}

@@ -152,6 +152,12 @@ type ChangesData =
     readonly fileUrls: Readonly<Record<string, string>>
   }
 
+/** Why the code host did not take a review write, and whether it may have applied it. */
+interface WriteRefusal {
+  readonly message: string
+  readonly unknown: boolean
+}
+
 /** Unchanged lines read for one loaded diff: each file's new side and its expanded gaps. */
 interface Expansion {
   readonly data: ChangesData | null
@@ -498,13 +504,19 @@ export function ChangesTab({
   // pending review settles before the next write looks for one.
   const [reviewRevision, setReviewRevision] = useState(0)
   const writing = useRef<Promise<unknown>>(Promise.resolve())
-  const writeReview = (url: string, write: ForgeReviewWrite): Promise<string | undefined> => {
-    const run = async (): Promise<string | undefined> => {
+  /**
+   * Send one write after the earlier ones.
+   * @returns undefined once the host took it, else its message and whether its outcome is unknown.
+   */
+  const sendWrite = (url: string, write: ForgeReviewWrite): Promise<WriteRefusal | undefined> => {
+    const run = async (): Promise<WriteRefusal | undefined> => {
       const response = await changeRequestReviewWrite(url, write)
       if (!response.ok) {
-        if (response.error.code === 'forgePanel/not-bound') return t('thread.writeFailed', { message: response.error.message })
+        if (response.error.code === 'forgePanel/not-bound') {
+          return { message: t('thread.writeFailed', { message: response.error.message }), unknown: false }
+        }
         setReviewRevision(value => value + 1)
-        return t('thread.writeUnknown')
+        return { message: t('thread.writeUnknown'), unknown: true }
       }
       const result = response.value
       if (result.ok) {
@@ -512,14 +524,14 @@ export function ChangesTab({
         return undefined
       }
       switch (result.code) {
-        case 'unsupported': return t('thread.writeUnsupported')
+        case 'unsupported': return { message: t('thread.writeUnsupported'), unknown: false }
         case 'failed':
           setReviewRevision(value => value + 1)
-          return t('thread.writeFailed', { message: result.message })
-        case 'stale': return t('thread.writeStale')
+          return { message: t('thread.writeFailed', { message: result.message }), unknown: false }
+        case 'stale': return { message: t('thread.writeStale'), unknown: false }
         case 'unknown':
           setReviewRevision(value => value + 1)
-          return t('thread.writeUnknown')
+          return { message: t('thread.writeUnknown'), unknown: true }
         /* v8 ignore next -- closed ForgeReviewWriteResult code union exhaustiveness guard */
         default: return assertNever(result.code, 'ForgeReviewWriteResult.code')
       }
@@ -528,6 +540,7 @@ export function ChangesTab({
     writing.current = next
     return next
   }
+  const writeReview = async (url: string, write: ForgeReviewWrite): Promise<string | undefined> => (await sendWrite(url, write))?.message
   const choices = useStore(store => store.byTab[tab.id])
   const [wanted, setWanted] = useState<Wanted | null>(null)
   const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
@@ -774,11 +787,20 @@ export function ChangesTab({
           body: latest.body, comments: latest.comments.map(item => item.comment) }, url => queue.finish(true, url))
         return
       }
+      // The submission is kept as the write to reconcile until the host answers, so an unknown outcome blocks another
+      // submission, which would otherwise publish a second review once the pending review no longer reads.
       void finishWrite(async () => {
-        const failure = await writeReview(data.url, { kind: 'submit-pending', headSha: data.headSha, review: pendingReview.id,
+        if (!queue.begin({ kind: 'review', headSha: data.headSha, event: latest.event, body: latest.body, comments: [] })) {
+          return t('review.saveFailed')
+        }
+        const refusal = await sendWrite(data.url, { kind: 'submit-pending', headSha: data.headSha, review: pendingReview.id,
           event: latest.event, body: latest.body })
-        if (failure === undefined && !queue.finish(true)) report('review.saveFailed')
-        return failure
+        if (refusal === undefined) {
+          if (!queue.finish(true)) report('review.saveFailed')
+          return undefined
+        }
+        if (!refusal.unknown) queue.finish(false)
+        return refusal.message
       }, 'review.submitted')
     }}
     discard={pendingReview === null ? undefined : () => {

@@ -5,7 +5,7 @@
  * unresolving the thread, and editing or deleting the user's own comments.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, IconRightUpOutlineRegular, MarkdownText,
@@ -169,8 +169,12 @@ function TextForm({ label, initial, busy, error, cancel, children }: {
   </div>
 }
 
-function Comment({ comment, last, actions, labels, now, t }: {
+/** Tells the card which of its forms hold text the reader is writing, so it does not fold them away. */
+type Drafting = (form: string, active: boolean) => void
+
+function Comment({ comment, last, actions, labels, now, drafting, t }: {
   readonly comment: ForgeReviewComment
+  readonly drafting: Drafting
   /** Whether the comment is the only one of its thread, so deleting it deletes the thread. */
   readonly last: boolean
   readonly actions: ThreadActions
@@ -179,6 +183,10 @@ function Comment({ comment, last, actions, labels, now, t }: {
   readonly t: Translate
 }): ReactNode {
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
+  useEffect(() => {
+    drafting(comment.id, mode === 'edit')
+    return () => { drafting(comment.id, false) }
+  }, [drafting, comment.id, mode])
   const [menu, setMenu] = useState(false)
   const writing = useWriting(t)
   const writes = actions.writes
@@ -235,11 +243,16 @@ function Comment({ comment, last, actions, labels, now, t }: {
  * The reply field of a thread. Without a pending review it replies at once, and its menu starts one with the reply; with
  * one, it adds the reply to it, since GitHub adds every reply of the user to the pending review.
  */
-function Reply({ thread, writes, t }: PropsLocale<typeof NS> & {
+function Reply({ thread, writes, drafting, t }: PropsLocale<typeof NS> & {
   readonly thread: ForgeReviewThread
   readonly writes: ThreadWrites
+  readonly drafting: Drafting
 }): ReactNode {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    drafting('reply', open)
+    return () => { drafting('reply', false) }
+  }, [drafting, open])
   const writing = useWriting(t)
   if (!open) {
     return <button type="button" className={css.replyPrompt} onClick={() => { setOpen(true) }}>{t('thread.replyPlaceholder')}</button>
@@ -293,7 +306,18 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
   const labels = useMarkdownLabels(t)
   const now = Date.now()
   const focused = actions.focused?.id === thread.id && actions.focused.revision !== foldedAt
-  const unfolded = open || !thread.resolved || focused
+  // A thread resolved elsewhere while the reader writes a reply or an edit stays open, so the text is not lost.
+  const [drafts, setDrafts] = useState<ReadonlySet<string>>(() => new Set())
+  const drafting = useCallback<Drafting>((form, active) => {
+    setDrafts((value) => {
+      if (value.has(form) === active) return value
+      const next = new Set(value)
+      if (active) next.add(form)
+      else next.delete(form)
+      return next
+    })
+  }, [])
+  const unfolded = open || !thread.resolved || focused || drafts.size > 0
   const side = place.kind === 'line' ? place.side : thread.side
   const original = place.kind === 'outdated' && thread.original !== null ? thread.original : null
   // The composer names an outdated thread by the lines it was written on, as its label does.
@@ -330,9 +354,9 @@ export function ThreadCard({ thread, place, actions, split = false, t }: PropsLo
       && <Excerpt hunk={thread.diffHunk} side={thread.side} lines={original.endLine - original.startLine + 1} />}
     <div className={css.comments}>
       {thread.comments.map(comment => <Comment key={comment.id} comment={comment} last={thread.comments.length === 1}
-        actions={actions} labels={labels} now={now} t={t} />)}
+        actions={actions} labels={labels} now={now} drafting={drafting} t={t} />)}
     </div>
-    {writes !== null && thread.viewerCanReply && <Reply thread={thread} writes={writes} t={t} />}
+    {writes !== null && thread.viewerCanReply && <Reply thread={thread} writes={writes} drafting={drafting} t={t} />}
     <div className={css.actions}>
       <Button size="sm" onClick={() => { if (!actions.addToInput(thread, range)) actions.inputFailed() }}>
         {t('review.addToInput')}

@@ -5,7 +5,7 @@ import { GhTimeoutError, GhUnavailableError, type GhOutput, type GhRunner } from
 import { GitHubProvider } from '../src/provider.ts'
 import {
   ADD_REVIEW_MUTATION, ADD_THREAD_MUTATION, DELETE_COMMENT_MUTATION, DELETE_REVIEW_MUTATION, EDIT_COMMENT_MUTATION, REPLY_MUTATION,
-  RESOLVE_MUTATION, SUBMIT_REVIEW_MUTATION, UNRESOLVE_MUTATION, WRITE_CHECK_QUERY,
+  RESOLVE_MUTATION, SUBMIT_REVIEW_MUTATION, UNRESOLVE_MUTATION, WRITE_CHECK_QUERY, WRITE_TARGET_CHECK_QUERY,
 } from '../src/review-writes.ts'
 import { demo, pull } from './fixtures.ts'
 
@@ -20,10 +20,13 @@ function output(stdout: unknown, exitCode = 0, stderr = ''): GhOutput {
   return { exitCode, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr }
 }
 
-function checked(pending: string | null = null, headRefOid = head, viewerDidAuthor = true): GhOutput {
+/** The check's answer: the head, the pending review, and the pull request that holds the write's thread or comment. */
+function checked(
+  pending: string | null = null, headRefOid = head, viewerDidAuthor = true, target: unknown = { pullRequest: { id: 'pull-7' } },
+): GhOutput {
   return output({ data: { repository: { pullRequest: {
     id: 'pull-7', headRefOid, reviews: { nodes: pending === null ? [] : [{ id: pending, viewerDidAuthor }] },
-  } } } })
+  } }, target } })
 }
 
 /** One recorded `gh` call: its arguments and, for a mutation, the JSON it sent on stdin. */
@@ -66,8 +69,8 @@ describe('GitHub review writes', () => {
     await expect(provider(gh.run).writeReview(pull(7), { kind: 'reply', headSha: head, thread, body: 'Fixed in `$(x)`', pending: false }, signal))
       .resolves.toEqual({ ok: true })
     expect(gh.calls).toEqual([
-      { args: ['api', 'graphql', '--hostname', 'github.com', '-f', `query=${WRITE_CHECK_QUERY}`, '-f', `owner=${demo.owner}`,
-        '-f', `name=${demo.name}`, '-F', 'number=7'], input: undefined },
+      { args: ['api', 'graphql', '--hostname', 'github.com', '-f', `query=${WRITE_TARGET_CHECK_QUERY}`, '-f', `owner=${demo.owner}`,
+        '-f', `name=${demo.name}`, '-F', 'number=7', '-f', `target=${thread}`], input: undefined },
       { args: MUTATION_ARGS, input: { query: REPLY_MUTATION, variables: { thread, body: 'Fixed in `$(x)`', review: null } } },
     ])
   })
@@ -103,7 +106,7 @@ describe('GitHub review writes', () => {
 
   it('returns the failure of starting a pending review and an unexpected start without replying', async () => {
     const write: ForgeReviewWrite = { kind: 'reply', headSha: head, thread, body: 'Later', pending: true }
-    const refused = fakeGh(checked(), output({ data: { addPullRequestReview: null }, errors: [{ message: 'Pull request is locked' }] }, 1))
+    const refused = fakeGh(checked(), output({ data: { addPullRequestReview: null }, errors: [{ type: 'UNPROCESSABLE', message: 'Pull request is locked' }] }, 1))
     await expect(provider(refused.run).writeReview(pull(7), write, signal))
       .resolves.toEqual({ ok: false, code: 'failed', message: 'Pull request is locked' })
     expect(refused.calls).toHaveLength(2)
@@ -196,6 +199,34 @@ describe('GitHub review writes', () => {
     await expect(provider(upper.run).writeReview(pull(7), write, signal)).resolves.toEqual({ ok: true })
   })
 
+  it('checks without a target for a write to the pending review', async () => {
+    const gh = fakeGh(checked(review), payload('deletePullRequestReview', { pullRequestReview: { id: review } }))
+
+    await provider(gh.run).writeReview(pull(7), { kind: 'discard-pending', headSha: head, review }, signal)
+
+    expect(gh.calls[0]?.args).toEqual(['api', 'graphql', '--hostname', 'github.com', '-f', `query=${WRITE_CHECK_QUERY}`,
+      '-f', `owner=${demo.owner}`, '-f', `name=${demo.name}`, '-F', 'number=7'])
+  })
+
+  it.each([
+    ['another pull request', { pullRequest: { id: 'pull-8' } }],
+    ['nothing GitHub knows', null],
+    ['a node that is not a thread or comment', {}],
+  ] as const)('refuses a thread or comment on %s without a mutation', async (_label, target) => {
+    const writes: ReadonlyArray<readonly [ForgeReviewWrite, string]> = [
+      [{ kind: 'reply', headSha: head, thread, body: 'Hi', pending: false }, thread],
+      [{ kind: 'resolve', headSha: head, thread, resolved: true }, thread],
+      [{ kind: 'edit-comment', headSha: head, comment, body: 'Text' }, comment],
+      [{ kind: 'delete-comment', headSha: head, comment }, comment],
+    ]
+    for (const [write, named] of writes) {
+      const gh = fakeGh(checked(null, head, true, target))
+      await expect(provider(gh.run).writeReview(pull(7), write, signal))
+        .resolves.toEqual({ ok: false, code: 'failed', message: `${named} is not a review thread or comment of pull request 7` })
+      expect(gh.calls).toHaveLength(1)
+    }
+  })
+
   it('reports a failed or unexpected check as failed without a mutation', async () => {
     const write: ForgeReviewWrite = { kind: 'resolve', headSha: head, thread, resolved: true }
     const down = fakeGh(output('', 1, 'gh: Server Error (HTTP 502)'))
@@ -212,7 +243,12 @@ describe('GitHub review writes', () => {
     ['a gh that cannot start', { throws: new GhUnavailableError('gh could not start: ENOENT') }, 'failed', 'gh could not start: ENOENT'],
     ['a gh that times out', { throws: new GhTimeoutError('gh api timed out after 30000ms') }, 'unknown', 'gh api timed out after 30000ms'],
     ['a thrown value that is not an error', { throws: 'lost' }, 'unknown', 'lost'],
-    ['GraphQL errors', output({ data: { resolveReviewThread: null }, errors: [{ message: 'one' }, { message: 'two' }] }, 1), 'failed', 'one; two'],
+    ['GraphQL refusals', output({ data: { resolveReviewThread: null }, errors: [{ type: 'NOT_FOUND', message: 'one' }, { type: 'FORBIDDEN', message: 'two' }] }, 1),
+      'failed', 'one; two'],
+    ['a GraphQL error without a type, as for a timeout', output({ data: null, errors: [{ message: 'Something went wrong while executing your query' }] }, 1),
+      'unknown', 'Something went wrong while executing your query'],
+    ['a refusal beside an error of another type', output({ errors: [{ type: 'UNPROCESSABLE', message: 'one' }, { type: 'INTERNAL', message: 'two' }] }, 1),
+      'unknown', 'one; two'],
     ['an HTTP refusal', output('', 1, 'gh: Validation Failed (HTTP 422)'), 'failed', 'gh: Validation Failed (HTTP 422)'],
     ['a server error', output('', 1, 'gh: Server Error (HTTP 502)'), 'unknown', 'gh: Server Error (HTTP 502)'],
     ['a failure printed on stdout', output('connection reset', 1), 'unknown', 'connection reset'],

@@ -30,7 +30,7 @@ function drafted(...drafts: ReviewSelection[]): ReviewQueue {
   return new ReviewQueue('review-test')
 }
 
-const PENDING = { id: 'review-1' as ForgeReviewId, commit: 'a'.repeat(40), comments: 2 }
+const PENDING = { id: 'review-1' as ForgeReviewId, comments: 2 }
 
 describe('review references', () => {
   it('anchors added and deleted files and detects changed source or hunk content', () => {

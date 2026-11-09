@@ -334,7 +334,7 @@ type ForgeReviewRequest = {
 ```
 
 ```ts type-equiv
-/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+/** Result of a review submission; unknown outcomes must be checked on the host before another submission. */
 type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
@@ -471,8 +471,6 @@ type ForgeReviewId = Branded<'ForgeReviewId'>
 interface ForgePendingReview {
   /** Host identity of the review. */
   readonly id: ForgeReviewId
-  /** Full object name of the commit the review addresses. */
-  readonly commit: string
   /** Comments the review holds. */
   readonly comments: number
 }
@@ -1118,7 +1116,8 @@ async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): P
 
 /**
  * Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then
- * poll the change request at once when it is watched. A `stale` result polls it as a stale read does.
+ * poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls
+ * it as a stale read does.
  * @param ref - change request served by a registered provider.
  * @param write - the write and the head commit the user saw.
  * @param signal - cancellation of the write.

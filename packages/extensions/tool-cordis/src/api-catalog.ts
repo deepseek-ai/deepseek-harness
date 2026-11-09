@@ -1285,7 +1285,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>',
-        description: 'Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then poll the change request at once when it is watched. A `stale` result polls it as a stale read does.',
+        description: 'Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls it as a stale read does.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'write', description: 'the write and the head commit the user saw.' }, { name: 'signal', description: 'cancellation of the write.' }],
         returns: 'whether the host took the write; `unsupported` when the provider cannot write reviews, and `unknown` when the outcome must be checked on the host before the write is tried again.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
@@ -6771,7 +6771,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePendingReview',
-    declaration: 'export interface ForgePendingReview {\n    readonly id: ForgeReviewId;\n    readonly commit: string;\n    readonly comments: number;\n}',
+    declaration: 'export interface ForgePendingReview {\n    readonly id: ForgeReviewId;\n    readonly comments: number;\n}',
   },
   {
     name: 'ForgeProvider',

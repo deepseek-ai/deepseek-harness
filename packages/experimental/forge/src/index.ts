@@ -276,7 +276,8 @@ export class ForgeService extends Service {
 
   /**
    * Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then
-   * poll the change request at once when it is watched. A `stale` result polls it as a stale read does.
+   * poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls
+   * it as a stale read does.
    * @param ref - change request served by a registered provider.
    * @param write - the write and the head commit the user saw.
    * @param signal - cancellation of the write.
@@ -289,7 +290,7 @@ export class ForgeService extends Service {
       (provider, operation) => provider.writeReview?.(ref, write, operation)
         ?? Promise.resolve({ ok: false, code: 'unsupported', message: 'This provider does not support review writes' } as const))
     if (!result.ok && result.code === 'stale') this.staleRead(ref, write.headSha, result.code)
-    else this.refresh(ref)
+    else if (result.ok || result.code !== 'unsupported') this.refresh(ref)
     return result
   }
 

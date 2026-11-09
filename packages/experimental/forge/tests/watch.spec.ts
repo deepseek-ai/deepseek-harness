@@ -292,7 +292,7 @@ describe('forge watch', () => {
     expect(provider.fetches).toHaveLength(2)
   })
 
-  it('polls at once after every review write, and after a stale one only once per head', async () => {
+  it('polls at once after every review write the provider takes up, and after a stale one only once per head', async () => {
     const provider = new FakeProvider()
     provider.results.set(key, snapshot(ref(1)))
     const writeReview = vi.fn(async (): Promise<ForgeReviewWriteResult> => ({ ok: true }))
@@ -314,6 +314,10 @@ describe('forge watch', () => {
     await expect(context.forge.writeReview(ref(1), write, signal)).resolves.toEqual({ ok: false, code: 'stale', message: 'the head moved' })
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(4)
+    await context.forge.writeReview(ref(1), write, signal)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(provider.fetches).toHaveLength(4)
+    writeReview.mockResolvedValue({ ok: false, code: 'unsupported', message: 'no writes' })
     await context.forge.writeReview(ref(1), write, signal)
     await vi.advanceTimersByTimeAsync(0)
     expect(provider.fetches).toHaveLength(4)
