@@ -77,9 +77,9 @@ export interface CuaConfig {
   textEventIntervalMs: number
   /** Native connection cleanup, socket-write and launcher termination budget in milliseconds. */
   graceMs: number
-  /** Maximum nodes admitted by a native accessibility snapshot. */
+  /** Default node limit when an accessibility read omits maxElements. */
   maxElements: number
-  /** Maximum depth traversed by a native accessibility snapshot. */
+  /** Default depth limit when an accessibility read omits maxDepth. */
   maxDepth: number
 }
 
@@ -155,7 +155,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
   const mouseControl = systemPointer ? new MouseControl(ctx, config.requireSystemPointerApproval) : undefined
   const requestSchema = systemPointer ? SystemPointerRequest : Request
   const instructions = systemPointer ? withSystemPointerGuidance(backend.guidance) : backend.guidance
-  const guidance = `${instructions}\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
+  const guidance = `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
@@ -230,7 +230,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
             maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
-            ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
+            ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)

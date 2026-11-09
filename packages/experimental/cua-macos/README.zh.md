@@ -72,7 +72,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `maxClipboardBytes` | `33554432` | 粘贴时保存原剪贴板内容的字节上限；超限会在替换前拒绝。 |
 | `pasteReadTimeoutMs` | `1000` | Paste 命令返回后等待剪贴板读取的上限；到期返回 `PASTE_NOT_CONSUMED`。 |
 | `maxAppMatches` | `20` | 已安装应用搜索的结果上限；范围过大的查询会被拒绝，需要缩小名称范围。 |
-| `maxElements` / `maxDepth` | `2000` / `25` | 辅助功能树遍历限制。 |
+| `maxElements` / `maxDepth` | `5000` / `50` | 读取树时的默认值。每次读取可单独调高或调低任一项。查找粘贴菜单始终使用配置值。[决策理由](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.zh.md) |
 | `maxClickHoldMs` | `5000` | 显式点击按住时长的上限，单位为毫秒，接受非负整数。设为 0 时只允许立即松开。 |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
@@ -89,7 +89,7 @@ CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用�
 
 原始 `getState` 操作返回经过校验的状态字段，以及按本次披露选项生成的完整文本。原生 helper 还返回供原生检查使用的结构化元素诊断数组，其中 `elementId` 是不透明字符串；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
-AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。详情不会绕过配置的节点数和深度上限；截断提示会指明触发的上限。
+AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。
 
 实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。调用 `performAction` 时使用 `listActions(elementId)` 返回的完整名称。
 
@@ -202,7 +202,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the tree within the provider limits; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. If the tree reports maxElements or maxDepth truncation, select a narrower window or ask the user to raise the named macOS provider setting and read again. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
+- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
 - performAction(elementId: string, action: string, argument?: JsonValue) -> ActionResult — perform an observed action with an optional direct JSON argument.
@@ -233,13 +233,15 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 #### Token 影响
 
-启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。本包不将保留的对象序列化进提示。
+启用插件会增加固定参数定义和指导文本。AX 观察、操作结果和已接入的图片会增加模型输入。本包不将保留的对象序列化进提示。窗口中有更多节点可读时，调高默认值或单次读取上限可能使进入模型的 AX 文本变长。
 
 #### KV Cache 影响
 
 工具结果追加到 Session 历史。修改插件配置或工具呈现方式可能改变请求前缀；保留应用对象不会改变已有历史。
 
 ## 已知限制与后续工作
+
+读取较大的树仍受原生操作超时（`timeoutMs`）、单次 AX 调用超时（`axTimeoutMs`）和响应大小限制（`maxResponseBytes`）约束。
 
 队列只排序单次原生请求。持有 app 对象不会为 Session 保留应用，[连续交互](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.zh.md)不分配跨调用所有权。一直不返回的系统截图 RPC 会占用唯一捕获槽位，重新创建 app 对象不会重置该系统连接。
 

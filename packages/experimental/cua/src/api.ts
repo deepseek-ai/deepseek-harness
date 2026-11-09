@@ -127,6 +127,8 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text
         requireAccessibility()
         observed.delete(target.appHandle)
         const state = StateResult.parse(await scopedCall('getState', {
+          ...options?.maxElements === undefined ? {} : { maxElements: options.maxElements },
+          ...options?.maxDepth === undefined ? {} : { maxDepth: options.maxDepth },
           ...options?.includeMenus === undefined ? {} : { includeMenus: options.includeMenus },
           ...options?.details === undefined ? {} : { details: options.details },
         }))

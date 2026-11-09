@@ -11,7 +11,7 @@ import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { initialShortcutConfig, type DesktopShortcutInput, type ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
   captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, readPersistedEvents, watchConsole,
@@ -1453,7 +1453,9 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
   expect(await file.getByRole('textbox').count()).toBe(0)
   await page.mouse.up()
   await file.getByRole('region', { name: '评论 R6–8', exact: true }).waitFor()
-  expect(await plus('R6').count()).toBe(0)
+  // The open editor leaves the hover plus for the next comment.
+  await code(3).hover()
+  expect(await plus('R3').isVisible()).toBe(true)
   await file.getByRole('button', { name: '取消', exact: true }).click()
   await file.getByRole('textbox').waitFor({ state: 'detached' })
 
@@ -1993,10 +1995,14 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
   const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
   const onLine = panel.locator('[data-forge-thread="on-line"]')
   await onLine.getByText('two', { exact: true }).waitFor({ timeout: 20_000 })
-  // The thread follows the row of its last line, under the new side.
-  expect(await onLine.evaluate(card => card.previousElementSibling?.querySelector('[data-new-line]')?.textContent)).toBe('export const n2 = \'two\'')
-  expect(await panel.locator('[data-forge-thread="old-side"]').evaluate(card => card.previousElementSibling?.querySelector('[data-old-line]')?.textContent))
-    .toBe('export const n15 = 15')
+  // The thread follows the row of its last line, in the column of its side: under the new side and the old side.
+  const placement = (card: Element, number: string) => {
+    const row = card.closest('[data-forge-notes]')
+    const column = Array.from(row?.children ?? []).findIndex(cell => cell.contains(card))
+    return { line: row?.previousElementSibling?.querySelector(number)?.textContent, column }
+  }
+  expect(await onLine.evaluate(placement, '[data-new-line]')).toEqual({ line: 'export const n2 = \'two\'', column: 1 })
+  expect(await panel.locator('[data-forge-thread="old-side"]').evaluate(placement, '[data-old-line]')).toEqual({ line: 'export const n15 = 15', column: 0 })
   await panel.locator('[data-forge-thread="resolved"]').getByText('已解决的讨论 · lin', { exact: true }).waitFor()
   await panel.locator('[data-forge-outdated-threads]').getByText('1 条讨论已过期：所在代码已被后续提交修改', { exact: true }).waitFor()
   await view.locator('[data-forge-diff-file="docs/panel.md"] [data-forge-thread="whole-file"]').getByText('文件级讨论', { exact: true }).waitFor()
@@ -2165,5 +2171,114 @@ it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu
   await page.getByRole('tooltip').filter({ hasText: `${from} → ${to}` }).waitFor()
   await viewed.check()
   await expect.poll(() => file.getAttribute('data-viewed')).toBe('viewed')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/**
+ * Launch the panel on a branch whose README.md replaces its first line and adds eight more, so a side-by-side view
+ * pairs a deletion with an addition, then open the Session's local changes full screen.
+ * @param failureShot - screenshot name for a failure.
+ * @returns the launch and the local changes view.
+ */
+async function openLocalChanges(failureShot: string): Promise<PanelLaunch & { readonly view: Locator }> {
+  const launch = await launchPanel(failureShot)
+  const { scaffold, page, project } = launch
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), `changed\n${Array.from({ length: 8 }, (_, line) => `line ${line + 2}\n`).join('')}`)
+  await writeFile(join(project, 'notes.md'), 'note\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click()
+  const view = page.locator('[data-forge-changes="local"]')
+  await view.locator('[data-forge-diff-file="README.md"]').waitFor()
+  await page.getByRole('button', { name: '全屏', exact: true }).click()
+  return { ...launch, view }
+}
+
+it.skipIf(MODE === 'record')('keeps the changes toolbar and header on one line, folding view controls into the More menu as they narrow', async () => {
+  const { page, view, tripwire } = await openLocalChanges('web-e2e-forge-toolbar-fold')
+  const toolbar = view.locator('[data-fold]')
+  const more = toolbar.getByRole('button', { name: '更多视图选项', exact: true })
+  const create = view.getByRole('button', { name: '创建变更请求', exact: true })
+  const layout = () => toolbar.evaluate((row) => {
+    const header = row.closest('[data-forge-changes]')!.firstElementChild!
+    return { fold: row.getAttribute('data-fold'), overflow: row.scrollWidth - row.clientWidth, height: row.getBoundingClientRect().height,
+      header: header.getBoundingClientRect().height }
+  })
+  // The button keeps a fixed height when its label wraps, so the label's own height tells one line from two.
+  const labelHeight = () => create.evaluate((button) => {
+    const range = document.createRange()
+    range.selectNodeContents(button)
+    return Math.round(range.getBoundingClientRect().height)
+  })
+  const lineHeight = await labelHeight()
+  const seen: string[] = []
+  for (const width of [1680, 700, 560, 390, 340]) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect.poll(async () => (await layout()).overflow).toBeLessThanOrEqual(0)
+    const { fold, height, header } = await layout()
+    // One 28px control row inside the toolbar's padding, and the header keeps its single-line height.
+    expect([width, height]).toEqual([width, 38])
+    expect([width, header]).toEqual([width, 44])
+    expect([width, await labelHeight()]).toEqual([width, lineHeight])
+    seen.push(`${width}:${fold}`)
+  }
+  expect(seen[0]).toBe('1680:0')
+  expect(seen.at(-1)).toBe('340:3')
+  expect(await more.isVisible()).toBe(true)
+
+  await page.setViewportSize({ width: 390, height: 800 })
+  await expect.poll(() => toolbar.getAttribute('data-fold')).toBe('2')
+  // Folded controls leave the row; the progress turns into the ring and the bare count.
+  expect(await toolbar.getByRole('button', { name: '左右对比', exact: true }).isVisible()).toBe(false)
+  expect(await toolbar.getByRole('switch', { name: '隐藏测试文件', exact: true }).isVisible()).toBe(false)
+  expect(await toolbar.locator('[data-forge-progress="compact"]').innerText()).toBe('0/2')
+  await more.click()
+  const menu = page.getByRole('menu')
+  expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['全部折叠', '左右对比', '自动换行', '隐藏测试文件'])
+  const code = view.locator('[data-forge-diff-file="README.md"] [data-review]')
+  expect(await code.getAttribute('data-split')).toBe('')
+  await menu.getByRole('menuitem', { name: '左右对比', exact: true }).click()
+  await expect.poll(() => code.getAttribute('data-split')).toBe(null)
+  expect(await page.getByRole('menu').count()).toBe(0)
+  await page.setViewportSize({ width: 1680, height: 800 })
+  await expect.poll(() => toolbar.getAttribute('data-fold')).toBe('0')
+  expect(await more.isVisible()).toBe(false)
+  expect(await toolbar.getByRole('button', { name: '左右对比', exact: true }).getAttribute('aria-pressed')).toBe('false')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('writes a left and a right comment at once, each inside its own column of the side-by-side row', async () => {
+  const { page, view, tripwire } = await openLocalChanges('web-e2e-forge-side-comments')
+  const readme = view.locator('[data-forge-diff-file="README.md"]')
+  const open = async (name: string) => {
+    await readme.getByRole('button', { name: `选择第 ${name} 行`, exact: true }).click()
+    await readme.getByRole('button', { name: '添加评论', exact: true }).click()
+    return readme.getByRole('region', { name: `评论 ${name}`, exact: true })
+  }
+  const left = await open('L1')
+  const right = await open('R1')
+  await right.getByRole('textbox').fill('右侧的评论')
+  for (const width of [1680, 1000, 780]) {
+    await page.setViewportSize({ width, height: 900 })
+    const boxes = await readme.evaluate((section) => {
+      const pair = section.querySelector('[data-diff-pair]')!
+      const [l, r] = Array.from(pair.children, cell => cell.getBoundingClientRect())
+      const [a, b] = Array.from(section.querySelectorAll('[data-forge-comment]'), form => form.getBoundingClientRect())
+      return { l: [l!.left, l!.right], r: [r!.left, r!.right], a: [a!.left, a!.right, a!.top], b: [b!.left, b!.right, b!.top] }
+    })
+    // Each comment stays inside its side's column, and both share one row.
+    expect(boxes.a[0]!).toBeGreaterThan(boxes.l[0]!)
+    expect(boxes.a[1]!).toBeLessThan(boxes.l[1]!)
+    expect(boxes.b[0]!).toBeGreaterThan(boxes.r[0]!)
+    expect(boxes.b[1]!).toBeLessThan(boxes.r[1]!)
+    expect(boxes.a[2]).toBe(boxes.b[2])
+  }
+  await left.getByRole('button', { name: '取消', exact: true }).click()
+  expect(await left.count()).toBe(0)
+  expect(await right.getByRole('textbox').inputValue()).toBe('右侧的评论')
   expect(tripwire.pageErrors).toEqual([])
 })

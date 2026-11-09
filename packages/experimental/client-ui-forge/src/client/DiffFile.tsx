@@ -161,6 +161,21 @@ function Code({ text, spans, old, next }: {
 }
 
 /** Whether a side-by-side row repeats an unchanged line or shows a change. */
+/** Whether two comments cover the same lines of the same side. */
+function sameRange(a: ReviewSelection['comment'], b: ReviewSelection['comment']): boolean {
+  return a.side === b.side && a.startLine === b.startLine && a.endLine === b.endLine
+}
+
+/** Whether a selection covers one line of a side. */
+function covers(item: ReviewSelection, side: 'L' | 'R', line: number): boolean {
+  return item.comment.side === side && line >= item.comment.startLine && line <= item.comment.endLine
+}
+
+/** The editor key of a range, such as `R3-4`. */
+function rangeKey(item: ReviewSelection): string {
+  return `${item.comment.side}${item.comment.startLine}-${item.comment.endLine}`
+}
+
 function pairKind(pair: SplitRow): 'context' | 'change' {
   return pair.left !== null && pair.left.kind === 'context' ? 'context' : 'change'
 }
@@ -176,33 +191,53 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   const style: CSSProperties & { '--forge-number-width': string } = { '--forge-number-width': `calc(${Math.max(2, String(maximum).length)}ch + 12px)` }
   const highlighter = useCodeHighlighter(languageForPath(file.path))
   const [selection, setSelection] = useState<ReviewSelection | null>(null)
+  // Mirrors `selection` for the release of a hover-plus drag, whose listener outlives the render that chose the range.
+  const chosen = useRef<ReviewSelection | null>(null)
+  const select = (next: ReviewSelection | null): void => {
+    chosen.current = next
+    setSelection(next)
+  }
+  // Comments being written, in the order they opened; each keeps the range it opened with while new ranges are chosen.
+  const [editors, setEditors] = useState<readonly ReviewSelection[]>([])
   const root = useRef<HTMLDivElement>(null)
   const origin = useRef<{ side: 'L' | 'R'; line: number } | null>(null)
   // `add` is a gutter drag that began on a row's hover plus and opens the editor when the pointer is released.
   const dragging = useRef<'gutter' | 'add' | 'text' | null>(null)
   const [selecting, setSelecting] = useState(false)
-  const [editing, setEditing] = useState(false)
   const [nativeSide, setNativeSide] = useState<'L' | 'R' | null>(null)
   const nativeSelection = useCallback((): void => {
-    if (editing || nativeSide === null || root.current === null || review === undefined) return
+    if (nativeSide === null || root.current === null || review === undefined) return
     const selected = readCodeSelection(root.current, nativeSide)
     if (selected === undefined) {
+      chosen.current = null
       setSelection(null)
       setNativeSide(null)
       return
     }
     const comment = selectReviewLines(file, selected.side, selected.from, selected.to)
-    setSelection(previous => comment === undefined ? null
-      : previous?.comment.side === comment.side && previous.comment.startLine === comment.startLine
-        && previous.comment.endLine === comment.endLine
-        ? previous : { source: review.source, comment })
-  }, [editing, nativeSide, review, file])
+    const previous = chosen.current
+    const next = comment === undefined ? null
+      : previous !== null && sameRange(previous.comment, comment) ? previous : { source: review.source, comment }
+    chosen.current = next
+    setSelection(next)
+  }, [nativeSide, review, file])
   useEffect(() => {
-    if (nativeSide === null || editing) return
+    if (nativeSide === null) return
     const changed = (): void => { if (dragging.current === null) nativeSelection() }
     document.addEventListener('selectionchange', changed)
     return () => { document.removeEventListener('selectionchange', changed) }
-  }, [nativeSide, editing, nativeSelection])
+  }, [nativeSide, nativeSelection])
+  /** Open an editor for a range, or focus the one already open for it, and clear the selection for the next range. */
+  const compose = (target: ReviewSelection): void => {
+    const open = root.current?.querySelector<HTMLTextAreaElement>(`[data-forge-comment="${rangeKey(target)}"] textarea`) ?? null
+    if (open !== null) open.focus()
+    else setEditors(list => [...list, target])
+    const native = window.getSelection()
+    if (root.current?.contains(native?.anchorNode ?? null) === true) native?.removeAllRanges()
+    select(null)
+    setNativeSide(null)
+    origin.current = null
+  }
   useEffect(() => {
     if (nativeSide === null) return
     const copy = (event: ClipboardEvent): void => {
@@ -220,10 +255,10 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     if (!selecting) return
     const finish = (event: PointerEvent): void => {
       if (dragging.current === 'text') nativeSelection()
-      const compose = dragging.current === 'add' && event.type === 'pointerup'
+      const release = dragging.current === 'add' && event.type === 'pointerup' ? chosen.current : null
       dragging.current = null
       setSelecting(false)
-      if (compose) setEditing(true)
+      if (release !== null) compose(release)
     }
     window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', finish)
@@ -237,12 +272,13 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }), [file, lines, open, highlighter])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
-    if (review === undefined || editing) return false
+    /* v8 ignore next -- the line buttons and hover pluses that choose a range draw only with review actions */
+    if (review === undefined) return false
     const from = extend && origin.current?.side === side ? origin.current.line : line
     const comment = selectReviewLines(file, side, from, line)
     if (comment === undefined) return false
     if (!extend || origin.current?.side !== side) origin.current = { side, line }
-    setSelection({ source: review.source, comment })
+    select({ source: review.source, comment })
     return true
   }
   // A drag that began on a hover plus extends through every row with a line on its starting side, wherever the pointer crosses that row.
@@ -252,8 +288,10 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     const line = from.side === 'L' ? old : next
     if (line !== null) choose(from.side, line, true)
   }
-  const selected = (side: 'L' | 'R', line: number | null): boolean => line !== null && selection !== null
-    && selection.comment.side === side && line >= selection.comment.startLine && line <= selection.comment.endLine
+  const selected = (side: 'L' | 'R', line: number | null): boolean => line !== null && selection !== null && covers(selection, side, line)
+  // The browser paints a native text range itself; a gutter range and every open editor's range take the highlight.
+  const marked = (side: 'L' | 'R', line: number | null): boolean => line !== null
+    && ((selected(side, line) && nativeSide === null) || editors.some(item => covers(item, side, line)))
   // `hover` adds the mouse shortcut: a plus shown while a hovering pointer is over this side of the row.
   const number = (side: 'L' | 'R', line: number | null, hover: boolean): ReactNode => {
     if (line === null || review === undefined || !file.hunks.some((hunk) => {
@@ -262,13 +300,14 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     })) {
       return <span className={css.number}>{line ?? ''}</span>
     }
-    const plus = !selecting && !editing && selection?.comment.side === side && selection.comment.endLine === line
+    const plus = !selecting && selection !== null && selection.comment.side === side && selection.comment.endLine === line
+      ? selection : null
     return <span className={clsx(css.number, reviewCss.gutter)} data-review-side={side}
       onPointerEnter={(event) => { if (dragging.current === 'gutter' && origin.current?.side === side && event.buttons === 1) choose(side, line, true) }}>
       <button type="button" className={reviewCss.line}
         aria-label={t('review.selectLine', { line: `${side}${line}` })} aria-pressed={selected(side, line)}
         onPointerDown={(event) => {
-          if (event.button !== 0 || editing) return
+          if (event.button !== 0) return
           event.preventDefault()
           window.getSelection()?.removeAllRanges()
           setNativeSide(null)
@@ -282,16 +321,16 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
           setNativeSide(null)
           choose(side, line, event.shiftKey)
         }}>{line}</button>
-      {plus && (
+      {plus !== null && (
         <Tooltip label={t('review.addComment')} portal>
           <button type="button" className={reviewCss.add} aria-label={t('review.addComment')}
-            onPointerDown={(event) => { event.preventDefault() }} onClick={() => { setEditing(true) }}>
+            onPointerDown={(event) => { event.preventDefault() }} onClick={() => { compose(plus) }}>
             <IconPlusOutlineRegular size={14} />
           </button>
         </Tooltip>
       )}
       {/* Keyboard and assistive technology reach the same editor through the line button and the labeled plus above. */}
-      {hover && !plus && !editing && (
+      {hover && plus === null && (
         <span className={reviewCss.hoverAdd} aria-hidden="true" data-review-add={`${side}${line}`}
           onPointerDown={(event) => {
             if (event.button !== 0) return
@@ -310,44 +349,59 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   }
   const cell = (value: SplitCell | null, spans: SideSpans, side: 'L' | 'R'): ReactNode => value === null
     ? <span className={clsx(css.cell, css.empty)} data-diff-side={side} />
-    : <span className={clsx(css.cell, css[value.kind], selected(side, value.no) && (editing || nativeSide === null) && reviewCss.selected)}
+    : <span className={clsx(css.cell, css[value.kind], marked(side, value.no) && reviewCss.selected)}
       data-diff-side={side}>
       {number(side, value.no, true)}<Code text={value.text} spans={spans?.get(value.no)} old={side === 'L' ? value.no : null} next={side === 'R' ? value.no : null} />
     </span>
-  const rows: ReactNode[] = []
-  let inserted = false
-  const editor = review === undefined || selection === null || !editing ? null : <ReviewComposer key="comment" selection={selection} visible={visible} split={columns}
-    actions={review} close={() => {
-      const native = window.getSelection()
-      if (root.current?.contains(native?.anchorNode ?? null) === true) native?.removeAllRanges()
-      setSelection(null)
-      setEditing(false)
-      setNativeSide(null)
-      origin.current = null
-    }} t={t} />
-  const remaining = new Set(comments.threads)
-  const appendComments = (old: number | null, next: number | null): void => {
-    if (review === undefined) return
-    for (const thread of remaining) {
-      const comment = thread.selection.comment
-      if ((comment.side === 'L' ? old : next) !== comment.endLine || !reviewMatches(thread.selection, review.source, file)) continue
-      rows.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated={false} split={columns} t={t} />)
-      remaining.delete(thread)
-    }
-  }
-  // A host thread follows the row of its last line, or the collapsed unchanged lines that hold it.
-  const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
-  const threadCard = (item: LineThread & { readonly actions: ThreadActions }, columns: boolean): ReactNode =>
-    <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} split={columns} t={t} />
-  const appendThreads = (old: number | null, next: number | null): void => {
-    for (const item of unplaced) {
-      if ((item.place.side === 'L' ? old : next) !== item.place.endLine) continue
-      rows.push(threadCard(item, columns))
-      unplaced.delete(item)
-    }
-  }
   const endsAt = (old: number | null, next: number | null): boolean => selection !== null
     && (selection.comment.side === 'L' ? old : next) === selection.comment.endLine
+  const rows: ReactNode[] = []
+  const unplacedEditors = new Set(editors)
+  const remaining = new Set(comments.threads)
+  // A host thread follows the row of its last line, or the collapsed unchanged lines that hold it.
+  const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
+  const threadCard = (item: LineThread & { readonly actions: ThreadActions }): ReactNode =>
+    <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} t={t} />
+  // The editors, the saved comments, then the host threads whose ranges end on this side's line.
+  const commentsAt = (side: 'L' | 'R', line: number | null): ReactNode[] => {
+    const nodes: ReactNode[] = []
+    if (line === null) return nodes
+    if (review !== undefined) {
+      for (const item of unplacedEditors) {
+        if (item.comment.side !== side || item.comment.endLine !== line) continue
+        nodes.push(editorOf(item, review))
+        unplacedEditors.delete(item)
+      }
+      for (const thread of remaining) {
+        const comment = thread.selection.comment
+        if (comment.side !== side || comment.endLine !== line || !reviewMatches(thread.selection, review.source, file)) continue
+        nodes.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated={false} t={t} />)
+        remaining.delete(thread)
+      }
+    }
+    for (const item of unplaced) {
+      if (item.place.side !== side || item.place.endLine !== line) continue
+      nodes.push(threadCard(item))
+      unplaced.delete(item)
+    }
+    return nodes
+  }
+  const editorOf = (item: ReviewSelection, actions: ReviewActions): ReactNode =>
+    <ReviewComposer key={`comment-${rangeKey(item)}`} selection={item} visible={visible} actions={actions}
+      close={() => { setEditors(list => list.filter(open => !sameRange(open.comment, item.comment))) }} t={t} />
+  // Side by side, a row's comments sit in a row of two cells under its columns, each continuing its line's background.
+  const notes = (key: string, pair: SplitRow): void => {
+    const left = commentsAt('L', pair.left?.no ?? null)
+    const right = commentsAt('R', pair.right?.no ?? null)
+    if (left.length === 0 && right.length === 0) return
+    const side = (value: SplitCell | null, nodes: ReactNode[]): ReactNode => (
+      <div className={clsx(css.noteCell, css[value?.kind ?? 'empty'])}>
+        <span className={css.number} />
+        <div className={css.noteStack} data-forge-comments="">{nodes}</div>
+      </div>
+    )
+    rows.push(<div key={key} className={css.notes} data-forge-notes="">{side(pair.left, left)}{side(pair.right, right)}</div>)
+  }
   for (const [at, segment] of prepared.entries()) {
     if (segment.kind === 'gap') {
       rows.push(<button key={`gap-${segment.index}`} type="button" className={css.gap} disabled={text === 'loading'}
@@ -357,7 +411,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       </button>)
       for (const item of unplaced) {
         if (gapOf(file, item.place.side, item.place.endLine) !== segment.index) continue
-        rows.push(threadCard(item, columns))
+        rows.push(threadCard(item))
         unplaced.delete(item)
       }
     } else if (columns) {
@@ -366,36 +420,29 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
           onPointerEnter={(event) => { extendAdd(event.buttons, pair.left?.no ?? null, pair.right?.no ?? null) }}>
           {cell(pair.left, segment.old, 'L')}{cell(pair.right, segment.new, 'R')}
         </div>)
-        if (!inserted && endsAt(pair.left?.no ?? null, pair.right?.no ?? null)) {
-          rows.push(editor)
-          inserted = true
-        }
-        appendComments(pair.left?.no ?? null, pair.right?.no ?? null)
-        appendThreads(pair.left?.no ?? null, pair.right?.no ?? null)
+        notes(`notes-${at}-${index}`, pair)
       }
     } else {
       for (const [index, row] of segment.rows.entries()) {
         // Both numbers place their plus in the sign column, so a row showing the labeled plus offers no hover plus.
-        const labeled = !selecting && !editing && endsAt(row.old, row.new)
-        rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (selected('L', row.old) || selected('R', row.new)) && (editing || nativeSide === null) && reviewCss.selected)} data-diff-line={row.kind}
+        const labeled = !selecting && endsAt(row.old, row.new)
+        rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (marked('L', row.old) || marked('R', row.new)) && reviewCss.selected)} data-diff-line={row.kind}
           onPointerEnter={(event) => { extendAdd(event.buttons, row.old, row.new) }}>
           {singleSide !== 'R' && number('L', row.old, row.kind === 'del' && !labeled)}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del' && !labeled)}<span className={css.sign}>{SIGN[row.kind]}</span>
           <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
         </div>)
-        if (!inserted && endsAt(row.old, row.new)) {
-          rows.push(editor)
-          inserted = true
-        }
-        appendComments(row.old, row.new)
-        appendThreads(row.old, row.new)
+        rows.push(...commentsAt('L', row.old), ...commentsAt('R', row.new))
       }
     }
   }
-  if (review !== undefined) for (const thread of remaining) {
-    rows.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated split={false} t={t} />)
+  if (review !== undefined) {
+    // An editor whose last line no longer draws, after a refresh or a narrower choice of commits, follows the lines.
+    for (const item of unplacedEditors) rows.push(editorOf(item, review))
+    for (const thread of remaining) {
+      rows.push(<ReviewThread key={`record-${thread.key}`} thread={thread} actions={review} locked={comments.locked} outdated t={t} />)
+    }
   }
-  for (const item of unplaced) rows.push(threadCard(item, false))
-  if (!inserted) rows.push(editor)
+  for (const item of unplaced) rows.push(threadCard(item))
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
     data-review={review === undefined ? undefined : ''}
     data-native-side={nativeSide ?? undefined}
@@ -404,12 +451,11 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       const side = codeSideAt(event.currentTarget, event.target)
       if (side === undefined) return
       if (!event.shiftKey || nativeSide !== side) window.getSelection()?.removeAllRanges()
-      if (!editing) dragging.current = 'text'
+      dragging.current = 'text'
       // The chosen column must allow selection before the browser starts its native text range.
       flushSync(() => {
         setNativeSide(side)
-        if (editing) return
-        setSelection(null)
+        select(null)
         setSelecting(true)
       })
     }}>{rows}</div>
@@ -425,7 +471,7 @@ function Content(props: DiffFileProps): ReactNode {
   const { file, large, revealed, handlers, review, threads, t } = props
   const comments = useFileReview(review, file.path)
   const records = review === undefined ? null : comments.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
-    actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} split={false} t={t} />)
+    actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} t={t} />)
   const lineThreads = threads?.lines.map(item => <ThreadCard key={item.thread.id} thread={item.thread} place={item.place}
     actions={threads.actions} t={t} />)
   if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}{lineThreads}</>

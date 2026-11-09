@@ -1165,7 +1165,7 @@ export interface Config {
 
 - `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
 - `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:33`](../packages/experimental/cua-macos/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:34`](../packages/experimental/cua-macos/src/index.ts)
 
 ```ts config-catalog
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
