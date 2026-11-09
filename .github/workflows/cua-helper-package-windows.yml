@@ -10,6 +10,9 @@ on:
       run-id:
         description: '产物所属的构建运行编号'
         value: ${{ jobs.package.outputs.run-id }}
+      build-key:
+        description: '源码和构建配置的摘要'
+        value: ${{ jobs.package.outputs.build-key }}
 
 permissions:
   contents: read
@@ -24,6 +27,7 @@ jobs:
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}
       run-id: ${{ github.run_id }}
+      build-key: ${{ steps.metadata.outputs.build-key }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -32,7 +36,45 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Publish Windows CUA helper
-        run: dotnet publish packages/experimental/cua-windows/native/entry/CuaWindows.csproj --configuration Release --runtime win-x64 --self-contained false --output dist/cua-helper-win-x64
+        run: >-
+          dotnet publish packages/experimental/cua-windows/native/entry/CuaWindows.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output dist/cua-helper-win-x64
+      - name: Add helper metadata
+        id: metadata
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = 'dist/cua-helper-win-x64'
+          $exe = Join-Path $directory 'dsh-cua-windows.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "helper executable is missing: $exe" }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $commit = '${{ github.sha }}'
+          $sdk = (& dotnet --version).Trim()
+          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$commit`n$sdk`nwin-x64")
+          $buildKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($keyBytes)).ToLowerInvariant()
+          $files = @{}
+          Get-ChildItem $directory -Recurse -File | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($directory, $_.FullName).Replace('\', '/')
+            $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $metadata = @{
+            version = $version
+            commit = $commit
+            buildKey = $buildKey
+            architecture = 'x64'
+            executable = 'dsh-cua-windows.exe'
+            sha256 = $files['dsh-cua-windows.exe']
+            signing = 'unsigned'
+            files = $files
+          }
+          $metadataPath = Join-Path $directory 'cua-helper.json'
+          $json = $metadata | ConvertTo-Json -Depth 5
+          Set-Content -Path $metadataPath -Value $json -Encoding utf8NoBOM
+          $outputPath = $env:GITHUB_OUTPUT
+          $outputLine = "build-key=$buildKey"
+          Add-Content -Path $outputPath -Value $outputLine -Encoding utf8
       - name: Archive publish output
         run: Compress-Archive -Path dist/cua-helper-win-x64/* -DestinationPath dist/cua-helper-win-x64.zip
       - uses: actions/upload-artifact@v7.0.1
