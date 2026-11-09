@@ -119,7 +119,9 @@ it('ends a silent proxy connection and its Git child at the connection deadline'
   const result = await running
   expect(result?.kind).toBe('timeout')
   // Git's termination status varies by platform; preserve the observed status, or the fallback when absent.
-  const childResult = await vi.mocked(subprocess.execa).mock.results.at(-1)!.value
+  const childRun = vi.mocked(subprocess.execa).mock.results.at(-1)
+  if (childRun?.type !== 'return') throw new Error('Git probe did not return a child process')
+  const childResult = await childRun.value
   expect(childResult.timedOut).toBe(true)
   expect(result).toMatchObject({
     exitCode: childResult.exitCode ?? 1, timedOut: true, argv: checkArgv('https://github.com/acme/plugin.git'),
