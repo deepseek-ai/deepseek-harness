@@ -22,11 +22,11 @@ function setup(autoFocus = true) {
   const renderSlot: ComponentProps<typeof ModelSelect>['renderSlot'] = (name, owner, options) => {
     if (name === 'conversation.input.model.options') {
       const controls = owner as object as OwnerOf<'conversation.input.model.options'>
-      return <button type="button" role="menuitem" data-model-menu-page="fixture" disabled={controls.locked}
-        onClick={() => { controls.openPage({ key: 'fixture', title: 'Fixture settings' }) }}>Fixture settings</button>
+      return <button type="button" role="menuitem" data-model-menu-pane="fixture" disabled={controls.locked}
+        onClick={() => { controls.openPane({ key: 'fixture', title: 'Fixture settings' }) }}>Fixture settings</button>
     }
-    if (name === 'conversation.input.model.page') {
-      const controls = owner as object as OwnerOf<'conversation.input.model.page'>
+    if (name === 'conversation.input.model.pane') {
+      const controls = owner as object as OwnerOf<'conversation.input.model.pane'>
       expect(options?.entryKey).toBe('fixture')
       return <><button type="button" role="switch" aria-checked="false" disabled={controls.locked}
         autoFocus={autoFocus} onClick={change}>Fixture setting</button><p>Fixture explanation</p></>
@@ -66,7 +66,7 @@ it('keeps focus on the page surface when the page places none, so Escape still r
   expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Fixture settings' }))
 })
 
-it('closes a detail page on an outside touch press that dispatches no mousedown', () => {
+it('closes a detail pane on an outside touch press that dispatches no mousedown', () => {
   const { trigger } = setup()
   fireEvent.click(screen.getByRole('menuitem', { name: 'Fixture settings' }))
   fireEvent.blur(screen.getByRole('switch'), { relatedTarget: null })
@@ -76,7 +76,7 @@ it('closes a detail page on an outside touch press that dispatches no mousedown'
   expect(trigger.getAttribute('aria-expanded')).toBe('false')
 })
 
-it.each([false, true])('closes a detail page on Tab without changing its setting (shift: %s)', async (shiftKey) => {
+it.each([false, true])('closes a detail pane on Tab without changing its setting (shift: %s)', async (shiftKey) => {
   const { trigger, change } = setup()
   fireEvent.click(screen.getByRole('menuitem', { name: 'Fixture settings' }))
   fireEvent.keyDown(screen.getByRole('switch'), { key: 'Tab', shiftKey })

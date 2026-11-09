@@ -127,7 +127,7 @@ describe('web e2e: agent teamwork panel', () => {
     await scaffold?.close()
   })
 
-  it('shows the explanation and switch only on the second page and returns to the summary', async () => {
+  it('shows the explanation and switch only on the detail pane and returns to the summary', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-info'))
     const trigger = page.getByRole('button', { name: /^Select model/u })
     await trigger.click()

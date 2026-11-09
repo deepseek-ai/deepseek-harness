@@ -1648,11 +1648,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
-      '/** Root-menu controls for opening plugin-owned settings pages. */\nexport type ModelMenuOptions = ModelMenuControls & {\n  /**\n   * Open page.key in conversation.input.model.page with page.title as its localized accessible name.\n   * The root button\'s data-model-menu-page must match page.key for focus return.\n   */\n  openPage: (page: ModelMenuPageRef) => void\n}',
+      '/** Selection state and feedback shared by menu option entries and detail panes. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
+      '/** Root-menu controls for opening plugin-owned settings panes. */\nexport type ModelMenuOptions = ModelMenuControls & {\n  /**\n   * Open pane.key in conversation.input.model.pane with pane.title as its localized accessible name.\n   * The root button\'s data-model-menu-pane must match pane.key for focus return.\n   */\n  openPane: (pane: ModelMenuPaneRef) => void\n}',
     ],
     ownerPropsReferences: [
-      'ModelMenuPageRef',
+      'ModelMenuPaneRef',
     ],
     standardProps: [
       'useRemoteAccess: (action: RemoteEndpoint) => boolean',
@@ -1687,11 +1687,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     source: 'packages/client/ui-model-selection/src/client/slots.ts:50',
   },
   {
-    key: 'conversation.input.model.page',
+    key: 'conversation.input.model.pane',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Plugin-owned content displayed as a model-menu detail page.',
-    doc: 'Plugin-owned content displayed as a model-menu detail page.\nThe page places its own initial focus, for example with `autoFocus`; without one,\nfocus stays on the menu surface, where Escape and Shift+Tab still return to the root menu.',
+    summary: 'Plugin-owned content displayed as a model-menu detail pane.',
+    doc: 'Plugin-owned content displayed as a model-menu detail pane.\nThe pane places its own initial focus, for example with `autoFocus`; without one,\nfocus stays on the menu surface, where Escape and Shift+Tab still return to the root menu.',
     registerOptions: [
       {
         name: 'key',
@@ -1701,7 +1701,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/** Selection state and feedback shared by menu option entries and detail pages. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
+      '/** Selection state and feedback shared by menu option entries and detail panes. */\nexport interface ModelMenuControls {\n  /** Whether the composer refuses changes, including while a model selection is saving. */\n  locked: boolean\n  /** Close the menu and focus its trigger synchronously before opening another overlay. */\n  dismiss: () => void\n  /** Report a failed selection through the menu owner\'s persistent toast. */\n  reportFailure: (message: string) => void\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [
@@ -1730,10 +1730,10 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     slotInject: '',
     declaredBy: 'an entry in \'conversation.input.model\' (client-ui-model-selection), so it exists while that entry is mounted',
     occupants: [
-      'client-ui-agent-team TeamModePage key \'agent-team\'',
+      'client-ui-agent-team TeamModePane key \'agent-team\'',
     ],
     replaceRisk: 'shadows-shipped-ui',
-    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.page\', () => ctx.slots.register(\n      { name: \'conversation.input.model.page\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
+    example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.input.model.pane\', () => ctx.slots.register(\n      { name: \'conversation.input.model.pane\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
     source: 'packages/client/ui-model-selection/src/client/slots.ts:60',
   },
   {

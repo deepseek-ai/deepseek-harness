@@ -51,7 +51,7 @@
   color: var(--dsw-alias-menu-icon);
 }
 
-.page {
+.pane {
   display: flex;
   flex-direction: column;
   min-width: 0;

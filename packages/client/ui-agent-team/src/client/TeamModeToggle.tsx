@@ -9,8 +9,8 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type { NS } from './locales.ts'
 import css from './TeamModeToggle.module.css'
 
-/** Session selection callbacks supplied to the Team settings page. */
-export interface TeamModePageInjected {
+/** Session selection callbacks supplied to the Team settings pane. */
+export interface TeamModePaneInjected {
   /** Save the selection; null means success, otherwise the string describes the failure. */
   selectTeamMode: (enabled: boolean) => Promise<string | null>
   /** Open a Session-targeted confirmation outside this menu. */
@@ -20,13 +20,13 @@ export interface TeamModePageInjected {
 /** Full props of the model-menu Team summary. */
 export type TeamModeToggleProps = PropsRuntime<'conversation.input.model.options'> & PropsLocale<typeof NS>
 
-/** Full props of the model-menu Team settings page. */
-export type TeamModePageProps = PropsRuntime<'conversation.input.model.page'>
-  & PropsLocale<typeof NS> & TeamModePageInjected
+/** Full props of the model-menu Team settings pane. */
+export type TeamModePaneProps = PropsRuntime<'conversation.input.model.pane'>
+  & PropsLocale<typeof NS> & TeamModePaneInjected
 
 /**
  * Show the saved Team state and open its settings without changing the mode.
- * @param props - Session projection, page navigation, and locale.
+ * @param props - Session projection, pane navigation, and locale.
  * @returns the summary when Team mode is available on a root Session.
  */
 export function TeamModeToggle(props: TeamModeToggleProps) {
@@ -36,7 +36,7 @@ export function TeamModeToggle(props: TeamModeToggleProps) {
   return <RootTeamModeSummary {...props} />
 }
 
-function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeToggleProps) {
+function RootTeamModeSummary({ useProjection, locked, openPane, t }: TeamModeToggleProps) {
   const mode = useProjection('agentTeam')
   if (mode === undefined) return null
   return (
@@ -44,9 +44,9 @@ function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeTog
       type="button"
       role="menuitem"
       className={css.summary}
-      data-model-menu-page="agent-team"
+      data-model-menu-pane="agent-team"
       disabled={locked}
-      onClick={() => { openPage({ key: 'agent-team', title: t('command.title') }) }}
+      onClick={() => { openPane({ key: 'agent-team', title: t('command.title') }) }}
     >
       <span className={css.summaryLabel}>{t('command.title')}</span>
       <span className={css.state}>{t(mode.enabled ? 'mode.on' : 'mode.off')}</span>
@@ -60,17 +60,17 @@ function RootTeamModeSummary({ useProjection, locked, openPage, t }: TeamModeTog
  * @param props - Session projections, mode operations, menu dismissal, and locale.
  * @returns the Team settings content when its projection is available.
  */
-export function TeamModePage(props: TeamModePageProps) {
+export function TeamModePane(props: TeamModePaneProps) {
   const addressedChild = props.useSession(snapshot => snapshot.subagent !== null)
   const listedChild = props.useSessions(state => state.byId[props.sessionId]?.origin === 'subagent')
   if (addressedChild || listedChild) return null
-  return <RootTeamModePage {...props} />
+  return <RootTeamModePane {...props} />
 }
 
 /** Read and change the selection only for root Sessions. */
-function RootTeamModePage({
+function RootTeamModePane({
   useProjection, locked, dismiss, reportFailure, selectTeamMode, requestDisableConfirmation, t,
-}: TeamModePageProps) {
+}: TeamModePaneProps) {
   const mode = useProjection('agentTeam')
   const modelSelection = useProjection('modelSelection')
   const [pending, setPending] = useState(false)
@@ -90,7 +90,7 @@ function RootTeamModePage({
     }).finally(() => { setPending(false) })
   }
   return (
-    <div className={css.page}>
+    <div className={css.pane}>
       <div className={css.row}>
         <span className={css.label}>{t('mode.label')}</span>
         <Switch className={css.toggle} checked={mode.enabled} disabled={locked || pending || modelSelection === undefined} label={t('mode.label')} onChange={select} autoFocus describedBy={descriptionId} />
