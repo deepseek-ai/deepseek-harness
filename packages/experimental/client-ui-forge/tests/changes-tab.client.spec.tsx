@@ -736,9 +736,10 @@ describe('ChangesTab base branch', () => {
   })
 
   it('records review comments under the compared ref and names the base the Host reports', async () => {
-    const renderDiff = DiffFileModule.DiffFile
+    // The memoized section draws through its inner component, which the spy observes.
+    const renderDiff = DiffFileModule.DiffFile.type
     let source: ReviewActions['source'] | undefined
-    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
       source = props.review?.source
       return renderDiff(props)
     })
@@ -809,6 +810,48 @@ describe('ChangesTab base branch', () => {
     expect(notice.textContent).toBe(`The base branch topic was not found; it may have been deleted${en['diff.useAutomaticBase']}`)
     fireEvent.click(within(notice).getByRole('button', { name: en['diff.useAutomaticBase'] }))
     expect(m.store.getSnapshot().byTab[TAB]?.base).toBeNull()
+  })
+})
+
+describe('ChangesTab drawing work', () => {
+  it('draws the lines of an expanded file once its section comes within reach of the scrollport', async () => {
+    const watched = new Map<Element, IntersectionObserverCallback>()
+    let root: Element | Document | null | undefined
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(readonly report: IntersectionObserverCallback, options?: IntersectionObserverInit) { root = options?.root }
+      observe(element: Element): void { watched.set(element, this.report) }
+      unobserve(element: Element): void { watched.delete(element) }
+      disconnect(): void { watched.clear() }
+    })
+    try {
+      const m = mount()
+      await settle()
+      const app = m.section('src/app.ts')
+      expect(root).toBe(m.view.container.querySelector('[data-forge-changes-scroll]'))
+      expect(app.querySelector('[data-forge-diff-unreached]')).not.toBeNull()
+      expect(rowTexts(app)).toEqual([])
+
+      act(() => {
+        // The double reports only the entries, which is all the view reads.
+        Reflect.apply(watched.get(app)!, undefined, [[{ target: app, isIntersecting: true }], undefined])
+      })
+      expect(app.querySelector('[data-forge-diff-unreached]')).toBeNull()
+      expect(rowTexts(app).length).toBeGreaterThan(0)
+      expect(watched.has(app)).toBe(false)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('leaves file sections undrawn while the reader filters the file list', async () => {
+    // The memoized section draws through its inner component, which the spy counts.
+    const draw = vi.spyOn(DiffFileModule.DiffFile, 'type')
+    const m = mount()
+    await settle()
+    const drawn = draw.mock.calls.length
+    fireEvent.change(m.view.getAllByRole('textbox', { name: 'Filter files…' })[0]!, { target: { value: 'app' } })
+    await settle()
+    expect(draw.mock.calls.length).toBe(drawn)
   })
 })
 
@@ -1347,9 +1390,10 @@ describe('line review actions', () => {
     expect(tree.getByRole('button', { name: 'src/app.ts' })).toBeTruthy()
   })
   it('refuses a local reference passed to the PR publication callback', async () => {
-    const renderDiff = DiffFileModule.DiffFile
+    // The memoized section draws through its inner component, which the spy observes.
+    const renderDiff = DiffFileModule.DiffFile.type
     let publish: ReviewActions['publish']
-    vi.spyOn(DiffFileModule, 'DiffFile').mockImplementation((props) => {
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
       publish = props.review?.publish
       return renderDiff(props)
     })
@@ -1849,6 +1893,28 @@ describe('ChangesTab review threads', () => {
     scrolled.mockClear()
     await settle()
     expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
+  })
+
+  it('draws a file a thread jump targets before its section comes within reach, and keeps it drawn', async () => {
+    // A double that never reports a section as reached, as for files far below the scrollport.
+    vi.stubGlobal('IntersectionObserver', class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    })
+    try {
+      const m = mount({ source, setup: reviewed() })
+      await settle()
+      expect(m.section('src/app.ts').querySelector('[data-forge-diff-unreached]')).not.toBeNull()
+      scrolled.mockClear()
+      fireEvent.click(within(m.section('src/app.ts')).getByRole('button', { name: 'app.ts has 4 unresolved threads; go to the next one' }))
+      await settle()
+      expect(m.section('src/app.ts').querySelector('[data-forge-diff-unreached]')).toBeNull()
+      expect(scrolled.mock.contexts).toContain(card(m, 'on-row'))
+      expect(m.section('docs/notes.txt').querySelector('[data-forge-diff-unreached]')).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('stops a later jump to a file at its header once a thread jump there has ended', async () => {

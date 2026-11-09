@@ -46,7 +46,7 @@ export interface LineThread {
   readonly place: Extract<ThreadPlace, { readonly kind: 'line' }>
 }
 
-/** Host threads of one file and how its section reaches them. */
+/** Host threads of one file and the actions their cards share. */
 export interface FileThreads {
   /** Threads on lines, which follow the row of their last line. */
   readonly lines: readonly LineThread[]
@@ -58,8 +58,6 @@ export interface FileThreads {
   readonly unresolved: number
   /** Reads, actions, and identities shared by the cards. */
   readonly actions: ThreadActions
-  /** Show the file's next unresolved thread in display order after the last one shown, or its first. */
-  readonly next: () => void
 }
 
 /** The commit a thread was written on, abbreviated, or null for a file thread. */

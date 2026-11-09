@@ -1197,7 +1197,7 @@ export type SourceSigning = 'ad-hoc' | {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:360`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:366`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1573,7 +1573,7 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 
 - `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/worktree/src/index.ts:35`](../packages/experimental/worktree/src/index.ts)
+- `source`: [`packages/experimental/worktree/src/index.ts:36`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
 /** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
@@ -1592,7 +1592,11 @@ export interface Config {
   timeoutMs?: number
   /** Subprocess termination grace in milliseconds. */
   graceMs?: number
-  /** Maximum captured bytes per subprocess output stream. */
+  /**
+   * Maximum captured bytes per subprocess output stream; archive inspection
+   * streams `git status`, and inspection and restoration stream the worktree
+   * listing, so it bounds only their stderr.
+   */
   maxOutputBytes?: number
 }
 ```
