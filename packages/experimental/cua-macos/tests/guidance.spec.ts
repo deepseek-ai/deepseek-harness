@@ -27,6 +27,12 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated mouse input is available at window level')
+  const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
+  expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
+  expect(GUIDANCE).toContain('returns, throws, or the user pauses')
+  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent(')
+  expect(pressKey).toBe(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
+  expect(GUIDANCE).toContain('W down, D down, D up, W up')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
   for (const term of ['AXShowAlternateUI', 'AXShowDefaultUI', 'HOVER_UNAVAILABLE', 'systemPointerHover']) expect(hover).toContain(term)
   const click = GUIDANCE.split('\n').find(line => line.startsWith('- click('))
@@ -135,5 +141,5 @@ it('documents facade initialization, emitted observations, and separate key argu
 })
 
 it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'sendKeyEvent', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
 })

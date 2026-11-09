@@ -81,13 +81,15 @@ actor AXWorker {
     private let systemPointerHover: Bool?
     private let sessionState: @Sendable () -> Bool?
     private var access: AXAccess?
+    private let heldKeys: HeldKeys
     private var keyboard: KeyboardInput?
     private var pointer: WindowPointerInput?
     private var hovers: [String: AXHover] = [:]
     private var closed = false
 
-    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil,
+    init(cancellation: CancellationLatch, axTimeout: Float, textEventInterval: Double, maxClickHoldMs: Int, systemPointerHover: Bool? = nil, heldKeys: HeldKeys = HeldKeys(),
          sessionState: @escaping @Sendable () -> Bool? = NativePlatform.sessionLocked) {
+        self.heldKeys = heldKeys
         self.cancellation = cancellation
         self.axTimeout = axTimeout
         self.textEventInterval = textEventInterval
@@ -118,7 +120,7 @@ actor AXWorker {
         if let keyboard, let pointer { return (keyboard, pointer) }
         let poster = PIDEventPoster()
         let latch = cancellation
-        let key = KeyboardInput(poster: poster, textEventInterval: textEventInterval, checkCancellation: { try latch.check() })
+        let key = KeyboardInput(post: poster.post, textEventInterval: textEventInterval, held: heldKeys, checkCancellation: { try latch.check() })
         let mouse = WindowPointerInput(poster: poster, checkCancellation: { try latch.check() })
         keyboard = key; pointer = mouse
         return (key, mouse)
@@ -208,8 +210,18 @@ actor AXWorker {
                  trace: ScreenshotTrace? = nil) async throws -> DriverOutcome {
         try cancellation.check()
         guard !closed else { throw NativeFailure(code: "NATIVE_CLOSED", message: "Helper is closing") }
-        if method == "sendKeyEvent" {
-            throw NativeFailure(code: "NOT_IMPLEMENTED", message: "sendKeyEvent is not implemented on current platform.")
+        if method == "releaseHeldKeys" {
+            try keyboard?.releaseHeldKeys(run: params.string("runId"))
+            return .result(Self.actionResult)
+        }
+        if method == "sendKeyEvent", try params.string("direction") == "up" {
+            let handle = try params.string("appHandle")
+            let dispatched = try inputs().0.keyUp(params.string("key"), app: handle, run: params.string("runId")) {
+                try NativePlatform.requireUnlocked(observeSession())
+                try NativePlatform.requireAccessibility()
+                return try ax().keyboardRecipient(validateIdentity(handle), catalog: catalog)
+            }
+            return .result(.object(["dispatched": .bool(dispatched)]))
         }
         let locked = observeSession()
         if method == "getCapabilities" {
@@ -331,6 +343,10 @@ actor AXWorker {
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
                                    maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
+        case "sendKeyEvent":
+            try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
+                try ax().keyboardRecipient(identity, catalog: catalog)
+            }
         case "typeText", "pressKey":
             let recipient = try ax().keyboardRecipient(identity, catalog: catalog)
             try NativePlatform.verify(recipient)
@@ -496,5 +512,10 @@ actor AXWorker {
     static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])
     }
-    func shutdown() { closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll(); access = nil; keyboard = nil; pointer = nil }
+    func shutdown() {
+        do { try keyboard?.releaseHeldKeys() }
+        catch { fputs("Could not release held keys on disconnect: \(error)\n", stderr) }
+        closed = true; snapshots.removeAll(); observedWindowBounds.removeAll(); targets.removeAll(); hovers.removeAll()
+        access = nil; keyboard = nil; pointer = nil
+    }
 }

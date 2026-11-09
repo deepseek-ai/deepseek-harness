@@ -124,14 +124,24 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     let accepted = false
     try {
       await input.fill(PROMPT)
+      // Hold the prompt POST at the browser boundary so the Host cannot accept
+      // the message before the pre-accept snapshot is read.
+      const promptSent = Promise.withResolvers<undefined>()
+      const releasePrompt = Promise.withResolvers<undefined>()
+      const holdPrompt = async (route: Route): Promise<void> => {
+        promptSent.resolve(undefined)
+        await releasePrompt.promise
+        await route.continue()
+      }
+      await page.route('**/api/session/prompt', holdPrompt, { times: 1 })
       const admitted = page.waitForResponse('**/api/session/prompt')
-      const [echoSnapshot, response] = await Promise.all([
-        input.evaluate(async (element, prompt) => {
+      try {
+        const echoCapture = input.evaluate(async (element, prompt) => {
           element.dispatchEvent(new KeyboardEvent('keydown', {
             key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
           }))
-          // sendSession registered its paint yield first. This frame observes the
-          // composer holding the message while the Host has not accepted it yet.
+          // sendSession registered its paint yield first; this frame observes the
+          // composer holding the message while the POST is still held.
           await new Promise<void>((resolve) => { requestAnimationFrame(() => { resolve() }) })
           const echo = document.querySelector<HTMLElement>('[data-submission-echo]')
           return [
@@ -139,12 +149,15 @@ describe('web e2e: fresh round trip through the real assembly', () => {
             `composer: ${JSON.stringify(element.textContent ?? '')}`,
             `contenteditable: ${element.getAttribute('contenteditable')}`,
           ].join('\n')
-        }, PROMPT),
-        admitted,
-      ])
+        }, PROMPT)
+        await promptSent.promise
+        await compareOrRefreshGolden(ECHO_EXPECTED, await echoCapture, MODE)
+      } finally {
+        releasePrompt.resolve(undefined)
+      }
+      const response = await admitted
       expect(await response.json()).toMatchObject({ result: { ok: true, value: { accepted: true } } })
       accepted = true
-      await compareOrRefreshGolden(ECHO_EXPECTED, echoSnapshot, MODE)
       // Acceptance publishes the echo and clears the composer; maintenance keeps the Turn from starting.
       await page.locator('[data-submission-echo]', { hasText: PROMPT }).waitFor()
       await expect.poll(() => input.textContent()).toBe('')

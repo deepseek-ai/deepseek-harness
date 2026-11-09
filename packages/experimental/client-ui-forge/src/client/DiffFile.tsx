@@ -494,22 +494,26 @@ export function DiffFile(props: DiffFileProps): ReactNode {
         >
           <IconChevronDownOutlineRegular size={14} className={css.chevron} />
         </button>
-        <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
-        <span className={css.filePath}>
-          <FileLabel path={file.path} tooltip={tooltip} />
+        <span className={css.fileTitle}>
+          <FileTypeIcon path={file.path} size={16} className={css.fileIcon} />
+          <span className={css.filePath}>
+            <FileLabel path={file.path} tooltip={tooltip} />
+          </span>
+          {viewed === 'changed' && (
+            <Tag tone="warning" className={css.changedTag}><span className={css.changedText}>{t('viewed.changed')}</span></Tag>
+          )}
+          {threads !== undefined && threads.unresolved > 0 && (
+            <Tooltip label={t('thread.next')} side="bottom">
+              <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
+                onClick={threads.next}>
+                <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
+                <span className={css.threadCountNumber}>{threads.unresolved}</span>
+              </button>
+            </Tooltip>
+          )}
+          <span className={css.fileSpacer} data-forge-path-spacer="" />
+          {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
-        {viewed === 'changed' && <Tag tone="warning" className={css.changedTag}>{t('viewed.changed')}</Tag>}
-        {threads !== undefined && threads.unresolved > 0 && (
-          <Tooltip label={t('thread.next')} side="bottom">
-            <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
-              onClick={threads.next}>
-              <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
-              <span className={css.threadCountNumber}>{threads.unresolved}</span>
-            </button>
-          </Tooltip>
-        )}
-        <span className={css.fileSpacer} data-forge-path-spacer="" />
-        {badge !== '' && <span className={css.badge}>{badge}</span>}
         {!file.binary && <Counts file={file} t={t} />}
         <label className={css.viewed} title={t('viewed.hint')}>
           <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
