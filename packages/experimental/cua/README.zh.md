@@ -31,7 +31,7 @@ kind: "package-reference"
 
 挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，并在 provider 支持应用级辅助功能时静默读取初始辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回用于截图和指针输入的对象。进行任何截图或指针输入前，必须选择应用及其一个窗口。调用 `app.getAccessibilityTree()` 输出树。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会先报告，再释放该连接；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 

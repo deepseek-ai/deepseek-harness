@@ -94,6 +94,12 @@ it('projects shared controls and macOS signing without adding signing to the sha
   for (const field of ['sourceSigning', 'permissionPollIntervalMs', 'agentPreset', 'helperPath']) {
     expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
   }
+  expect(CuaConfig({})).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(NativeProvider.Config({})).toMatchObject({ maxElements: 5000, maxDepth: 50 })
+  const limits = { maxElements: 100000, maxDepth: 512 }
+  expect(NativeProvider.Config(limits)).toMatchObject(limits)
+  expect(() => NativeProvider.Config({ maxElements: 100001 })).toThrow()
+  expect(() => NativeProvider.Config({ maxDepth: 513 })).toThrow()
   expect(CuaConfig({})).not.toHaveProperty('sourceSigning')
   expect(CuaConfig.dict).not.toHaveProperty('sourceSigning')
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc', timeoutMs: 1234 })).toMatchObject({
@@ -768,6 +774,7 @@ it('prepares the selected native component before registering CUA and creates no
 it('adds an installation-owned bridge URL when persistent PTC is available', async () => {
   const f = await setup()
   const text = async () => (await f.ctx.systemPrompt.assemble()).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
+  expect(await text()).toContain('AX read defaults: maxElements=64, maxDepth=8.')
   expect(await text()).not.toContain('Persistent PTC initialization:')
   await f.ctx.plugin(FileSystem)
   await f.ctx.plugin(Sandbox)

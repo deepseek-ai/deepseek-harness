@@ -63,7 +63,7 @@ it('enumerates every available method once in its catalog entry', () => {
 })
 
 it('documents option fields and return fields', () => {
-  for (const token of ['emit', 'includeMenus', 'details', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
+  for (const token of ['emit', 'includeMenus', 'details', 'maxElements', 'maxDepth', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
   for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'bytes', 'mimeType', 'pixelWidth', 'pixelHeight', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 

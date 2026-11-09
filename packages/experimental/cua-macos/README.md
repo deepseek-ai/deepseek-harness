@@ -72,7 +72,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `maxClipboardBytes` | `33554432` | Maximum original clipboard bytes preserved during a paste; oversized contents reject before replacement. |
 | `pasteReadTimeoutMs` | `1000` | Clipboard read deadline after the Paste command returns; expiry reports `PASTE_NOT_CONSUMED`. |
 | `maxAppMatches` | `20` | Maximum installed-app search matches; broader queries reject and require a narrower name. |
-| `maxElements` / `maxDepth` | `2000` / `25` | Accessibility traversal limits. |
+| `maxElements` / `maxDepth` | `5000` / `50` | Defaults for tree reads. Each read can raise or lower either value. Paste menu discovery always uses the configured limits. [Rationale](../../../.agents/notes/implemented/architecture/2026-11-09-cua-ax-traversal-defaults.md) |
 | `maxClickHoldMs` | `5000` | Maximum explicit click hold in milliseconds; accepts nonnegative integers. Zero only permits immediate release. |
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |
@@ -89,7 +89,7 @@ Application consent is enforced before AX reads, window-title reads, screenshots
 
 Raw `getState` exposes validated state fields and the complete text for the requested disclosure options. The native helper also returns structured element diagnostics with opaque string `elementId` values for native checks; the tool projection omits that duplicate array from model text and structured tool values.
 
-AX observations show menu-bar entries by default. Use `app.getAccessibilityTree({ includeMenus: true })` to expand menu contents and `app.getAccessibilityTree({ details: true })` for identifiers, global-point bounds and complete action names. These options also apply to raw `getState`. Every read replaces the application's current snapshot; use element IDs from that read. Details do not bypass the configured node and depth limits. Truncation identifies the reached limit.
+AX observations show menu-bar entries by default. Use `app.getAccessibilityTree({ includeMenus: true })` to expand menu contents and `app.getAccessibilityTree({ details: true })` for identifiers, global-point bounds and complete action names. These options also apply to raw `getState`. Every read replaces the application's current snapshot; use element IDs from that read. Pass `maxElements` or `maxDepth` to override either configured limit for one read. Truncation identifies the reached limit.
 
 Values and placeholders are separate. Named, stateful or actionable groups and scroll areas retain their own rows. Repeated names, descriptions and help text on one node are shown once. Values, placeholders and URLs keep their distinct meanings even when their text matches; body text shared by distinct nodes remains intact. Writability is explicit on relevant controls, including `AXIncrementor`; `unknown` means the system did not report it. Missing optional state fields do not imply false. UTF-16 ranges outside the observed value are marked unavailable. Compact tree labels can omit AppKit target and selector details. Pass the exact name returned by `listActions(elementId)` to `performAction`.
 
@@ -202,7 +202,7 @@ Setup and discovery:
 Available at app or window level depending on the platform.
 
 Element ids are opaque strings from the latest successful tree; the object facade keeps one current snapshot per app across its repeated app and window objects, a new read replaces it, and a failed read invalidates the previous one. Repeated strings can appear for different elements, so do not reuse an old id blindly, and element operations do not fall back to pointer input or typing.
-- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean }) -> string — read the tree within the provider limits; includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. If the tree reports maxElements or maxDepth truncation, select a narrower window or ask the user to raise the named macOS provider setting and read again. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
+- getAccessibilityTree(options?: { emit?: boolean, includeMenus?: boolean, details?: boolean, maxElements?: number, maxDepth?: number }) -> string — set the node count or depth for one read. Omitted limits use the provider settings. includeMenus expands menu contents and details adds identifiers, native bounds, and complete action names. macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need. Use element ids from the file only while that observation is current.
 - listActions(elementId: string) -> string[] — list the actions an element advertises.
 - invoke(elementId: string) -> ActionResult — invoke the element's default action; dispatched is false when it has none.
 - performAction(elementId: string, action: string, argument?: JsonValue) -> ActionResult — perform an observed action with an optional direct JSON argument.
@@ -233,13 +233,15 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 #### Token effect
 
-Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Retained objects are not serialized into prompts by this package.
+Enabling the plugin adds a fixed schema and guidance. AX observations, operation results and admitted images add model input. Retained objects are not serialized into prompts by this package. A higher default or per-read override can include more AX text in model input when the window has more nodes to visit.
 
 #### KV Cache effect
 
 Tool results append to Session history. Changing plugin configuration or tool presentation can change the request prefix; retaining an app object does not change existing history.
 
 ## Known Limitations and Deferred Work
+
+The native operation deadline (`timeoutMs`), per-AX-call timeout (`axTimeoutMs`), and response size limit (`maxResponseBytes`) still apply to larger tree reads.
 
 The queue orders individual native requests. Holding an app object does not reserve its application across a Session; [continuous interaction](../../../.agents/notes/implemented/architecture/2026-10-13-cua-continuous-hover.md) grants no cross-call ownership. Capture RPCs that never return occupy the single capture slot; creating new app objects does not reset that system connection.
 
