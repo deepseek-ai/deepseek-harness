@@ -105,7 +105,7 @@ Program-only SDK bindings:
 ```ts
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
-declare class Image { private constructor(); readonly path: string; readonly width: number; readonly height: number; }
+declare class Image { private constructor(); readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number; }
 
 declare function inspect(...values: unknown[]): void;
 

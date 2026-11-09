@@ -76,6 +76,7 @@ export async function runNodeMain(
   const images = new WeakMap<object, string>()
   class Image {
     readonly [key: string]: PtcJsonValue
+    declare readonly attachmentId: string
     declare readonly path: string
     declare readonly width: number
     declare readonly height: number
@@ -84,6 +85,7 @@ export async function runNodeMain(
   const decodeImage = (wire: PtcImageWire): PtcJsonValue => {
     const image = capturedObjectCreate(Image.prototype) as Image
     capturedObjectDefineProperties(image, {
+      attachmentId: { enumerable: true, value: wire.attachmentId },
       path: { enumerable: true, value: wire.path },
       width: { enumerable: true, value: wire.width },
       height: { enumerable: true, value: wire.height },

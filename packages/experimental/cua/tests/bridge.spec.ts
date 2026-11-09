@@ -64,7 +64,7 @@ it.each([null, 'text only', { content: [{ type: 'text', text: '{}' }] }])('rejec
 })
 
 it('returns the program Image unchanged from one screenshot tool call', async () => {
-  const image = Object.freeze({ path: '/images/screenshot.png', width: 1, height: 1 })
+  const image = Object.freeze({ attachmentId: 'sha256:screenshot', path: '/images/screenshot.png', width: 1, height: 1 })
   const tool = vi.fn(async (operation: CuaOperation): Promise<JsonValue> => {
     if (operation.method === 'getCapabilities') return capabilities
     if (operation.method === 'getApp') return selected

@@ -137,6 +137,7 @@ describe('renderToolsSdk', () => {
     expect(text).toContain('declare class ToolCallError extends Error')
     expect(text).toContain('readonly toolName: ToolName;')
     expect(text).toContain('declare const tools: {')
+    expect(text).toContain('readonly attachmentId: string;')
     expect(text).toContain('type JsonValue = null | boolean | number | string')
     expect(text.indexOf('bash: {')).toBeGreaterThan(0)
     expect(text).toContain('"my-mcp.tool":')

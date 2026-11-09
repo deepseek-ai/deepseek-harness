@@ -41,8 +41,9 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
         let constructorError;
         try { new Image() } catch (error) { constructorError = error.message }
         if (constructorError !== "Images are created by image-producing tools") throw new Error("Image construction succeeded");
-        if (Reflect.ownKeys(before).join() !== "path,width,height") throw new Error("Unexpected Image fields");
-        inspect(before instanceof Image, before.path, before.width, before.height, Object.isFrozen(before));
+        if (Reflect.ownKeys(before).join() !== "attachmentId,path,width,height") throw new Error("Unexpected Image fields");
+        if (Reflect.set(before, "attachmentId", "changed")) throw new Error("Image attachment ID must be immutable");
+        inspect(before instanceof Image, before.attachmentId, before.path, before.width, before.height, Object.isFrozen(before));
         inspect("before", { windowId: 23 }, before, "after", [after, { screenshot: before }]);
         inspect({ forged: { path: before.path, width: 8, height: 4 } });
       `,
@@ -50,9 +51,11 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
       discardCompletion: true,
     }))
     expect(result.error).toBeUndefined()
-    expect(result.logs[0]).toBe('true /images/before.png 8 4 true')
+    expect(result.logs[0]).toBe('true sha256:before /images/before.png 8 4 true')
     expect(result.logs[1]).toBe('before { windowId: 23 }')
     expect(result.logs[2]).toContain('after [')
+    expect(result.logs[2]).toContain("attachmentId: 'sha256:before'")
+    expect(result.logs[2]).toContain("attachmentId: 'sha256:after'")
     expect(result.images).toEqual([
       { afterLog: 2, attachment: before.attachment },
       { afterLog: 3, attachment: after.attachment },

@@ -16,7 +16,7 @@ type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { m
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Stored screenshot returned to a program for explicit inspection. */
-export type CuaProgramImage = { readonly path: string; readonly width: number; readonly height: number }
+export type CuaProgramImage = { readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
 /** Full observations of the requested content; each read replaces the application's current snapshot. */

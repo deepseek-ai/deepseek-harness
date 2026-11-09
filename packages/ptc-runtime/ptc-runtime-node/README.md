@@ -27,7 +27,7 @@ Execute model-written TypeScript with host-provided async functions. The default
 
 Mount this provider in a composition that supplies `fs`, `subprocess`, `sandbox` and `sandboxPolicy`. `dsh-tool-executor-ptc` supplies the calling Session's directory and standing policy; direct runtime consumers resolve those options before execution.
 
-Programs display text, objects, and `Image` values through top-level `inspect(...values)`. One call can mix multiple texts and images, including images nested in arrays and objects. `Image.path` names a stored attachment file readable in the execution environment; `width` and `height` describe that file’s pixels. Image descriptors share the `maxOutputBytes` budget with text.
+Programs display text, objects, and `Image` values through top-level `inspect(...values)`. One call can mix multiple texts and images, including images nested in arrays and objects. `Image.attachmentId` matches the attachment ID in the model's image description. `Image.path` names a stored attachment file readable in the execution environment; `width` and `height` describe that file’s pixels. Image descriptors share the `maxOutputBytes` budget with text.
 
 ### Configuration
 

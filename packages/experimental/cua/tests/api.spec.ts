@@ -8,7 +8,7 @@ import type { CuaApp, CuaCapabilities, CuaElementId, CuaOperation, CuaWindow } f
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
-const IMAGE = Object.freeze({ path: '/images/screenshot.png', width: 1, height: 1 })
+const IMAGE = Object.freeze({ attachmentId: 'sha256:screenshot', path: '/images/screenshot.png', width: 1, height: 1 })
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
 const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
 const delivered = { dispatched: true }
@@ -585,7 +585,7 @@ describe('screenshots', () => {
     expect(f.sink.text).toHaveBeenCalledTimes(1)
   })
 
-  it.each([null, 'text only', {}, { path: '/image.png', width: 1 }])('rejects an invalid screenshot result %j', async (value) => {
+  it.each([null, 'text only', {}, { path: '/image.png', width: 1 }, { path: '/image.png', width: 1, height: 1 }])('rejects an invalid screenshot result %j', async (value) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     const window = await app.getWindow(23)

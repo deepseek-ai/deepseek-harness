@@ -319,7 +319,7 @@ export function renderToolsSdk(schemas: readonly ToolSdkSchema[], programFormat:
   const argsMap = `interface ToolArgsMap {${argsMembers.length > 0 ? `\n${argsMembers.join('\n')}\n` : ''}}`
   const outputMap = `interface ToolOutputMap {${outputMembers.length > 0 ? `\n${outputMembers.join('\n')}\n` : ''}}`
   const declaration = [
-    'declare class Image { private constructor(); readonly path: string; readonly width: number; readonly height: number; }',
+    'declare class Image { private constructor(); readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number; }',
     'declare function inspect(...values: unknown[]): void;',
     argsMap,
     outputMap,

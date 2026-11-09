@@ -190,6 +190,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text
       async getScreenshot() {
         const value = await base.call('screenshot', {})
         if (value === null || typeof value !== 'object' || Array.isArray(value)
+          || typeof value.attachmentId !== 'string'
           || typeof value.path !== 'string' || typeof value.width !== 'number' || typeof value.height !== 'number') {
           throw new Error('The CUA program binding must return an Image for screenshots')
         }

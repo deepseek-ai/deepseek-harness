@@ -298,7 +298,7 @@ export class ProgramWorker {
   private registerImage(image: PtcImage): PtcImageWire {
     const id = randomUUID()
     this.images.set(id, image.attachment)
-    return { kind: 'image', id, path: image.path, width: image.attachment.width, height: image.attachment.height }
+    return { kind: 'image', id, attachmentId: image.attachment.attachmentId, path: image.path, width: image.attachment.width, height: image.attachment.height }
   }
 
   private async start(cwd: string): Promise<void> {

@@ -258,7 +258,7 @@ describe('flat worker JSON wire', () => {
 
 
 it('transports registered images as leaves inside arrays and objects', () => {
-  const image = { path: '/images/selected.png', width: 8, height: 4 }
+  const image = { attachmentId: 'sha256:selected', path: '/images/selected.png', width: 8, height: 4 }
   const encoded = encodePtcJsonWire({ selected: [image, 7] }, value => value === image
     ? { kind: 'image', id: 'image-1', ...image } : undefined)
   expect(decodePtcJsonWire(encoded)).toBeUndefined()
@@ -272,11 +272,14 @@ it('transports registered images as leaves inside arrays and objects', () => {
 
 it.each([
   [], new Date(0),
-  { kind: 'image', id: '', path: '/image.png', width: 8, height: 4 },
-  { kind: 'image', id: '1', path: '', width: 8, height: 4 },
-  { kind: 'image', id: '1', path: '/image.png', width: 0, height: 4 },
-  { kind: 'image', id: '1', path: '/image.png', width: 8, height: 1.5 },
-  { kind: 'image', id: '1', path: '/image.png', width: 8, height: 4, extra: true },
+  { kind: 'image', id: '', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 4 },
+  { kind: 'image', id: '1', attachmentId: 'sha256:image', path: '', width: 8, height: 4 },
+  { kind: 'image', id: '1', attachmentId: 'sha256:image', path: '/image.png', width: 0, height: 4 },
+  { kind: 'image', id: '1', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 1.5 },
+  { kind: 'image', id: '1', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 4, extra: true },
+  { kind: 'image', id: '1', path: '/image.png', width: 8, height: 4 },
+  { kind: 'image', id: '1', attachmentId: '', path: '/image.png', width: 8, height: 4 },
+  { kind: 'image', id: '1', attachmentId: 1, path: '/image.png', width: 8, height: 4 },
 ])('rejects malformed image tokens %j', (token) => {
   expect(decodePtcJsonWire([token], () => null)).toBeUndefined()
 })

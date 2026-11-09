@@ -27,7 +27,7 @@ kind: "package-reference"
 
 在提供 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 的组合中挂载本提供方。`dsh-tool-executor-ptc`传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
 
-程序通过顶层 `inspect(...values)` 展示文本、对象与 `Image`；同一次调用可混合多段文本和多张图片，图片也可嵌入数组或对象。`Image.path` 是执行环境可读取的已存储附件文件，`width` 与 `height` 为该文件的像素尺寸。图片元数据与文本共用 `maxOutputBytes` 预算。
+程序通过顶层 `inspect(...values)` 展示文本、对象与 `Image`；同一次调用可混合多段文本和多张图片，图片也可嵌入数组或对象。`Image.attachmentId` 与模型收到的图片说明中的附件 ID 一致。`Image.path` 是执行环境可读取的已存储附件文件，`width` 与 `height` 为该文件的像素尺寸。图片元数据与文本共用 `maxOutputBytes` 预算。
 
 ### 配置
 

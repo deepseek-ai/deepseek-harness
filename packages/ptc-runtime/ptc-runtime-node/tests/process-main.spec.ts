@@ -211,7 +211,7 @@ it('records malformed host traffic after completion', async () => {
 
 it('captures image selection during execution and revokes it for late or external calls', async () => {
   const h = await setup()
-  h.methods.invoke = async () => [{ kind: 'image', id: 'one', path: '/image.png', width: 8, height: 4 }]
+  h.methods.invoke = async () => [{ kind: 'image', id: 'one', attachmentId: 'sha256:image', path: '/image.png', width: 8, height: 4 }]
   const selected = vi.fn()
   h.methods.image = selected
   const done = Promise.withResolvers<undefined>()
@@ -220,7 +220,8 @@ it('captures image selection during execution and revokes it for late or externa
   const result = await h.run(`
     process.image = await tools.echo({});
     if (!Object.isFrozen(process.image)) throw new Error("Image must be immutable");
-    if (Reflect.ownKeys(process.image).join() !== "path,width,height") throw new Error("Unexpected Image fields");
+    if (Reflect.ownKeys(process.image).join() !== "attachmentId,path,width,height") throw new Error("Unexpected Image fields");
+    if (process.image.attachmentId !== "sha256:image") throw new Error("Unexpected attachment ID");
     let constructorError;
     try { new Image() } catch (error) { constructorError = error.message }
     if (constructorError !== "Images are created by image-producing tools") throw new Error("Image construction succeeded");

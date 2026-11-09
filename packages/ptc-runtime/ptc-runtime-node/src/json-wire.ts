@@ -251,6 +251,7 @@ interface ObjectWireToken {
 export interface PtcImageWire {
   kind: 'image'
   id: string
+  attachmentId: string
   path: string
   width: number
   height: number
@@ -311,15 +312,17 @@ export function encodePtcJsonWire(value: PtcJsonValue, image?: (value: object) =
 function imageWireToken(value: object): PtcImageWire | undefined {
   if (intrinsicArrayIsArray(value) || !hasPlainObjectPrototype(value)) return undefined
   const keys = enumerableStringKeys(value)
-  if (keys === undefined || keys.length !== 5
+  if (keys === undefined || keys.length !== 6
     || !keysContain(keys, 'kind') || !keysContain(keys, 'id') || !keysContain(keys, 'path')
+    || !keysContain(keys, 'attachmentId')
     || !keysContain(keys, 'width') || !keysContain(keys, 'height')) return undefined
   const token = value as Record<string, unknown>
   if (token.kind !== 'image' || typeof token.id !== 'string' || token.id.length === 0
+    || typeof token.attachmentId !== 'string' || token.attachmentId.length === 0
     || typeof token.path !== 'string' || token.path.length === 0
     || typeof token.width !== 'number' || !intrinsicNumberIsSafeInteger(token.width) || token.width <= 0
     || typeof token.height !== 'number' || !intrinsicNumberIsSafeInteger(token.height) || token.height <= 0) return undefined
-  return { kind: 'image', id: token.id, path: token.path, width: token.width, height: token.height }
+  return { kind: 'image', id: token.id, attachmentId: token.attachmentId, path: token.path, width: token.width, height: token.height }
 }
 
 type DecodeFrame =
