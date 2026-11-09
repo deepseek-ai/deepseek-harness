@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Read and act on pull requests and merge requests without coupling consumers to one code host. A provider maps remote and change request URLs to provider-neutral references, finds change requests by head branch, reads their status in batches, reads their diffs and files, and marks drafts ready or merges on request. Watchers of one change request share a single polling loop whose cadence follows check, mergeability, and lifecycle state.
+Read and act on pull requests and merge requests without coupling consumers to one code host. A provider maps remote and change request URLs to provider-neutral references, finds change requests by head branch, reads their status in batches, reads their diffs and files, reads and writes their review threads, and marks drafts ready or merges on request. Watchers of one change request share a single polling loop whose cadence follows check, mergeability, and lifecycle state.
 
 ## Table of Contents
 
@@ -46,9 +46,11 @@ Providers may implement `commits` and `compare` together. `commits(ref, signal)`
 
 Reaching `fetchTimeoutMs` aborts the fetch signal with `FORGE_FETCH_TIMEOUT`. Providers must stop their work and settle when the signal aborts; rejected fetches become `unavailable` failures. A provider that ignores cancellation can stall polling and service disposal.
 
-Providers may implement `submitReview` to publish a line comment or a completed review at an explicit head commit. The registry returns unsupported when that capability is absent and refreshes watched status after a submission. Successful writes return their web URL; failures distinguish changed heads, refusals, and unknown outcomes. Callers must reconcile unknown outcomes before another submission. Pending drafts belong to the consumer, not the polling registry.
+Providers may implement `submitReview` to publish a line comment or a completed review at an explicit head commit. The registry returns unsupported when that capability is absent and refreshes watched status after a submission. Successful writes return their web URL; failures distinguish changed heads, refusals, and unknown outcomes. Callers must reconcile unknown outcomes before another submission. Comments a user keeps for a later review go to the code host's pending review through `writeReview`, not to the polling registry.
 
 Providers may implement `readReview` to read a change request's review threads at one head commit. `readReview(ref, headSha, signal)` returns `ForgeReviewData`, the threads with each line thread's position at the head and at the commit it was written on, only when the read names `headSha` as the head; otherwise `stale`, which polls a watched change request at once, once per head commit shared with stale diff reads. The registry returns an `unsupported` failure when the provider lacks the method.
+
+Providers may implement `writeReview` to change a change request's review threads and the signed-in user's pending review. `writeReview(ref, write, signal)` takes one `ForgeReviewWrite`: a reply, published at once or with `pending` inside the pending review; resolving or unresolving a thread; editing or deleting a comment; adding a line comment at the head to the pending review; or submitting or discarding the pending review. A pending reply or comment starts a pending review when the user has none. The provider writes only while the head is still `write.headSha`; otherwise it returns `stale`, which polls a watched change request as a stale read does, and after any other result the registry polls a watched change request at once. A write is never retried, and an `unknown` result must be checked on the host before the write is tried again. The registry returns `unsupported` when the provider lacks the method. `ForgeReviewData` names the user's pending review and whether the user may reply to and resolve each thread, edit and delete each comment, and add to, submit, and discard a pending review; a provider without `writeReview` reports none of these permissions.
 
 -----
 
