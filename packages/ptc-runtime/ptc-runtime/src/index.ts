@@ -5,6 +5,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from './types.ts'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
@@ -96,9 +97,38 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
+ * Every {@link PtcRuntimeError} code:
+ * - `PTC_RUNTIME_UNAVAILABLE`: the runtime was disposed, or a retained environment's cleanup is
+ *   incomplete; release the owner or reload the runtime before running more programs.
+ * - `PTC_RUNTIME_CONFLICT`: a program is already running for the same state owner, or the owner's
+ *   retained environment was launched under a different sandbox policy; wait, or release the owner.
+ * - `PTC_RUNTIME_INVALID_ARGUMENT`: the consumer passed a request or spec that violates this contract,
+ *   such as a relative `cwd` or an unresolved spec.
+ */
+export const PTC_RUNTIME_ERROR_CODES = [
+  'PTC_RUNTIME_UNAVAILABLE',
+  'PTC_RUNTIME_CONFLICT',
+  'PTC_RUNTIME_INVALID_ARGUMENT',
+] as const
+
+/** One {@link PtcRuntimeError} code. */
+export type PtcRuntimeErrorCode = typeof PTC_RUNTIME_ERROR_CODES[number]
+
+/** Contract misuse a {@link PtcRuntime} rejects; `code` is one of {@link PTC_RUNTIME_ERROR_CODES}. */
+export class PtcRuntimeError extends HarnessError {
+  override readonly code: PtcRuntimeErrorCode
+
+  constructor(message: string, code: PtcRuntimeErrorCode, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'PtcRuntimeError'
+    this.code = code
+  }
+}
+
+/**
  * Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate
- * failures resolve in {@link PtcRunResult}; only Service Definition contract misuse rejects. Implementations bridge
- * structured-cloneable bindings, materialize each declared namespace rejection
+ * failures resolve in {@link PtcRunResult}; only Service Definition contract misuse rejects, with
+ * {@link PtcRuntimeError}. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection
  * class, treat programs as hostile peers, isolate distinct state owners, and
  * terminate and await in-flight runs during disposal.
  */
@@ -154,7 +184,7 @@ export abstract class PtcRuntime extends Service {
    * Resolve supported options and provider defaults before execution.
    * @param request - Program, bindings, cancellation and optional execution choices.
    * @returns Complete directory, deadline and supported authority for run.
-   * @throws When an explicit choice is invalid or unsupported by this provider.
+   * @throws When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.
    */
   abstract resolve(request: PtcRunRequest): PtcRunSpec
 

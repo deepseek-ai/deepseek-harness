@@ -52,7 +52,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za
 
 ### 可能出什么问题
 
-失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。
+失败以 `result.error` 返回，带正交的 `kind`：`exception`、`timeout`、`abort`、`worker-exit`、`invalid-output`、`output-limit`、`protocol` 或 `sandbox-unavailable`。提供方在成功或失败之外，单独返回适用的 `result.sandbox` 事实。无效或不支持的执行选项在 `resolve` 期间失败；`run` 拒绝调用方误用，例如未解析输入、无效绑定名或资源释放后的调用。契约误用以 `PtcRuntimeError` 拒绝：无效的请求或 spec 为 `PTC_RUNTIME_INVALID_ARGUMENT`，资源释放后或保留环境清理未完成时为 `PTC_RUNTIME_UNAVAILABLE`，同一所有者的并发运行或保留环境以其他沙箱策略启动时为 `PTC_RUNTIME_CONFLICT`。
 
 -----
 
