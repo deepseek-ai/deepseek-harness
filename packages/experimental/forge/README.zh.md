@@ -40,6 +40,12 @@ kind: "package-reference"
 
 提供方可以同时实现 `commits` 与 `compare`。`commits(ref, signal)` 在一个 head 提交上按从旧到新列出变更请求的提交，每个提交带完整对象名、第一个父提交、标题、作者与作者时间，并带 `truncated` 标志；`compare(ref, base, head, signal)` 读取从提交 `base` 到提交 `head` 的统一补丁。提供方缺少其中任一方法时，注册表的 `commits` 返回 undefined，`compare` 返回 `unavailable` 失败，因此使用方只在两者都存在时提供按提交查看。
 
+提供方可以同时实现 `viewedFiles` 与 `setViewed`。`viewedFiles(ref, headSha, signal)` 在 head 提交 `headSha` 上读取当前登录用户对变更请求各文件的已审阅标记，每个文件为 `viewed`、`unviewed`，或在标记后又有改动时为 `dismissed`，并带 `truncated` 标志；`setViewed(ref, { path, viewed, headSha }, signal)` 仅在 head 仍是 `headSha` 时设置或清除一个文件的标记。两者都把已移动的 head 报告为 `stale`，并像过期的 `diff` 一样立即轮询被监听的变更请求。提供方缺少其中任一方法时，`viewedFiles` 返回 undefined，`setViewed` 返回 `failed` 失败，因此使用方自行保存已审阅标记。
+
+快照携带变更请求的概览。`reviewers` 先列出被请求的评审者，再列出每个账号最近一次评审的结论及其所针对的提交；`closingIssues` 列出变更请求合并时代码托管平台会关闭的 issue；`reviewersTruncated` 与 `closingIssuesTruncated` 标记提供方只读取了部分的列表。`branchUpdates` 列出能让落后于基线的 head 为当前登录用户更新的方式；head 已是最新、存在冲突或不允许更新时为空。`canRequestReviews` 与 `canRerunChecks` 说明当前登录用户的权限，每个检查的 `rerun` 指出能重跑它的托管平台运行，否则为 null。
+
+提供方可以实现 `rerunChecks(ref, { headSha }, signal)`，重跑 head 提交 `headSha` 的失败检查；可以同时实现 `requestReviews(ref, { reviewers }, signal)` 与 `reviewerCandidates(ref, query, signal)`，后者列出可以请求评审的账号，托管平台的建议排在最前；还可以实现 `updateBranch(ref, { method, headSha }, signal)`，仅在 head 仍是 `headSha` 时把基线合并或变基进 head。每个操作在托管平台接受后返回 undefined，否则返回 `ForgeActionFailure`，结束后会立即轮询被监听的变更请求。提供方缺少某个操作时，注册表以 `failed` 失败返回；除非提供方同时实现两个评审请求方法，`reviewerCandidates` 返回 `unavailable`。
+
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
 `ctx.forge.watch(ref, listener)` 同样是 effect。变更请求的第一个监听方会立即触发轮询；`latest(ref)` 返回最近一次结果。每个 forge 同时最多只有一次轮询读取在进行，这次读取包含该 forge 所有到期的变更请求。打开状态的变更请求在检查未完成或可合并性未知时每 `activeIntervalMs` 轮询一次，否则每 `idleIntervalMs` 轮询一次。已关闭的变更请求按 `idleIntervalMs` 轮询以检测重新打开；已合并的停止自动轮询。`refresh(ref)` 立即轮询一个被监听的变更请求，已结束的也包括在内；该 forge 已有读取在进行时，等待其结束后立即再读一次。读取失败后，重试间隔为 `activeIntervalMs` 按连续失败次数翻倍，最长 `maxBackoffMs`；该值必须大于或等于 `activeIntervalMs`。注销提供方会让其被监听的变更请求以 `unavailable` 结束。最后一个监听方离开后轮询停止。默认值见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge)。
