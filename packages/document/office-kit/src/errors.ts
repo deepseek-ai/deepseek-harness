@@ -2,9 +2,9 @@
 import type { OfficeKitErrorCode } from './types.ts'
 
 /**
- * Classified conversion failure; engine details stay in the cause. `code` is also the `document-render/failed` Remote
- * reason the Office preview localizes, so it is not a `HarnessError` code; a consumer that records tool failures maps
- * it to its own error class, as `dsh-tool-office` does with `OfficeToolError`.
+ * Classified conversion failure; engine details stay in the cause. The same lowercase `code` is the
+ * `document-render/failed` reason the Office preview localizes, so its spelling is a wire value and a client
+ * localization key.
  */
 export class OfficeKitError extends Error {
   /**

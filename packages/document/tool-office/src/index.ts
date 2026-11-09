@@ -29,7 +29,7 @@ import { renderFileContent, renderImagesContent, type OfficeFileFormats, type Of
   type OfficeRenderValue } from './content.ts'
 import { OFFICE_KIT_FAILURE_CODES, OfficeToolError } from './error.ts'
 
-export { OfficeToolError, type OfficeToolErrorCode } from './error.ts'
+export type { OfficeToolErrorCode } from './error.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'tool-office'

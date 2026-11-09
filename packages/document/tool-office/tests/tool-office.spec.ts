@@ -246,8 +246,8 @@ describe('office schema', () => {
     const { ctx, kit } = await setup()
     const definition = ctx.tools.get(name)!
     const call = { signal, callId: ToolCallId(`agentless-${name}`), name, arguments: args, deferContext: vi.fn(), concludeTurn: vi.fn() }
-    await expect(definition.execute(args as never, call as never)).rejects.toThrow('Office tools run only in an Agent step')
-    await expect(definition.execute(args as never, call as never)).rejects.toMatchObject(contextUnavailable)
+    await expect(definition.execute(args as never, call as never)).rejects
+      .toMatchObject({ message: expect.stringContaining('Office tools run only in an Agent step') as string, ...contextUnavailable })
     expect(kit.renderImages).not.toHaveBeenCalled()
     expect(kit.convertTo).not.toHaveBeenCalled()
     expect(kit.recalculate).not.toHaveBeenCalled()
@@ -449,6 +449,12 @@ describe('Office service failures', () => {
       expect(text(result)).toBe(`Error: cannot ${verb} "${args.input}": The document converter is unavailable.${unavailableHint}`)
       expect(errorInfo(result)).toEqual(officeToolError('OFFICE_UNAVAILABLE'))
     }
+    const definition = ctx.tools.get('office_render')!
+    const call = { signal, callId: ToolCallId('missing-service'), name: 'office_render', agent: agentOn('vision'), deferContext: vi.fn(), concludeTurn: vi.fn() }
+    await expect(definition.execute({ input: 'deck.pptx' }, call as never)).rejects.toMatchObject({
+      ...officeToolError('OFFICE_UNAVAILABLE'),
+      cause: expect.objectContaining({ name: 'OfficeKitError', code: 'unavailable', message: 'The document converter is unavailable.' }) as Error,
+    })
     expect(kit.renderImages).not.toHaveBeenCalled()
     const missing = await office(ctx, { operation: 'convert', input: 'missing.pptx', format: 'pdf' })
     expect(text(missing)).toBe(`Error: cannot convert "missing.pptx": The document converter is unavailable.${unavailableHint}`)
@@ -614,6 +620,14 @@ describe('arguments and paths', () => {
     [{ operation: 'recalculate', input: 'book.xlsx', format: 'pdf' }, 'format'],
   ])('refuses %j before reading the filesystem', async (args, message) => {
     await expectRefusal(args, message, invalidArgs, 0)
+  })
+
+  it('prefixes argument refusals with the argument error label', async () => {
+    const { ctx } = await setup()
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', output: 'deck.pdf' })))
+      .toBe('Error: invalid arguments: office_render does not accept output')
+    expect(text(await office(ctx, { operation: 'render', input: 'deck.pptx', dpi: 23 })))
+      .toBe('Error: invalid arguments: dpi must be an integer from 24 to 600')
   })
 
   it.each([
