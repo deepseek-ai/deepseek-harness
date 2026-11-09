@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import {
   ConnectorAccountActivationEntry, ConnectorAccountBadgeEntry, ConnectorAccountSectionEntry, ConnectorAccountToastEntry,
@@ -21,7 +21,8 @@ const OTHER = '@acme/other'
 const OP = 'op-1' as ConnectorOperationId
 
 function isFace(value: Record<string, unknown>): asserts value is Record<string, unknown> & ConnectorAccountFace {
-  assert(typeof value.resolveText === 'function' && typeof value.follow === 'function' && typeof value.remote === 'object')
+  assert(typeof value.resolveText === 'function' && typeof value.follow === 'function')
+  assert(typeof value.start === 'function' && typeof value.cancel === 'function')
   assert(typeof value.hooks === 'object' && value.hooks !== null)
 }
 
@@ -54,6 +55,7 @@ async function bench() {
   let wake: (() => void) | undefined, closed = false, accepted = 0
   const closeStream = vi.fn(async () => { closed = true; wake?.() })
   const start = vi.fn(async (_key: string, _operation: string): Promise<RemoteResult<ConnectorOperationId>> => ({ ok: true, value: OP }))
+  const cancel = vi.fn(async (_key: string, _id: ConnectorOperationId): Promise<RemoteResult<void>> => ({ ok: true, value: undefined }))
   class Remote extends Service {
     constructor() { super(ctx, 'remote') }
     $stream() {
@@ -71,7 +73,7 @@ async function bench() {
     }
   }
   new Remote()
-  ctx.provide('remote.connectorAccounts', { watch: vi.fn(), start, cancel: vi.fn() })
+  ctx.provide('remote.connectorAccounts', { watch: vi.fn(), start, cancel })
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   await ctx.plugin(SlotRegistry)
@@ -84,7 +86,7 @@ async function bench() {
   const bundles = (slot: 'plugins.bundle.config' | 'plugins.bundle.activation') =>
     ctx.slots.entries(slot).map(item => [item.options.key, bundleFaceOf(item).account])
   return {
-    ctx, locale, start, closeStream, bundles,
+    ctx, locale, start, cancel, closeStream, bundles,
     mount: () => ctx.plugin({ inject: [...inject], apply }),
     async publish(...entries: ConnectorAccountEntry[]) {
       const target = accepted + 1
@@ -124,8 +126,13 @@ it('shows one tag and one notice entry for the page and each bundle\'s section a
   expect(faceOf(toast).hooks.connectorAccounts).toBe(face.hooks.connectorAccounts)
   expect([...face.hooks.connectorAccounts.getSnapshot().accounts.keys()]).toEqual([FIXTURE, OTHER, 'mcp:custom'])
   expect(face.resolveText({ en: 'Connected', zh: '已连接' })).toBe('Connected')
-  await face.remote.start(FIXTURE, 'connect')
+  expect(await face.start(FIXTURE, 'connect')).toBe(OP)
   expect(b.start).toHaveBeenCalledWith(FIXTURE, 'connect')
+  await face.cancel(FIXTURE, OP)
+  expect(b.cancel).toHaveBeenCalledWith(FIXTURE, OP)
+  // A refusal reaches the buttons as a rejection with the Host's message.
+  b.start.mockResolvedValueOnce({ ok: false, error: new RemoteError('gateway/internal', 'offline', {}) } as never)
+  await expect(face.start(FIXTURE, 'connect')).rejects.toThrow('offline')
   face.follow(FIXTURE, OP)
   face.failed()
   expect(face.hooks.connectorAccounts.getSnapshot().notice).toEqual({ seq: 1, kind: 'action-failed' })

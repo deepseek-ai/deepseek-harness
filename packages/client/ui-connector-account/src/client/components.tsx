@@ -1,13 +1,12 @@
 /**
  * The account surfaces the Plugins page shows for registered connector accounts: a bundle's section with the
  * confirmation a button asks for, the title tag, the activation prompt, and the notice. Each is the slot entry that reads
- * this browser's state and calls the Remote.
+ * this browser's state and calls the Host through the injected callbacks.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, IconWarningOutlineRegular, Modal, StateDot, Tag, Toast, type StateDotState, type TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRuntime, Translate } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { ConnectorAccountButton, ConnectorAccountCommand, ConnectorAccountEntry, ConnectorAccountPhase } from '../types.ts'
 import css from './ConnectorAccount.module.css'
@@ -26,21 +25,21 @@ const BADGE_TONE: Record<ConnectorAccountPhase, TagTone> = {
   checking: 'outline', connecting: 'info', connected: 'success', disconnected: 'outline', unavailable: 'warning',
 }
 
-async function settle<T>(call: Promise<RemoteResult<T>>): Promise<T> {
-  const result = await call
-  if (!result.ok) throw new Error(result.error.message)
-  return result.value
-}
-
 /**
- * Run a button's command against the Host: start and cancel call the Remote directly, and open shows the operation's
- * authorization page again in this browser.
- * @param face - the Remote and the browser state the commands report to.
- * @returns whether a call this surface made has not answered, and the runner of one account's command.
+ * Run a button's command against the Host: start and cancel call the face's callbacks, and open shows the
+ * operation's authorization page again in this browser.
+ * @param face - the Host callbacks and the browser state the commands read and report to.
+ * @returns whether a call this surface made has not answered, whether the Host stream is delivering, and the runner of
+ *   one account's command.
  */
 function useAccountCommand(
-  face: Pick<FaceProps, 'remote' | 'follow' | 'failed'>,
-): { readonly busy: boolean; readonly run: (entry: ConnectorAccountEntry, command: ConnectorAccountCommand) => void } {
+  face: Pick<FaceProps, 'useConnectorAccounts' | 'start' | 'cancel' | 'follow' | 'failed'>,
+): {
+  readonly busy: boolean
+  readonly linked: boolean
+  readonly run: (entry: ConnectorAccountEntry, command: ConnectorAccountCommand) => void
+} {
+  const linked = face.useConnectorAccounts(state => state.linked)
   const [busy, setBusy] = useState(false)
   // A second click before the re-render still finds the first call pending.
   const pending = useRef(false)
@@ -55,11 +54,11 @@ function useAccountCommand(
     const { key } = entry
     switch (command.kind) {
       case 'start':
-        call(async () => { face.follow(key, await settle(face.remote.start(key, command.operation))) })
+        call(async () => { face.follow(key, await face.start(key, command.operation)) })
         return
       case 'cancel': {
         const operation = entry.operation
-        if (operation !== undefined) call(async () => { await settle(face.remote.cancel(key, operation.id)) })
+        if (operation !== undefined) call(async () => { await face.cancel(key, operation.id) })
         return
       }
       case 'open':
@@ -69,7 +68,7 @@ function useAccountCommand(
       default: assertNever(command)
     }
   }
-  return { busy, run }
+  return { busy, linked, run }
 }
 
 /** Ask before an action that changes the account outside DSH; the dialog closes before it confirms. */
@@ -78,15 +77,16 @@ function Confirm(props: {
   readonly title: string
   readonly body: string
   readonly label: string
+  readonly disabled: boolean
   readonly onClose: () => void
   readonly onConfirm: () => void
 }): ReactNode {
-  const { t, title, body, label, onClose, onConfirm } = props
+  const { t, title, body, label, disabled, onClose, onConfirm } = props
   return (
     <Modal open title={title} closeLabel={t('close')} onClose={onClose}
       footer={<>
         <Button variant="ghost" onClick={onClose}>{t('action.cancel')}</Button>
-        <Button variant="primary" data-modal-autofocus onClick={() => { onClose(); onConfirm() }}>{label}</Button>
+        <Button variant="primary" data-modal-autofocus disabled={disabled} onClick={() => { onClose(); onConfirm() }}>{label}</Button>
       </>}>
       <p>{body}</p>
     </Modal>
@@ -102,15 +102,15 @@ function Confirm(props: {
 export function ConnectorAccountSectionEntry(props: BundleFaceProps): ReactNode {
   const { useConnectorAccounts, account, resolveText, t } = props
   const entry = useConnectorAccounts(state => state.accounts.get(account))
-  const linked = useConnectorAccounts(state => state.linked)
-  const { busy, run } = useAccountCommand(props)
+  const { busy, linked, run } = useAccountCommand(props)
+  const disabled = busy || !linked
   const [confirming, setConfirming] = useState<ConnectorAccountButton>()
   if (entry === undefined) return null
   const { display } = entry
   const button = (item: ConnectorAccountButton): ReactNode => {
     const label = resolveText(item.label)
     const onClick = item.confirm === undefined ? () => { run(entry, item.command) } : () => { setConfirming(item) }
-    return <Button key={label} variant={item.variant ?? 'outline'} size="sm" disabled={busy || !linked} onClick={onClick}>{label}</Button>
+    return <Button key={label} variant={item.variant ?? 'outline'} size="sm" disabled={disabled} onClick={onClick}>{label}</Button>
   }
   const details = display.failure?.details ?? []
   const confirm = confirming?.confirm
@@ -141,7 +141,7 @@ export function ConnectorAccountSectionEntry(props: BundleFaceProps): ReactNode 
       <p className={css.hint}>{resolveText(entry.copy.hint)}</p>
       {confirming === undefined || confirm === undefined ? null : (
         <Confirm t={t} title={resolveText(confirm.title)} body={resolveText(confirm.body)} label={resolveText(confirm.label)}
-          onClose={() => { setConfirming(undefined) }} onConfirm={() => { run(entry, confirming.command) }} />
+          disabled={disabled} onClose={() => { setConfirming(undefined) }} onConfirm={() => { run(entry, confirming.command) }} />
       )}
     </div>
   )
@@ -178,7 +178,7 @@ export function ConnectorAccountActivationEntry(
 ): ReactNode {
   const { useConnectorAccounts, account, resolveText, onDismiss, onOpenDetails, t } = props
   const entry = useConnectorAccounts(state => state.accounts.get(account))
-  const { run } = useAccountCommand(props)
+  const { linked, run } = useAccountCommand(props)
   const phase = entry?.display.phase
   useEffect(() => {
     if (phase === 'connected' || phase === 'unavailable') onDismiss()
@@ -194,7 +194,7 @@ export function ConnectorAccountActivationEntry(
     <Modal open={phase === 'disconnected'} title={resolveText(activation.title)} closeLabel={t('close')} onClose={onDismiss}
       footer={<>
         <Button variant="ghost" onClick={onDismiss}>{t('activation.later')}</Button>
-        <Button variant="primary" data-modal-autofocus onClick={onConnect}>{resolveText(activation.connect)}</Button>
+        <Button variant="primary" data-modal-autofocus disabled={!linked} onClick={onConnect}>{resolveText(activation.connect)}</Button>
       </>}>
       <p>{resolveText(activation.body)}</p>
     </Modal>
