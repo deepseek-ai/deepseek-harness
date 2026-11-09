@@ -67,7 +67,7 @@ Windows CI 使用隔离替身检查任务 XML、准备阶段、无效配置、�
 
 安装时会启动依赖进行就绪检查，并在注册任务前停止它。runner 存活期间，守卫仅在自己拥有的网络进程退出后，按配置间隔重新启动它；启动连续失败时仍会重试，但不会重启 runner、重跑任务或重试签名。退出、重启和启动失败消息写入 `run-*.log`，依赖进程的输出会被丢弃。重启消息只表明进程已创建，不代表网络可用；请在 runner 日志中确认重新连接。进程仍存活但无响应时需要操作者排查。守卫独占锁定 `NetworkRoot`，回收残留子进程前核对 PID、启动时间和可执行文件，并在 runner 退出时停止子进程。不可恢复的守卫错误会保留活动 runner 直到其退出，并报告恢复已停止。重新安装时保留 `NetworkRoot`；仅拉取代码不会替换已安装的辅助脚本。
 
-Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network.ps1` 和 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network-process.ps1`。在已配置的打包机器上，给第一条命令添加 `-CheckStartup`，可验证实际启动环境清理后的网络配置。这些测试不会使用签名硬件或外部网络端点。
+Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network.ps1` 和 `pwsh -NoProfile -File apps/desktop/tests/windows-runner-network-process.ps1`。在已配置的打包机器上，给第一条命令添加 `-CheckStartup`，可验证实际启动环境清理后的网络配置。就绪探测设置退出状态并让 Node 正常完成清理，保留响应体取消、请求超时和外层进程期限保护。测试通过真实重定向子进程路径覆盖 HTTP 成功、非 2xx、代理连接拒绝和请求超时，不使用签名硬件或外部网络端点。
 
 <a id="signing-configuration"></a>
 
