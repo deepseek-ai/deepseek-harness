@@ -826,8 +826,7 @@
     "612bd4047fa63f957ecb33d7fc7544c489301c3c0592e9a42dafe2cb85311165": 1
   },
   "packages/core/session/src/index.ts": {
-    "487a58a6269113d4cbfd31915a9abdbf016e672be9a2af2c6d5d57b087d0b011": 1,
-    "617d5fb3379f8603568546bd83b208f372616fda55fa23902ffacca293d1e841": 1
+    "487a58a6269113d4cbfd31915a9abdbf016e672be9a2af2c6d5d57b087d0b011": 1
   },
   "packages/core/session/tests/canonical-envelopes.spec.ts": {
     "23574fdfdba1d085e9d7aa52f76f723732597efdad04ca6b6742c3f5131376d6": 1,

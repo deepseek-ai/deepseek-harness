@@ -20,6 +20,28 @@ function opened(tools: ToolSchema[] = [first]) {
 }
 
 describe('developer request-header references', () => {
+  it('resolves a tool addition against an earlier header in the same batch', () => {
+    const session = Session.create(SessionId('batch-developer-header'))
+    const message = addition()
+    session.append([
+      ['request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [first] } }],
+      ['developer/message', { turn: 1, step: 1, headerSeq: SessionSeq(0), message }, { surfaceOp: 'append' }],
+    ])
+    expect(session.seq).toBe(2)
+    expect(session.deriveMessages()).toEqual([message])
+    expect(foldSurface(session.snapshotEvents()).nodes).toEqual([1])
+  })
+
+  it.each([1, 2])('rejects a non-earlier batch header reference %s without committing a prefix', (reference) => {
+    const session = Session.create(SessionId('invalid-batch-developer-header'))
+    expect(() => session.append([
+      ['request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [first] } }],
+      ['developer/message', { turn: 1, step: 1, headerSeq: SessionSeq(reference), message: addition() }, { surfaceOp: 'append' }],
+    ])).toThrow('earlier request/header')
+    expect(session.seq).toBe(0)
+    expect(session.surface.nodes).toEqual([])
+  })
+
   it('keeps an older header binding through compound changes, replacement, restore, and fork', () => {
     const { session, headerSeq } = opened([first, { name: 'other', description: 'Other', parameters: {} }])
     session.append('request/header', { reason: 'change', header: { config: { provider: 'test', model: 'test' }, tools: [second] } })

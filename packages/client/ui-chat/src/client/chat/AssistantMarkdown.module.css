@@ -15,9 +15,17 @@
 }
 
 .body {
+  --dsh-assistant-block-gap: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--dsh-assistant-block-gap);
+}
+
+/* A step-group reasoning part (its Chat seat carries data-chat-group-part)
+   holds only reasoning rows, which are process rows: they sit 4px apart, like
+   rows of different steps. */
+:global([data-chat-group-part="reasoning"]) .body {
+  --dsh-assistant-block-gap: 4px;
 }
 
 /* Wide markdown tables (the renderer's ≥4-column md-table-wide hook) span
@@ -50,11 +58,13 @@
   z-index: 1;
 }
 
-/* hidden="until-found" keeps a zero-height reasoning box in flex layout.
-   Cancel the one gap that box would otherwise leave before the visible reply;
-   visible Assistant blocks retain the ordinary 16px rhythm. */
-.body > [data-turn-process-inline][hidden] {
-  margin-bottom: -16px;
+/* hidden="until-found" keeps a zero-height reasoning box in flex layout, and
+   so does the class-less wrapper of a reasoning block whose row renders
+   nothing (signature-only reasoning has no display text). Cancel the one gap
+   each box would otherwise leave. */
+.body > [data-turn-process-inline][hidden],
+.body > :empty:not([class]) {
+  margin-bottom: calc(-1 * var(--dsh-assistant-block-gap));
 }
 
 /* Interrupted-turn terminal marker: quiet inline tag, no animation. Fixed

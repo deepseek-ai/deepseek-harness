@@ -156,6 +156,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       limit: { type: 'integer', description: 'Number of rows, 1 through 100. Defaults to 50.' },
     },
     output: jsonOutput(TASK_LIST_VALUE_SCHEMA),
+    // Board reads project the Team Lead journal without appending to it.
+    isConcurrencySafe: () => true,
     async execute(args, exec) {
       const cursor = args.cursor ?? 0
       const limit = args.limit ?? 50
@@ -186,6 +188,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       task_id: { type: 'string', required: true, description: 'Shared task id.' },
     },
     output: jsonOutput(TASK_VIEW_SCHEMA),
+    // Board reads project the Team Lead journal without appending to it.
+    isConcurrencySafe: () => true,
     execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_get')
       const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))

@@ -83,6 +83,8 @@ The [experimental persistence catalog](../../../docs/experimental-persistence-ca
 
 The logical `SessionHeader.isSeeded` field reports whether fork history exists without exposing a positional integer. `Session.inheritedEventCount` retains the exact checked `SessionLogOffset`; `ownEvents()` returns events at and after that cut, and `isOwnSeq(seq)` accepts only an existing child-owned position. A low-level seeded constructor must supply an explicit `seed` and `inheritedEventCount` because the constructor seed can contain child-owned setup events after the inherited prefix.
 
+`session.append(type, data, ...opts)` appends one event and returns that event. `session.append(inputs)` accepts a readonly array of positional `[type, data, ...opts]` tuples (`SessionEventInput`) and returns the committed events in input order; an empty array appends nothing. Array admission validates every candidate and synchronous dispatch before changing the log or message surface, so observers read the complete committed group. Persistence listeners retain their own durability rules; array admission alone does not guarantee crash-atomic storage.
+
 ### Flush durable state
 
 `ctx.sessions.flush(session)` dispatches the awaited durability checkpoint: every persistence listener flushes and the call settles after all of them. A producer that needs an immediate durability barrier awaits it instead of assuming the write-behind drained.
