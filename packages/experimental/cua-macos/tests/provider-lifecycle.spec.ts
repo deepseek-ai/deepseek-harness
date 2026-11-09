@@ -17,11 +17,12 @@ import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { CuaConfig } from '@deepseek-ai/dsh-cua'
+import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
+import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
 import { createConfigProjector } from '@deepseek-ai/dsh-app-boot/src/config-schema/projector.ts'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import UserQuestions from '@deepseek-ai/dsh-user-questions'
+import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
@@ -67,7 +68,7 @@ vi.mock('@deepseek-ai/dsh-cua/native-client', async importOriginal => ({
 }))
 
 const config = {
-  permissionPollIntervalMs: 1000, systemPointerHover: false,
+  permissionPollIntervalMs: 1000, requireSystemPointerApproval: true,
   agentPreset: false,
   helperPath: resolve('fixture-helper'), sourceSigning: 'ad-hoc', buildTimeoutMs: 300_000, timeoutMs: 10_000, connectTimeoutMs: 5000, screenshotTimeoutMs: 5000, axTimeoutMs: 3000, maxRequestBytes: 1024, maxResponseBytes: 4096, maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxAppMatches: 20,
   graceMs: 10, textEventIntervalMs: 8, maxClickHoldMs: 7000, maxElements: 64, maxDepth: 8, dragDurationMs: 200, dragSteps: 10,
@@ -77,7 +78,7 @@ const { helperPath: _helperPath, ...automaticConfig } = config
 
 it('defaults to ad-hoc signing and requires a keychain path for certificate signing', () => {
   expect(NativeProvider.Config({}).sourceSigning).toBe('ad-hoc')
-  expect(NativeProvider.Config({}).systemPointerHover).toBe(false)
+  expect(NativeProvider.Config({}).requireSystemPointerApproval).toBe(true)
   expect(NativeProvider.Config({ sourceSigning: 'ad-hoc' }).sourceSigning).toBe('ad-hoc')
   for (const sourceSigning of [{ identity: 'Apple Development: Example', keychain: '/keychains/custom.keychain-db' }, { identity: 'ABC123', keychain: '/keychains/custom.keychain-db' }]) {
     expect(NativeProvider.Config({ sourceSigning }).sourceSigning).toEqual(sourceSigning)
@@ -288,7 +289,7 @@ it('merges startup capabilities into runtime native fields', async () => {
   native.request.mockResolvedValueOnce(runtime)
   const result = await f.execute('getCapabilities')
   expect(result.isError).toBe(false)
-  expect(result.value).toEqual({ ...runtime, platform: 'macos', appLevelAccessibility: true, keyboard: ['app'], browser: false,
+  expect(result.value).toEqual({ ...runtime, platform: 'macos', systemPointer: true, appLevelAccessibility: true, keyboard: ['app'], browser: false,
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
@@ -969,4 +970,185 @@ it('routes permission actions through the macOS provider with the Client languag
   expect(native.request).toHaveBeenLastCalledWith('openPermissionSettings', {
     permission: 'screenRecording', settingsMessage: 'Open System Settings > Privacy & Security > Screen Recording manually.',
   }, expect.any(AbortSignal))
+})
+
+const hoverTarget = { appHandle: 'app-one', snapshotId: 'snapshot', elementId: '0' }
+const physicalHover = { ...hoverTarget, useSystemPointer: true }
+
+async function hoverFixture(requireApproval = true) {
+  const f = await setup()
+  if (!requireApproval) {
+    await f.provider.dispose()
+    await f.ctx.plugin(NativeProvider, { ...config, requireSystemPointerApproval: false })
+  }
+  const questions = await f.ctx.plugin(UserQuestions)
+  const questionId = 'cua-mouse-control'
+  const approved = { answers: [{ id: questionId, selected: ['Allow for this session'] }] }
+  const ask = vi.fn(async () => approved)
+  f.ctx.on('user-questions/request', async ({ questions }) => questions[0]!.id === questionId ? ask()
+    : { answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
+  let index = 0
+  const call = (agent: typeof f.handle.agent, method: string, params: Record<string, unknown>) => executeToolFixture(f.ctx, {
+    agent, signal: new AbortController().signal, callId: ToolCallId(`hover-${++index}`), name: 'cua', arguments: { method, params },
+  })
+  const select = async (agent = f.handle.agent) => {
+    native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
+      authorization: { id: 'a'.repeat(64), name: 'Fixture', persistable: false } })
+    expect((await call(agent, 'getApp', { selector: 'Fixture' })).isError).toBe(false)
+  }
+  await select()
+  native.request.mockClear()
+  return { ...f, ask, approved, call, select, questions }
+}
+
+it('requires an explicit system-pointer request on every move and asks only once per session', async () => {
+  const f = await hoverFixture()
+  native.request.mockRejectedValueOnce(new Error('HOVER_UNAVAILABLE'))
+  expect(JSON.stringify((await f.execute('mouseMove', hoverTarget)).content)).toContain('HOVER_UNAVAILABLE')
+  expect(f.ask).not.toHaveBeenCalled()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const answer = Promise.withResolvers<typeof f.approved>()
+  f.ask.mockImplementationOnce(() => { entered.resolve(); return answer.promise })
+  onTestFinished(() => { answer.resolve(f.approved) })
+  const pending = f.execute('mouseMove', physicalHover)
+  await entered.promise
+  expect(native.request).toHaveBeenCalledTimes(1)
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_PENDING')
+  answer.resolve(f.approved)
+  expect((await pending).isError).toBe(false)
+  for (const [params, physical] of [
+    [hoverTarget, false], [{ ...hoverTarget, useSystemPointer: false }, false], [physicalHover, true],
+  ] as const) {
+    expect((await f.execute('mouseMove', params)).isError).toBe(false)
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: physical }, expect.any(AbortSignal), expect.any(String))
+  }
+  expect(native.request.mock.calls[1]?.[1]).toEqual(physicalHover)
+  expect(f.ask).toHaveBeenCalledTimes(1)
+})
+
+it('keeps refusals and grants separate and forgets a closed session on reopen', async () => {
+  const f = await hoverFixture()
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  const { agent } = await f.ctx.agents.create({ sessionId: SessionId('other-mouse-session') })
+  expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('APP_ACCESS_REQUIRED')
+  await f.select(agent)
+  f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  native.request.mockClear()
+  for (let i = 0; i < 2; i++) expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('MOUSE_CONTROL_DENIED')
+  expect(native.request).not.toHaveBeenCalled()
+  expect((await f.call(agent, 'mouseMove', hoverTarget)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  const sessionId = f.handle.agent.id
+  await f.handle.dispose()
+  const reopened = await f.ctx.agents.create({ sessionId })
+  await f.select(reopened.agent)
+  expect((await f.call(reopened.agent, 'mouseMove', hoverTarget)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: false }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.call(reopened.agent, 'mouseMove', physicalHover)).isError).toBe(false)
+  expect(f.ask).toHaveBeenCalledTimes(3)
+})
+
+it('rechecks the selection after a pending approval and does not dispatch revoked or stale input', async () => {
+  const f = await hoverFixture()
+  f.ask.mockImplementationOnce(async () => {
+    await f.ctx.cuaAccess.revoke('a'.repeat(64) as Parameters<typeof f.ctx.cuaAccess.revoke>[0])
+    return f.approved
+  })
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(true)
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it('revalidates window coordinates after the user answers', async () => {
+  const f = await hoverFixture()
+  native.request.mockResolvedValueOnce([{ windowId: 7, appName: 'Fixture', title: 'Window', bounds: { x: 0, y: 0, width: 100, height: 100 },
+    isOnScreen: true, onCurrentSpace: true }])
+  await f.execute('listWindows', { appHandle: 'app-one' })
+  f.ask.mockImplementationOnce(async () => {
+    native.request.mockResolvedValueOnce([])
+    await f.execute('listWindows', { appHandle: 'app-one' })
+    return f.approved
+  })
+  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: 7, x: 500, y: 500, relative: true, useSystemPointer: true })
+  expect(JSON.stringify(result.content)).toContain('STALE_SNAPSHOT')
+  expect(native.request.mock.calls.map(([name]) => name)).toEqual(['listWindows', 'listWindows'])
+})
+
+it('drops dismissal, aborted answers and missing human answerers without allowing input', async () => {
+  const f = await hoverFixture()
+  f.ask.mockRejectedValueOnce(new UserQuestionError('dismissed', 'ASK_CANCELLED'))
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_CANCELLED')
+  f.ask.mockRejectedValueOnce(new UserQuestionError('The answer channel disconnected', 'ASK_ABORTED'))
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('The answer channel disconnected')
+  const controller = new AbortController()
+  f.ask.mockImplementationOnce(async () => { controller.abort(); return f.approved })
+  await Promise.allSettled([f.execute('mouseMove', physicalHover, controller.signal)])
+  expect(native.request).not.toHaveBeenCalled()
+  expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
+  expect(f.ask).toHaveBeenCalledTimes(4)
+  await f.provider.dispose()
+  await f.ctx.plugin(NativeProvider, config)
+  await f.select()
+  await f.questions.dispose()
+  expect(JSON.stringify((await f.execute('mouseMove', physicalHover)).content)).toContain('MOUSE_APPROVAL_UNAVAILABLE')
+})
+
+it('allows only the explicitly requested physical move when approval is disabled', async () => {
+  const f = await hoverFixture(false)
+  for (const [target, expected] of [[hoverTarget, false], [physicalHover, true], [hoverTarget, false]] as const) {
+    expect((await f.execute('mouseMove', target)).isError).toBe(false)
+    expect(native.request).toHaveBeenLastCalledWith('mouseMove', { ...hoverTarget, useSystemPointer: expected }, expect.any(AbortSignal), expect.any(String))
+  }
+  expect(f.ask).not.toHaveBeenCalled()
+})
+
+it.each([true, false])('rejects a delegated pointer move before asking or dispatching with approval=%s', async (approval) => {
+  const f = await hoverFixture(approval)
+  const { agent } = await f.ctx.agents.create({ sessionId: SessionId('delegated-mouse-session'),
+    meta: { origin: 'subagent', parentSession: f.handle.agent.id } })
+  // This case starts with application access already granted to the child.
+  const selectAnswer = vi.spyOn(f.ctx.userQuestions, 'ask')
+    .mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
+  await f.select(agent)
+  selectAnswer.mockClear()
+  native.request.mockClear()
+  const refused = await f.call(agent, 'mouseMove', physicalHover)
+  expect(JSON.stringify(refused.content)).toContain('MOUSE_CONTROL_UNAVAILABLE')
+  expect(selectAnswer).not.toHaveBeenCalled()
+  expect(f.ask).not.toHaveBeenCalled()
+  expect(native.request).not.toHaveBeenCalled()
+})
+
+it.each([true, false])('uses the declared systemPointer capability for a non-macOS provider (%s)', async (systemPointer) => {
+  const f = await setup()
+  await f.provider.dispose()
+  await f.ctx.plugin({ name: 'fixture-window-provider', inject: NativeProvider.inject, apply(ctx: Context) {
+    installCua(ctx, CuaConfig(config), {
+      helperPath: config.helperPath, createChannel: native.connect, guidance: COMMON_GUIDANCE,
+      permissionParameters: () => ({}),
+      capabilities: { platform: 'fixture', methods: ['getApp', 'getCapabilities', 'mouseMove'], systemPointer,
+        appLevelAccessibility: true, keyboard: ['app'], coordinateSpace: 'screenshot-pixels', browser: false },
+    })
+  } })
+  native.request.mockResolvedValueOnce({ systemPointer: !systemPointer })
+  expect((await f.execute('getCapabilities')).value).toMatchObject({ platform: 'fixture', systemPointer })
+  const sections = (await f.ctx.systemPrompt.assemble({ scope: f.handle.agent })).sections
+  const guidance = sections.find(section => section.name === 'computer-use:dsh-cua')!.text
+  expect(guidance.includes('relative?: boolean, useSystemPointer?: boolean')).toBe(systemPointer)
+  expect(guidance.includes('The question interrupts the user')).toBe(systemPointer)
+  expect(JSON.stringify(f.ctx.tools.get('cua', f.handle.agent)!.parameters).includes('useSystemPointer')).toBe(systemPointer)
+  await selectApplication(f)
+  native.request.mockClear()
+  const answer = vi.spyOn(f.ctx.userQuestions, 'ask').mockResolvedValue({
+    answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }],
+  })
+  const physical = await f.execute('mouseMove', physicalHover)
+  expect(physical.isError).toBe(!systemPointer)
+  expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
+  if (systemPointer) expect(native.request).toHaveBeenLastCalledWith('mouseMove', physicalHover, expect.any(AbortSignal), expect.any(String))
+  else expect(native.request).not.toHaveBeenCalled()
+  expect((await f.execute('mouseMove', hoverTarget)).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('mouseMove', systemPointer ? { ...hoverTarget, useSystemPointer: false } : hoverTarget,
+    expect.any(AbortSignal), expect.any(String))
 })

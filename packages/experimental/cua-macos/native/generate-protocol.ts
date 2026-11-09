@@ -11,7 +11,7 @@ import { PermissionGuideParameters, PermissionSettingsParameters } from '../src/
 export function renderNativeProtocol(): { json: string; swift: string } {
   const { fields, enums, json } = nativeProtocol({
     sendKeyEvent: z.object({ runId: z.string().min(1) }),
-    mouseMove: z.object({ allowSystemPointer: z.boolean().optional() }),
+    mouseMove: z.object({ useSystemPointer: z.boolean().optional() }),
     requestPermission: PermissionGuideParameters, openPermissionSettings: PermissionSettingsParameters,
   }, [z.object({
     method: z.literal('releaseHeldKeys'), params: z.object({ runId: z.string().min(1) }).strict(),

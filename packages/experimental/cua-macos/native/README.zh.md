@@ -123,7 +123,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `paste` 提供一种纯文本或 HTML 剪贴板格式，调用应用已启用的标准 Paste 菜单命令，并等待剪贴板数据请求。随后仅在所有权标记和修改计数仍匹配时恢复原有格式。Host 通过文件锁串行化不同 helper 的粘贴。maxClipboardBytes 同时限制输入和保留内容，不支持的菜单和过大的数据在分派前失败。后续复制会被保留。取消会尽可能恢复仍持有的剪贴板数据，强制结束不保证恢复，数据请求也不证明目标已完成编辑。 分派完成后，`pasteReadTimeoutMs` 限制等待剪贴板读取的时间。到期返回 `PASTE_NOT_CONSUMED`，关闭延迟数据提供方，并仅在仍持有剪贴板时恢复原内容。该失败不能证明应用以后不会处理已排队的 Paste 命令；决定是否重试前先检查目标内容。
 
-默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。macOS 提供方在连接握手中设置 `systemPointerHover`。未在握手中指定该配置的诊断客户端，可以在单次请求中传入 `allowSystemPointer: true`。默认值为 false。只有值为 true 才允许移动全局光标，且须检查前台进程和鼠标命中的窗口。
+默认情况下，`mouseMove` 通过同一窗口内启用的控件或祖先声明的 `AXShowAlternateUI` 和 `AXShowDefaultUI` 展开或恢复界面。缺少这条路径时返回 `HOVER_UNAVAILABLE`，不发送输入。Host 根据本会话的授权或免询问配置决定本次悬停的路径，再向 helper 传入 `useSystemPointer`。
 
 开启后，系统指针路线会检查前台应用和坐标命中的窗口，不满足条件时返回 `FOREGROUND_REQUIRED`。返回值 `hoverRoute` 和 `systemPointerMoved` 说明走了哪条路线以及是否移动了可见光标。悬停不会按下鼠标，也不会在读取后还原光标。后续输入可能中断悬停。点击只在目标点发送按键事件，不先在窗口外点击。
 

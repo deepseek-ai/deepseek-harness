@@ -21,7 +21,6 @@ struct HelperConfiguration: Sendable {
     var shutdownGraceSeconds: Double = 3
     var textEventIntervalSeconds: Double = 0.00025
     var maxClickHoldMs = 5000
-    var systemPointerHover: Bool?
     var timeoutSeconds: Double = 30
     var screenshotTimeoutSeconds: Double = 5
     init(arguments: [String]) throws {
@@ -65,7 +64,7 @@ struct HelperConfiguration: Sendable {
         guard let fields = decoded.object, Set(fields.keys) == ["type", "protocol", "runtimeKey", "config"],
               fields["type"] == .string("hello"), fields["protocol"] == .number(1),
               fields["runtimeKey"] == .string(runtimeKey), let config = fields["config"]?.object,
-              Set(config.keys).subtracting(["systemPointerHover"]) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "maxClickHoldMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
+              Set(config.keys) == ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "maxClickHoldMs", "screenshotTimeoutMs", "timeoutMs", "graceMs"] else {
             throw NativeFailure(code: "NATIVE_PROTOCOL", message: "Expected shared helper protocol 1 hello for this runtime")
         }
         func number(_ name: String) throws -> String {
@@ -83,10 +82,6 @@ struct HelperConfiguration: Sendable {
             "--screenshot-timeout-ms", number("screenshotTimeoutMs"), "--timeout-ms", number("timeoutMs"),
             "--shutdown-grace-ms", number("graceMs"),
         ])
-        if let setting = config["systemPointerHover"] {
-            guard case .bool(let allowed) = setting else { throw RequestParameters.invalid("systemPointerHover must be a boolean") }
-            systemPointerHover = allowed
-        }
     }
 }
 
