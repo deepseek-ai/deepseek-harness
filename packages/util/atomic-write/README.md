@@ -101,7 +101,7 @@ Read these pages when you need the consuming stores or the family this primitive
 
 - [Profile configuration editor](../../boot/config-editor/README.md) — the profile patch every edit replaces through this package.
 - [Credentials store](../../credentials/credentials-local/README.md) — the credentials file this package locks and replaces.
-- [util group map](../README.md) — the zero-dependency utility family this package belongs to.
+- [util group map](../README.md) — the utility family this package belongs to.
 
 -----
 

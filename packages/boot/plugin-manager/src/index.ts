@@ -473,7 +473,8 @@ export class PluginManager extends TypertRemoteService {
 
   /** Read current plugins, including why a row cannot be changed through the profile patch.
    * @returns Current runtime entries with persistent patch targets.
-   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` when the profile patches cannot be read.
+   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches
+   *   cannot be read; Remote callers receive `gateway/internal`.
    */
   @Remote
   async listPlugins(): Promise<PluginInfo[]> {
@@ -498,7 +499,8 @@ export class PluginManager extends TypertRemoteService {
    * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
    * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
    * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
-   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` when a profile or installation manifest cannot be read.
+   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or
+   *   installation manifest cannot be read; Remote callers receive `gateway/internal`.
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
