@@ -165,7 +165,7 @@ export type ForgeReviewRequest = {
   readonly headSha: string
 } & (
   | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
-  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+  | { readonly kind: 'review'; readonly event: ForgeReviewEvent; readonly body: string; readonly comments: readonly ForgeLineComment[] }
 )
 
 /** Opaque host identity of one review thread. */
@@ -173,6 +173,9 @@ export type ForgeThreadId = Branded<'ForgeThreadId'>
 
 /** Opaque host identity of one review comment. */
 export type ForgeCommentId = Branded<'ForgeCommentId'>
+
+/** Opaque host identity of one review. */
+export type ForgeReviewId = Branded<'ForgeReviewId'>
 
 /** Consecutive lines on one side of a diff whose new side is one commit. */
 export interface ForgeAnchor {
@@ -211,6 +214,10 @@ export interface ForgeReviewComment {
   readonly pending: boolean
   /** Web page of the comment, or null when the host reports none. */
   readonly url: string | null
+  /** Whether the signed-in user can replace the comment's text through `writeReview`; false for a provider without it. */
+  readonly viewerCanEdit: boolean
+  /** Whether the signed-in user can delete the comment through `writeReview`; false for a provider without it. */
+  readonly viewerCanDelete: boolean
 }
 
 /**
@@ -235,21 +242,74 @@ export interface ForgeReviewThread {
   readonly diffHunk: string | null
   /** Whether the thread is marked resolved. */
   readonly resolved: boolean
+  /** Whether the signed-in user can reply to the thread through `writeReview`; false for a provider without it. */
+  readonly viewerCanReply: boolean
+  /**
+   * Whether the signed-in user can mark the thread resolved, or unresolved when `resolved`, through `writeReview`; false
+   * for a provider without it.
+   */
+  readonly viewerCanResolve: boolean
   /** Comments oldest first; the first starts the thread. */
   readonly comments: readonly ForgeReviewComment[]
+}
+
+/** The signed-in user's review of a change request that is not submitted yet, which only that user sees. */
+export interface ForgePendingReview {
+  /** Host identity of the review. */
+  readonly id: ForgeReviewId
+  /** Comments the review holds. */
+  readonly comments: number
 }
 
 /** Review threads of a change request read at one head commit. */
 export interface ForgeReviewData {
   /** Head commit the threads were read at; `current` positions number its files. */
   readonly headSha: string
+  /** Login of the signed-in user the provider read as, or null when the host does not name one. */
+  readonly viewer: string | null
   /** Threads in host order, at most the provider's limit. */
   readonly threads: readonly ForgeReviewThread[]
   /** Whether the change request has more threads than `threads` holds. */
   readonly truncated: boolean
+  /** The signed-in user's pending review, or null without one. */
+  readonly pendingReview: ForgePendingReview | null
+  /**
+   * Whether the signed-in user can add comments to a pending review and submit or discard it through `writeReview`;
+   * false for a provider without it.
+   */
+  readonly viewerCanReview: boolean
 }
 
-/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+/** Decision a submitted review records. */
+export type ForgeReviewEvent = 'comment' | 'approve' | 'request-changes'
+
+/**
+ * One write to the review threads and the pending review of a change request. `pending` replies and `add-pending`
+ * comments join the signed-in user's pending review, which is started when the user has none. A host that adds every
+ * reply to an existing pending review, as GitHub does, refuses a reply with `pending: false` while one exists.
+ */
+export type ForgeReviewWrite = {
+  /** Head commit the user saw; providers check it before writing and refuse with `stale` once the head is another commit. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'reply'; readonly thread: ForgeThreadId; readonly body: string; readonly pending: boolean }
+  | { readonly kind: 'resolve'; readonly thread: ForgeThreadId; readonly resolved: boolean }
+  | { readonly kind: 'edit-comment'; readonly comment: ForgeCommentId; readonly body: string }
+  /** Deleting the only comment of a thread deletes the thread. */
+  | { readonly kind: 'delete-comment'; readonly comment: ForgeCommentId }
+  /** A comment on lines of `headSha`. */
+  | { readonly kind: 'add-pending'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'submit-pending'; readonly review: ForgeReviewId; readonly event: ForgeReviewEvent; readonly body: string }
+  /** Delete the pending review with every comment it holds. */
+  | { readonly kind: 'discard-pending'; readonly review: ForgeReviewId }
+)
+
+/** Result of a review write; an `unknown` outcome must be checked on the host before the write is tried again. */
+export type ForgeReviewWriteResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+
+/** Result of a review submission; unknown outcomes must be checked on the host before another submission. */
 export type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
@@ -312,6 +372,12 @@ export interface ForgeProvider {
    * Omission declares that this provider cannot read reviews.
    */
   readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
+  /**
+   * Write to the review threads or the pending review of a change request while its head is `write.headSha`; once the
+   * head is another commit, the write resolves to `stale` without writing. A write is never retried. Omission declares
+   * that this provider cannot write reviews, and its `readReview` then reports no viewer permission.
+   */
+  writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */

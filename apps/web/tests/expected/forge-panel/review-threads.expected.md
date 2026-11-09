@@ -14,14 +14,17 @@
 - text: export const n2 = 'two'
 - region "R2":
   - text: R2 · 在 aaaaaaa 上 lin 2 小时前
+  - button "lin 的评论操作"
   - paragraph:
     - text: Why
     - strong: two
     - text: "?"
   - text: octo 2 小时前 作者
   - paragraph: It reads better.
+  - button "回复…"
   - button "添加到输入框"
   - button "在 GitHub 中查看"
+  - button "解决讨论"
 - button "选择第 L3 行": "3"
 - text: export const n3 = 3
 - button "选择第 R3 行": "3"
@@ -53,9 +56,12 @@
 - text: export const n15 = 'fifteen'
 - region "L15":
   - text: L15 · 在 aaaaaaa 上 lin 2 小时前
+  - button "lin 的评论操作"
   - paragraph: The old fifteen was a number.
+  - button "回复…"
   - button "添加到输入框"
   - button "在 GitHub 中查看"
+  - button "解决讨论"
 - text: 已解决的讨论 · lin
 - button "展开"
 - button "选择第 L16 行": "16"
@@ -77,6 +83,9 @@
   - text: 原在 R9 · 在 fffffff 上 已过期
   - button "查看当时的文件"
   - text: "@@ -1,5 +1,5 @@ export const n1 = 1 -export const n2 = 2 +export const n2 = 'two' lin 2 小时前"
+  - button "lin 的评论操作"
   - paragraph: This line moved.
+  - button "回复…"
   - button "添加到输入框"
   - button "在 GitHub 中查看"
+  - button "解决讨论"

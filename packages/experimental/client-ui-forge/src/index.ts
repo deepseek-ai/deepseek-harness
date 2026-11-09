@@ -6,8 +6,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeReviewData, ForgeReviewRequest,
-  ForgeReviewResult, MergeMethod,
+  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeLineComment, ForgeReviewData,
+  ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
@@ -464,8 +464,9 @@ export class ForgePanelController extends TypertRemoteService {
   /**
    * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
    * at the same head commit and update time are reused from memory, for any Session, until they are
-   * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
-   * shows threads resolved since, which do not change a GitHub pull request's update time.
+   * `reviewRefreshMs` old, `maxCachedReviewBytes` evicts them, or a review write through this panel drops them; a read
+   * again after that age, or a `fresh` read, shows threads resolved elsewhere since, which do not change a GitHub pull
+   * request's update time.
    * @param session - Session the change request is bound to.
    * @param url - binding URL of the change request.
    * @param headSha - head commit of the displayed diff.
@@ -493,14 +494,16 @@ export class ForgePanelController extends TypertRemoteService {
     const readAt = Date.now()
     const kept = fresh ? undefined : this.reviews.get(key, version, readAt)
     if (kept !== undefined) return kept
+    const token = this.reviews.token()
     const review = await this.home.forge.readReview(ref, headSha, signal)
     if ('code' in review) throw reviewError(review)
-    this.reviews.set(key, version, review, readAt)
+    this.reviews.set(key, version, review, readAt, token)
     return review
   }
 
   /**
-   * Publish a line comment or completed review for a visible Session binding.
+   * Publish a line comment or completed review for a visible Session binding. The threads kept for the change request
+   * are dropped once the host answers, so the next read shows the comments.
    * @param session - Session retaining the change request.
    * @param url - visible binding URL.
    * @param request - reviewed head, ranges, plain text, and explicit review decision.
@@ -511,13 +514,43 @@ export class ForgePanelController extends TypertRemoteService {
   async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult> {
     signal.throwIfAborted()
     const { ref } = this.bound(session, url)
-    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(request.headSha)) throw new Error('Invalid review commit')
+    if (!isCommit(request.headSha)) throw new Error('Invalid review commit')
     const comments = request.kind === 'comment' ? [request.comment] : request.comments
-    if (comments.some(comment => comment.path === '' || comment.body.trim() === ''
-      || !Number.isSafeInteger(comment.startLine) || comment.startLine < 1
-      || !Number.isSafeInteger(comment.endLine) || comment.endLine < comment.startLine)) throw new Error('Invalid review comment')
+    if (!comments.every(validComment)) throw new Error('Invalid review comment')
     if (request.kind === 'review' && request.event !== 'approve' && request.body.trim() === '' && comments.length === 0) throw new Error('Empty review')
-    return await this.home.forge.submitReview(ref, request, signal)
+    try {
+      return await this.home.forge.submitReview(ref, request, signal)
+    } finally {
+      this.reviews.drop(changeRequestKey(ref))
+    }
+  }
+
+  /**
+   * Write to the review threads or the pending review of a change request of a Session while its head is still the
+   * head the user saw. The threads kept for the change request are dropped once the host answers, so the next read
+   * shows the write, which a resolve does not show through a GitHub pull request's update time.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param write - the write and the head commit of the threads the user saw.
+   * @param signal - request cancellation.
+   * @returns whether the host took the write; `stale` once the head moved, which polls the change request again, and
+   * `unknown` when the outcome must be checked on the host before the write is tried again.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; an error
+   * for a write without text, a head that is not a commit object name, or an invalid line range.
+   */
+  @Remote
+  async changeRequestReviewWrite(
+    session: Session, url: string, write: ForgeReviewWrite, signal: AbortSignal,
+  ): Promise<ForgeReviewWriteResult> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (!isCommit(write.headSha)) throw new Error('Invalid review commit')
+    if (!validWrite(write)) throw new Error('Invalid review write')
+    try {
+      return await this.home.forge.writeReview(ref, write, signal)
+    } finally {
+      this.reviews.drop(changeRequestKey(ref))
+    }
   }
 
   /**
@@ -876,6 +909,44 @@ export class ForgePanelController extends TypertRemoteService {
       this.panels.set(session, panel)
     }
     return panel
+  }
+}
+
+/**
+ * Whether a value names a full commit object name.
+ * @param value - the value from the browser.
+ * @returns whether it is 40 or 64 hexadecimal digits.
+ */
+function isCommit(value: string): boolean {
+  return /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(value)
+}
+
+/**
+ * Whether a line comment from the browser names a path, consecutive positive lines, and text.
+ * @param comment - the comment.
+ * @returns whether a provider may write it.
+ */
+function validComment(comment: ForgeLineComment): boolean {
+  return comment.path !== '' && comment.body.trim() !== '' && Number.isSafeInteger(comment.startLine) && comment.startLine >= 1
+    && Number.isSafeInteger(comment.endLine) && comment.endLine >= comment.startLine
+}
+
+/**
+ * Whether a review write from the browser names its target and carries text where the write needs it.
+ * @param write - the write.
+ * @returns whether a provider may perform it.
+ */
+function validWrite(write: ForgeReviewWrite): boolean {
+  switch (write.kind) {
+    case 'reply': return write.thread !== '' && write.body.trim() !== ''
+    case 'resolve': return write.thread !== ''
+    case 'edit-comment': return write.comment !== '' && write.body.trim() !== ''
+    case 'delete-comment': return write.comment !== ''
+    case 'add-pending': return validComment(write.comment)
+    case 'submit-pending': return write.review !== '' && (write.event !== 'request-changes' || write.body.trim() !== '')
+    case 'discard-pending': return write.review !== ''
+    /* v8 ignore next -- closed ForgeReviewWrite kind union exhaustiveness guard */
+    default: return assertNever(write, 'ForgeReviewWrite.kind')
   }
 }
 

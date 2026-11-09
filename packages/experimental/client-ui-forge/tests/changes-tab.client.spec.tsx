@@ -24,7 +24,7 @@ import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
 import type {
-  ChangeRequestKey, ForgeCommitList, ForgeReviewData, ForgeReviewThread, ForgeThreadId,
+  ChangeRequestKey, ForgeCommitList, ForgeReviewData, ForgeReviewId, ForgeReviewThread, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
@@ -130,6 +130,22 @@ function ok<T>(value: T): RemoteResult<T> {
   return { ok: true, value }
 }
 
+/** Threads of #7 at its head, none of them yet, read for `lin`, who may review the change request `octo` opened. */
+function reviewData(overrides: Partial<ForgeReviewData> = {}): ForgeReviewData {
+  return { headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true, ...overrides }
+}
+
+/** The pending review of `octo` on #7. */
+const PENDING_REVIEW = { id: 'review-1' as ForgeReviewId, comments: 1 }
+
+/** Store comment drafts the way an earlier panel kept them in the browser. */
+function storeDrafts(...bodies: string[]): void {
+  const drafts = bodies.map(body => ({ source: { kind: 'change', url: URL7, headSha: HEAD, commits: null },
+    comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body,
+      hunk: '@@ -3,3 +3,4 @@\n const a3 = 3\n-const x = 4\n+const y = 4\n+const z = 5\n const a5 = 6' } }))
+  localStorage.setItem('test-review', JSON.stringify({ comments: drafts, records: [], body: '', event: 'comment', uncertain: null }))
+}
+
 /** Refused Remote reads, by what the Host said. */
 const REFUSED = {
   noForkPoint: { ok: false, error: new RemoteError('forgePanel/no-fork-point', 'no fork point', {}) },
@@ -143,6 +159,7 @@ const REFUSED = {
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
   reviewUnsupported: { ok: false, error: new RemoteError('forgePanel/review-unsupported', 'no review reads', {}) },
   reviewFailed: { ok: false, error: new RemoteError('forgePanel/review-failed', 'GitHub is down', {}) },
+  notBound: { ok: false, error: new RemoteError('forgePanel/not-bound', 'not bound', {}) },
 } satisfies Record<string, RemoteResult<never>>
 
 /**
@@ -246,6 +263,7 @@ function mount(options: MountOptions = {}) {
     addReviewToInput: vi.fn<ChangesTabInjected['addReviewToInput']>().mockReturnValue(true),
     addThreadToInput: vi.fn<ChangesTabInjected['addThreadToInput']>().mockReturnValue(true),
     changeRequestReview: vi.fn<ChangesTabInjected['changeRequestReview']>(async () => REFUSED.reviewUnsupported),
+    changeRequestReviewWrite: vi.fn<ChangesTabInjected['changeRequestReviewWrite']>(async () => ok<ForgeReviewWriteResult>({ ok: true })),
     createChangeRequest: vi.fn<ChangesTabInjected['createChangeRequest']>(),
     report: vi.fn<ChangesTabInjected['report']>(),
   }
@@ -1294,7 +1312,10 @@ describe('ChangesTab change requests', () => {
 
 describe('line review actions', () => {
   async function comment(options: MountOptions = {}) {
-    const m = mount({ source: { kind: 'change', url: URL7 }, ...options })
+    const m = mount({ source: { kind: 'change', url: URL7 }, ...options, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData()))
+      options.setup?.(faces)
+    } })
     await settle()
     const section = within(m.section('src/app.ts'))
     fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
@@ -1427,42 +1448,249 @@ describe('line review actions', () => {
     expect(m.faces.submitReview).not.toHaveBeenCalled()
     expect(m.faces.createChangeRequest).not.toHaveBeenCalled()
   })
-  it('queues comments and submits them together with the selected review decision', async () => {
-    const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }) })
+  it('adds comments to the pending review on the code host and submits it with the selected review decision', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }),
+      setup: (faces) => { faces.changeRequestReview.mockResolvedValue(ok(reviewData())) } })
     await settle()
     const section = within(m.section('src/app.ts'))
     fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
     fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
     fireEvent.change(section.getByRole('textbox'), { target: { value: 'Please fix' } })
+    m.faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
     fireEvent.click(section.getByRole('button', { name: 'Start review' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledWith(URL7, { kind: 'add-pending', headSha: HEAD,
+      comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body: 'Please fix' } })
     expect(m.faces.submitReview).not.toHaveBeenCalled()
-    const pending = within(m.section('src/app.ts').querySelector('[data-forge-review-thread="pending"]')!)
-    expect(pending.getByText('Please fix')).toBeTruthy()
-    fireEvent.click(pending.getByRole('button', { name: 'Edit' }))
-    fireEvent.change(pending.getByRole('textbox'), { target: { value: 'Please fix the guard' } })
-    fireEvent.click(pending.getByRole('button', { name: 'Done' }))
+    expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().comments).toEqual([])
+    expect(section.queryByRole('textbox')).toBeNull()
+    // The write drops the Host's kept threads, so the view reads them again and finds the pending review.
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(2)
+    fireEvent.click(section.getByRole('button', { name: 'Select line R5' }))
+    fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+    expect(section.getByRole('button', { name: 'Add to review' })).toBeTruthy()
+    fireEvent.click(section.getByRole('button', { name: 'Cancel' }))
+
     fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
     const dialog = within(m.view.getByRole('dialog', { name: 'Submit review' }))
-    expect(dialog.getAllByRole('textbox')).toHaveLength(1)
-    expect(dialog.queryByText('Please fix the guard')).toBeNull()
-
-    fireEvent.change(m.view.getByRole('textbox', { name: 'Review summary…' }), { target: { value: 'Needs a fix' } })
-    fireEvent.click(m.view.getByRole('radio', { name: 'Request changes' }))
-    fireEvent.click(m.view.getByRole('button', { name: 'Submit review' }))
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Review summary…' }), { target: { value: 'Needs a fix' } })
+    fireEvent.click(dialog.getByRole('radio', { name: 'Request changes' }))
+    m.faces.changeRequestReview.mockResolvedValue(ok(reviewData()))
+    fireEvent.click(dialog.getByRole('button', { name: 'Submit review' }))
     await settle()
-    expect(m.faces.submitReview).toHaveBeenCalledWith(URL7, expect.objectContaining({ kind: 'review', event: 'request-changes', body: 'Needs a fix', headSha: HEAD,
-      comments: [expect.objectContaining({ path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body: 'Please fix the guard' })] }))
-    expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().comments).toEqual([])
-    expect(m.section('src/app.ts').querySelector('[data-forge-review-thread="published"]')?.textContent).toContain('Please fix the guard')
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenLastCalledWith(URL7,
+      { kind: 'submit-pending', headSha: HEAD, review: 'review-1', event: 'request-changes', body: 'Needs a fix' })
+    expect(m.faces.report).toHaveBeenCalledWith('review.submitted')
+    expect(m.view.queryByRole('dialog')).toBeNull()
+    expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot()).toMatchObject({ body: '', event: 'comment' })
+    expect(m.view.getByRole('button', { name: 'Submit review' })).toBeTruthy()
   })
-  it('keeps a pending comment editable when its file leaves the diff', async () => {
-    const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }) })
+  it('keeps the dialog and says why the code host did not take the submission or the discard', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReviewWrite.mockResolvedValueOnce(ok({ ok: false, code: 'failed', message: 'Review is empty' }))
+        .mockResolvedValueOnce(ok({ ok: false, code: 'stale', message: 'moved' }))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    const dialog = within(m.view.getByRole('dialog', { name: 'Submit review' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Submit review' }))
+    await settle()
+    expect(dialog.getByRole('alert').textContent).toBe(t('thread.writeFailed', { message: 'Review is empty' }))
+    fireEvent.click(dialog.getByRole('button', { name: 'Discard review' }))
+    fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenLastCalledWith(URL7, { kind: 'discard-pending', headSha: HEAD, review: 'review-1' })
+    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeStale'])
+    expect(m.faces.report).not.toHaveBeenCalled()
+    fireEvent.click(within(dialog.getByRole('group', { name: 'Discard review' })).getByRole('button', { name: 'Discard review' }))
+    await settle()
+    expect(m.faces.report).toHaveBeenCalledWith('review.discarded')
+    expect(m.view.queryByRole('dialog')).toBeNull()
+  })
+  it('submits a pending review once when two activations arrive in the same render batch', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    const button = within(m.view.getByRole('dialog')).getByRole('button', { name: 'Submit review' })
+    act(() => { button.click(); button.click() })
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledOnce()
+  })
+  it('refuses a local reference passed to the pending review callback', async () => {
+    const renderDiff = DiffFileModule.DiffFile.type
+    let queue: ReviewActions['queue']
+    vi.spyOn(DiffFileModule.DiffFile, 'type').mockImplementation((props) => {
+      queue = props.review?.queue
+      return renderDiff(props)
+    })
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => { faces.changeRequestReview.mockResolvedValue(ok(reviewData())) } })
+    await settle()
+    expect(queue).toBeDefined()
+    expect(await queue!({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: {
+      path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, hunk: '', body: 'Local reference',
+    } })).toBe(en['review.stale'])
+    expect(m.faces.changeRequestReviewWrite).not.toHaveBeenCalled()
+  })
+  it('keeps a pending review submission whose outcome is unknown blocked until the reader checks GitHub', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+      faces.changeRequestReviewWrite.mockResolvedValueOnce(ok({ ok: false, code: 'unknown', message: 'timeout' }))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    const dialog = within(m.view.getByRole('dialog'))
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Review summary…' }), { target: { value: 'Looks good' } })
+    // The submission went through: the pending review no longer reads.
+    m.faces.changeRequestReview.mockResolvedValue(ok(reviewData()))
+    fireEvent.click(dialog.getByRole('button', { name: 'Submit review' }))
+    await settle()
+    const records = m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal })
+    expect(records.getSnapshot().uncertain).toEqual({ kind: 'review', headSha: HEAD, event: 'comment', body: 'Looks good', comments: [] })
+    expect(dialog.getByRole('alert').textContent).toBe(en['thread.writeUnknown'])
+    expect(dialog.getByRole('button', { name: 'Submit review' })).toHaveProperty('disabled', true)
+    expect(m.faces.submitReview).not.toHaveBeenCalled()
+    fireEvent.click(dialog.getByRole('button', { name: 'Checked; allow resubmission' }))
+    expect(records.getSnapshot().uncertain).toBeNull()
+  })
+  it('refuses to submit the pending review when the browser cannot keep the submission for reconciliation', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    vi.spyOn(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }), 'begin').mockReturnValue(false)
+    fireEvent.click(within(m.view.getByRole('dialog')).getByRole('button', { name: 'Submit review' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).not.toHaveBeenCalled()
+    expect(within(m.view.getByRole('dialog')).getByRole('alert').textContent).toBe(en['review.saveFailed'])
+  })
+  it('reports a summary the browser could not clear after the code host took the submission', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    vi.spyOn(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }), 'finish').mockReturnValue(false)
+    fireEvent.click(within(m.view.getByRole('dialog')).getByRole('button', { name: 'Submit review' }))
+    await settle()
+    expect(m.faces.report.mock.calls.map(call => call[0])).toEqual(['review.saveFailed', 'review.submitted'])
+  })
+  it.each([
+    ['an unsupported write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unsupported', message: 'no writes' }), en['thread.writeUnsupported'], 1],
+    ['a refused write', ok<ForgeReviewWriteResult>({ ok: false, code: 'failed', message: 'Locked' }), t('thread.writeFailed', { message: 'Locked' }), 2],
+    ['a stale write', ok<ForgeReviewWriteResult>({ ok: false, code: 'stale', message: 'moved' }), en['thread.writeStale'], 1],
+    ['an unknown write', ok<ForgeReviewWriteResult>({ ok: false, code: 'unknown', message: 'timeout' }), en['thread.writeUnknown'], 2],
+    ['an unbound change request', REFUSED.notBound, t('thread.writeFailed', { message: 'not bound' }), 1],
+    ['a lost connection', REFUSED.failed, en['thread.writeUnknown'], 2],
+  ] as const)('keeps the comment after %s, reading the threads again only when they may have changed', async (_label, answer, message, reads) => {
+    const m = await comment({ setup: (faces) => { faces.changeRequestReviewWrite.mockResolvedValueOnce(answer) } })
+    fireEvent.click(m.sectionQueries.getByRole('button', { name: 'Start review' }))
+    await settle()
+    expect(m.sectionQueries.getByRole('alert').textContent).toBe(message)
+    expect(m.sectionQueries.getByRole('textbox')).toHaveProperty('value', 'Check the guard')
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(reads)
+  })
+  it('sends writes one at a time, so a second waits for the pending review the first starts', async () => {
+    storeDrafts('First', 'Second')
+    const first = deferred<RemoteResult<ForgeReviewWriteResult>>()
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData()))
+      faces.changeRequestReviewWrite.mockReturnValueOnce(first.promise)
+    } })
+    await settle()
+    const drafts = [...m.section('src/app.ts').querySelectorAll<HTMLElement>('[data-forge-review-thread="pending"]')]
+    for (const draft of drafts) fireEvent.click(within(draft).getByRole('button', { name: 'Add to review' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledTimes(1)
+    first.settle(ok({ ok: false, code: 'failed', message: 'Busy' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite.mock.calls.map(call => call[1].kind === 'add-pending' ? call[1].comment.body : null))
+      .toEqual(['First', 'Second'])
+    expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().comments.map(item => item.comment.body)).toEqual(['First'])
+  })
+  it('offers no single comment while a pending review exists, which GitHub refuses', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ pendingReview: PENDING_REVIEW })))
+    } })
     await settle()
     const section = within(m.section('src/app.ts'))
     fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
     fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
-    fireEvent.change(section.getByRole('textbox'), { target: { value: 'Keep this draft' } })
-    fireEvent.click(section.getByRole('button', { name: 'Start review' }))
+    expect(section.getByRole('button', { name: 'Add to review' })).toBeTruthy()
+    expect(section.queryByRole('button', { name: 'GitHub comment options' })).toBeNull()
+  })
+  it('lets the author of the change request only comment in the review dialog', async () => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer: 'OCTO', pendingReview: PENDING_REVIEW })))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    const dialog = within(m.view.getByRole('dialog'))
+    expect(dialog.getByText(en['review.ownChangeRequest'])).toBeTruthy()
+    expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', true)
+  })
+  it.each([
+    ['another reviewer', 'reviewer'],
+    ['an unnamed viewer', null],
+  ] as const)('lets %s choose every review decision', async (_label, viewer) => {
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewer, pendingReview: PENDING_REVIEW })))
+    } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    const dialog = within(m.view.getByRole('dialog'))
+    expect(dialog.queryByText(en['review.ownChangeRequest'])).toBeNull()
+    expect(dialog.getByRole('radio', { name: 'Approve' })).toHaveProperty('disabled', false)
+  })
+  it('offers no pending review action while the threads are unread, the user may not review, or chosen commits show', async () => {
+    const unread = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    const section = within(unread.section('src/app.ts'))
+    fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
+    fireEvent.click(section.getByRole('button', { name: 'Add comment' }))
+    expect(section.queryByRole('button', { name: 'Start review' })).toBeNull()
+    expect(section.getByRole('button', { name: 'Publish single comment' })).toBeTruthy()
+    unread.view.unmount()
+    const barred = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => {
+      faces.changeRequestReview.mockResolvedValue(ok(reviewData({ viewerCanReview: false })))
+    } })
+    await settle()
+    const barredSection = within(barred.section('src/app.ts'))
+    fireEvent.click(barredSection.getByRole('button', { name: 'Select line R4' }))
+    fireEvent.click(barredSection.getByRole('button', { name: 'Add comment' }))
+    expect(barredSection.queryByRole('button', { name: 'Start review' })).toBeNull()
+  })
+  it('moves a browser draft into the pending review at the head it was written on', async () => {
+    storeDrafts('Kept from before')
+    const m = mount({ source: { kind: 'change', url: URL7 }, setup: (faces) => { faces.changeRequestReview.mockResolvedValue(ok(reviewData())) } })
+    await settle()
+    const draft = within(m.section('src/app.ts').querySelector('[data-forge-review-thread="pending"]')!)
+    expect(draft.getByText(en['review.browserDraft'])).toBeTruthy()
+    expect(m.view.getByRole('button', { name: 'Submit review (1)' })).toBeTruthy()
+    fireEvent.click(draft.getByRole('button', { name: 'Add to review' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledWith(URL7, { kind: 'add-pending', headSha: HEAD,
+      comment: { path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body: 'Kept from before' } })
+    expect(m.faces.reviewQueue({ id: TAB, signal: m.aborter.signal }).getSnapshot().comments).toEqual([])
+  })
+  it('publishes browser drafts as one review while the user has no pending review', async () => {
+    storeDrafts('Kept from before')
+    const m = mount({ source: { kind: 'change', url: URL7 } })
+    await settle()
+    fireEvent.click(m.view.getByRole('button', { name: 'Submit review (1)' }))
+    fireEvent.click(within(m.view.getByRole('dialog')).getByRole('button', { name: 'Submit review' }))
+    await settle()
+    expect(m.faces.submitReview).toHaveBeenCalledWith(URL7, expect.objectContaining({ kind: 'review', event: 'comment', body: '',
+      comments: [expect.objectContaining({ body: 'Kept from before' })] }))
+    expect(m.section('src/app.ts').querySelector('[data-forge-review-thread="published"]')?.textContent).toContain('Kept from before')
+  })
+  it('keeps a browser draft editable when its file leaves the diff', async () => {
+    storeDrafts('Keep this draft')
+    const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }) })
+    await settle()
     m.faces.changeRequestDiff.mockResolvedValue(ok({ ...CHANGE, files: [] }))
     fireEvent.click(m.view.getByRole('button', { name: 'Refresh changes' }))
     await settle()
@@ -1473,7 +1701,10 @@ describe('line review actions', () => {
   })
   it('retains an uncertain write across tab remount and requires explicit reconciliation', async () => {
     const m = mount({ source: { kind: 'change', url: URL7 }, state: ready({ changeRequests: [entry(7, snapshot(7))] }),
-      setup: (faces) => { faces.submitReview.mockResolvedValue({ ok: true, value: { ok: false, code: 'unknown', message: 'timeout' } }) } })
+      setup: (faces) => {
+        faces.submitReview.mockResolvedValue({ ok: true, value: { ok: false, code: 'unknown', message: 'timeout' } })
+        faces.changeRequestReview.mockResolvedValue(ok(reviewData()))
+      } })
     await settle()
     const section = within(m.section('src/app.ts'))
     fireEvent.click(section.getByRole('button', { name: 'Select line R4' }))
@@ -1729,7 +1960,7 @@ describe('ChangesTab review threads', () => {
     line('missing', 'src/missing.ts', 'R', 1),
     line('missing-no-url', 'src/missing.ts', 'R', 2, { comments: [reviewComment({ url: null })] }),
   ]
-  const REVIEW: ForgeReviewData = { headSha: HEAD, threads: THREADS, truncated: false }
+  const REVIEW: ForgeReviewData = { headSha: HEAD, viewer: 'octo', threads: THREADS, truncated: false, pendingReview: null, viewerCanReview: false }
   const reviewed = (review: ForgeReviewData = REVIEW) => (faces: Faces): void => {
     faces.changeRequestDiff.mockImplementation(async () => ok({ ...CHANGE, files: FILES }))
     faces.changeRequestReview.mockImplementation(async () => ok(review))
@@ -1743,6 +1974,17 @@ describe('ChangesTab review threads', () => {
   /** Code of the row a thread follows, on the side its lines number. */
   const following = (m: ReturnType<typeof mount>, id: string, side: 'L' | 'R' = 'R'): string | null =>
     card(m, id)?.previousElementSibling?.querySelector(side === 'L' ? '[data-old-line]' : '[data-new-line]')?.textContent ?? null
+
+  it('writes to a thread at the head of its read and reads the threads again', async () => {
+    const writable = line('on-row', 'src/app.ts', 'R', 4, { viewerCanResolve: true })
+    const m = mount({ source, setup: reviewed({ ...REVIEW, threads: [writable], pendingReview: { id: 'review-1' as ForgeReviewId, comments: 2 } }) })
+    await settle()
+    expect(m.view.getByRole('button', { name: 'Submit review (2)' })).toBeTruthy()
+    fireEvent.click(within(card(m, 'on-row')!).getByRole('button', { name: 'Resolve thread' }))
+    await settle()
+    expect(m.faces.changeRequestReviewWrite).toHaveBeenCalledWith(URL7, { kind: 'resolve', thread: 'on-row', resolved: true, headSha: HEAD })
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(2)
+  })
 
   it('reads threads at the head of the latest status and places them on rows, gaps, files, and outdated sections', async () => {
     const m = mount({ source, setup: reviewed() })

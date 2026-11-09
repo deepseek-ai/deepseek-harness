@@ -6,7 +6,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { en } from '../src/client/locales.ts'
-import { Avatar, OutdatedThreads, ThreadCard, type ThreadActions } from '../src/client/ReviewThreads.tsx'
+import { Avatar, OutdatedThreads, ThreadCard, type ThreadActions, type ThreadWrites } from '../src/client/ReviewThreads.tsx'
 import { ThreadList, type ThreadListProps } from '../src/client/ThreadList.tsx'
 import { diffFile, reviewComment, reviewThread } from './thread-fixtures.client.ts'
 
@@ -29,9 +29,17 @@ function actions(overrides: Partial<ThreadActions> = {}): ThreadActions {
     author: 'octo', focused: null,
     addToInput: vi.fn(() => true), openLink: vi.fn(), readText: vi.fn(async (): Promise<RemoteResult<string>> => ({ ok: true, value: 'a\nb\nc' })),
     inputFailed: vi.fn(),
+    writes: null,
     ...overrides,
   }
 }
+
+/** Writes that the code host takes, for a user without a pending review who may start one. */
+function writes(overrides: Partial<ThreadWrites> = {}): ThreadWrites {
+  return { write: vi.fn<ThreadWrites['write']>(async () => undefined), reviewStarted: false, canReview: true, ...overrides }
+}
+
+const LINE = { kind: 'line', side: 'R', startLine: 3, endLine: 3 } as const
 
 const outdated = (overrides: Partial<ForgeReviewThread> = {}): ForgeReviewThread => reviewThread({
   id: 'old' as ForgeThreadId, current: null, original: { commit: OLD, startLine: 2, endLine: 3 }, diffHunk: '@@ -1 +1,3 @@\n a\n+b\n+c', ...overrides,
@@ -45,6 +53,189 @@ describe('Avatar', () => {
     expect(image.getAttribute('referrerpolicy')).toBe('no-referrer')
     fireEvent.error(image)
     expect([...view.container.querySelectorAll('span')].map(span => span.textContent)).toEqual(['O', 'L', '?'])
+  })
+})
+
+describe('ThreadCard writes', () => {
+  it('offers no write without writes or permissions', () => {
+    const permitted = reviewThread({ viewerCanReply: true, viewerCanResolve: true,
+      comments: [reviewComment({ viewerCanEdit: true, viewerCanDelete: true })] })
+    const silent = render(<ThreadCard thread={permitted} place={LINE} actions={actions()} t={t} />)
+    expect(silent.queryByRole('button', { name: en['thread.replyPlaceholder'] })).toBeNull()
+    expect(silent.queryByRole('button', { name: 'Resolve thread' })).toBeNull()
+    expect(silent.queryByRole('button', { name: /^Actions for the comment/ })).toBeNull()
+    silent.unmount()
+    const barred = render(<ThreadCard thread={reviewThread()} place={LINE} actions={actions({ writes: writes() })} t={t} />)
+    expect(barred.queryByRole('button', { name: en['thread.replyPlaceholder'] })).toBeNull()
+    expect(barred.queryByRole('button', { name: 'Resolve thread' })).toBeNull()
+    expect(barred.queryByRole('button', { name: /^Actions for the comment/ })).toBeNull()
+  })
+
+  it('replies at once by default, or starts a pending review from the menu, keeping the text after a refusal', async () => {
+    const write = vi.fn<ThreadWrites['write']>().mockResolvedValueOnce('GitHub did not apply this: Locked').mockResolvedValue(undefined)
+    const thread = reviewThread({ id: 't1' as ForgeThreadId, viewerCanReply: true })
+    const view = render(<ThreadCard thread={thread} place={LINE} actions={actions({ writes: writes({ write }) })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    const field = view.getByRole('textbox', { name: en['thread.replyPlaceholder'] })
+    expect(view.getByRole('button', { name: 'Reply' })).toHaveProperty('disabled', true)
+    fireEvent.change(field, { target: { value: '  ' } })
+    expect(view.getByRole('button', { name: 'Reply' })).toHaveProperty('disabled', true)
+    fireEvent.change(field, { target: { value: 'Fixed in the next commit' } })
+    fireEvent.click(view.getByRole('button', { name: 'Reply' }))
+    expect(view.getByRole('button', { name: en['review.publishing'] })).toHaveProperty('disabled', true)
+    expect(await view.findByRole('alert')).toHaveProperty('textContent', 'GitHub did not apply this: Locked')
+    expect(field).toHaveProperty('value', 'Fixed in the next commit')
+    fireEvent.click(view.getByRole('button', { name: 'Reply options' }))
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Start review' }))
+    await vi.waitFor(() => { expect(view.queryByRole('textbox')).toBeNull() })
+    expect(write.mock.calls).toEqual([
+      [{ kind: 'reply', thread: 't1', body: 'Fixed in the next commit', pending: false }],
+      [{ kind: 'reply', thread: 't1', body: 'Fixed in the next commit', pending: true }],
+    ])
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }))
+    expect(view.queryByRole('textbox')).toBeNull()
+  })
+
+  it('adds every reply to the pending review once one exists, offering no reply at once', async () => {
+    const write = vi.fn<ThreadWrites['write']>(async () => undefined)
+    const thread = reviewThread({ id: 't1' as ForgeThreadId, viewerCanReply: true })
+    const view = render(<ThreadCard thread={thread} place={LINE}
+      actions={actions({ writes: writes({ write, reviewStarted: true }) })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    expect(view.getByRole('button', { name: 'Add to review' })).toHaveProperty('disabled', true)
+    expect(view.queryByRole('button', { name: 'Reply options' })).toBeNull()
+    fireEvent.change(view.getByRole('textbox'), { target: { value: 'Later' } })
+    fireEvent.click(view.getByRole('button', { name: 'Add to review' }))
+    expect(view.getByRole('button', { name: en['review.publishing'] })).toHaveProperty('disabled', true)
+    await vi.waitFor(() => { expect(view.queryByRole('textbox')).toBeNull() })
+    expect(write).toHaveBeenLastCalledWith({ kind: 'reply', thread: 't1', body: 'Later', pending: true })
+  })
+
+  it('replies only at once when the user may not review', () => {
+    const thread = reviewThread({ viewerCanReply: true })
+    const view = render(<ThreadCard thread={thread} place={LINE}
+      actions={actions({ writes: writes({ canReview: false }) })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    expect(view.getByRole('button', { name: 'Reply' })).toBeTruthy()
+    expect(view.queryByRole('button', { name: 'Reply options' })).toBeNull()
+  })
+
+  it('resolves an unresolved thread and unresolves a resolved one, showing a refusal and a thrown write as the outcome', async () => {
+    const write = vi.fn<ThreadWrites['write']>().mockResolvedValueOnce('Refused').mockRejectedValueOnce(new Error('lost')).mockResolvedValue(undefined)
+    const open = render(<ThreadCard thread={reviewThread({ id: 't1' as ForgeThreadId, viewerCanResolve: true })} place={LINE}
+      actions={actions({ writes: writes({ write }) })} t={t} />)
+    fireEvent.click(open.getByRole('button', { name: 'Resolve thread' }))
+    expect(open.getByRole('button', { name: 'Resolve thread' })).toHaveProperty('disabled', true)
+    expect(await open.findByRole('alert')).toHaveProperty('textContent', 'Refused')
+    fireEvent.click(open.getByRole('button', { name: 'Resolve thread' }))
+    await vi.waitFor(() => { expect(open.getByRole('alert').textContent).toBe(en['thread.writeUnknown']) })
+    open.unmount()
+    const settled = render(<ThreadCard thread={reviewThread({ id: 't2' as ForgeThreadId, resolved: true, viewerCanResolve: true })} place={LINE}
+      actions={actions({ writes: writes({ write }), focused: { id: 't2' as ForgeThreadId, revision: 1 } })} t={t} />)
+    fireEvent.click(settled.getByRole('button', { name: 'Unresolve thread' }))
+    await vi.waitFor(() => { expect(write).toHaveBeenLastCalledWith({ kind: 'resolve', thread: 't2', resolved: false }) })
+    expect(settled.queryByRole('alert')).toBeNull()
+    expect(write).toHaveBeenNthCalledWith(1, { kind: 'resolve', thread: 't1', resolved: true })
+  })
+
+  it('edits the user\'s comment in place and keeps the editor after a refusal', async () => {
+    const write = vi.fn<ThreadWrites['write']>().mockResolvedValueOnce('Refused').mockResolvedValue(undefined)
+    const comment = reviewComment({ body: 'Old text', viewerCanEdit: true, author: { login: 'octo', avatarUrl: null, bot: false } })
+    const view = render(<ThreadCard thread={reviewThread({ comments: [comment] })} place={LINE}
+      actions={actions({ writes: writes({ write }) })} t={t} />)
+    const menuButton = view.getByRole('button', { name: 'Actions for the comment by octo' })
+    fireEvent.click(menuButton)
+    expect(menuButton.getAttribute('aria-expanded')).toBe('true')
+    const menu = within(view.getByRole('menu'))
+    expect(menu.queryByRole('menuitem', { name: 'Delete' })).toBeNull()
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Edit' }))
+    const field = view.getByRole('textbox', { name: 'Edit comment' })
+    expect(field).toHaveProperty('value', 'Old text')
+    expect(view.getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true)
+    fireEvent.change(field, { target: { value: 'New text' } })
+    fireEvent.click(view.getByRole('button', { name: 'Save' }))
+    expect(view.getByRole('button', { name: 'Saving…' })).toHaveProperty('disabled', true)
+    expect(await view.findByRole('alert')).toHaveProperty('textContent', 'Refused')
+    fireEvent.click(view.getByRole('button', { name: 'Save' }))
+    await vi.waitFor(() => { expect(view.queryByRole('textbox')).toBeNull() })
+    expect(write).toHaveBeenLastCalledWith({ kind: 'edit-comment', comment: comment.id, body: 'New text' })
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by octo' }))
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Edit' }))
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }))
+    expect(view.getByText('Old text')).toBeTruthy()
+  })
+
+  it('asks before deleting a comment, warning when it is the thread\'s only one, and keeps the question after a refusal', async () => {
+    const write = vi.fn<ThreadWrites['write']>().mockResolvedValueOnce('Refused').mockResolvedValue(undefined)
+    const only = reviewComment({ viewerCanDelete: true, author: null })
+    const view = render(<ThreadCard thread={reviewThread({ comments: [only] })} place={LINE}
+      actions={actions({ writes: writes({ write }) })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by Deleted account' }))
+    expect(within(view.getByRole('menu')).queryByRole('menuitem', { name: 'Edit' })).toBeNull()
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
+    const question = within(view.getByRole('group', { name: en['thread.deleteLast'] }))
+    expect(view.queryByRole('button', { name: /^Actions for the comment/ })).toBeNull()
+    fireEvent.click(question.getByRole('button', { name: 'Delete' }))
+    expect(question.getByRole('button', { name: 'Deleting…' })).toHaveProperty('disabled', true)
+    expect(await question.findByRole('alert')).toHaveProperty('textContent', 'Refused')
+    fireEvent.click(question.getByRole('button', { name: 'Cancel' }))
+    expect(view.queryByRole('group')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by Deleted account' }))
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
+    fireEvent.click(view.getByRole('button', { name: 'Delete' }))
+    await vi.waitFor(() => { expect(view.queryByRole('group')).toBeNull() })
+    expect(write).toHaveBeenLastCalledWith({ kind: 'delete-comment', comment: only.id })
+    view.unmount()
+
+    const two = render(<ThreadCard thread={reviewThread({ comments: [reviewComment(), reviewComment({ viewerCanDelete: true })] })}
+      place={LINE} actions={actions({ writes: writes({ write }) })} t={t} />)
+    fireEvent.click(two.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    fireEvent.click(within(two.getByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
+    expect(two.getByRole('group', { name: en['thread.deleteConfirm'] })).toBeTruthy()
+  })
+
+  it('keeps a thread resolved elsewhere open while the reader writes a reply or an edit in it, then folds it', () => {
+    const open = reviewThread({ id: 't1' as ForgeThreadId, viewerCanReply: true, comments: [reviewComment({ viewerCanEdit: true })] })
+    const resolved = { ...open, resolved: true }
+    const view = render(<ThreadCard thread={open} place={LINE} actions={actions({ writes: writes() })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: en['thread.replyPlaceholder'] }))
+    fireEvent.change(view.getByRole('textbox'), { target: { value: 'Half written' } })
+    view.rerender(<ThreadCard thread={resolved} place={LINE} actions={actions({ writes: writes() })} t={t} />)
+    expect(view.getByRole('textbox')).toHaveProperty('value', 'Half written')
+    fireEvent.click(view.getByRole('button', { name: 'Cancel' }))
+    expect(view.getByText('Resolved thread · reviewer')).toBeTruthy()
+
+    fireEvent.click(view.getByRole('button', { name: 'Expand' }))
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    fireEvent.click(within(view.getByRole('menu')).getByRole('menuitem', { name: 'Edit' }))
+    fireEvent.change(view.getByRole('textbox', { name: 'Edit comment' }), { target: { value: 'Reworded' } })
+    fireEvent.click(view.getByRole('button', { name: 'Collapse' }))
+    expect(view.getByRole('textbox', { name: 'Edit comment' })).toHaveProperty('value', 'Reworded')
+  })
+
+  it('closes the comment menu without acting', () => {
+    const write = vi.fn<ThreadWrites['write']>()
+    const view = render(<ThreadCard thread={reviewThread({ comments: [reviewComment({ viewerCanEdit: true })] })} place={LINE}
+      actions={actions({ writes: writes({ write }) })} t={t} />)
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(view.queryByRole('menu')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    fireEvent.click(view.getByRole('button', { name: 'Actions for the comment by reviewer' }))
+    expect(view.queryByRole('menu')).toBeNull()
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('ignores a second send while a write runs', async () => {
+    let finish: (value: string | undefined) => void = () => {}
+    const write = vi.fn<ThreadWrites['write']>(() => new Promise((resolve) => { finish = resolve }))
+    const view = render(<ThreadCard thread={reviewThread({ viewerCanResolve: true })} place={LINE}
+      actions={actions({ writes: writes({ write }) })} t={t} />)
+    const button = view.getByRole('button', { name: 'Resolve thread' })
+    act(() => { button.click(); button.click() })
+    expect(write).toHaveBeenCalledOnce()
+    await act(async () => { finish(undefined) })
   })
 })
 

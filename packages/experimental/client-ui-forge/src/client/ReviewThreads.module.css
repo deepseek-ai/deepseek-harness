@@ -167,6 +167,84 @@
   margin: 10px -8px -4px;
 }
 
+/* A reply or a comment edit uses the inline review form's field; its actions sit under it like the form's. */
+.form { margin-top: 10px; }
+
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* The collapsed reply field, a field-shaped button that opens the reply form. */
+.replyPrompt {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-dimmed);
+  font: inherit;
+  text-align: start;
+  cursor: text;
+}
+
+.replyPrompt:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 2px;
+}
+
+.menuAnchor { display: inline-flex; flex: none; }
+
+/* The comment menu's icon button keeps the 20px row height of the header it ends. */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.icon[aria-expanded="true"] { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+
+.icon:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .icon:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+}
+
+/* Confirming a deletion replaces nothing: the comment stays readable above the question. */
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.confirmText { flex: 1 1 auto; min-width: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+
+.confirmError,
+.actionError { flex-basis: 100%; margin-top: 0; }
+
+.actionError { padding-inline: 8px; }
+
 /* The end of the recorded hunk, drawn like the diff rows it came from. */
 .excerpt,
 .original {

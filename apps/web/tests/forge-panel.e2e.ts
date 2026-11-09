@@ -1,5 +1,6 @@
 /** Worktree Sessions and the change request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -50,7 +51,13 @@ const run = promisify(execFile)
  * and the matching diagnostic as GitHub's HTTP 406 refusal. The raw contents API
  * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
  * request 7 serves `commits.json`, oldest first. The review thread read serves
- * `threads.json` as its one page of threads, or no threads without it. Every invocation is appended to `calls.jsonl`.
+ * `threads.json` as its one page of threads, with the viewer `lin`, who may write
+ * to the repository and did not open either pull request, or no threads without it. Review mutations, which arrive as
+ * JSON on stdin, change what later reads report through `state.json`: replies,
+ * which join the pending review whenever one exists, resolution, comment edits and
+ * deletions, and the pending review of `lin` with its new threads, which a
+ * submission publishes. Each mutation is appended to
+ * `mutations.jsonl`, and every invocation to `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -131,6 +138,56 @@ if (args[0] === 'auth' && args[1] === 'status') {
   process.stdout.write('github.com\\n  Logged in to github.com account octo\\n')
   process.exit(0)
 }
+const review = () => ({ pending: null, published: [], replies: {}, resolved: {}, bodies: {}, deleted: [], ...state.review })
+/** The signed-in reviewer, who did not open the pull requests. */
+const VIEWER = 'lin'
+/** One review comment node by \`login\`, which the viewer may change when it is the viewer's own. */
+const commentNode = (id, body, login, pending) => ({ id, state: pending ? 'PENDING' : 'SUBMITTED', createdAt: '2026-10-09T01:00:00Z',
+  url: pending ? null : 'https://github.com/octo/demo/pull/7#discussion_' + id, body,
+  viewerCanUpdate: login === VIEWER, viewerCanDelete: login === VIEWER, author: { __typename: 'User', login, avatarUrl: null } })
+if (args[0] === 'api' && args[1] === 'graphql' && args.includes('--input')) {
+  const { query, variables } = JSON.parse(readFileSync(0, 'utf8'))
+  const field = query.match(/\\{\\s*(\\w+)\\(input:/)[1]
+  appendFileSync(join(here, 'mutations.jsonl'), JSON.stringify({ field, variables }) + '\\n')
+  const current = review()
+  const draft = thread => ({ id: 'new-' + (current.published.length + (current.pending?.threads.length ?? 0) + 1),
+    path: thread.path, side: thread.side, line: thread.line, startLine: thread.startLine ?? null, body: thread.body })
+  let payload
+  if (field === 'addPullRequestReview') {
+    current.pending = { id: 'review-1', commit: variables.commit, threads: [] }
+    for (const thread of variables.threads ?? []) current.pending.threads.push(draft(thread))
+    payload = { pullRequestReview: { id: 'review-1' } }
+  } else if (field === 'addPullRequestReviewThread') {
+    current.pending.threads.push(draft(variables))
+    payload = { thread: { id: current.pending.threads.at(-1).id } }
+  } else if (field === 'addPullRequestReviewThreadReply') {
+    const replies = current.replies[variables.thread] ??= []
+    // As on GitHub, a reply joins the pending review whenever one exists.
+    replies.push({ id: variables.thread + '-reply-' + replies.length, body: variables.body, pending: variables.review !== null || current.pending !== null })
+    payload = { comment: { id: replies.at(-1).id } }
+  } else if (field === 'resolveReviewThread' || field === 'unresolveReviewThread') {
+    current.resolved[variables.thread] = field === 'resolveReviewThread'
+    payload = { thread: { id: variables.thread } }
+  } else if (field === 'updatePullRequestReviewComment') {
+    current.bodies[variables.comment] = variables.body
+    payload = { pullRequestReviewComment: { id: variables.comment } }
+  } else if (field === 'deletePullRequestReviewComment') {
+    current.deleted.push(variables.comment)
+    payload = { clientMutationId: null }
+  } else if (field === 'submitPullRequestReview' || field === 'deletePullRequestReview') {
+    if (field === 'submitPullRequestReview') current.published.push(...current.pending.threads)
+    for (const replies of Object.values(current.replies)) {
+      for (const reply of replies) if (reply.pending && field === 'deletePullRequestReview') current.deleted.push(reply.id)
+      for (const reply of replies) reply.pending = false
+    }
+    current.pending = null
+    payload = { pullRequestReview: { id: variables.review } }
+  }
+  state.review = current
+  save()
+  process.stdout.write(JSON.stringify({ data: { [field]: payload } }))
+  process.exit(0)
+}
 if (args[0] === 'api' && args[1] === 'graphql') {
   const query = args.find(arg => arg.startsWith('query=')).slice('query='.length)
   const check = (name, conclusion, completedAt, databaseId = 101) => ({
@@ -171,11 +228,39 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     } } } } }))
     process.exit(0)
   }
-  if (query.includes('{ id headRefOid reviewThreads(first: $first)')) {
+  if (query.includes('viewer { login }')) {
     const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
-    const threads = existsSync(join(here, 'threads.json')) ? JSON.parse(readFileSync(join(here, 'threads.json'), 'utf8')) : []
-    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number,
-      headRefOid: pulls[number].headRefOid, reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: threads } } } } }))
+    const current = review()
+    const page = nodes => ({ pageInfo: { hasNextPage: false, endCursor: null }, nodes })
+    const written = (thread, pending) => ({
+      id: thread.id, isOutdated: false, isResolved: false, path: thread.path, diffSide: thread.side, startDiffSide: thread.startLine === null ? null : thread.side,
+      line: thread.line, startLine: thread.startLine, originalLine: thread.line, originalStartLine: thread.startLine, subjectType: 'LINE',
+      viewerCanReply: true, viewerCanResolve: true, viewerCanUnresolve: false,
+      root: { nodes: [{ diffHunk: '@@ -1,5 +1,5 @@', commit: { oid: pulls[number].headRefOid }, originalCommit: { oid: pulls[number].headRefOid } }] },
+      comments: page([commentNode(thread.id + '-0', thread.body, VIEWER, pending)]),
+    })
+    const stored = existsSync(join(here, 'threads.json')) ? JSON.parse(readFileSync(join(here, 'threads.json'), 'utf8')) : []
+    const threads = [...stored, ...current.published.map(thread => written(thread, false)),
+      ...(current.pending?.threads ?? []).map(thread => written(thread, true))].map((thread) => {
+      const replies = (current.replies[thread.id] ?? []).map(reply => commentNode(reply.id, reply.body, VIEWER, reply.pending))
+      const comments = [...thread.comments.nodes, ...replies].filter(comment => !current.deleted.includes(comment.id))
+        .map(comment => ({ ...comment, body: current.bodies[comment.id] ?? comment.body }))
+      return { ...thread, isResolved: current.resolved[thread.id] ?? thread.isResolved, comments: page(comments) }
+    }).filter(thread => thread.comments.nodes.length > 0)
+    const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
+    process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
+      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
+        reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
+        reviewThreads: page(threads) } } } }))
+    process.exit(0)
+  }
+  if (query.includes('reviews(states: PENDING')) {
+    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
+    const pending = review().pending
+    // Every thread and comment the double serves belongs to the pull request it was read from.
+    const target = args.some(arg => arg.startsWith('target=')) ? { target: { pullRequest: { id: 'pull-' + number } } } : {}
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid,
+      reviews: { nodes: pending === null ? [] : [{ id: pending.id, viewerDidAuthor: true }] } } }, ...target } }))
     process.exit(0)
   }
   if (query.includes('pullRequest(number: $number)')) {
@@ -1028,7 +1113,10 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(narrowComment.x + narrowComment.width).toBeLessThanOrEqual(390)
   await page.setViewportSize({ width: 1680, height: 1000 })
   await panelFile.getByRole('button', { name: '开始评审', exact: true }).click()
-  await panelFile.locator('[data-forge-review-thread="pending"]').getByText('请核对边界条件', { exact: true }).waitFor()
+  // The comment starts the pending review on GitHub, and the threads read again show it there.
+  const pendingThread = panelFile.locator('[data-forge-thread="new-1"]')
+  await pendingThread.getByText('请核对边界条件', { exact: true }).waitFor({ timeout: 20_000 })
+  await pendingThread.getByText('待提交', { exact: true }).waitFor()
   await page.setViewportSize({ width: 1680, height: 500 })
   const changesScroll = view.locator('[data-forge-changes-scroll]')
   await changesScroll.evaluate((element) => { element.scrollTop = element.scrollHeight })
@@ -1059,11 +1147,16 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
   await reviewDialog.getByRole('button', { name: '提交评审', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '已提交评审' }).waitFor()
-  await panelFile.locator('[data-forge-review-thread="published"]').getByText('请核对边界条件', { exact: true }).waitFor()
-  await compareOrRefreshGolden(join(EXPECTED, 'review-record.expected.md'), await captureStableAria(page, '[data-forge-review-thread="published"]', scaffold.workspaceCwd), MODE)
-  const published: unknown = JSON.parse((await readFile(join(root, 'reviews.jsonl'), 'utf8')).trim())
-  expect(published).toEqual({ endpoint: 'repos/octo/demo/pulls/7/reviews', body: { commit_id: HEAD7, event: 'REQUEST_CHANGES', body: '需要补充边界检查',
-    comments: [{ path: 'src/panel.ts', side: 'RIGHT', line: 4, start_line: 2, start_side: 'RIGHT', body: '请核对边界条件' }] } })
+  await expect.poll(() => pendingThread.getByText('待提交', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-record.expected.md'),
+    await captureStableAria(page, '[data-forge-thread="new-1"]', scaffold.workspaceCwd), MODE)
+  const mutations = (await readFile(join(root, 'mutations.jsonl'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line))
+  expect(mutations).toEqual([
+    { field: 'addPullRequestReview', variables: { pull: 'pull-7', commit: HEAD7,
+      threads: [{ path: 'src/panel.ts', body: '请核对边界条件', line: 4, side: 'RIGHT', startLine: 2, startSide: 'RIGHT' }] } },
+    { field: 'submitPullRequestReview', variables: { review: 'review-1', event: 'REQUEST_CHANGES', body: '需要补充边界检查' } },
+  ])
+  expect(existsSync(join(root, 'reviews.jsonl'))).toBe(false)
   await page.getByRole('button', { name: '退出全屏', exact: true }).click()
   await panelFile.getByRole('button', { name: '6 行未变更', exact: true }).click()
   await panelFile.getByText('export const n6 = 6', { exact: true }).first().waitFor({ timeout: 20_000 })
@@ -1087,7 +1180,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(await panelFile.evaluate((element, original) => element === original, originalFile)).toBe(true)
   await expect.poll(() => docsFile.getAttribute('data-expanded')).toBe(null)
   await expect.poll(() => scrollport.evaluate(element => element.scrollTop)).toBe(position)
-  expect(await panelFile.locator('[data-forge-review-thread="published"]').count()).toBe(1)
+  expect(await panelFile.locator('[data-forge-thread="new-1"]').count()).toBe(1)
   await page.setViewportSize({ width: 1680, height: 1000 })
   await page.locator('[data-dockkit-tab]').filter({ hasText: '#7 的变更' }).locator('[data-dockkit-tab-close]').click()
   await expect.poll(() => view.count()).toBe(0)
@@ -1726,7 +1819,7 @@ it.skipIf(MODE === 'record').each([120, 4000])('types a review comment beside %i
   expect(await file.getByRole('button', { name: '开始评审', exact: true }).isDisabled()).toBe(true)
   await input.fill('检查边界条件')
   await file.getByRole('button', { name: '开始评审', exact: true }).click()
-  await file.locator('[data-forge-review-thread="pending"]').getByText('检查边界条件', { exact: true }).waitFor()
+  await file.locator('[data-forge-thread]').getByText('检查边界条件', { exact: true }).waitFor({ timeout: 20_000 })
   expect(tripwire.pageErrors).toEqual([])
 })
 
@@ -1863,18 +1956,21 @@ it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a 
   expect(tripwire.pageErrors).toEqual([])
 })
 
-/** One review thread node of pull request 7 as the GraphQL thread read returns it, its comments by `lin` then `octo`. */
+/**
+ * One review thread node of pull request 7 as the GraphQL thread read returns it, its comments by `lin`, the viewer, then
+ * `octo`, the pull request's author; the viewer may reply, resolve, and change their own comments.
+ */
 function threadNode(
   id: string, fields: Record<string, unknown>, bodies: readonly string[], commit: string = HEAD7,
 ): Record<string, unknown> {
   return {
     id, isOutdated: false, isResolved: false, path: 'src/panel.ts', diffSide: 'RIGHT', startDiffSide: null, line: null, startLine: null,
-    originalLine: null, originalStartLine: null, subjectType: 'LINE', ...fields,
+    originalLine: null, originalStartLine: null, subjectType: 'LINE', viewerCanReply: true, viewerCanResolve: true, viewerCanUnresolve: true, ...fields,
     root: { nodes: [{ diffHunk: '@@ -1,5 +1,5 @@\n export const n1 = 1\n-export const n2 = 2\n+export const n2 = \'two\'',
       commit: { oid: commit }, originalCommit: { oid: commit } }] },
     comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: bodies.map((body, index) => ({
       id: `${id}-${index}`, state: 'SUBMITTED', createdAt: '2026-10-09T00:00:00Z', url: `${PULL}#discussion_${id}_${index}`, body,
-      author: { __typename: 'User', login: index === 0 ? 'lin' : 'octo', avatarUrl: null },
+      viewerCanUpdate: index === 0, viewerCanDelete: index === 0, author: { __typename: 'User', login: index === 0 ? 'lin' : 'octo', avatarUrl: null },
     })) },
   }
 }
@@ -1955,9 +2051,72 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
   expect(quotes).toHaveLength(1)
   await compareOrRefreshGolden(join(EXPECTED, 'review-thread-message.expected.md'), quotes.join('').trimEnd(), MODE)
   const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
-  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('{ id headRefOid reviewThreads(first: $first)')))
+  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('viewer { login }')))
   expect(reads.length).toBeGreaterThan(0)
   expect(reads[0]).toEqual(expect.arrayContaining(['owner=octo', 'name=demo', 'number=7', 'first=100']))
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('replies to, edits, deletes, and resolves review threads, and discards a pending review started from a reply', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-writes')
+  await writeFile(join(root, 'threads.json'), JSON.stringify(THREADS))
+  await page.clock.setFixedTime(Date.parse('2026-10-09T02:00:00Z'))
+  const { view } = await openReview(page, scaffold)
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const onLine = panel.locator('[data-forge-thread="on-line"]')
+  await onLine.getByText('two', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: '回复…', exact: true }).click()
+  await onLine.getByRole('textbox', { name: '回复…', exact: true }).fill('已改为字符串')
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-reply.expected.md'),
+    await captureStableAria(page, '[data-forge-thread="on-line"]', scaffold.workspaceCwd), MODE)
+  await onLine.getByRole('button', { name: '回复', exact: true }).click()
+  await onLine.getByText('已改为字符串', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: 'lin 的评论操作', exact: true }).first().click()
+  await page.getByRole('menuitem', { name: '编辑', exact: true }).click()
+  await onLine.getByRole('textbox', { name: '编辑评论', exact: true }).fill('Why a **word**?')
+  await onLine.getByRole('button', { name: '保存', exact: true }).click()
+  await onLine.getByText('word', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: 'lin 的评论操作', exact: true }).last().click()
+  await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+  await onLine.getByRole('group', { name: '删除这条评论？', exact: true }).getByRole('button', { name: '删除', exact: true }).click()
+  await expect.poll(() => onLine.getByText('已改为字符串', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+
+  await onLine.getByRole('button', { name: '解决讨论', exact: true }).click()
+  await onLine.getByText('已解决的讨论 · lin', { exact: true }).waitFor({ timeout: 20_000 })
+
+  const oldSide = panel.locator('[data-forge-thread="old-side"]')
+  await oldSide.getByRole('button', { name: '回复…', exact: true }).click()
+  await oldSide.getByRole('textbox', { name: '回复…', exact: true }).fill('稍后一起提交')
+  await oldSide.getByRole('button', { name: '回复选项', exact: true }).click()
+  await page.getByRole('menuitem', { name: '开始评审', exact: true }).click()
+  await oldSide.getByText('待提交', { exact: true }).waitFor({ timeout: 20_000 })
+  await view.getByRole('button', { name: '提交评审 (1)', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '提交评审', exact: true })
+  await dialog.getByRole('button', { name: '丢弃评审', exact: true }).click()
+  await compareOrRefreshGolden(join(EXPECTED, 'discard-review.expected.md'),
+    await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
+  await dialog.getByRole('group', { name: '丢弃评审', exact: true }).getByRole('button', { name: '丢弃评审', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已丢弃评审' }).waitFor()
+  await expect.poll(() => oldSide.getByText('稍后一起提交', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+  await view.getByRole('button', { name: '提交评审', exact: true }).waitFor()
+
+  const mutations = (await readFile(join(root, 'mutations.jsonl'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line))
+  expect(mutations).toEqual([
+    { field: 'addPullRequestReviewThreadReply', variables: { thread: 'on-line', body: '已改为字符串', review: null } },
+    { field: 'updatePullRequestReviewComment', variables: { comment: 'on-line-0', body: 'Why a **word**?' } },
+    { field: 'deletePullRequestReviewComment', variables: { comment: 'on-line-reply-0' } },
+    { field: 'resolveReviewThread', variables: { thread: 'on-line' } },
+    { field: 'addPullRequestReview', variables: { pull: 'pull-7', commit: HEAD7, threads: null } },
+    { field: 'addPullRequestReviewThreadReply', variables: { thread: 'old-side', body: '稍后一起提交', review: 'review-1' } },
+    { field: 'deletePullRequestReview', variables: { review: 'review-1' } },
+  ])
+  // Every write checked the head of pull request 7 first.
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
+  expect(calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('reviews(states: PENDING') && !arg.includes('viewer { login }'))))
+    .toHaveLength(mutations.length - 1)
   expect(tripwire.pageErrors).toEqual([])
 })
 

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-读取并操作 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，批量读取其状态，读取其 diff 与文件，并按请求把草稿标记为可评审或合并变更请求。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
+读取并操作 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，批量读取其状态，读取其 diff 与文件，读取和写入其评审讨论，并按请求把草稿标记为可评审或合并变更请求。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
 
 ## 目录
 
@@ -46,9 +46,11 @@ kind: "package-reference"
 
 达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
-provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。待提交草稿由消费者管理，不由轮询注册表保存。
+provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。用户留待之后一起提交的评论通过 `writeReview` 写入代码托管平台的待提交评审，不由轮询注册表保存。
 
 提供方可以实现 `readReview`，在一个 head 提交处读取变更请求的评审讨论。只有读取时的 head 就是 `headSha` 时，`readReview(ref, headSha, signal)` 才返回 `ForgeReviewData`，其中每个行级讨论都带有它在 head 上的位置和在写下时所在提交上的位置；否则返回 `stale`，并立即重新轮询被关注的变更请求，每个 head 提交只轮询一次，这个次数与 diff 读取遇到 `stale` 时共用。提供方未实现该方法时，注册表返回 `unsupported` 失败。
+
+提供方可以实现 `writeReview`，修改变更请求的评审讨论和当前登录用户的待提交评审。`writeReview(ref, write, signal)` 接收一个 `ForgeReviewWrite`：回复讨论，立即发布，或在 `pending` 时加入待提交评审；把讨论标记为已解决或取消解决；编辑或删除评论；在 head 上添加一条行内评论到待提交评审；或提交、丢弃待提交评审。用户还没有待提交评审时，待提交的回复或评论会先开始一个评审。只有 head 仍是 `write.headSha` 时提供方才会写入；否则返回 `stale`，并像读取遇到 `stale` 时那样重新轮询被关注的变更请求；其他结果之后，注册表都会立即重新轮询被关注的变更请求。写操作从不重试；结果为 `unknown` 时，必须先在托管平台上核对，再重试。提供方未实现该方法时，注册表返回 `unsupported`。`ForgeReviewData` 给出用户的待提交评审，以及用户能否回复和解决每个讨论、编辑和删除每条评论、向待提交评审添加评论并提交或丢弃它；未实现 `writeReview` 的提供方不报告任何这类权限。
 
 -----
 

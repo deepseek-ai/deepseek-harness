@@ -3,7 +3,8 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
-  ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
+  ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
+  MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
@@ -17,6 +18,7 @@ import {
 import type { PageResult, SnapshotPages } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
+import { writeGitHubReview } from './review-writes.ts'
 import { readReviewThreads } from './threads.ts'
 
 const AUTHENTICATION = /gh auth login|authentication|bad credentials|HTTP 401/i
@@ -63,6 +65,17 @@ export class GitHubProvider implements ForgeProvider {
     if (failure !== undefined) return failure
     if (!isCommit(headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(headSha)}`)
     return await readReviewThreads(this.graphql, ref, headSha, this.limits, signal)
+  }
+
+  /**
+   * Write to the review threads or the pending review of a pull request through GraphQL mutations after a check of its head.
+   * @see writeGitHubReview
+   */
+  async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult> {
+    const failure = this.hostFailure(ref.repository.host)
+    if (failure !== undefined) return { ok: false, code: 'failed', message: failure.message }
+    if (!isCommit(write.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(write.headSha)}`)
+    return await writeGitHubReview(this.graphql, this.gh, ref, write, signal)
   }
 
   /**

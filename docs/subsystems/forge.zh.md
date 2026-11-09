@@ -53,6 +53,12 @@ interface ForgeProvider {
    * Omission declares that this provider cannot read reviews.
    */
   readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
+  /**
+   * Write to the review threads or the pending review of a change request while its head is `write.headSha`; once the
+   * head is another commit, the write resolves to `stale` without writing. A write is never retried. Omission declares
+   * that this provider cannot write reviews, and its `readReview` then reports no viewer permission.
+   */
+  writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
   /** Map a Git remote URL to its repository, or undefined when this provider does not serve it. */
   repositoryFromRemote(url: string): ForgeRepository | undefined
   /** Map a change request web URL to its reference, or undefined when this provider does not serve it. */
@@ -309,7 +315,7 @@ interface ForgeActionFailure {
 }
 ```
 
-`ctx.forge.submitReview` 将明确指定的评论或完整评审交给 provider；未实现此能力的 provider 返回不支持。消费者保存待提交草稿，并在再次提交前核对结果不明的写操作。
+`ctx.forge.submitReview` 将明确指定的评论或完整评审交给 provider；未实现此能力的 provider 返回不支持。消费者在再次提交前核对结果不明的写操作；留待之后一起提交的评论通过 `ctx.forge.writeReview` 写入代码托管平台的待提交评审。
 
 ```ts type-equiv
 /** One inline comment addressed to the old or new side of a pull request diff. */
@@ -329,12 +335,12 @@ type ForgeReviewRequest = {
   readonly headSha: string
 } & (
   | { readonly kind: 'comment'; readonly comment: ForgeLineComment }
-  | { readonly kind: 'review'; readonly event: 'comment' | 'approve' | 'request-changes'; readonly body: string; readonly comments: readonly ForgeLineComment[] }
+  | { readonly kind: 'review'; readonly event: ForgeReviewEvent; readonly body: string; readonly comments: readonly ForgeLineComment[] }
 )
 ```
 
 ```ts type-equiv
-/** Result of a review write; unknown outcomes must be checked on the host before another submission. */
+/** Result of a review submission; unknown outcomes must be checked on the host before another submission. */
 type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
@@ -396,6 +402,10 @@ interface ForgeReviewComment {
   readonly pending: boolean
   /** Web page of the comment, or null when the host reports none. */
   readonly url: string | null
+  /** Whether the signed-in user can replace the comment's text through `writeReview`; false for a provider without it. */
+  readonly viewerCanEdit: boolean
+  /** Whether the signed-in user can delete the comment through `writeReview`; false for a provider without it. */
+  readonly viewerCanDelete: boolean
 }
 ```
 
@@ -422,6 +432,13 @@ interface ForgeReviewThread {
   readonly diffHunk: string | null
   /** Whether the thread is marked resolved. */
   readonly resolved: boolean
+  /** Whether the signed-in user can reply to the thread through `writeReview`; false for a provider without it. */
+  readonly viewerCanReply: boolean
+  /**
+   * Whether the signed-in user can mark the thread resolved, or unresolved when `resolved`, through `writeReview`; false
+   * for a provider without it.
+   */
+  readonly viewerCanResolve: boolean
   /** Comments oldest first; the first starts the thread. */
   readonly comments: readonly ForgeReviewComment[]
 }
@@ -432,11 +449,72 @@ interface ForgeReviewThread {
 interface ForgeReviewData {
   /** Head commit the threads were read at; `current` positions number its files. */
   readonly headSha: string
+  /** Login of the signed-in user the provider read as, or null when the host does not name one. */
+  readonly viewer: string | null
   /** Threads in host order, at most the provider's limit. */
   readonly threads: readonly ForgeReviewThread[]
   /** Whether the change request has more threads than `threads` holds. */
   readonly truncated: boolean
+  /** The signed-in user's pending review, or null without one. */
+  readonly pendingReview: ForgePendingReview | null
+  /**
+   * Whether the signed-in user can add comments to a pending review and submit or discard it through `writeReview`;
+   * false for a provider without it.
+   */
+  readonly viewerCanReview: boolean
 }
+```
+
+`ctx.forge.writeReview(ref, write, signal)` 写入评审讨论和当前登录用户的待提交评审：回复讨论，立即发布，或在 `pending` 时加入待提交评审；把讨论标记为已解决或取消解决；编辑或删除评论；在 head 上添加一条行内评论到待提交评审；以及提交或丢弃待提交评审。用户还没有待提交评审时，待提交的回复或评论会先开始一个评审。每个写操作都带有用户看到的 head 提交；提供方先检查它，head 已变化时不写入，直接返回 `stale`，并像读取遇到 `stale` 时那样重新轮询被关注的变更请求；其他结果之后，服务都会立即重新轮询被关注的变更请求。写操作从不重试；结果为 `unknown` 时，必须先在托管平台上核对，再重试。提供方没有实现 `writeReview` 时，服务返回 `unsupported`。`ForgeReviewData` 带有待提交评审，以及用户对每个讨论、每条评论和待提交评审的权限；未实现 `writeReview` 的提供方把这些权限报告为没有，使用方据此只提供能够成功的写操作。GraphQL mutation 以及它们的结果如何对应到这些返回值，由 [GitHub 提供方 README](../../packages/experimental/forge-github/README.zh.md#use-this-package) 说明。
+
+```ts type-equiv
+/** Opaque host identity of one review. */
+type ForgeReviewId = Branded<'ForgeReviewId'>
+```
+
+```ts type-equiv
+/** The signed-in user's review of a change request that is not submitted yet, which only that user sees. */
+interface ForgePendingReview {
+  /** Host identity of the review. */
+  readonly id: ForgeReviewId
+  /** Comments the review holds. */
+  readonly comments: number
+}
+```
+
+```ts type-equiv
+/** Decision a submitted review records. */
+type ForgeReviewEvent = 'comment' | 'approve' | 'request-changes'
+```
+
+```ts type-equiv
+/**
+ * One write to the review threads and the pending review of a change request. `pending` replies and `add-pending`
+ * comments join the signed-in user's pending review, which is started when the user has none. A host that adds every
+ * reply to an existing pending review, as GitHub does, refuses a reply with `pending: false` while one exists.
+ */
+type ForgeReviewWrite = {
+  /** Head commit the user saw; providers check it before writing and refuse with `stale` once the head is another commit. */
+  readonly headSha: string
+} & (
+  | { readonly kind: 'reply'; readonly thread: ForgeThreadId; readonly body: string; readonly pending: boolean }
+  | { readonly kind: 'resolve'; readonly thread: ForgeThreadId; readonly resolved: boolean }
+  | { readonly kind: 'edit-comment'; readonly comment: ForgeCommentId; readonly body: string }
+  /** Deleting the only comment of a thread deletes the thread. */
+  | { readonly kind: 'delete-comment'; readonly comment: ForgeCommentId }
+  /** A comment on lines of `headSha`. */
+  | { readonly kind: 'add-pending'; readonly comment: ForgeLineComment }
+  | { readonly kind: 'submit-pending'; readonly review: ForgeReviewId; readonly event: ForgeReviewEvent; readonly body: string }
+  /** Delete the pending review with every comment it holds. */
+  | { readonly kind: 'discard-pending'; readonly review: ForgeReviewId }
+)
+```
+
+```ts type-equiv
+/** Result of a review write; an `unknown` outcome must be checked on the host before the write is tried again. */
+type ForgeReviewWriteResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 ```
 
 ## Session 绑定
@@ -729,6 +807,8 @@ type ForgeChangeRequestStatesFrame =
 变更视图经同一个 Remote 读取。`localDiff` 读取 Session 检出的某个 `ForgeLocalScope`；`changeRequestDiff` 经提供方的 `diff` 读取已绑定变更请求在其最新状态 head 处的变更（提供方只返回描述该 head 提交的补丁），或经提供方的 `compare` 读取它指定的 `ForgeCommitRange`；两者返回的文件都已在宿主上解析为 `ForgeDiffFile` 的 hunk，并带有分层与改动摘要。`localCommits` 与 `changeRequestCommits` 列出范围可以指定的提交，提供方不读取提交时后者返回 null。`localText` 与 `changeRequestText` 读取一个文件的新版本，用来补出 hunk 之间未变更的行。每次检查还会把 `branch` 范围的规模统计为 `ForgePanelState.local`，供面板的变更卡片使用，始终以自动分叉点为准。`base` 指定了引用的 `branch` 范围改为与 HEAD 和该分支的合并基准比较；`diffBases` 列出视图可选的分支以及自动分叉点。head 已越过最新状态时，提供方返回 `stale`，`ctx.forge.diff` 立即重新轮询该变更请求（每个 head 提交一次）；`changeRequestDiff` 以 `forgePanel/stale-head` 拒绝且不缓存任何内容，变更视图保持加载，直到更新的状态到达后按该状态的 head 重新读取。因此评审评论始终指向视图所显示行的那个提交。
 
 `changeRequestReview(session, url, headSha, fresh)` 在视图所显示 diff 的 head 处读取已绑定变更请求的讨论；head 不同时以 `forgePanel/stale-head` 拒绝，提供方不支持读取讨论时返回 `forgePanel/review-unsupported`，其他失败返回 `forgePanel/review-failed`。每个变更请求在内存里保留一次读取结果，以 head 提交和状态的更新时间为键、受 `maxCachedReviewBytes` 约束，保留时间达到 `reviewRefreshMs` 后，或 `fresh` 要求时（读者刷新视图后的第一次读取就是这样）重新读取：在 GitHub 上，新评论和回复会改变 PR 的更新时间，解决讨论则不会。变更视图可见时，每收到一次状态就重新请求一次，并按[面板 README](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package) 所述把讨论叠加到文件上。
+
+`changeRequestReviewWrite(session, url, write)` 检查已绑定变更请求的一个 `ForgeReviewWrite` 的 head 提交、id、文字和行范围后，交给 `ctx.forge.writeReview`，并返回 `ForgeReviewWriteResult`。提供方给出答复后，无论结果如何，都会丢弃该变更请求保留的讨论，以及在此之前开始的所有读取，使下一次 `changeRequestReview` 从托管平台读取；`submitReview` 同样如此。变更视图一次只发送一个写操作，每个可能改变讨论的写操作之后都会重新读取讨论。
 
 ```ts type-equiv
 /**
@@ -1042,6 +1122,19 @@ async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise
 async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>
 
 /**
+ * Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then
+ * poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls
+ * it as a stale read does.
+ * @param ref - change request served by a registered provider.
+ * @param write - the write and the head commit the user saw.
+ * @param signal - cancellation of the write.
+ * @returns whether the host took the write; `unsupported` when the provider cannot write reviews, and `unknown` when the
+ * outcome must be checked on the host before the write is tried again.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
+
+/**
  * List the commits of a change request at its current head.
  * @param ref - change request served by a registered provider.
  * @param signal - cancellation of the read.
@@ -1314,8 +1407,9 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 /**
  * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
  * at the same head commit and update time are reused from memory, for any Session, until they are
- * `reviewRefreshMs` old or `maxCachedReviewBytes` evicts them; a read again after that age, or a `fresh` read,
- * shows threads resolved since, which do not change a GitHub pull request's update time.
+ * `reviewRefreshMs` old, `maxCachedReviewBytes` evicts them, or a review write through this panel drops them; a read
+ * again after that age, or a `fresh` read, shows threads resolved elsewhere since, which do not change a GitHub pull
+ * request's update time.
  * @param session - Session the change request is bound to.
  * @param url - binding URL of the change request.
  * @param headSha - head commit of the displayed diff.
@@ -1331,7 +1425,8 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async changeRequestReview(session: Session, url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>
 
 /**
- * Publish a line comment or completed review for a visible Session binding.
+ * Publish a line comment or completed review for a visible Session binding. The threads kept for the change request
+ * are dropped once the host answers, so the next read shows the comments.
  * @param session - Session retaining the change request.
  * @param url - visible binding URL.
  * @param request - reviewed head, ranges, plain text, and explicit review decision.
@@ -1339,6 +1434,21 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @returns confirmed publication or a typed failure; unknown outcomes require reconciliation on the host.
  */
 @Remote async submitReview(session: Session, url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
+ * Write to the review threads or the pending review of a change request of a Session while its head is still the
+ * head the user saw. The threads kept for the change request are dropped once the host answers, so the next read
+ * shows the write, which a resolve does not show through a GitHub pull request's update time.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param write - the write and the head commit of the threads the user saw.
+ * @param signal - request cancellation.
+ * @returns whether the host took the write; `stale` once the head moved, which polls the change request again, and
+ * `unknown` when the outcome must be checked on the host before the write is tried again.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; an error
+ * for a write without text, a head that is not a commit object name, or an invalid line range.
+ */
+@Remote async changeRequestReviewWrite( session: Session, url: string, write: ForgeReviewWrite, signal: AbortSignal, ): Promise<ForgeReviewWriteResult>
 
 /**
  * Mark a draft change request of a Session ready for review; the change

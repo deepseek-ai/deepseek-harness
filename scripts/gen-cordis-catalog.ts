@@ -429,6 +429,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ForgeCommit: 'forge.md',
   ForgeCommitList: 'forge.md',
   ForgeReviewData: 'forge.md',
+  ForgeReviewWrite: 'forge.md',
+  ForgeReviewWriteResult: 'forge.md',
   ForgeCommitRange: 'forge.md',
   ForgeFileLayer: 'forge.md',
   ForgeChangeRequestStatesFrame: 'forge.md',
