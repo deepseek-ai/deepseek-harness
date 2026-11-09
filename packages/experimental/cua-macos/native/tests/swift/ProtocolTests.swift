@@ -43,7 +43,7 @@ func refusesInvalidRequestEnvelopes(_ source: String) {
     let window = WindowInfo(
         windowID: 7, pid: 42, appName: "Fixture", title: "Canvas",
         bounds: WindowBounds(x: -100, y: 40, width: 320, height: 200),
-        isOnScreen: true, onCurrentSpace: nil, layer: 0
+        isOnScreen: true, onCurrentSpace: nil
     )
     let encoded = try JSONEncoder().encode(window.json)
     let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
@@ -51,6 +51,20 @@ func refusesInvalidRequestEnvelopes(_ source: String) {
     #expect(window.json["windowId"] == .number(7))
     #expect(window.json["bounds"]["x"] == .number(-100))
     #expect(window.json["isOnScreen"] == .bool(true))
+}
+
+@Test(arguments: [
+    (0, false, false, 200.0, true), (0, false, true, 0.0, true),
+    (3, true, true, 200.0, true), (3, false, true, 200.0, false),
+    (25, true, false, 200.0, false), (3, true, true, 0.0, false),
+])
+func discoversNormalWindowsAndVisibleAuxiliaryWindows(layer: Int, onScreen: Bool, currentSpace: Bool,
+                                                      width: Double, expected: Bool) {
+    let window = WindowInfo(windowID: 7, pid: 42, appName: "Fixture", title: "",
+                            bounds: WindowBounds(x: 0, y: 0, width: width, height: 100),
+                            isOnScreen: onScreen, onCurrentSpace: currentSpace, layer: layer)
+    #expect(window.isDiscoverable == expected)
+    #expect(window.json["layer"] == nil)
 }
 
 @Test func separatesUnsupportedMethodsFromInvalidParameters() throws {
@@ -82,9 +96,25 @@ func rejectsInvalidWindowIDs(_ value: String) throws {
 }
 
 @Test func rejectsRoundedIntegerOverflowWithoutTrapping() throws {
-    let request = try NativeRequest(data: Data(#"{"id":"call","method":"click","params":{"elementIndex":9223372036854775808}}"#.utf8))
+    let request = try NativeRequest(data: Data(#"{"id":"call","method":"click","params":{"clickCount":9223372036854775808}}"#.utf8))
     let params = try RequestParameters(request)
-    #expect(throws: NativeFailure.self) { try params.integer("elementIndex", in: 0...Int.max) }
+    #expect(throws: NativeFailure.self) { try params.integer("clickCount", in: 0...Int.max) }
+}
+
+@Test(arguments: [("12", 12), ("007", 7)])
+func resolvesDecimalElementIdentifiers(_ source: String, _ index: Int) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"click\",\"params\":{\"elementId\":\"\(source)\"}}".utf8))
+    #expect(try RequestParameters(request).elementIdIndex() == index)
+}
+
+@Test(arguments: [
+    #"12"#, #""""#, #""-1""#, #""+1""#, #"" 1""#, #""1.0""#, #""abc""#, #""e12""#,
+    #""9223372036854775808""#, #""١٢""#,
+])
+func rejectsNonDecimalElementIdentifiers(_ value: String) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"click\",\"params\":{\"elementId\":\(value)}}".utf8))
+    let params = try RequestParameters(request)
+    #expect(throws: NativeFailure.self) { try params.elementIdIndex() }
 }
 
 @Test func nestedSeparatorsAndEscapedQuotesDoNotChangeEnvelopeFieldCount() throws {

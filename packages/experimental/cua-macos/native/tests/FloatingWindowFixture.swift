@@ -19,6 +19,7 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
     var panelSize: [CGFloat] = []
     var buttonPoint: [CGFloat] = []
     var resizeControl: DispatchSourceSignal?
+    var visibilityControl: DispatchSourceSignal?
     var observer: Timer?
 
     init(statePath: String) { self.statePath = statePath }
@@ -46,6 +47,15 @@ final class FloatingWindowFixture: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
         panelID = panel.windowNumber
+        signal(SIGUSR1, SIG_IGN)
+        let visibility = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        visibility.setEventHandler { [weak self] in
+            guard let self, let panel = self.panel else { return }
+            if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+            self.persist()
+        }
+        visibility.resume()
+        visibilityControl = visibility
         signal(SIGUSR2, SIG_IGN)
         let control = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: .main)
         control.setEventHandler { [weak self] in

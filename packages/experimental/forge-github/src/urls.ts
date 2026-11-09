@@ -5,6 +5,9 @@ import type { ChangeRequestRef, ForgeRepository } from '@deepseek-ai/dsh-experim
 /** Characters GitHub permits in owner and repository names. */
 const SEGMENT = /^[A-Za-z0-9_.-]+$/
 
+/** A full SHA-1 or SHA-256 object name. */
+const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i
+
 /** Host, owner, and repository name addressed by a URL. */
 export interface GitHubLocation {
   /** Lowercase host name. */
@@ -36,6 +39,15 @@ export function checkedRepository(ref: ChangeRequestRef): ForgeRepository {
   if (!isSegment(owner) || !isSegment(name)) throw new Error(`forge-github: invalid repository ${JSON.stringify(`${owner}/${name}`)}`)
   if (!Number.isSafeInteger(ref.number) || ref.number <= 0) throw new Error(`forge-github: invalid pull request number ${ref.number}`)
   return ref.repository
+}
+
+/**
+ * Whether a value is a full commit object name that can be inlined into a request.
+ * @param value - candidate commit.
+ * @returns whether it is 40 or 64 hexadecimal digits.
+ */
+export function isCommit(value: string): boolean {
+  return COMMIT.test(value)
 }
 
 /**

@@ -39,6 +39,10 @@ kind: "package-reference"
 
 `ChatView` 通过节点列表外围既有的 `MarkdownDelegateProvider` 提供文件及 HTTP(S) 导航，直接传入 `requestOpenFile`、`openExternalLink` 和 `fileImages`。文件打开动作保留 Chat 的失败反馈与重试处理。Assistant Markdown 文件链接在消息落定后可于右侧栏打开，包括未修改文件的引用。相对路径基于当前查看的 Session 工作区解析；绝对路径仍使用同一 Session 的文件系统访问。[支持的 Markdown 行号引用](../ui-primitives/README.zh.md#rendering-agent-output)定位到指定起始行，并复用现有文件标签。文件缺失时显示预览错误状态。
 
+`ChatView` 还传入 `renderCode`，因此 Chat 消息流中带语言且有内容的每个 Markdown 围栏都经由 session 作用域的 `conversation.chat.markdown.fence` hoc slot 渲染。其 `entryKey` 为小写的围栏语言，owner props 携带该 `lang`、围栏 `code`、`streaming` 状态，以及存在时为 info string 其余部分的 `meta`。slot 内容是不带统一 diff 行的普通代码块，因此没有对应层的语言按代码渲染。Chat 自带 `math` 层，消息流式输出时显示源码，落定后显示行间 TeX；还自带 `diff` 与 `patch` 层，以统一 diff 行代替内容渲染。其他插件注册 `key` 为小写语言的层即可接入该语言：不渲染 `children` 的层替换代码块，渲染 `children` 的层装饰代码块，两者都可以自行从 `meta` 解析参数。
+
+围栏层的根元素不设外边距，因为围栏所在的[块级外框](../ui-primitives/README.zh.md#component-catalog)负责它与相邻块之间的间距。与内容相关的错误由层自己接住。层崩溃时错误照常上报，只有该围栏改为渲染崩溃层的 `children`，并在该围栏本次挂载内保持如此，props 变化也不恢复；同语言的其他围栏仍保留该层，重新挂载的围栏会再次使用它。因此，处理不了不完整内容的层在 `streaming` 为 true 时渲染 `children`。
+
 原生消息图片使用独立的用户与输出位置。`conversation.chat.user.content` Factory 声明 `conversation.chat.user.images`，由 `UserContent` 渲染；Assistant 节点注册声明 `conversation.chat.message.images`，由 `AssistantMarkdown` 渲染。两者通过显式 props 接收图片来源、授权 `loadImage` 和布局参数。官方 `MessageImages` 条目调用共享的 root 作用域 `conversation.images.content` Factory。每个位置均可独立替换，无需复制画廊实现。
 
 Session 作用域的 `conversation.chat.user.content` Factory 只渲染用户内容区域：文本、额外内容块、按输入顺序排列的图片／文件附件及引用摘要。[`UserContentInput`](src/client/contract/slots.ts) 携带预处理的 `content`、变换 `facts`、显示 props 和显式 `loadImage`；引用动作由节点自己的 Injection 提供。正文调用共享 `conversation.user.text` Factory，图片调用自身拥有的图片 Slot。直接调用需要 Session 绑定，行包装层由调用方提供。
@@ -123,7 +127,7 @@ Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载的�
 
 过程组使用稳定的 `div` 布局盒子、滚动正文及不限高的内容盒子，后者报告正文内部的内容增长。业务样式必须适配组内及组边界间距，处理隐藏或空成员以及回答前的间距特例。`conversation.chat.flow` 插槽添加一个 `display: contents` DOM 锚点；行选择器直接匹配该锚点，不重复匹配其正文容器祖先。运行状态与各行共享父级，使分隔线使用同一套可见兄弟节点规则。锚点自身不产生间距。更早历史控件紧邻流锚点之前，两者的兄弟关系决定首行间距。CSS 变量不属于 Group Definition。
 
-运行中的分组标题、思考预览、工具与命令行、当前重试行以及底部运行状态使用共享的 [TextShimmer](../ui-primitives/README.zh.md#component-catalog)。每行的文字共用一道从左到右的高光，包括折叠的分组标题；图标和悬停箭头保留底色。普通流程行之间相隔 4px；展开的分组标题与内容之间相隔 8px；Assistant 回复与相邻过程行之间相隔 12px；每轮完成／耗时控件与其输入、以及紧随其后的可见行之间保留 16px。控件与回复之间隔着已收起的行时，回复保持 12px 回复间距，因此折叠不会改变它的间距。隐藏行与空行（包括保留的空 slot 锚点）不产生间距。“深度求索”运行文字保留蓝色底色，并使用主题专用高光扫过文字。
+运行中的分组标题、思考预览、工具与命令行、当前重试行以及底部运行状态使用共享的 [TextShimmer](../ui-primitives/README.zh.md#component-catalog)。每行的文字共用一道从左到右的高光，包括折叠的分组标题；图标和悬停箭头保留底色。普通流程行之间相隔 4px，同一条 Assistant 消息里相邻的推理行也是如此；展开的分组标题与内容之间相隔 8px；Assistant 回复与相邻过程行之间相隔 12px；每轮完成／耗时控件与其输入、以及紧随其后的可见行之间保留 16px。控件与回复之间隔着已收起的行时，回复保持 12px 回复间距，因此折叠不会改变它的间距。隐藏行与空行（包括保留的空 slot 锚点）不产生间距。“深度求索”运行文字保留蓝色底色，并使用主题专用高光扫过文字。
 
 运行状态显示一只鲸鱼，其 APNG 遮罩继承文字颜色。启用减少动态效果或强制颜色模式、或浏览器不支持 alpha 遮罩时，CSS 选择静态 SVG。APNG 是插件样式表引用的[包资源](../AGENTS.md#dependency-declaration)；React 不通过 DOM 样式传递图片数据。
 
@@ -131,7 +135,7 @@ Chat Builder 按节点发布 `bottomSource`：节点可见且属于已加载的�
 
 每个组拥有本地 `useDisclosure` 状态，组件保持挂载时，模式切换保留该状态。
 
-Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
+Session 作用域的 `conversation.chat.reasoning.body` single Slot 仅在思考正文展开时提供原始文本 `rawText`、显示文本 `text` 和流式状态。官方条目以优先级 100 注册，并调用 `conversation.chat.reasoning.content` Factory。替换项使用更小的优先级数值，可向同一个 Factory 传入原文或派生显示文本。root 作用域的 Factory 不要求 Session，并固定使用紧凑排版。其可选 `labels` 原样接受完整的 `MarkdownLabels`，省略时使用 Chat 的默认本地化文案。在 Chat 消息流中，带语言的围栏经由围栏 slot 渲染并使用 Chat 视图的代码块文案，因此这些 `labels` 在那里只作用于脚注和无语言围栏。宿主不提供内联 fallback 或插件操作状态。显示扩展必须保留查看未翻译文本的能力，并在自己的 Body 包装内维护控件。扩展不替换思考预览或展开策略。哪些块生成思考行由[思考展示规则](src/client/conversation-nodes/README.zh.md#display-modes)定义。
 
 Chat 节点 slot 为推理与工具注入绑定重置来源的 `useDisclosure` 钩子。中间 renderer 只透传、不订阅，每次调用拥有独立展开状态。来源回调保留接收对象及稳定引用。外层轮次实际隐藏过程成员时，所在节点重置这些开合状态，不替换组件 key，也不改变钩子引用。展示模式切换保留展开状态。
 
@@ -180,7 +184,9 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 
 `useChatViewport` 负责识别轮次的 DOM 读取、限制范围后的写入、原生事件及一个持续保留的分页锚点。加载更早时，Node 与 Group 容器根据已有开合状态标记可选锚点。视口按正文顺序选择第一个非空、未隐藏的标记，不做命中测试或按几何位置搜索，再测量该元素及其滚动容器。先补偿锚点所在的限高组，再把剩余位移交给整段文本的滚动区域。内层补偿写入通过该组绑定的控制器取消动画并暂停跟随，读者滚回底部后恢复。提交和后续内容尺寸变化复用该锚点；消息行重挂载时按同一语义 key 重新定位。补偿限于实际可滚动范围，不增加底部空白。
 
-`useChatReading` 负责跟随策略、读者输入采样和语义位置记忆；`useChatNavigation` 负责轮次跳转，并向视口请求位置保持。阅读手势释放分页锚点，composer 内的点击、打字和非滚动按键则保留锚点；分页仍在加载时，`scrollend` 会记录读者的新位置。`useChatScroll` 协调已提交的输入。显式导航把测得的落点交给阅读策略，因此无需通过命中测试重新寻找已知目标。
+`useChatReading` 负责跟随策略、读者输入采样和语义位置记忆；`useChatNavigation` 负责轮次跳转，并向视口请求位置保持。阅读手势释放分页锚点，composer 内的点击、打字和非滚动按键则保留锚点。延迟消费的历史请求在消费时采集锚点，不在发请求时采集。`useChatScroll` 协调已提交的输入。显式导航把测得的落点交给阅读策略，因此无需通过命中测试重新寻找已知目标。
+
+历史预取复用已有 500ms 阅读采样及内容／尺寸通知，在请求前确认距顶部两屏以内，最多一页等待消费。触摸和实际内层滚动优先于动画阻塞判断保留自动意图，释放后重查；其余动画、指针按住或无法取得锚点使自动加载退回按钮，不自动重试缓存页。加载和处理状态的按钮仍可点击，加入当前请求而不重复请求。明确点击保留意图，直到消费、到头、失败或被新导航取代；页面可用后绕过自动阻塞，在顶部使用首条分页锚点，其他位置使用当前阅读锚点并以分页锚点兜底，通过既有保位消费，不等待动画结束。没有可用锚点时手动消费仍继续，但不保证位置稳定。自动静止消费使用保位，普通外层滚动使用浏览器锚定；自动消费在 scrollTop ≤ 0.5 时，首条分页锚点与持续保位共用采集屏幕位置的恢复公式，只应用一次便立即释放；不再叠加可能已由原生锚定产生的滚动位置增量。历史消费完成时，即使可见 Node 顺序未变化，也会结算一次补偿记录；视图关闭或历史失败时丢弃记录，不应用补偿。实际 Chat 滚动区关闭纵向越界回弹，不新增滚动动画。历史行在加载、处理、重试和到头时保持高度，首次打开就完整的 Session 不显示该行。
 
 活跃轮次高亮采用近似定位：`readVisibleTurn` 对 flow 插槽的直属 Node/Group 布局盒二分（独立渲染时使用正文容器的直属布局盒），落在间隙时保留前方候选。它不做文档命中测试，也不查询 Group 成员或全部 Turn 标记。空 Seat 保留零高度的流内布局盒，使外层位置有序且不增加间距。这种定位不改变语义位置捕获或分页补偿。
 
@@ -206,6 +212,8 @@ Markdown 文件、链接、图片、引用 chip 和工具文件控件将明确�
 ## 已知限制与暂缓事项
 
 <a id="known-limitations-and-deferred-work"></a>
+
+- **进行中手势遇到手动分页**——手动消费在页面到达时采集持续保位锚点，即使触摸手势已经开始。随后移动可能被恢复到该锚点，约束手势或其惯性，直到新的阅读输入释放锚点。自动路径的触摸延迟不保护这一明确的手动路径。
 
 - **运行图标分辨率**——动态鲸鱼使用 28×28 图片，默认 CSS 尺寸为 14×14。较大的正文字号或大于 2 的设备像素比可能使位图描边变模糊；静态回退图标仍为矢量图。浏览器图片缓存管理动画时钟，因此重新挂载不保证从第一帧重新播放。
 

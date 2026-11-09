@@ -157,19 +157,34 @@ const BOOTSTRAP_NAMES = new Set([
 /** Name prefixes no discovered file may set. */
 const BOOTSTRAP_PREFIXES = ['DSH_', 'XDG_', 'DYLD_', 'BASH_FUNC_']
 
-/**
- * The bootstrap names the Harness-home `.env` alone may set. A proxy chooses the route every
- * request takes, so the invoking directory's file — which arrives with a clone — keeps refusing
- * them; the home file is the user's own, and `DSH_HOME` is itself bootstrap-only, so no `.env` can
- * relocate this exemption. The CA and TLS names in the same group stay refused everywhere: they
- * change what is trusted, not where traffic goes.
- */
+/** Proxy names the Harness-home `.env` may set in any letter case: proxy clients read both spellings. */
 const HOME_LAYER_PROXY_NAMES = new Set(['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY'])
+
+/**
+ * DeepSeek endpoint names the Harness-home `.env` may set only as spelled here: their consumers look them up by
+ * exact name on POSIX, so another spelling would load without effect.
+ */
+const HOME_LAYER_ENDPOINT_NAMES = new Set(['DEEPSEEK_BASE_URL', 'DEEPSEEK_SEARCH_BASE_URL'])
+
+/**
+ * Whether the Harness-home `.env` alone may set a bootstrap-only name. Each such name chooses where requests go: a
+ * proxy for every request, a DeepSeek endpoint for the model or search requests that carry the user's credential.
+ * The invoking directory's file arrives with a clone and keeps refusing them. The home file is the user's own, and
+ * the profile patches beside it can already set these endpoints as plugin `baseURL` fields; `DSH_HOME` is itself
+ * bootstrap-only, so no `.env` can relocate this exemption. The CA and TLS names in the same group stay refused
+ * everywhere: they change what is trusted, not where traffic goes.
+ * @param name - the variable name as the file spells it.
+ * @returns true for a {@link HOME_LAYER_PROXY_NAMES} entry in any letter case or a
+ *   {@link HOME_LAYER_ENDPOINT_NAMES} entry in its exact spelling.
+ */
+function isHomeLayerRouteName(name: string): boolean {
+  return HOME_LAYER_PROXY_NAMES.has(name.toUpperCase()) || HOME_LAYER_ENDPOINT_NAMES.has(name)
+}
 
 /**
  * Whether a variable may come only from the inherited process environment
  * because it changes process, runtime, VCS, or network bootstrap. The Harness-home
- * file is additionally allowed {@link HOME_LAYER_PROXY_NAMES}.
+ * file is additionally allowed the names {@link isHomeLayerRouteName} accepts.
  * @param name - the variable name.
  * @returns true when only the inherited environment may supply it.
  */
@@ -184,7 +199,7 @@ function isBootstrapOnly(name: string): boolean {
  * @param binName - the diagnostic prefix on the thrown error.
  * @param dir - the directory whose `.env` to read.
  * @param warn - sink for the one-line unreadable-file diagnostic.
- * @param home - the resolved Harness home; when `dir` is it, {@link HOME_LAYER_PROXY_NAMES} are accepted.
+ * @param home - the resolved Harness home; when `dir` is it, names {@link isHomeLayerRouteName} accepts are allowed.
  * @returns the parsed entries, or `undefined` when the file is absent or unreadable.
  * @throws when the file declares a name {@link isBootstrapOnly} rejects and this layer may not set.
  */
@@ -207,12 +222,17 @@ function readEnvLayer(
   const values = parseEnv(content) as Record<string, string>
   for (const name of Object.keys(values)) {
     if (!isBootstrapOnly(name)) continue
-    const proxyName = HOME_LAYER_PROXY_NAMES.has(name.toUpperCase())
-    if (isHome && proxyName) continue
-    // A proxy name has a second way out that the other bootstrap names do not, so its message says so.
-    const remedy = proxyName
-      ? `export ${name}, or put it in ${resolve(home, '.env')}, which does not travel with a repository`
-      : `export ${name} instead of putting it in a .env file`
+    const homeLayerName = isHomeLayerRouteName(name)
+    if (isHome && homeLayerName) continue
+    // A home-layer name, or an endpoint name spelled another way, has a second way out that the other bootstrap names
+    // do not, so its message says so.
+    const homeEnv = resolve(home, '.env')
+    const upper = name.toUpperCase()
+    const remedy = homeLayerName
+      ? `export ${name}, or put it in ${homeEnv}, which does not travel with a repository`
+      : HOME_LAYER_ENDPOINT_NAMES.has(upper)
+        ? `spell it ${upper}, then export it or put it in ${homeEnv}, which does not travel with a repository`
+        : `export ${name} instead of putting it in a .env file`
     throw new Error(
       `${binName}: ${path} sets "${name}", which only the launching environment may set`
       + ' (it decides how this process starts, where its code and instructions load from, or how it'
@@ -231,7 +251,7 @@ function readEnvLayer(
  * @param cwd - the invoking directory whose `.env` is the project layer.
  * @param warn - sink for the one-line misconfiguration diagnostics.
  * @returns this run's frozen environment snapshot.
- * @throws when either file declares a bootstrap-only variable, except {@link HOME_LAYER_PROXY_NAMES} in the Harness-home file.
+ * @throws when either file declares a bootstrap-only variable, except names {@link isHomeLayerRouteName} accepts in the Harness-home file.
  */
 export function loadLayeredEnv(
   binName: string, cwd: string = process.cwd(),

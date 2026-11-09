@@ -140,17 +140,17 @@ describe('configuration guards', () => {
     // A record restored from an older owner state carries no tier; drop it after typing the record so
     // the published facts show the field absent rather than defaulted.
     const legacy: OwnerShare = {
-      shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+      shareId: 'share-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
       gatewayToken: 'token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
       allowsFork: false, online: false, link: '', relay: RELAY, revision: 0, sessionMode: 'view',
     }
     delete (legacy as { sessionMode?: OwnerShare['sessionMode'] }).sessionMode
     expect(publishedShareState(legacy)).toEqual({
-      shareId: 'share-1', sessionId: 'session-1', allowsFork: false, viewerAdmitted: true,
+      shareId: 'share-1', sessionIds: ['session-1'], allowsFork: false, viewerAdmitted: true,
       stopped: false, sessionMode: undefined,
     })
     expect(publishedShareState({
-      shareId: 'share-2', sessionId: 'session-2', sessionTitle: 'Session', accessMode: 'open',
+      shareId: 'share-2', sessionIds: ['session-2'], sessionTitle: 'Session', accessMode: 'open',
       gatewayToken: 'token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
       allowsFork: true, online: true, link: '', relay: RELAY, revision: 0,
       sessionMode: 'write', expiresAt: '2026-01-02T00:00:00Z',

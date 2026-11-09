@@ -91,19 +91,94 @@
 }
 
 .headerEnd {
-  flex: none;
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   margin-left: auto;
 }
+
 
 .toolbar {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
   box-sizing: border-box;
-  min-height: 38px;
-  padding: 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* Spans the file tree's width with the tree's search inset, and its divider continues the tree's border. */
+.lensCell {
+  display: none;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  width: var(--forge-tree-width);
+  padding: 0 8px;
+  border-inline-end: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.toolbar[data-tree='right'] .lensCell {
+  order: 1;
+  border-inline-start: 0.5px solid var(--dsw-alias-border-l3);
+  border-inline-end: 0;
+}
+
+.toolbarMain {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 8px;
+}
+
+.lensMenu {
+  display: inline-flex;
+}
+
+@container forge-changes (min-width: 760px) {
+  .toolbar:not([data-tree='hidden']) .lensCell {
+    display: flex;
+  }
+
+  .toolbar:not([data-tree='hidden']) .lensMenu {
+    display: none;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.progressSlot {
+  display: inline-flex;
+}
+
+/* Breaks the toolbar's review controls onto a second row where one row is too narrow for them. */
+.rowBreak {
+  display: none;
+}
+
+@container forge-changes (max-width: 640px) {
+  .reviewRow {
+    order: 2;
+  }
+
+  .rowBreak {
+    display: block;
+    flex-basis: 100%;
+    order: 1;
+    height: 4px;
+  }
+
+  .progressSlot {
+    margin-left: auto;
+  }
 }
 
 .select {
@@ -173,7 +248,6 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
 }
 
 .tool {
@@ -272,9 +346,12 @@
 }
 
 .files {
+  --forge-files-inset: 10px;
   flex: 1;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
+  padding: var(--forge-files-inset);
   overflow: auto;
 }
 
@@ -303,14 +380,35 @@
   text-align: center;
 }
 
+/* Each file is one card, so a file's last collapsed-context strip and the next file's header no longer read as adjacent
+   rows. Diffs share R16; clip, unlike hidden, keeps the card from becoming the sticky header's scroll container. */
 .file {
-  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  overflow: clip;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--forge-changes-bg);
 }
 
+.file + .file {
+  margin-top: 12px;
+}
+
+@container forge-changes (max-width: 380px) {
+  .files {
+    --forge-files-inset: 6px;
+  }
+
+  .file + .file {
+    margin-top: 8px;
+  }
+}
+
+/* Above the comment plus (z-index 1) of rows scrolled beneath it. Sticky offsets start inside the list's padding,
+   so the negative inset keeps a stuck header flush with the scroll area's top edge. */
 .fileHeader {
   position: sticky;
-  top: 0;
-  z-index: 1;
+  top: calc(-1 * var(--forge-files-inset, 0px));
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -318,7 +416,8 @@
   min-height: 36px;
   padding: 0 4px 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
-  background: var(--forge-changes-bg);
+  /* The hover tint over the view background stays opaque while code scrolls beneath the sticky header. */
+  background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--forge-changes-bg);
 }
 
 /* A bare chevron: its rotation shows whether the file is expanded, so it takes no fill in any state. */
@@ -347,10 +446,23 @@
   border-bottom: 0;
 }
 
+/* The file's own information gives way inside this box, so the counts, the viewed mark, and the menu after it stay
+   whole at any width. */
+.fileTitle {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .fileIcon {
   flex: none;
 }
 
+/* The path shares the shortage with the badge in proportion to their widths, so the longer path keeps the larger part
+   and stays under the pointer for its full-path tooltip. */
 .filePath {
   display: flex;
   flex: 0 1 auto;
@@ -370,8 +482,73 @@
   transform: rotate(-90deg);
 }
 
-.badge {
+/* Capped rather than shrunk, so a long path never truncates the tag; a longer translation ends in an ellipsis. */
+.changedTag {
   flex: none;
+  max-width: 30%;
+}
+
+.changedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
+.viewed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.viewed input {
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.viewed:has(input:checked) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .viewed:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.viewed:has(input:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.viewed input:focus-visible {
+  outline: none;
+}
+
+@container forge-changes (max-width: 520px) {
+  .viewed {
+    padding: 0 6px;
+  }
+
+  .viewedLabel {
+    display: none;
+  }
+}
+
+.badge {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 50%;
   overflow: hidden;
   padding: 0 6px;
@@ -388,6 +565,12 @@
 .code {
   overflow-x: auto;
   font: var(--dsw-font-markdown-code-block);
+}
+
+/* An expanded file the reader has not scrolled near yet: one 22px row (`.line`) per drawn line, so the scroll
+   range and the positions of the files below stay close to their drawn values. */
+.unreached {
+  height: calc(var(--forge-rows) * 22px);
 }
 
 /* One intrinsic-width track paints every unwrapped unified row across the scrolled width. */
@@ -457,6 +640,11 @@
 
 .text {
   padding: 0 16px 0 6px;
+}
+
+/* Side-by-side cells have no sign column, so commentable code keeps one as an empty lane for the comment plus. */
+.code[data-split][data-review] .text {
+  padding-left: calc(1.4em + 6px);
 }
 
 .add {

@@ -63,6 +63,18 @@ function fixture(options: {
 }
 
 describe('native helper transport', () => {
+  it('sends run cleanup after an interrupted native request has acknowledged its outcome', async () => {
+    const f = fixture()
+    const active = f.client.request('getState', {}, new AbortController().signal)
+    const release = f.client.requestCleanup('releaseHeldKeys', { runId: 'program' })
+    expect(f.requests).toHaveLength(1)
+    f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'paused' } })
+    await expect(active).rejects.toThrow('paused')
+    expect(f.requests.map(frame => frame.method)).toEqual(['getState', 'releaseHeldKeys'])
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await expect(release).resolves.toEqual({ dispatched: true })
+  })
+
   it('passes transport limits and connection deadlines to the shared channel', () => {
     const f = fixture({ maxRequestBytes: 4096, maxResponseBytes: 8192, timeoutMs: 1234 })
     expect(f.connect).toHaveBeenCalledExactlyOnceWith(f.owner, f.config)
@@ -72,8 +84,8 @@ describe('native helper transport', () => {
     const f = fixture()
     const pending = f.client.request('activate', { appHandle: 'app-one' }, new AbortController().signal, ToolCallId('foreground-call'))
     expect(f.id()).toBe('foreground-call')
-    f.reply({ id: 'foreground-call', result: { dispatched: true, verified: false } })
-    await expect(pending).resolves.toEqual({ dispatched: true, verified: false })
+    f.reply({ id: 'foreground-call', result: { dispatched: true } })
+    await expect(pending).resolves.toEqual({ dispatched: true })
   })
 
   it('accepts split UTF-8 replies and preserves native refusal codes without closing the connection', async () => {
@@ -343,6 +355,20 @@ describe('native helper transport', () => {
     await rejected
     expect(f.client.disposed).toBe(true)
     expect(f.close).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['throw', 'callback', 'stdout', 'done'] as const)('preserves the platform startup diagnostic through %s', async (kind) => {
+    const failure = new NativeError('NATIVE_STARTUP', 'Windows refused the helper; check application-control policy')
+    const f = fixture(kind === 'callback' ? { writeError: failure } : {})
+    if (kind === 'throw') vi.spyOn(f.stdin, 'write').mockImplementation(() => { throw failure })
+    const pending = f.client.request('getCapabilities', {}, new AbortController().signal)
+    const rejected = expect(pending).rejects.toBe(failure)
+    if (kind === 'stdout') f.stdout.emit('error', failure)
+    if (kind === 'done') f.done.reject(failure)
+    await f.closed
+    f.finish()
+    await rejected
+    expect(f.client.disposed).toBe(true)
   })
 
   it('rejects unsolicited replies and shares one quiescent disposal across callers', async () => {

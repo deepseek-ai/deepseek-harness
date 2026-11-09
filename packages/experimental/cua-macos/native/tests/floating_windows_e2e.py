@@ -54,14 +54,14 @@ def main():
                 actual = wait_state(lambda value: value['panelOnScreen'] and value['panelLayer'] > 0)
                 app = helper.call('getApp', {'selector': str(fixture.pid)})
                 owner = {'appHandle': app['appHandle']}
+                helper.call('activate', owner)
                 panel_id = actual['panelWindowId']
                 params = {**owner, 'maxElements': 100, 'maxDepth': 15}
                 panel = {**params, 'windowId': panel_id}
                 windows = helper.call('listWindows', owner)
                 assert panel_id in [window['windowId'] for window in windows], windows
-                assert all(window['pid'] == fixture.pid for window in windows), windows
                 listed = next(window for window in windows if window['windowId'] == panel_id)
-                assert listed['layer'] == actual['panelLayer'], listed
+                assert set(listed) == {'windowId', 'appName', 'title', 'bounds', 'isOnScreen', 'onCurrentSpace'}, listed
                 assert listed['onCurrentSpace'] is True, listed
                 application = helper.call('getState', params)
                 assert application['focusedWindowId'] == actual['mainWindowId'], application
@@ -81,7 +81,12 @@ def main():
                 assert base64.b64decode(capture['data'], validate=True).startswith(b'\x89PNG\r\n\x1a\n')
                 helper.call('click', target)
                 wait_state(lambda value: value['count'] == 2)
-                helper.call('listWindows', owner)
+                os.kill(fixture.pid, signal.SIGUSR1)
+                wait_state(lambda value: not value['panelOnScreen'] and value['panelLayer'] > 0)
+                assert panel_id not in [w['windowId'] for w in helper.call('listWindows', owner)]
+                os.kill(fixture.pid, signal.SIGUSR1)
+                wait_state(lambda value: value['panelOnScreen'] and value['panelWindowId'] == panel_id)
+                assert panel_id in [w['windowId'] for w in helper.call('listWindows', owner)]
                 helper.call('click', target)
                 wait_state(lambda value: value['count'] == 3)
                 helper.call('getState', params)
@@ -102,6 +107,7 @@ def main():
                 helper.call('click', {**owner, 'windowId': actual['mainWindowId'], 'x': close_x, 'y': close_y})
                 wait_state(lambda value: value['closed'] and not value['panelOnScreen'])
                 deadline = time.monotonic() + 10
+                wait_state(lambda value: value['panelLayer'] == -1)
                 while panel_id in [window['windowId'] for window in helper.call('listWindows', owner)]:
                     if time.monotonic() >= deadline:
                         raise AssertionError('Closed panel remains in WindowServer inventory')

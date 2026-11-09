@@ -6,8 +6,10 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -16,7 +18,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ReviewQueue } from './review-queue.ts'
-import { formatReviewComment, type ReviewSelection } from './review.ts'
+import { ViewedFiles } from './viewed-files.ts'
+import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -34,10 +37,18 @@ import {
 } from './source.ts'
 import { numberOf } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
+import { WorktreeSettings } from './WorktreeSettings.tsx'
+import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
 /** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms']
+
+/** The worktree row of the Forge bundle, whose Plugins page carries the archive cleanup switch. */
+export const WORKTREE_ROW_KEY = '@deepseek-ai/dsh-experimental-forge-bundle#worktree'
+
+/** The Loader entry id the worktree service's settings namespace follows. */
+export const WORKTREE_NS = 'worktree'
 
 /** Registry id of the forge tab type, also its slot key. */
 export const TAB_ID = '@deepseek-ai/dsh-experimental-client-ui-forge'
@@ -58,6 +69,7 @@ interface SessionStores {
   readonly panel: PanelSource
   readonly visibility: VisibilitySource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
+  readonly viewed: ViewedFiles
   readonly release: () => void
 }
 
@@ -65,6 +77,24 @@ function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'forge-panel: dictionaries')
   const t = ctx.locale.bind(NS)
   const notices = createNoticeSource()
+  const lifetime = new AbortController()
+  ctx.effect(() => () => { lifetime.abort() })
+  ctx.on('workspace/archive-notice', async (sessionId, next) => {
+    const fallback = await next()
+    const result = await ctx.remote.forgePanel.worktreeCleanup(sessionId, null)
+    if (!result.ok || result.value === null) return fallback
+    const { revision, status } = result.value
+    if (status === 'failed') return { text: t('toast.archiveCleanupFailed'), tone: 'warning' }
+    if (status !== 'scheduled') return fallback
+    void ctx.remote.forgePanel.worktreeCleanup(sessionId, revision).then((completed) => {
+      if (lifetime.signal.aborted || !completed.ok || completed.value === null) return
+      if (completed.value.status === 'failed') ctx.emit('workspace/archive-followup-failed', sessionId, t('toast.archiveCleanupFailed'))
+      else if (completed.value.status === 'retained') ctx.emit('workspace/archive-followup-settled', sessionId)
+    }).catch((error: unknown) => {
+      if (!lifetime.signal.aborted) console.warn('archive worktree cleanup result unavailable:', error)
+    })
+    return { text: t('toast.archiveCleanupScheduled'), tone: 'success' }
+  })
   const stores = new Map<SessionId, SessionStores>()
   ctx.effect(() => () => {
     for (const store of [...stores.values()]) store.release()
@@ -83,7 +113,10 @@ function registerUi(ctx: Context): void {
         panel.close()
         stores.delete(sessionId)
       }, 'forge-panel: release Session state')
-      store = { panel, visibility: createVisibilitySource(), reviews: new WeakMap(), release: () => { void dispose() } }
+      store = {
+        panel, visibility: createVisibilitySource(), reviews: new WeakMap(), viewed: new ViewedFiles(sessionId),
+        release: () => { void dispose() },
+      }
       stores.set(sessionId, store)
     }
     return store
@@ -120,7 +153,7 @@ function registerUi(ctx: Context): void {
     if (scope === undefined || conversation === undefined) return false
     const input = conversation.input.for(scope)
     const numbers = Array.from(input.state.getSnapshot().draft.matchAll(/(?:^|\n)(?:> )?## User Comment (\d+)/g), match => Number(match[1]))
-    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1))) return false
+    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1), reviewQuoteSummary(selection.comment))) return false
     input.focus()
     return true
   }
@@ -203,7 +236,10 @@ function registerUi(ctx: Context): void {
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       diffBases: (query, signal) => ctx.remote.forgePanel.diffBases(sessionId, query, signal),
       localText: (scope, path) => ctx.remote.forgePanel.localText(sessionId, scope, path),
-      changeRequestDiff: (url, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, signal),
+      localCommits: (base, signal) => ctx.remote.forgePanel.localCommits(sessionId, base, signal),
+      changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
+      changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
+      viewedFiles: store.viewed,
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
       reviewQueue: ({ id, signal }) => {
@@ -327,6 +363,11 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
+  const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
+  ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')
+  ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+    name: 'plugins.row.config', key: WORKTREE_ROW_KEY, locale: NS, inject: () => worktreeSettings.inject(),
+  }, WorktreeSettings))
 }
 
 /**

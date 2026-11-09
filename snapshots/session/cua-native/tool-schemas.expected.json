@@ -95,7 +95,7 @@
     },
     {
       "name": "cua",
-      "description": "Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
+      "description": "Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
       "parameters": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
@@ -264,10 +264,6 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
-                  },
-                  "includeHidden": {
-                    "description": "Include offscreen and zero-size windows for explicit selection or restoration.",
-                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -306,7 +302,7 @@
                     "type": "boolean"
                   },
                   "details": {
-                    "description": "Include identifiers, global-point bounds and complete action names.",
+                    "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
                   }
                 },
@@ -327,7 +323,144 @@
             "properties": {
               "method": {
                 "type": "string",
-                "const": "hover"
+                "const": "listActions"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "performAction"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  },
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "argument": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId",
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "invoke"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "mouseMove"
               },
               "params": {
                 "anyOf": [
@@ -338,20 +471,29 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -383,6 +525,10 @@
                         "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
                         "type": "boolean",
                         "const": false
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -423,6 +569,10 @@
                         "type": "boolean",
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -459,14 +609,19 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
                       "mouseButton": {
                         "type": "string",
@@ -511,7 +666,7 @@
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -695,23 +850,28 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "value": {
-                    "type": "string"
+                    "$ref": "#/$defs/__schema0"
                   }
                 },
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "value"
                 ],
                 "additionalProperties": false
@@ -737,14 +897,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "text": {
                     "type": "string",
@@ -768,51 +933,8 @@
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "text"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "method",
-              "params"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "method": {
-                "type": "string",
-                "const": "performSecondaryAction"
-              },
-              "params": {
-                "type": "object",
-                "properties": {
-                  "appHandle": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "snapshotId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "action": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "appHandle",
-                  "snapshotId",
-                  "elementIndex",
-                  "action"
                 ],
                 "additionalProperties": false
               }
@@ -836,6 +958,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -867,6 +994,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -906,6 +1038,11 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "key": {
                     "type": "string",
                     "minLength": 1
@@ -913,20 +1050,58 @@
                   "modifiers": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "enum": [
-                        "command",
-                        "control",
-                        "option",
-                        "shift",
-                        "fn"
-                      ]
+                      "type": "string"
                     }
                   }
                 },
                 "required": [
                   "appHandle",
                   "key"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "sendKeyEvent"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "down",
+                      "up"
+                    ]
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "key",
+                  "direction"
                 ],
                 "additionalProperties": false
               }
@@ -1252,6 +1427,39 @@
             "additionalProperties": false
           }
         ],
+        "$defs": {
+          "__schema0": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              }
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -1346,22 +1554,6 @@
         },
         "required": [
           "pattern"
-        ]
-      }
-    },
-    {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local subagent's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent": {
-            "type": "string",
-            "description": "The name of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent"
         ]
       }
     },

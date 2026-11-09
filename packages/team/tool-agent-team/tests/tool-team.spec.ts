@@ -263,6 +263,13 @@ describe('dsh-tool-team', () => {
     const { ctx, lead } = await setup(['hang', 'hang'])
     const leadAssembly = await assembly(ctx, lead)
     expect(teamTools(leadAssembly)).toEqual(TEAM_TOOLS)
+    const teamTool = (name: string) => ctx.tools.get(name, scopeOf(lead.ctx))
+    expect(teamTool('team_task_get')?.isConcurrencySafe?.({ task_id: '1' })).toBe(true)
+    expect(teamTool('team_task_list')?.isConcurrencySafe?.({})).toBe(true)
+    for (const name of ['team_task_create', 'team_task_update']) {
+      expect(teamTool(name)).toBeDefined()
+      expect(teamTool(name)).not.toHaveProperty('isConcurrencySafe')
+    }
     const leadPrompt = renderPrompt(leadAssembly)
     expect(leadPrompt).toContain('Agent Teams is available in this session')
     expect(leadPrompt).toContain('Task readiness never starts an owner')
@@ -315,7 +322,7 @@ describe('dsh-tool-team', () => {
     expect(runtimeContextText(adapter.requests[1]!)).toContain(agentIdentity('agent-1'))
   })
 
-  it('appends the new Lead id after inherited history in an ordinary fork', async () => {
+  it('reuses the inherited Lead identity in an ordinary fork', async () => {
     const { ctx, lead, adapter } = await setup([textResponse('parent answer'), textResponse('fork answer')])
     await runTurn(lead, 'Parent task')
     const seed = lead.session.snapshotEvents()
@@ -336,7 +343,8 @@ describe('dsh-tool-team', () => {
     expect(childRequest.messages.slice(0, parentRequest.messages.length)).toEqual(parentRequest.messages)
     expect(childRequest.messages.at(-1)?.content).toContainEqual({ type: 'text', text: 'Continue independently' })
     expect(runtimeContextText(adapter.requests[1]!)).toContain(leadIdentity(handle.agent))
-    expect(JSON.stringify(childRequest.messages)).not.toContain('system-reminder')
+    expect(handle.agent.session.snapshotEvents().slice(seed.length).filter(event =>
+      event.type === 'user/message' && event.data.source.kind === 'runtime-context')).toHaveLength(0)
     expect(handle.agent.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
     expect(ctx.subagents.rootOf(handle.agent)).toBe(handle.agent)
     await handle.dispose()

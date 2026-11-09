@@ -46,7 +46,7 @@ async function collect(read: ReturnType<typeof createViewerReadService>, endpoin
 
 describe('viewer authority', () => {
   it('does not let another actor poll, replace, or cancel a stream', async () => {
-    const read = reader({ sharedSessionId: () => 'source', gateway: gateway([{ private: 'alice' }]) })
+    const read = reader({ sharedSessionIds: () => ['source'], gateway: gateway([{ private: 'alice' }]) })
     const open = { op: 'stream-open' as const, id: 1, endpoint: 'session/follow',
       payload: { args: { request: { address: { kind: 'session', sessionId: 'source' } } } } }
     expect((await read.answer('share', open, alice)).status).toBe(200)
@@ -66,7 +66,7 @@ describe('viewer authority', () => {
       creator: alice, createdAt: '2026-09-11T00:00:00.000Z',
     })
     const block = { asOfSeq: 0, values: {} }
-    const read = reader({ sharedSessionId: () => 'source', forks, gateway: gateway([
+    const read = reader({ sharedSessionIds: () => ['source'], forks, gateway: gateway([
       { type: 'baseline', value: { projections: { source: block, 'alice-fork': { asOfSeq: 1, values: { title: 'Mine' } } } } },
       { type: 'projection', sessionId: 'alice-fork', seq: 2, changes: [{ key: 'title', val: 'Renamed' }] },
     ]) })

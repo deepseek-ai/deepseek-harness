@@ -93,6 +93,54 @@ describe('QuoteNode composer lifecycle', () => {
     })
   })
 
+  it('shows an owner summary in place of the text while drafts, editor state, and the sent message keep the text', async () => {
+    const summary = { label: 'index.ts L78', title: 'src/index.ts', detail: 'L78', body: 'rename this' }
+    const { shell, sink } = bench()
+    const mirrored: DraftSnapshot[] = []
+    shell.bindDraftPersistence((document) => { mirrored.push(document) })
+    expect(shell.actions.insertQuote(quote, summary)).toBe(true)
+    const persisted = mirrored.at(-1)
+    expect(persisted).toEqual({ text: '> selected source text ', references: [], quotes: [{ offset: 0, length: 22, text: quote, summary }] })
+    const view = render(<QuoteNodeView editor={shell.editor} nodeKey="quote-key" text={quote} summary={summary} labels={{ remove: 'Remove quote' }} />)
+    expect(view.container.querySelector('[data-quote-preview-text]')?.textContent).toBe('index.ts L78src/index.ts L78 rename this')
+    view.unmount()
+
+    const restored = bench().shell
+    restored.setDraft(persisted as DraftSnapshot)
+    expect(restored.draftSnapshot).toEqual(persisted)
+    const reparsed = restored.editor.parseEditorState(restored.editor.getEditorState().toJSON())
+    expect(reparsed.read(() => $nodesOfType(QuoteNode).map(node => [node.getQuoteText(), node.getQuoteSummary()])))
+      .toEqual([[quote, summary]])
+    const plain = bench().shell
+    plain.insertQuote(quote)
+    expect(plain.editor.parseEditorState(plain.editor.getEditorState().toJSON())
+      .read(() => $nodesOfType(QuoteNode).map(node => node.getQuoteSummary()))).toEqual([undefined])
+
+    shell.submit('queue')
+    expect(sink).toHaveBeenCalledWith('> selected source text', [], 'queue', expect.any(AbortSignal), expect.any(Function))
+    await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('') })
+  })
+
+  it('treats a summary added or changed at the same text and offset as a draft change', () => {
+    const summary = { label: 'index.ts L78', title: 'src/index.ts', detail: 'L78', body: 'rename this' }
+    const { shell } = bench()
+    const mirrored: DraftSnapshot[] = []
+    shell.bindDraftPersistence((document) => { mirrored.push(document) })
+    shell.insertQuote(quote)
+    const plain = shell.draftSnapshot
+    const revision = shell.snapshot.draftRev
+    shell.setDraft({ ...plain, quotes: [{ offset: 0, length: 22, text: quote, summary }] })
+    expect(shell.snapshot.draftRev).toBeGreaterThan(revision)
+    expect(shell.draftSnapshot.quotes).toEqual([{ offset: 0, length: 22, text: quote, summary }])
+    expect(mirrored.at(-1)?.quotes).toEqual([{ offset: 0, length: 22, text: quote, summary }])
+    shell.setDraft({ ...plain, quotes: [{ offset: 0, length: 22, text: quote, summary: { ...summary, body: 'keep this' } }] })
+    expect(shell.draftSnapshot.quotes?.[0]?.summary?.body).toBe('keep this')
+    shell.setDraft({ ...plain, quotes: [{ offset: 0, length: 22, text: quote, summary: { ...summary, body: 'keep this' } }] })
+    expect(shell.draftSnapshot.quotes?.[0]?.summary?.body).toBe('keep this')
+    shell.setDraft(plain)
+    expect(shell.draftSnapshot.quotes).toEqual([{ offset: 0, length: 22, text: quote }])
+  })
+
   it('treats insert, close removal, Backspace, undo, and redo as whole-node operations', async () => {
     const direct = bench().shell
     direct.insertQuote(quote)

@@ -8,11 +8,13 @@ import type {
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  Button, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal, type MarkdownMenuTarget,
+  Button, FenceCodeBlock, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
+  type MarkdownDelegateFenceInfo, type MarkdownMenuTarget,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { isAtOrOutside } from '../contract/group-tree.ts'
 import type { ChatFlowHookContext, ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
+import { markdownLabels } from '../markdown-labels.ts'
 import { TurnNavigator } from './TurnNavigator.tsx'
 import { mergeTurnRailItems } from './turn-rail-items.ts'
 import { useTextInteraction } from './text-interaction.ts'
@@ -61,7 +63,7 @@ const MOTION_TAIL_MS = 800
 export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
-  loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
+  loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
   usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
@@ -106,6 +108,15 @@ export function ChatView({
       dialog: t('image.dialog'), close: t('image.close'),
     },
   }), [cwd, t, fileDrag, sessionId])
+  const codeLabels = useMemo(() => markdownLabels(t).code, [t])
+  // Every fence in the flow dispatches by language; the content is the plain
+  // code block, so a language without a layer renders as code without diff rows.
+  const renderCode = useCallback((fence: MarkdownDelegateFenceInfo) => renderSlot('conversation.chat.markdown.fence', fence, {
+    entryKey: fence.lang,
+    children: (
+      <FenceCodeBlock lang={fence.lang} code={fence.code} streaming={fence.streaming} labels={codeLabels} diff={false} />
+    ),
+  }), [renderSlot, codeLabels])
   const running = useSession(s => s.running)
   // Fold transitions run while a Turn is live, while an input is pending, and briefly after settling.
   const [motionTail, setMotionTail] = useState(false)
@@ -125,6 +136,8 @@ export function ChatView({
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
+  const historyLoadStatus = useSession(s => s.historyLoadStatus)
+  const historyWasPartial = useSession(s => s.historyWasPartial)
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   // Close/retry must ignore a settlement that started before the latest
@@ -200,8 +213,9 @@ export function ChatView({
   const steeringId = latestSteering?.source.kind === 'user' && 'rpcId' in latestSteering.source
     ? latestSteering.source.rpcId : latestSteering?.id ?? null
   const scroll = useChatScroll({
-    ready: openState === 'open',
-    order, firstSeq, lastKey, running, loadingOlder, hasMore, chatScroll, loadOlder, loadThrough, deferCompletedTurns,
+    isOpen: openState === 'open',
+    order, firstSeq, lastKey, running, loadingOlder, historyLoadStatus, hasMore, chatScroll,
+    loadOlder, consumeOlder, loadThrough, deferCompletedTurns,
     lastIsUser: lastKey !== null && nodeStore.get(lastKey)?.kind === 'user',
     steeringId,
     submissionId: visibleSubmissions.at(-1)?.requestId ?? null,
@@ -236,10 +250,24 @@ export function ChatView({
                 {t('chat.loadError', { message: openError.message, code: openError.code })}
               </div>
             )}
-            {hasMore && (
-              <div className={css.older}>
-                <button type="button" disabled={loadingOlder} onClick={scroll.loadEarlier}>
-                  {loadingOlder ? t('loading') : t('chat.loadOlder')}
+            {(hasMore || historyWasPartial) && (
+              <div className={css.older} ref={scroll.historyEdgeRef} data-chat-history={historyLoadStatus}>
+                <button type="button" disabled={!hasMore}
+                  onClick={scroll.loadEarlier}>
+                  {([
+                    ['more', t('chat.loadOlder')],
+                    ['loading', t('chat.loadingOlder')],
+                    ['processing', t('chat.processingOlder')],
+                    ['error', t('chat.retryOlder')],
+                    ['start', t('chat.historyStart')],
+                  ] as const).map(([state, label]) => {
+                    const current = !hasMore ? 'start' : loadingOlder ? 'loading'
+                      : historyLoadStatus === 'error' ? 'error'
+                        : scroll.historyInputHeld ? 'more'
+                          : scroll.historyProcessing ? 'processing' : 'more'
+                    return <span key={state} aria-hidden={state !== current}
+                      className={state === current ? undefined : css.historyHidden}>{label}</span>
+                  })}
                 </button>
               </div>
             )}
@@ -248,6 +276,7 @@ export function ChatView({
               openFile={requestOpenFile}
               openExternalLink={openExternalLink}
               fileImages={fileImages}
+              renderCode={renderCode}
             >
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,

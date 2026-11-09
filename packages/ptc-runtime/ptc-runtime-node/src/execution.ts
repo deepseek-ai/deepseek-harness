@@ -52,9 +52,7 @@ class NodeExecution {
   constructor(
     private readonly ctx: Context, private readonly config: ResolvedConfig,
     private readonly processes: PolicyProcesses, readonly mode: ExecutionMode,
-  ) {
-    if (mode.retainsState && this.config.launch.kind === 'embedded') throw new Error('Persistent PTC requires a node-script launch')
-  }
+  ) {}
 
   /** Stop every owned process, retaining failed cleanup for a later retry. */
   async dispose(): Promise<void> {

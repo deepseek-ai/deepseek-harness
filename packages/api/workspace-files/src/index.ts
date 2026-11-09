@@ -1,13 +1,14 @@
 /**
  * Workspace file service: read-only file previews, workspace directory
- * listings, and the filesystem-observation change feed, exposed as
- * `workspaceFiles`.
+ * listings, workspace-wide name and path search, and the
+ * filesystem-observation change feed, exposed as `workspaceFiles`.
  *
  * File reads follow the composed filesystem's read access, including paths
  * outside the workspace. The selected Session header supplies the base for
  * relative paths, with the sandbox policy root as its no-cwd fallback, not a
- * read-containment restriction. Directory listings and change observations
- * remain workspace-scoped. File-kind checks and configured read caps apply to
+ * read-containment restriction. Directory listings, searches, and change
+ * observations remain workspace-scoped; a search reports workspace-relative
+ * paths. File-kind checks and configured read caps apply to
  * every preview; this service exposes no mutations.
  *
  * A page is cut from `streamText`, which decodes and rejects non-UTF-8 as it
@@ -30,6 +31,7 @@ import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Remote, RemoteError, TypertRemoteService, type TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 import { WorkspaceChangeFeed } from './changes.ts'
+import { searchWorkspace, type SearchLimits } from './search.ts'
 import type {
   WorkspaceByteRange,
   WorkspaceByteReadOptions,
@@ -37,6 +39,8 @@ import type {
   WorkspaceDirectoryListing,
   WorkspaceFileBytes,
   WorkspaceFileRange,
+  WorkspaceFileSearchRequest,
+  WorkspaceFileSearchResult,
   WorkspaceFileStat,
   WorkspaceFileText,
   WorkspaceFileWatchFrame,
@@ -66,7 +70,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
   }
 }
 
-/** Deployment caps on one page or one listing. */
+/** Deployment caps on one page, one listing, or one search. */
 export interface Config {
   /**
    * Inclusive byte cap on one page's text and on one byte window.
@@ -82,6 +86,8 @@ export interface Config {
   readonly maxLines: number
   /** Cap on returned directory entries; the rest is dropped and reported cut. */
   readonly maxEntries: number
+  /** Budgets on one search's matches, listed files, deadline and ripgrep process. */
+  readonly search: SearchLimits
 }
 
 /** One page cut from a decoded text stream. */
@@ -188,13 +194,20 @@ export class WorkspaceFiles extends TypertRemoteService {
     maxFileBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER - 1).default(32 * 1024 * 1024),
     maxLines: z.number().step(1).min(1).default(5000),
     maxEntries: z.number().step(1).min(1).default(2000),
+    search: z.object({
+      maxResults: z.number().step(1).min(1).default(512),
+      maxEntries: z.number().step(1).min(1).default(100000),
+      graceMs: z.number().step(1).min(1).max(2147483647).default(3000),
+      timeoutMs: z.number().step(1).min(1).max(2147483647).default(30000),
+      stderrMaxBytes: z.number().step(1).min(1).default(65536),
+    }),
   })
 
   private readonly feed: WorkspaceChangeFeed
 
   /**
    * @param ctx - Host context carrying the filesystem and the sandbox policy.
-   * @param config - deployment caps on one page or one listing.
+   * @param config - deployment caps on one page, one listing, or one search.
    */
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'workspaceFiles')
@@ -326,6 +339,52 @@ export class WorkspaceFiles extends TypertRemoteService {
       entries: children.slice(0, this.config.maxEntries).map(directoryEntry),
       truncated: children.length > this.config.maxEntries,
     }
+  }
+
+  /**
+   * Search files and their inferred ancestor directories with packaged ripgrep.
+   * Native ignore rules apply unless disabled; VCS metadata, symlinks and empty
+   * directories are absent. Within the bounded set of listed files, matches
+   * sort by depth, then workspace-relative path.
+   * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
+   * @param request - the query, literal exclusions, and hidden/ignore switches.
+   * @param signal - caller cancellation, forwarded to the subprocess; rejection preserves its reason.
+   * @returns matches capped by search.maxResults; incomplete marks excess rg files or exit 2.
+   * @throws RemoteError `gateway/bad-request`: the query is blank.
+   * @throws RemoteError `workspace-file/not-found`: the workspace root does not exist.
+   * @throws RemoteError `workspace-file/not-directory`: the workspace root is not a directory.
+   * @throws RemoteError `workspace-file/search-failed`: subprocess is missing, rg cannot launch or execute, or the search times out.
+   */
+  @Remote
+  async search(
+    workspaceFileScope: WorkspaceFileScope,
+    request: WorkspaceFileSearchRequest,
+    signal: AbortSignal,
+  ): Promise<WorkspaceFileSearchResult> {
+    const query = request.query.trim()
+    if (query.length === 0) throw new RemoteError('gateway/bad-request', 'query must not be blank', {})
+    signal.throwIfAborted()
+    const { workspaceRoot } = workspaceFileScope
+    const root = await this.ctx.fs.resolve(workspaceRoot, { signal })
+    const info = await this.ctx.fs.stat(root, signal)
+    if (info === undefined) {
+      throw new RemoteError('workspace-file/not-found', `no entry at "${workspaceRoot}"`, { path: workspaceRoot })
+    }
+    if (info.type !== 'directory') {
+      throw new RemoteError('workspace-file/not-directory', `"${workspaceRoot}" is a ${info.type}`, { path: workspaceRoot, kind: info.type })
+    }
+    const subprocess = this.ctx.get('subprocess')
+    if (subprocess === undefined) {
+      throw new RemoteError('workspace-file/search-failed', 'Workspace file search requires a subprocess provider', {})
+    }
+    return searchWorkspace(subprocess, {
+      cwd: this.ctx.fs.processPath(root),
+      query,
+      excludedPaths: request.excludedPaths,
+      includeHidden: request.includeHidden,
+      respectGitignore: request.respectGitignore,
+      ...this.config.search,
+    }, signal)
   }
 
   /**

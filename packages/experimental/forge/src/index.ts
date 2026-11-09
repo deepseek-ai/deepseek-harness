@@ -6,7 +6,7 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
-  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
+  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config, ForgeCommitList,
   ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
 } from './types.ts'
 
@@ -44,6 +44,8 @@ interface Watch {
   /** Epoch milliseconds of the next poll; undefined while in flight or after a terminal state. */
   dueAt: number | undefined
   failures: number
+  /** Head commit whose `stale` diff read last polled at once, so further stale reads at it wait for the regular poll. */
+  staleHead: string | undefined
 }
 
 /**
@@ -236,15 +238,59 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Read the changes of a change request as its host computes them.
+   * Read the changes of a change request at one head commit as its host
+   * computes them. The first `stale` failure at a head commit polls a watched
+   * change request again at once, so its next status names the current head;
+   * later stale reads at the same commit wait for the regular poll, which
+   * bounds the reads while the host's answers disagree. When the latest status of a watched change request names
+   * `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.
    * @param ref - change request served by a registered provider.
+   * @param headSha - head commit the patch must describe, usually the head of the latest status.
    * @param signal - cancellation of the read.
-   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.
    * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
    */
-  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const latest = this.watches.get(changeRequestKey(ref))?.latest
+    const base = latest !== undefined && 'snapshot' in latest && latest.snapshot.headSha === headSha ? latest.snapshot.baseSha : undefined
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.diff(ref, headSha, operation, base))
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (typeof result !== 'string' && result.code === 'stale' && watch !== undefined && watch.staleHead !== headSha) {
+      watch.staleHead = headSha
+      this.refresh(ref)
+    }
+    return result
+  }
+
+  /**
+   * List the commits of a change request at its current head.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns the commits, why the host did not provide them, or undefined when the provider does not read commits.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure | undefined> {
     return await this.invoke(this.registration(ref.repository.forge), signal,
-      (provider, operation) => provider.diff(ref, operation))
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve(undefined) : provider.commits(ref, operation))
+  }
+
+  /**
+   * Read the changes between two commits of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param base - full object name of the commit compared from.
+   * @param head - full object name of a commit that descends from `base`.
+   * @param signal - cancellation of the read.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it; a provider that
+   * does not read commits returns `unavailable`.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve({ code: 'unavailable', message: 'This provider does not read commits' } as const)
+        : provider.compare(ref, base, head, operation))
   }
 
   /**
@@ -302,7 +348,7 @@ export class ForgeService extends Service {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(key)
       if (watch === undefined) {
-        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0 }
+        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0, staleHead: undefined }
         this.watches.set(key, watch)
         this.schedule()
       }

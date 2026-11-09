@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { closeSync, openSync } from 'node:fs'
 import { devNull } from 'node:os'
 import type { Readable, Writable } from 'node:stream'
+import { SubprocessError } from '@deepseek-ai/dsh-subprocess'
 import type { SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import {
   loadWin32ProcessBindings,
@@ -25,6 +26,16 @@ import {
   WINDOWS_RUNNER_SELECTION,
 } from './runner-launch.ts'
 import type { RunnerInvocation } from './runner-launch.ts'
+
+/** Classify a failure on the private runner channel, keeping an already coded failure. */
+function runnerIpcFailure(error: unknown): SubprocessError {
+  if (error instanceof SubprocessError) return error
+  return new SubprocessError(
+    `subprocess-local: Windows runner IPC failed: ${String(error)}`,
+    'SUBPROCESS_RUNNER_IPC_FAILED',
+    { cause: error },
+  )
+}
 
 /** Test seams for runner launch and dynamic capability checks. */
 export interface WindowsJobInternals {
@@ -171,8 +182,9 @@ export function launchWindowsJob(
     const status = signal !== null
       ? `signal ${signal}`
       : exitCode === null ? 'without an exit status' : `exit code ${String(exitCode)}`
-    failInfrastructure(new Error(
+    failInfrastructure(new SubprocessError(
       `subprocess-local: Windows Job runner exited with ${status} before proving its managed range empty`,
+      'SUBPROCESS_RUNNER_FAILED',
     ))
   }
 
@@ -184,7 +196,7 @@ export function launchWindowsJob(
   )
   child.on('message', (value: unknown) => {
     if (directResultType !== undefined) {
-      const error = new Error('subprocess-local: Windows runner emitted more than one direct result')
+      const error = new SubprocessError('subprocess-local: Windows runner emitted more than one direct result', 'SUBPROCESS_RUNNER_IPC_FAILED')
       failInfrastructure(error)
       owner.terminateForHostExit()
       return
@@ -193,7 +205,11 @@ export function launchWindowsJob(
     try {
       result = parseWindowsRunnerResult(value)
     } catch (error) {
-      failInfrastructure(error)
+      failInfrastructure(new SubprocessError(
+        `subprocess-local: Windows runner emitted a malformed result: ${String(error)}`,
+        'SUBPROCESS_RUNNER_IPC_FAILED',
+        { cause: error },
+      ))
       owner.terminateForHostExit()
       return
     }
@@ -208,14 +224,16 @@ export function launchWindowsJob(
   child.once('spawn', () => {
     runnerSpawned = true
     try {
-      if (child.send === undefined) throw new Error('subprocess-local: Windows runner has no IPC channel')
+      if (child.send === undefined) {
+        throw new SubprocessError('subprocess-local: Windows runner has no IPC channel', 'SUBPROCESS_RUNNER_IPC_FAILED')
+      }
       child.send({ type: 'start', cwd: spec.cwd, env: targetEnv, ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control } }, (error) => {
         if (error === null) return
-        failInfrastructure(error)
+        failInfrastructure(runnerIpcFailure(error))
         owner.terminateForHostExit()
       })
     } catch (error) {
-      failInfrastructure(error)
+      failInfrastructure(runnerIpcFailure(error))
       owner.terminateForHostExit()
     }
   })
@@ -225,7 +243,11 @@ export function launchWindowsJob(
       rangeExit.resolve()
       return
     }
-    failInfrastructure(error)
+    failInfrastructure(new SubprocessError(
+      `subprocess-local: Windows Job runner failed after it started: ${String(error)}`,
+      'SUBPROCESS_RUNNER_FAILED',
+      { cause: error },
+    ))
   })
   child.once('exit', (exitCode, signal) => {
     runnerExit = { exitCode, signal }

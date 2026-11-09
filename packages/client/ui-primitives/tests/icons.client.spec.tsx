@@ -42,6 +42,7 @@ describe('product icon set', () => {
       'IconMicrophoneOutlineRegular',
       'IconPlanOutlineRegular', 'IconCompactOutlineRegular', 'IconShieldOutlineRegular', 'IconDeliverDocRegular',
       'IconWarningTriangleOutlineRegular', 'IconCompareSplitOutlineRegular', 'IconCloseCircleFillRegular',
+      'IconEyeOutlineRegular', 'IconEyeOffOutlineRegular',
     ]))
   })
 
@@ -56,6 +57,18 @@ describe('product icon set', () => {
       expect(paths[0]!.getAttribute('stroke')).toBeNull()
     }
     expect(render(<primitives.IconCloseCircleFillRegular />).container.querySelector('svg')!.getAttribute('width')).toBe('16')
+  })
+
+  it('draws the open eye as an outline with a pupil and the closed eye with a slash through the same contour', () => {
+    for (const weight of ['regular', 'medium'] as const) {
+      const eye = artwork('eye-outline', weight)
+      expect(eye.documentElement.getAttribute('viewBox')).toBe('0 0 16 16')
+      expect(eye.querySelector('circle')?.getAttribute('r')).toBe('2.25')
+      const off = artwork('eye-off-outline', weight)
+      expect(off.querySelector('circle')).toBeNull()
+      expect(off.querySelector('path')?.getAttribute('d')).toBe('M2.25 2.25L13.75 13.75')
+      for (const doc of [eye, off]) expect([...doc.querySelectorAll('path, circle')].every(node => node.getAttribute('fill') === null)).toBe(true)
+    }
   })
 
   it.each([

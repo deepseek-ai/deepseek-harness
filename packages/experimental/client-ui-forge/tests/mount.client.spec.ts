@@ -7,9 +7,13 @@ import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
+import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { ChangeRequestSnapshot, ForgeReviewRequest, ForgeReviewResult } from '@deepseek-ai/dsh-experimental-forge/types'
+import type {
+  ChangeRequestSnapshot, ForgeCommitList, ForgeReviewRequest, ForgeReviewResult,
+} from '@deepseek-ai/dsh-experimental-forge/types'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -21,16 +25,20 @@ import { ForgeTab, type ForgeTabInjected } from '../src/client/ForgeTab.tsx'
 import { ForgeTabTitle } from '../src/client/ForgeTabTitle.tsx'
 import { HeaderButton, type HeaderButtonInjected } from '../src/client/HeaderButton.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
-import { inject, mountForgePanel, TAB_ID, TAB_KIND } from '../src/client/mount.ts'
+import { inject, mountForgePanel, TAB_ID, TAB_KIND, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
 import type { SessionListInjected } from '../src/client/session-list.ts'
 import { SessionHoverForge } from '../src/client/SessionHoverForge.tsx'
 import { SessionRowForge } from '../src/client/SessionRowForge.tsx'
 import type { NoticeSource } from '../src/client/source.ts'
 import type { ReviewSelection } from '../src/client/review.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from '../src/client/WorktreeProgress.tsx'
+import { WorktreeSettings } from '../src/client/WorktreeSettings.tsx'
+import type { WorktreeSettingsInjected, WorktreeSettings as WorktreeSettingsFields } from '../src/client/worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
+import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
-  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
+  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
+  ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -40,6 +48,7 @@ const S2 = SessionId('s2')
 const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
 const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
+const COMMITS: ForgeCommitList = { headSha: 'a'.repeat(40), commits: [], truncated: false }
 
 afterEach(() => {
   localStorage.clear()
@@ -144,6 +153,8 @@ async function base() {
       stateStreams.push(handle)
       return handle
     }),
+    worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<WorktreeCleanup | null>> =>
+      ({ ok: true, value: null })),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
@@ -164,8 +175,13 @@ async function base() {
     changeRequestChecks: vi.fn(async (
       _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
     ): Read<ChangeRequestSnapshot> => ({ ok: true, value: snapshot(7) })),
-    changeRequestDiff: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeChangeRequestDiff> =>
-      ({ ok: true, value: CHANGE })),
+    changeRequestDiff: vi.fn(async (
+      _sessionId: SessionId, _url: string, _commits: ForgeCommitRange | null, _signal?: AbortSignal,
+    ): Read<ForgeChangeRequestDiff> => ({ ok: true, value: CHANGE })),
+    localCommits: vi.fn(async (_sessionId: SessionId, _base: string | null, _signal?: AbortSignal): Read<ForgeLocalCommits> =>
+      ({ ok: true, value: COMMITS })),
+    changeRequestCommits: vi.fn(async (_sessionId: SessionId, _url: string, _signal?: AbortSignal): Read<ForgeCommitList | null> =>
+      ({ ok: true, value: COMMITS })),
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
@@ -183,6 +199,8 @@ async function base() {
     return fiber.ctx
   }) }
   ctx.provide('sessions', sessions)
+  const worktreeForm = stubConfigForm<WorktreeSettingsFields>()
+  ctx.provide('configForms', { get: (name: string) => { expect(name).toBe(WORKTREE_NS); return worktreeForm.scope } } as never)
   ctx.provide('sidebarRight', sidebarRight)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({
@@ -198,9 +216,12 @@ async function base() {
       'shell.overlay': { kind: 'list', scope: 'root' },
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
       'sidebar.session.row.hover': { kind: 'list', scope: 'root' },
+      'plugins.row.config': { kind: 'keyed', scope: 'root' },
     },
   } as never, () => null)
-  return { ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes }
+  return {
+    ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes, worktreeForm,
+  }
 }
 
 async function fixture() {
@@ -271,7 +292,7 @@ describe('mountForgePanel registration', () => {
   })
 
   it('declares the browser services it needs', () => {
-    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions'])
+    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms'])
   })
 
   it('registers the tab types, their bodies and titles, the header button, the worktree option and card, and the toast', async () => {
@@ -713,11 +734,11 @@ describe('mountForgePanel changes view', () => {
   it('inserts numbered frozen quotes in the originating Session without sending a message', async () => {
     const f = await fixture()
     try {
-      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
+      const selection: ReviewSelection = { source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
       const scope = f.sessions.scope(S1)!
       let draft = ''
       const focus = vi.fn(), send = vi.fn()
-      const insertQuote = vi.fn((text: string) => { draft += `\n> ${text}`; return true })
+      const insertQuote = vi.fn((text: string, _summary?: QuoteSummary) => { draft += `\n> ${text}`; return true })
       const input = { state: { getSnapshot: () => ({ draft }) }, insertQuote, focus }
       const resolve = vi.fn(() => input)
       // Only the input methods used by this contribution are supplied by the Session fixture.
@@ -726,6 +747,7 @@ describe('mountForgePanel changes view', () => {
       expect(view.addReviewToInput(selection)).toBe(true)
       expect(view.addReviewToInput(selection)).toBe(true)
       expect(insertQuote.mock.calls.map(([text]) => text.split('\n')[0])).toEqual(['## User Comment 1', '## User Comment 2'])
+      expect(insertQuote.mock.calls[0]?.[1]).toEqual({ label: 'a.ts R1', title: 'a.ts', detail: 'R1', body: 'Check this' })
       expect(resolve).toHaveBeenCalledWith(scope)
       expect(focus).toHaveBeenCalledTimes(2)
       insertQuote.mockReturnValueOnce(false)
@@ -742,7 +764,7 @@ describe('mountForgePanel changes view', () => {
     try {
       const view = f.changes(S1)
       if (missing === 'no scope') f.sessions.scope.mockReturnValue(undefined)
-      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
+      expect(view.addReviewToInput({ source: { kind: 'local', scope: 'branch', base: 'origin/main', baseRef: null, commits: null }, comment: { path: 'a', side: 'L', startLine: 1, endLine: 1, body: 'Comment', hunk: '' } })).toBe(false)
     } finally { await f.dispose() }
   })
   it('immediately closes an already-aborted occurrence and reports failed removal', async () => {
@@ -759,8 +781,8 @@ describe('mountForgePanel changes view', () => {
     const f = await fixture()
     const lifetime = new AbortController()
     const tab = { id: 'review-tab' as TabId, signal: lifetime.signal }
-    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null }
-      : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40) },
+    const selection: ReviewSelection = { source: kind === 'local' ? { kind, scope: 'branch', base: 'origin/main', baseRef: null, commits: null }
+      : { kind, url: 'https://github.com/octo/demo/pull/7', headSha: 'a'.repeat(40), commits: null },
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)
     queue.recordAgent(selection)
@@ -791,12 +813,18 @@ describe('mountForgePanel changes view', () => {
     expect(await view.localText({ kind: 'staged' }, 'src/a.ts')).toEqual({ ok: true, value: 'a\n' })
     expect(await view.diffBases('rel', signal)).toEqual({ ok: true, value: { automatic: null, remote: [], local: [] } })
     expect(f.forgePanel.diffBases).toHaveBeenCalledWith(S1, 'rel', signal)
-    expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: CHANGE })
+    expect(await view.changeRequestDiff('https://github.com/octo/demo/pull/7', null, signal)).toEqual({ ok: true, value: CHANGE })
     expect(await view.changeRequestText('https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')).toEqual({ ok: true, value: 'b\n' })
     expect(f.forgePanel.localDiff).toHaveBeenCalledWith(S1, { kind: 'staged' }, signal)
     expect(f.forgePanel.localText).toHaveBeenCalledWith(S1, { kind: 'staged' }, 'src/a.ts')
-    expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(f.forgePanel.changeRequestDiff).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', null, signal)
     expect(f.forgePanel.changeRequestText).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), 'src/a.ts')
+    expect(await view.localCommits('refs/heads/topic', signal)).toEqual({ ok: true, value: COMMITS })
+    expect(f.forgePanel.localCommits).toHaveBeenCalledWith(S1, 'refs/heads/topic', signal)
+    expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
+    expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
+    expect(view.viewedFiles).toBe(f.changes(S1).viewedFiles)
+    expect(view.viewedFiles).not.toBe(f.changes(S2).viewedFiles)
     view.reconnect()
     expect(f.forgePanel.follow).not.toHaveBeenCalled()
     await f.dispose()
@@ -854,4 +882,118 @@ describe('mountForgePanel changes view', () => {
     expect(f.notice()).toMatchObject({ key: 'toast.promptFailed', tone: 'failure' })
     await f.dispose()
   })
+})
+
+
+describe('worktree row settings', () => {
+  it('registers the row page over the worktree namespace and stages the retain switch as a boolean write', async () => {
+    const f = await fixture()
+    try {
+      const registration = f.ctx.slots.entries('plugins.row.config').find(candidate => candidate.component === WorktreeSettings)
+      expect(registration?.options).toMatchObject({ key: WORKTREE_ROW_KEY })
+      const face = registration!.inject!() as Partial<WorktreeSettingsInjected>
+      if (face.hooks === undefined || face.edit === undefined || face.save === undefined) throw new Error('expected the worktree settings face')
+      f.worktreeForm.publish({ status: 'ready', value: { retainOnArchive: false }, base: { retainOnArchive: false }, user: {}, writable: true })
+      expect(face.hooks.worktreeForm.getSnapshot()).toMatchObject({ available: true, dirty: false, retainOnArchive: { text: 'false' } })
+      face.edit('retainOnArchive', 'true')
+      expect(face.hooks.worktreeForm.getSnapshot()).toMatchObject({ dirty: true, retainOnArchive: { text: 'true', overridden: true } })
+      face.save()
+      await vi.waitFor(() => { expect(f.worktreeForm.mutate).toHaveBeenCalledOnce() })
+      expect(f.worktreeForm.mutate.mock.calls[0]?.[0]).toEqual([{ op: 'set', path: ['retainOnArchive'], value: true }])
+    } finally { await f.ctx.fiber.dispose() }
+    expect(f.worktreeForm.listenerCount()).toBe(0)
+  })
+})
+
+describe('archive notices', () => {
+  it('uses the scheduled cleanup notice and reports a later failure', async () => {
+    const f = await fixture()
+    try {
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      const settled = Promise.withResolvers<RemoteResult<WorktreeCleanup | null>>()
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => revision === null
+        ? { ok: true, value: { revision: 1, status: 'scheduled' } }
+        : await settled.promise)
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      expect(f.notice()).toBeNull()
+      settled.resolve({ ok: true, value: { revision: 1, status: 'failed' } })
+      await vi.waitFor(() => { expect(failed).toHaveBeenCalledWith(S1, en['toast.archiveCleanupFailed']) })
+      expect(f.notice()).toBeNull()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it.each(['retained', 'removed'] as const)('leaves the ordinary archive notice for %s worktrees', async (status) => {
+    const f = await fixture()
+    try {
+      f.forgePanel.worktreeCleanup.mockResolvedValue({ ok: true, value: { revision: 1, status } })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const }))).toEqual({ text: 'fallback', tone: 'success' })
+      expect(f.notice()).toBeNull()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('emits nothing when a scheduled cleanup ends removed', async () => {
+    const f = await fixture()
+    try {
+      const settled = vi.fn()
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-settled', settled)
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => ({ ok: true, value: { revision: 1, status: revision === null ? 'scheduled' : 'removed' } }))
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      await vi.waitFor(() => { expect(f.forgePanel.worktreeCleanup).toHaveBeenCalledTimes(2) })
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(settled).not.toHaveBeenCalled()
+      expect(failed).not.toHaveBeenCalled()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('restores the ordinary notice when a scheduled cleanup ends retained', async () => {
+    const f = await fixture()
+    try {
+      const settled = vi.fn()
+      f.ctx.on('workspace/archive-followup-settled', settled)
+      f.forgePanel.worktreeCleanup.mockImplementation(async (_id, revision) => ({ ok: true, value: { revision: 1, status: revision === null ? 'scheduled' : 'retained' } }))
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve({ text: 'fallback', tone: 'success' as const })))
+        .toEqual({ text: en['toast.archiveCleanupScheduled'], tone: 'success' })
+      await vi.waitFor(() => { expect(settled).toHaveBeenCalledWith(S1) })
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it('uses a warning for an already failed cleanup and falls back when its result is unavailable', async () => {
+    const f = await fixture()
+    try {
+      const fallback = () => Promise.resolve({ text: 'fallback', tone: 'success' as const })
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 1, status: 'failed' } })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual({ text: en['toast.archiveCleanupFailed'], tone: 'warning' })
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual(await fallback())
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce(REFUSED.failed)
+      expect(await f.ctx.waterfall('workspace/archive-notice', S1, fallback)).toEqual(await fallback())
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
+  it.each(['result', 'rejection'] as const)('contains a transport failure and ignores a late %s after unload', async (mode) => {
+    const f = await fixture()
+    try {
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const failed = vi.fn()
+      f.ctx.on('workspace/archive-followup-failed', failed)
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 1, status: 'scheduled' } })
+        .mockRejectedValueOnce(new Error('connection lost'))
+      await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))
+      await vi.waitFor(() => { expect(warning).toHaveBeenCalledTimes(1) })
+      const completed = Promise.withResolvers<RemoteResult<WorktreeCleanup | null>>()
+      f.forgePanel.worktreeCleanup.mockResolvedValueOnce({ ok: true, value: { revision: 2, status: 'scheduled' } })
+        .mockImplementationOnce(async () => await completed.promise)
+      await f.ctx.waterfall('workspace/archive-notice', S1, () => Promise.resolve(undefined))
+      await f.dispose()
+      if (mode === 'result') completed.resolve({ ok: true, value: { revision: 2, status: 'failed' } })
+      else completed.reject(new Error('late connection loss'))
+      await completed.promise.catch(() => {})
+      expect(failed).not.toHaveBeenCalled()
+    } finally { await f.ctx.fiber.dispose() }
+  })
+
 })
