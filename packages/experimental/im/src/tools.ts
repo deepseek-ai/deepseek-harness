@@ -21,7 +21,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import type {} from '@deepseek-ai/dsh-fs'
+import type { FileSystem, FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import {
   ImChatKey, splitKey, type ImApi, type ImConfig, type ImHistory, type ImMessage, type ImOutputs, type ImSendResult,
@@ -256,10 +256,9 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         if (info?.type !== 'file') {
           throw new ImError('capacity', `Cannot publish "${args.path}": it is not a regular file.`)
         }
-        const data = await scoped.fs.readBytes(target, exec.signal, config.send.maxMediaBytes)
-        const name = basename(target.displayPath)
+        const content = await fileContent(scoped.fs, target, info, config, exec.signal)
         const quote = args.quote === undefined ? undefined : (await messageOf(im, chat, args.quote)).key
-        return sendValue(await im.send(chat, mediaContent(name, data), {
+        return sendValue(await im.send(chat, content, {
           operationId: operationId(record.sessionId, exec.callId),
           session: record.sessionId,
           ...quote === undefined ? {} : { quote },
@@ -377,19 +376,51 @@ function sendValue(result: ImSendResult): SendView {
   }
 }
 
-/** Element of one local file: `img` / `audio` / `video` by extension, else `file`; bytes ride as a data URL. */
-function mediaContent(name: string, data: Uint8Array): Element<'message'> {
-  const extension = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
-  const src = `data:${mediaTypeOf(extension)};base64,${Buffer.from(data).toString('base64')}`
-  if (IMAGE_TYPES[extension] !== undefined) return h('message', h('img', { src, alt: name }))
-  if (AUDIO_TYPES[extension] !== undefined) return h('message', h('audio', { src, name }))
-  if (VIDEO_TYPES[extension] !== undefined) return h('message', h('video', { src, name }))
-  return h('message', h('file', { src, name, size: data.byteLength }))
+/** Extension of one file name, lower-cased. */
+function extensionOf(name: string): string {
+  return name.slice(name.lastIndexOf('.') + 1).toLowerCase()
 }
 
 /** Media type of one file extension (`application/octet-stream` when it is not media). */
 function mediaTypeOf(extension: string): string {
   return IMAGE_TYPES[extension] ?? AUDIO_TYPES[extension] ?? VIDEO_TYPES[extension] ?? 'application/octet-stream'
+}
+
+/** Element of one published file: `img` / `audio` / `video` by extension, else `file`. */
+function fileElement(name: string, src: string, size?: number): Element<'message'> {
+  const extension = extensionOf(name)
+  if (IMAGE_TYPES[extension] !== undefined) return h('message', h('img', { src, alt: name }))
+  if (AUDIO_TYPES[extension] !== undefined) return h('message', h('audio', { src, name }))
+  if (VIDEO_TYPES[extension] !== undefined) return h('message', h('video', { src, name }))
+  return h('message', h('file', { src, name, ...size === undefined ? {} : { size } }))
+}
+
+/**
+ * Content of one published file. A file of this host is published by its own URL, so no bytes travel through the
+ * message or the store; a file of another execution world (an SSH workspace) is read through `ctx.fs` and inlined as a
+ * data URL, bounded by `send.maxMediaBytes`.
+ * @param fs - the caller's filesystem, the world the path was resolved in.
+ * @param target - the resolved regular file.
+ * @param info - its metadata, which supplies the published byte count when the backend reports one.
+ * @param config - operator configuration (`send.maxMediaBytes`).
+ * @param signal - cancellation of the calling turn.
+ * @returns the message content to publish.
+ */
+async function fileContent(
+  fs: FileSystem,
+  target: FsTarget,
+  info: FsInfo,
+  config: ImConfig,
+  signal: AbortSignal | undefined,
+): Promise<Element<'message'>> {
+  const name = basename(target.displayPath)
+  // A host-backed world maps its own process path back, which is exactly the file `ctx.http`'s `file:` handler opens.
+  if (fs.processPathFromHostPath(fs.processPath(target)) !== undefined) {
+    return fileElement(name, fs.fileUrl(target), info.size)
+  }
+  const data = await fs.readBytes(target, signal, config.send.maxMediaBytes)
+  return fileElement(name, `data:${mediaTypeOf(extensionOf(name))};base64,${Buffer.from(data).toString('base64')}`,
+    data.byteLength)
 }
 
 /** Bound one model-facing text to `config.tools.maxReadBytes` UTF-8 bytes. */
@@ -434,12 +465,13 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
       + 'content may be sent again; uncertain means the chat must be inspected before a new intentional send, because '
       + 'the same tool call is never resent; partial means only some parts were published. The report line names what '
       + 'the platform could not render natively.')
+    parts.push('A publication carries only what you pass it: im_send and im_reply publish their own text and inline '
+      + 'images, and im_send_file publishes the file at the path you name.')
   }
   parts.push('Media arrives as a label such as [图片 #12.1] or [文件 #12.2 report.pdf]; im_read_image with an image id '
     + 'shows exactly that image of the chat, and im_read_file with any media id saves that element into your workspace '
     + 'and returns the path to open with your file tools. An image or file in the message you were handed already '
-    + 'arrives with the text. Publishing reads nothing of this host: im_send and im_reply carry inline images only, and '
-    + 'a local file reaches the chat through im_send_file.')
+    + 'arrives with the text.')
   return parts.join(' ')
 }
 

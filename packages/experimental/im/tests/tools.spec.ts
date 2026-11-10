@@ -171,7 +171,9 @@ function fakeAgent(sessionId: SessionId): Agent {
 }
 
 /** A filesystem double: one file kind per path, or the failure a scenario needs. */
-function fakeFs(options: { kind?: 'file' | 'directory' | 'absent'; bytes?: number; failure?: Error } = {}) {
+function fakeFs(
+  options: { kind?: 'file' | 'directory' | 'absent'; bytes?: number; failure?: Error; remote?: boolean } = {},
+) {
   const writes: { key: string; data: Uint8Array }[] = []
   return {
     writes,
@@ -181,6 +183,9 @@ function fakeFs(options: { kind?: 'file' | 'directory' | 'absent'; bytes?: numbe
       kind: 'file',
     }),
     processPath: (target: { targetKey: string }) => target.targetKey,
+    // A host-backed world maps its own process path back to itself; a remote one (an SSH workspace) cannot.
+    processPathFromHostPath: (hostPath: string) => options.remote === true ? undefined : hostPath,
+    fileUrl: (target: { targetKey: string }) => `file://${target.targetKey}`,
     stat: async () => (options.failure === undefined
       ? options.kind === 'absent' ? undefined : { type: options.kind ?? 'file', size: 4, version: 'v1' }
       : (() => { throw options.failure })()),
@@ -482,9 +487,18 @@ describe('im_send, im_reply and im_send_file', () => {
     expect(types).toEqual(['file', 'img', 'audio', 'video'])
     const first = mounted.im.sends[0]?.content as { children: { attrs: Record<string, unknown> }[] }
     expect(first.children[0]?.attrs).toMatchObject({ name: 'notes.md', size: 4 })
-    expect(String(first.children[0]?.attrs.src)).toMatch(/^data:application\/octet-stream;base64,/)
+    expect(first.children[0]?.attrs.src).toBe('file:///work/notes.md')
     expect(mounted.im.sends[0]?.options.quote).toBe(ImMessageKey('fake:bot', 'm1'))
     expect(mounted.im.sends[1]?.options.quote).toBeUndefined()
+  })
+
+  it('inlines the bytes of a file another execution world holds', async () => {
+    const mounted = await mount({ fs: fakeFs({ remote: true, bytes: 3 }) })
+    const result = await mounted.call('im_send_file', { path: 'notes.md' })
+    expect(result.isError).toBe(false)
+    const content = mounted.im.sends[0]?.content as { children: { attrs: Record<string, unknown> }[] }
+    expect(content.children[0]?.attrs).toMatchObject({ name: 'notes.md', size: 3 })
+    expect(content.children[0]?.attrs.src).toBe('data:application/octet-stream;base64,QUFB')
   })
 
   it('refuses a path that is not a regular file and one the filesystem cannot read', async () => {
