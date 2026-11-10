@@ -220,6 +220,7 @@
       "@deepseek-ai/dsh-file-reference/types": ["./packages/context/file-reference/src/types.ts"],
       "@deepseek-ai/dsh-session-reference/types": ["./packages/context/session-reference/src/types.ts"],
       "@deepseek-ai/dsh-tool-executor-ptc/types": ["./packages/core/tool-executor-ptc/src/types.ts"],
+      "@deepseek-ai/dsh-tool-executor-ptc/run-code": ["./packages/core/tool-executor-ptc/src/run-code.ts"],
       "@deepseek-ai/dsh-tool-executor-ptc/client": ["./packages/core/tool-executor-ptc/src/client.ts"],
       "@deepseek-ai/dsh-tools/pipeline": ["./packages/core/tools/src/pipeline.ts"],
       "@deepseek-ai/dsh-tool-testkit": ["./packages/test-support/tool-testkit/src/index.ts"],

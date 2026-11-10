@@ -42,6 +42,10 @@ kind: "package-reference"
 
 共享分派事件与 `ptc-mode` 消息来源声明位于 `@deepseek-ai/dsh-tool-executor-ptc/types`；Client 代码通过 `@deepseek-ai/dsh-tool-executor-ptc/client` 导入同一组声明。两个入口都不引入 Host 服务声明。Host 策略扩展通过包主入口的 `import type` 获取 `PtcDispatchLog` 与 `tools/ptc-dispatch-log`，无需挂载执行器。
 
+`/run-code` 入口导出 `createRunCodeTool`，供插件在原生工具旁注册具名程序工具。调用方显式传入运行时及完整的私有 `ToolDefinition` 列表，再将返回的定义注册到所属作用域。即使 Agent 能直接调用其他原生工具，程序也只能调用该列表中的工具；私有定义不进入工具注册表。嵌套调用保留正常审批、guard、派发日志、截图、延后上下文和轮次结束行为。`RunCodeConfig` 提供与本执行器相同且经过校验的调用额度与并发设置。
+
+调用方拥有传入的运行时，必须使其可用至工厂上下文完成销毁。对于保留状态或实施沙箱的运行时，销毁会取消活动的 Agent 程序并等待嵌套调用；Agent 销毁时释放其保留环境。环境初始化由传入[运行时的注册 API](../../ptc-runtime/ptc-runtime/README.zh.md#choose-a-backend)负责；应在提供程序工具前完成注册。工厂将运行时语法和执行说明追加到调用方提供的描述后；私有绑定的说明由调用方提供。
+
 [配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-executor-ptc)
 
 -----
@@ -125,6 +129,20 @@ Error: code run failed (abort): run_code exceeded its limit of 2048 tool calls (
 #### KV Cache 影响
 
 只要 PTC mode 选择、生成的 SDK、传输 schema 与可见工具集合不变，前缀就保持稳定。模式或筛选器变更可能从第一个改变的提示词或 schema token 起使复用失效。修改 `maxSubCallsPerMinute` 不会改变提示词或 schema token。
+
+### 注册的程序工具
+
+#### 模型可见内容
+
+工厂创建的工具显示调用方提供的名称和描述，并使用与 `run_code` 相同的程序参数、运行时说明和结果渲染。私有绑定不生成直接工具 schema 或 SDK 提示词段落。绑定指引由消费方负责。
+
+#### Token 影响
+
+现有原生工具 schema 中加入一个程序工具 schema。调用方的绑定指引产生相应提示词成本；中间值只有在程序输出它们或嵌套工具提供延后上下文时才进入模型历史。
+
+#### KV Cache 影响
+
+只要调用方描述和运行时设置不变，schema 就保持稳定。初始化在运行时内部执行，不向模型请求添加程序源码。
 
 ## 已知限制与延期工作
 

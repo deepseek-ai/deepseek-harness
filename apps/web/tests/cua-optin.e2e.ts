@@ -1,4 +1,4 @@
-/** CUA follows PTC Agent scopes and changes the default only from its detail page. */
+/** CUA selects each Agent's tool form and changes the default only from its detail page. */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -110,7 +110,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(profileManifest().dependencies).toEqual(dependencies)
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     expect(await card.textContent()).not.toContain('将 PTC 模式改为可持久化')
-    expect(await card.textContent()).toContain('请切换到 PTC 模式')
+    expect(await card.textContent()).not.toContain('请切换到 PTC 模式')
     expect(await card.textContent()).toContain('Windows 支持正在开发中')
     expect(await card.textContent()).not.toContain('Swift')
     const description = await card.getByRole('button', { name: '查看 Computer Use', exact: true }).evaluate((button) => {
@@ -126,11 +126,14 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agents.get(ptcAgent.id) === ptcAgent).toBe(true)
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(false)
+    expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua_run_code')).toBe(true)
+    expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua_run_code')).toBe(false)
     expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(true)
     expect((await scaffold.ctx.systemPrompt.assemble({ scope: ptcAgent })).tools.map(tool => tool.name)).toEqual(['run_code'])
     for (const preset of ['ptc', 'standard', 'ptc', initialDefault]) {
       await scaffold.ctx.agentPresets.select(originalAgent, preset)
       expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua')).toBe(preset === 'ptc')
+      expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua_run_code')).toBe(preset !== 'ptc')
     }
     const child = await scaffold.ctx.agents.create({
       sessionId: SessionId('cua-child'),
@@ -163,6 +166,7 @@ it.skipIf(process.platform !== 'darwin').each([
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(freshDefault.ctx)).toBe(initialDefault)
     expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua')).toBe(false)
+    expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua_run_code')).toBe(true)
     const fresh = (await scaffold.ctx.agents.create({
       sessionId: SessionId('cua-new-ptc'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
@@ -172,6 +176,27 @@ it.skipIf(process.platform !== 'darwin').each([
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
+    if (!codingTools) {
+      const panel = page.locator('[data-cua-settings]')
+      await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
+      expect(await panel.textContent()).toContain('标准、创造和 PTC 模式均可使用 Computer Use')
+      expect(await persistent.textContent()).toContain('其他模式始终单独保留 Computer Use 状态')
+      for (const width of [1680, 390]) {
+        await page.setViewportSize({ width, height: 1000 })
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme })
+          await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+          await expect.poll(() => panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+          if (webSnapshotMode() === 'refresh') {
+            const directory = fileURLToPath(new URL('../../../.playwright-mcp/cua-run-code-ui', import.meta.url))
+            await mkdir(directory, { recursive: true })
+            await panel.screenshot({ path: join(directory, `details-zh-${width}-${colorScheme}.png`), animations: 'disabled' })
+          }
+        }
+      }
+      await page.emulateMedia({ colorScheme: null })
+      await page.setViewportSize({ width: 1680, height: 1000 })
+    }
     const beforePersistent = scaffold.ctx.ptcRuntime
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
@@ -192,6 +217,9 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(runtimeFiber() === persistentRuntimeFiber).toBe(true)
     expect(scaffold.ctx.agentPresets.defaultId).toBe(initialDefault)
     expect(scaffold.ctx.agents.get(ptcAgent.id) === ptcAgent).toBe(true)
+    for (const agent of [originalAgent, freshDefault, ptcAgent, fresh]) {
+      expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua_run_code')).toBe(false)
+    }
     for (const agent of [ptcAgent, fresh]) {
       expect(scaffold.ctx.tools.schemas(agent).some(tool => tool.name === 'cua')).toBe(false)
       expect((await scaffold.ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name)).toEqual(['run_code'])

@@ -1,0 +1,6 @@
+- tabpanel "Code":
+  - text: Code typescript
+  - button "Wrap lines" [pressed]
+  - button "Original JSON"
+  - button "Copy code"
+  - code: "globalThis.visits = 1; var app = await cua.getApp(\"test.fixture\"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click(\"0\"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId })"
