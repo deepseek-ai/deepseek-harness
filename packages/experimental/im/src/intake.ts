@@ -63,7 +63,8 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
  * - {@link receive} resolves only after the message record *and* the event receipt are durable; the adapter ACKs
  *   afterwards. A rejection (a storage failure) therefore leaves the platform event unacked and a redelivery is
  *   expected. A message over `maxInputBytes` is remembered and acknowledged instead: refusing it would have the
- *   platform redeliver a message that can never be accepted.
+ *   platform redeliver a message that can never be accepted. The platform reads of a frame (a card, a merged forward,
+ *   the text of a quoted reply) happen outside the store chain, so a slow read delays only its own frame.
  * - A `(bot, event id)` the intake already recorded is one delivery: the record the first delivery stored stands, a
  *   payload that drifted from it is logged once, and the redelivered frame is ACKed like any duplicate.
  * - A chat matched by no `sources` rule is neither stored nor emitted.
@@ -74,7 +75,7 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
  *   `ignored`.
  */
 export class ImIntake {
-  /** The intake chain: dedupe and store of one event never interleave with another's. */
+  /** The store chain: recording and storing one frame never interleave with another's; platform reads stay outside. */
   private chain: Promise<void> = Promise.resolve()
   /** The pass currently dispatching, if any. */
   private active: Promise<void> | undefined
@@ -96,7 +97,24 @@ export class ImIntake {
     if (message.sender.id === bot.selfId) return
     const key = `${bot.id}|${session.event.id ?? message.id}`
     const digest = digestOf(message)
-    const accepted = this.chain.then(() => this.accept(bot, message, key, digest))
+    const known = this.store.event(key)
+    if (known !== undefined) {
+      // The message ID is the identity a redelivery repeats. The platform hands the same message back with a drifted
+      // payload (an edited body, a mention list, a timestamp), and refusing that frame leaves it unacknowledged — so
+      // the platform redelivers it again, forever. Report the drift once and treat the message as the duplicate it is.
+      if (known.digest !== digest) {
+        this.ctx.logger.warn('IM event %s was redelivered with a different payload; the first delivery stands', key)
+      }
+      this.pump()
+      return
+    }
+    const receivedAt = Date.now()
+    // The platform reads of one draft — a card, a merged forward, the text of a quoted reply — happen BEFORE the intake
+    // chain, because that chain is what the rest of this listener's callers wait on to acknowledge: a slow read inside
+    // it delayed the acknowledgement of every other chat. A frame that races another copy of itself may read twice;
+    // the store keeps one record per key either way.
+    const draft = await this.inspect(bot, message)
+    const accepted = this.chain.then(() => this.accept(key, digest, receivedAt, draft))
     this.chain = accepted.then(noop, noop)
     await accepted
     this.pump()
@@ -279,27 +297,35 @@ export class ImIntake {
     }
   }
 
-  /** Dedupe, admit and store one inbound message; runs in the intake chain. */
-  private async accept(bot: Bot, message: InboundMessage, key: string, digest: string): Promise<void> {
-    const known = this.store.event(key)
-    if (known) {
-      // The message ID is the identity a redelivery repeats. The platform hands the same message back with a drifted
-      // payload (an edited body, a mention list, a timestamp), and refusing that frame leaves it unacknowledged — so
-      // the platform redelivers it again, forever. Report the drift once and treat the message as the duplicate it is.
-      if (known.digest !== digest) {
-        this.ctx.logger.warn('IM event %s was redelivered with a different payload; the first delivery stands', key)
-      }
-      return
-    }
-    const receivedAt = Date.now()
+  /**
+   * Admission and the platform reads of one received frame, outside the intake chain: the draft to store, or
+   * `undefined` for a frame that is recorded but not stored.
+   * @param bot - the bot that delivered the frame.
+   * @param message - the inbound message.
+   * @returns the draft to store and dispatch.
+   */
+  private async inspect(bot: Bot, message: InboundMessage): Promise<ImMessageDraft | undefined> {
     const source = admit(this.config.sources, bot.id, message)
-    if (source === undefined) {
-      // Not admitted: remember the event so a redelivery is a cheap no-op, but neither store nor emit the message.
-      await this.store.remember(key, { digest, receivedAt })
-      return
-    }
+    if (source === undefined) return undefined
     const draft = await this.readableDraft(bot, message, source)
-    if (source.store === 'addressed' && !draft.addressed) {
+    return source.store === 'addressed' && !draft.addressed ? undefined : draft
+  }
+
+  /**
+   * Record and store one inspected frame. This is the chain's job, and the chain is the only place the event record and
+   * the stored message are written.
+   * @param key - `${bot}|${event id}`, the identity a redelivery repeats.
+   * @param digest - payload digest of this frame.
+   * @param receivedAt - when the frame arrived, kept across the chain.
+   * @param draft - the inspected draft, or undefined for a frame that is only remembered.
+   */
+  private async accept(
+    key: string, digest: string, receivedAt: number, draft: ImMessageDraft | undefined,
+  ): Promise<void> {
+    // A concurrent frame of the same event may have stored it while this one was reading the platform.
+    if (this.store.event(key) !== undefined) return
+    if (draft === undefined) {
+      // Not admitted: remember the event so a redelivery is a cheap no-op, but neither store nor emit the message.
       await this.store.remember(key, { digest, receivedAt })
       return
     }

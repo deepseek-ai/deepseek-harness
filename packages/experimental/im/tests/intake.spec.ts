@@ -165,6 +165,29 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toContain('balance-alerter')
   })
 
+  it('acknowledges another chat while one frame waits for a platform read', async () => {
+    const { bot, store, intake } = await boot()
+    const held = Promise.withResolvers<undefined>()
+    let reads = 0
+    bot.getMessage = async (chat: { id: string }) => {
+      reads += 1
+      await held.promise
+      return inbound({ id: 'm-slow', chat: { id: chat.id, type: 'group' }, content: h('message', h.text('read back')) })
+    }
+    const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
+    const slow = deliver(bot, 'evt-slow', inbound({ id: 'm-slow', chat: { id: 'slow', type: 'group' }, content: card }))
+    await vi.waitFor(() => { expect(reads).toBe(1) })
+
+    // The other chat is acknowledged although that read is still open: the reads are outside the store chain.
+    await deliver(bot, 'evt-fast', inbound({ id: 'm-fast' }))
+    expect(store.get(ImMessageKey('fake:bot', 'm-fast'))).toBeDefined()
+
+    held.resolve(undefined)
+    await slow
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-slow'))?.text).toBe('read back')
+  })
+
   it('reads the entries of a merged forward the event could only reference', async () => {
     const { bot, store, intake } = await boot()
     // An event hands the container alone; the platform answers a read of it with the entries.
