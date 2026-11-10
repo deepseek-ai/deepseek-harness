@@ -59,13 +59,13 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[], platform: 'macos' | 'windows' = 'macos') {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() } finally { await rm(directory, { recursive: true, force: true }) }
   })
-  const native = createNativeFixture()
+  const native = createNativeFixture(selectorPid)
   const guarded: string[] = []
   const modules = {
     llm: LlmRuntime, sessions: SessionStore, projections: SessionProjectionRegistry, systemPrompt: SystemPrompt,
@@ -99,7 +99,8 @@ async function setup(programs: readonly string[], platform: 'macos' | 'windows' 
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
           getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
-          capabilities: { platform, methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
+          acceptsPidSelector: selectorPid !== undefined,
+          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -250,16 +251,19 @@ it('settles an in-flight native call before releasing the provider connection an
   expect(ctx.tools.get('cua_run_code', agent)).toBeUndefined()
 })
 
-it('returns the Windows application ID without the native placeholder PID', async () => {
+it.each([
+  { platform: 'windows', selectorPid: undefined, expectedProcess: {}, selector: 'test.fixture' },
+  { platform: 'fixture', selectorPid: 101, expectedProcess: { pid: 101 }, selector: '101' },
+])('returns only usable application selectors for $platform', async ({ platform, selectorPid, expectedProcess, selector }) => {
   const { agent, run, native } = await setup([
-    'var apps = await cua.listApps(); inspect(JSON.stringify(apps)); await cua.getApp(apps[0].id)',
-  ], 'windows')
+    'var apps = await cua.listApps(); inspect(JSON.stringify(apps)); await cua.getApp(String(apps[0].pid ?? apps[0].id))',
+  ], platform, selectorPid)
   await run()
   const result = agent.session.deriveMessages().find(message => message.role === 'tool')
   expect(result?.isError).toBe(false)
   expect(JSON.parse(result!.content.filter(block => block.type === 'text').map(block => block.text).join('')))
-    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', isRunning: true }])
-  expect(native.calls.filter(call => call.method === 'getApp').map(call => call.params.selector)).toEqual(['test.fixture'])
+    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', isRunning: true, ...expectedProcess }])
+  expect(native.calls.filter(call => call.method === 'getApp').map(call => call.params.selector)).toEqual([selector])
 })
 
 it('forwards per-read accessibility limits to the Windows backend', async () => {

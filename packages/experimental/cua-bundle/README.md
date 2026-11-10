@@ -89,6 +89,7 @@ CUA activation and removal change tool schemas and system guidance; subsequent r
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Windows npm installations require a separate native helper. Configure `helperPath` for the matching architecture as described in [Windows setup](../cua-windows/README.md#setup).
 - System permissions require the user’s approval in macOS; enabling the bundle does not grant them.
 - PTC execution is shared by the profile and configured independently of the CUA provider's program runtime. A Host without HMR applies saved changes at restart.
 

@@ -22,7 +22,7 @@ kind: "package-reference"
 <a id="setup"></a>
 ## 运行条件与配置
 
-在原生 Windows 的源码检出中，提供方启用时通过 PATH 中的 .NET 10 SDK 构建当前架构的 helper，输出到 `native/bin/win-<arch>`。`helperPath` 可指定现有 exe 的绝对路径。手动构建时，在本包中执行 `pnpm run build:native:x64` 或 `pnpm run build:native:arm64`。使用 `build:native` 生成的 `native/bin/local` 产物时，需要匹配的 Windows .NET 运行时，并显式配置 `helperPath`。独立的 win-x64 ZIP 需完整解压，当前 npm 发布流程尚未装入该载荷。
+在原生 Windows 的源码检出中，提供方启用时通过 PATH 中的 .NET 10 SDK 构建当前架构的 helper，输出到 `native/bin/win-<arch>`。`helperPath` 可指定现有 exe 的绝对路径。手动构建时，在本包中执行 `pnpm run build:native:x64` 或 `pnpm run build:native:arm64`。使用独立 win-x64 ZIP 时，需要完整解压，并将 `helperPath` 指向其中的 exe。使用 `build:native` 生成的 `native/bin/local` 产物时，需要匹配的 Windows .NET 运行时，并显式配置 `helperPath`。
 
 `buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 30000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
 
@@ -76,6 +76,12 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- 通过 npm 安装的包不含 Windows helper。x64 可使用独立 ZIP，ARM64 需要对应架构的构建产物，见[配置说明](#setup)。
+- 悬停、点击、滚动和拖拽使用系统指针。`requireSystemPointerApproval` 不会为 Windows 操作弹出单独的指针授权提示。
+- 拖拽只检查起点处最上层的窗口。若其他应用遮住路径或终点，即使目标仍在前台，也可能把内容拖到其他应用。
+- 清理输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
+- helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
+- Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。
 - 不支持 `findApps`、启动应用、应用级辅助功能和持续按键 `sendKeyEvent`。请让用户打开所需应用或窗口。
 - 可以发现 `isRunning: false` 的应用，但当前 `getApp` 流程会尝试未支持的启动操作，并以 `UNSUPPORTED` 失败。选择这类应用前应先打开窗口。
 - 观察和输入需要可访问、未锁定的交互式 Windows 会话。截图需要 Windows Graphics Capture 支持；列出的窗口仍可能无法截图或接收输入。

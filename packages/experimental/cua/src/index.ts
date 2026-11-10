@@ -138,6 +138,8 @@ export interface CuaBackend {
    */
   getGuidance(kind: 'raw' | 'standalone'): string
   capabilities: CuaStartupCapabilities
+  /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
+  acceptsPidSelector?: boolean
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -297,8 +299,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
-      // Only macOS exposes a native PID as an application selector.
-      if ((method === 'listApps' || method === 'findApps') && backend.capabilities.platform !== 'macos') {
+      if ((method === 'listApps' || method === 'findApps') && !backend.acceptsPidSelector) {
         return nativeDiscoveryRows.parse(result).map(({ pid: _pid, ...record }) => record)
       }
       if (method === 'getCapabilities') {

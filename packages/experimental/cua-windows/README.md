@@ -22,7 +22,7 @@ Discover Windows applications, obtain consent, then inspect and operate their wi
 <a id="setup"></a>
 ## Setup and configuration
 
-In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to build the helper for the current architecture under `native/bin/win-<arch>`. Set `helperPath` to the absolute path of an existing executable to use it instead. For a manual build, run `pnpm run build:native:x64` or `pnpm run build:native:arm64` in this package. The framework-dependent `build:native` output in `native/bin/local` requires a matching Windows .NET runtime and an explicit `helperPath`. Extract the complete standalone win-x64 ZIP. The npm release pipeline does not yet stage that payload.
+In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to build the helper for the current architecture under `native/bin/win-<arch>`. Set `helperPath` to the absolute path of an existing executable to use it instead. For a manual build, run `pnpm run build:native:x64` or `pnpm run build:native:arm64` in this package. To use the standalone win-x64 ZIP, extract the entire archive and point `helperPath` at its exe. The framework-dependent `build:native` output in `native/bin/local` requires a matching Windows .NET runtime and an explicit `helperPath`.
 
 `buildTimeoutMs` defaults to 300000, `connectTimeoutMs` to 30000, and `pollIntervalMs` to 25. Accessibility reads default to 2000 nodes and depth 25. Pass `maxElements` and `maxDepth` to override either limit for one read. The bundle loads this provider only on native Windows. When configured explicitly in WSL, `windowsPowerShellPath` defaults to `powershell.exe`. The WSL cache currently copies only the exe, so a multi-file publish cannot start from that cache.
 
@@ -76,6 +76,12 @@ Inspected results append to model history. Retaining an App, Window, or returned
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- The npm package omits the Windows helper. Use the [standalone ZIP on x64 or a matching build on ARM64](#setup).
+- Hover, click, scroll and drag use the system pointer. `requireSystemPointerApproval` does not prompt separately for Windows pointer operations.
+- Drag checks the topmost window only at its starting point. An overlay from another application along the path or at the destination can receive the drop even while the selected window stays in the foreground.
+- The helper does not check each key or button release during cleanup. If an input remains held after a failure, release it manually before continuing.
+- Helper identity hashes only the exe. Different DLLs with the same apphost can reuse the old service. Stop Hosts using the same output directory before rebuilding to avoid locked files.
+- The Windows handshake requires a positive `maxClickHoldMs`. With zero, it fails with `INVALID_CONFIG` before ordinary clicks or status queries can run.
 - `findApps`, application launch, app-level accessibility, and held-key `sendKeyEvent` are unavailable. Ask the user to open the required application or window.
 - Applications with `isRunning: false` can be discovered, but the current `getApp` flow attempts an unsupported launch and fails with `UNSUPPORTED`. Open a window before selecting such an application.
 - Observation and input require an accessible, unlocked interactive Windows session. Screenshots require Windows Graphics Capture support; a listed window can still be unavailable for capture or input.

@@ -89,6 +89,7 @@ CUA 生效和卸载会改变工具 schema 与系统指引，后续请求使用�
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Windows 的 npm 安装包不含 helper。请按架构准备原生产物，并通过 `helperPath` 指定 exe。见 [Windows 配置说明](../cua-windows/README.zh.md#setup)。
 - 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
 - PTC 执行方式由 profile 共享，与 CUA 提供方持有的程序运行时分别配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 

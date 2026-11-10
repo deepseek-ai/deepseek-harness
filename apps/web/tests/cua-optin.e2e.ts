@@ -13,7 +13,7 @@ import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
 
-// The shipped bundle admits only macOS Hosts; unsupported Hosts are exercised in bundle-platform.e2e.ts.
+// This fixture exercises the macOS provider’s permission setup.
 it.skipIf(process.platform !== 'darwin').each([
   { selectedDefault: undefined, codingTools: false, script: false },
   { selectedDefault: undefined, codingTools: true, script: false },
@@ -111,7 +111,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(await card.getByText('实验性', { exact: true }).count()).toBe(1)
     expect(await card.textContent()).not.toContain('将 PTC 模式改为可持久化')
     expect(await card.textContent()).not.toContain('请切换到 PTC 模式')
-    expect(await card.textContent()).toContain('Windows 支持正在开发中')
+    expect(await card.textContent()).toContain('通过 npm 安装 DSH 的 Windows 用户需要单独配置 helper')
     expect(await card.textContent()).not.toContain('Swift')
     const description = await card.getByRole('button', { name: '查看 Computer Use', exact: true }).evaluate((button) => {
       const element = document.getElementById(button.getAttribute('aria-describedby')!)!
@@ -174,6 +174,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
     expect(scaffold.ctx.tools.schemas(fresh).some(tool => tool.name === 'cua')).toBe(true)
     await card.getByRole('button', { name: '查看 Computer Use', exact: true }).click()
+    await plugins.locator('[data-detail-document]').getByText('helperPath', { exact: true }).waitFor()
     toggle = page.locator('[data-plugin-panel]').getByRole('switch', { name: '启用 Computer Use', exact: true })
     const persistent = page.getByRole('group', { name: 'PTC 执行方式', exact: true })
     if (!codingTools) {

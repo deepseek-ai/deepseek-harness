@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Utilisation de l'ordinateur",
-    "description": "Compatible actuellement avec macOS ; la prise en charge de Windows est en cours de développement. Ajoute le contrôle de l’ordinateur aux sessions existantes et nouvelles dans les modes standard, créateur, PTC et autres. Accordez les autorisations d’accessibilité et d’enregistrement de l’écran avant utilisation.",
+    "description": "Contrôlez des applications sur macOS et Windows. Si vous installez DSH avec npm sous Windows, configurez séparément le programme auxiliaire.",
     "detail": "docs/DETAIL.md"
   }
 }

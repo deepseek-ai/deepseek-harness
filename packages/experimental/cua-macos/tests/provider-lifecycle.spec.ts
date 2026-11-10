@@ -407,7 +407,9 @@ it('rejects a model attempt to call the private launch operation', async () => {
 
 it('correlates a native request with its logged tool invocation', async () => {
   const f = await setup()
-  expect((await f.execute()).isError).toBe(false)
+  const apps = [{ name: 'Editor', isRunning: true, pid: 101 }]
+  native.request.mockResolvedValueOnce(apps)
+  expect((await f.execute()).value).toEqual(apps)
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
