@@ -111,7 +111,7 @@ export class LogBuffer {
  * @throws If object formatting fails; preceding arguments remain visible.
  */
 export function makeInspect(
-  logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
+  logs: Pick<LogBuffer, 'push'>, images: Pick<WeakMap<object, string>, 'get'>, emitImage: (id: string) => void,
 ): (...args: unknown[]) => void {
   return (...args: unknown[]): void => {
     const pending: string[] = []
@@ -121,8 +121,8 @@ export function makeInspect(
       pending.length = 0
     }
     for (const arg of args) {
-      const directImage = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
-      if (directImage !== undefined && emitImage !== undefined) {
+      const directImage = arg !== null && typeof arg === 'object' ? images.get(arg) : undefined
+      if (directImage !== undefined) {
         flush()
         emitImage(directImage)
         continue
@@ -131,7 +131,7 @@ export function makeInspect(
       const options: ImageInspectOptions = {
         depth: null, maxArrayLength: null, maxStringLength: null,
         ptcImageCollector(image) {
-          const id = images?.get(image)
+          const id = images.get(image)
           if (id !== undefined) nested.push(id)
         },
       }
@@ -141,7 +141,7 @@ export function makeInspect(
         flush()
         throw error
       }
-      if (emitImage === undefined || nested.length === 0) continue
+      if (nested.length === 0) continue
       flush()
       for (const id of nested) emitImage(id)
     }

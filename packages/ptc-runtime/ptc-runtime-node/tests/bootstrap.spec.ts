@@ -46,7 +46,7 @@ describe('LogBuffer', () => {
 describe('makeInspect', () => {
   it('renders inspected arguments into captured output', () => {
     const seen: string[] = []
-    const inspect = makeInspect(new LogBuffer(1_000, text => seen.push(text)))
+    const inspect = makeInspect(new LogBuffer(1_000, text => seen.push(text)), new WeakMap(), () => {})
     inspect('plain', { a: 1 })
     expect(seen).toEqual(['plain { a: 1 }'])
   })
@@ -62,7 +62,7 @@ describe('makeInspect', () => {
     ['undefined property', { value: undefined }, '{ value: undefined }'],
   ])('displays a %s argument and continues execution', (_name, value, expected) => {
     const text: string[] = []
-    const inspect = makeInspect({ push: line => text.push(line) })
+    const inspect = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
     inspect('before', value, 'after')
     expect(text).toHaveLength(1)
     expect(text[0]).toContain(expected)
@@ -85,7 +85,7 @@ describe('makeInspect', () => {
       nested: { a: { b: { c: { d: { e: { answer: 42 } } } } } },
     }
     const text: string[] = []
-    makeInspect(new LogBuffer(100_000, line => text.push(line)))(value)
+    makeInspect(new LogBuffer(100_000, line => text.push(line)), new WeakMap(), () => {})(value)
     expect(text).toHaveLength(1)
     expect(runInNewContext(`(${text[0]!})`)).toEqual(value)
   })
@@ -93,7 +93,7 @@ describe('makeInspect', () => {
   it('preserves preceding arguments when a custom formatter throws', () => {
     const value = { [Symbol.for('nodejs.util.inspect.custom')]() { throw new Error('formatter failed') } }
     const text: string[] = []
-    const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)))
+    const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)), new WeakMap(), () => {})
     expect(() => { inspect('before', value, 'after') }).toThrow('formatter failed')
     expect(text).toEqual(['before'])
   })
@@ -114,8 +114,6 @@ describe('makeInspect', () => {
     inspect()
     expect(selected).toEqual(['one', 'two', 'one'])
     expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null", ''])
-    makeInspect({ push: line => text.push(line) }, images)(one)
-    expect(runInNewContext(`(${text.at(-1)!})`)).toEqual(one)
   })
 
   it('does not select images behind getters', () => {
@@ -229,7 +227,7 @@ describe('makeInspect', () => {
 
   it('displays undefined arguments and cycles', () => {
     const text: string[] = []
-    const inspect = makeInspect({ push: line => text.push(line) })
+    const inspect = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
     inspect(undefined)
     expect(text).toEqual(['undefined'])
     inspect(null)
