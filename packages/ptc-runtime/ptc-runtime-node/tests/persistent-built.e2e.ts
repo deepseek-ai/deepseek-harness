@@ -44,6 +44,6 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(observed.first.error).toBeUndefined()
     const helperValue = programFormat === 'repl' ? 7 : null
     expect(observed).toMatchObject({ initialized: { value: helperValue }, reinitialized: { value: helperValue } })
-    expect(observed).toMatchObject({ second: { output: [{ type: 'text', text: 'b' }], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { output: [], value: 'undefined' } })
+    expect(observed).toMatchObject({ second: { output: [{ type: 'text', text: 'b\n' }], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { output: [], value: 'undefined' } })
   })
 })

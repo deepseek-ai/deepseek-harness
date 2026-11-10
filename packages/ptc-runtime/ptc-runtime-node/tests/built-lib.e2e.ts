@@ -79,6 +79,6 @@ describe.skipIf(!built)('built lib real load path (plain node)', () => {
       failure: { typed: true, name: 'ToolCallError', toolName: 'fail', message: 'denied' },
       env: [],
     })
-    expect(result.output).toContainEqual({ type: 'text', text: 'halfway 42' })
+    expect(result.output).toContainEqual({ type: 'text', text: 'halfway 42\n' })
   })
 })
