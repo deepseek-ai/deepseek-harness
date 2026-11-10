@@ -141,7 +141,7 @@ describe.skipIf(MODE === 'record')('web snapshot: Official native subagent bundl
     const firstTurnEvents = agent.session.snapshotEvents()
     const toolResults = firstTurnEvents.filter(event => event.type === 'tool/result').map(event => event.data)
     expect(toolResults, `PTC execution must start the native child before waiting for its result: ${JSON.stringify(toolResults)}`)
-      .toMatchObject([{ message: { isError: false, content: [{ type: 'text', text: 'agent-1' }] } }])
+      .toMatchObject([{ message: { isError: false, content: [{ type: 'text', text: 'agent-1\n' }] } }])
     const dispatches = firstTurnEvents.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
     expect(dispatches).toMatchObject([{ name: 'subagent_claude_code', isError: false }])
     const catalog = firstTurnEvents.filter(event => event.type === 'subagent/catalog').map(event => event.data)

@@ -8,6 +8,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from './types.ts'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
+export { PtcImage } from './image.ts'
+
 export type {
   PtcBindingErrorClass,
   PtcBindingFunction,
@@ -17,13 +19,15 @@ export type {
   PtcRunFailure,
   PtcRunRequest,
   PtcRunResult,
+  PtcOutput,
   PtcRunSpec,
   PtcRunSandbox,
 } from './types.ts'
 
 /**
  * Binding globals EVERY backend refuses because SOME backend owns the slot in
- * the program's namespace: `console` (Node's log capture), and
+ * the program's namespace: `console` and `inspect` (Node's output bindings),
+ * `Image` (Node's program image class), and
  * `__dsh_main__`/`__builtins__`/`__name__` (the Python backend's bootstrap
  * wrapper and seeded module globals),
  * and `__debug__`. One shared set — rather than each backend refusing only its
@@ -41,7 +45,7 @@ export type {
  * Python backend, which is exactly the split the shared set exists to prevent.
  */
 export const RESERVED_BINDING_GLOBALS: ReadonlySet<string> = new Set([
-  'console',
+  'console', 'inspect', 'Image',
   '__dsh_main__', '__builtins__', '__name__', '__debug__',
 ])
 

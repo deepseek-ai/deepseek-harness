@@ -496,6 +496,7 @@ async function runner(handler: ProgramImportHandler, retained = false, format: P
     async initialized() {},
     async invoke() { throw new Error('unexpected binding call') },
     log() {},
+    image() {},
     outputLimit() {},
   }, [], (error) => { ready.reject(error) })
   const main = retained ? runPersistentMain(child, 100_000, state, format, handler) : runNodeMain(child, 100_000, state, format, handler)
