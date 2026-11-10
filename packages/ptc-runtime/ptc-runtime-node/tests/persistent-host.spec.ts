@@ -14,7 +14,7 @@ const request: PtcRunRequest = { program: '1', bindings: [], stateOwner: {} }
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { replScoped: false, ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
   return { ctx, fiber, runtime, ...fakeChild(ctx, runtime, request) }
 }
 
