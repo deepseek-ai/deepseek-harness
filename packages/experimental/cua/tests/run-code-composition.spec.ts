@@ -32,7 +32,7 @@ import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
 
 const programs = [
-  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.click("0"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })',
+  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })',
   'globalThis.visits++; await win.getAccessibilityTree({emit:false}); await win.click("0"); ({ visits, sameCua: cua === initialCua, app: app.appHandle, window: win.windowId, tree: await win.getAccessibilityTree({emit:false}), pid: process.pid })',
   'await win.click("0")',
 ]
@@ -101,7 +101,7 @@ async function setup(programs: readonly string[]) {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
-          guidance: 'Use the CUA object API to inspect and control the selected application.',
+          getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
           capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
@@ -218,21 +218,22 @@ it('resets one Agent program environment through ctx.cuaPrograms while keeping i
   await expect(programs.reset(agent)).resolves.toBeUndefined()
 })
 
-it('recreates the automatic facade after a program clears an overwritten global', async () => {
+it('recreates the automatic facade when its environment is rebuilt', async () => {
   const { agent, run } = await setup([
-    'var previousCua = cua; globalThis.cua = 42; globalThis.cua = undefined; "cleared"',
-    '({ ready: typeof cua.getApp === "function", replaced: cua !== previousCua })',
+    'var previousCua = cua; "created"',
+    'process.exit(0)',
+    '({ ready: typeof cua.getApp === "function", previous: typeof previousCua })',
   ])
   await run()
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
-  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false])
-  expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
-    .toEqual({ ready: true, replaced: true })
+  expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, true, false])
+  expect(JSON.parse(results[2]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
+    .toEqual({ ready: true, previous: 'undefined' })
 })
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {
   const { ctx, native, agent, provider, run } = await setup([
-    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); process.pid',
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); process.pid',
     'await win.click("0")',
   ])
   const started = native.holdNextClick()

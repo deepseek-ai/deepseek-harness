@@ -58,12 +58,11 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
   const session = ctx.sessions.create(SessionId('private-program'))
   session.append('turn/start', { turn: 1 })
   const agent = { ctx: agentContext, id: session.id, session } as Agent
-  const initialization = 'globalThis.cua ??= createComputer()'
   let handle: RunCodeToolHandle | undefined
   const fiber = await ctx.plugin(Object.assign((owner: Context) => {
     handle = createRunCodeToolHandle(owner, {
       name: 'cua_run_code', description: 'Run computer operations through cua.',
-      runtime, tools: [definition], initialization,
+      runtime, tools: [definition],
       ...limits === undefined ? {} : { limits },
     })
     owner.tools.register(handle.definition)
@@ -79,14 +78,14 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
       })
     } finally { toolSet.dispose() }
   }
-  return { ctx, runtime, agent, agentContext, session, fiber, initialization, execute, handle }
+  return { ctx, runtime, agent, agentContext, session, fiber, execute, handle }
 }
 
 describe('registered program tool factory', () => {
   it('uses the explicit runtime and binds only private definitions under native execution', async () => {
     const body = vi.fn(async () => 'private result')
     const definition = privateTool(body)
-    const { ctx, runtime, agent, initialization, execute } = await setup(definition)
+    const { ctx, runtime, agent, execute } = await setup(definition)
     const unrelated = vi.fn(async () => 'unrelated')
     ctx.tools.register({ ...privateTool(unrelated), name: 'other' })
     expect(ctx.get('ptcRuntime')).toBeUndefined()
@@ -98,7 +97,6 @@ describe('registered program tool factory', () => {
     expect(JSON.stringify(schema.parameters)).toContain('Default 120000; capped at 600000')
     runtime.behavior = async (request) => {
       expect(request.program).toBe('await cua.inspect()')
-      expect(request.initialization).toBe(initialization)
       expect(request.stateOwner).toBe(agent)
       expect(Object.keys(request.bindings[0]!.functions)).toEqual(['cua'])
       return { logs: [], value: await request.bindings[0]!.functions.cua!({}) }
@@ -133,8 +131,8 @@ describe('registered program tool factory', () => {
       .toEqual([{ name: 'ApprovalError', code: 'APPROVAL_REJECTED' }, { name: 'ComputerGuardError', code: 'COMPUTER_BLOCKED' }])
   })
 
-  it('uses its own name for escalation and initializes the temporary environment', async () => {
-    const { ctx, runtime, initialization, execute } = await setup(privateTool())
+  it('uses its own name for escalation and omits the retained owner', async () => {
+    const { ctx, runtime, execute } = await setup(privateTool())
     await ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
     await ctx.plugin(ApprovalService, { policy: 'ask' })
     vi.spyOn(runtime, 'sandboxMode', 'get').mockReturnValue('read-only')
@@ -144,7 +142,6 @@ describe('registered program tool factory', () => {
       return Promise.resolve<ApprovalOutcome>('allowed-once')
     })
     runtime.behavior = async (request) => {
-      expect(request.initialization).toBe(initialization)
       expect(request.stateOwner).toBeUndefined()
       expect(request.sandboxPolicy?.mode).toBe('workspace-write')
       return { logs: [], sandbox: { mode: 'workspace-write', denied: true } }

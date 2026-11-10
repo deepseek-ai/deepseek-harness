@@ -12,7 +12,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const fixture = fileURLToPath(new URL('../../../snapshots/session/cua-run-code/session.v4.jsonl', import.meta.url))
 const snapshotDirectory = fileURLToPath(new URL('../../../snapshots/web/cua-run-code', import.meta.url))
@@ -60,17 +60,25 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   const results = events.filter(event => event.type === 'tool/result')
   expect(results).toHaveLength(2)
   expect(results.every(event => !event.data.message.isError)).toBe(true)
-  expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(9)
+  expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(8)
   const calls = page.locator('[data-tool="cua_run_code"]')
-  await expandOwningTurnProcess(page, calls.first())
-  await expect.poll(() => calls.count()).toBe(2)
-  expect(await calls.first().getByText('Code', { exact: true }).count()).toBe(1)
   const description = 'Select and capture the fixture window'
-  await calls.first().getByText(description, { exact: true }).click()
+  const turnControl = page.locator('[data-turn-process="1"]')
+  await turnControl.waitFor({ state: 'visible' })
+  await expect.poll(() => turnControl.getAttribute('aria-expanded')).toBe('false')
+  await turnControl.click()
+  await expect.poll(() => turnControl.getAttribute('aria-expanded')).toBe('true')
+  const group = calls.first().locator('xpath=ancestor::*[@data-chat-group-key][1]')
+  const groupControl = group.locator('[data-process-activity]').first()
+  await groupControl.waitFor({ state: 'visible' })
+  if (await groupControl.getAttribute('aria-expanded') === 'false') await groupControl.click()
+  await expect.poll(() => groupControl.getAttribute('aria-expanded')).toBe('true')
+  await expect.poll(() => calls.count()).toBe(2)
+  await calls.first().getByRole('button', { name: `Code ${description}`, exact: true }).click()
   const source = calls.first().locator('pre.shiki')
   await source.waitFor()
   expect(await source.textContent()).toContain('var app = await cua.getApp("test.fixture")')
-  expect(await page.locator('[data-subcalls] [data-tool="cua"]').count()).toBe(9)
+  expect(await page.locator('[data-subcalls] [data-tool="cua"]').count()).toBe(8)
   expect(events.filter(event => event.type === 'tool/ptc-dispatch' && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)
   expect(events.filter(event => event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
     && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)

@@ -1,6 +1,10 @@
 /** Controlled connection streams exercise the platform-independent native protocol client. */
 import { PassThrough, Writable } from 'node:stream'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Context } from '@deepseek-ai/cordis'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
+import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { NativeChannel } from '../src/native-client.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
@@ -24,17 +28,20 @@ function fixture(options: {
 } = {}) {
   const requests: z.infer<typeof Request>[] = []
   const cancellations: z.infer<typeof Cancel>[] = []
+  const frames: z.infer<typeof Frame>[] = []
   const stdout = new PassThrough()
   const done: PromiseWithResolvers<void> = Promise.withResolvers()
   const gone: PromiseWithResolvers<void> = Promise.withResolvers()
   const stdin = new Writable({ write(chunk, _encoding, callback) {
     const frame = Frame.parse(JSON.parse(String(chunk)))
+    frames.push(frame)
     if ('type' in frame) { cancellations.push(frame); callback(options.cancelWriteError) }
     else { requests.push(frame); callback(options.writeError) }
   } })
   const closed: PromiseWithResolvers<void> = Promise.withResolvers()
   const close = vi.fn(() => { closed.resolve() })
-  const waitForClose = vi.fn(() => gone.promise)
+  const waiting: PromiseWithResolvers<void> = Promise.withResolvers()
+  const waitForClose = vi.fn(() => { waiting.resolve(); return gone.promise })
   const channel: NativeChannel = { stdin, stdout, done: done.promise, close, waitForClose }
   shared.create.mockClear().mockReturnValueOnce(channel)
   const owner = { subprocess: { spawn: vi.fn() } }
@@ -58,8 +65,8 @@ function fixture(options: {
     stdout.destroy()
     stdin.destroy()
   })
-  return { client, requests, cancellations, stdout, stdin, owner, config, connect: shared.create,
-    close, closed: closed.promise, waitForClose, done, gone, finish, reply, id }
+  return { client, requests, cancellations, frames, stdout, stdin, owner, config, connect: shared.create,
+    close, closed: closed.promise, waiting: waiting.promise, waitForClose, done, gone, finish, reply, id }
 }
 
 describe('native helper transport', () => {
@@ -73,6 +80,273 @@ describe('native helper transport', () => {
     expect(f.requests.map(frame => frame.method)).toEqual(['getState', 'releaseHeldKeys'])
     f.reply({ id: f.id(), result: { dispatched: true } })
     await expect(release).resolves.toEqual({ dispatched: true })
+  })
+
+  it.each(['connection', 'resource'] as const)('shares %s-triggered cleanup and waits for its acknowledgement before closing', async (trigger) => {
+    const f = fixture()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    let cleanup: Promise<void> | undefined
+    const release = (): Promise<void> => cleanup ??= f.client.requestCleanup('releaseHeldKeys', { runId: 'shared' })
+      .then(() => undefined).finally(() => { remove() })
+    const remove = f.client.registerCleanup((canRequest) => { expect(canRequest).toBe(true); entered.resolve(); return release() })
+    const pending = trigger === 'resource' ? release() : undefined
+    const closing = f.client.dispose()
+    expect(f.client.dispose()).toBe(closing)
+    expect(f.client.disposed).toBe(true)
+    const denied = expect(f.client.request('click', {}, new AbortController().signal)).rejects.toMatchObject({ code: 'NATIVE_CLOSED' })
+    expect(() => f.client.registerCleanup(async () => {})).toThrow('closing helper')
+    await entered.promise
+    expect(f.requests.map(request => request.method)).toEqual(['releaseHeldKeys'])
+    expect(f.cancellations).toEqual([])
+    expect(f.close).not.toHaveBeenCalled()
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await f.waiting
+    expect(f.close).toHaveBeenCalledTimes(1)
+    expect(f.stdout.destroyed).toBe(false)
+    f.finish()
+    await Promise.all([closing, pending, denied])
+    await release()
+    expect(f.requests).toHaveLength(1)
+    expect(f.waitForClose).toHaveBeenCalledTimes(1)
+    expect(f.stdout.destroyed).toBe(true)
+    expect(f.stdin.destroyed).toBe(true)
+  })
+
+  it('keeps screenshot diagnostics on the cancellation returned during graceful disposal', async () => {
+    const reportDiagnostic = vi.fn<(message: string) => void>()
+    const f = fixture({ reportDiagnostic })
+    const pending = f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('graceful-capture'))
+    const result = pending.catch((error: unknown) => error)
+    f.reply({ type: 'diagnostic', requestId: 'graceful-capture', stage: 'capture-image.begin', elapsedMs: 2 })
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    f.client.registerCleanup(async () => {
+      const release = f.client.requestCleanup('releaseHeldKeys', { runId: 'graceful' })
+      entered.resolve()
+      await release
+    })
+    const closing = f.client.dispose()
+    await entered.promise
+    expect(f.cancellations).toEqual([{ type: 'cancel', id: 'graceful-capture' }])
+    f.reply({ id: 'graceful-capture', error: { code: 'NATIVE_CANCELLED', message: 'capture cancelled' } })
+    await expect.poll(() => f.requests.map(request => request.method)).toEqual(['screenshot', 'releaseHeldKeys'])
+    f.reply({ id: f.id(), result: { dispatched: true } })
+    await f.waiting
+    expect(reportDiagnostic.mock.calls.flat().join('\n')).not.toContain('host.settled')
+    f.finish()
+    await closing
+    const failure = await result
+    expect(failure).toMatchObject({ code: 'NATIVE_CANCELLED' })
+    if (!(failure instanceof NativeError)) throw new Error('The screenshot cancellation must retain its native error')
+    expect(failure.message).toContain('capture-image.begin')
+    expect(failure.message).not.toContain('NATIVE_DISPOSED')
+    expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.settled')
+  })
+
+  it.each(['write', 'protocol', 'timeout'] as const)('settles a fatal cleanup %s without waiting recursively on disposal', async (kind) => {
+    if (kind === 'timeout') vi.useFakeTimers()
+    try {
+      const f = fixture({ timeoutMs: 25, graceMs: 10,
+        ...kind === 'write' ? { writeError: new Error('cleanup pipe failed') } : {},
+      })
+      const joined: PromiseWithResolvers<void> = Promise.withResolvers()
+      let cleanup: Promise<void> | undefined
+      const release = (): Promise<void> => cleanup ??= f.client.requestCleanup('releaseHeldKeys', { runId: 'failing' }).then(() => undefined)
+      f.client.registerCleanup(() => { joined.resolve(); return release() })
+      const pending = release()
+      const closing = f.client.dispose()
+      const results = Promise.allSettled([pending, closing])
+      await joined.promise
+      if (kind === 'protocol') f.stdout.write('{invalid}\n')
+      if (kind === 'timeout') await vi.advanceTimersByTimeAsync(25)
+      await f.closed
+      expect(f.close).toHaveBeenCalledTimes(1)
+      expect(f.cancellations).toEqual([])
+      f.finish()
+      const [first, second] = await results
+      const code = kind === 'write' ? 'NATIVE_IO' : kind === 'protocol' ? 'NATIVE_PROTOCOL' : 'NATIVE_TIMEOUT'
+      expect(first).toMatchObject({ status: 'rejected', reason: { code } })
+      expect(second).toMatchObject({ status: 'rejected', reason: { code } })
+      if (first?.status !== 'rejected' || second?.status !== 'rejected') throw new Error('Both cleanup callers must settle')
+      expect(second.reason).toBe(first.reason)
+      expect(f.stdout.destroyed).toBe(true)
+      expect(f.stdin.destroyed).toBe(true)
+    } finally { if (kind === 'timeout') vi.useRealTimers() }
+  })
+
+  it.each(['refusal', 'request-limit'] as const)('invalidates standalone cleanup on %s before another request can enter', async (kind) => {
+    const f = fixture(kind === 'request-limit' ? { maxRequestBytes: 32 } : {})
+    const cleanup = f.client.requestCleanup('releaseHeldKeys', { runId: 'standalone' })
+    const rejected = expect(cleanup).rejects.toMatchObject({ code: kind === 'refusal' ? 'RELEASE_REFUSED' : 'NATIVE_REQUEST_LIMIT' })
+    if (kind === 'refusal') f.reply({ id: f.id(), error: { code: 'RELEASE_REFUSED', message: 'release not acknowledged' } })
+    // Admission is checked in the same stack as the failed reply or preflight.
+    expect(f.close).toHaveBeenCalledTimes(1)
+    const denied = expect(f.client.request('click', {}, new AbortController().signal)).rejects.toMatchObject({ code: 'NATIVE_CLOSED' })
+    expect(f.requests).toHaveLength(kind === 'refusal' ? 1 : 0)
+    await f.waiting
+    f.finish()
+    await Promise.all([rejected, denied])
+  })
+
+  it('closes a timed-out standalone cleanup and ignores its late acknowledgement', async () => {
+    vi.useFakeTimers()
+    try {
+      const f = fixture({ timeoutMs: 25, graceMs: 10 })
+      const cleanup = f.client.requestCleanup('releaseHeldKeys', { runId: 'expired' })
+      const rejected = expect(cleanup).rejects.toMatchObject({ code: 'NATIVE_TIMEOUT' })
+      const id = f.id()
+      await vi.advanceTimersByTimeAsync(25)
+      expect(f.close).toHaveBeenCalledTimes(1)
+      expect(f.cancellations).toEqual([])
+      f.reply({ id, result: { dispatched: true } })
+      f.finish()
+      await rejected
+      expect(f.client.disposed).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
+  it.each(['request', 'cleanup'] as const)('retains the original %s failure when connection closure also fails', async (kind) => {
+    const reportDiagnostic = vi.fn<(message: string) => void>()
+    const f = fixture({ reportDiagnostic })
+    const original = new NativeError('NATIVE_IO', 'original connection failure')
+    const closeFailure = new Error('connection close acknowledgement failed')
+    const pending = kind === 'request'
+      ? f.client.request('screenshot', {}, new AbortController().signal, ToolCallId('failed-capture'))
+      : f.client.requestCleanup('releaseHeldKeys', { runId: 'both-failed' })
+    const result = pending.catch((error: unknown) => error)
+    if (kind === 'request') f.reply({ type: 'diagnostic', requestId: 'failed-capture', stage: 'capture-image.begin', elapsedMs: 2 })
+    f.stdout.emit('error', original)
+    await f.waiting
+    expect(reportDiagnostic.mock.calls.flat().join('\n')).not.toContain('host.settled')
+    f.gone.reject(closeFailure)
+    f.done.resolve()
+    const failure = await result
+    if (!(failure instanceof AggregateError)) throw new Error('Both native and close failures must remain available')
+    expect(failure.errors).toEqual([original, closeFailure])
+    expect(failure.cause).toBe(original)
+    if (kind === 'request') {
+      expect(original.message).toContain('capture-image.begin')
+      expect(reportDiagnostic.mock.calls.flat().join('\n')).toContain('host.settled')
+    }
+    expect(f.stdout.destroyed).toBe(true)
+    expect(f.stdin.destroyed).toBe(true)
+  })
+
+  it('reports the native and close failures with screenshot diagnostics through the tool pipeline', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(Tools)
+    ctx.tools.setExecutor(new NativeToolExecutor(ctx))
+    const f = fixture()
+    ctx.tools.register(defineTool({ name: 'capture_fixture', description: 'Capture the fixture window.', parameters: {},
+      output: { schema: { type: 'json' }, render: () => [] },
+      execute: async (_args, execution) => f.client.request('screenshot', {}, execution.signal, execution.callId),
+    }))
+    const running = ctx.tools.execute({ calls: [{ type: 'tool-call', name: 'capture_fixture', id: ToolCallId('pipeline-capture'), arguments: '{}' }],
+      signal: new AbortController().signal,
+    })
+    await expect.poll(() => f.requests.length).toBe(1)
+    f.reply({ type: 'diagnostic', requestId: 'pipeline-capture', stage: 'capture-image.begin', elapsedMs: 2 })
+    f.stdout.emit('error', new NativeError('NATIVE_IO', 'original connection failure'))
+    await f.waiting
+    f.gone.reject(new Error('connection close acknowledgement failed'))
+    f.done.resolve()
+    const result = (await running).results[0]?.result
+    expect(result?.isError).toBe(true)
+    const text = result?.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+    expect(text).toContain('NATIVE_IO: original connection failure')
+    expect(text).toContain('connection close acknowledgement failed')
+    expect(text).toContain('capture-image.begin')
+  })
+
+  it('shares an aggregated cleanup failure with disposal without repeating its close failure', async () => {
+    const f = fixture()
+    const original = new NativeError('NATIVE_IO', 'cleanup dispatch failed')
+    const closeFailure = new Error('transport close failed')
+    let cleanup: Promise<void> | undefined
+    const release = (): Promise<void> => cleanup ??= f.client.requestCleanup('releaseHeldKeys', { runId: 'shared-failure' }).then(() => undefined)
+    f.client.registerCleanup(() => release())
+    const pending = release()
+    const closing = f.client.dispose()
+    const results = Promise.allSettled([pending, closing])
+    f.stdout.emit('error', original)
+    await f.waiting
+    f.gone.reject(closeFailure)
+    f.done.resolve()
+    const [first, second] = await results
+    if (first?.status !== 'rejected' || second?.status !== 'rejected') throw new Error('Both callers must receive cleanup failure')
+    const failure: unknown = first.reason
+    if (!(failure instanceof AggregateError)) throw new Error('Both native and close failures must remain available')
+    expect(failure.errors).toEqual([original, closeFailure])
+    expect(failure.cause).toBe(original)
+    expect(second.reason).toBe(failure)
+    expect(f.close).toHaveBeenCalledTimes(1)
+    expect(f.waitForClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs local cleanup after immediate invalidation without another native write', async () => {
+    const f = fixture()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const modes: boolean[] = []
+    f.client.registerCleanup(async (canRequest) => { modes.push(canRequest); entered.resolve() })
+    f.client.invalidate()
+    expect(f.close).toHaveBeenCalledTimes(1)
+    const closing = f.client.dispose()
+    await entered.promise
+    expect(modes).toEqual([false])
+    expect(f.requests).toEqual([])
+    f.finish()
+    await closing
+    await expect(f.client.requestCleanup('releaseHeldKeys', {})).rejects.toMatchObject({ code: 'NATIVE_DISPOSED' })
+    expect(f.requests).toEqual([])
+  })
+
+  it.each(['same', 'additional'] as const)('retains a native failure when registered cleanup reports the %s failure', async (kind) => {
+    const f = fixture()
+    const original = new NativeError('NATIVE_IO', 'transport failed')
+    const local = new Error('local resource cleanup failed')
+    const combined = kind === 'same' ? original : new AggregateError([original, local], 'Resource cleanup failed')
+    f.client.registerCleanup(async () => { throw combined })
+    const pending = f.client.request('getState', {}, new AbortController().signal)
+    const rejected = expect(pending).rejects.toBe(combined)
+    f.stdout.emit('error', original)
+    await f.waiting
+    f.finish()
+    await rejected
+  })
+
+  it('settles queued cleanup registrations without another write after a native refusal', async () => {
+    const f = fixture()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const settled: string[] = []
+    for (const runId of ['first', 'second']) f.client.registerCleanup(async () => {
+      const request = f.client.requestCleanup('releaseHeldKeys', { runId })
+      if (runId === 'first') entered.resolve()
+      try { await request } finally { settled.push(runId) }
+    })
+    const closing = f.client.dispose()
+    const rejected = expect(closing).rejects.toMatchObject({ code: 'RELEASE_REFUSED' })
+    await entered.promise
+    f.reply({ id: f.id(), error: { code: 'RELEASE_REFUSED', message: 'first release failed' } })
+    expect(f.close).toHaveBeenCalledTimes(1)
+    f.finish()
+    await rejected
+    expect(f.requests.map(request => request.params.runId)).toEqual(['first'])
+    expect(settled.toSorted()).toEqual(['first', 'second'])
+  })
+
+  it('submits the screenshot before a diagnostic sink can synchronously cancel it', async () => {
+    const controller = new AbortController()
+    const f = fixture({ reportDiagnostic: (message) => {
+      if (message.includes('host.dispatch')) controller.abort()
+    } })
+    const pending = f.client.request('screenshot', {}, controller.signal)
+    const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_CANCELLED' })
+    expect(f.frames.map(frame => 'type' in frame ? 'cancel' : frame.method)).toEqual(['screenshot', 'cancel'])
+    f.reply({ id: f.id(), error: { code: 'NATIVE_CANCELLED', message: 'capture stopped' } })
+    await rejected
+    expect(f.close).not.toHaveBeenCalled()
   })
 
   it('passes transport limits and connection deadlines to the shared channel', () => {
@@ -285,13 +559,18 @@ describe('native helper transport', () => {
     try {
       const f = fixture({ timeoutMs: 25, graceMs: 10 })
       const pending = f.client.request('screenshot', {}, new AbortController().signal)
-      const rejected = expect(pending).rejects.toMatchObject({ code: 'NATIVE_CLEANUP', cause: { code: 'NATIVE_TIMEOUT' } })
+      const rejected = pending.catch((error: unknown) => error)
+      f.reply({ type: 'diagnostic', requestId: f.id(), stage: 'capture-image.begin', elapsedMs: 1 })
       await vi.advanceTimersByTimeAsync(25)
       expect(f.close).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(10)
       expect(f.close).toHaveBeenCalledTimes(1)
       f.finish()
-      await rejected
+      const failure = await rejected
+      expect(failure).toMatchObject({ code: 'NATIVE_CLEANUP', cause: { code: 'NATIVE_TIMEOUT' } })
+      if (!(failure instanceof NativeError) || !(failure.cause instanceof NativeError)) throw new Error('Cancellation cleanup must retain its native cause')
+      expect(failure.message).toContain('capture-image.begin')
+      expect(failure.cause.message).not.toContain('Screenshot diagnostics')
       expect(f.client.disposed).toBe(true)
       expect(vi.getTimerCount()).toBe(0)
     } finally { vi.useRealTimers() }
@@ -377,6 +656,7 @@ describe('native helper transport', () => {
     const first = f.client.dispose()
     const second = f.client.dispose()
     expect(second).toBe(first)
+    await f.waiting
     expect(f.waitForClose).toHaveBeenCalledTimes(1)
     f.finish()
     await first
@@ -391,7 +671,7 @@ describe('native helper transport', () => {
     const f = fixture()
     const pending = f.client.request('getState', {}, new AbortController().signal)
     const failure = new Error('cannot close connection')
-    const rejected = expect(pending).rejects.toBe(failure)
+    const rejected = expect(pending).rejects.toMatchObject({ errors: [expect.objectContaining({ code: 'NATIVE_DISPOSED' }), failure] })
     const disposing = f.client.dispose()
     const disposalRejected = expect(disposing).rejects.toBe(failure)
     f.gone.reject(failure)

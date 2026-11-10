@@ -70,9 +70,6 @@ class NodeExecution {
    * @returns Resolved inputs with the selected file policy.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
-    if (request.initialization !== undefined && this.config.executionMode !== 'persistent-in-memory') {
-      throw new Error('ptc-runtime-node: initialization requires persistent-in-memory execution')
-    }
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`)
@@ -82,12 +79,10 @@ class NodeExecution {
   /**
    * Evaluate in a temporary process or reuse an enabled state owner's process.
    * @param spec - Resolved request; concurrent calls for one owner are rejected.
+   * @param initialization - Type-erased source for new environments, or undefined when none is registered.
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
-  async run(spec: PtcRunSpec): Promise<PtcRunResult> {
-    if (spec.initialization !== undefined && this.config.executionMode !== 'persistent-in-memory') {
-      throw new Error('ptc-runtime-node: initialization requires persistent-in-memory execution')
-    }
+  async run(spec: PtcRunSpec, initialization: string | undefined): Promise<PtcRunResult> {
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
     const bindings = validateBindings(spec)
@@ -108,12 +103,12 @@ class NodeExecution {
         ...spec.sandboxPolicy.additionalWritableRoots === undefined
           ? {}
           : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
-      }, this.processes, this.mode, owner !== undefined)
+      }, this.processes, this.mode, owner !== undefined, initialization)
       this.workers.add(worker)
       if (owner !== undefined) this.owners.set(owner, worker)
     }
     try { return await worker.run(spec, bindings) } finally {
-      if (owner === undefined && worker.cleanupComplete) this.workers.delete(worker)
+      if (worker.cleanupComplete) this.workers.delete(worker)
     }
   }
 

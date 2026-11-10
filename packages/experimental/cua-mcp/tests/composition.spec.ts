@@ -77,7 +77,7 @@ async function setup(options: SetupOptions = {}) {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
-          guidance: 'Fixture CUA guidance: select test.fixture and operate window 7.',
+          getGuidance: () => 'Fixture CUA guidance: select test.fixture and operate window 7.',
           capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),

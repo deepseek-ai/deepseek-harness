@@ -1,6 +1,6 @@
 /** Agent-scoped CUA transports sharing a provider-owned persistent program runtime. */
 import { extname } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
@@ -87,13 +87,12 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
       ...config.standaloneRunCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
     })
     yield runtime.dispose
-    const programs = runtimeCtx.plugin({
+    const programTools = {
       name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory', 'agentPresets', 'agents', 'systemPrompt'],
       apply(consumer: Context) {
         const program = createRunCodeToolHandle(consumer, {
           name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
           tools: [tool], limits: config.standaloneRunCode.executor,
-          initialization: `globalThis.cua ??= (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
         })
         // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
         consumer.provide('cuaPrograms', {
@@ -130,9 +129,24 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
         })
         for (const agent of consumer.agents.list()) sync(agent)
       },
+    }
+    const initializer = runtimeCtx.plugin({
+      name: 'cua-program-initializer', inject: ['ptcRuntime'],
+      async apply(owner: Context) {
+        let programs!: Fiber
+        owner.effect(function* () {
+          yield owner.ptcRuntime.registerEnvironmentInitializer(
+            `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
+          )
+          programs = owner.plugin(programTools)
+          yield programs.dispose
+          yield owner.on('agent/created', async () => { await programs.await() })
+        }, 'cua.environment-initializer')
+        await programs.await()
+      },
     })
-    yield programs.dispose
+    yield initializer.dispose
     // Creation can overlap the first provider activation; await its registered tools before the first turn.
-    yield ctx.on('agent/created', async () => { await programs.await() })
+    yield ctx.on('agent/created', async () => { await initializer.await() })
   }, 'cua.program-runtime')
 }

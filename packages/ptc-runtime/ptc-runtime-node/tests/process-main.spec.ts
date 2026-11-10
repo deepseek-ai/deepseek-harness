@@ -28,6 +28,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const logs: string[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
+    initialized: async () => {},
     invoke: async () => encodePtcJsonWire(42),
     log: (text) => { logs.push(text) },
     outputLimit: () => {},

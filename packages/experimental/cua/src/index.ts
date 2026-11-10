@@ -138,20 +138,16 @@ async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, 
 export interface CuaBackend {
   helperPath: string
   createChannel: NativeChannelFactory
-  guidance: string
-  /** Instructions for cua_run_code; omission reuses the shared guidance. */
-  programGuidance?: string
+  /**
+   * Select platform operation instructions for the exposed tool form.
+   * @param kind Raw cua calls or standalone cua_run_code programs.
+   * @returns Instructions before shared capability guidance and configured limits are added.
+   */
+  getGuidance(kind: 'raw' | 'standalone'): string
   capabilities: CuaStartupCapabilities
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
-  /**
-   * Stop this Agent's held input and await native cleanup before its connection closes.
-   * Omit when no input survives individual operations. Unrelated program execution need not settle.
-   * @param agent Agent whose native calls have been cancelled.
-   * @returns Cleanup completion; a rejection is reported while connection disposal still proceeds.
-   */
-  releaseInput?: (agent: Agent) => Promise<void>
   /**
    * Build native permission parameters for the selected action and Client language.
    * @param method Native permission action.
@@ -177,8 +173,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     const instructions = systemPointer ? withSystemPointerGuidance(text) : text
     return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   }
-  const guidance = formatGuidance(backend.guidance)
-  const programGuidance = formatGuidance(backend.programGuidance ?? backend.guidance)
+  const guidance = formatGuidance(backend.getGuidance('raw'))
+  const programGuidance = formatGuidance(backend.getGuidance('standalone'))
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,
     connectTimeoutMs: config.connectTimeoutMs, screenshotTimeoutMs: config.screenshotTimeoutMs,
@@ -211,8 +207,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       controller.abort()
       return closing ??= Promise.resolve().then(async () => {
         try {
-          try { await backend.releaseInput?.(agent) }
-          finally { await clients.get(agent)?.dispose() }
+          await clients.get(agent)?.dispose()
         } finally {
           await Promise.allSettled([...pending].filter(([, owner]) => owner === agent).map(([task]) => task))
           clients.delete(agent)

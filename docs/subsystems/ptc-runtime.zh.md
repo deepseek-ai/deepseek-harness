@@ -27,16 +27,6 @@ interface PtcRunRequest {
    */
   program: string
   /**
-   * Optional source in the program's language and format, evaluated before it in
-   * the same environment after installing the current bindings. It runs on every
-   * execution, including fresh environments; callers must make repeated initialization
-   * safe. Its completion value is discarded, while logs, timeout, cancellation and
-   * output budgets are shared with the program. Failure prevents program execution
-   * without rolling back earlier effects. Omission runs only the program. Providers
-   * reject explicit initialization during resolve when the mode cannot support it.
-   */
-  initialization?: string
-  /**
    * Object-identity owner for optional in-memory state. Omission requests a fresh
    * environment. Consumers must await runtime.release(owner) when the owner ends.
    * Stateless providers ignore this field; retained state is never durable.
@@ -246,6 +236,21 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * @throws When managed resource cleanup fails.
  */
 release(owner: object): Promise<void>
+
+/**
+ * Register source evaluated once when each execution environment is created.
+ * Registration must precede the first run admission; only one initializer may
+ * be registered. Current bindings are installed before initialization. Its
+ * completion is discarded; logs, timeout, cancellation and output bounds share
+ * the first run. Initialization failure discards the environment without
+ * executing the user program or rolling back external effects.
+ * @param program - Initialization source in the provider's language and format.
+ * @returns An idempotent async disposer that stops admission, cancels and drains
+ * admitted runs, and releases environments. Failed cleanup blocks execution
+ * until the disposer succeeds on retry. The caller owns this disposer.
+ * @throws When unsupported, registered twice, registered after admission, or invalid.
+ */
+registerEnvironmentInitializer(program: string): () => Promise<void>
 
 /**
  * Resolve supported options and provider defaults before execution.

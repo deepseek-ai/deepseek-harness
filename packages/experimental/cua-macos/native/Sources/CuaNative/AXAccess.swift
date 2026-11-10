@@ -208,6 +208,12 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "read writability of \(name)") }
         return value
     }
+    /// Observation keeps unsupported writability unknown; mutation callers use strict writable checks.
+    static func observationWritability(role: String, probe: (String, Bool) throws -> Bool?) rethrows -> (value: Bool?, selection: Bool?) {
+        let value = AXTextNode.valueRoles.contains(role) ? try probe("AXValue", true) : nil
+        let selection = AXTextNode.textRoles.contains(role) ? try probe("AXSelectedTextRange", true) : nil
+        return (value, selection)
+    }
     func requireEnabled(_ element: AXUIElement) throws {
         if try boolean(element, "AXEnabled") == false { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility element is disabled") }
     }
@@ -590,10 +596,11 @@ final class AXAccess {
             let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
             let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
-            let valueWritable = AXTextNode.valueRoles.contains(role) ? try writable(element, "AXValue") : nil
+            let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
+            let valueWritable = writability.value
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = AXTextNode.textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : nil
+            let selectionWritable = writability.selection
             let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
             let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
             let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")

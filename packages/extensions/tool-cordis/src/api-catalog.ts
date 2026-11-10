@@ -2625,6 +2625,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['When managed resource cleanup fails.'],
       },
       {
+        signature: 'registerEnvironmentInitializer(program: string): () => Promise<void>',
+        description: 'Register source evaluated once when each execution environment is created. Registration must precede the first run admission; only one initializer may be registered. Current bindings are installed before initialization. Its completion is discarded; logs, timeout, cancellation and output bounds share the first run. Initialization failure discards the environment without executing the user program or rolling back external effects.',
+        parameters: [{ name: 'program', description: 'Initialization source in the provider\'s language and format.' }],
+        returns: 'An idempotent async disposer that stops admission, cancels and drains admitted runs, and releases environments. Failed cleanup blocks execution until the disposer succeeds on retry. The caller owns this disposer.',
+        throws: ['When unsupported, registered twice, registered after admission, or invalid.'],
+      },
+      {
         signature: 'abstract resolve(request: PtcRunRequest): PtcRunSpec',
         description: 'Resolve supported options and provider defaults before execution.',
         parameters: [{ name: 'request', description: 'Program, bindings, cancellation and optional execution choices.' }],
@@ -8196,7 +8203,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'PtcRunRequest',
-    declaration: 'export interface PtcRunRequest {\n    program: string;\n    initialization?: string;\n    stateOwner?: object;\n    bindings: PtcBindingNamespace[];\n    cwd?: string;\n    timeoutMs?: number | null;\n    sandboxPolicy?: SandboxExecutionPolicy;\n    signal?: AbortSignal;\n}',
+    declaration: 'export interface PtcRunRequest {\n    program: string;\n    stateOwner?: object;\n    bindings: PtcBindingNamespace[];\n    cwd?: string;\n    timeoutMs?: number | null;\n    sandboxPolicy?: SandboxExecutionPolicy;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'PtcRunResult',

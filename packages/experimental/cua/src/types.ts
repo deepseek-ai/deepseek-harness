@@ -184,7 +184,7 @@ export interface CuaSurface {
 /**
  * An explicit window with screenshot and pointer input operations.
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
- * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
+ * Coordinate input requires a successful AX observation covering the window or a screenshot, and rejects resizing since that observation.
  */
 export interface CuaWindow extends CuaSurface {
   readonly windowId: number
@@ -244,9 +244,10 @@ export interface CuaApp extends CuaSurface {
    */
   getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
   /**
-   * Observe a specific window.
+   * Select a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
+   * @returns A window object without a native request; selection leaves the accessibility snapshot unchanged.
+   * Providers reject a closed or foreign window when operating on it.
    */
   getWindow(windowId: number): Promise<CuaWindow>
 }
@@ -278,9 +279,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
+   * Select an app, obtain consent, and launch it in the background if necessary, without reading AX.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
-   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
+   * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>
 }
