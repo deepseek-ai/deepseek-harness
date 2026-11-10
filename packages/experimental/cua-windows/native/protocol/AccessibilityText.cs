@@ -7,9 +7,8 @@ namespace DeepSeek.Cua.Protocol;
 
 public sealed record AccessibilityNode
 {
-    public required string Role { get; init; }
+    public required string ControlType { get; init; }
     public string Name { get; init; } = "";
-    public string? Subrole { get; init; }
     public string? Help { get; init; }
     public string? Identifier { get; init; }
     public string? Value { get; init; }
@@ -32,7 +31,7 @@ public static class AccessibilityText
 {
     private static string Quote(string value) => JsonSerializer.Serialize(value, WireJson.Options);
 
-    public static bool Retain(AccessibilityNode node) => node.Role is not ("AXGroup" or "AXScrollArea")
+    public static bool Retain(AccessibilityNode node) => node.ControlType is not ("Group" or "Other")
         || node.Name.Length != 0 || !string.IsNullOrEmpty(node.Help) || node.HasValue || node.Actions.Length != 0
         || node.Enabled == false || node.Focused == true || node.Selected.HasValue || node.Expanded.HasValue;
 
@@ -40,8 +39,7 @@ public static class AccessibilityText
     {
         var text = new StringBuilder("- ");
         if (index is { } number) text.Append('[').Append(number).Append("] ");
-        text.Append(node.Role);
-        if (node.Subrole is { Length: > 0 } subrole) text.Append(" subrole=").Append(Quote(subrole));
+        text.Append(node.ControlType);
         if (node.Enabled == false) text.Append(" disabled");
         if (node.Focused == true) text.Append(" focused");
         if (node.Selected is { } selected) text.Append(" selected=").Append(selected ? "true" : "false");

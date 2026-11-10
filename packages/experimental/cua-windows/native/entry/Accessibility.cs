@@ -14,7 +14,7 @@ internal static class Accessibility
 {
     private static readonly AutomationProperty[] Properties = [
         AutomationElement.ControlTypeProperty, AutomationElement.NameProperty, AutomationElement.HelpTextProperty,
-        AutomationElement.AutomationIdProperty, AutomationElement.ClassNameProperty, AutomationElement.IsEnabledProperty,
+        AutomationElement.AutomationIdProperty, AutomationElement.IsEnabledProperty,
         AutomationElement.HasKeyboardFocusProperty, AutomationElement.IsKeyboardFocusableProperty, AutomationElement.IsPasswordProperty,
         AutomationElement.BoundingRectangleProperty, AutomationElement.IsInvokePatternAvailableProperty,
         AutomationElement.IsValuePatternAvailableProperty, AutomationElement.IsRangeValuePatternAvailableProperty,
@@ -98,7 +98,7 @@ internal static class Accessibility
                 }
                 Add(new string(' ', indent * 2) + AccessibilityText.Format(node, index, details));
             }
-            if (!includeMenus && node.Role == "AXMenu")
+            if (!includeMenus && node.ControlType == nameof(ControlType.Menu))
             {
                 Add(new string(' ', (indent + 1) * 2) + "[menu contents omitted; includeMenus:true]");
                 return;
@@ -124,7 +124,7 @@ internal static class Accessibility
 
     private static AccessibilityNode Read(AutomationElement element, WindowState window, WindowGeometry geometry, RequestContext context)
     {
-        var type = Property(element, AutomationElement.ControlTypeProperty) as ControlType ?? ControlType.Custom;
+        var type = Property(element, AutomationElement.ControlTypeProperty) as ControlType;
         var actions = new List<string>();
         if (Flag(element, AutomationElement.IsInvokePatternAvailableProperty)) actions.Add("Press");
         if (Flag(element, AutomationElement.IsTogglePatternAvailableProperty)) actions.Add("Toggle");
@@ -175,15 +175,14 @@ internal static class Accessibility
                 selection = new(start, selectedText.Length);
             }
         }
-        var role = Role(type, password, value);
         var bounds = Property(element, AutomationElement.BoundingRectangleProperty) is System.Windows.Rect rectangle && !rectangle.IsEmpty
             ? ((double, double, double, double)?)(rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height) : null;
         var expanded = Property(element, ExpandCollapsePattern.ExpandCollapseStateProperty) is ExpandCollapseState state
             ? state == ExpandCollapseState.Expanded ? true : state == ExpandCollapseState.Collapsed ? false : (bool?)null : null;
         return new()
         {
-            Role = role, Name = Text(element, AutomationElement.NameProperty), Help = Text(element, AutomationElement.HelpTextProperty),
-            Identifier = Text(element, AutomationElement.AutomationIdProperty), Subrole = type == ControlType.Custom ? Text(element, AutomationElement.ClassNameProperty) : null,
+            ControlType = ControlTypeName(type), Name = Text(element, AutomationElement.NameProperty), Help = Text(element, AutomationElement.HelpTextProperty),
+            Identifier = Text(element, AutomationElement.AutomationIdProperty),
             Value = value, HasValue = hasValue, ValueWritable = writable,
             Enabled = Property(element, AutomationElement.IsEnabledProperty) as bool?, Focused = Property(element, AutomationElement.HasKeyboardFocusProperty) as bool?,
             Selected = Property(element, SelectionItemPattern.IsSelectedProperty) as bool?, Expanded = expanded,
@@ -192,33 +191,34 @@ internal static class Accessibility
         };
     }
 
-    private static string Role(ControlType type, bool password, string? value)
+    private static string ControlTypeName(ControlType? type)
     {
-        if (password) return "AXSecureTextField";
-        if (type == ControlType.Edit) return value?.Contains('\n') == true ? "AXTextArea" : "AXTextField";
-        if (type == ControlType.Document) return "AXTextArea";
-        if (type == ControlType.Button) return "AXButton";
-        if (type == ControlType.CheckBox) return "AXCheckBox";
-        if (type == ControlType.RadioButton) return "AXRadioButton";
-        if (type == ControlType.Text) return "AXStaticText";
-        if (type == ControlType.Window) return "AXWindow";
-        if (type == ControlType.MenuBar) return "AXMenuBar";
-        if (type == ControlType.Menu) return "AXMenu";
-        if (type == ControlType.MenuItem) return "AXMenuItem";
-        if (type == ControlType.ComboBox) return "AXComboBox";
-        if (type == ControlType.List) return "AXList";
-        if (type == ControlType.ListItem) return "AXRow";
-        if (type == ControlType.Tree) return "AXOutline";
-        if (type == ControlType.TreeItem) return "AXRow";
-        if (type == ControlType.Tab) return "AXTabGroup";
-        if (type == ControlType.TabItem) return "AXRadioButton";
-        if (type == ControlType.Slider) return "AXSlider";
-        if (type == ControlType.Spinner) return "AXIncrementor";
-        if (type == ControlType.ScrollBar) return "AXScrollBar";
-        if (type == ControlType.Image) return "AXImage";
-        if (type == ControlType.Hyperlink) return "AXLink";
-        if (type == ControlType.Table || type == ControlType.DataGrid) return "AXTable";
-        return "AXGroup";
+        if (type == ControlType.Edit) return nameof(ControlType.Edit);
+        if (type == ControlType.Document) return nameof(ControlType.Document);
+        if (type == ControlType.Button) return nameof(ControlType.Button);
+        if (type == ControlType.CheckBox) return nameof(ControlType.CheckBox);
+        if (type == ControlType.RadioButton) return nameof(ControlType.RadioButton);
+        if (type == ControlType.Text) return nameof(ControlType.Text);
+        if (type == ControlType.Window) return nameof(ControlType.Window);
+        if (type == ControlType.MenuBar) return nameof(ControlType.MenuBar);
+        if (type == ControlType.Menu) return nameof(ControlType.Menu);
+        if (type == ControlType.MenuItem) return nameof(ControlType.MenuItem);
+        if (type == ControlType.ComboBox) return nameof(ControlType.ComboBox);
+        if (type == ControlType.List) return nameof(ControlType.List);
+        if (type == ControlType.ListItem) return nameof(ControlType.ListItem);
+        if (type == ControlType.Tree) return nameof(ControlType.Tree);
+        if (type == ControlType.TreeItem) return nameof(ControlType.TreeItem);
+        if (type == ControlType.Tab) return nameof(ControlType.Tab);
+        if (type == ControlType.TabItem) return nameof(ControlType.TabItem);
+        if (type == ControlType.Slider) return nameof(ControlType.Slider);
+        if (type == ControlType.Spinner) return nameof(ControlType.Spinner);
+        if (type == ControlType.ScrollBar) return nameof(ControlType.ScrollBar);
+        if (type == ControlType.Image) return nameof(ControlType.Image);
+        if (type == ControlType.Hyperlink) return nameof(ControlType.Hyperlink);
+        if (type == ControlType.Table) return nameof(ControlType.Table);
+        if (type == ControlType.DataGrid) return nameof(ControlType.DataGrid);
+        if (type == ControlType.Group) return nameof(ControlType.Group);
+        return "Other";
     }
 
     internal static ElementReference Element(AppState app, WindowState window, string snapshotId, string elementId,

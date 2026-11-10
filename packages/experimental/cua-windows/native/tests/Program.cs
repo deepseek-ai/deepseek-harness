@@ -65,13 +65,20 @@ Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["control"])
 Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
 
-var node = new AccessibilityNode { Role = "AXTextField", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Actions = ["Press", "Focus"] };
+var node = new AccessibilityNode { ControlType = "Edit", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Actions = ["Press", "Focus"] };
 var text = AccessibilityText.Format(node, 3, false);
+Check(text == "- [3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" actions=[\"Focus\"]",
+    "Rows expose the native ControlType name without a subrole");
+foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "TabItem", "Table", "DataGrid" })
+    Check(AccessibilityText.Format(new() { ControlType = controlType }, null, false) == "- " + controlType,
+        "Formatting preserves distinct Windows control types: " + controlType);
+Check(!AccessibilityText.Retain(new() { ControlType = "Other" }), "Empty fallback containers can collapse");
+Check(AccessibilityText.Retain(new() { ControlType = "Other", Name = "Custom content" }), "Named fallback containers retain their row");
 Check(text.Contains("= \"\" placeholder=\"Title\""), "Empty values and placeholders remain distinct");
 Check(!text.Contains("\"Press\"") && text.Contains("\"Focus\""), "Common actions compact without hiding secondary actions");
 Check(AccessibilityText.Format(node, 3, true).Contains("\"Press\""), "Details retain complete action names");
-Check(!AccessibilityText.Retain(new() { Role = "AXGroup" }), "Empty structural containers can collapse");
-Check(AccessibilityText.Retain(new() { Role = "AXGroup", Actions = ["Copy"] }), "Actionable containers retain their row");
-Check(AccessibilityText.Format(new() { Role = "AXTextArea", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, 0, false)
+Check(!AccessibilityText.Retain(new() { ControlType = "Group" }), "Empty structural containers can collapse");
+Check(AccessibilityText.Retain(new() { ControlType = "Group", Actions = ["Copy"] }), "Actionable containers retain their row");
+Check(AccessibilityText.Format(new() { ControlType = "Document", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, 0, false)
     .Contains("selection=unavailable"), "Out-of-range selections do not describe valid text");
 Console.WriteLine($"{checks} portable CUA checks passed");
