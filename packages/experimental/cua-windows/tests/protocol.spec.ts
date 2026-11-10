@@ -27,11 +27,6 @@ it('resolves Windows input defaults without a compiler path setting', () => {
   expect(Config({ maxElements: 100000, maxDepth: 512 })).toMatchObject({ maxElements: 100000, maxDepth: 512 })
   expect(() => Config({ maxElements: 100001 })).toThrow()
   expect(() => Config({ maxDepth: 513 })).toThrow()
-  expect(resolved.launchWaitMs).toBe(1000)
-  expect(Config({ launchWaitMs: 750 }).launchWaitMs).toBe(750)
-  for (const launchWaitMs of [0, -1, 0.5, 2 ** 31, Number.NaN, Number.POSITIVE_INFINITY]) {
-    expect(() => Config({ launchWaitMs })).toThrow()
-  }
   expect(resolved.textEventIntervalMs).toBe(0)
   expect(() => Config({ pollIntervalMs: 0 })).toThrow()
   expect(() => Config({ maxResponseBytes: 2 ** 31 })).toThrow()

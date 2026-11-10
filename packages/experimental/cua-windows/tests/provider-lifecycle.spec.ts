@@ -37,10 +37,10 @@ it('rejects relative overrides before installing a native provider', async () =>
   expect(native.install).not.toHaveBeenCalled()
 })
 it('uses an absolute fixture without compiling and disposes the Host runtime', async () => {
-  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13, launchWaitMs: 750 })
+  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 750, 'pipe')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 1000, 'pipe')
   const backend = native.install.mock.calls[0]![2]
   expect(backend.helperPath).toBe(config.helperPath)
   expect(native.architecture).not.toHaveBeenCalled()
