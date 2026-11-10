@@ -200,12 +200,13 @@ it.skipIf(process.platform !== 'darwin').each([
     const beforePersistent = scaffold.ctx.ptcRuntime
     await persistent.getByRole('button', { name: '设为持久化', exact: true }).click()
     await persistent.getByRole('button', { name: '已设为持久化', exact: true }).waitFor()
-    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'repl')
+    expect(scaffold.ctx.ptcRuntime.programFormat).toBe(script ? 'script' : 'scoped-repl')
     expect(scaffold.ctx.ptcRuntime.retainsState).toBe(true)
     expect(scaffold.ctx.ptcRuntime === beforePersistent).toBe(false)
     saved = await readFile(settingsPath, 'utf8')
     expect(saved).toContain(`executionMode: ${script ? 'vm-script' : 'persistent-in-memory'}`)
     expect(saved).toContain(`scriptPersistence: ${script}`)
+    expect(saved).toContain(`replScoped: ${!script}`)
     const runtime = scaffold.ctx.ptcRuntime
     const persistentRuntimeFiber = runtimeFiber()
     const owner = {}

@@ -2860,7 +2860,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-ptc-runtime-node`
 
 - `inject`: `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
-- `source`: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:7`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
+- `source`: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:8`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
 
 ```ts config-catalog
 /** Deployment-varying runtime bounds and launch choices. */
@@ -2871,7 +2871,10 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
-  /** Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings. */
+  /**
+   * Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings;
+   * omitted, it is `SCOPED_REPL_BY_DEFAULT` from configuration.ts, currently true, with persistent-in-memory and false otherwise.
+   */
   replScoped?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number

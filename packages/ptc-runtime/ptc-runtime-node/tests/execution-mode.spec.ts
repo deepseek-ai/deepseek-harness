@@ -10,7 +10,7 @@ import { resolvePersistentExecution } from '../src/configuration.ts'
 it.each([undefined, 'function-body', 'repl', 'script', 'scoped-repl'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
   const { runtime } = await mountRuntime(new Context(), resolvePersistentExecution(programFormat))
   expect(runtime.retainsState).toBe(true)
-  expect(runtime.programFormat).toBe(programFormat === 'script' || programFormat === 'scoped-repl' ? programFormat : 'repl')
+  expect(runtime.programFormat).toBe(programFormat === 'script' ? 'script' : 'scoped-repl')
 })
 
 it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
@@ -28,13 +28,13 @@ it.each(['in-memory', 'durable', 'fresh-process', 'persistent-repl'])('rejects u
   expect(() => z.resolve({ executionMode }, NodeRuntime.Config, {})).toThrow()
 })
 
-it('clears retained state when a provider is reloaded with another execution mode', async () => {
+it.each([false, true])('clears retained state when a provider is reloaded with another execution mode (replScoped %s)', async (replScoped) => {
   const ctx = new Context()
   const owner = {}
-  const { runtime: memory, fiber: memoryFiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory' })
+  const { runtime: memory, fiber: memoryFiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped })
   const first = await memory.run(memory.resolve({ program: 'let retained = 17;', bindings: [], stateOwner: owner }))
   expect(first.error).toBeUndefined()
-  expect(memory.programFormat).toBe('repl')
+  expect(memory.programFormat).toBe(replScoped ? 'scoped-repl' : 'repl')
   expect(memory.sandboxMode).toBe('danger-full-access')
   await memoryFiber.dispose()
   const { runtime: perCall, fiber: perCallFiber } = await mountRuntime(ctx, { executionMode: 'per-call' })
@@ -42,19 +42,25 @@ it('clears retained state when a provider is reloaded with another execution mod
   expect(perCall.sandboxMode).toBe('danger-full-access')
   expect((await perCall.run(perCall.resolve({ program: 'return typeof retained;', bindings: [], stateOwner: owner }))).value).toBe('undefined')
   await perCallFiber.dispose()
-  const { runtime: resumed } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory' })
+  const { runtime: resumed } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped })
   expect((await resumed.run(resumed.resolve({ program: 'typeof retained', bindings: [], stateOwner: owner }))).value).toBe('undefined')
 })
 
 it.each<NonNullable<Config['executionMode']>>(['per-call', 'persistent-in-memory', 'vm-script'])('resolves omitted cwd from the configured workspace in %s mode', async (executionMode) => {
   const workspaceRoot = join(process.cwd(), 'configured-workspace')
-  const { runtime } = await mountRuntime(new Context(), { executionMode }, { workspaceRoot })
+  const { runtime } = await mountRuntime(new Context(), { executionMode, replScoped: false }, { workspaceRoot })
   expect(runtime.resolve({ program: '', bindings: [] }).cwd).toBe(workspaceRoot)
   expect(runtime.resolve({ program: '', bindings: [], cwd: process.cwd() }).cwd).toBe(process.cwd())
 })
 
 it.each(['per-call', 'persistent-in-memory'] as const)('rejects Script retention with %s syntax', async (executionMode) => {
-  await expect(mountRuntime(new Context(), { executionMode, scriptPersistence: true })).rejects.toThrow('scriptPersistence')
+  await expect(mountRuntime(new Context(), { executionMode, scriptPersistence: true, replScoped: false })).rejects.toThrow('scriptPersistence')
+})
+
+// The only ptc-runtime-node mode test that omits replScoped; it pins SCOPED_REPL_BY_DEFAULT from configuration.ts.
+it('runs the scoped REPL when persistent-in-memory omits replScoped', async () => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'persistent-in-memory' })
+  expect(runtime.programFormat).toBe('scoped-repl')
 })
 
 it.each([false, true])('advertises Script syntax and its selected retention %s', async (scriptPersistence) => {

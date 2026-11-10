@@ -21,7 +21,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   await writeFile(join(root, 'package.json'), JSON.stringify({ name, version: '1.0.0', dsh: { bundle: {
     patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'],
   } } }))
-  await writeFile(join(root, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: persistent-in-memory\n')
+  await writeFile(join(root, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: persistent-in-memory\n    replScoped: false\n')
   const scaffold = owned.scaffold = await launchWebScaffold({ profile: { packages: [{ dir: root }] } })
   const browser = owned.browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
