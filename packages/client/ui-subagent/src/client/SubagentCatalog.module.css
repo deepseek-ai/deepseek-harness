@@ -205,25 +205,13 @@
   line-height: 17px;
 }
 
-/* The chevron shares the row's highlight: its glyph darkens without a fill. */
+/* In the panel's columns the arrow's 24px target centers on the trailing column. */
 .sectionBody .sidebarButton,
 .sectionBody .sidebarSpace {
   align-self: center;
   width: 24px;
   height: 24px;
   margin: 0 -4px;
-  padding: 0;
-  border-radius: var(--dsw-radius-xs);
-}
-
-.sectionBody .sidebarButton:focus-visible {
-  background: transparent;
-}
-
-@media (hover: hover) {
-  .sectionBody .sidebarButton:hover {
-    background: transparent;
-  }
 }
 
 .node {
@@ -380,7 +368,6 @@
   grid-row: 2;
 }
 
-.sidebarButton,
 .sidebarSpace {
   box-sizing: border-box;
   flex: none;
@@ -395,26 +382,32 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* The arrow shares its row's highlight: a 24px target whose glyph darkens
+   without a fill, in the panel and in the switcher menu alike. In the menu it
+   keeps the 28px trailing column the current row's check also fills. */
 .sidebarButton {
+  box-sizing: border-box;
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  width: 24px;
+  height: 24px;
+  margin: 6px 2px;
+  padding: 0;
   border: 0;
-  border-radius: var(--dsw-radius-sm);
+  border-radius: var(--dsw-radius-xs);
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
 }
 
 .sidebarButton:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
 }
 
 @media (hover: hover) {
   .sidebarButton:hover {
-    background: var(--dsw-alias-interactive-bg-hover);
     color: var(--dsw-alias-label-primary);
   }
 }
