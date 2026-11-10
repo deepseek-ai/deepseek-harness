@@ -200,15 +200,15 @@ export class SessionPanel {
     await Promise.all([inspection, probe])
   }
 
-  /**
-   * Stop inspections, probes, and the change request watch, end every follower, and wait for pending work.
-   * @returns settles once pending inspections and probes have ended.
-   */
   /** Publish the review revisions of the bound change requests after a review change was announced. */
   reviewChanged(): void {
     this.publish({ ...this.current, changeRequests: this.entries(this.ctx.forgeSession.changeRequests(this.session)) })
   }
 
+  /**
+   * Stop inspections, probes, and the change request watch, end every follower, and wait for pending work.
+   * @returns settles once pending inspections and probes have ended.
+   */
   async dispose(): Promise<void> {
     this.lifetime.abort()
     this.stopWatching()
