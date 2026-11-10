@@ -11,10 +11,8 @@ struct ApplicationInfo: Sendable {
     let path: String?
     let executablePath: String?
     let regular: Bool
-    func matches(_ selector: String, installed: InstalledApplication? = nil) -> Bool {
-        guard regular, let name else { return false }
-        if let installed { return installed.matchesProcess(self) }
-        return name.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
+    func matches(_ selector: String) -> Bool {
+        name?.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
             || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
                 == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path)
     }
@@ -28,6 +26,7 @@ struct ApplicationInfo: Sendable {
 struct ApplicationCatalogSnapshot: Sendable {
     let applications: [ApplicationInfo]
     let frontPID: Int32?
+    var selectableApplications: [ApplicationInfo] { applications.filter { $0.regular && $0.name != nil } }
     func application(_ pid: Int32) -> ApplicationInfo? { applications.first { $0.pid == pid } }
 }
 @MainActor enum ApplicationCatalog {

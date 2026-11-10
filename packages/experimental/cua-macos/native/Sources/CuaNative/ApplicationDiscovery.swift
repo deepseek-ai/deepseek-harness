@@ -75,6 +75,7 @@ struct InstalledApplication: Sendable, Equatable {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
+        // Reuse is limited to this installation, even if another copy has the same bundle identifier.
         configuration.allowsRunningApplicationSubstitution = false
         let running = try await NSWorkspace.shared.openApplication(
             at: URL(fileURLWithPath: app.path), configuration: configuration)

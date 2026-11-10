@@ -137,6 +137,17 @@ def main():
         assert helper.call("getApp", {"selector": str(process.pid)})["appHandle"] == running["appHandle"]
         check_window(running, state, process.pid)
 
+        app, executable, _, _ = fixture("Concurrent instances", identifier + ".concurrent")
+        pending = helper.call("getApp", {"selector": str(app)})
+        for index in range(2):
+            state = root / f"concurrent-{index}.json"
+            instance = subprocess.Popen([str(executable), str(state), "--background"],
+                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            cleanup.callback(stop, instance)
+            wait_for_state(state, lambda value: value["pid"] == instance.pid and value["windowId"] > 0)
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="AMBIGUOUS_APP")
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="STALE_APP")
+
         standalone_ids = []
         for index in range(2):
             state = root / f"standalone-{index}.json"
