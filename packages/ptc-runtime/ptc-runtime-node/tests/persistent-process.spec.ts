@@ -60,9 +60,30 @@ it('runs initialization before the program in the same REPL and discards its com
   expect(decodePtcJsonWire((await h.run('42', [], 1024, '')).value)).toBe(42)
 })
 
+it.each([false, true])('closes program output and bindings before queued microtasks with initialization %s', async (initialize) => {
+  const h = await setup()
+  const namespaces = [{ global: 'tools', names: ['echo'] }]
+  const result = await h.run(
+    'queueMicrotask(() => { console.log("late"); void tools.echo({}).catch(() => {}) }); 42',
+    namespaces, 1024, initialize ? 'globalThis.ready = true' : undefined,
+  )
+  expect(decodePtcJsonWire(result.value)).toBe(42)
+  await setImmediate()
+  expect(h.seen.filter(item => item.type === 'log' || item.type === 'call')).toEqual([])
+  expect(decodePtcJsonWire((await h.run('await tools.echo({})', namespaces)).value)).toBe(42)
+  expect(h.seen.filter(item => item.type === 'call')).toHaveLength(1)
+})
+
+it('does not adopt a REPL completion Promise without explicit await', async () => {
+  const h = await setup()
+  expect((await h.run('Promise.resolve(42)')).error?.kind).toBe('invalid-output')
+  expect(decodePtcJsonWire((await h.run('await Promise.resolve(42)')).value)).toBe(42)
+})
+
 it('prevents the program after initialization exceptions and output overflow', async () => {
   const h = await setup()
   await h.run('var entered = 0;')
+  expect((await h.run('entered++', [], 4096, 'const =')).error?.kind).toBe('exception')
   const failed = await h.run('entered++', [], 1024, 'throw "initialization failed"')
   expect(failed.error?.kind).toBe('exception')
   expect(failed.error?.message).toContain('initialization failed')
@@ -117,6 +138,20 @@ it('does not start the user program when Host acceptance rejects', async () => {
   expect(result.error?.kind).toBe('exception')
   expect(result.error?.message).toContain('initialization was canceled')
   expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+})
+
+it('cancels initialization while its Host acceptance is pending', async () => {
+  const h = await setup()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setInitialized(() => { entered.resolve(); return accepted.promise })
+  const pending = h.run('globalThis.programRan = true', [], 1024, 'globalThis.helper = {}')
+  try {
+    await entered.promise
+    await h.peer.revoke()
+    expect(await pending).toEqual({})
+    expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+  } finally { accepted.resolve(); await pending }
 })
 
 it('checks revocation after accepting an initialization reply', async () => {

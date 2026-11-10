@@ -166,6 +166,8 @@ describe('Node environment initialization', () => {
   it.each([
     'globalThis.cycle = {}; cycle.self = cycle; cycle',
     '({ get bad() { throw new Error("must not inspect") } })',
+    '({ get then() { throw new Error("must not adopt") } })',
+    'new Promise(() => {})',
   ])('discards initialization completion without traversing it: %s', async (initialization) => {
     const { run } = await setup({}, initialization)
     expect(await run('42')).toMatchObject({ value: 42, logs: [] })
