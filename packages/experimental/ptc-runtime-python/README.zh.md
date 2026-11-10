@@ -27,7 +27,7 @@ kind: "package-reference"
 
 仅在显式组合中选择这个已发布的实验包。将 `PythonPtcRuntime` 与 `dsh-tools` 一起注册后，`run(resolve(request))` 会在全新的 CPython 3.10+ 子进程中执行每个程序；成功时以 `result.value` resolve，失败时以 `result.error` resolve（正交的 `PtcRunFailure.kind` 分类涵盖解析失败、抛出异常、无效完成值、输出溢出、预算到期、中止、约束不可用与执行基底终止）。仅有调用方误用会 reject，例如 binding 不合法、执行选项未解析，或在 dispose 后调用。配置在加载期拒绝：非 Unix 平台；不是可执行普通文件的显式 `pythonBin`，或无法在 `PATH` 上解析的裸名；非 CPython、低于 3.10 或探测失败的解释器；非正或非整数预算；低于截断标记下限（64）的 `maxLogBytes`；会被 `setTimeout` 截断的定时器值；超过有效 fd-3 帧上限的预算（宿主堆无法安全解析接近上限的帧时，该上限会降低）；或最坏峰值会突破 `RLIMIT_AS` 的 `addressSpaceMb`／输出预算组合。
 
-组合必须为此本地执行宿主提供 `sandbox` 和 `sandboxPolicy`。`resolve(request)` 接受显式 `sandboxPolicy`，或解析共享部署策略，并将 `cwd` 默认设为该策略的工作区根目录。PTC mode 提供调用 Session 的策略和目录。配置的 `maxWallMs` 仍是执行截止时间；不支持显式 `timeoutMs` 覆盖。
+组合必须为此本地执行宿主提供 `sandbox` 和 `sandboxPolicy`。`resolve(request)` 接受显式 `sandboxPolicy`，或解析共享部署策略，并将 `cwd` 默认设为该策略的工作区根目录。PTC mode 提供调用 Session 的策略和目录。配置的 `maxWallMs` 仍是执行截止时间；不支持显式 `timeoutMs` 覆盖，解析时会拒绝。不支持注册环境初始化程序。
 
 `read-only` 和 `workspace-write` 通过配置的沙箱提供方执行；`danger-full-access` 显式绕过约束。`result.sandbox` 独立于程序结果报告模式、观察到的拒绝，以及后端的完整或部分强制能力。[沙箱服务](../../sandbox/sandbox/README.zh.md)定义文件限制与后端局限；这些模式不限制网络访问或任意文件读取。
 

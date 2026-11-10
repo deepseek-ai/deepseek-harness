@@ -40,11 +40,14 @@ const result = await ctx.ptcRuntime.run(spec)
 // result.value === 3
 ```
 
+<a id="choose-a-backend"></a>
 ### Choose a backend
 
 Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. The private [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.md) provider executes Python in a fresh CPython subprocess without file confinement. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
 
 For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-repl), pass the same `stateOwner` object across runs and await `release(owner)` at the owner's end. Different object identities never share an environment; omitted owners use a temporary environment. Stateless providers ignore ownership. Calls for one retained owner must not overlap.
+
+`registerEnvironmentInitializer(program)` registers source that prepares each new environment once before user code, after current bindings are installed. Register before the first run is admitted; only one initializer may be registered. Initialization shares the first run's logs, deadline, cancellation and output budget, and its completion value is discarded. Failure prevents user execution and discards the environment without rolling back external effects. Own the returned async disposer: it cancels and drains admitted runs and releases environments. Failed cleanup blocks new execution until disposal succeeds on retry. Registration after admission of the first run remains invalid even after all environments are released. Unsupported providers and modes reject registration; see the [Node provider](../ptc-runtime-node/README.md#persistent-repl) for supported syntax.
 
 ### Name your bindings portably
 

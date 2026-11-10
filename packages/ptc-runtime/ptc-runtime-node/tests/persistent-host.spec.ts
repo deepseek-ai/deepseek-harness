@@ -137,6 +137,78 @@ it.each(['persistent-in-memory', 'per-call'] as const)('rejects admission when %
   }
 })
 
+it('requires Host acceptance before a newly initialized environment can succeed', async () => {
+  const h = await setup()
+  onTestFinished(h.runtime.registerEnvironmentInitializer(''))
+  h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
+  const result = await h.start()
+  expect(result.error?.kind).toBe('protocol')
+  expect(result.error?.message).toContain('without Host acceptance')
+  expect(h.terminate).toHaveBeenCalledOnce()
+  expect(h.waitForExit).toHaveBeenCalledOnce()
+})
+
+it.each([false, true])('rejects unsolicited initialization acceptance with readiness %s', async (ready) => {
+  const h = await setup()
+  const acknowledgement = { t: 'q', i: 'initialized', m: 'initialized', a: [] }
+  h.onBoot(() => { h.emit(acknowledgement) })
+  const result = ready ? await h.start() : await h.start(request, acknowledgement)
+  expect(result.error?.kind).toBe('protocol')
+  expect(result.error?.message).toContain('unexpected environment initialization')
+})
+
+it('keeps failed initializer removal closed until cleanup is retried', async () => {
+  const h = await setup()
+  const remove = h.runtime.registerEnvironmentInitializer('')
+  onTestFinished(remove)
+  h.receive((message) => {
+    if (typeof message !== 'object' || message === null) return
+    if ('m' in message && message.m === 'run') h.emit({ t: 'q', i: 'initialized', m: 'initialized', a: [] })
+    else if ('t' in message && message.t === 's' && 'i' in message && message.i === 'initialized') h.complete({})
+  })
+  expect((await h.start()).error).toBeUndefined()
+  const failure = new Error('initializer cleanup failed')
+  h.waitForExit.mockRejectedValue(failure)
+  try {
+    await expect(remove()).rejects.toBe(failure)
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
+    h.waitForExit.mockResolvedValue(true)
+    await remove()
+    await remove()
+    expect(h.waitForExit).toHaveBeenCalledTimes(2)
+  } finally { h.waitForExit.mockResolvedValue(true); await remove() }
+})
+
+it('rejects registration once a run is admitted, before process readiness', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.complete({}) })
+  const pending = h.start()
+  expect(() => h.runtime.registerEnvironmentInitializer('')).toThrow('before the first run')
+  expect((await pending).error).toBeUndefined()
+})
+
+it('waits for canceled startup when an initializer is removed', async () => {
+  const h = await setup()
+  const remove = h.runtime.registerEnvironmentInitializer('')
+  onTestFinished(remove)
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const lookup = Promise.withResolvers<string>()
+  h.resolveExecutable.mockImplementation(() => { entered.resolve(); return lookup.promise })
+  const pending = h.start(request, NO_INITIAL_FRAME)
+  await entered.promise
+  let removed = false
+  const closing = remove().then(() => { removed = true })
+  try {
+    await setImmediate()
+    expect(removed).toBe(false)
+    expect(h.spawn).not.toHaveBeenCalled()
+    lookup.resolve(process.execPath)
+    await closing
+    expect((await pending).error?.kind).toBe('abort')
+    expect(h.spawn).not.toHaveBeenCalled()
+  } finally { lookup.resolve(process.execPath); await closing; await pending }
+})
+
 describe('persistent PTC host protocol', () => {
   it.each([
     null,

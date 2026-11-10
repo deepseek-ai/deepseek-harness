@@ -62,6 +62,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   edit: 'edit',
   apply_patch: 'edit',
   run_code: 'code',
+  cua_run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
   // The three run-control verbs take one package id and produce a receipt, so

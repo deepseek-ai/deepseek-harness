@@ -88,6 +88,7 @@ describe('PythonPtcRuntime — seam descriptors and misuse', () => {
       expect(() => runtime.resolve({ ...request, cwd: 'relative' })).toThrow('cwd must be absolute')
       expect(() => runtime.resolve({ ...request, timeoutMs: 1 })).toThrow('per-call timeout is unsupported')
       expect(() => runtime.resolve({ ...request, timeoutMs: null })).toThrow('per-call timeout is unsupported')
+      expect(() => runtime.registerEnvironmentInitializer('helper = {}')).toThrow('environment initialization is unsupported')
       const sandboxPolicy = { mode: 'danger-full-access' as const, workspaceRoot: cwd }
       expect(runtime.resolve({ ...request, sandboxPolicy }).sandboxPolicy).toBe(sandboxPolicy)
       await expect(runtime.run({ ...request, cwd, timeoutMs: 30_000 })).rejects.toThrow('run requires a resolved sandbox policy')

@@ -972,9 +972,9 @@ export class PythonPtcRuntime extends PtcRuntime {
 
   /**
    * Resolve authority, directory, and the configured wall deadline.
-   * @param request - Program inputs and optional resolved sandbox authority; timeout overrides are unsupported.
+   * @param request - Program inputs and optional resolved sandbox authority.
    * @returns Complete inputs for the provider's run method.
-   * @throws When a requested timeout is unsupported, cwd is relative, or the provider is disposed.
+   * @throws When a timeout override is supplied, cwd is relative, or the provider is disposed.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) throw new Error('dsh-ptc-runtime-python: resolve() after disposal')
