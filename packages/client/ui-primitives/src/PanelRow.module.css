@@ -91,6 +91,35 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+/* A detail line under the content: the row grows by its 17px line and 4px insets, and the icon keeps the first
+   line's 20px box, so its center stays level with that line. */
+.tall .body {
+  align-items: flex-start;
+  height: auto;
+  padding: 4px 0;
+}
+
+.tall .icon {
+  height: 20px;
+}
+
+.lines {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A 16px column, so the action's 24px target reaches past it without moving the glyph. */
 .menu {
   justify-content: center;

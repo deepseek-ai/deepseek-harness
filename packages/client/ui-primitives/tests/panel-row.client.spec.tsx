@@ -50,6 +50,18 @@ describe('PanelRow', () => {
     expect(staticRow.className).not.toBe(interactive)
   })
 
+  it('puts a detail line under the content and keeps the trailing area beside both lines', () => {
+    const view = render(
+      <PanelRow icon={<svg />} detail={<span>gh auth login</span>} trailing={<button type="button">Copy</button>}>Sign in</PanelRow>,
+    )
+    const row = view.container.querySelector('[data-panel-row]') as HTMLElement
+    const lines = screen.getByText('Sign in').parentElement as HTMLElement
+    expect([...lines.children].map(line => line.textContent)).toEqual(['Sign in', 'gh auth login'])
+    expect([...row.children].map(child => child.textContent)).toEqual(['Sign ingh auth login', 'Copy'])
+    const plain = render(<PanelRow icon={<svg />}>Sign in</PanelRow>).container.querySelector('[data-panel-row]') as HTMLElement
+    expect(row.className).not.toBe(plain.className)
+  })
+
   it('forwards attributes such as context-menu handlers to the outer element', () => {
     const onContextMenu = vi.fn()
     const view = render(<PanelRow icon={<svg />} className="placed" onContextMenu={onContextMenu} tabIndex={0}>Row</PanelRow>)

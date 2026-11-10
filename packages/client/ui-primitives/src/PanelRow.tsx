@@ -26,6 +26,12 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
    * the visible text, so speech input that names what the row shows reaches the button.
    */
   readonly actionLabel?: string | undefined
+  /**
+   * Second line under the content, in smaller tertiary type that clips with an ellipsis, such as the consequence of a
+   * status or a command to run; the row grows to two lines with the icon beside the first, and the trailing area and
+   * the menu centered on the row.
+   */
+  readonly detail?: ReactNode
 }
 
 /**
@@ -35,16 +41,23 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
  * @param props - row content, the optional action and row actions, and attributes for the outer element.
  * @returns the row element.
  */
-export function PanelRow({ icon, children, trailing, menu, onActivate, actionLabel, className, ...attributes }: PanelRowProps) {
+export function PanelRow({ icon, children, trailing, menu, onActivate, actionLabel, detail, className, ...attributes }: PanelRowProps) {
   const body = (
     <>
       <span className={css.icon} aria-hidden="true">{icon}</span>
-      <span className={css.content}>{children}</span>
+      {detail === undefined
+        ? <span className={css.content}>{children}</span>
+        : (
+          <span className={css.lines}>
+            <span className={css.content}>{children}</span>
+            <span className={css.detail}>{detail}</span>
+          </span>
+        )}
     </>
   )
   const interactive = onActivate !== undefined || menu !== undefined
   return (
-    <div {...attributes} className={clsx(css.row, interactive && css.interactive, className)} data-panel-row="">
+    <div {...attributes} className={clsx(css.row, interactive && css.interactive, detail !== undefined && css.tall, className)} data-panel-row="">
       {onActivate === undefined
         ? <span className={css.body}>{body}</span>
         : <button type="button" className={clsx(css.body, css.action)} aria-label={actionLabel} onClick={onActivate}>{body}</button>}
