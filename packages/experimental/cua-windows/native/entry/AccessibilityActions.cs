@@ -46,18 +46,6 @@ internal static class AccessibilityActions
             context.Ax(() => { ((InvokePattern)pattern!).Invoke(); return true; });
         else if (context.Ax(() => element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out pattern)))
             context.Ax(() => { ((SelectionItemPattern)pattern!).Select(); return true; });
-        else return false;
-        return true;
-    }
-
-    internal static bool Click(ElementReference reference, RequestContext context)
-    {
-        object? pattern = null;
-        var element = reference.Element;
-        if (context.Ax(() => element.TryGetCurrentPattern(InvokePattern.Pattern, out pattern)))
-            context.Ax(() => { ((InvokePattern)pattern!).Invoke(); return true; });
-        else if (context.Ax(() => element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out pattern)))
-            context.Ax(() => { ((SelectionItemPattern)pattern!).Select(); return true; });
         else if (context.Ax(() => element.TryGetCurrentPattern(TogglePattern.Pattern, out pattern)))
             context.Ax(() => { ((TogglePattern)pattern!).Toggle(); return true; });
         else return false;
