@@ -919,8 +919,8 @@ describe('SubagentsSection', () => {
       expect(row.querySelector('[data-state]')?.parentElement?.className).toContain('rowActivitySlot')
     }
     expect(screen.getByRole('treeitem', { name: /days.*12天05小时06分07秒/ })).toBeTruthy()
-    expect(screen.getByText('12天5小时').getAttribute('title'))
-      .toBe('总活跃耗时：12天05小时06分07秒')
+    // The exact duration reaches the row's accessible name; the compact cell carries no native title.
+    expect(screen.getByText('12天5小时').hasAttribute('title')).toBe(false)
     expect(screen.getByText('1天')).toBeTruthy()
     expect(screen.getByText('约6个月12天')).toBeTruthy()
     expect(screen.getByText('约1个月')).toBeTruthy()

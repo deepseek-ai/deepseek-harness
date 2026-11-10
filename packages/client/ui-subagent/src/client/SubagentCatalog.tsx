@@ -363,12 +363,7 @@ function CatalogRows({
                   <span className={css.metrics}>
                     {tokenMetric !== undefined && <span className={css.metricToken}>{tokenMetric}</span>}
                     {durationMetric !== undefined && (
-                      <span
-                        className={css.metricDuration}
-                        title={t('duration.exactTitle', { duration: durationMetric.exact })}
-                      >
-                        {durationMetric.compact}
-                      </span>
+                      <span className={css.metricDuration}>{durationMetric.compact}</span>
                     )}
                   </span>
                 )}

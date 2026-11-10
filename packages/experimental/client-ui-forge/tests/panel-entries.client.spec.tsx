@@ -277,7 +277,12 @@ describe('CheckoutRow', () => {
     const element = b.element() as HTMLElement
     expect(element.hasAttribute('data-failed')).toBe(true)
     expect(element.textContent).toBe(en['checkout.failed'])
+    vi.useFakeTimers()
     fireEvent.pointerEnter(within(element).getByText(en['checkout.failed']))
+    act(() => { vi.advanceTimersByTime(499) })
+    expect(b.view.queryByRole('tooltip')).toBeNull()
+    act(() => { vi.advanceTimersByTime(1) })
+    vi.useRealTimers()
     expect(b.view.getByRole('tooltip').textContent).toBe('sandbox runner unavailable')
     expect(b.renderFactorySlot).not.toHaveBeenCalled()
     fireEvent.contextMenu(element)
@@ -288,13 +293,35 @@ describe('CheckoutRow', () => {
     const b = row(ready(), '/work')
     const element = b.element() as HTMLElement
     expect(element.textContent).toBe(`main${en['checkout.project']}${en['checkout.projectActions']}`)
+    vi.useFakeTimers()
     fireEvent.pointerEnter(within(element).getByText('main'))
+    act(() => { vi.advanceTimersByTime(499) })
+    expect(b.view.queryByRole('tooltip')).toBeNull()
+    act(() => { vi.advanceTimersByTime(1) })
+    vi.useRealTimers()
     expect(b.view.getByRole('tooltip').textContent).toBe('Project directory: ~/repo')
     expect(b.renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', expect.objectContaining({
       target: { kind: 'directory', value: { sessionId: SESSION, path: '/work/repo' } },
     }))
     fireEvent.contextMenu(element)
     expect(b.opened).toEqual([{ kind: 'directory', value: { sessionId: SESSION, path: '/work/repo' } }])
+  })
+
+  it('crawls a branch name the row clips while the pointer rests on the row', () => {
+    const b = row(ready(), '/work')
+    const element = b.element() as HTMLElement
+    const name = within(element).getByText('main')
+    Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
+    Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    try {
+      fireEvent.pointerEnter(element)
+      expect(name.scrollLeft).toBe(120)
+      fireEvent.pointerLeave(element)
+      expect(name.scrollLeft).toBe(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('names a detached HEAD with its commit and a linked worktree', () => {

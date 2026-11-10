@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconStopFillRegular, StateDot, TerminalBlock,
-  type StateDotState, type TerminalBlockLabels,
+  IconChevronDownOutlineRegular, IconStopFillRegular, MarqueeText, StateDot, type StateDotState, TerminalBlock,
+  type TerminalBlockLabels, Tooltip, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { createJobsSectionStore } from './jobs-store.ts'
@@ -203,19 +203,16 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
   const labels = useMemo(() => terminalLabels(t), [t])
   const elapsed = live ? now - job.startedAt : (job.finishedAt ?? job.startedAt) - job.startedAt
   const duration = formatDuration(elapsed, t)
+  const labelRef = useRef<HTMLSpanElement>(null)
+  const marquee = useHoverMarquee(labelRef)
   const body = (
     <>
       <span className={css.glyph}><StateDot state={dotState(job)} /></span>
       <span className={css.main}>
-        <span className={css.label} title={job.label}>{job.label}</span>
-        <span className={css.secondary} title={detail ?? status}>{`${job.kind} · ${detail ?? status}`}</span>
+        <MarqueeText ref={labelRef} className={css.label} data-job-label="">{job.label}</MarqueeText>
+        <span className={css.secondary}>{`${job.kind} · ${detail ?? status}`}</span>
       </span>
-      <span
-        className={css.duration}
-        title={t(live ? 'duration.title.live' : 'duration.title.done', { duration })}
-      >
-        {duration}
-      </span>
+      <span className={css.duration}>{duration}</span>
     </>
   )
   const killTitle = kill === undefined
@@ -225,7 +222,8 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
       : kill.state === 'failed' ? t('kill.failed') : t('kill.stop', { label: job.label })
   return (
     <li className={css.item}>
-      <div className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine}>
+      {/* A command its cell clips crawls into view while the pointer rests on the row. */}
+      <div className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
         {observable
           ? (
             <button
@@ -241,24 +239,25 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
           : <span className={css.row}>{body}</span>}
         {kill !== undefined
           ? (
-            <button
-              type="button"
-              className={
-                kill.state === 'armed'
-                  ? `${css.stop} ${css.stopArmed}`
-                  : kill.state === 'failed' ? `${css.stop} ${css.stopFailed}` : css.stop
-              }
-              data-kill-state={kill.state}
-              disabled={kill.state === 'pending'}
-              aria-label={killTitle}
-              title={killTitle}
-              onClick={kill.onPress}
-            >
-              <IconStopFillRegular size={12} />
-              {/* The armed press must be legible without hover: the button
-                  widens into a labeled confirm pill instead of a tint only. */}
-              {kill.state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
-            </button>
+            <Tooltip label={killTitle ?? ''} side="bottom" align="end" delayMs={500} portal>
+              <button
+                type="button"
+                className={
+                  kill.state === 'armed'
+                    ? `${css.stop} ${css.stopArmed}`
+                    : kill.state === 'failed' ? `${css.stop} ${css.stopFailed}` : css.stop
+                }
+                data-kill-state={kill.state}
+                disabled={kill.state === 'pending'}
+                aria-label={killTitle}
+                onClick={kill.onPress}
+              >
+                <IconStopFillRegular size={12} />
+                {/* The armed press must be legible without hover: the button
+                    widens into a labeled confirm pill instead of a tint only. */}
+                {kill.state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
+              </button>
+            </Tooltip>
           )
           : null}
         {/* The row button's overlay takes presses here too; a row without output keeps the column empty. */}

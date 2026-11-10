@@ -1,9 +1,9 @@
 /** Environment section rows: the Session's checkout and its branch changes. */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Button, IconBranchOutlineRegular, IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconWarningTriangleOutlineRegular,
-  Menu, PanelRow, StateDot, Tooltip,
+  MarqueeText, Menu, PanelRow, StateDot, Tooltip, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
@@ -58,7 +58,9 @@ export type LocalChangesRowProps =
  * Render the branch the Session works on and the kind of its directory. The
  * row and its More button open the shared directory menu on the checkout
  * root; a removed worktree offers Restore instead, and a failed inspection
- * shows a warning whose tooltip carries the failure. The row is mounted
+ * shows a warning whose tooltip carries the failure. Tooltips show after
+ * 500ms of hover, and a branch name the row clips crawls into view while the
+ * pointer rests on the row. The row is mounted
  * whenever the panel shows, so it refreshes the Session's forge state when
  * the panel opens and when the window regains focus, which picks up changes
  * made outside the Session.
@@ -71,6 +73,8 @@ export function CheckoutRow({
   const state = usePanel(snapshot => snapshot.state)
   const home = useHost(facts => facts.home)
   const { getTriggerProps } = useContextMenu()
+  const nameRef = useRef<HTMLSpanElement>(null)
+  const marquee = useHoverMarquee(nameRef)
   useEffect(() => {
     refreshIfStale()
     const onVisibility = (): void => { if (document.visibilityState === 'visible') refreshIfStale() }
@@ -87,7 +91,7 @@ export function CheckoutRow({
     if (state.checkout.state !== 'failed') return null
     return (
       <PanelRow className={css.envRow} icon={<IconWarningTriangleOutlineRegular size={16} />} data-forge-checkout="" data-failed="">
-        <Tooltip label={state.checkout.message} side="left">
+        <Tooltip label={state.checkout.message} side="left" delayMs={500}>
           <span className={css.envName} tabIndex={0}>{t('checkout.failed')}</span>
         </Tooltip>
       </PanelRow>
@@ -106,6 +110,8 @@ export function CheckoutRow({
       icon={icon}
       data-forge-checkout=""
       data-missing={label.missing ? '' : undefined}
+      onPointerEnter={marquee.enter}
+      onPointerLeave={marquee.leave}
       trailing={(
         <>
           <span className={css.envNote}>{label.kind}</span>
@@ -127,8 +133,8 @@ export function CheckoutRow({
         label: t(label.worktree ? 'checkout.worktreeActions' : 'checkout.projectActions'),
       })}
     >
-      <Tooltip label={label.tooltip} side="left">
-        <span className={css.envName} tabIndex={0}>{name}</span>
+      <Tooltip label={label.tooltip} side="left" delayMs={500}>
+        <MarqueeText ref={nameRef} className={css.envName} tabIndex={0}>{name}</MarqueeText>
       </Tooltip>
     </PanelRow>
   )

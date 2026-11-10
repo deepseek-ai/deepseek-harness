@@ -274,8 +274,8 @@ describe('JobsSection rows', () => {
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '5') }))
     const labels = within(screen.getByRole('list', { name: zh['list.aria'] }))
       .getAllByRole('listitem')
-      .map(item => item.querySelector('[title]')?.getAttribute('title'))
-      .filter((title): title is string => title != null && !title.startsWith('已运行') && !title.startsWith('耗时'))
+      .map(item => item.querySelector('[data-job-label]')?.textContent)
+      .filter((label): label is string => label != null)
     expect(labels).toEqual([
       'live-2', 'live-1', 'settled-d', 'settled-a', 'settled-c', 'settled-b', 'settled-e',
     ])
@@ -288,7 +288,7 @@ describe('JobsSection rows', () => {
       job({ id: 'bash-1' as JobView['id'], label: 'first', status: 'completed', startedAt: 1_700_000_000_000, finishedAt: 1_700_000_000_000 + 100 }),
     ])} />)
     openList()
-    expect(within(screen.getByRole('list')).getAllByRole('listitem').map(row => row.querySelector('[title]')?.getAttribute('title')).filter(title => title !== undefined))
+    expect(within(screen.getByRole('list')).getAllByRole('listitem').map(row => row.querySelector('[data-job-label]')?.textContent).filter(label => label !== undefined))
       .toEqual(['first', 'second'])
   })
 
@@ -444,19 +444,19 @@ describe('JobsSection human kill', () => {
       job({ id: 'bash-2' as JobView['id'], label: 'done', status: 'completed', finishedAt: 1_700_000_100_000 }),
     ])} />)
     openList()
-    expect(screen.getByTitle(stopTitle('pnpm run build'))).toBeDefined()
-    expect(screen.queryByTitle(stopTitle('done'))).toBeNull()
+    expect(screen.getByRole('button', { name: stopTitle('pnpm run build') })).toBeDefined()
+    expect(screen.queryByRole('button', { name: stopTitle('done') })).toBeNull()
   })
 
   it('arms on the first press and kills on the confirming press', async () => {
     const killJob = vi.fn(async () => true)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
     openList()
-    const stop = screen.getByTitle(stopTitle('pnpm run build'))
+    const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(killJob).not.toHaveBeenCalled()
     expect(stop.getAttribute('data-kill-state')).toBe('armed')
-    expect(screen.getByTitle(zh['kill.confirm'])).toBe(stop)
+    expect(screen.getByRole('button', { name: zh['kill.confirm'] })).toBe(stop)
     // The armed step is legible without hover: the button carries the label.
     expect(stop.textContent).toBe(zh['kill.confirmAction'])
     await act(async () => { fireEvent.click(stop) })
@@ -473,7 +473,7 @@ describe('JobsSection human kill', () => {
     const killJob = vi.fn(async () => true)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
     openList()
-    const stop = screen.getByTitle(stopTitle('pnpm run build'))
+    const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(stop.getAttribute('data-kill-state')).toBe('armed')
     act(() => { vi.advanceTimersByTime(3_000) })
@@ -487,11 +487,11 @@ describe('JobsSection human kill', () => {
     const killJob = vi.fn(async () => false)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
     openList()
-    const stop = screen.getByTitle(stopTitle('pnpm run build'))
+    const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     await act(async () => { fireEvent.click(stop) })
     expect(stop.getAttribute('data-kill-state')).toBe('failed')
-    expect(screen.getByTitle(zh['kill.failed'])).toBe(stop)
+    expect(screen.getByRole('button', { name: zh['kill.failed'] })).toBe(stop)
     act(() => { vi.advanceTimersByTime(4_000) })
     expect(stop.getAttribute('data-kill-state')).toBe('idle')
   })
@@ -502,10 +502,10 @@ describe('JobsSection human kill', () => {
       job({ id: 'bash-2' as JobView['id'], label: 'pnpm run watch' }),
     ])} />)
     openList()
-    const first = screen.getByTitle(stopTitle('pnpm run build'))
+    const first = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(first)
     expect(first.getAttribute('data-kill-state')).toBe('armed')
-    const second = screen.getByTitle(stopTitle('pnpm run watch'))
+    const second = screen.getByRole('button', { name: stopTitle('pnpm run watch') })
     fireEvent.click(second)
     expect(second.getAttribute('data-kill-state')).toBe('armed')
     expect(first.getAttribute('data-kill-state')).toBe('idle')
@@ -519,13 +519,13 @@ describe('JobsSection human kill', () => {
       job({ id: 'bash-2' as JobView['id'], label: 'pnpm run watch' }),
     ], undefined, {}, killJob)} />)
     openList()
-    const first = screen.getByTitle(stopTitle('pnpm run build'))
+    const first = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(first)
     fireEvent.click(first)
     expect(killJob).toHaveBeenCalledTimes(1)
     // While the first kill is in flight, the user arms the second row; the
     // late resolution must not clobber that newer phase.
-    const second = screen.getByTitle(stopTitle('pnpm run watch'))
+    const second = screen.getByRole('button', { name: stopTitle('pnpm run watch') })
     fireEvent.click(second)
     expect(second.getAttribute('data-kill-state')).toBe('armed')
     await act(async () => { resolveKill(false) })
@@ -536,12 +536,12 @@ describe('JobsSection human kill', () => {
   it('clears an armed phase whose row stopped being killable', () => {
     const { rerender } = render(<JobsSection {...props([job()])} />)
     openList()
-    const stop = screen.getByTitle(stopTitle('pnpm run build'))
+    const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(stop.getAttribute('data-kill-state')).toBe('armed')
     rerender(<JobsSection {...props([job({ status: 'stopping' })])} />)
     // The stopping row offers no kill control any more, and the stale phase is gone.
-    expect(screen.queryByTitle(stopTitle('pnpm run build'))).toBeNull()
+    expect(screen.queryByRole('button', { name: stopTitle('pnpm run build') })).toBeNull()
     expect(document.querySelector('[data-kill-state]')).toBeNull()
   })
 })
@@ -550,4 +550,32 @@ it('renders the Russian settled-count copy', () => {
   const translate: JobsSectionProps['t'] = makeTranslate(ru)
   render(<JobsSection {...props([job({ status: 'completed', finishedAt: 1_700_000_003_000 })])} t={translate} />)
   expect(screen.getByRole('button', { name: ru['section.settledCount'].replace('{count}', '1') })).toBeDefined()
+})
+
+describe('JobsSection hover', () => {
+  it('reveals a clipped command on row hover instead of native titles, and names the stop control after 500ms', () => {
+    vi.useFakeTimers()
+    try {
+      const view = render(<JobsSection {...props([job()])} />)
+      openList()
+      expect(view.container.querySelector('[title]')).toBeNull()
+      const label = view.container.querySelector<HTMLElement>('[data-job-label]')!
+      Object.defineProperty(label, 'scrollWidth', { value: 300, configurable: true })
+      Object.defineProperty(label, 'clientWidth', { value: 200, configurable: true })
+      const row = label.closest('li')!.firstElementChild as HTMLElement
+      fireEvent.pointerEnter(row)
+      // The suite's matchMedia answers reduced motion, so the command jumps to its far edge.
+      expect(label.scrollLeft).toBe(100)
+      fireEvent.pointerLeave(row)
+      expect(label.scrollLeft).toBe(0)
+      const stop = screen.getByRole('button', { name: zh['kill.stop'].replace('{label}', 'pnpm run build') })
+      fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(zh['kill.stop'].replace('{label}', 'pnpm run build'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
