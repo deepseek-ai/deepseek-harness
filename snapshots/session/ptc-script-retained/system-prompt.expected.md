@@ -89,6 +89,8 @@ AX read defaults: maxElements=2000, maxDepth=25.
 
 Maximum click holdMs: 5000 ms.
 
+In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.
+
 Persistent PTC initialization:
 
 ```ts

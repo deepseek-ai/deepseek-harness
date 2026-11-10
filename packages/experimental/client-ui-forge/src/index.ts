@@ -6,8 +6,9 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeLineComment, ForgeReviewData,
-  ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, MergeMethod,
+  BranchUpdateMethod, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure,
+  ForgeLineComment, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
+  ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
@@ -462,6 +463,49 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /**
+   * Read the signed-in user's viewed marks on the files of a change request of a Session, which the host keeps for the
+   * whole change request.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param headSha - head commit of the shown diff; marks read at another head are refused.
+   * @param signal - request cancellation.
+   * @returns the marks at `headSha`, or null when the provider keeps no viewed marks.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `headSha`, which is then polled again; `forgePanel/viewed-failed`
+   * when the host does not provide the marks otherwise.
+   */
+  @Remote
+  async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.viewedFiles(this.bound(session, url).ref, headSha, signal)
+    if (result === undefined) return null
+    if ('code' in result) {
+      throw new RemoteError(result.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/viewed-failed', result.message, {})
+    }
+    return result
+  }
+
+  /**
+   * Set or clear the signed-in user's viewed mark on one file of a change request of a Session.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - the file, its mark, and the head commit of the shown diff.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+   * reason when the host refuses, cannot be reached, or keeps no viewed marks; `forgePanel/action-unknown` when the host
+   * did not confirm whether it saved the mark.
+   */
+  @Remote
+  async setFileViewed(session: Session, url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (request.path === '') throw new Error('Invalid viewed file')
+    const failure = await this.home.forge.setViewed(ref, request, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
    * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
    * at the same head commit and update time are reused from memory, for any Session, until they are
    * `reviewRefreshMs` old, `maxCachedReviewBytes` evicts them, or a review write through this panel drops them; a read
@@ -585,6 +629,85 @@ export class ForgePanelController extends TypertRemoteService {
   async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const failure = await this.home.forge.merge(this.bound(session, url).ref, { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user
+   * saw; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - the head commit whose checks the user saw.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+   * reason when the host refuses, cannot be reached, or reruns no checks; `forgePanel/action-unknown` when the host did
+   * not confirm whether it started the rerun.
+   */
+  @Remote
+  async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.rerunChecks(this.bound(session, url).ref, request, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Request reviews of a change request of a Session from more reviewers; the change request is polled again once the
+   * host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param reviewers - the reviewers to ask, by kind and login.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/action-failed` with the host's reason when the host refuses, cannot be reached, or requests no reviews;
+   * `forgePanel/action-unknown` when the host did not confirm whether it requested the reviews.
+   */
+  @Remote
+  async requestReviews(
+    session: Session, url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal,
+  ): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (reviewers.length === 0 || reviewers.some(reviewer => reviewer.login.trim() === '')) throw new Error('Invalid reviewers')
+    const failure = await this.home.forge.requestReviews(ref, { reviewers }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * List accounts a review of a change request of a Session can be requested from.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param query - text the login or name contains; empty for the host's suggestions and first accounts.
+   * @param signal - request cancellation.
+   * @returns the accounts, the host's suggestions first.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/reviewers-failed` when the host does not list them.
+   */
+  @Remote
+  async reviewerCandidates(session: Session, url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.reviewerCandidates(this.bound(session, url).ref, query, signal)
+    if ('code' in result) throw new RemoteError('forgePanel/reviewers-failed', result.message, {})
+    return result
+  }
+
+  /**
+   * Bring the base branch's new commits into the head branch of a change request of a Session while its head is still
+   * `headSha`; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param method - merge commit or rebase.
+   * @param headSha - head commit the user confirmed.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's reason when
+   * the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not
+   * confirm whether it started the update.
+   */
+  @Remote
+  async updateBranch(session: Session, url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.updateBranch(this.bound(session, url).ref, { method, headSha }, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 
@@ -1014,7 +1137,9 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
  * @returns the Remote error to throw.
  */
 function actionError(failure: ForgeActionFailure): RemoteError {
-  return new RemoteError(failure.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/action-failed', failure.message, {})
+  const code = failure.code === 'stale' ? 'forgePanel/stale-head' : failure.code === 'unknown' ? 'forgePanel/action-unknown'
+    : 'forgePanel/action-failed'
+  return new RemoteError(code, failure.message, {})
 }
 
 /**
