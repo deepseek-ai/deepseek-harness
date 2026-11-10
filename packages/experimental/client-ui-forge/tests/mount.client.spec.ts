@@ -26,7 +26,9 @@ import {
 } from '../src/client/ChangeRequestsSection.tsx'
 import { ChangesTab, type ChangesTabInjected } from '../src/client/ChangesTab.tsx'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
-import { CheckoutRow, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected } from '../src/client/EnvironmentRows.tsx'
+import {
+  CheckoutRow, ConnectionRow, LocalChangesRow, type CheckoutRowInjected, type ConnectionRowInjected, type LocalChangesRowInjected,
+} from '../src/client/EnvironmentRows.tsx'
 import { en, NS, zh } from '../src/client/locales.ts'
 import { inject, mountForgePanel, WORKTREE_NS, WORKTREE_ROW_KEY } from '../src/client/mount.ts'
 import type { SessionListInjected } from '../src/client/session-list.ts'
@@ -113,6 +115,10 @@ function isCheckoutFace(value: Record<string, unknown>): value is Record<string,
 
 function isLocalFace(value: Record<string, unknown>): value is Record<string, unknown> & LocalChangesRowInjected {
   return typeof value.viewLocalChanges === 'function' && typeof value.createChangeRequest === 'function'
+}
+
+function isConnectionFace(value: Record<string, unknown>): value is Record<string, unknown> & ConnectionRowInjected {
+  return Object.keys(value).length === 2 && typeof value.reconnect === 'function' && typeof value.hooks === 'object'
 }
 
 function isAttentionFace(value: Record<string, unknown>): value is Record<string, unknown> & AttentionIndicatorInjected {
@@ -272,6 +278,7 @@ async function fixture() {
   const actionsInject = entry('conversation.session.panel.section.actions', ChangeRequestsActions)?.inject
   const checkoutInject = entry('conversation.session.panel.environment.row', CheckoutRow)?.inject
   const localInject = entry('conversation.session.panel.environment.row', LocalChangesRow)?.inject
+  const connectionInject = entry('conversation.session.panel.environment.row', ConnectionRow)?.inject
   const attentionInject = entry('conversation.session.panel.indicator', AttentionIndicator)?.inject
   const changesInject = entry('sidebar.right.pane.tab', ChangesTab)?.inject
   const worktreeInject = entry('conversation.hero.options', WorktreeToggle)?.inject
@@ -280,6 +287,7 @@ async function fixture() {
   const rowInject = entry('sidebar.session.row.trailing', SessionRowForge)?.inject
   const hoverInject = entry('sidebar.session.row.hover', SessionHoverForge)?.inject
   assert(sectionInject !== undefined && actionsInject !== undefined && checkoutInject !== undefined && localInject !== undefined)
+  assert(connectionInject !== undefined)
   assert(attentionInject !== undefined)
   assert(worktreeInject !== undefined && toastInject !== undefined)
   assert(progressInject !== undefined && changesInject !== undefined && rowInject !== undefined && hoverInject !== undefined)
@@ -296,6 +304,11 @@ async function fixture() {
   const checkout = (sessionId: SessionId): CheckoutRowInjected => {
     const value = checkoutInject(sessionId as never)
     assert(isCheckoutFace(value))
+    return value
+  }
+  const connection = (sessionId: SessionId): ConnectionRowInjected => {
+    const value = connectionInject(sessionId as never)
+    assert(isConnectionFace(value))
     return value
   }
   const local = (sessionId: SessionId): LocalChangesRowInjected => {
@@ -335,7 +348,7 @@ async function fixture() {
     return value
   }
   return {
-    ...b, dispose, entry, section, actions, checkout, local, attention, changes, worktree, progress,
+    ...b, dispose, entry, section, actions, checkout, local, connection, attention, changes, worktree, progress,
     toast, notice, list,
   }
 }
@@ -368,6 +381,8 @@ describe('mountForgePanel registration', () => {
     expect(f.ctx.slots.entries('conversation.session.panel.section.actions').map(registration => registration.options.key)).toEqual(['change-requests'])
     expect(f.entry('conversation.session.panel.environment.row', CheckoutRow)).toMatchObject({ options: { id: 'forge.checkout', order: 20 }, locale: NS })
     expect(f.entry('conversation.session.panel.environment.row', LocalChangesRow)).toMatchObject({ options: { id: 'forge.local', order: 30 }, locale: NS })
+    expect(f.entry('conversation.session.panel.environment.row', ConnectionRow))
+      .toMatchObject({ options: { id: 'forge.connection', order: 40 }, locale: NS })
     expect(f.entry('conversation.session.panel.indicator', AttentionIndicator)).toMatchObject({ options: { id: 'forge.attention' }, locale: NS })
     expect(f.entry('sidebar.right.pane.tab', ChangesTab)).toMatchObject({ options: { key: CHANGES_ID }, locale: NS })
     expect(f.entry('sidebar.right.pane.tab', ChangesTab)?.store).toBeDefined()
@@ -406,6 +421,7 @@ describe('mountForgePanel registration', () => {
       ['conversation.session.panel.section.actions', ChangeRequestsActions],
       ['conversation.session.panel.environment.row', CheckoutRow],
       ['conversation.session.panel.environment.row', LocalChangesRow],
+      ['conversation.session.panel.environment.row', ConnectionRow],
       ['conversation.session.panel.indicator', AttentionIndicator],
       ['sidebar.right.pane.tab', ChangesTab],
       ['sidebar.right.pane.tab.title', ChangesTabTitle],
@@ -461,7 +477,7 @@ describe('mountForgePanel Session stores', () => {
   it('shares one panel stream per Session between the Session panel entries, the worktree option, and the worktree card', async () => {
     const f = await fixture()
     const tab = f.section(S1)
-    const faces = [f.actions(S1), f.checkout(S1), f.local(S1), f.attention(S1), f.worktree(S1), f.progress(S1)]
+    const faces = [f.actions(S1), f.checkout(S1), f.local(S1), f.connection(S1), f.attention(S1), f.worktree(S1), f.progress(S1)]
     for (const face of faces) {
       expect(face.hooks.panel).toBe(tab.hooks.panel)
     }
@@ -474,7 +490,7 @@ describe('mountForgePanel Session stores', () => {
     f.streams[0]?.push(ready())
     await vi.waitFor(() => { expect(seen).toEqual([ready()]) })
 
-    tab.reconnect()
+    f.connection(S1).reconnect()
     expect(f.forgePanel.follow).toHaveBeenCalledOnce()
     f.ctx.emit('connection/reset')
     expect(f.streams[0]?.disposed).toHaveBeenCalled()

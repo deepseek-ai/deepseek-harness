@@ -10,14 +10,6 @@
   line-height: 20px;
 }
 
-.disconnected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--dsw-alias-label-secondary);
-}
-
 .iconButton {
   display: inline-flex;
   flex: none;
@@ -54,37 +46,6 @@
   .iconButton.moreButton:hover {
     background: transparent;
   }
-}
-
-.banner {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--dsw-radius-sm);
-  background: var(--forge-fill);
-  color: var(--dsw-alias-label-primary);
-}
-
-.bannerDetail {
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
-
-.bannerCommand {
-  max-width: 100%;
-  color: var(--dsw-alias-label-secondary);
-  font-family: var(--ds-font-family-code);
-  font-size: 12px;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-}
-
-.bannerAction {
-  flex: none;
 }
 
 .list {
@@ -534,6 +495,50 @@
 .envRow[data-missing] .envNote,
 .envRow[data-failed] .envName {
   color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The title of a status row: what failed or needs the user, in the warning color the checkout row's failure uses. */
+.statusTitle {
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+/* The command a sign-in row asks the user to run, in code type on its detail line. */
+.signinCommand {
+  font-family: var(--ds-font-family-code);
+}
+
+/* A failure's info button: a 24px target in the trailing area whose 16px glyph darkens on hover, focus, or while its
+   reason shows, without a fill; it stays visible so touch screens can press it. */
+.reason {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.reason:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.reason[aria-describedby],
+.reason:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .reason:hover {
+    color: var(--dsw-alias-label-primary);
+  }
 }
 
 /* Attention mark over the Session panel toggle; the toggle sizes and places it. */

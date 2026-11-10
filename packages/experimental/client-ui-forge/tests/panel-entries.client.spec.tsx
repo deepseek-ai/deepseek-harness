@@ -15,7 +15,9 @@ import { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsProps, type ChangeRequestsSectionProps,
 } from '../src/client/ChangeRequestsSection.tsx'
-import { CheckoutRow, LocalChangesRow, type CheckoutRowProps, type LocalChangesRowProps } from '../src/client/EnvironmentRows.tsx'
+import {
+  CheckoutRow, ConnectionRow, LocalChangesRow, type CheckoutRowProps, type ConnectionRowProps, type LocalChangesRowProps,
+} from '../src/client/EnvironmentRows.tsx'
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
@@ -38,7 +40,6 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
   const panel = panelStore(state, options.disconnected)
   const store = options.store ?? createChangeRequestsSectionStore().create()
   const handlers = {
-    reconnect: vi.fn<() => void>(),
     refresh: vi.fn<() => Promise<void>>(async () => {}),
     remove: vi.fn<(entry: ForgePanelChangeRequest) => void>(),
     markReady: vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {}),
@@ -59,7 +60,7 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     ...handlers,
     t,
   } as Pick<ChangeRequestsSectionProps,
-    'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'reconnect' | 'refresh'
+    'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
     | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
@@ -84,14 +85,10 @@ describe('ChangeRequestsSection', () => {
     expect(section(state).view.container.innerHTML).toBe('')
   })
 
-  it('keeps the cards and adds a reconnect notice while disconnected', () => {
+  it('keeps the cards while disconnected and leaves the lost stream to the Environment section', () => {
     const b = section(ready({ changeRequests: [entry(1, snapshot(1))] }), { disconnected: true })
-    const root = b.view.container.querySelector('[data-forge-panel]') as HTMLElement
-    expect(root.firstElementChild?.getAttribute('role')).toBe('status')
-    fireEvent.click(within(root).getByRole('button', { name: en.retry }))
-    expect(b.reconnect).toHaveBeenCalledOnce()
-    act(() => { b.panel.set({ state: ready({ changeRequests: [entry(1, snapshot(1))] }), disconnected: false }) })
     expect(b.view.queryByRole('status')).toBeNull()
+    expect(expansion(b.view)).toEqual([true])
   })
 
   it.each([
@@ -176,35 +173,55 @@ describe('ChangeRequestsSection', () => {
     expect(screen.queryByRole('menuitem', { name: en['change.markReady'] })).toBeNull()
   })
 
-  it('shows the sign-in notice above the cards', () => {
+  it('asks to sign in above the cards with the command to copy', () => {
     const b = section(ready({
       readiness: { state: 'unauthenticated', message: 'not logged in' },
       changeRequests: [entry(1, snapshot(1))],
     }))
-    const banner = b.view.getByRole('status')
-    expect(within(banner).getByText('gh auth login --hostname github.com').tagName).toBe('CODE')
-    fireEvent.click(within(banner).getByRole('button', { name: en['signin.copy'] }))
+    const root = b.view.container.querySelector('[data-forge-panel]') as HTMLElement
+    const row = b.view.getByRole('status')
+    expect(root.firstElementChild).toBe(row)
+    expect(row.getAttribute('data-forge-signin')).toBe('unauthenticated')
+    expect(within(row).getByText('Sign in to github.com')).toBeTruthy()
+    expect(within(row).getByText('gh auth login --hostname github.com')).toBeTruthy()
+    const copy = within(row).getByRole('button', { name: en['signin.copy'] })
+    expect(copy.textContent).toBe(en['signin.copyShort'])
+    fireEvent.click(copy)
     expect(b.copyText).toHaveBeenCalledWith('gh auth login --hostname github.com')
+    expect(within(row).queryByRole('button', { name: en['reason.show'] })).toBeNull()
+  })
+
+  it('shows the section for a sign-in alone, without the card list', () => {
+    const b = section(ready({ readiness: { state: 'unauthenticated', message: null } }))
+    expect(b.view.getByRole('status').textContent).toContain('Sign in to github.com')
+    expect(b.view.queryByRole('list')).toBeNull()
   })
 
   it.each([
-    ['with its message', 'token expired', ['Sign in to gitlab.example.test to show change request status', 'token expired']],
-    ['without a message', null, ['Sign in to gitlab.example.test to show change request status']],
-  ])('asks to sign in to another code host %s', (_label, message, texts) => {
+    ['asks to sign in to another code host', { forge: 'gitlab', state: 'unauthenticated' }, 'Sign in to gitlab.example.test'],
+    ['says the host could not be read', { forge: 'github', state: 'unavailable' }, "Can't read change requests on gitlab.example.test"],
+  ] as const)('%s and gives the reason from the info button', (_label, { forge, state }, title) => {
     const b = section(ready({
-      repository: { forge: 'gitlab', host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
-      readiness: { state: 'unauthenticated', message },
-      changeRequests: [entry(1, snapshot(1))],
+      repository: { forge, host: 'gitlab.example.test', owner: 'octo', name: 'demo' },
+      readiness: { state, message: 'token expired' },
     }))
-    expect([...b.view.getByRole('status').children].map(child => child.textContent)).toEqual(texts)
+    const row = b.view.getByRole('status')
+    expect([row.textContent, row.querySelector('code, [data-forge-signin] button:not([data-forge-reason])')]).toEqual([title, null])
+    const reason = within(row).getByRole('button', { name: en['reason.show'] })
+    fireEvent.click(reason)
+    expect(screen.getByRole('tooltip').textContent).toBe('token expired')
+    expect(reason.getAttribute('aria-describedby')).toBe(screen.getByRole('tooltip').id)
   })
 
   it.each([
-    ['with its message', 'spawn gh ENOENT', 'Change requests on github.com could not be read: spawn gh ENOENT'],
-    ['without a message', null, 'Change requests on github.com could not be read: '],
-  ])('explains an unreachable host %s', (_label, message, text) => {
-    const b = section(ready({ readiness: { state: 'unavailable', message }, changeRequests: [entry(1, snapshot(1))] }))
-    expect(b.view.getByRole('status').textContent).toBe(text)
+    ['another code host', { forge: 'gitlab', state: 'unauthenticated' }],
+    ['an unreachable host', { forge: 'github', state: 'unavailable' }],
+  ] as const)('offers no info button for %s that gave no reason', (_label, { forge, state }) => {
+    const b = section(ready({
+      repository: { forge, host: 'github.com', owner: 'octo', name: 'demo' },
+      readiness: { state, message: null },
+    }))
+    expect(within(b.view.getByRole('status')).queryByRole('button')).toBeNull()
   })
 
   it.each([
@@ -296,17 +313,24 @@ describe('CheckoutRow', () => {
     expect(row(state).view.container.innerHTML).toBe('')
   })
 
-  it('warns that Git could not be read and shows the failure on hover, without the directory menu', () => {
+  it('warns that Git could not be read and gives the failure from the info button, without the directory menu', () => {
     const b = row(ready({ checkout: { state: 'failed', message: 'sandbox runner unavailable' } }))
     const element = b.element() as HTMLElement
     expect(element.hasAttribute('data-failed')).toBe(true)
     expect(element.textContent).toBe(en['checkout.failed'])
+    expect(within(element).getByText(en['checkout.failed']).hasAttribute('tabindex')).toBe(false)
+    const reason = within(element).getByRole('button', { name: en['reason.show'] })
     vi.useFakeTimers()
-    fireEvent.pointerEnter(within(element).getByText(en['checkout.failed']))
+    fireEvent.pointerEnter(reason)
     act(() => { vi.advanceTimersByTime(499) })
     expect(b.view.queryByRole('tooltip')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     vi.useRealTimers()
+    expect(b.view.getByRole('tooltip').textContent).toBe('sandbox runner unavailable')
+    fireEvent.pointerLeave(reason)
+    expect(b.view.queryByRole('tooltip')).toBeNull()
+    // A press shows it too, for touch screens that cannot hover.
+    fireEvent.click(reason)
     expect(b.view.getByRole('tooltip').textContent).toBe('sandbox runner unavailable')
     expect(b.renderFactorySlot).not.toHaveBeenCalled()
     fireEvent.contextMenu(element)
@@ -387,6 +411,35 @@ describe('CheckoutRow', () => {
     const restore = within(b.element() as HTMLElement).getByRole('button', { name: en['checkout.restore'] })
     expect(restore instanceof HTMLButtonElement && restore.disabled).toBe(true)
     expect(restore.querySelector('svg[data-state="ongoing"]')).not.toBeNull()
+  })
+})
+
+describe('ConnectionRow', () => {
+  function row(state: ForgePanelState | null, disconnected: boolean) {
+    const panel = panelStore(state, disconnected)
+    const reconnect = vi.fn<() => void>()
+    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), reconnect, t } as
+      Pick<ConnectionRowProps, 'sessionId' | 'usePanel' | 'reconnect' | 't'> as ConnectionRowProps
+    return { view: render(<ConnectionRow {...props} />), panel, reconnect }
+  }
+
+  it('renders nothing while the stream is open', () => {
+    expect(row(ready(), false).view.container.innerHTML).toBe('')
+  })
+
+  it.each([
+    ['after a state arrived', ready()],
+    ['before any state arrived', null],
+  ])('says the details may be out of date and reconnects once the stream ended %s', (_label, state) => {
+    const b = row(state, true)
+    const status = b.view.getByRole('status')
+    expect(status.hasAttribute('data-forge-connection')).toBe(true)
+    expect(within(status).getByText(en['connection.title'])).toBeTruthy()
+    expect(within(status).getByText(en['connection.detail'])).toBeTruthy()
+    fireEvent.click(within(status).getByRole('button', { name: en.retry }))
+    expect(b.reconnect).toHaveBeenCalledOnce()
+    act(() => { b.panel.set({ state: ready(), disconnected: false }) })
+    expect(b.view.queryByRole('status')).toBeNull()
   })
 })
 

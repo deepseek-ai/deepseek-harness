@@ -657,6 +657,12 @@ it.skipIf(MODE === 'record')('reads local Git with full access when the sandbox 
   const panel = await showSessionPanel(page)
   const failed = panel.locator('[data-forge-checkout][data-failed]')
   await failed.getByText('无法读取 Git 信息', { exact: true }).waitFor({ timeout: 20_000 })
+  // The failure's reason shows from the info button, also on a press as touch screens need; another press hides it.
+  const reason = failed.getByRole('button', { name: '查看原因', exact: true })
+  await reason.click()
+  await expect.poll(async () => (await page.getByRole('tooltip').textContent())?.trim().length ?? 0).toBeGreaterThan(0)
+  await reason.click()
+  await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
 
   const permission = page.locator('button[aria-label^="访问模式"]').first()
   await permission.click()

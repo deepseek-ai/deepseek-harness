@@ -2406,6 +2406,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-session-panel ProjectRow id \'project\'',
       'experimental-client-ui-forge CheckoutRow id \'forge.checkout\'',
       'experimental-client-ui-forge LocalChangesRow id \'forge.local\'',
+      'experimental-client-ui-forge ConnectionRow id \'forge.connection\'',
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'conversation.session.panel.environment.row\', () => ctx.slots.register(\n      { name: \'conversation.session.panel.environment.row\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',

@@ -1,14 +1,17 @@
 /** Session panel section listing the Session's change requests, and its title control. */
 
-import type { ReactNode } from 'react'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useRef, type ReactNode } from 'react'
+import {
+  Button, IconWarningTriangleOutlineRegular, MarqueeText, PanelRow, useHoverMarquee,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import type { NS } from './locales.ts'
+import { ReasonButton } from './ReasonButton.tsx'
 import type { PanelSnapshot } from './source.ts'
 import { defaultExpanded } from './status.ts'
 import css from './Forge.module.css'
@@ -20,8 +23,6 @@ export interface ChangeRequestsSectionInjected {
     readonly panel: HostObservable<PanelSnapshot>
     readonly locale: HostObservable<string>
   }
-  /** Open the stream again after it ended. */
-  readonly reconnect: () => void
   /**
    * Reinspect the checkout, probe sign-in, and poll the change requests;
    * settles once the Host has inspected and probed, after reporting a failure.
@@ -72,54 +73,82 @@ export type ChangeRequestsActionsProps =
 
 type Translate = ChangeRequestsSectionProps['t']
 
-function SignIn({ state, copyText, t }: {
-  readonly state: ForgePanelState
+/** Sign-in the repository's host still needs before its change requests show. */
+interface SignInNeed {
+  readonly host: string
+  readonly forge: string
+  readonly readiness: ForgeReadiness
+}
+
+function signInNeedOf(state: ForgePanelState): SignInNeed | null {
+  const { repository, readiness } = state
+  if (repository === null || readiness === null || readiness.state === 'ready') return null
+  return { host: repository.host, forge: repository.forge, readiness }
+}
+
+/**
+ * The status row above the cards while the host cannot serve the change
+ * requests yet: sign-in, with the command to copy for GitHub, or a failed
+ * sign-in check. A reason the host gave shows from the info button; a clipped
+ * title or command crawls into view while the pointer rests on the row.
+ */
+function SignInRow({ need, copyText, t }: {
+  readonly need: SignInNeed
   readonly copyText: (text: string) => void
   readonly t: Translate
 }): ReactNode {
-  const { repository, readiness } = state
-  if (repository === null || readiness === null || readiness.state === 'ready') return null
-  const host = repository.host
-  if (readiness.state === 'unavailable') {
-    return <div className={css.banner} role="status">{t('signin.unavailable', { host, message: readiness.message ?? '' })}</div>
-  }
-  const command = repository.forge === 'github' ? `gh auth login --hostname ${host}` : undefined
+  const titleRef = useRef<HTMLSpanElement>(null)
+  const commandRef = useRef<HTMLSpanElement>(null)
+  const titleMarquee = useHoverMarquee(titleRef)
+  const commandMarquee = useHoverMarquee(commandRef)
+  const { host, forge, readiness } = need
+  const unavailable = readiness.state === 'unavailable'
+  const command = !unavailable && forge === 'github' ? `gh auth login --hostname ${host}` : undefined
+  const reason = command === undefined && readiness.message !== null && readiness.message !== ''
+    ? <ReasonButton reason={readiness.message} label={t('reason.show')} />
+    : undefined
+  const marquee = command === undefined ? titleMarquee : commandMarquee
   return (
-    <div className={css.banner} role="status">
-      <span>{t('signin.title', { host })}</span>
-      {command === undefined
-        ? readiness.message !== null && <span className={css.bannerDetail}>{readiness.message}</span>
-        : (
-          <>
-            <code className={css.bannerCommand}>{command}</code>
-            <Button size="sm" variant="outline" className={css.bannerAction} onClick={() => { copyText(command) }}>
-              {t('signin.copy')}
-            </Button>
-          </>
-        )}
-    </div>
+    <PanelRow
+      icon={<IconWarningTriangleOutlineRegular size={16} />}
+      role="status"
+      data-forge-signin={readiness.state}
+      onPointerEnter={marquee.enter}
+      onPointerLeave={marquee.leave}
+      detail={command === undefined ? undefined : <MarqueeText ref={commandRef} className={css.signinCommand}>{command}</MarqueeText>}
+      trailing={command === undefined ? reason : (
+        <Button size="sm" variant="outline" aria-label={t('signin.copy')} onClick={() => { copyText(command) }}>
+          {t('signin.copyShort')}
+        </Button>
+      )}
+    >
+      <MarqueeText ref={titleRef} className={css.statusTitle}>{t(unavailable ? 'signin.unavailable' : 'signin.title', { host })}</MarqueeText>
+    </PanelRow>
   )
 }
 
 /**
- * Render the Session's change request cards. The section shows only while the
- * Session binds at least one change request; the sign-in notice and a lost
- * stream show above the cards. A card starts expanded when the Session binds
+ * Render the Session's change request cards. The section shows while the
+ * Session binds a change request or the repository's host needs sign-in, which
+ * a status row above the cards says; a lost stream shows in the Environment
+ * section instead. A card starts expanded when the Session binds
  * exactly one change request; a card the user expands or collapses keeps that
  * choice in the Session's store, across updates and while the panel is hidden.
  * Viewing changes closes the panel's overlay.
  * @param props - panel snapshot hooks, card actions, panel owner values, and copy.
- * @returns the cards, or null without bound change requests.
+ * @returns the cards, or null with neither bound change requests nor a sign-in to complete.
  */
 export function ChangeRequestsSection({
-  usePanel, useLocale, dismissOverlay, reconnect, refresh, remove, markReady, merge, readChecks,
+  usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, readChecks,
   rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
   const chosen = useStore(current => current.expanded)
   const state = snapshot.state
-  if (state === null || state.changeRequests.length === 0) return null
+  if (state === null) return null
+  const signIn = signInNeedOf(state)
+  if (signIn === null && state.changeRequests.length === 0) return null
   const actions: ChangeRequestActions = {
     openLink, copyLink: copyText, retry: () => { void refresh() }, remove, markReady, merge, readChecks,
     rerunChecks, requestReviews, reviewerCandidates, updateBranch,
@@ -134,27 +163,23 @@ export function ChangeRequestsSection({
   const now = Date.now()
   return (
     <div className={css.cards} data-forge-panel="">
-      {snapshot.disconnected && (
-        <div className={css.disconnected} role="status">
-          <span>{t('stream.failed')}</span>
-          <Button size="sm" variant="outline" onClick={reconnect}>{t('retry')}</Button>
-        </div>
+      {signIn !== null && <SignInRow need={signIn} copyText={copyText} t={t} />}
+      {state.changeRequests.length > 0 && (
+        <ul className={css.list}>
+          {state.changeRequests.map(entry => (
+            <ChangeRequestCard
+              key={entry.url}
+              entry={entry}
+              expanded={expanded(entry.url)}
+              onToggle={() => { toggle(entry.url) }}
+              now={now}
+              actions={actions}
+              locale={locale}
+              t={t}
+            />
+          ))}
+        </ul>
       )}
-      <SignIn state={state} copyText={copyText} t={t} />
-      <ul className={css.list}>
-        {state.changeRequests.map(entry => (
-          <ChangeRequestCard
-            key={entry.url}
-            entry={entry}
-            expanded={expanded(entry.url)}
-            onToggle={() => { toggle(entry.url) }}
-            now={now}
-            actions={actions}
-            locale={locale}
-            t={t}
-          />
-        ))}
-      </ul>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-/** Environment section rows: the Session's checkout and its branch changes. */
+/** Environment section rows: the Session's checkout, its branch changes, and a lost panel stream. */
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import { checkoutLabel } from './checkout.ts'
 import type { NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
+import { ReasonButton } from './ReasonButton.tsx'
 import { openChangeRequestOf } from './status.ts'
 import css from './Forge.module.css'
 
@@ -90,10 +91,9 @@ export function CheckoutRow({
   if (label === undefined) {
     if (state.checkout.state !== 'failed') return null
     return (
-      <PanelRow className={css.envRow} icon={<IconWarningTriangleOutlineRegular size={16} />} data-forge-checkout="" data-failed="">
-        <Tooltip label={state.checkout.message} side="left" delayMs={500}>
-          <span className={css.envName} tabIndex={0}>{t('checkout.failed')}</span>
-        </Tooltip>
+      <PanelRow className={css.envRow} icon={<IconWarningTriangleOutlineRegular size={16} />} data-forge-checkout="" data-failed=""
+        trailing={<ReasonButton reason={state.checkout.message} label={t('reason.show')} />}>
+        <span className={css.envName}>{t('checkout.failed')}</span>
       </PanelRow>
     )
   }
@@ -136,6 +136,44 @@ export function CheckoutRow({
       <Tooltip label={label.tooltip} side="left" delayMs={500}>
         <MarqueeText ref={nameRef} className={css.envName} tabIndex={0}>{name}</MarqueeText>
       </Tooltip>
+    </PanelRow>
+  )
+}
+
+/** Business face of the connection row. */
+export interface ConnectionRowInjected {
+  /** Panel snapshot of the Session; bound as `usePanel`. */
+  readonly hooks: { readonly panel: HostObservable<PanelSnapshot> }
+  /** Open the stream again after it ended. */
+  readonly reconnect: () => void
+}
+
+/** Full props of the connection row. */
+export type ConnectionRowProps =
+  PropsRuntime<'conversation.session.panel.environment.row'>
+  & InjectFace<ConnectionRowInjected>
+  & PropsLocale<typeof NS>
+
+/**
+ * Say that the Session's panel stream ended, so the Git and change request
+ * details may be out of date, whether or not it delivered a state first; Retry
+ * opens the stream again. Assistive technology announces the row when it shows.
+ * @param props - panel snapshot hook, reconnect action, and copy.
+ * @returns the row, or null while the stream is open.
+ */
+export function ConnectionRow({ usePanel, reconnect, t }: ConnectionRowProps): ReactNode {
+  const disconnected = usePanel(snapshot => snapshot.disconnected)
+  if (!disconnected) return null
+  return (
+    <PanelRow
+      className={css.envRow}
+      icon={<IconWarningTriangleOutlineRegular size={16} />}
+      role="status"
+      data-forge-connection=""
+      detail={t('connection.detail')}
+      trailing={<Button size="sm" variant="outline" onClick={reconnect}>{t('retry')}</Button>}
+    >
+      <span className={css.statusTitle}>{t('connection.title')}</span>
     </PanelRow>
   )
 }

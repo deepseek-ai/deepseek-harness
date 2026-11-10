@@ -33,7 +33,9 @@ import { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
 import { ChangesTabTitle } from './ChangesTabTitle.tsx'
-import { CheckoutRow, LocalChangesRow, type CheckoutRowInjected, type LocalChangesRowInjected } from './EnvironmentRows.tsx'
+import {
+  CheckoutRow, ConnectionRow, LocalChangesRow, type CheckoutRowInjected, type ConnectionRowInjected, type LocalChangesRowInjected,
+} from './EnvironmentRows.tsx'
 import { de, en, es, fr, ja, NS, pt, ru, zh, type ForgePanelKey } from './locales.ts'
 import type { SessionListInjected } from './session-list.ts'
 import { SessionHoverForge } from './SessionHoverForge.tsx'
@@ -226,7 +228,6 @@ function registerUi(ctx: Context): void {
     const store = storesOf(sessionId)
     return {
       hooks: { panel: store.panel.hooks.panel, locale },
-      reconnect: store.panel.reconnect,
       refresh: refreshOf(sessionId),
       remove: (entry) => { remove(sessionId, entry) },
       readChecks: async (url, headSha, signal) => {
@@ -294,6 +295,10 @@ function registerUi(ctx: Context): void {
     hooks: { panel: storesOf(sessionId).panel.hooks.panel },
     viewLocalChanges: () => { openChanges(sessionId, { kind: 'local' }) },
     createChangeRequest: () => { createChangeRequest(sessionId) },
+  })
+  const connectionFace = (sessionId: SessionId): ConnectionRowInjected => ({
+    hooks: { panel: storesOf(sessionId).panel.hooks.panel },
+    reconnect: storesOf(sessionId).panel.reconnect,
   })
   const attentionFace = (sessionId: SessionId): AttentionIndicatorInjected => ({
     hooks: { panel: storesOf(sessionId).panel.hooks.panel },
@@ -401,6 +406,10 @@ function registerUi(ctx: Context): void {
     yield ctx.slots.register({
       name: 'conversation.session.panel.environment.row', id: 'forge.local', order: 30, locale: NS, inject: localFace,
     }, LocalChangesRow)
+    // Last in the section: a lost stream leaves every forge row above it out of date.
+    yield ctx.slots.register({
+      name: 'conversation.session.panel.environment.row', id: 'forge.connection', order: 40, locale: NS, inject: connectionFace,
+    }, ConnectionRow)
   })
   ctx.slots.inject('conversation.session.panel.indicator', () => ctx.slots.register({
     name: 'conversation.session.panel.indicator',
