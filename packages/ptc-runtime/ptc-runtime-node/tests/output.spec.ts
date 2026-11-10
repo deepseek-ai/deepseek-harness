@@ -263,3 +263,32 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect((await run(completion('42'), false)).value).toBe(42)
   })
 })
+
+it.each(['get', 'set'])('decodes Images after a program changes the %s prototype descriptor field', async (field) => {
+  const { runtime } = await mountRuntime(new Context(), { executionMode: 'per-call' })
+  const image = new PtcImage('/images/prototype.png', {
+    attachmentId: AttachmentId('sha256:prototype'), mediaType: 'image/png', bytes: 64, width: 8, height: 4,
+  })
+  const result = await runtime.run(runtime.resolve({
+    program: `
+      const field = ${JSON.stringify(field)};
+      const original = Object.getOwnPropertyDescriptor(Object.prototype, field);
+      try {
+        Object.defineProperty(Object.prototype, field, { configurable: true, value: () => 1 });
+        const image = await tools.image({});
+        inspect(image.attachmentId, image.path, image.width, image.height, Object.isFrozen(image));
+        inspect(image);
+      } finally {
+        Reflect.deleteProperty(Object.prototype, field);
+        if (original !== undefined) Object.defineProperty(Object.prototype, field, original);
+      }
+    `,
+    bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+    discardCompletion: true,
+  }))
+  expect(result.error).toBeUndefined()
+  expect(result.output).toEqual([
+    { type: 'text', text: 'sha256:prototype /images/prototype.png 8 4 true' },
+    { type: 'image', attachment: image.attachment },
+  ])
+})

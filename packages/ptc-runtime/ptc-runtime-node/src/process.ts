@@ -13,7 +13,7 @@ import type { ProgramEvaluator, ProgramImportHandler, ProgramImportResult } from
 import { PROGRAM_PROTOCOL_VERSION, type ProgramResult, type HostMethods, type ProgramMethods } from './protocol.ts'
 
 const capturedObjectCreate = Object.create
-const capturedObjectDefineProperties = Object.defineProperties
+const capturedObjectDefineProperty = Object.defineProperty
 const capturedObjectFreeze = Object.freeze
 const nativeConsole = globalThis.console
 
@@ -85,12 +85,12 @@ export async function runNodeMain(
   }
   const decodeImage = (wire: PtcImageWire): PtcJsonValue => {
     const image = capturedObjectCreate(Image.prototype) as Image
-    capturedObjectDefineProperties(image, {
-      attachmentId: { enumerable: true, value: wire.attachmentId },
-      path: { enumerable: true, value: wire.path },
-      width: { enumerable: true, value: wire.width },
-      height: { enumerable: true, value: wire.height },
-    })
+    for (const key of ['attachmentId', 'path', 'width', 'height'] as const) {
+      const descriptor = capturedObjectCreate(null) as PropertyDescriptor
+      descriptor.enumerable = true
+      descriptor.value = wire[key]
+      capturedObjectDefineProperty(image, key, descriptor)
+    }
     capturedObjectFreeze(image)
     images.set(image, wire.id)
     return image
