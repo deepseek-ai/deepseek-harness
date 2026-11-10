@@ -141,12 +141,12 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
-    private func acquire(_ identity: ProcessIdentity) throws -> String {
+    private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }
             forget(old.key)
         }
-        let id = try identifier("app")
+        let id = try pendingHandle ?? identifier("app")
         targets[id] = .running(identity)
         return id
     }
@@ -234,7 +234,7 @@ actor AXWorker {
         try NativePlatform.requireUnlocked(locked)
         if method == "getApp" {
             let selector = try params.string("selector")
-            let matches = catalog.applications.filter { $0.matches(selector) }
+            let matches = catalog.applications.filter { $0.matches(selector, installed: installed) }
             if matches.isEmpty, let installed {
                 let authorization = try ApplicationAuthorization.describeInstalled(installed)
                 let previous = targets.filter { if case .pending(let app, _) = $0.value { return app.path == installed.path }; return false }
@@ -470,7 +470,9 @@ actor AXWorker {
             if original["persistable"] == .bool(true), actual["id"] != original["id"] {
                 throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
             }
-            targets[plan.handle] = .running(identity)
+            guard try acquire(identity, pendingHandle: plan.handle) == plan.handle else {
+                throw NativeFailure(code: "STALE_APP", message: "Application already has a running handle; call getApp again")
+            }
             var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
             if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
             return .object(value)

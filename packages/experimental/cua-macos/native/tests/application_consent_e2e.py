@@ -123,11 +123,18 @@ def main():
 
         app, executable, state, _ = fixture("Direct bundle", identifier)
         pending = helper.call("getApp", {"selector": str(app)})
+        peer = NativeHelper([], args.helper)
+        cleanup.callback(peer.stop)
+        peer_pending = peer.call("getApp", {"selector": str(app)})
         process = subprocess.Popen([str(executable)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         cleanup.callback(stop, process)
         wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
         running = helper.call("getApp", {"selector": str(process.pid)})
         assert running["authorization"]["id"] == pending["authorization"]["id"] == expected, running["authorization"]
+        resumed = peer.call("launchApp", {"appHandle": peer_pending["appHandle"]})
+        assert peer.call("getApp", {"selector": str(process.pid)})["appHandle"] == resumed["appHandle"]
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="STALE_APP")
+        assert helper.call("getApp", {"selector": str(process.pid)})["appHandle"] == running["appHandle"]
         check_window(running, state, process.pid)
 
         standalone_ids = []

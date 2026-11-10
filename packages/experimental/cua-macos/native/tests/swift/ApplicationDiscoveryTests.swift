@@ -76,6 +76,38 @@ func failedLaunchInspectionInvalidatesThePendingHandle(failure: String) async th
     #expect(running["path"] == .string(app.path))
 }
 
+@Test func selectsLocalizedProcessesByTheInstalledExecutable() async throws {
+    let executable = try NativePlatform.executablePathResult(getpid()).get()
+    let installed = InstalledApplication(path: "/Applications/Calculator.app", executablePath: executable,
+                                        name: "Calculator", bundleID: "test.dsh.calculator")
+    func process(_ pid: Int32, executablePath: String) -> ApplicationInfo {
+        ApplicationInfo(pid: pid, name: "计算器", bundleID: installed.bundleID, path: nil,
+                        executablePath: executablePath, regular: true)
+    }
+    let running = process(getpid(), executablePath: executable)
+    let otherCopy = process(42, executablePath: "/Other/Calculator.app/Contents/MacOS/Calculator")
+    let catalog = ApplicationCatalogSnapshot(applications: [otherCopy, running], frontPID: nil)
+    let params = try RequestParameters(NativeRequest(data: Data(#"{"id":"select","method":"getApp","params":{"selector":"calculator"}}"#.utf8)))
+    let worker = AXWorker(cancellation: CancellationLatch(), axTimeout: 1, textEventInterval: 0, maxClickHoldMs: 5000,
+                          sessionState: { false })
+    func select(_ catalog: ApplicationCatalogSnapshot) async throws -> JSONValue {
+        let outcome = try await worker.execute("getApp", params: params, catalog: catalog, installed: installed)
+        guard case .result(let app) = outcome else { throw NativeFailure(code: "TEST", message: "Expected application selection") }
+        return app
+    }
+    let first = try await select(catalog)
+    #expect(first["running"] == .bool(true))
+    #expect(first["pid"] == .number(Double(getpid())))
+    let handle = try #require(first["appHandle"].string)
+    #expect(try await select(catalog)["appHandle"].string == handle)
+    let second = process(43, executablePath: executable)
+    do {
+        _ = try await select(ApplicationCatalogSnapshot(applications: [running, second], frontPID: nil))
+        Issue.record("Selected one of two processes at the same executable path")
+    } catch let failure as NativeFailure { #expect(failure.code == "AMBIGUOUS_APP") }
+    await worker.shutdown()
+}
+
 @Test @MainActor func broadQueriesRejectInsteadOfHidingApplicationAmbiguity() throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("dsh-cua-apps-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

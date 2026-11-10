@@ -11,10 +11,12 @@ struct ApplicationInfo: Sendable {
     let path: String?
     let executablePath: String?
     let regular: Bool
-    func matches(_ selector: String) -> Bool {
-        regular && name != nil && (name?.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
+    func matches(_ selector: String, installed: InstalledApplication? = nil) -> Bool {
+        guard regular, let name else { return false }
+        if let installed { return installed.matchesProcess(self) }
+        return name.caseInsensitiveCompare(selector) == .orderedSame || bundleID == selector || String(pid) == selector
             || (selector.hasPrefix("/") && path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
-                == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path))
+                == URL(fileURLWithPath: selector).resolvingSymlinksInPath().path)
     }
     var json: JSONValue {
         var value: [String: JSONValue] = ["pid": .number(Double(pid))]
