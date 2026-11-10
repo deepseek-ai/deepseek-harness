@@ -77,6 +77,8 @@ For a new machine, keep the runner disabled while preparing and testing network 
 
 ## Signing configuration
 
+Windows packaging requires PowerShell 7 (`pwsh`) on `PATH`. The toolchain check verifies Authenticode support before building; runtime signature checks use this engine to handle paths longer than 260 characters.
+
 The [machine preset configuration](../packaging/README.md#configuration-and-local-builds) selects public settings and the signing file. Without a preset, use the target dotenv file.
 
 Fill in `.env.windows` with `DSH_DESKTOP_WINDOWS_CER_FILE` (public EV leaf certificate), `DSH_DESKTOP_WINDOWS_SIGNTOOL` (SafeNet-compatible SignTool), `DSH_DESKTOP_WINDOWS_KEY_CONTAINER` (matching private-key container), and `DSH_DESKTOP_WINDOWS_TOKEN_PIN` (Token Password). The private key stays on the USB token; keep the certificate and local credential file out of Git.

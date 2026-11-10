@@ -77,6 +77,8 @@ Windows CI 使用隔离的本地 fixture 运行 `pwsh -NoProfile -File apps/desk
 
 ## 签名配置
 
+Windows 打包要求 `PATH` 中提供 PowerShell 7（`pwsh`）。工具链检查在构建前验证 Authenticode 支持；运行时签名检查使用此引擎处理超过 260 个字符的路径。
+
 通过[机器 preset 配置](../packaging/README.zh.md#configuration-and-local-builds)选择公开设置与签名文件；不选择 preset 时使用目标 dotenv 文件。
 
 在 `.env.windows` 中填写 `DSH_DESKTOP_WINDOWS_CER_FILE`（公开 EV 叶证书）、`DSH_DESKTOP_WINDOWS_SIGNTOOL`（SafeNet 兼容的 SignTool）、`DSH_DESKTOP_WINDOWS_KEY_CONTAINER`（匹配的私钥容器）和 `DSH_DESKTOP_WINDOWS_TOKEN_PIN`（Token Password）。私钥仍保留在 USB Token；不要把证书或本地凭据文件提交到 Git。
