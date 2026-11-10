@@ -262,13 +262,17 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
         const refs = await stage('image admission', () => admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }]))
         signal.throwIfAborted()
-        const attachment = refs[0] as ImageAttachmentRef
+        let attachment = refs[0] as ImageAttachmentRef
         const original = attachment.originalDimensions ?? attachment
         if (original.width !== screenshot.pixelWidth || original.height !== screenshot.pixelHeight) {
           throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot dimensions disagree with its decoded image')
         }
         const image = await stage('model image preparation', () => attachments.readImageRequest(attachment, target(attachment), signal))
         signal.throwIfAborted()
+        if (image.width !== attachment.width || image.height !== attachment.height) {
+          attachment = await stage('image storage', () => attachments.saveImage({ data: image.data, mediaType: image.mediaType }))
+          signal.throwIfAborted()
+        }
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
           pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }

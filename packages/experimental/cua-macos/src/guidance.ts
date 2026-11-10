@@ -21,7 +21,7 @@ ${COMMON_GUIDANCE.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
 }
 
 /** Native PTC operation instructions with registered file tools for large observations. */
-export const GUIDANCE = operationGuidance('In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Print only the matches you need.')
+export const GUIDANCE = operationGuidance('In persistent PTC, capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory, or save it with await tools.write({ file_path: path, content: tree }) to a new workspace file. Search its contents with tools.grep({ path, pattern }) and use tools.read around a matching line. Use inspect to display the matches you need.')
 
 /** CUA-only program instructions; other session tools remain outside the program. */
-export const PROGRAM_GUIDANCE = operationGuidance('Capture a large tree with const tree = await win.getAccessibilityTree({ emit: false }). Filter its lines in memory and print only the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it.')
+export const PROGRAM_GUIDANCE = operationGuidance('Capture a large tree with const tree = await win.getAccessibilityTree(). Filter its lines in memory and use inspect to display the matches you need. If needed, save it to a new workspace file with node:fs/promises and use the session’s file tools to search it.')

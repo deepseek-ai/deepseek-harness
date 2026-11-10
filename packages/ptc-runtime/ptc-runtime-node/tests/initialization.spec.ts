@@ -25,13 +25,13 @@ function tools(functions: Record<string, PtcBindingFunction>) {
 
 describe('Node environment initialization', () => {
   it('initializes once and keeps current bindings through retained objects', async () => {
-    const { run } = await setup({}, 'globalThis.helper = { read: () => tools.value({}) }; console.log("initialized"); helper')
+    const { run } = await setup({}, 'globalThis.helper = { read: () => tools.value({}) }; inspect("initialized"); helper')
     expect(await run('var saved = helper; await helper.read()', {
       bindings: tools({ value: async () => 'first' }),
-    })).toMatchObject({ logs: ['initialized'], value: 'first' })
+    })).toMatchObject({ output: [{ type: 'text', text: 'initialized\n' }], value: 'first' })
     expect(await run('({ value: await helper.read(), same: saved === helper })', {
       bindings: tools({ value: async () => 'second' }),
-    })).toMatchObject({ logs: [], value: { value: 'second', same: true } })
+    })).toMatchObject({ output: [], value: { value: 'second', same: true } })
   })
 
   it('initializes temporary environments, other owners, and environments recreated after release', async () => {
@@ -148,16 +148,16 @@ describe('Node environment initialization', () => {
   })
 
   it('shares output accounting and initializes again after output overflow', async () => {
-    const { run } = await setup({ maxOutputBytes: 256 }, 'globalThis.resource = 42; console.log("x".repeat(120))')
-    const result = await run('console.log("y".repeat(120)); "z".repeat(50)')
+    const { run } = await setup({ maxOutputBytes: 256 }, 'globalThis.resource = 42; inspect("x".repeat(120))')
+    const result = await run('inspect("y".repeat(120)); "z".repeat(50)')
     expect(result.error?.kind).toBe('output-limit')
-    expect(result.logs[0]).toBe('x'.repeat(120))
+    expect(result.output[0]?.type === 'text' ? result.output[0].text : undefined).toBe('x'.repeat(120) + '\n')
     expect(result.error?.message).toContain('retained variables were cleared')
     expect((await run('resource')).value).toBe(42)
   })
 
   it('does not start the program after initialization exhausts captured output', async () => {
-    const { run, cwd } = await setup({ maxOutputBytes: 256 }, 'var fs = await import("node:fs"); console.log("x".repeat(1000))')
+    const { run, cwd } = await setup({ maxOutputBytes: 256 }, 'var fs = await import("node:fs"); inspect("x".repeat(1000))')
     const result = await run('fs.writeFileSync("program-started", "unexpected")')
     expect(result.error?.kind).toBe('output-limit')
     await expect(access(join(cwd, 'program-started'))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -170,7 +170,7 @@ describe('Node environment initialization', () => {
     'new Promise(() => {})',
   ])('discards initialization completion without traversing it: %s', async (initialization) => {
     const { run } = await setup({}, initialization)
-    expect(await run('42')).toMatchObject({ value: 42, logs: [] })
+    expect(await run('42')).toMatchObject({ value: 42, output: [] })
   })
 
   it('rejects malformed, duplicate, late, and disposed registrations', async () => {

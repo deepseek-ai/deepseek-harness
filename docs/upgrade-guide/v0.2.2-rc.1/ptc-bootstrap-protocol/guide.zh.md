@@ -13,6 +13,8 @@ Node PTC Host 要求 bootstrap 协议版本从 2 升至 3。它会在派发程�
 
 版本 3 为每个新环境携带可选的 `ProgramBootData.initialization` 源码。bootstrap 安装本次绑定后独立执行初始化，随后等待 Host 对 `initialized()` RPC 的确认，再次检查取消状态后才执行模型程序。初始化失败会丢弃环境并阻止模型代码执行。Node 提供方仅在 `persistent-in-memory` 模式下支持注册初始化程序。
 
+版本 3 还携带 `ProgramBootData.discardCompletion`，用于在 JSON 校验和序列化前丢弃完成值。bootstrap 提供 `inspect`，并通过 `HostMethods.image(id)` 按输出顺序发送选中的图片。自定义 bootstrap 必须同时支持这些字段、方法和环境初始化。
+
 ## 迁移
 
 1. 如果 Node PTC 配置设置了 `launch.bootstrapPath`，请在其执行环境中部署匹配版本的 `@deepseek-ai/dsh-ptc-runtime-node`。使用包内构建产物 `lib/process.js`，或默认采用 REPL 的 `lib/persistent-process.js`，并保留其依赖。Host 与 bootstrap 版本必须匹配；只修改声明的版本号并不够。

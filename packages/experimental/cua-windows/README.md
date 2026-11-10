@@ -62,15 +62,15 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 #### What the model sees
 
-Application and window identifiers, requested observations, and action results enter normal Session history. Selection alone does not provide an accessibility tree.
+The program receives application and window identifiers, observations, and action results. Selection alone does not provide an accessibility tree.
 
 #### Token effect
 
-Trees and images add model input. Use `emit: false` when processing an observation without printing it, and avoid printing an already emitted result again.
+Process returned trees and screenshots in memory. In a CUA program, call `inspect(...values)` with the text or images to display.
 
 #### KV Cache effect
 
-New observations append to history; retaining an App or Window object does not itself add its contents to the prompt.
+Inspected results append to model history. Retaining an App, Window, or returned observation in the program preserves the existing prompt prefix.
 
 ## Known Limitations and Deferred Work
 

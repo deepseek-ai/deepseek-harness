@@ -44,27 +44,27 @@ it.skipIf(!helperPath || !selector)('admits real application screenshots through
     expect(batch.results).toHaveLength(1)
     const result = batch.results[0]!.result
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
+    const image = result.content.find(block => block.type === 'image')
+    if (image) {
+      const path = ctx.attachments.imageHostPath(image.attachment)
+      if (!path) throw new Error('Screenshot attachment has no readable path')
+      return { attachmentId: image.attachment.attachmentId, path, width: image.attachment.width, height: image.attachment.height }
+    }
     return result.value!
   }
-  const emitted: string[] = []
-  const api = createCuaApi(dispatch, {
-    text: (text) => { emitted.push(text) },
-    image: (image) => { expect(image.bytes.byteLength).toBeGreaterThan(0) },
-  })
-  const discovered = (await api.listApps({ emit: false })).find(app =>
+  const api = createCuaApi(dispatch)
+  const discovered = (await api.listApps()).find(app =>
     app.id === selector || app.displayName === selector)
   const app = await api.getApp(discovered?.id ?? selector!)
-  const target = (await app.getWindows({ emit: false })).find(window =>
+  const target = (await app.getWindows()).find(window =>
     window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
   expect(target).toBeDefined()
   const window = await app.getWindow(target!.windowId)
-  expect(emitted).toEqual([])
-  await window.getAccessibilityTree()
-  expect(emitted).toHaveLength(1)
+  expect(typeof await window.getAccessibilityTree()).toBe('string')
   for (let i = 0; i < 5; ++i) {
     const screenshot = await window.getScreenshot()
-    const decoded = await sharp(screenshot.bytes).raw().toBuffer({ resolveWithObject: true })
-    expect(decoded.info.width).toBe(screenshot.pixelWidth)
-    expect(decoded.info.height).toBe(screenshot.pixelHeight)
+    const decoded = await sharp(screenshot.path).raw().toBuffer({ resolveWithObject: true })
+    expect(decoded.info.width).toBe(screenshot.width)
+    expect(decoded.info.height).toBe(screenshot.height)
   }
 }, 60_000)
