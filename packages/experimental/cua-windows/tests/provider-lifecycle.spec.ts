@@ -44,7 +44,9 @@ it('uses an absolute fixture without compiling and disposes the Host runtime', a
   const backend = native.install.mock.calls[0]![2]
   expect(backend.helperPath).toBe(config.helperPath)
   expect(native.architecture).not.toHaveBeenCalled()
-  expect(backend.guidance).toBe(GUIDANCE)
+  expect(backend.getGuidance('raw')).toBe(GUIDANCE)
+  expect(backend.getGuidance('standalone')).toBe(GUIDANCE)
+  expect(backend.permissionParameters('requestPermission', 'accessibility', 'en')).toEqual({ permission: 'accessibility' })
   expect(backend.capabilities).toMatchObject({ platform: 'windows', appLevelAccessibility: false, keyboard: ['window'] })
   const channel = { marker: 'native stream' }
   native.connect.mockReturnValue(channel)

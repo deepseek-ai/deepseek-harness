@@ -886,6 +886,26 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
+<a id="deepseek-aidsh-cua-windows"></a>
+
+## `@deepseek-ai/dsh-cua-windows`
+
+- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+- `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
+- `source`: [`packages/experimental/cua-windows/src/index.ts:32`](../packages/experimental/cua-windows/src/index.ts)
+
+```ts config-catalog
+/** Windows native waiting policy, alongside shared CUA resource limits. */
+export interface Config extends CuaConfig {
+  /** Windows PowerShell executable used to query WSL interoperation and the Windows architecture. */
+  windowsPowerShellPath: string
+  /** Milliseconds between application-readiness and clipboard-release observations. */
+  pollIntervalMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
 <a id="deepseek-aidsh-deepseek-account"></a>
 

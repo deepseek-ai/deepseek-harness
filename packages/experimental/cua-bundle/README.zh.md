@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-在 macOS 和 Windows 的插件页为已有和新建 PTC 会话开启 Computer Use。组合包随 DSH 提供且默认关闭，在受支持 Host 的实验性插件列表中显示。各 Host 加载对应平台的原生提供方和共享权限页面。关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+在 macOS 和 Windows 的插件页为已有和新建会话开启 Computer Use。PTC 通过 `run_code` 使用 `cua`，其他预设使用 `cua_run_code`。组合包随 DSH 提供且默认关闭，在受支持 Host 的实验性插件列表中显示。各 Host 加载对应平台的原生提供方和共享权限页面。关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。打开详情，按需设置 PTC。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。
+在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。
 
 在 macOS 上，组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。请为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。
 
@@ -37,7 +37,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他已组合的 preset 获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。其他 preset 的 CUA 程序状态独立于此设置。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
@@ -71,26 +71,26 @@ pnpm dsh web
 <a id="model-experience"></a>
 ## 模型体验
 
-### Computer Use in PTC sessions
+### 各 preset 中的 Computer Use
 
 #### What the model sees
 
-已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。关闭撤回这些贡献，保留 PTC 展示方式。其他 preset 不获得 CUA 贡献。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
+已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。其他已组合的 preset 获得 `cua_run_code` 和相同的操作指引。关闭会撤回这些贡献，并释放专用 CUA 运行时。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
 
 #### Token effect
 
-CUA 生效时添加其指引。关闭撤回这些指引，现有 PTC 执行说明保留。
+CUA 生效时添加所选 preset 对应的工具 schema 和指引。关闭会撤回这些贡献，现有 PTC 执行说明保留。
 
 #### KV Cache effect
 
-CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新后的前缀。顶层 `run_code` 工具保持存在。
+CUA 生效和卸载会改变工具 schema 与系统指引，后续请求使用更新后的前缀。PTC 保留其顶层 `run_code` 工具。
 
 ## 已知限制与延后工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
-- PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
+- PTC 执行方式由 profile 共享，与 CUA 提供方持有的程序运行时分别配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>
 ### 开发备注

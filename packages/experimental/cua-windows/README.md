@@ -64,8 +64,9 @@ Trees and images add model input. Use `emit: false` when processing an observati
 
 New observations append to history; retaining an App or Window object does not itself add its contents to the prompt.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - `findApps`, application launch, app-level accessibility, and held-key `sendKeyEvent` are unavailable. Ask the user to open the required application or window.
 - Applications with `isRunning: false` can be discovered, but the current `getApp` flow attempts an unsupported launch and fails with `UNSUPPORTED`. Open a window before selecting such an application.

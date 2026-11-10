@@ -493,6 +493,7 @@ async function runner(handler: ProgramImportHandler, retained = false, format: P
   const ready: PromiseWithResolvers<void> = Promise.withResolvers()
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, 100_000, {
     ready() { ready.resolve() },
+    async initialized() {},
     async invoke() { throw new Error('unexpected binding call') },
     log() {},
     outputLimit() {},

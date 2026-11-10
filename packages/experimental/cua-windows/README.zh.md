@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## 概要
+## 概述
 
 通过共享的 [Computer Use API](../cua/README.zh.md) 发现 Windows 应用、获取授权，然后观察和操作应用窗口。选择应用、选择窗口、读取辅助功能树和前台激活是彼此独立的动作。本页说明 Windows 平台的接口语义与安全交互规范。
 
@@ -64,8 +64,9 @@ kind: "package-reference"
 
 新的观察会追加到历史；保留 App 或 Window 对象本身不会把对象内容加入提示词。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与后续工作
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - 不支持 `findApps`、启动应用、应用级辅助功能和持续按键 `sendKeyEvent`。请让用户打开所需应用或窗口。
 - 可以发现 `isRunning: false` 的应用，但当前 `getApp` 流程会尝试未支持的启动操作，并以 `UNSUPPORTED` 失败。选择这类应用前应先打开窗口。

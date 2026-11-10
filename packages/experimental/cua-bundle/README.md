@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Enable Computer Use from Plugins on macOS and Windows for existing and new PTC sessions. The bundle ships with DSH switched off and appears in the Experimental plugins list on supported Hosts. Each Host loads its platform's native provider and the shared permission page. Disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
+Enable Computer Use from Plugins on macOS and Windows for existing and new sessions. PTC uses the `cua` binding through `run_code`. Other presets receive `cua_run_code`. The bundle ships with DSH switched off and appears in the Experimental plugins list on supported Hosts. Each Host loads its platform's native provider and the shared permission page. Disabled profiles prepare no native components and register neither CUA tools nor their model guidance.
 
 ## Table of Contents
 
@@ -24,7 +24,7 @@ Enable Computer Use from Plugins on macOS and Windows for existing and new PTC s
 <a id="use-this-package"></a>
 ## Use this package
 
-On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. Open its details and choose PTC if needed. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only.
+On macOS or Windows, open **Plugins → More** and switch on **Computer use** in the Experimental plugins list. An enabled bundle also appears in the main plugin list; switching it off returns it to the Experimental plugins list only.
 
 On macOS, the bundle ships with DSH and updates with it, so enabling it downloads nothing. Published packages contain the signed and notarized helper; users need no compiler. Source Web and development Desktop prepare an ad-hoc helper when enabled. Grant Accessibility and Screen Recording to `DSH Computer Use.app`.
 
@@ -37,7 +37,7 @@ pnpm dsh web
 
 For the source Desktop launcher and its separate development profile, follow [Desktop development](../../../apps/desktop/README.md). Enable Computer Use in each profile that needs it.
 
-The switch saves bundle selection in the profile’s `package.json`. Computer Use is installed only in PTC sessions. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Native preparation runs when the provider loads and reuses the source-hashed executable when available.
+The switch saves bundle selection in the profile’s `package.json`. PTC sessions receive the raw `cua` binding; other composed presets receive `cua_run_code` with an automatically initialized `cua` object and separate persistent state. Enabling through its card or detail page offers setup guidance when system permissions need attention. The detail page offers **Set to PTC** for the new-session default; existing sessions keep their preset. The switch leaves PTC execution mode and other settings unchanged. The detail page’s **Use persistent mode** action separately enables in-memory state across PTC calls; its effects and reload behavior are described in the [permission page](../cua/README.md). Other presets keep their CUA program state independently of this setting. Native preparation runs when the provider loads and reuses the source-hashed executable when available.
 
 Disabling unloads the provider and withdraws CUA tools from its Agent scopes. Runtime configuration, the new-session default and saved grants remain.
 
@@ -71,26 +71,26 @@ The bundle patch mounts the native provider and permission UI with `agentPreset:
 <a id="model-experience"></a>
 ## Model Experience
 
-### Computer Use in PTC sessions
+### Computer Use across presets
 
 #### What the model sees
 
-Existing and new PTC sessions receive `cua` through the generated SDK and `run_code`, plus CUA guidance. Disabling withdraws these contributions and keeps PTC presentation. Other presets receive no CUA contributions. [CUA](../cua/README.md) and [PTC](../../ptc-runtime/ptc-runtime-node/README.md#persistent-repl) own the interfaces and output semantics.
+Existing and new PTC sessions receive `cua` through the generated SDK and `run_code`, plus CUA guidance. Other composed presets receive `cua_run_code` and the same operation guidance. Disabling withdraws these contributions and disposes the dedicated CUA runtime. [CUA](../cua/README.md) and [PTC](../../ptc-runtime/ptc-runtime-node/README.md#persistent-repl) own the interfaces and output semantics.
 
 #### Token effect
 
-CUA activation adds its guidance. Disabling removes that guidance; the existing PTC execution instructions remain.
+CUA activation adds its tool schema and guidance for the selected preset. Disabling removes those contributions; existing PTC execution instructions remain.
 
 #### KV Cache effect
 
-CUA activation and removal change the PTC SDK and system guidance; subsequent requests use the updated prefix. The top-level `run_code` transport remains present.
+CUA activation and removal change tool schemas and system guidance; subsequent requests use the updated prefix. PTC keeps its top-level `run_code` transport.
 
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - System permissions require the user’s approval in macOS; enabling the bundle does not grant them.
-- PTC execution is shared by the profile and is configured independently. A Host without HMR applies saved changes at restart.
+- PTC execution is shared by the profile and configured independently of the CUA provider's program runtime. A Host without HMR applies saved changes at restart.
 
 <a id="dev-note"></a>
 ### Dev Note

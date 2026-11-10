@@ -14,6 +14,7 @@ import { WindowsNativeRuntime } from '../src/native-runtime.ts'
 interface Frame { type?: string; id?: string; method?: string; runtimeKey?: string; config?: Record<string, unknown> }
 interface FixtureOptions {
   transport?: 'pipe' | 'stdio'
+  bridgeExitJoined?: boolean
   startupDiagnostic?: string
   startup?: 'wrong-runtime' | 'wrong-instance' | 'extra' | 'malformed' | 'oversized' | 'invalid-utf8' | 'exit' | 'silent' | 'stdout-error' | 'stdout-close'
   handshake?: 'wrong-instance' | 'wrong-pid' | 'extra' | 'malformed' | 'oversized' | 'silent' | 'initial-result'
@@ -30,7 +31,14 @@ interface FixtureOptions {
 async function fixture(options: FixtureOptions = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'cua-windows-pipes-'))
   const clients: NativeClient[] = []
-  const generations: Array<{ stop: () => Promise<void>; stdout: PassThrough; received: Frame[]; peers: Set<Socket>; endpoint: string }> = []
+  const generations: Array<{
+    stop: () => Promise<void>
+    exit: () => void
+    stdout: PassThrough
+    received: Frame[]
+    peers: Set<Socket>
+    endpoint: string
+  }> = []
   const resources: { runtime?: WindowsNativeRuntime } = {}
   onTestFinished(async () => {
     await Promise.allSettled(clients.map(client => client.dispose()))
@@ -50,7 +58,7 @@ async function fixture(options: FixtureOptions = {}) {
       socket.on('error', (error) => { stdout.destroy(error) })
       socket.on('close', () => { done.resolve({ exitCode: 0, signal: null }) })
       return { stdin, stdout, stderr: undefined, control: undefined, collected: {}, done: done.promise,
-        terminate: () => { socket.destroy() }, waitForExit: async () => { await done.promise; return true } }
+        terminate: () => { socket.destroy() }, waitForExit: async () => { await done.promise; return options.bridgeExitJoined ?? true } }
     }
     const instanceId = request.argv[request.argv.indexOf('--instance-id') + 1]!
     const runtimeKey = request.argv[request.argv.indexOf('--runtime-key') + 1]!
@@ -129,7 +137,7 @@ async function fixture(options: FixtureOptions = {}) {
       else if (options.split) { stdout.write(text.slice(0, 5)); stdout.write(text.slice(5)) }
       else stdout.write(text)
     })
-    generations.push({ stop, stdout, received, peers, endpoint })
+    generations.push({ stop, stdout, received, peers, endpoint, exit: () => { exited.resolve({ exitCode: 1, signal: null }) } })
     options.onSpawn?.()
     return { stdin, stdout, stderr: undefined, control: undefined,
       collected: { stderr: { readFrom: () => ({ text: diagnostic, nextOffset: Buffer.byteLength(diagnostic), lossy: false }) } },
@@ -450,4 +458,20 @@ it('rejects WSL EOF without a desktop cleanup acknowledgement', async () => {
   const client = f.client()
   await client.request('ready', {}, new AbortController().signal)
   await expect(client.dispose()).rejects.toThrow('cleanup acknowledgement')
+})
+
+it('closes a connected Agent when the helper exits with its pipe still open', async () => {
+  const f = await fixture()
+  const client = f.client()
+  await client.request('first', {}, new AbortController().signal)
+  f.generations[0]!.exit()
+  await vi.waitFor(() => { expect(client.disposed).toBe(true) })
+  await expect(client.dispose()).rejects.toThrow('cleanup acknowledgement')
+})
+
+it('reports an unjoined WSL bridge after native cleanup was acknowledged', async () => {
+  const f = await fixture({ transport: 'stdio', bridgeExitJoined: false })
+  const client = f.client()
+  await client.request('first', {}, new AbortController().signal)
+  await expect(client.dispose()).rejects.toThrow('Windows bridge process did not exit')
 })

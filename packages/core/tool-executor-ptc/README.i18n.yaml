@@ -15,8 +15,8 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-executor-ptc/use-this-package:
-  en: 2db07bc05f05d202
-  zh: 4efdaab79fcc00af
+  en: 90ceb23f80ce7b26
+  zh: 01ecb606d4e8fb6f
 /deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation:
   en: 78708b3779d999a9
   zh: ad6173f9f01630de
@@ -47,6 +47,18 @@
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
   en: 4bf1cd2890cfe6c4
   zh: 5b230b0adc09ddfb
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools:
+  en: 9253b0d52c38cad9
+  zh: e2d41d32791c46b1
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/what-the-model-sees:
+  en: 71ee0ac3a10cd438
+  zh: cc8a730e4589510a
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/token-effect:
+  en: b9f8f6c9ee03641c
+  zh: 64e2a8d7f6f58021
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/kv-cache-effect:
+  en: f4703836365dc3d4
+  zh: a09ff48a6550fd69
 /deepseek-ai-dsh-tool-executor-ptc/known-limitations-and-deferred-work:
   en: 86d79fbb28aced73
   zh: aac0ffa1c3ad5e9a

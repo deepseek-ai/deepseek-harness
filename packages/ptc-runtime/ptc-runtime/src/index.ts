@@ -137,6 +137,24 @@ export abstract class PtcRuntime extends Service {
    */
   release(owner: object): Promise<void> { void owner; return Promise.resolve() }
 
+  /**
+   * Register source evaluated once when each execution environment is created.
+   * Registration must precede the first run admission; only one initializer may
+   * be registered. Current bindings are installed before initialization. Its
+   * completion is discarded; logs, timeout, cancellation and output bounds share
+   * the first run. Initialization failure discards the environment without
+   * executing the user program or rolling back external effects.
+   * @param program - Initialization source in the provider's language and format.
+   * @returns An idempotent async disposer that stops admission, cancels and drains
+   * admitted runs, and releases environments. Failed cleanup blocks execution
+   * until the disposer succeeds on retry. The caller owns this disposer.
+   * @throws When unsupported, registered twice, registered after admission, or invalid.
+   */
+  registerEnvironmentInitializer(program: string): () => Promise<void> {
+    void program
+    throw new Error('PTC runtime: environment initialization is unsupported')
+  }
+
   /** Provider-owned program usage guidance for consumers to present alongside the source language. */
   get executionInstructions(): string { return '' }
 

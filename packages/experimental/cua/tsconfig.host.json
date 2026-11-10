@@ -22,6 +22,9 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../core/tool-executor-ptc"
+    },
+    {
       "path": "../../core/system-prompt"
     },
     {

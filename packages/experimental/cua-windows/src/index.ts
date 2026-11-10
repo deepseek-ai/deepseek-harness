@@ -82,7 +82,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, host === 'wsl' ? 'stdio' : 'pipe')
   ctx.effect(() => () => runtime.dispose(), 'cua-windows.native-runtime')
   installCua(ctx, config, {
-    helperPath, createChannel: (_owner, native) => runtime.connect(native), guidance: GUIDANCE, capabilities: CAPABILITIES,
+    helperPath, createChannel: (_owner, native) => runtime.connect(native), getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: (_method, permission) => ({ permission }),
   })
 }
