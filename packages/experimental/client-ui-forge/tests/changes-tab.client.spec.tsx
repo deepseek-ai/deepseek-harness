@@ -21,6 +21,8 @@ import { en, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ChangesTab.module.css'
 import baseCss from '../src/client/BaseMenu.module.css'
+import treeCss from '../src/client/ChangedFiles.module.css'
+import threadCss from '../src/client/ReviewThreads.module.css'
 import type {
   ForgeBaseBranch, ForgeBaseBranches, ForgeChangeRequestDiff, ForgeDiffFile, ForgeLocalDiff, ForgePanelChangeRequest, ForgePanelState,
 } from '../src/types.ts'
@@ -62,6 +64,21 @@ function hoverPath(section: HTMLElement): string | null {
     return within(document.body).getByRole('tooltip').textContent
   } finally {
     fireEvent.pointerLeave(label)
+    vi.useRealTimers()
+  }
+}
+
+/** Hover an anchor and read the tooltip 1ms before and at the 500ms hover delay, then leave it. */
+function tooltipAfterHover(anchor: Element): { readonly early: string | null; readonly at500: string | null } {
+  vi.useFakeTimers()
+  try {
+    fireEvent.pointerEnter(anchor)
+    act(() => { vi.advanceTimersByTime(499) })
+    const early = within(document.body).queryByRole('tooltip')?.textContent ?? null
+    act(() => { vi.advanceTimersByTime(1) })
+    return { early, at500: within(document.body).queryByRole('tooltip')?.textContent ?? null }
+  } finally {
+    fireEvent.pointerLeave(anchor)
     vi.useRealTimers()
   }
 }
@@ -458,6 +475,45 @@ describe('ChangesTab keyboard file navigation', () => {
     } finally {
       selection.removeAllRanges()
     }
+  })
+})
+
+describe('ChangesTab tooltips', () => {
+  it('names only a renamed tree row in a tooltip after 500ms and crawls a name the row clips', async () => {
+    const m = mount()
+    await settle()
+    const tree = within(m.view.getByRole('navigation'))
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'src/app.ts' }))).toEqual({ early: null, at500: null })
+    expect(tooltipAfterHover(tree.getByRole('button', { name: 'lib/a.txt → lib/b.txt' })))
+      .toEqual({ early: null, at500: 'lib/a.txt → lib/b.txt' })
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    try {
+      const row = tree.getByRole('button', { name: 'src/app.ts' })
+      const name = row.querySelector('[data-forge-tree-name]')
+      if (!(name instanceof HTMLElement)) throw new Error('no tree name')
+      expect(name.textContent).toBe('app.ts')
+      Object.defineProperty(name, 'scrollWidth', { value: 240, configurable: true })
+      Object.defineProperty(name, 'clientWidth', { value: 120, configurable: true })
+      fireEvent.pointerEnter(row)
+      expect([name.scrollLeft, name.hasAttribute('data-scrolled')]).toEqual([120, true])
+      fireEvent.pointerLeave(row)
+      expect([name.scrollLeft, name.hasAttribute('data-scrolled')]).toEqual([0, false])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('shows toolbar and viewed hints after 500ms of hover and at once on keyboard focus, with no native titles', async () => {
+    const m = mount()
+    await settle()
+    const refresh = m.view.getByRole('button', { name: en['diff.refresh'] })
+    expect(tooltipAfterHover(refresh)).toEqual({ early: null, at500: en['diff.refresh'] })
+    fireEvent.focus(refresh)
+    expect(within(document.body).getByRole('tooltip').textContent).toBe(en['diff.refresh'])
+    fireEvent.blur(refresh)
+    const viewed = within(m.section('src/app.ts')).getByRole('checkbox', { name: 'Mark app.ts as viewed' }).closest('label')!
+    expect(tooltipAfterHover(viewed)).toEqual({ early: null, at500: en['viewed.hint'] })
+    expect(m.view.container.querySelector('[title]')).toBeNull()
   })
 })
 
@@ -2017,7 +2073,12 @@ describe('ChangesTab review threads', () => {
     expect(m.section('docs/notes.txt').firstElementChild?.nextElementSibling?.getAttribute('data-forge-thread')).toBe('file-thread')
     expect(m.section('docs/gone.txt').querySelector(`.${css.code}`)?.lastElementChild?.getAttribute('data-forge-thread')).toBe('beyond')
     for (const id of ['binary', 'oversized', 'renamed', 'large']) expect(card(m, id)).not.toBeNull()
-    expect(within(m.view.getByRole('navigation')).getByTitle('4 unresolved threads').textContent).toBe('4')
+    const chip = within(m.view.getByRole('navigation')).getByRole('button', { name: 'src/app.ts' }).querySelector(`.${treeCss.threads}`)!
+    expect([chip.textContent, chip.hasAttribute('title')]).toEqual(['4', false])
+    expect(tooltipAfterHover(chip)).toEqual({ early: null, at500: '4 unresolved threads' })
+    const time = card(m, 'on-row')!.querySelector(`.${threadCss.time}`)!
+    expect(time.hasAttribute('title')).toBe(false)
+    expect(tooltipAfterHover(time)).toEqual({ early: null, at500: '2026-11-05T08:00:00Z' })
     fireEvent.click(within(app).getByRole('button', { name: '4 unchanged lines' }))
     await settle()
     expect(following(m, 'in-gap')).toBe('const a7 = 8')

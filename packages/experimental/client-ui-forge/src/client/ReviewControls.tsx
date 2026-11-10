@@ -87,7 +87,7 @@ export function SegmentedChoice<Value extends string>({ segments, value, choose,
             <span className={css.count}>{segment.count ?? ''}</span>
           </button>
         )
-        return segment.disabledTip === null ? button : <Tooltip key={segment.value} label={segment.disabledTip} side="bottom">{button}</Tooltip>
+        return segment.disabledTip === null ? button : <Tooltip key={segment.value} label={segment.disabledTip} side="bottom" delayMs={500}>{button}</Tooltip>
       })}
     </div>
   )
@@ -149,7 +149,7 @@ export function HideTestsSwitch({ hidden, toggle, t }: PropsLocale<typeof NS> & 
   readonly toggle: () => void
 }): ReactNode {
   return (
-    <Tooltip label={t('tests.hideHint')} side="bottom">
+    <Tooltip label={t('tests.hideHint')} side="bottom" delayMs={500}>
       {/* A label forwards a click on its text to the switch, its first labelable descendant. */}
       <label className={css.switch} data-forge-hide-tests="">
         <Switch checked={hidden} label={t('tests.hide')} onChange={toggle} />

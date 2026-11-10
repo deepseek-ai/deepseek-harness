@@ -322,7 +322,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
           choose(side, line, event.shiftKey)
         }}>{line}</button>
       {plus !== null && (
-        <Tooltip label={t('review.addComment')} portal>
+        <Tooltip label={t('review.addComment')} portal delayMs={500}>
           <button type="button" className={reviewCss.add} aria-label={t('review.addComment')}
             onPointerDown={(event) => { event.preventDefault() }} onClick={() => { compose(plus) }}>
             <IconPlusOutlineRegular size={14} />
@@ -589,7 +589,7 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
             <Tag tone="warning" className={css.changedTag}><span className={css.changedText}>{t('viewed.changed')}</span></Tag>
           )}
           {threads !== undefined && threads.unresolved > 0 && (
-            <Tooltip label={t('thread.next')} side="bottom">
+            <Tooltip label={t('thread.next')} side="bottom" delayMs={500}>
               <button type="button" className={css.threadCount} aria-label={t('thread.unresolvedAria', { name, count: threads.unresolved })}
                 onClick={() => { handlers.nextThread(file.path) }}>
                 <span className={css.threadCountText}>{t('thread.unresolvedCount', { count: threads.unresolved })}</span>
@@ -601,11 +601,13 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
           {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
         {!file.binary && <Counts file={file} t={t} />}
-        <label className={css.viewed} title={t('viewed.hint')}>
-          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
-            onChange={(event) => { handlers.view(file, event.target.checked) }} />
-          <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
-        </label>
+        <Tooltip label={t('viewed.hint')} side="bottom" align="end" portal delayMs={500}>
+          <label className={css.viewed}>
+            <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
+              onChange={(event) => { handlers.view(file, event.target.checked) }} />
+            <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
+          </label>
+        </Tooltip>
         {props.visible && <FileMenu name={name} file={file} handlers={handlers} t={t} />}
       </div>
       {expanded && (waiting ? <div className={css.unreached} style={placeholder} data-forge-diff-unreached="" /> : <Body {...props} />)}
