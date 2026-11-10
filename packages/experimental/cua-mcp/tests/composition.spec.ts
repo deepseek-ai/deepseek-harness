@@ -108,7 +108,7 @@ async function setup(options: SetupOptions = {}) {
   for (const entry of ctx.loader.entries()) await entry.fiber?.await()
 
   const lifetime = new AbortController()
-  const adapter = createCuaMcpServer(ctx, { consent: options.consent ?? 'allow', cwd: directory, signal: lifetime.signal })
+  const adapter = await createCuaMcpServer(ctx, { consent: options.consent ?? 'allow', cwd: directory, signal: lifetime.signal })
   const client = new Client({ name: 'composition', version: '1' }, options.elicit === undefined ? {} : { capabilities: { elicitation: {} } })
   const elicitations: ElicitationRequest[] = []
   if (options.elicit !== undefined) {
@@ -129,19 +129,31 @@ async function setup(options: SetupOptions = {}) {
     await client.close()
     await adapter.dispose()
   })
+  // The native registration requires a description; tests name their programs unless they supply one.
   const run = (code: string, extra: { description?: string; timeoutMs?: number } = {}, signal?: AbortSignal) =>
-    client.callTool({ name: 'cua_run_code', arguments: { code, ...extra } }, signal === undefined ? {} : { signal })
+    client.callTool({ name: 'cua_run_code', arguments: { code, description: 'Test program', ...extra } }, signal === undefined ? {} : { signal })
   return { ctx, native, directory, adapter, client, elicitations, run, lifetime }
 }
 
 describe('Computer Use MCP composition', () => {
   it('serves two tools, prefixes the first program result with the API reference, and retains program state', async () => {
-    const { ctx, native, client, run } = await setup()
+    const { ctx, native, client, run, adapter } = await setup()
     expect(client.getInstructions()).toContain('cua_run_code')
     const listed = await client.listTools()
     expect(listed.tools.map(tool => tool.name)).toEqual(['cua_run_code', 'cua_reset'])
-    expect(listed.tools[0]?.inputSchema).toMatchObject({ type: 'object', required: ['code'] })
-    expect(listed.tools[0]?.description).toContain('complete `cua` API reference')
+    // The MCP tool is the Agent's registration: name, description, and parameters field for field.
+    const registered = ctx.tools.schemas(adapter.agent).find(tool => tool.name === 'cua_run_code')
+    if (registered === undefined) throw new Error('the provider registered no cua_run_code for the connection Agent')
+    // Field for field, minus the sandbox-escalation controls the registration carries and this profile refuses.
+    const { properties, ...schema } = registered.parameters as { properties: Record<string, unknown> }
+    const { sandbox_permissions: escalationMode, justification, ...served } = properties
+    expect(escalationMode).toBeDefined()
+    expect(justification).toBeDefined()
+    expect(listed.tools[0]).toMatchObject({
+      name: registered.name, description: registered.description, inputSchema: { ...schema, properties: served },
+    })
+    expect(registered.parameters).toMatchObject({ required: expect.arrayContaining(['code', 'description']) as string[] })
+    expect(registered.description.length).toBeGreaterThan(1000)
 
     const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
       + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })', { description: 'Open the fixture' })
@@ -149,9 +161,8 @@ describe('Computer Use MCP composition', () => {
     const [reference, ...rest] = first.content
     expect(reference).toMatchObject({ type: 'text' })
     const referenceText = (reference as Extract<Block, { type: 'text' }>).text
-    expect(referenceText).toContain('## cua_run_code execution rules')
-    expect(referenceText).toContain('remain in memory for this Agent across calls')
-    expect(referenceText).toContain('## cua API reference')
+    expect(referenceText.startsWith('## cua API reference')).toBe(true)
+    expect(referenceText).not.toContain('execution rules')
     expect(referenceText).toContain('Fixture CUA guidance: select test.fixture and operate window 7.')
     expect(referenceText).toContain('Maximum click holdMs: 5000 ms.')
     const result = JSON.parse((rest[0] as Extract<Block, { type: 'text' }>).text) as { visits: number; window: number; pid: number }
@@ -197,9 +208,10 @@ describe('Computer Use MCP composition', () => {
     setTimeout(() => { controller.abort() }, 100)
     await expect(hanging).rejects.toThrow()
     expect(lastJson(await run('1 + 1'))).toBe(2)
-    const invalid = await client.callTool({ name: 'cua_run_code', arguments: { code: '' } })
+    // Argument validation belongs to the DSH executor: a program without the required description is refused there.
+    const invalid = await client.callTool({ name: 'cua_run_code', arguments: { code: '1' } })
     expect(invalid.isError).toBe(true)
-    expect(texts(invalid).join('\n')).toContain('Input validation error')
+    expect(texts(invalid).join('\n')).toMatch(/description/)
   })
 
   it('resets the program environment while keeping the native connection, then repeats the reference', async () => {
@@ -252,13 +264,16 @@ describe('Computer Use MCP composition', () => {
     expect(texts(refused).join('\n')).toContain('DSH_CUA_CONSENT=allow')
   })
 
-  it('reports a Host without a CUA provider and releases the connection Agent on disposal', async () => {
+  it('serves only cua_reset on a Host without a CUA provider and releases the connection Agent on disposal', async () => {
     const { ctx, run, client, adapter } = await setup({ provider: false })
+    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_reset'])
+    // No registration exists for the Agent, so the executor, not cua-mcp, refuses the program tool.
     const result = await run('1')
     expect(result.isError).toBe(true)
-    expect(texts(result)[0]).toContain('no active CUA provider')
+    expect(texts(result)[0]).toContain('unknown tool "cua_run_code"')
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).toBe(true)
+    expect(texts(reset)[0]).toContain('no active CUA provider')
     expect(ctx.agents.list()).toHaveLength(1)
     await client.close()
     await adapter.dispose()

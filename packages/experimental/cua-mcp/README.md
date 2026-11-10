@@ -49,11 +49,11 @@ On macOS the profile prepares the signed Computer Use helper on first start and 
 
 ### What you get
 
-`cua_run_code` runs a TypeScript program as REPL statements against the global `cua` object through the provider's retained Node environment. The result carries the program's printed lines and final expression as text, then every screenshot the program captured as an inline image in the exact version the program observed, so pixel coordinates in the text match the image. The first result of a connection starts with the complete `cua_run_code` execution rules and the `cua` API reference; the tool description stays short. `description` is optional and defaults to `CUA program`; `timeoutMs` bounds one program. Programs run one at a time per connection in arrival order; a cancelled call cancels its program.
+`cua_run_code` is the Agent's DSH registration served as an MCP tool: every `tools/list` reads its name, description, and parameter schema from the tool registry, so the provider's definition is the only source, `description` is required as that definition declares, and `timeoutMs` bounds one program. The projection omits the registration's sandbox-escalation fields, `sandbox_permissions` and `justification`, and a call naming them is refused before execution; every other argument passes to the DSH tool executor unchanged, which validates them and answers unknown names, so an invalid call returns DSH's error result. The program runs as TypeScript REPL statements against the global `cua` object in the provider's retained Node environment. The result carries the program's printed lines and final expression as text, then every screenshot the program captured as an inline image in the exact version the program observed, so pixel coordinates in the text match the image. The first result of a connection starts with the `cua` API reference; the tool description carries the execution rules. Programs run one at a time per connection in arrival order; a cancelled call cancels its program.
 
 `cua_reset` discards the program environment: variables, imports, and application or window objects. Application grants, native connections, and the applications themselves stay; the next program starts a fresh process and its result repeats the API reference. Use it after a conflicting declaration or an unusable environment.
 
-The connection's Agent is created when the client finishes initialization and disposed when the client closes stdin, which also exits the process. Application consent follows the [CUA consent rules](../cua/README.md) for that Agent: `DSH_CUA_CONSENT=allow` grants each request for the session without a human, and the default `elicit` forwards the request to the client as a form elicitation whose answers are the CUA labels; a declined form records a denial for the session, and a client without elicitation receives an error that names the `allow` mode.
+The connection's Agent is created before the stdio transport opens, so the first listing already carries its registration, and disposed when the client closes stdin, which also exits the process. Application consent follows the [CUA consent rules](../cua/README.md) for that Agent: `DSH_CUA_CONSENT=allow` grants each request for the session without a human, and the default `elicit` forwards the request to the client as a form elicitation whose answers are the CUA labels; a declined form records a denial for the session, and a client without elicitation receives an error that names the `allow` mode.
 
 -----
 
@@ -78,7 +78,7 @@ The patch also mounts the provider with `screenshotTarget: { longEdge: 2048, max
 
 The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, the macOS provider row disabled off Darwin, and this frontend. `dsh.bundle.profile` names the `cua-mcp` profile, which app-boot initializes from this single bundle on first start. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and connects the official MCP server to a stdio transport after the launcher commits readiness. `cua-mcp` is a required startup entry, so a frontend that cannot activate stops the profile.
 
-[`server.ts`](src/server.ts) registers both tools on one `McpServer`. The connection's Agent mounts the registry's default preset and records the launch directory. `cua_run_code` runs through `ctx.tools.execute` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent; [`client-config.ts`](src/client-config.ts) renders the client snippets.
+[`server.ts`](src/server.ts) serves both tools through the protocol server's low-level `tools/list` and `tools/call` handlers: the listing projects the Agent's `cua_run_code` registration, checked against the protocol's tool type, beside the hand-written `cua_reset`. The connection's Agent mounts the registry's default preset and records the launch directory. A `cua_run_code` call runs through `ctx.tools.execute` inside `ctx.agents.withInitiator` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent; [`client-config.ts`](src/client-config.ts) renders the client snippets.
 
 </details>
 
@@ -102,11 +102,11 @@ The [patch](cordis.patch.yml) composes the whole profile over the empty root: se
 
 #### What the model sees
 
-The connected harness's model sees two tools and the server instructions from `tools/list` and `initialize`. The first `cua_run_code` result of a connection, and the first after `cua_reset`, begins with the `cua_run_code` execution rules and the `cua` API reference the provider registered; later results carry only program output and captured screenshots. No DSH model request exists in this profile.
+The connected harness's model sees the Agent's `cua_run_code` definition, `cua_reset`, and the server instructions from `tools/list` and `initialize`. The first `cua_run_code` result of a connection, and the first after `cua_reset`, begins with the `cua` API reference the provider registered; later results carry only program output and captured screenshots. No DSH model request exists in this profile.
 
 #### Token effect
 
-The first result adds about 15,000 characters once per connection or reset with the current macOS provider: 2,200 characters of execution rules and 12,800 of API reference, about 3,800 tokens by the repository's four-character estimate. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the generated Codex configuration raises the `cua_run_code` budget to 25,000 tokens.
+The tool description carries the 2,200-character execution rules of the registration; the first result adds the API reference, about 13,000 characters with the current macOS provider, once per connection or reset, about 3,300 tokens by the repository's four-character estimate. Screenshots are inline images at the provider's `screenshotTarget` size. Clients cap tool output; the generated Codex configuration raises the `cua_run_code` budget to 25,000 tokens. Clients also cap tool descriptions: Claude Code 2.1.309 forwards the first 4,096 characters of an MCP tool description and appends `… [truncated]`; DSH's `dsh-mcp-client` forwards a 20,000-character description intact. The registration's description fits that budget; the reference does not and travels in the first result.
 
 #### KV Cache effect
 
@@ -116,9 +116,10 @@ The tool catalog and instructions are stable for one installation. The first res
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS Hosts have a provider; the Windows provider mounts here once it exists. Other Hosts serve both tools as errors.
+- Only macOS Hosts have a provider; the Windows provider mounts here once it exists. Other Hosts list only `cua_reset`: a `cua_run_code` call fails as `unknown tool`, and `cua_reset` names the missing provider.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.
 - Program sandbox escalation and the raw `cua` tool are not exposed; `DSH_PERMISSION_MODE` selects the launch-time file sandbox of program processes.
+- A provider description longer than 4,096 characters reaches Claude Code 2.1.309 models cut; the projection does not shorten it.
 - Root tool calls are not Session events; the connected harness's transcript is the record of calls and results.
 - The patch lists the profile's dependency closure explicitly; a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row.
 

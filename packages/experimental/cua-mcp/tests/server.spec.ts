@@ -1,4 +1,4 @@
-/** Server behavior that the fixture desktop cannot reach: creation failures, missing references, reset failures, and disposal. */
+/** Server behavior the fixture desktop cannot reach: registry projection, creation failures, unknown tools, reset failures, disposal. */
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { CuaPrograms } from '@deepseek-ai/dsh-cua'
@@ -15,23 +15,48 @@ const approval: AskUserQuestionItem = {
   intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny' },
 }
 
-function batch(text: string): ToolBatchResult {
+/** The registration the fixture provider publishes for the connection's Agent. */
+const registration = {
+  name: 'cua_run_code',
+  description: 'Run a program against the global cua object.',
+  parameters: {
+    type: 'object',
+    properties: {
+      code: { type: 'string' }, description: { type: 'string' }, timeoutMs: { type: 'number' },
+      sandbox_permissions: { type: 'string', enum: ['danger-full-access'] }, justification: { type: 'string' },
+    },
+    required: ['code', 'description'], additionalProperties: false,
+  },
+}
+
+/** The projection of that registration: the sandbox-escalation fields are not served. */
+const projectedSchema = {
+  type: 'object',
+  properties: { code: { type: 'string' }, description: { type: 'string' }, timeoutMs: { type: 'number' } },
+  required: ['code', 'description'], additionalProperties: false,
+}
+
+function batch(text: string, isError = false): ToolBatchResult {
   return {
-    results: [{ callId: 'cua-mcp-1' as never, result: { isError: false, value: text, content: [{ type: 'text', text }] } }],
+    results: [{ callId: 'cua-mcp-1' as never, result: isError
+      ? { isError: true, error: { message: text, info: { name: 'ToolNotFoundError', code: 'UNKNOWN_TOOL' } }, content: [{ type: 'text', text }] }
+      : { isError: false, value: text, content: [{ type: 'text', text }] } }],
     additionalContexts: [], concluded: false,
   }
 }
 
 interface SetupOptions {
   createFailures?: number
-  /** Agent creation waits for this promise before it settles. */
-  createGate?: Promise<void>
   programs?: Partial<CuaPrograms> | false
   elicitation?: boolean
+  /** Whether the provider registered `cua_run_code` for the Agent. */
+  registered?: boolean
+  /** Parameter schema of that registration; the default is representable as an MCP tool. */
+  parameters?: Record<string, unknown>
   reference?: boolean
 }
 
-async function setup(options: SetupOptions = {}) {
+function fixture(options: SetupOptions = {}) {
   const ctx = new Context()
   const agent = { id: SessionId('cua-mcp-fake'), ctx: new Context() } as Agent
   const dispose = vi.fn(async () => {})
@@ -39,7 +64,6 @@ async function setup(options: SetupOptions = {}) {
   const create = vi.fn(async (
     request: { setup?: (agentCtx: Context, agent: Agent) => Promise<unknown> | undefined },
   ): Promise<AgentHandle> => {
-    await options.createGate
     if (failures > 0) {
       failures -= 1
       throw new Error('registry refused the Agent')
@@ -47,22 +71,35 @@ async function setup(options: SetupOptions = {}) {
     await request.setup?.(agent.ctx, agent)
     return { agent, dispose }
   })
+  const initiators: Agent[] = []
+  const withInitiator = vi.fn(<T>(initiator: Agent, operation: () => T): T => { initiators.push(initiator); return operation() })
   const mount = vi.fn(async () => ({ id: 'cua-mcp' }))
-  const execute = vi.fn(async (_input: ToolBatchInput): Promise<ToolBatchResult> => batch('program output'))
-  const get = vi.fn(() => options.reference === false ? undefined : { name: 'cua_run_code', description: 'Run a program.' })
+  const execute = vi.fn(async (input: ToolBatchInput): Promise<ToolBatchResult> => {
+    const call = input.calls[0]
+    if (call === undefined) throw new Error('no call')
+    return options.registered === false || call.name !== 'cua_run_code' ? batch(`unknown tool "${call.name}"`, true) : batch('program output')
+  })
+  const get = vi.fn(() => options.registered === false
+    ? undefined
+    : { ...registration, parameters: options.parameters ?? registration.parameters })
   const assemble = vi.fn(async () => ({
     sections: options.reference === false ? [] : [{ name: 'computer-use:dsh-cua', text: 'Fixture guidance' }], contexts: [], variables: {}, tools: [],
   }))
   const reset = vi.fn(async () => {})
-  ctx.provide('agents', { create } as never)
+  ctx.provide('agents', { create, withInitiator } as never)
   ctx.provide('agentPresets', { defaultId: 'cua-mcp', mount } as never)
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
   if (options.programs !== false) ctx.provide('cuaPrograms', { reset, screenshotRequestTarget: () => undefined, ...options.programs } as never)
-  const errors = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+  onTestFinished(async () => { await ctx.fiber.dispose() })
+  return { ctx, agent, create, withInitiator, initiators, mount, execute, get, assemble, reset, dispose }
+}
+
+async function setup(options: SetupOptions = {}) {
+  const parts = fixture(options)
   const lifetime = new AbortController()
-  const adapter = createCuaMcpServer(ctx, { consent: 'elicit', cwd: '/workspace', signal: lifetime.signal })
+  const adapter = await createCuaMcpServer(parts.ctx, { consent: 'elicit', cwd: '/workspace', signal: lifetime.signal })
   const client = new Client({ name: 'server-spec', version: '1' }, options.elicitation ? { capabilities: { elicitation: {} } } : {})
   const elicitations: unknown[] = []
   if (options.elicitation) {
@@ -78,10 +115,9 @@ async function setup(options: SetupOptions = {}) {
     lifetime.abort()
     await client.close()
     await adapter.dispose()
-    await ctx.fiber.dispose()
   })
   const run = (args: Record<string, unknown>) => client.callTool({ name: 'cua_run_code', arguments: args })
-  return { ctx, agent, adapter, client, run, create, mount, execute, get, assemble, reset, dispose, errors, elicitations }
+  return { ...parts, adapter, client, run, elicitations }
 }
 
 function texts(result: CallToolResult): string[] {
@@ -89,45 +125,74 @@ function texts(result: CallToolResult): string[] {
 }
 
 describe('Computer Use MCP server', () => {
-  it('creates the Agent once initialization completes, mounts the default preset, and forwards program arguments', async () => {
-    const { run, create, mount, execute, agent } = await setup()
-    await vi.waitFor(() => { expect(create).toHaveBeenCalledOnce() })
+  it('creates the Agent before serving, projects its registration verbatim, and forwards arguments inside the initiator scope', async () => {
+    const { adapter, client, run, create, mount, execute, withInitiator, initiators, agent } = await setup()
+    expect(create).toHaveBeenCalledOnce()
     expect(create.mock.calls[0]?.[0]).toMatchObject({ meta: { cwd: '/workspace', agentPreset: 'cua-mcp' } })
     expect(mount).toHaveBeenCalledWith(agent.ctx)
-    const first = await run({ code: '1 + 1', timeoutMs: 5000 })
-    expect(texts(first)).toEqual(['## cua_run_code execution rules\n\nRun a program.\n\n## cua API reference\n\nFixture guidance', 'program output'])
+    expect(adapter.agent).toBe(agent)
+    const listed = await client.listTools()
+    expect(listed.tools.map(tool => tool.name)).toEqual(['cua_run_code', 'cua_reset'])
+    expect(listed.tools[0]).toMatchObject({
+      name: registration.name, description: registration.description, inputSchema: projectedSchema, title: 'Computer use program',
+    })
+    expect(listed.tools[0]?.inputSchema.properties).not.toHaveProperty('sandbox_permissions')
+    const escalation = await run({ code: '1', description: 'Escalate', sandbox_permissions: 'danger-full-access', justification: 'test' })
+    expect(escalation.isError).toBe(true)
+    expect(texts(escalation)[0]).toContain('remove sandbox_permissions and justification')
+    expect(execute).not.toHaveBeenCalled()
+    const first = await run({ code: '1 + 1', description: 'Add', timeoutMs: 5000 })
+    expect(texts(first)).toEqual(['## cua API reference\n\nFixture guidance', 'program output'])
     expect(execute).toHaveBeenCalledOnce()
     const input = execute.mock.calls[0]?.[0]
     if (input === undefined) throw new Error('the executor was not called')
     expect(input.agent).toBe(agent)
     expect(input.calls[0]?.name).toBe('cua_run_code')
-    expect(JSON.parse(input.calls[0]!.arguments)).toEqual({ code: '1 + 1', description: 'CUA program', timeoutMs: 5000 })
-    expect(create).toHaveBeenCalledOnce()
+    expect(JSON.parse(input.calls[0]!.arguments)).toEqual({ code: '1 + 1', description: 'Add', timeoutMs: 5000 })
+    expect(withInitiator).toHaveBeenCalledOnce()
+    expect(initiators).toEqual([agent])
+    expect(texts(await run({ code: '2', description: 'Again' }))).toEqual(['program output'])
   })
 
-  it('retries Agent creation after a failure and reports an executor without a result', async () => {
-    const { run, create, errors, execute } = await setup({ createFailures: 1 })
-    await vi.waitFor(() => { expect(errors).toHaveBeenCalledOnce() })
-    expect(String(errors.mock.calls[0]?.[0])).toContain('Agent creation failed')
-    const result = await run({ code: '1' })
-    expect(result.isError).not.toBe(true)
-    expect(create).toHaveBeenCalledTimes(2)
+  it('fails the listing when the registration is not representable as an MCP tool', async () => {
+    const { client } = await setup({ parameters: { type: 'string' } })
+    await expect(client.listTools()).rejects.toThrow('The cua_run_code registration is not an MCP tool')
+  })
+
+  it('refuses to serve when the Agent cannot be created', async () => {
+    const { ctx, dispose } = fixture({ createFailures: 1 })
+    await expect(createCuaMcpServer(ctx, { consent: 'allow', cwd: '/workspace', signal: new AbortController().signal }))
+      .rejects.toThrow('registry refused the Agent')
+    expect(dispose).not.toHaveBeenCalled()
+  })
+
+  it('lists only cua_reset without a registration and lets the executor answer unknown tools', async () => {
+    const { client, run } = await setup({ registered: false, programs: false, reference: false })
+    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_reset'])
+    const unknown = await run({ code: '1', description: 'Probe' })
+    expect(unknown.isError).toBe(true)
+    expect(texts(unknown)).toEqual(['unknown tool "cua_run_code"'])
+    const other = await client.callTool({ name: 'cua_other', arguments: {} })
+    expect(other.isError).toBe(true)
+    expect(texts(other)).toEqual(['unknown tool "cua_other"'])
+    const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
+    expect(reset.isError).toBe(true)
+    expect(texts(reset).join('')).toContain('no active CUA provider')
+  })
+
+  it('fails the call as a protocol error when the executor settles without a result, reports reset failures, and repeats the reference after a reset', async () => {
+    const { run, client, reset, execute } = await setup()
     execute.mockResolvedValueOnce({ results: [], additionalContexts: [], concluded: false })
-    const missing = await run({ code: '2' })
-    expect(missing.isError).toBe(true)
-    expect(texts(missing).join('')).toContain('settled without a cua_run_code result')
-  })
-
-  it('omits the preface when the provider registered no tool or guidance, and reports reset failures', async () => {
-    const { run, client, reset } = await setup({ reference: false })
-    expect(texts(await run({ code: '1' }))).toEqual(['program output'])
+    await expect(run({ code: '2', description: 'Lost' })).rejects.toThrow('settled without a cua_run_code result')
+    expect(texts(await run({ code: '1', description: 'First' }))[0]).toContain('## cua API reference')
     reset.mockRejectedValueOnce(new Error('cleanup is incomplete'))
     expect(await client.callTool({ name: 'cua_reset', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'cleanup is incomplete' }], isError: true })
     reset.mockRejectedValueOnce('opaque failure')
     expect(await client.callTool({ name: 'cua_reset', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'opaque failure' }], isError: true })
+    expect(texts(await run({ code: '1', description: 'Still first environment' }))).toEqual(['program output'])
     const ok = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(ok.isError).not.toBe(true)
-    expect(texts(await run({ code: '1' }))).toEqual(['program output'])
+    expect(texts(await run({ code: '1', description: 'Fresh' }))[0]).toContain('## cua API reference')
   })
 
   it('answers consent only for its own Agent and forwards a request without a signal', async () => {
@@ -136,47 +201,16 @@ describe('Computer Use MCP server', () => {
     expect(await ctx.waterfall('user-questions/request', { questions: [approval] }, next)).toEqual({ answers: [] })
     expect(await ctx.waterfall('user-questions/request', { questions: [approval], agent: { id: SessionId('other') } as Agent }, next)).toEqual({ answers: [] })
     expect(next).toHaveBeenCalledTimes(2)
-    // The connection Agent exists only after initialization; its requests reach the client.
-    await vi.waitFor(() => { expect(ctx.get('agents')).toBeDefined() })
     const answer = await ctx.waterfall('user-questions/request', { questions: [approval], agent }, next)
     expect(answer).toEqual({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
     expect(elicitations).toHaveLength(1)
     expect(next).toHaveBeenCalledTimes(2)
   })
 
-  it('disposes without an Agent, and after a creation that never succeeded', async () => {
-    const idle = await setup()
-    await vi.waitFor(() => { expect(idle.create).toHaveBeenCalledOnce() })
-    await idle.client.close()
-    await idle.adapter.dispose()
-    expect(idle.dispose).toHaveBeenCalledOnce()
-
-    const failing = await setup({ createFailures: 3, programs: false })
-    const result = await failing.run({ code: '1' })
-    expect(result.isError).toBe(true)
-    expect(texts(result).join('')).toContain('no active CUA provider')
-    await failing.client.close()
-    await failing.adapter.dispose()
-    expect(failing.dispose).not.toHaveBeenCalled()
-
-    const neverCreated = await setup({ createFailures: 3 })
-    const refused = await neverCreated.run({ code: '1' })
-    expect(refused.isError).toBe(true)
-    expect(texts(refused).join('')).toContain('registry refused the Agent')
-    await neverCreated.client.close()
-    await neverCreated.adapter.dispose()
-    expect(neverCreated.dispose).not.toHaveBeenCalled()
-
-    // Disposal during a pending creation that then fails releases nothing and does not reject.
-    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
-    const racing = await setup({ createFailures: 1, createGate: gate.promise })
-    await vi.waitFor(() => { expect(racing.create).toHaveBeenCalledOnce() })
-    await racing.client.close()
-    const disposing = racing.adapter.dispose()
-    // Disposal observes the pending creation before the timer lets it fail.
-    await new Promise(resolve => setTimeout(resolve, 20))
-    gate.resolve()
-    await disposing
-    expect(racing.dispose).not.toHaveBeenCalled()
+  it('disposes the Agent after the connection closes', async () => {
+    const served = await setup()
+    await served.client.close()
+    await served.adapter.dispose()
+    expect(served.dispose).toHaveBeenCalledOnce()
   })
 })

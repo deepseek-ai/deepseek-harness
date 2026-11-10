@@ -65,6 +65,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     const first = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
       code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
         + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })',
+      description: 'Open the fixture window',
     } }) as CallResult
     expect(first.isError).toBeUndefined()
     expect(first.content.map(block => block.type)).toEqual(['text', 'text', 'text', 'image'])
@@ -87,7 +88,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     expect(reset.isError).toBeUndefined()
     expect(textOf(reset.content[0])).toContain('Program environment cleared')
     const third = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: '({ visits: globalThis.visits ?? null, hasWindow: typeof win !== "undefined", pid: process.pid })',
+      code: '({ visits: globalThis.visits ?? null, hasWindow: typeof win !== "undefined", pid: process.pid })', description: 'Inspect the fresh environment',
     } }) as CallResult
     expect(third.content).toHaveLength(2)
     expect(textOf(third.content[0])).toContain('## cua API reference')

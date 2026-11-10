@@ -1,7 +1,8 @@
 /**
- * The Computer Use MCP stdio application: a profile bundle over dsh-base whose one frontend serves
- * `cua_run_code` and `cua_reset` to an external MCP client. Help and `--print-client-config` exit without
- * claiming stdio; a served connection owns one Agent until the client closes stdin.
+ * The Computer Use MCP stdio application: the standalone cua-mcp profile's frontend, serving the Agent's
+ * `cua_run_code` registration and `cua_reset` to an external MCP client. Help and `--print-client-config` exit
+ * without claiming stdio; a served connection owns one Agent, created before the transport opens, until the client
+ * closes stdin.
  * @module @deepseek-ai/dsh-cua-mcp
  */
 import { isSea } from 'node:sea'
@@ -13,7 +14,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { Command, Option } from 'commander'
 import { CLIENT_CONFIG_TARGETS, clientLaunch, renderClientConfig, type ClientConfigTarget, type LaunchFacts } from './client-config.ts'
 import type { ConsentMode } from './consent.ts'
-import { createCuaMcpServer } from './server.ts'
+import { createCuaMcpServer, type CuaMcpServer } from './server.ts'
 
 /** Cordis frontend identity. */
 export const name = 'cua-mcp'
@@ -72,10 +73,12 @@ Examples:
   exitOnStdinEnd(ctx, 'cua-mcp: stdin')
   ctx.effect(() => {
     const lifetime = new AbortController()
-    const adapter = createCuaMcpServer(ctx, { consent: config.consent, cwd: profile.cwd, signal: lifetime.signal })
+    let adapter: Promise<CuaMcpServer> | undefined
     let opening: Promise<void> | undefined
     const stopReady = ready.onReady(() => {
-      opening = adapter.server.connect(new StdioServerTransport())
+      // The Agent exists, with the provider's tools registered for it, before the client can list or call anything.
+      adapter = createCuaMcpServer(ctx, { consent: config.consent, cwd: profile.cwd, signal: lifetime.signal })
+      opening = adapter.then(created => created.server.connect(new StdioServerTransport()))
       void opening.catch((error: unknown) => {
         if (!lifetime.signal.aborted) {
           ctx.logger.error('MCP startup failed: %s', error)
@@ -87,7 +90,8 @@ Examples:
       stopReady()
       lifetime.abort()
       await opening?.catch(() => undefined)
-      await adapter.dispose()
+      const created = await adapter?.catch(() => undefined)
+      await created?.dispose()
     }
   }, 'cua-mcp: server')
 }

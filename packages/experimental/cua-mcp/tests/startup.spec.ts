@@ -2,7 +2,7 @@
 import { EventEmitter } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import { internals, provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import { McpServer } from '@modelcontextprotocol/server'
+import { Server } from '@modelcontextprotocol/server'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import * as frontend from '../src/index.ts'
@@ -30,12 +30,13 @@ let connect: Mock<() => Promise<void>>
 let dispose: Mock<() => Promise<void>>
 
 beforeEach(() => {
-  const server = new McpServer({ name: 'startup-fixture', version: '1' })
+  // oxlint-disable-next-line typescript/no-deprecated -- the frontend serves the SDK's low-level server.
+  const server = new Server({ name: 'startup-fixture', version: '1' })
   closers.push(() => server.close())
   connect = vi.fn(async () => {})
   vi.spyOn(server, 'connect').mockImplementation(connect)
   dispose = vi.fn(() => server.close())
-  vi.mocked(createCuaMcpServer).mockReturnValue({ server, dispose })
+  vi.mocked(createCuaMcpServer).mockResolvedValue({ server, agent: {} as never, dispose })
 })
 
 afterEach(async () => {
@@ -83,12 +84,13 @@ async function boot(args: string[], config: Partial<frontend.Config> = {}) {
 describe('Computer Use MCP startup', () => {
   it('serves after readiness with the configured consent and joins disposal', async () => {
     const { ctx, exit, ready, stdin } = await boot([], { consent: 'allow' })
+    // Nothing is created before readiness; the Agent then exists before the transport opens.
+    expect(createCuaMcpServer).not.toHaveBeenCalled()
+    ready()
     const options = vi.mocked(createCuaMcpServer).mock.calls[0]?.[1]
     if (options === undefined) throw new Error('the frontend did not construct a server')
     expect(options).toMatchObject({ consent: 'allow', cwd: '/workspace' })
-    expect(connect).not.toHaveBeenCalled()
-    ready()
-    expect(connect).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(connect).toHaveBeenCalledOnce() })
     expect(StdioServerTransport).toHaveBeenCalledOnce()
     stdin.end()
     expect(exit).toHaveBeenCalledWith(0)
@@ -124,7 +126,13 @@ describe('Computer Use MCP startup', () => {
     expect(StdioServerTransport).not.toHaveBeenCalled()
   })
 
-  it('reports a transport startup failure through bounded exit, except during disposal', async () => {
+  it('reports an Agent creation or transport startup failure through bounded exit, except during disposal', async () => {
+    vi.mocked(createCuaMcpServer).mockRejectedValueOnce(new Error('registry refused the Agent'))
+    const refused = await boot([])
+    refused.ready()
+    await vi.waitFor(() => { expect(refused.exit).toHaveBeenCalledWith(1) })
+    expect(connect).not.toHaveBeenCalled()
+    await refused.ctx.fiber.dispose()
     connect.mockRejectedValueOnce(new Error('transport start failed'))
     const failing = await boot([])
     failing.ready()

@@ -12,9 +12,9 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 `@deepseek-ai/dsh-cua-mcp` 是 `OPTIONAL_BUNDLES` 中的实验性组合包：它在空 profile 根上用一次 insert 组成独立的 `cua-mcp` profile，并通过 `dsh.bundle.profile` 声明该 profile，因此首次 `dsh --profile cua-mcp` 就从这一个组合包初始化 profile。这是唯一的 MCP 应用路径；没有包 bin 或 SDK 逃逸，该组合包不进入 `PROFILE_TEMPLATES`，因为模板不能引用实验包。
 
-服务器运行在 profile 进程内，带着连接的 Agent、不经模型步骤地调用 `ctx.tools.execute`。一个 stdio 连接拥有一个 Agent：客户端初始化后创建，stdin EOF 时销毁。Agent 归属已经决定了保留的程序进程、本机连接和会话级授权，因此连接生命周期与状态生命周期重合。空的默认 preset `cua-mcp` 让该 Agent 只获得 `cua_run_code`，因为提供方只为已组合 preset 注册程序工具。
+服务器运行在 profile 进程内，带着连接的 Agent、不经模型步骤地调用 `ctx.tools.execute`。一个 stdio 连接拥有一个 Agent：在 stdio 传输打开之前创建，stdin EOF 时销毁。Agent 归属已经决定了保留的程序进程、本机连接和会话级授权，因此连接生命周期与状态生命周期重合。空的默认 preset `cua-mcp` 让该 Agent 只获得 `cua_run_code`，因为提供方只为已组合 preset 注册程序工具。
 
-工具面由两个工具构成。`cua_run_code` 转发 `code`、缺省为 `CUA program` 的可选 `description` 和 `timeoutMs`；每个连接的首个结果携带执行规则和完整的 `cua` API 参考，使工具描述保持在客户端限制之内。`cua_reset` 通过 `ctx.cuaPrograms.reset` 释放程序环境，CUA 提供方现在把它与 `screenshotRequestTarget` 一起暴露。投影把每张延后的截图按程序观察到的请求版本交付，使程序文本中的坐标与交付的图片一致。提供方新增的 `screenshotTarget` 配置取代了没有模型的 profile 无法满足的模型路由查询。
+工具面由两个工具构成。`cua_run_code` 就是该 Agent 的 DSH 注册项，经协议服务器的低层 `tools/list` 与 `tools/call` handler 提供：每次列表都从工具注册表投影名称、描述和参数，调用则在 Agent 的 initiator 作用域内把参数原样交给工具执行器，因此提供方的定义是唯一 schema，`description` 按该定义必填，校验与未知名称由 DSH 回答；唯一的剪裁是注册项中的沙箱提权字段，投影省略它们，调用也不得指定；每个连接的首个结果携带 `cua` API 参考，即提供方的指引。`cua_reset` 通过 `ctx.cuaPrograms.reset` 释放程序环境，CUA 提供方现在把它与 `screenshotRequestTarget` 一起暴露。投影把每张延后的截图按程序观察到的请求版本交付，使程序文本中的坐标与交付的图片一致。提供方新增的 `screenshotTarget` 配置取代了没有模型的 profile 无法满足的模型路由查询。
 
 授权有两种模式。`DSH_CUA_CONSENT=allow` 以批准标签为本会话回答连接 Agent 的每个审批问题。默认的 `elicit` 把每个问题作为表单 elicitation 转发给客户端，枚举即问题的选项标签。不新增任何 Session 事件：训练侧只消费 MCP 工具结果，接入 harness 的 transcript 记录调用；DSH 保留嵌套的 `tool/ptc-dispatch` 事件以供诊断。
 
@@ -36,6 +36,10 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 **用 `dsh plugin enable|disable` 子命令选中随附组合包。** 它在启动器里重复了插件管理器的仅改 manifest 选择，而且仍然产生以 base 为底的 profile；组合包声明的 profile 不需要任何步骤。
 
+**为 `cua_run_code` 手写 MCP schema 与描述。** 第二份定义几天内就漂移了：描述 663 对 2,164 个字符，`description` 可选对必填。投影注册项去掉了这份副本；SDK 的 `registerTool` 只接受 Standard Schema 值，且不允许 `tools/list`、`tools/call` 与自定义 handler 混用，所以两个工具都走低层 handler。
+
+**把 `cua` API 参考放进工具描述。** Claude Code 2.1.309 只转发 MCP 工具描述的前 4,096 个字符并追加 `… [truncated]`，2026-11-10 用 20,000 个字符的探针描述测得；`dsh-mcp-client` 原样转发同一描述。参考约 13,000 个字符，因此随每个环境的首个结果传递，注册项 2,200 个字符的描述留在预算之内。
+
 ## 后果
 
-每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。必需启动条目 `cua-mcp` 在前端无法激活时让 profile 大声失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。
+每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。必需启动条目 `cua-mcp` 在前端无法激活时让 profile 大声失败。没有提供方的 Host 只列出 `cua_reset`，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述与首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。
