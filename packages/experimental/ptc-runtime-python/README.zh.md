@@ -27,7 +27,7 @@ kind: "package-reference"
 
 仅在显式组合中选择这个已发布的实验包。将 `PythonPtcRuntime` 与 `dsh-tools` 一起注册后，`run(resolve(request))` 会在全新的 CPython 3.10+ 子进程中执行每个程序；成功时以 `result.value` resolve，失败时以 `result.error` resolve（正交的 `PtcRunFailure.kind` 分类涵盖解析失败、抛出异常、无效完成值、输出溢出、预算到期、中止、约束不可用与执行基底终止）。仅有调用方误用会 reject，例如 binding 不合法、执行选项未解析，或在 dispose 后调用。配置在加载期拒绝：非 Unix 平台；不是可执行普通文件的显式 `pythonBin`，或无法在 `PATH` 上解析的裸名；非 CPython、低于 3.10 或探测失败的解释器；非正或非整数预算；低于截断标记下限（64）的 `maxLogBytes`；会被 `setTimeout` 截断的定时器值；超过有效 fd-3 帧上限的预算（宿主堆无法安全解析接近上限的帧时，该上限会降低）；或最坏峰值会突破 `RLIMIT_AS` 的 `addressSpaceMb`／输出预算组合。
 
-组合必须为此本地执行宿主提供 `sandbox` 和 `sandboxPolicy`。`resolve(request)` 接受显式 `sandboxPolicy`，或解析共享部署策略，并将 `cwd` 默认设为该策略的工作区根目录。PTC mode 提供调用 Session 的策略和目录。配置的 `maxWallMs` 仍是执行截止时间；不支持显式 `timeoutMs` 覆盖。
+组合必须为此本地执行宿主提供 `sandbox` 和 `sandboxPolicy`。`resolve(request)` 接受显式 `sandboxPolicy`，或解析共享部署策略，并将 `cwd` 默认设为该策略的工作区根目录。PTC mode 提供调用 Session 的策略和目录。配置的 `maxWallMs` 仍是执行截止时间；不支持显式 `timeoutMs` 覆盖，解析时会拒绝。不支持注册环境初始化程序。
 
 `read-only` 和 `workspace-write` 通过配置的沙箱提供方执行；`danger-full-access` 显式绕过约束。`result.sandbox` 独立于程序结果报告模式、观察到的拒绝，以及后端的完整或部分强制能力。[沙箱服务](../../sandbox/sandbox/README.zh.md)定义文件限制与后端局限；这些模式不限制网络访问或任意文件读取。
 
@@ -45,9 +45,11 @@ The program is the body of an async Python function. Top-level await and return 
 
 `resolve` 在启动 Python 进程前拒绝 `discardCompletion: true`。省略该选项或设为 false 时保留程序完成值。
 
+`result.output` 的文本条目保留实际写入的换行和未换行尾段；用 `join('')` 连接各条目的 `text`。`print('a', 'b')` 输出 `'a b\n'`，而 `sys.stdout.write('a'); sys.stdout.write('b')` 输出 `'ab'`。子进程与宿主都将换行的 JSON 转义开销计入 `maxLogBytes`。
+
 ### wire
 
-帧在子进程 fd 3 上以 JSON-lines 传输——每行一个对象——因此 stdout/stderr 留给程序自己的输出。子进程 → 宿主：`boot-ack`、`call`、`log`、`done`。宿主 → 子进程：`boot`（首帧，携带全部上限与命名空间声明）、`run`（`boot-ack` 之后，只携带程序体）与每个 `call` 一个 `reply`。伪造帧可在 `done` 上同时携带 `value` 与 `error`，因此消费方必须先检查 `error`，在它存在时忽略 `value`。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧追加到同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条 `'ab'` 条目而不是假换行（拆分计费算术见 fd-3 协议 Agent Note 的 wire-contract 一节）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。
+帧在子进程 fd 3 上以 JSON-lines 传输——每行一个对象——因此 stdout/stderr 留给程序自己的输出。子进程 → 宿主：`boot-ack`、`call`、`log`、`done`。宿主 → 子进程：`boot`（首帧，携带全部上限与命名空间声明）、`run`（`boot-ack` 之后，只携带程序体）与每个 `call` 一个 `reply`。伪造帧可在 `done` 上同时携带 `value` 与 `error`，因此消费方必须先检查 `error`，在它存在时忽略 `value`。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧追加到同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条带有原始换行的 `'ab\n'` 条目（拆分计费算术见 fd-3 协议 Agent Note 的 wire-contract 一节）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。
 
 ### 可能出错的地方
 
@@ -73,7 +75,7 @@ The program is the body of an async Python function. Top-level await and return 
 
 ### wire 契约
 
-帧为 `boot`／`run`（宿主 → 子进程）与 `boot-ack`／`call`／`log`／`done` （子进程 → 宿主），以及每个 `call` 对应一个 `reply`（宿主 → 子进程）。`log` 帧的 `truncated` 标志标记的就是子进程账本自己的截断标记帧，因此宿主在与子进程相同的点停止捕获，而不是从自己的预算推断。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧合并进同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条 `'ab'` 条目而不是假换行（拆分计费算术在 fd-3 协议 Agent Note 的 wire-contract 段）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。`done.error.kind` 为 `exception`、`invalid-output`、`output-limit` 或模型代码返回后 CPU 检查产生的 `timeout` 之一；墙钟截止、中止与基底死亡在宿主侧观察。
+帧为 `boot`／`run`（宿主 → 子进程）与 `boot-ack`／`call`／`log`／`done` （子进程 → 宿主），以及每个 `call` 对应一个 `reply`（宿主 → 子进程）。`log` 帧的 `truncated` 标志标记的就是子进程账本自己的截断标记帧，因此宿主在与子进程相同的点停止捕获，而不是从自己的预算推断。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧合并进同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条带有原始换行的 `'ab\n'` 条目（拆分计费算术在 fd-3 协议 Agent Note 的 wire-contract 段）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。`done.error.kind` 为 `exception`、`invalid-output`、`output-limit` 或模型代码返回后 CPU 检查产生的 `timeout` 之一；墙钟截止、中止与基底死亡在宿主侧观察。
 
 ### 无损 JSON 跨越
 

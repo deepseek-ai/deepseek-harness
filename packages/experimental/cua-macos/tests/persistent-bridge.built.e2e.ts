@@ -109,7 +109,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
         inspect(tree.includes("Count: 2"), (await cua.getCapabilities()).platform);
       `, 'second')
       expect(second.error).toBeUndefined()
-      expect(second.output).toEqual([{ type: 'text', text: 'true macos' }])
+      expect(second.output).toEqual([{ type: 'text', text: 'true macos\n' }])
       expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState', 'getCapabilities'])
     } finally {
       try { await ctx.fiber.dispose() } finally {

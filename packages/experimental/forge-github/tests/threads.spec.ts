@@ -21,7 +21,7 @@ function fakeGh(handler: (args: readonly string[]) => GhOutput): { run: GhRunner
 }
 
 function provider(run: GhRunner, limits: Partial<GitHubLimits> = {}): GitHubProvider {
-  return new GitHubProvider(run, ['github.com'], { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, ...limits })
+  return new GitHubProvider(run, ['github.com'], { maxOutputBytes: 8_388_608, maxReviewThreads: 1_000, maxCommits: 250, maxViewedFiles: 3_000, ...limits })
 }
 
 function page(nodes: readonly unknown[], next: string | null = null): Record<string, unknown> {

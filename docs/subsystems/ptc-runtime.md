@@ -95,7 +95,8 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text and inspected images. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
@@ -184,7 +185,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## Captured output and the failure taxonomy
 
-`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -204,7 +205,7 @@ declare class PtcImage {
 ```
 
 ```ts type-equiv
-/** One captured text entry or explicitly inspected image, in emission order. */
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
 type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 ```
 
@@ -260,6 +261,21 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * @throws When managed resource cleanup fails.
  */
 release(owner: object): Promise<void>
+
+/**
+ * Register source evaluated once when each execution environment is created.
+ * Registration must precede the first run admission; only one initializer may
+ * be registered. Current bindings are installed before initialization. Its
+ * completion is discarded; logs, timeout, cancellation and output bounds share
+ * the first run. Initialization failure discards the environment without
+ * executing the user program or rolling back external effects.
+ * @param program - Initialization source in the provider's language and format.
+ * @returns An idempotent async disposer that stops admission, cancels and drains
+ * admitted runs, and releases environments. Failed cleanup blocks execution
+ * until the disposer succeeds on retry. The caller owns this disposer.
+ * @throws When unsupported, registered twice, registered after admission, or invalid.
+ */
+registerEnvironmentInitializer(program: string): () => Promise<void>
 
 /**
  * Resolve supported options and provider defaults before execution.

@@ -257,6 +257,9 @@ function mount(options: MountOptions = {}) {
     changeRequestText: vi.fn<ChangesTabInjected['changeRequestText']>(async () => ok(APP_TEXT)),
     localCommits: vi.fn<ChangesTabInjected['localCommits']>(async () => ok(COMMITS)),
     changeRequestCommits: vi.fn<ChangesTabInjected['changeRequestCommits']>(async () => ok(COMMITS)),
+    // Without a host that keeps viewed marks, the browser keeps them, as for local changes.
+    changeRequestViewed: vi.fn<ChangesTabInjected['changeRequestViewed']>(async () => ok(null)),
+    setFileViewed: vi.fn<ChangesTabInjected['setFileViewed']>(async () => ok(undefined)),
     openLink: vi.fn<ChangesTabInjected['openLink']>(),
     copyPath: vi.fn<ChangesTabInjected['copyPath']>(),
     reviewQueue: vi.fn<ChangesTabInjected['reviewQueue']>().mockReturnValue(new ReviewQueue('test-review')),
@@ -1789,6 +1792,227 @@ describe('ChangesTab review layers', () => {
     expect(toolbar.getAttribute('data-tree')).toBe('hidden')
     expect(m.view.queryByRole('radiogroup')).toBeNull()
     expect(m.view.getByRole('button', { name: 'Review layer: All' })).toBeDefined()
+  })
+})
+
+describe('ChangesTab viewed marks the host keeps', () => {
+  const source = { kind: 'change', url: URL7 } as const
+  const marks = (m: ReturnType<typeof mount>): (string | null)[][] => [...m.view.container.querySelectorAll('[data-forge-diff-file]')]
+    .map(element => [element.getAttribute('data-forge-diff-file'), element.getAttribute('data-viewed'), element.hasAttribute('data-expanded') ? 'open' : 'closed'])
+  const hosted = (files: Record<string, 'viewed' | 'unviewed' | 'dismissed'>, headSha = HEAD) => ok({ headSha, files, truncated: false })
+  const box = (m: ReturnType<typeof mount>, path: string, name: string): HTMLInputElement =>
+    within(m.section(path)).getByRole('checkbox', { name: `Mark ${name} as viewed` })
+
+  it('reads the marks with the diff, saves each mark on the host at once, and keeps the browser\'s marks apart', async () => {
+    const saved = Promise.withResolvers<RemoteResult<void>>()
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed', 'docs/notes.txt': 'dismissed' }))
+      faces.setFileViewed.mockReturnValueOnce(saved.promise)
+    } })
+    await settle()
+    expect(m.faces.changeRequestViewed).toHaveBeenCalledWith(URL7, HEAD, expect.any(AbortSignal))
+    expect(marks(m)).toEqual([['docs/gone.txt', 'unviewed', 'open'], ['docs/notes.txt', 'changed', 'open'], ['src/app.ts', 'viewed', 'closed']])
+    expect(m.view.getByRole('progressbar').getAttribute('aria-valuetext')).toBe('1 / 3 viewed')
+
+    const gone = box(m, 'docs/gone.txt', 'gone.txt')
+    expect(gone.closest('label')?.title).toBe(en['viewed.hintHost'])
+    fireEvent.click(gone)
+    expect(m.faces.setFileViewed).toHaveBeenCalledWith(URL7, { path: 'docs/gone.txt', viewed: true, headSha: HEAD })
+    expect(marks(m)[0]).toEqual(['docs/gone.txt', 'viewed', 'closed'])
+    // While its write is in flight the mark stays put, also for V.
+    expect(gone.disabled).toBe(true)
+    expect(gone.closest('label')?.title).toBe(en['viewed.saving'])
+    fireEvent.keyDown(m.section('docs/gone.txt'), { key: 'v' })
+    expect(m.faces.setFileViewed).toHaveBeenCalledOnce()
+    await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
+    expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(false)
+    expect(marks(m)[0]).toEqual(['docs/gone.txt', 'viewed', 'closed'])
+    expect(m.viewedFiles.marksOf(JSON.stringify(['change', URL7, null])).size).toBe(0)
+    expect(m.faces.report).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['refused', { ok: false, error: new RemoteError('forgePanel/action-failed', 'Resource not accessible', {}) }, ['viewed.syncFailed', { message: 'Resource not accessible' }]],
+    ['stale', REFUSED.staleHead, ['viewed.syncStale']],
+  ] as const)('returns a %s mark to what the host keeps and says why', async (_label, result, report) => {
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' }))
+      faces.setFileViewed.mockResolvedValue(result)
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    expect(marks(m)[2]).toEqual(['src/app.ts', 'unviewed', 'open'])
+    await settle()
+    expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'open'])
+    expect(m.faces.report).toHaveBeenCalledWith(...report)
+    // A later choice that fails returns to the earlier saved one.
+    m.faces.setFileViewed.mockResolvedValueOnce(ok(undefined))
+    fireEvent.click(box(m, 'docs/notes.txt', 'notes.txt'))
+    await settle()
+    expect(marks(m)[1]?.[1]).toBe('viewed')
+    fireEvent.click(box(m, 'docs/notes.txt', 'notes.txt'))
+    expect(marks(m)[1]?.[1]).toBe('unviewed')
+    await settle()
+    expect(marks(m)[1]?.[1]).toBe('viewed')
+  })
+
+  it('locks every mark and offers to read again when the host\'s marks cannot be read', async () => {
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/viewed-failed', 'API rate limit exceeded', {}) })
+        .mockResolvedValueOnce(hosted({}, 'b'.repeat(40)))
+        .mockResolvedValue(hosted({ 'src/app.ts': 'viewed' }))
+    } })
+    await settle()
+    const notice = m.view.getByText('Could not read viewed files from GitHub, so files cannot be marked: API rate limit exceeded')
+    const app = box(m, 'src/app.ts', 'app.ts')
+    expect(app.disabled).toBe(true)
+    expect(app.closest('label')?.title).toBe(en['viewed.unavailable'])
+    fireEvent.click(app)
+    fireEvent.keyDown(m.section('src/app.ts'), { key: 'v' })
+    expect(m.faces.setFileViewed).not.toHaveBeenCalled()
+    // Marks read at another head than the diff cannot apply either.
+    fireEvent.click(within(notice.closest('[role="status"]') as HTMLElement).getByRole('button', { name: en.retry }))
+    await settle()
+    const message = /^Could not read viewed files from GitHub, so files cannot be marked: viewed marks were read at b{40}/
+    expect(m.view.getByText(message)).toBeDefined()
+    fireEvent.click(m.view.getByRole('button', { name: en.retry }))
+    await settle()
+    expect(m.view.queryByText(/^Could not read viewed files/)).toBeNull()
+    expect(marks(m)[2]).toEqual(['src/app.ts', 'viewed', 'closed'])
+  })
+
+  it('waits for a later status when the marks were read at a moved head, as for the diff', async () => {
+    const m = mount({ source, setup: (faces) => { faces.changeRequestViewed.mockResolvedValueOnce(REFUSED.staleHead) } })
+    await settle()
+    expect(m.paths()).toEqual([])
+    const polled = entry(7, snapshot(7, { headSha: HEAD }))
+    const moved = { ...polled, update: { ...polled.update!, fetchedAt: 2 } }
+    act(() => { m.panel.set({ state: ready({ changeRequests: [moved] }), disconnected: false }) })
+    await settle()
+    expect(m.paths()).toEqual(['docs/gone.txt', 'docs/notes.txt', 'src/app.ts'])
+  })
+
+  it('keeps the marks of chosen commits in the browser without reading the host', async () => {
+    const m = mount({ source, setup: (faces) => { faces.changeRequestViewed.mockResolvedValue(hosted({ 'src/app.ts': 'viewed' })) } })
+    await settle()
+    m.faces.changeRequestViewed.mockClear()
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^3333333/ }))
+    await settle()
+    expect(m.faces.changeRequestViewed).not.toHaveBeenCalled()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    expect(m.faces.setFileViewed).not.toHaveBeenCalled()
+    expect(box(m, 'src/app.ts', 'app.ts').closest('label')?.title).toBe(en['viewed.hint'])
+  })
+
+  it('keeps a write in flight and its lock across a read at the same head, and the saved choice until the next read', async () => {
+    const saved = Promise.withResolvers<RemoteResult<void>>()
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({}))
+      faces.setFileViewed.mockReturnValueOnce(saved.promise)
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    // The read the refresh starts predates the write, so it holds no mark for the file.
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(m.faces.changeRequestViewed).toHaveBeenCalledTimes(2)
+    expect(marks(m)[2]?.[1]).toBe('viewed')
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(true)
+    await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
+    expect(marks(m)[2]?.[1]).toBe('viewed')
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
+    // The next read holds what the host keeps, which wins over the settled choice.
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(marks(m)[2]?.[1]).toBe('unviewed')
+  })
+
+  it('returns a mark refused after a read at the same head to that read, leaving other writes in flight locked', async () => {
+    const saved = Promise.withResolvers<RemoteResult<void>>()
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({}))
+      faces.setFileViewed.mockReturnValueOnce(saved.promise)
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    m.faces.changeRequestViewed.mockResolvedValue(hosted({ 'docs/notes.txt': 'viewed' }))
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    expect(marks(m).map(row => row[1])).toEqual(['unviewed', 'viewed', 'viewed'])
+    const next = Promise.withResolvers<RemoteResult<void>>()
+    m.faces.setFileViewed.mockReturnValueOnce(next.promise)
+    fireEvent.click(box(m, 'docs/gone.txt', 'gone.txt'))
+    await act(async () => { saved.resolve({ ok: false, error: new RemoteError('forgePanel/action-failed', 'late', {}) }); await Promise.resolve() })
+    expect(marks(m).map(row => row[1])).toEqual(['viewed', 'viewed', 'unviewed'])
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
+    expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(true)
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncFailed', { message: 'late' })
+    await act(async () => { next.resolve(ok(undefined)); await Promise.resolve() })
+    expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(false)
+  })
+
+  it('starts the diff of another head without the earlier choices, which a late write leaves alone', async () => {
+    const saved = Promise.withResolvers<RemoteResult<void>>()
+    const moved = 'b'.repeat(40)
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({}))
+      faces.setFileViewed.mockReturnValueOnce(saved.promise)
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    m.faces.changeRequestDiff.mockResolvedValue(ok({ ...CHANGE, headSha: moved }))
+    m.faces.changeRequestViewed.mockResolvedValue(hosted({}, moved))
+    const polled = entry(7, snapshot(7, { headSha: moved }))
+    const status = { ...polled, update: { ...polled.update!, fetchedAt: 2 } }
+    act(() => { m.panel.set({ state: ready({ changeRequests: [status] }), disconnected: false }) })
+    await settle()
+    expect(m.faces.changeRequestViewed).toHaveBeenLastCalledWith(URL7, moved, expect.any(AbortSignal))
+    expect(marks(m)[2]?.[1]).toBe('unviewed')
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
+    // A write at the new head is in flight when the earlier one settles, which leaves it and its lock alone.
+    const next = Promise.withResolvers<RemoteResult<void>>()
+    m.faces.setFileViewed.mockReturnValueOnce(next.promise)
+    fireEvent.click(box(m, 'docs/gone.txt', 'gone.txt'))
+    await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
+    expect(marks(m).map(row => row[1])).toEqual(['viewed', 'unviewed', 'unviewed'])
+    expect(box(m, 'docs/gone.txt', 'gone.txt').disabled).toBe(true)
+  })
+
+  it('keeps a write that settles while chosen commits show for the read it was made on', async () => {
+    const saved = Promise.withResolvers<RemoteResult<void>>()
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({}))
+      faces.setFileViewed.mockReturnValueOnce(saved.promise)
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    fireEvent.click(m.view.getByRole('button', { name: 'Commits shown: All commits' }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^3333333/ }))
+    await settle()
+    await act(async () => { saved.resolve(ok(undefined)); await Promise.resolve() })
+    // Returning to all commits reads the host's marks again, which then decide.
+    fireEvent.click(m.view.getByRole('button', { name: /^Commits shown: 3333333/ }))
+    await settle()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^All commits/ }))
+    await settle()
+    expect(marks(m)[2]?.[1]).toBe('unviewed')
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
+  })
+
+  it('keeps a mark the host may have saved and tells the reader to check', async () => {
+    const m = mount({ source, setup: (faces) => {
+      faces.changeRequestViewed.mockResolvedValue(hosted({}))
+      faces.setFileViewed.mockResolvedValue({ ok: false, error: new RemoteError('forgePanel/action-unknown', 'Something went wrong', {}) })
+    } })
+    await settle()
+    fireEvent.click(box(m, 'src/app.ts', 'app.ts'))
+    await settle()
+    expect(marks(m)[2]?.[1]).toBe('viewed')
+    expect(box(m, 'src/app.ts', 'app.ts').disabled).toBe(false)
+    expect(m.faces.report).toHaveBeenCalledWith('viewed.syncUnknown', { message: 'Something went wrong' })
   })
 })
 

@@ -1,4 +1,5 @@
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 // @vitest-environment jsdom
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -53,6 +54,9 @@ describe('tool-call-model', () => {
     expect(classifyTool('grep')).toBe('search')
     expect(classifyTool('write')).toBe('write')
     expect(classifyTool('edit')).toBe('edit')
+    expect(classifyTool('run_code')).toBe('code')
+    expect(classifyTool('cua_run_code')).toBe('code')
+    expect(classifyTool('cua_run_code_extra')).toBe('others')
     expect(classifyTool('cordis_runtime_inspect')).toBe('read')
     // The v3 run-control verbs: `others` is the decided intent, not an
     // unclassified default (there is no program to show and no file to open).
@@ -235,10 +239,15 @@ describe('tool-call-model', () => {
       .toBe('{\n  "code": ""\n}')
   })
 
-  it('resultText flattens text blocks verbatim, other shapes as JSON, empty error content to name: code', () => {
+  it('resultText retains text, describes images, and uses the structured failure when content is empty', () => {
     expect(resultText(result({ content: [{ type: 'text', text: 'a\nb' }] }))).toBe('a\nb')
-    expect(resultText(result({ content: [{ type: 'text', text: 'a' }, { type: 'image', data: 'x' } as never] })))
-      .toBe(`a\n${JSON.stringify({ type: 'image', data: 'x' }, null, 2)}`)
+    const attachment = { attachmentId: AttachmentId('sha256:image'), mediaType: 'image/png' as const, width: 8, height: 4, bytes: 64 }
+    expect(resultText(result({ content: [{ type: 'text', text: 'a' }, { type: 'image', attachment }] })))
+      .toBe('a\nsha256:image (8×4, 64 B)')
+    expect(resultText(result({ content: [{ type: 'image', attachment: { ...attachment, name: 'shot.png' } }] })))
+      .toBe('shot.png (8×4, 64 B)')
+    const reasoning = { type: 'reasoning' as const, text: 'detail' }
+    expect(resultText(result({ content: [reasoning] }))).toBe(JSON.stringify(reasoning, null, 2))
     expect(resultText(result({ content: [], isError: true, error: { name: 'ToolError', code: 'denied' } })))
       .toBe('ToolError: denied')
     expect(resultText(result({ content: [] }))).toBe('')

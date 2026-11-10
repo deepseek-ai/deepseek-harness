@@ -3,20 +3,24 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect, types } from 'node:util'
+import { inspect, types, type InspectOptions } from 'node:util'
 import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
-const { isNativeError, isArrayBufferView, isProxy } = types
+const { isNativeError } = types
 const {
   create: capturedObjectCreate,
   defineProperty: capturedObjectDefineProperty,
-  keys: capturedObjectKeys,
-  getOwnPropertyDescriptor: capturedObjectGetOwnPropertyDescriptor,
 } = Object
+
+/** Node formatting options shared with the runtime-owned Image hook. */
+export interface ImageInspectOptions extends InspectOptions {
+  /** Primitive token retained by Node when passing options to a formatter in another VM context. */
+  ptcImageCollector?: symbol
+}
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -89,6 +93,9 @@ export class LogBuffer {
     this.sink(text)
   }
 
+  /** Whether captured text has exceeded the shared output budget. */
+  get overflowed(): boolean { return this.truncated }
+
   /** Remaining exact JSON-byte budget for the completion value or failure message. */
   remainingOutputBytes(): number {
     return this.maxBytes - this.bytes
@@ -100,58 +107,58 @@ export class LogBuffer {
  * @param logs - the buffer every rendered line is pushed into.
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
- * @returns The program's inspect function.
+ * @returns The program's inspect function and its matching Image collection hook.
  * @throws If object formatting fails; preceding arguments remain visible.
  */
 export function makeInspect(
-  logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
-): (...args: unknown[]) => void {
-  return (...args: unknown[]): void => {
+  logs: Pick<LogBuffer, 'push'>, images: Pick<WeakMap<object, string>, 'get'>, emitImage: (id: string) => void,
+): {
+  inspect: (...args: unknown[]) => void
+  collectImage: (image: object, options: ImageInspectOptions) => void
+} {
+  const collectors = new Map<symbol, string[]>()
+  const programInspect = (...args: unknown[]): void => {
     const pending: string[] = []
     const flush = (): void => {
       if (pending.length === 0) return
-      logs.push(pending.join(' '))
+      logs.push(pending.join(' ') + '\n')
       pending.length = 0
     }
     for (const arg of args) {
-      const directImage = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
-      if (directImage !== undefined && emitImage !== undefined) {
+      const directImage = arg !== null && typeof arg === 'object' ? images.get(arg) : undefined
+      if (directImage !== undefined) {
         flush()
         emitImage(directImage)
         continue
       }
+      const nested: string[] = []
+      const collector = Symbol()
+      const options: ImageInspectOptions = {
+        depth: null, maxArrayLength: null, maxStringLength: null,
+        ptcImageCollector: collector,
+      }
+      collectors.set(collector, nested)
       try {
-        pending.push(typeof arg === 'string' ? arg : inspect(arg, { depth: null, maxArrayLength: null, maxStringLength: null }))
+        pending.push(typeof arg === 'string' ? arg : inspect(arg, options))
       } catch (error: unknown) {
         flush()
         throw error
-      }
-      if (images === undefined || emitImage === undefined) continue
-      const nested: string[] = []
-      const seen = new Set<object>()
-      const visit: unknown[] = [arg]
-      while (visit.length > 0) {
-        const current = visit.pop()
-        if (current === null || typeof current !== 'object') continue
-        const id = images.get(current)
-        if (id !== undefined) {
-          nested.push(id)
-          continue
-        }
-        // Binary contents contain no Images; proxy traps must not run during discovery.
-        if (seen.has(current) || isArrayBufferView(current) || isProxy(current)) continue
-        seen.add(current)
-        for (const key of capturedObjectKeys(current).reverse()) {
-          const property = capturedObjectGetOwnPropertyDescriptor(current, key)
-          if (property !== undefined && 'value' in property) visit.push(property.value)
-        }
+      } finally {
+        collectors.delete(collector)
       }
       if (nested.length === 0) continue
       flush()
       for (const id of nested) emitImage(id)
     }
     flush()
-    if (args.length === 0) logs.push('')
+    if (args.length === 0) logs.push('\n')
+  }
+  return {
+    inspect: programInspect,
+    collectImage(image, options) {
+      const id = images.get(image)
+      if (id !== undefined && options.ptcImageCollector !== undefined) collectors.get(options.ptcImageCollector)?.push(id)
+    },
   }
 }
 
@@ -222,8 +229,12 @@ export function prepareCompletion(
   return { value: encodePtcJsonWire(snapshot) }
 }
 
-/** Build the fixed overflow fragment without carrying rejected variable bytes. */
-function outputLimit(maxOutputBytes: number): ProgramResult {
+/**
+ * Build the fixed overflow fragment without carrying rejected variable bytes.
+ * @param maxOutputBytes Configured limit reported to the caller.
+ * @returns The output-limit failure shared by evaluation phases.
+ */
+export function outputLimit(maxOutputBytes: number): ProgramResult {
   return { error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } }
 }
 

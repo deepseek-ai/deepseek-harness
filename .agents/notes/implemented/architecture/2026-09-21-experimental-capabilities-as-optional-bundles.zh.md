@@ -34,4 +34,4 @@ Computer Use 是 experimental 包组内随安装提供的可选组合包。组�
 
 官方发现不表示实验性状态，也不引入不同的插件生命周期。关闭 bundle 保留已安装文件；激活失败保留现有的已保存选择行为。Bundle 行是普通 Host 行，使用常规开关。独立与组合测试覆盖 Host 行及每个预设的工具目录；实时切换与已记录 Session 覆盖激活和模型可见行为。
 
-Computer Use 将权限服务和原生提供方保留在 Host，在已绑定 `ptc` preset 的 Agent 作用域中注册工具。现有 Agent 事件和 `createScope()` 维护当前、新建和恢复的 Agent，preset 声明保持不变。只有详情页的显式操作通过现有设置表单修改新会话默认模式，启用开关不配置 PTC 执行方式。
+Computer Use 将权限服务和原生提供方保留在 Host，并在 Agent 作用域中注册工具。`agentPreset` 指定的 preset 获得原始 `cua`；其他已组合的 preset 获得 [CUA 程序工具](2026-11-09-cua-program-tool.zh.md)。现有 Agent 事件和 `createScope()` 维护当前、新建和恢复的 Agent，preset 声明保持不变。只有详情页的显式操作通过现有设置表单修改新会话默认模式，启用开关不配置 PTC 执行方式。

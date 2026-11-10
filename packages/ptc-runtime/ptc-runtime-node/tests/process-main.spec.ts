@@ -28,6 +28,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const logs: string[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
+    initialized: async () => {},
     invoke: async () => encodePtcJsonWire(42),
     log: (text) => { logs.push(text) },
     image: () => {},
@@ -52,7 +53,7 @@ it('clears the environment and returns a binding result after captured output', 
   }
   const result = await h.run('const doubled = await tools.echo({ n: 21 }); inspect("got", doubled); return { doubled };')
   expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
-  expect(h.logs).toEqual(['got 42'])
+  expect(h.logs).toEqual(['got 42\n'])
   expect(h.state.env).toEqual({})
   expect(h.state.env).not.toBe(h.nativeEnvironment)
   expect(Object.getPrototypeOf(h.state.env)).toBeNull()
@@ -68,7 +69,7 @@ it.each(['function-body', 'repl', 'script'] as const)('provides console in the o
   const result = await h.run('inspect(typeof console.log, typeof console.dir, typeof console.table);', 1024, format,
     { discardCompletion: true })
   expect(result).toEqual({})
-  expect(h.logs).toEqual(['function function function'])
+  expect(h.logs).toEqual(['function function function\n'])
   expect(Object.getOwnPropertyDescriptor(globalThis, 'console')).toEqual(nativeConsole)
 })
 
@@ -120,6 +121,7 @@ it.each([
   ['throw new Error("boom")', 'boom'],
   ['throw "raw-throw"', 'raw-throw'],
   ['const e = new Error("bare"); e.stack = undefined; throw e', 'bare'],
+  ['delete missing; return 1', 'Delete of an unqualified identifier in strict mode'],
 ])('returns bounded program exceptions for %s', async (code, message) => {
   const h = await setup(65_536)
   const result = await h.run(code, 65_536)
@@ -213,7 +215,9 @@ it('captures image selection during execution and revokes it for late or externa
     try { new Image() } catch (error) { constructorError = error.message }
     if (constructorError !== "Images are created by image-producing tools") throw new Error("Image construction succeeded");
     process.savedInspect = inspect;
-    inspect(process.image);
+    const nodeUtil = await import('node:util');
+    inspect(nodeUtil.inspect(process.image));
+    inspect({ image: process.image });
     setImmediate(() => { inspect(process.image); process.done(); });
   `, 1024, 'script', { discardCompletion: true })
   expect(result.error).toBeUndefined()

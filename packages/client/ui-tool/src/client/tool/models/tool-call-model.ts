@@ -62,6 +62,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   edit: 'edit',
   apply_patch: 'edit',
   run_code: 'code',
+  cua_run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
   // The three run-control verbs take one package id and produce a receipt, so
@@ -202,8 +203,9 @@ function deriveAutoReviewDenial(block: ToolCallBlock): AutoReviewDenial | null {
 
 /**
  * Flatten a settled result's content blocks to display text: text blocks
- * verbatim, other block shapes as pretty JSON. Empty content on a failed call
- * falls back to the structured error's `name: code` line.
+ * verbatim, image references with dimensions and bytes, and other blocks as
+ * pretty JSON. Empty failure content falls back to the structured error's
+ * `name: code` line.
  * @param node - the settled result node.
  * @returns the flattened result text (may be empty).
  */
@@ -211,7 +213,10 @@ export function resultText(node: ToolResultNode): string {
   const parts: string[] = []
   for (const block of node.content) {
     if (block.type === 'text') parts.push(block.text)
-    else parts.push(JSON.stringify(block, null, 2))
+    else if (block.type === 'image') {
+      const image = block.attachment
+      parts.push(`${image.name ?? image.attachmentId} (${image.width}×${image.height}, ${image.bytes} B)`)
+    } else parts.push(JSON.stringify(block, null, 2))
   }
   if (parts.length === 0 && node.error !== undefined) {
     parts.push(`${node.error.name}: ${node.error.code}`)

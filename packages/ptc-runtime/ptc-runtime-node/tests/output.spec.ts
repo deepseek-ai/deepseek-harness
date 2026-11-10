@@ -27,7 +27,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const { run } = await setup()
     const result = await run('inspect("%s %d %j %%", "text", 7, { n: 1 }, [2, 3]);')
     expect(result.error).toBeUndefined()
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['%s %d %j %% text 7 { n: 1 } [ 2, 3 ]'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['%s %d %j %% text 7 { n: 1 } [ 2, 3 ]\n'])
     expect(result.value).toBeUndefined()
   })
 
@@ -49,7 +49,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     }))
     expect(result.error).toBeUndefined()
     expect(calls).toEqual(['edit', 'test'])
-    expect(result.output[0]).toEqual({ type: 'text', text: "{ path: '/file.ts', operation: undefined }" })
+    expect(result.output[0]).toEqual({ type: 'text', text: "{ path: '/file.ts', operation: undefined }\n" })
     expect(result.output[1]).toEqual({ type: 'text', text: expect.stringContaining('Error: inspection detail') as string })
   })
 
@@ -62,10 +62,10 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
       inspect('after');
     `)
     expect(result.error).toBeUndefined()
-    expect(result.output).toEqual([{ type: 'text', text: 'before <Revoked Proxy>' }, { type: 'text', text: 'after' }])
+    expect(result.output).toEqual([{ type: 'text', text: 'before <Revoked Proxy>\n' }, { type: 'text', text: 'after\n' }])
     const recovered = await run('inspect("recovered")')
     expect(recovered.error).toBeUndefined()
-    expect(recovered.output).toEqual([{ type: 'text', text: 'recovered' }])
+    expect(recovered.output).toEqual([{ type: 'text', text: 'recovered\n' }])
   })
 
   it('displays complete arrays, long strings and deeply nested objects', async () => {
@@ -91,7 +91,25 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const result = await run('inspect("before", { [Symbol.for("nodejs.util.inspect.custom")]() { throw new Error("formatter failed") } })')
     expect(result.error?.kind).toBe('exception')
     expect(result.error?.message).toContain('formatter failed')
-    expect(result.output).toEqual([{ type: 'text', text: 'before' }])
+    expect(result.output).toEqual([{ type: 'text', text: 'before\n' }])
+  })
+
+  it('collects images when a program formatter delegates with the supplied options', async () => {
+    const { runtime } = await setup()
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const result = await runtime.run(runtime.resolve({
+      program: `
+        const image = await tools.image({});
+        inspect({ [Symbol.for('nodejs.util.inspect.custom')](_depth, options, format) { return format({ image }, options) } });
+      `,
+      bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output.map(block => block.type)).toEqual(['text', 'image'])
+    const text = result.output[0]
+    expect(text?.type === 'text' ? text.text : undefined).toContain("attachmentId: 'sha256:selected'")
+    expect(result.output[1]).toEqual({ type: 'image', attachment: image.attachment })
   })
 
   it('emits selected images among text and objects and preserves immutable image properties', async () => {
@@ -116,8 +134,8 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     }))
     expect(result.error).toBeUndefined()
     expect(result.output).toEqual([
-      { type: 'text', text: 'true sha256:before /images/before.png 8 4 true' },
-      { type: 'text', text: 'before { windowId: 23 }' },
+      { type: 'text', text: 'true sha256:before /images/before.png 8 4 true\n' },
+      { type: 'text', text: 'before { windowId: 23 }\n' },
       { type: 'image', attachment: before.attachment },
       { type: 'text', text: expect.stringContaining('after [') as string },
       { type: 'image', attachment: after.attachment },
@@ -140,6 +158,52 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const failed = await runtime.run(runtime.resolve({ program: 'inspect(await tools.image({})); throw new Error("after image")', bindings, discardCompletion: true }))
     expect(failed.output).toEqual([{ type: 'image', attachment: image.attachment }])
     expect(failed.error?.kind).toBe('exception')
+  })
+
+  it('emits images in collection entries and enumerable symbol properties without reading accessors', async () => {
+    const { runtime } = await setup()
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const result = await runtime.run(runtime.resolve({
+      program: `
+        const image = await tools.image({});
+        const map = new Map([[image, { image }]]);
+        const set = new Set([image]);
+        map.set('self', map);
+        set.add(set);
+        Object.defineProperty(map, 'forEach', { get() { throw new Error('map getter') } });
+        Object.defineProperty(set, 'forEach', { get() { throw new Error('set getter') } });
+        const container = { map, set, [Symbol('image')]: image };
+        Object.defineProperty(container, 'hidden', { value: image });
+        inspect(container);
+        inspect({ get image() { throw new Error('image getter') } });
+      `,
+      bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output.map(block => block.type)).toEqual(['text', 'image', 'image', 'image', 'image', 'text'])
+    expect(result.output.filter(block => block.type === 'image').map(block => block.attachment)).toEqual(Array(4).fill(image.attachment))
+  })
+
+  it('collects images selected by Node formatting and keeps ordinary formatting as text', async () => {
+    const { runtime } = await setup()
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const result = await runtime.run(runtime.resolve({
+      program: `
+        const image = await tools.image({});
+        const { inspect: nodeInspect } = await import('node:util');
+        console.log(image);
+        inspect(nodeInspect({ image }));
+        inspect({ image, [nodeInspect.custom]() { return 'summary' } });
+        inspect({ [nodeInspect.custom]() { return { image } } });
+      `,
+      bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output.map(block => block.type)).toEqual(['text', 'text', 'text', 'text', 'image'])
+    expect(result.output[2]).toEqual({ type: 'text', text: 'summary\n' })
+    expect(result.output.at(-1)).toEqual({ type: 'image', attachment: image.attachment })
   })
 
   it('inspects a retained image in a later program', async () => {
@@ -168,7 +232,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
       discardCompletion: true,
     }))
     expect(result.error?.kind).toBe('output-limit')
-    expect(result.output[0]).toEqual({ type: 'text', text: 'before' })
+    expect(result.output[0]).toEqual({ type: 'text', text: 'before\n' })
     expect(result.output[1]).toEqual({ type: 'image', attachment: image.attachment })
     expect(result.output[2]).toEqual({ type: 'text', text: expect.stringMatching(/^x+$/) as string })
   })
@@ -206,7 +270,7 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(bigint.error).toBeUndefined()
     expect(bigint.value).toBeUndefined()
     const captured = await run(`inspect("selected"); ${completion('"hidden"')}`)
-    expect(captured.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['selected'])
+    expect(captured.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['selected\n'])
     expect(captured.value).toBeUndefined()
   })
 
@@ -222,9 +286,16 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     `)
     expect(result.error).toBeUndefined()
     expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([
-      'object true', 'log\n', 'info\n', 'warn\n', 'error\n', 'debug\n', '{ native: true }\n', 'after',
+      'object true\n', 'log\n', 'info\n', 'warn\n', 'error\n', 'debug\n', '{ native: true }\n', 'after\n',
     ])
     expect(runtime.executionInstructions).toContain('Use inspect(...values) to display output. Do not use console.')
+  })
+
+  it('preserves raw writes, inspected lines and blank lines', async () => {
+    const { run } = await setup()
+    const result = await run('process.stdout.write("a"); process.stdout.write("b"); inspect("c"); console.log("d"); inspect(); inspect(""); process.stderr.write("e")')
+    expect(result.error).toBeUndefined()
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toBe('abc\nd\n\n\ne')
   })
 
   it('allows local console declarations and retains a program-owned console', async () => {
@@ -232,10 +303,10 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const source = 'const console = { value: 42 }; inspect(console.value)'
     const local = await run(mode.executionMode === 'per-call' ? source : `{ ${source} }`)
     expect(local.error).toBeUndefined()
-    expect(local.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['42'])
+    expect(local.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['42\n'])
     if (runtime.retainsState) {
       expect((await run('var console = { value: 17 }')).error).toBeUndefined()
-      expect((await run('inspect(console.value)')).output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['17'])
+      expect((await run('inspect(console.value)')).output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['17\n'])
     }
   })
 
@@ -298,7 +369,7 @@ it.each(['get', 'set'])('decodes Images after a program changes the %s prototype
   }))
   expect(result.error).toBeUndefined()
   expect(result.output).toEqual([
-    { type: 'text', text: 'sha256:prototype /images/prototype.png 8 4 true' },
+    { type: 'text', text: 'sha256:prototype /images/prototype.png 8 4 true\n' },
     { type: 'image', attachment: image.attachment },
   ])
 })

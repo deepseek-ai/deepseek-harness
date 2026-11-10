@@ -13,9 +13,11 @@ TypeScript `run_code` programs display selected values through `inspect(...value
 
 CUA observations previously produced output automatically. `getCapabilities()`, `listApps()`, `findApps(query)`, `getState()`, `app.getWindows()` and app or window `getAccessibilityTree()` now return their results to the program. Use `inspect` to display the values you need.
 
-Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images nested in arrays or objects. Read CUA window IDs from the window object’s `windowId`.
+Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images in arrays, Map entries, Set values and enumerable object properties. Nested image selection follows Node's custom formatting. Read CUA window IDs from the window object’s `windowId`.
 
 Other image-producing tools retain their declared program values and automatically attach their pictures to the model context. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.
+
+Formatting selected values can require more memory than the retained output; see the [Node formatting memory limit](../../../../packages/ptc-runtime/ptc-runtime-node/README.md#known-limitations-and-deferred-work).
 
 ## Migration
 
@@ -41,6 +43,6 @@ Other image-producing tools retain their declared program values and automatical
    ```
 
 3. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
-4. Third-party `PtcRuntime` providers replace returned `logs` arrays with `output: PtcOutput[]`; direct runtime consumers read `result.output`. Text entries are `{ type: 'text', text }`, image entries are `{ type: 'image', attachment }`, and array order is display order.
-5. Upgrade preinstalled Node bootstraps selected by `launch.bootstrapPath` to protocol version 3 alongside the host. Readiness rejects incompatible revisions before program dispatch.
+4. Third-party `PtcRuntime` providers replace returned `logs` arrays with `output: PtcOutput[]`; direct runtime consumers read `result.output`. Text entries are `{ type: 'text', text }`, image entries are `{ type: 'image', attachment }`, and array order is display order. Preserve emitted line breaks and concatenate adjacent text entries without separators.
+5. For custom `launch.bootstrapPath` deployments, follow the [Node PTC bootstrap upgrade guide](../ptc-bootstrap-protocol/guide.md).
 6. Run an updated program and verify that inspected values appear once and its final expression adds no output.

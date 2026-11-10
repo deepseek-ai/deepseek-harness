@@ -530,7 +530,7 @@
           "content": [
             {
               "type": "text",
-              "text": "42"
+              "text": "42\n"
             }
           ],
           "isError": false,
@@ -763,7 +763,7 @@
           "content": [
             {
               "type": "text",
-              "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed"
+              "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed\n"
             }
           ],
           "isError": false,
@@ -1690,7 +1690,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "42"
+                  "text": "42\n"
                 }
               ],
               "isError": false,
@@ -1971,7 +1971,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed"
+                  "text": "Auto review rejected tool \"snapshot_double\"; its body was not executed\n"
                 }
               ],
               "isError": false,

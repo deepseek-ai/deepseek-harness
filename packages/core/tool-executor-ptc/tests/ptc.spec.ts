@@ -1233,12 +1233,12 @@ describe('the run_code dispatch bridge', () => {
       const first = await tools.echo!({ value: 'one' })
       const second = await tools.echo!({ value: 'two' })
       if (typeof first !== 'string' || typeof second !== 'string') throw new Error('echo returned a non-string')
-      return { output: [{ type: 'text', text: `saw ${first}` }, { type: 'text', text: second }] }
+      return { output: [{ type: 'text', text: `saw ${first}\n` }, { type: 'text', text: second }] }
     }
     const result = await runCode(ctx, 'const …: string = …', { agent })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected run_code success')
-    expect(result.value).toEqual({ logs: ['saw echo:one', 'echo:two'] })
+    expect(result.value).toEqual({ logs: ['saw echo:one\n', 'echo:two'] })
     expect(result.content).toEqual([{ type: 'text', text: 'saw echo:one\necho:two' }])
     expect(calls).toEqual([{ value: 'one' }, { value: 'two' }])
     const dispatches = events.filter(event => event.type === 'tool/ptc-dispatch')
@@ -1816,6 +1816,17 @@ describe('the run_code dispatch bridge', () => {
       content: [{ type: 'text', text: 'nested context' }],
       source: { kind: 'test' },
     }])
+  })
+
+  it.each([false, true])('preserves raw text fragments, failure=%s', async (failed) => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    runtime.behavior = () => Promise.resolve({
+      output: ['sel', 'ected\n', 'log\n', 'warn\n', 'after\n'].map(text => ({ type: 'text' as const, text })),
+      ...failed ? { error: { kind: 'exception' as const, message: 'stopped' } } : {},
+    })
+    const result = await runCode(ctx, 'program')
+    expect(result.isError).toBe(failed)
+    expect(result.content).toEqual([{ type: 'text', text: `${failed ? 'Error: code run failed (exception): stopped\nCaptured output:\n' : ''}selected\nlog\nwarn\nafter\n` }])
   })
 
   it.each([
