@@ -78,7 +78,7 @@ export function nativeProtocol(
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $comment: 'Generated from the shared CUA operation schema. Do not edit.',
     title: 'dsh-cua native request',
-    description: 'Host resource fields and private continuations are not model tool parameters. App handles and snapshots belong to one helper; coordinates use window-local native units.',
+    description: 'The Host resolves resource limits before dispatch. Private continuations are available only to the Host. App handles and snapshots belong to one helper; coordinates use window-local native units.',
     oneOf: schemas,
   }, null, 2) + '\n' }
 }

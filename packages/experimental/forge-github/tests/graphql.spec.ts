@@ -1,8 +1,9 @@
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
-import type { ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestSnapshot, ForgeCheckId } from '@deepseek-ai/dsh-experimental-forge'
 import { describe, expect, it } from 'vitest'
 import {
-  mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse, mapSnapshotResponse, mapThreadPageResponse, snapshotQuery,
+  actionsRunOf, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse, mapSnapshotResponse, mapThreadPageResponse,
+  snapshotQuery,
 } from '../src/graphql.ts'
 import type { SnapshotPages, ThreadPageResult } from '../src/graphql.ts'
 import { checkRun, demo, pull, pullRequestNode, repositorySettings, statusContext, threadPage } from './fixtures.ts'
@@ -69,7 +70,11 @@ describe('snapshot mapping', () => {
       mergeability: 'mergeable',
       mergeReady: true,
       mergeMethods: ['merge', 'squash'],
+      branchUpdates: [],
       reviewDecision: 'none',
+      reviewers: [],
+      reviewersTruncated: false,
+      canRequestReviews: true,
       checks: [{
         name: 'lint',
         state: 'success',
@@ -77,11 +82,15 @@ describe('snapshot mapping', () => {
         workflow: 'ci',
         startedAt: '2026-10-09T01:00:00Z',
         completedAt: '2026-10-09T01:02:07Z',
+        rerun: 'actions:7',
       }],
       checksRollup: 'success',
       checksTruncated: false,
+      canRerunChecks: true,
       unresolvedThreads: 2,
       threadsTruncated: false,
+      closingIssues: [],
+      closingIssuesTruncated: false,
       updatedAt: '2026-10-09T01:02:03Z',
       closedAt: null,
     })
@@ -100,7 +109,7 @@ describe('snapshot mapping', () => {
     const old = checkRun('build', 'COMPLETED', 'FAILURE')
     const newer = { ...checkRun('build', 'QUEUED', null), databaseId: 9 }
     const suite = (app: string, workflow: string, event: string) => ({ app: { id: app },
-      workflowRun: { event, workflow: { id: workflow, name: 'CI' } } })
+      workflowRun: { databaseId: 7, event, workflow: { id: workflow, name: 'CI' } } })
     const result = await single(pullRequestNode(1, {}, [
       old, newer, { ...old, databaseId: 2 },
       { ...old, checkSuite: suite('github-actions', 'ci', 'push') },
@@ -212,7 +221,7 @@ describe('snapshot mapping', () => {
     ['EXPECTED', 'pending'],
   ])('maps status context %s to %s', async (state, expected) => {
     expect((await single(pullRequestNode(1, {}, [statusContext('deploy', state)]))).checks).toEqual([{
-      name: 'deploy', state: expected, url: null, workflow: null, startedAt: null, completedAt: null,
+      name: 'deploy', state: expected, url: null, workflow: null, startedAt: null, completedAt: null, rerun: null,
     }])
   })
 
@@ -450,5 +459,99 @@ describe('head branch lookup mapping', () => {
   it('throws for an invisible repository or a malformed response', () => {
     expect(() => mapHeadResponse({ data: { repository: null } }, demo, 'topic')).toThrow('forge-github: repository octo/demo is not visible')
     expect(() => mapHeadResponse({ data: {} }, demo, 'topic')).toThrow('forge-github: unexpected GitHub response to the head branch lookup')
+  })
+})
+
+describe('overview mapping', () => {
+  const user = (login: string) => ({ __typename: 'User', login, avatarUrl: `https://avatars.example/${login}` })
+  const review = (state: string, author: unknown, oid: string | null = 'f'.repeat(40)) => ({ state, commit: oid === null ? null : { oid }, author })
+
+  it('lists requested reviewers in host order, then other reviewers, each with their latest outcome', async () => {
+    const snapshot = await single(pullRequestNode(1, {
+      reviewRequests: { totalCount: 4, nodes: [
+        { asCodeOwner: false, requestedReviewer: user('lin') },
+        { asCodeOwner: true, requestedReviewer: { __typename: 'Team', combinedSlug: 'octo/forge', avatarUrl: null } },
+        { asCodeOwner: false, requestedReviewer: { __typename: 'Bot', login: 'copilot', avatarUrl: null } },
+        { asCodeOwner: false, requestedReviewer: { __typename: 'Mannequin', login: 'ghost' } },
+        { asCodeOwner: false, requestedReviewer: null },
+      ] },
+      latestReviews: { totalCount: 4, nodes: [
+        review('COMMENTED', { __typename: 'Bot', login: 'review-bot', avatarUrl: null }),
+        review('COMMENTED', user('zhou'), 'e'.repeat(40)),
+        review('COMMENTED', user('octo')),
+        review('PENDING', user('qian')),
+        review('COMMENTED', null),
+      ] },
+      latestOpinionatedReviews: { totalCount: 2, nodes: [review('CHANGES_REQUESTED', user('zhou'), 'e'.repeat(40)), review('APPROVED', user('LIN'), null)] },
+    }))
+    expect(snapshot.reviewers).toEqual([
+      { kind: 'user', login: 'LIN', avatarUrl: 'https://avatars.example/lin', requested: true, codeOwner: false, verdict: 'approved', reviewedSha: null },
+      { kind: 'team', login: 'octo/forge', avatarUrl: null, requested: true, codeOwner: true, verdict: null, reviewedSha: null },
+      { kind: 'bot', login: 'copilot', avatarUrl: null, requested: true, codeOwner: false, verdict: null, reviewedSha: null },
+      { kind: 'bot', login: 'review-bot', avatarUrl: null, requested: false, codeOwner: false, verdict: 'commented', reviewedSha: 'f'.repeat(40) },
+      { kind: 'user', login: 'zhou', avatarUrl: 'https://avatars.example/zhou', requested: false, codeOwner: false,
+        verdict: 'changes-requested', reviewedSha: 'e'.repeat(40) },
+    ])
+    expect(snapshot.reviewersTruncated).toBe(false)
+  })
+
+  it.each([
+    ['review requests', { reviewRequests: { totalCount: 30, nodes: [] } }],
+    ['reviews', { latestReviews: { totalCount: 30, nodes: [] } }],
+    ['opinionated reviews', { latestOpinionatedReviews: { totalCount: 30, nodes: [] } }],
+  ])('reports more %s than it read as an incomplete reviewer list', async (_label, overrides) => {
+    expect((await single(pullRequestNode(1, overrides))).reviewersTruncated).toBe(true)
+  })
+
+  it.each([
+    ['an open, mergeable head the viewer may update', {}, ['merge']],
+    ['a head that can also be rebased', { canBeRebased: true }, ['merge', 'rebase']],
+    ['a conflicting head', { mergeable: 'CONFLICTING' }, []],
+    ['a closed pull request', { state: 'CLOSED' }, []],
+    // GitHub answers false both for a head that is up to date and for one the viewer may not update.
+    ['a head up to date or one the viewer may not update', { viewerCanUpdateBranch: false }, []],
+    ['a head behind its base whose merge state is blocked', { mergeStateStatus: 'BLOCKED' }, ['merge']],
+  ])('offers branch updates for %s', async (_label, overrides, updates) => {
+    expect((await single(pullRequestNode(1, { viewerCanUpdateBranch: true, ...overrides }))).branchUpdates).toEqual(updates)
+  })
+
+  it.each([
+    ['TRIAGE', 'OPEN', true, false],
+    ['WRITE', 'OPEN', true, true],
+    ['READ', 'OPEN', false, false],
+    ['ADMIN', 'MERGED', false, true],
+  ])('lets a %s viewer of a %s pull request request reviews: %s, and rerun checks: %s', async (permission, state, requests, reruns) => {
+    const snapshot = await single(pullRequestNode(1, { state }), repositorySettings({ viewerPermission: permission }))
+    expect([snapshot.canRequestReviews, snapshot.canRerunChecks]).toEqual([requests, reruns])
+  })
+
+  it('grants neither without readable repository settings', async () => {
+    const snapshot = await single(pullRequestNode(1), null)
+    expect([snapshot.canRequestReviews, snapshot.canRerunChecks]).toEqual([false, false])
+  })
+
+  it('names a rerun only for a check of a workflow run with a database id', async () => {
+    const run = checkRun('lint', 'COMPLETED', 'FAILURE')
+    const snapshot = await single(pullRequestNode(1, {}, [
+      run,
+      { ...checkRun('test', 'COMPLETED', 'FAILURE'), checkSuite: { app: { id: 'github-actions' }, workflowRun: null } },
+      { ...checkRun('e2e', 'COMPLETED', 'FAILURE'), checkSuite: { app: { id: 'github-actions' },
+        workflowRun: { databaseId: null, event: 'pull_request', workflow: { id: 'e2e', name: 'e2e' } } } },
+    ]))
+    expect(snapshot.checks.map(check => [check.name, check.rerun])).toEqual([['lint', 'actions:7'], ['test', null], ['e2e', null]])
+    expect(actionsRunOf('actions:7' as ForgeCheckId)).toBe(7)
+    expect(actionsRunOf('status:7' as ForgeCheckId)).toBeUndefined()
+  })
+
+  it('maps the linked issues of any repository on the host, noting more than it read', async () => {
+    const snapshot = await single(pullRequestNode(1, { closingIssuesReferences: { totalCount: 3, nodes: [
+      { number: 6, title: 'Show progress', state: 'OPEN', url: 'https://github.com/octo/demo/issues/6', repository: { name: 'demo', owner: { login: 'octo' } } },
+      { number: 2, title: 'Rerun', state: 'CLOSED', url: 'https://github.com/octo/tracker/issues/2', repository: { name: 'tracker', owner: { login: 'octo' } } },
+    ] } }))
+    expect(snapshot.closingIssues).toEqual([
+      { repository: demo, number: 6, title: 'Show progress', state: 'open', url: 'https://github.com/octo/demo/issues/6' },
+      { repository: { ...demo, name: 'tracker' }, number: 2, title: 'Rerun', state: 'closed', url: 'https://github.com/octo/tracker/issues/2' },
+    ])
+    expect(snapshot.closingIssuesTruncated).toBe(true)
   })
 })

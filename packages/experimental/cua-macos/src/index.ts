@@ -9,6 +9,7 @@ import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { installHeldKeys } from './held-keys.ts'
+import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
 import { GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
@@ -43,6 +44,8 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
+  maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),

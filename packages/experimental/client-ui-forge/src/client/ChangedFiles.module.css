@@ -14,6 +14,11 @@
 .menu { width: min(360px, calc(100vw - 24px)); }
 .trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; white-space: nowrap; cursor: pointer; }
 .trigger:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
+/* The label ends in an ellipsis once its toolbar lets the entry shrink. */
+.anchor { min-width: 0; max-width: 100%; }
+.trigger { min-width: 0; max-width: 100%; }
+.triggerLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.triggerChevron { flex: none; }
 @media (hover: hover) { .row:hover, .trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); } }
 @media (pointer: coarse) { .row { min-height: 44px; } .search input { font-size: 16px; } }
 

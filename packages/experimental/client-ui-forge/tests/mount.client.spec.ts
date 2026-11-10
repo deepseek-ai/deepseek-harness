@@ -12,7 +12,8 @@ import type { QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SidebarRightTabDefinition, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {
-  ChangeRequestSnapshot, ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult,
+  ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate,
+  ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
@@ -93,6 +94,7 @@ const REFUSED = {
   failed: { ok: false, error: new RemoteError('gateway/bad-request', 'failed', {}) },
   stale: { ok: false, error: new RemoteError('forgePanel/stale-head', 'Head branch was modified', {}) },
   refused: { ok: false, error: new RemoteError('forgePanel/action-failed', 'Pull Request is not mergeable', {}) },
+  unknown: { ok: false, error: new RemoteError('forgePanel/action-unknown', 'Something went wrong', {}) },
 } satisfies Record<string, RemoteResult<never>>
 
 function isTabFace(value: Record<string, unknown>): value is Record<string, unknown> & ForgeTabInjected {
@@ -160,6 +162,18 @@ async function base() {
     dismiss: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     markReady: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
     merge: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    rerunChecks: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeRerunRequest): Promise<RemoteResult<void>> => OK),
+    requestReviews: vi.fn(async (
+      _sessionId: SessionId, _url: string, _reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[],
+    ): Promise<RemoteResult<void>> => OK),
+    reviewerCandidates: vi.fn(async (
+      _sessionId: SessionId, _url: string, _query: string, _signal: AbortSignal,
+    ): Read<readonly ForgeReviewerCandidate[]> => ({ ok: true, value: [{ login: 'mona', name: null, avatarUrl: null, suggested: true }] })),
+    updateBranch: vi.fn(async (_sessionId: SessionId, _url: string, _method: string, _headSha: string): Promise<RemoteResult<void>> => OK),
+    changeRequestViewed: vi.fn(async (
+      _sessionId: SessionId, _url: string, _headSha: string, _signal: AbortSignal,
+    ): Read<ForgeViewedFiles | null> => ({ ok: true, value: null })),
+    setFileViewed: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeViewedRequest): Promise<RemoteResult<void>> => OK),
     refresh: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
     requestWorktree: vi.fn(async (_sessionId: SessionId, _from: string | null): Promise<RemoteResult<void>> => OK),
     cancelWorktree: vi.fn(async (_sessionId: SessionId): Promise<RemoteResult<void>> => OK),
@@ -186,7 +200,9 @@ async function base() {
     changeRequestText: vi.fn(async (_sessionId: SessionId, _url: string, _commit: string, _path: string): Read<string> => ({ ok: true, value: 'b\n' })),
     changeRequestReview: vi.fn(async (
       _sessionId: SessionId, _url: string, headSha: string, _fresh: boolean, _signal?: AbortSignal,
-    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, threads: [], truncated: false } })),
+    ): Read<ForgeReviewData> => ({ ok: true, value: { headSha, viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })),
+    changeRequestReviewWrite: vi.fn(async (_sessionId: SessionId, _url: string, _write: ForgeReviewWrite): Read<ForgeReviewWriteResult> =>
+      ({ ok: true, value: { ok: true } })),
     submitReview: vi.fn(async (_sessionId: SessionId, _url: string, _request: ForgeReviewRequest): Read<ForgeReviewResult> => ({ ok: true, value: { ok: true, url: 'https://github.com/review' } })),
   }
   ctx.provide('remote.forgePanel', forgePanel)
@@ -619,6 +635,7 @@ describe('mountForgePanel change request actions', () => {
   it.each([
     ['confirms it', OK, { key: 'toast.markedReady', tone: 'success', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.markReadyFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('marks a draft ready through the Remote and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.markReady.mockResolvedValueOnce(result)
@@ -632,12 +649,81 @@ describe('mountForgePanel change request actions', () => {
     ['confirms it', OK, { key: 'toast.merged', tone: 'success', params: { name: '#7' } }],
     ['says a moved head needs another look', REFUSED.stale, { key: 'toast.mergeStale', tone: 'failure', params: { name: '#7' } }],
     ['reports why the host refused', REFUSED.refused, { key: 'toast.mergeFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
   ])('merges through the Remote with the confirmed head and %s', async (_label, result, notice) => {
     const f = await fixture()
     f.forgePanel.merge.mockResolvedValueOnce(result)
     await f.tab(S1).merge(entry(7, snapshot(7)), { method: 'rebase', headSha: 'b'.repeat(40) })
     expect(f.forgePanel.merge).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'rebase', 'b'.repeat(40))
     expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+})
+
+describe('mountForgePanel overview actions', () => {
+  const url = 'https://github.com/octo/demo/pull/7'
+
+  it.each([
+    ['confirms it', OK, { key: 'toast.rerunRequested', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', REFUSED.stale, { key: 'toast.rerunStale', tone: 'failure', params: { name: '#7' } }],
+    ['reports why the host refused', REFUSED.refused, { key: 'toast.rerunFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
+  ])('reruns failed checks through the Remote and %s', async (_label, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.rerunChecks.mockResolvedValueOnce(result)
+    await f.tab(S1).rerunChecks(entry(7, snapshot(7)), { headSha: 'b'.repeat(40) })
+    expect(f.forgePanel.rerunChecks).toHaveBeenCalledWith(S1, url, { headSha: 'b'.repeat(40) })
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it.each([
+    ['confirms it', OK, { key: 'toast.reviewRequested', tone: 'success', params: { name: '#7', login: 'mona, lin' } }],
+    ['reports why the host refused', REFUSED.refused, { key: 'toast.reviewRequestFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
+  ])('requests reviews through the Remote and %s', async (_label, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.requestReviews.mockResolvedValueOnce(result)
+    const reviewers = [{ kind: 'user' as const, login: 'mona' }, { kind: 'user' as const, login: 'lin' }]
+    await f.tab(S1).requestReviews(entry(7, snapshot(7)), reviewers)
+    expect(f.forgePanel.requestReviews).toHaveBeenCalledWith(S1, url, reviewers)
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it('lists reviewer candidates through the Remote and rejects with the host\'s reason', async () => {
+    const f = await fixture()
+    const signal = new AbortController().signal
+    await expect(f.tab(S1).reviewerCandidates(url, 'mo', signal)).resolves.toEqual([{ login: 'mona', name: null, avatarUrl: null, suggested: true }])
+    expect(f.forgePanel.reviewerCandidates).toHaveBeenCalledWith(S1, url, 'mo', signal)
+    f.forgePanel.reviewerCandidates.mockResolvedValueOnce({ ok: false, error: new RemoteError('forgePanel/reviewers-failed', 'down', {}) })
+    await expect(f.tab(S1).reviewerCandidates(url, '', signal)).rejects.toThrow('down')
+    await f.dispose()
+  })
+
+  it.each([
+    ['confirms it', OK, { key: 'toast.branchUpdated', tone: 'success', params: { name: '#7' } }],
+    ['says a moved head needs another look', REFUSED.stale, { key: 'toast.branchUpdateStale', tone: 'failure', params: { name: '#7' } }],
+    ['reports why the host refused', REFUSED.refused, { key: 'toast.branchUpdateFailed', tone: 'failure', params: { message: 'Pull Request is not mergeable' } }],
+    ['tells the reader to check an outcome the host did not confirm', REFUSED.unknown, { key: 'toast.actionUnknown', tone: 'failure', params: { name: '#7' } }],
+  ])('updates the branch through the Remote with the confirmed head and %s', async (_label, result, notice) => {
+    const f = await fixture()
+    f.forgePanel.updateBranch.mockResolvedValueOnce(result)
+    await f.tab(S1).updateBranch(entry(7, snapshot(7)), { method: 'rebase', headSha: 'b'.repeat(40) })
+    expect(f.forgePanel.updateBranch).toHaveBeenCalledWith(S1, url, 'rebase', 'b'.repeat(40))
+    expect(f.notice()).toMatchObject(notice)
+    await f.dispose()
+  })
+
+  it('reads and saves the host\'s viewed marks through the Remote', async () => {
+    const f = await fixture()
+    const signal = new AbortController().signal
+    const view = f.changes(S1)
+    expect(await view.changeRequestViewed(url, 'a'.repeat(40), signal)).toEqual({ ok: true, value: null })
+    expect(f.forgePanel.changeRequestViewed).toHaveBeenCalledWith(S1, url, 'a'.repeat(40), signal)
+    const request = { path: 'src/a.ts', viewed: true, headSha: 'a'.repeat(40) }
+    expect(await view.setFileViewed(url, request)).toEqual(OK)
+    expect(f.forgePanel.setFileViewed).toHaveBeenCalledWith(S1, url, request)
     await f.dispose()
   })
 })
@@ -797,7 +883,6 @@ describe('mountForgePanel changes view', () => {
     comment: { path: 'a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Check this', hunk: '@@ -1 +1 @@\n-old\n+new' } }
     const queue = f.changes(S1).reviewQueue(tab)
     queue.recordAgent(selection)
-    if (kind === 'change') queue.add(selection)
     queue.summarize('Summary', 'comment')
     const otherTab = { id: 'other-tab' as TabId, signal: new AbortController().signal }
     const other = f.changes(S1).reviewQueue(otherTab)
@@ -835,8 +920,11 @@ describe('mountForgePanel changes view', () => {
     expect(await view.changeRequestCommits('https://github.com/octo/demo/pull/7', signal)).toEqual({ ok: true, value: COMMITS })
     expect(f.forgePanel.changeRequestCommits).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', signal)
     expect(await view.changeRequestReview('https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal))
-      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), threads: [], truncated: false } })
+      .toEqual({ ok: true, value: { headSha: 'a'.repeat(40), viewer: 'octo', threads: [], truncated: false, pendingReview: null, viewerCanReview: true } })
     expect(f.forgePanel.changeRequestReview).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', 'a'.repeat(40), true, signal)
+    const write = { kind: 'resolve', headSha: 'a'.repeat(40), thread: 'thread-1' as ForgeThreadId, resolved: true } as const
+    expect(await view.changeRequestReviewWrite('https://github.com/octo/demo/pull/7', write)).toEqual({ ok: true, value: { ok: true } })
+    expect(f.forgePanel.changeRequestReviewWrite).toHaveBeenCalledWith(S1, 'https://github.com/octo/demo/pull/7', write)
     expect(view.viewedFiles).toBe(f.changes(S1).viewedFiles)
     expect(view.viewedFiles).not.toBe(f.changes(S2).viewedFiles)
     view.reconnect()
@@ -858,6 +946,8 @@ describe('mountForgePanel changes view', () => {
     expect(f.notice()).toMatchObject({ key: 'review.submitted', tone: 'success' })
     f.changes(S1).report('review.published')
     expect(f.notice()).toMatchObject({ key: 'review.published', tone: 'success' })
+    f.changes(S1).report('review.discarded')
+    expect(f.notice()).toMatchObject({ key: 'review.discarded', tone: 'success' })
 
     const writeText = vi.fn(async (_text: string) => {})
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

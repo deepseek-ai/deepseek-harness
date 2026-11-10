@@ -6,7 +6,7 @@ import { CapabilitiesResult, Request, ScreenshotResult, SystemPointerRequest } f
 const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
   { reason: 'raw process ID instead of a selected app handle', request: { method: 'typeText', params: { pid: 17, text: 'hello' } } },
   { reason: 'unknown native method', request: { method: 'shutdown', params: {} } },
-  { reason: 'host-owned traversal limit', request: { method: 'getState', params: { appHandle: 'app', maxElements: 1000000 } } },
+  { reason: 'zero node budget', request: { method: 'getState', params: { appHandle: 'app', maxElements: 0 } } },
   { reason: 'extra tool argument', request: { method: 'listApps', params: {}, helperPath: '/untrusted/helper' } },
   { reason: 'element click without an observed snapshot', request: { method: 'click', params: { appHandle: 'app', elementId: '0' } } },
   { reason: 'numeric element id', request: { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: 0 } } },
@@ -66,11 +66,11 @@ it.each([
   }).success).toBe(false)
 })
 
-it('accepts disclosure options without accepting host traversal limits', () => {
-  const params = { appHandle: 'app', includeMenus: true, details: false }
+it('accepts disclosure options and bounded per-read traversal limits', () => {
+  const params = { appHandle: 'app', includeMenus: true, details: false, maxDepth: 513, maxElements: 100001 }
   expect(Request.parse({ method: 'getState', params })).toEqual({ method: 'getState', params })
   expect(Request.safeParse({ method: 'getState', params: { ...params, details: 'all' } }).success).toBe(false)
-  expect(Request.safeParse({ method: 'getState', params: { ...params, maxDepth: 100 } }).success).toBe(false)
+  expect(Request.safeParse({ method: 'getState', params: { ...params, maxDepth: -1 } }).success).toBe(false)
 })
 
 it.each([

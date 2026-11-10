@@ -1,4 +1,7 @@
-/** Browser-persisted review drafts and the write whose outcome still needs confirmation. */
+/**
+ * Browser-persisted review records, the review summary, comment drafts an earlier panel kept in the browser, and the
+ * write whose outcome still needs confirmation. New pull request comments go to the pending review on the code host.
+ */
 
 import { z } from 'zod'
 import type { ForgeReviewRequest } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -152,16 +155,6 @@ export class ReviewQueue {
   readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
-  }
-
-  /**
-   * Save a frozen PR comment on the whole change request unless a write needs reconciliation.
-   * @param selection - frozen PR comment.
-   * @returns whether it was saved; a comment on chosen commits is refused.
-   */
-  add(selection: ReviewSelection): boolean {
-    if (selection.source.kind !== 'change' || selection.source.commits !== null || this.state.uncertain !== null) return false
-    return this.save({ ...this.state, comments: [...this.state.comments, selection] })
   }
 
   /**

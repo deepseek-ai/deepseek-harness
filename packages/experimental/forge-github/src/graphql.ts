@@ -3,8 +3,8 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, ForgeRepository,
-  Mergeability, MergeMethod, ReviewDecision,
+  ChangeRequestCheck, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, CheckState, ChecksRollup,
+  ForgeCheckId, ForgeFailure, ForgeRepository, Mergeability, MergeMethod, ReviewDecision, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import { checkedRepository, isCommit } from './urls.ts'
@@ -14,7 +14,7 @@ const CHECK_FIELDS = `pageInfo { hasNextPage endCursor }
     __typename
     ... on CheckRun {
       id databaseId name status conclusion detailsUrl startedAt completedAt
-      checkSuite { app { id } workflowRun { event workflow { id name } } }
+      checkSuite { app { id } workflowRun { databaseId event workflow { id name } } }
     }
     ... on StatusContext { context state targetUrl createdAt }
   }`
@@ -24,6 +24,11 @@ const PAGE_SIZE = 100
 
 const THREAD_FIELDS = 'pageInfo { hasNextPage endCursor } nodes { isResolved }'
 
+/** Most review requests, reviews per kind, and closing issues one snapshot reads. */
+const OVERVIEW_PAGE = 25
+
+const REVIEW_FIELDS = 'totalCount nodes { state commit { oid } author { __typename login avatarUrl } }'
+
 /**
  * Pull request fields of one snapshot.
  * @param threads - review threads the first page holds, at most {@link PAGE_SIZE}.
@@ -32,8 +37,15 @@ const THREAD_FIELDS = 'pageInfo { hasNextPage endCursor } nodes { isResolved }'
 function pullRequestFields(threads: number): string {
   return `id number url title state isDraft updatedAt closedAt
   author { login }
-  headRefName headRefOid baseRefName baseRefOid additions deletions mergeable mergeStateStatus reviewDecision
+  headRefName headRefOid baseRefName baseRefOid additions deletions mergeable mergeStateStatus reviewDecision viewerCanUpdateBranch
+  canBeRebased
   reviewThreads(first: ${threads}) { ${THREAD_FIELDS} }
+  reviewRequests(first: ${OVERVIEW_PAGE}) { totalCount nodes { asCodeOwner requestedReviewer {
+    __typename ... on User { login avatarUrl } ... on Bot { login avatarUrl } ... on Team { combinedSlug avatarUrl }
+  } } }
+  latestReviews(first: ${OVERVIEW_PAGE}) { ${REVIEW_FIELDS} }
+  latestOpinionatedReviews(first: ${OVERVIEW_PAGE}) { ${REVIEW_FIELDS} }
+  closingIssuesReferences(first: ${OVERVIEW_PAGE}) { totalCount nodes { number title state url repository { name owner { login } } } }
   commits(last: 1) { nodes { commit { statusCheckRollup { id state contexts(first: ${PAGE_SIZE}) {
     ${CHECK_FIELDS}
   } } } } }`
@@ -76,7 +88,11 @@ const checkRunSchema = z.object({
   completedAt: z.string().nullable(),
   checkSuite: z.object({
     app: z.object({ id: z.string() }).nullable(),
-    workflowRun: z.object({ event: z.string(), workflow: z.object({ id: z.string(), name: z.string() }) }).nullable(),
+    workflowRun: z.object({
+      databaseId: z.number().int().nonnegative().nullable(),
+      event: z.string(),
+      workflow: z.object({ id: z.string(), name: z.string() }),
+    }).nullable(),
   }).nullable(),
 })
 
@@ -120,6 +136,13 @@ export interface SnapshotPages {
   readonly checks?: (id: RollupId, cursor: string) => Promise<CheckPageResult>
 }
 
+const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
+
+const reviewsSchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  nodes: z.array(z.object({ state: z.string(), commit: z.object({ oid: z.string() }).nullable(), author: actorSchema.nullable() })),
+})
+
 const pullRequestSchema = z.object({
   id: z.string().transform(value => value as PullRequestId),
   url: z.string(),
@@ -139,7 +162,33 @@ const pullRequestSchema = z.object({
   mergeable: z.string(),
   mergeStateStatus: z.string(),
   reviewDecision: z.string().nullable(),
+  viewerCanUpdateBranch: z.boolean(),
+  canBeRebased: z.boolean(),
   reviewThreads: threadPageSchema,
+  reviewRequests: z.object({
+    totalCount: z.number().int().nonnegative(),
+    nodes: z.array(z.object({
+      asCodeOwner: z.boolean(),
+      requestedReviewer: z.object({
+        __typename: z.string(),
+        login: z.string().optional(),
+        combinedSlug: z.string().optional(),
+        avatarUrl: z.string().nullable().optional(),
+      }).nullable(),
+    })),
+  }),
+  latestReviews: reviewsSchema,
+  latestOpinionatedReviews: reviewsSchema,
+  closingIssuesReferences: z.object({
+    totalCount: z.number().int().nonnegative(),
+    nodes: z.array(z.object({
+      number: z.number().int().positive(),
+      title: z.string(),
+      state: z.string(),
+      url: z.string(),
+      repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
+    })),
+  }),
   commits: z.object({
     nodes: z.array(z.object({
       commit: z.object({
@@ -199,8 +248,16 @@ type RepositoryNode = z.infer<typeof repositorySchema>
 /** GitHub merge states in which the merge button works: mergeable, with passing or non-required failing checks. */
 const MERGEABLE_NOW: ReadonlySet<string> = new Set(['CLEAN', 'HAS_HOOKS', 'UNSTABLE'])
 
-/** Repository permissions that may merge. */
+/** Repository permissions that may merge and rerun workflow jobs. */
 const MERGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE'])
+
+/** Repository permissions that may request reviews. */
+const TRIAGERS: ReadonlySet<string> = new Set(['ADMIN', 'MAINTAIN', 'WRITE', 'TRIAGE'])
+
+/** Outcome of a submitted review by GitHub state; a pending review is not submitted. */
+const VERDICTS: Readonly<Record<string, ReviewVerdict>> = {
+  APPROVED: 'approved', CHANGES_REQUESTED: 'changes-requested', COMMENTED: 'commented', DISMISSED: 'dismissed',
+}
 
 /** Merge methods in menu order, with the repository setting that allows each and GitHub's name for it. */
 const METHODS: readonly {
@@ -433,6 +490,7 @@ function toSnapshot(
         workflow: run.data.checkSuite?.workflowRun?.workflow.name ?? null,
         startedAt: run.data.startedAt,
         completedAt: run.data.completedAt,
+        rerun: workflow?.databaseId == null ? null : actionsRun(workflow.databaseId),
       })
       continue
     }
@@ -445,6 +503,7 @@ function toSnapshot(
         workflow: null,
         startedAt: null,
         completedAt: null,
+        rerun: null,
       })
     } else if (typeof context === 'object' && context !== null && '__typename' in context
       && (context.__typename === 'CheckRun' || context.__typename === 'StatusContext')) {
@@ -458,6 +517,8 @@ function toSnapshot(
   const summary: ChecksRollup = rollup?.contexts.pageInfo.hasNextPage || unknownContext || checks.length === 0 ? checksRollup(rollup?.state)
     : checks.some(check => check.state === 'failure' || check.state === 'cancelled') ? 'failure'
       : checks.some(check => check.state === 'pending') ? 'pending' : 'success'
+  const permission = settings?.viewerPermission ?? ''
+  const open = node.state === 'OPEN'
   return {
     ref,
     url: node.url,
@@ -475,15 +536,85 @@ function toSnapshot(
     mergeReady: settings !== undefined && MERGERS.has(settings.viewerPermission ?? '') && node.state === 'OPEN' && !node.isDraft
       && MERGEABLE_NOW.has(node.mergeStateStatus),
     mergeMethods: settings === undefined ? [] : mergeMethods(settings),
+    // GitHub's `viewerCanUpdateBranch` is false while the head is up to date as well as when the viewer may not update
+    // it; `mergeStateStatus` cannot tell a head behind its base, as BLOCKED and the other states take precedence over
+    // BEHIND. `canBeRebased` reports whether the pull request can be rebase merged, which follows the repository's rebase
+    // merge setting, so rebase is offered only where a rebase merge is allowed.
+    branchUpdates: !open || !node.viewerCanUpdateBranch || node.mergeable === 'CONFLICTING' ? []
+      : node.canBeRebased ? ['merge', 'rebase'] : ['merge'],
     reviewDecision: reviewDecision(node.reviewDecision),
+    reviewers: reviewersOf(node),
+    reviewersTruncated: [node.reviewRequests, node.latestReviews, node.latestOpinionatedReviews]
+      .some(connection => connection.totalCount > connection.nodes.length),
+    canRequestReviews: open && TRIAGERS.has(permission),
     checks,
     checksRollup: summary,
     checksTruncated: rollup?.contexts.pageInfo.hasNextPage ?? false,
+    canRerunChecks: MERGERS.has(permission),
     unresolvedThreads: node.reviewThreads.nodes.filter(thread => !thread.isResolved).length,
     threadsTruncated: node.reviewThreads.pageInfo.hasNextPage,
+    closingIssues: node.closingIssuesReferences.nodes.map(issue => ({
+      repository: {
+        forge: ref.repository.forge, host: ref.repository.host, owner: issue.repository.owner.login, name: issue.repository.name,
+      },
+      number: issue.number,
+      title: issue.title,
+      state: issue.state === 'OPEN' ? 'open' as const : 'closed' as const,
+      url: issue.url,
+    })),
+    closingIssuesTruncated: node.closingIssuesReferences.totalCount > node.closingIssuesReferences.nodes.length,
     updatedAt: node.updatedAt,
     closedAt: node.closedAt,
   }
+}
+
+/**
+ * The requested reviewers in host order, then the other accounts that submitted a review, each with their latest
+ * outcome. An approval or change request outlasts later comments, as GitHub's reviewer list shows it; the author and
+ * accounts GitHub does not name are left out.
+ */
+function reviewersOf(node: PullRequestNode): ChangeRequestReviewer[] {
+  const reviewers = new Map<string, ChangeRequestReviewer>()
+  const keyOf = (kind: ChangeRequestReviewer['kind'], login: string): string => `${kind}:${login.toLowerCase()}`
+  for (const request of node.reviewRequests.nodes) {
+    const reviewer = request.requestedReviewer
+    const kind = reviewer?.__typename === 'User' ? 'user' : reviewer?.__typename === 'Bot' ? 'bot' : reviewer?.__typename === 'Team' ? 'team' : undefined
+    const login = kind === 'team' ? reviewer?.combinedSlug : reviewer?.login
+    if (kind === undefined || login === undefined) continue
+    reviewers.set(keyOf(kind, login), {
+      kind, login, avatarUrl: reviewer?.avatarUrl ?? null, requested: true, codeOwner: request.asCodeOwner,
+      verdict: null, reviewedSha: null,
+    })
+  }
+  const author = node.author?.login.toLowerCase()
+  for (const review of [...node.latestReviews.nodes, ...node.latestOpinionatedReviews.nodes]) {
+    const verdict = VERDICTS[review.state]
+    const account = review.author
+    if (verdict === undefined || account === null || account.login.toLowerCase() === author) continue
+    const kind = account.__typename === 'Bot' ? 'bot' : 'user'
+    const key = keyOf(kind, account.login)
+    const known = reviewers.get(key)
+    reviewers.set(key, {
+      kind, login: account.login, avatarUrl: known?.avatarUrl ?? account.avatarUrl, requested: known?.requested ?? false,
+      codeOwner: known?.codeOwner ?? false, verdict, reviewedSha: review.commit?.oid ?? null,
+    })
+  }
+  return [...reviewers.values()]
+}
+
+/** The rerun identity of a GitHub Actions job: the database id of its workflow run, which reruns its failed jobs. */
+function actionsRun(run: number): ForgeCheckId {
+  return `actions:${run}` as ForgeCheckId
+}
+
+/**
+ * Read the workflow run database id from a check's rerun identity.
+ * @param id - identity a snapshot of this provider named.
+ * @returns the workflow run id, or undefined for an identity this provider did not build.
+ */
+export function actionsRunOf(id: ForgeCheckId): number | undefined {
+  const match = /^actions:(\d{1,15})$/.exec(id)
+  return match === null ? undefined : Number(match[1])
 }
 
 /** The methods the repository allows, the viewer's default first. */
