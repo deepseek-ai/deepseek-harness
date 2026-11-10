@@ -235,7 +235,7 @@ Only if the task cannot be completed without moving the user’s pointer, call a
 
 #### Token effect
 
-Enabling the plugin adds a fixed schema and guidance. In TypeScript PTC, inspected text and images add model input. Retained objects are not serialized into prompts by this package. A higher default or per-read override can return more AX text when the window has more nodes to visit. Each visible auxiliary window, such as a status item, menu or tooltip, adds one window record to `getWindows()` and raw `getState` output; it does not automatically add a screenshot.
+Enabling the plugin adds a fixed schema and guidance. Native `cua` calls send result text and admitted screenshot images to the model. In TypeScript PTC, programs select text and images with `inspect`. Retaining an app or window object in the program adds no prompt content. A higher default or per-read override can return more AX text when the window has more nodes to visit. Each visible auxiliary window, such as a status item, menu or tooltip, adds one window record to `getWindows()` and raw `getState` output; it does not automatically add a screenshot.
 
 #### KV Cache effect
 

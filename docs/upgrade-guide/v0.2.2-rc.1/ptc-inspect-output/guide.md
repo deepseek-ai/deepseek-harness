@@ -11,6 +11,8 @@ English | [中文](guide.zh.md)
 
 TypeScript `run_code` programs display selected values through `inspect(...values)`. Function return values and final expressions previously appeared in the result; they are now omitted. Each inspected argument is rendered independently: strings appear directly, and other lossless JSON values use two-space JSON formatting. Undefined arguments are omitted. Values that cannot be represented as lossless JSON, such as binary views and cyclic objects, throw an exception.
 
+CUA observations previously produced output automatically. `getCapabilities()`, `listApps()`, `findApps(query)`, `getState()`, `app.getWindows()` and app or window `getAccessibilityTree()` now return their results to the program. Use `inspect` to display the values you need.
+
 Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images nested in arrays or objects. Read CUA window IDs from the window object’s `windowId`.
 
 Other image-producing tools retain their declared program values and automatically attach their pictures to the model context. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.

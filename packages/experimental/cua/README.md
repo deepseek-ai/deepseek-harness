@@ -126,7 +126,7 @@ Platform providers mount the shared `cua` tool and supply operating instructions
 
 #### Token effect
 
-In TypeScript PTC, text and images selected by the program with `inspect` enter model input.
+Native `cua` calls send their result text and admitted screenshot images to the model. In TypeScript PTC, programs select text and images with `inspect`. Retaining an app or window object in the program adds no prompt content.
 
 #### KV Cache effect
 

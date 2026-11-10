@@ -126,7 +126,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### Token 影响
 
-在 TypeScript PTC 中，程序传给 `inspect` 的文本和图片会进入模型输入。
+直接调用原生 `cua` 工具时，结果文本和通过检查的截图会进入模型输入。在 TypeScript PTC 中，程序用 `inspect` 选择要展示的文本和图片。在程序中保留应用或窗口对象不会增加提示词内容。
 
 #### KV Cache 影响
 
