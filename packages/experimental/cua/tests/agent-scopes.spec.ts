@@ -398,5 +398,7 @@ it.each([
   const prompt = (await ctx.systemPrompt.assemble({ scope: owner.agent })).sections.find(section => section.name === 'computer-use:dsh-cua')?.text
   expect(prompt).toBeDefined()
   expect(prompt?.includes('Persistent PTC initialization:')).toBe(runtime.retainsState)
+  expect(prompt?.includes('use the host-provided bridge initialization once and retain the returned objects')).toBe(runtime.retainsState)
+  expect(prompt?.includes('cua comes from that bridge and is not a preinstalled global')).toBe(runtime.retainsState)
   expect(prompt?.includes('var cua = connectCua(() => tools.cua, text => console.log(text));')).toBe(runtime.retainsState)
 })
