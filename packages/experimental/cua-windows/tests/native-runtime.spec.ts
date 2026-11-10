@@ -145,7 +145,7 @@ async function fixture(options: FixtureOptions = {}) {
       terminate: () => { void stop() }, waitForExit: async () => { await exited.promise; await options.cleanupGate; if (options.processCleanup === 'reject') throw new Error('cleanup failed'); return options.processCleanup !== false } }
   })
   const owner = { subprocess: { spawn } }
-  const runtime = new WindowsNativeRuntime(owner, 25, options.transport)
+  const runtime = new WindowsNativeRuntime(owner, 25, 750, options.transport)
   resources.runtime = runtime
   const activeRuntime = runtime
   const config: NativeClientConfig = { helperPath, cwd: directory, timeoutMs: 30_000, connectTimeoutMs: 5000,
@@ -166,6 +166,7 @@ it('shares one Host helper while closing only the selected Agent connection', as
   expect(await b.request('two', {}, signal)).toMatchObject({ connection: 2, pid: 100 })
   expect(f.spawn).toHaveBeenCalledOnce()
   expect(f.generations[0]!.received[0]?.config?.pollIntervalMs).toBe(25)
+  expect(f.generations[0]!.received[0]?.config?.launchWaitMs).toBe(750)
   await a.dispose()
   expect(await b.request('after-close', {}, signal)).toMatchObject({ connection: 2 })
   await b.dispose()

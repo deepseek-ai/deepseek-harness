@@ -19,38 +19,26 @@ internal static class AccessibilityActions
 
     internal static string[] Actions(ElementReference reference, RequestContext context)
     {
-        var element = reference.Element;
-        var actions = new List<string>();
-        if (context.Ax(() => element.TryGetCurrentPattern(InvokePattern.Pattern, out _))) actions.Add("Press");
-        if (context.Ax(() => element.TryGetCurrentPattern(TogglePattern.Pattern, out _))) actions.Add("Toggle");
-        if (context.Ax(() => element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out _))) actions.Add("Pick");
-        if (context.Ax(() => element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out _))) { actions.Add("Expand"); actions.Add("Collapse"); }
-        if (context.Ax(() => element.TryGetCurrentPattern(ScrollItemPattern.Pattern, out _))) actions.Add("ScrollToVisible");
-        if (context.Ax(() => element.Current.IsKeyboardFocusable)) actions.Add("Focus");
-        if (context.Ax(() => element.Current.ControlType) == ControlType.Window) actions.Add("Raise");
-        return actions.ToArray();
+        var supported = context.Ax(reference.Element.GetSupportedPatterns).ToHashSet();
+        return PatternActions.Names(pattern => supported.Contains(pattern.Pattern));
     }
 
-    internal static void Perform(AppState app, ElementReference reference, string action, JsonElement? argument, RequestContext context)
+    internal static void Perform(ElementReference reference, string action, JsonElement? argument, RequestContext context)
     {
-        if (argument is { } value && value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
-            throw new NativeFailure("INVALID_ARGUMENT", "This accessibility action does not accept an argument");
-        Secondary(app, reference, action, context);
+        var operation = PatternActions.Resolve(action, argument);
+        var pattern = Pattern<BasePattern>(reference.Element, operation.Pattern, context);
+        try { context.Ax(() => { operation.Invoke(pattern); return true; }); }
+        catch (ArgumentException)
+        {
+            throw new NativeFailure("INVALID_ARGUMENT", $"The control rejected the argument for {action}; check its accepted values before retrying");
+        }
+        catch (InvalidOperationException error) when (error is not ElementNotEnabledException)
+        {
+            throw new NativeFailure("UNSUPPORTED", $"The control could not complete {action} in its current state; read fresh state before further input");
+        }
     }
 
     internal static bool Invoke(ElementReference reference, RequestContext context)
-    {
-        object? pattern = null;
-        var element = reference.Element;
-        if (context.Ax(() => element.TryGetCurrentPattern(InvokePattern.Pattern, out pattern)))
-            context.Ax(() => { ((InvokePattern)pattern!).Invoke(); return true; });
-        else if (context.Ax(() => element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out pattern)))
-            context.Ax(() => { ((SelectionItemPattern)pattern!).Select(); return true; });
-        else return false;
-        return true;
-    }
-
-    internal static bool Click(ElementReference reference, RequestContext context)
     {
         object? pattern = null;
         var element = reference.Element;
@@ -88,40 +76,6 @@ internal static class AccessibilityActions
         if (current.IsReadOnly || number < current.Minimum || number > current.Maximum)
             throw new NativeFailure("UNSUPPORTED", "The control cannot accept this value");
         context.Ax(() => { range.SetValue(number); return true; });
-    }
-
-    internal static void Secondary(AppState app, ElementReference reference, string action, RequestContext context)
-    {
-        switch (action.ToLowerInvariant())
-        {
-            case "press":
-                context.Ax(() => { Pattern<InvokePattern>(reference.Element, InvokePattern.Pattern, context).Invoke(); return true; });
-                break;
-            case "pick":
-                context.Ax(() => { Pattern<SelectionItemPattern>(reference.Element, SelectionItemPattern.Pattern, context).Select(); return true; });
-                break;
-            case "toggle":
-                context.Ax(() => { Pattern<TogglePattern>(reference.Element, TogglePattern.Pattern, context).Toggle(); return true; });
-                break;
-            case "expand":
-                context.Ax(() => { Pattern<ExpandCollapsePattern>(reference.Element, ExpandCollapsePattern.Pattern, context).Expand(); return true; });
-                break;
-            case "collapse":
-                context.Ax(() => { Pattern<ExpandCollapsePattern>(reference.Element, ExpandCollapsePattern.Pattern, context).Collapse(); return true; });
-                break;
-            case "scrolltovisible":
-                context.Ax(() => { Pattern<ScrollItemPattern>(reference.Element, ScrollItemPattern.Pattern, context).ScrollIntoView(); return true; });
-                break;
-            case "focus":
-                context.Ax(() => { reference.Element.SetFocus(); return true; });
-                break;
-            case "raise":
-                if (context.Ax(() => reference.Element.Current.ControlType) != ControlType.Window)
-                    throw new NativeFailure("UNSUPPORTED", "Raise is available only on the observed window element");
-                Windows.Activate(app, reference.Window, context);
-                break;
-            default: throw new NativeFailure("UNSUPPORTED", "Use an action name from a fresh details:true observation");
-        }
     }
 
     internal static void SelectText(ElementReference reference, string text, string? prefix, string? suffix,

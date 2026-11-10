@@ -79,7 +79,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'cua-windows.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, host === 'wsl' ? 'stdio' : 'pipe')
+  // Temporary native-runtime configuration.
+  const launchWaitMs = 1000
+  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, launchWaitMs, host === 'wsl' ? 'stdio' : 'pipe')
   ctx.effect(() => () => runtime.dispose(), 'cua-windows.native-runtime')
   installCua(ctx, config, {
     helperPath, createChannel: (_owner, native) => runtime.connect(native), getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,

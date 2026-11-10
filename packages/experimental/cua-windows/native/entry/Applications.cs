@@ -94,6 +94,39 @@ internal static class Applications
             ? @"\\" + resolved[8..] : resolved.StartsWith(@"\\?\", StringComparison.Ordinal) ? resolved[4..] : resolved;
     }
 
+    internal static string ResolveExecutable(string path)
+    {
+        try
+        {
+            if (!Path.IsPathFullyQualified(path) || path.StartsWith(@"\\.\", StringComparison.Ordinal)
+                || path.StartsWith(@"\\?\", StringComparison.Ordinal)
+                || !string.Equals(Path.GetExtension(path), ".exe", StringComparison.OrdinalIgnoreCase))
+                throw new NativeFailure("INVALID_ARGUMENT", "Use an absolute .exe file path, not a command line or device path");
+            if ((File.GetAttributes(path) & FileAttributes.Directory) != 0)
+                throw new NativeFailure("INVALID_ARGUMENT", "The selected executable path is a directory");
+            var resolved = CanonicalPath(path);
+            if (!string.Equals(Path.GetExtension(resolved), ".exe", StringComparison.OrdinalIgnoreCase))
+                throw new NativeFailure("INVALID_ARGUMENT", "The selected path must resolve to an .exe file");
+            return resolved;
+        }
+        catch (Exception error) when (error is FileNotFoundException or DirectoryNotFoundException)
+        {
+            throw new NativeFailure("APP_NOT_FOUND", "The selected executable does not exist; provide an existing absolute .exe path");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new NativeFailure("PERMISSION_DENIED", "Windows refused access to the selected executable");
+        }
+        catch (Exception error) when (error is ArgumentException or NotSupportedException)
+        {
+            throw new NativeFailure("INVALID_ARGUMENT", "The executable path is invalid; provide an absolute .exe file path");
+        }
+        catch (IOException)
+        {
+            throw new NativeFailure("APP_IDENTITY_UNAVAILABLE", "The selected executable could not be read; check the file before selecting it again");
+        }
+    }
+
     internal static string Digest(string path)
     {
         using var file = File.OpenRead(path);

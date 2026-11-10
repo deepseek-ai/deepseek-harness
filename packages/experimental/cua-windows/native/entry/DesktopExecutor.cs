@@ -1,4 +1,5 @@
 // The shared Host policy authorizes handles before these platform operations execute.
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using DeepSeek.Cua.Protocol;
@@ -92,12 +93,29 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 return new { appHandle = selected.Handle, pid = 4, name = selected.Name,
                     running = selected.IsRunning, authorization = selected.Authorization };
             }
-            if (request.Method == "launchApp")
-                throw new NativeFailure("UNSUPPORTED", "Windows application selection does not launch applications");
             var app = state.App(String(parameters, "appHandle"));
             var foreground = Win32.GetForegroundWindow();
             switch (request.Method)
             {
+                case "launchApp":
+                {
+                    var before = Windows.Refresh(app, context)
+                        .Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)).ToHashSet();
+                    await sta.Invoke(() => ShellBroker.Launch(Path.IsPathFullyQualified(app.AppId)
+                        ? app.AppId : @"shell:AppsFolder\" + app.AppId), cancellation);
+                    var elapsed = Stopwatch.StartNew();
+                    WindowState[] windows;
+                    while (true)
+                    {
+                        windows = Windows.Refresh(app, context);
+                        if (!before.SetEquals(windows.Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)))) break;
+                        var remaining = config.LaunchWaitMs - elapsed.ElapsedMilliseconds;
+                        if (remaining <= 0) break;
+                        await Task.Delay((int)Math.Min(config.PollIntervalMs, remaining), cancellation);
+                    }
+                    context.Check();
+                    return new { appHandle = app.Handle, pid = 4, name = app.Name, running = windows.Length != 0 };
+                }
                 case "listWindows":
                     return Windows.DescribeAll(app, Windows.Refresh(app, context), context).Values;
                 case "getState":
@@ -177,27 +195,22 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     var button = OptionalString(parameters, "mouseButton") ?? "left";
                     var count = parameters.TryGetProperty("clickCount", out var clickCount) ? clickCount.GetInt32() : 1;
                     var modifiers = Modifiers(parameters);
-                    (WindowState Window, double X, double Y)? pointer = null;
+                    (WindowState Window, double X, double Y) pointer;
                     if (parameters.TryGetProperty("elementId", out _))
                     {
-                        await mta.Invoke(() =>
+                        pointer = await mta.Invoke(() =>
                         {
                             var element = Accessibility.Element(app, target, String(parameters, "snapshotId"), String(parameters, "elementId"), context);
-                            if (!hold.HasValue && button == "left" && count == 1 && modifiers.Length == 0 && AccessibilityActions.Click(element, context)) return true;
                             var bounds = context.Ax(() => element.Element.Current.BoundingRectangle);
                             if (bounds.IsEmpty) throw new NativeFailure("UNSUPPORTED", "The element has no pointer bounds");
                             var geometry = element.Window.RequireObservation(app, context);
-                            pointer = (element.Window, bounds.X + bounds.Width / 2 - geometry.Pixels.Left,
+                            return (element.Window, bounds.X + bounds.Width / 2 - geometry.Pixels.Left,
                                 bounds.Y + bounds.Height / 2 - geometry.Pixels.Top);
-                            return true;
                         }, cancellation);
                     }
                     else pointer = Coordinate(app, parameters, context);
-                    if (pointer is { } targetPoint)
-                    {
-                        if (hold is { } held) await Input.HoldClick(app, targetPoint.Window, targetPoint.X, targetPoint.Y, button, count, modifiers, held, context);
-                        else Input.Click(app, targetPoint.Window, targetPoint.X, targetPoint.Y, button, count, modifiers, context);
-                    }
+                    if (hold is { } held) await Input.HoldClick(app, pointer.Window, pointer.X, pointer.Y, button, count, modifiers, held, context);
+                    else Input.Click(app, pointer.Window, pointer.X, pointer.Y, button, count, modifiers, context);
                     return ActionResult(foreground);
                 }
                 case "listActions":
@@ -213,7 +226,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     await mta.Invoke(() =>
                     {
                         var element = Accessibility.Element(app, target, String(parameters, "snapshotId"), String(parameters, "elementId"), context);
-                        AccessibilityActions.Perform(app, element, String(parameters, "action"), argument, context);
+                        AccessibilityActions.Perform(element, String(parameters, "action"), argument, context);
                         return true;
                     }, cancellation);
                     return ActionResult(foreground);

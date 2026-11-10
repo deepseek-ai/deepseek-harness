@@ -166,7 +166,7 @@ class WindowsChannel implements NativeChannel {
   private closing = false
   private closeTimer: ReturnType<typeof setTimeout> | undefined
 
-  constructor(helper: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number,
+  constructor(helper: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number, launchWaitMs: number,
     owner: Owner, transport: WindowsTransport) {
     this.stdin = new Writable({
       write: (chunk: Buffer, _encoding, callback) => {
@@ -181,7 +181,7 @@ class WindowsChannel implements NativeChannel {
     for (const stream of [this.stdin, this.stdout]) stream.on('error', () => {})
     void this.readiness.promise.catch(() => {})
     void this.closed.promise.catch(() => {})
-    this.done = this.run(helper, config, pollIntervalMs, owner, transport)
+    this.done = this.run(helper, config, pollIntervalMs, launchWaitMs, owner, transport)
     void this.done.catch(() => {})
   }
 
@@ -194,7 +194,7 @@ class WindowsChannel implements NativeChannel {
 
   waitForClose(): Promise<void> { return this.closed.promise }
 
-  private async run(helperPromise: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number,
+  private async run(helperPromise: Promise<WindowsHelper>, config: NativeClientConfig, pollIntervalMs: number, launchWaitMs: number,
     owner: Owner, transport: WindowsTransport): Promise<void> {
     let helper: WindowsHelper | undefined
     let connection: WindowsConnection | undefined
@@ -234,7 +234,7 @@ class WindowsChannel implements NativeChannel {
           const { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs,
             screenshotTimeoutMs, timeoutMs, graceMs, maxClickHoldMs } = config
           socket.write(JSON.stringify({ type: 'hello', protocol: 1, runtimeKey: ready.runtimeKey,
-            config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs, pollIntervalMs, maxClickHoldMs } }) + '\n')
+            config: { maxRequestBytes, maxResponseBytes, axTimeoutMs, textEventIntervalMs, screenshotTimeoutMs, timeoutMs, graceMs, pollIntervalMs, launchWaitMs, maxClickHoldMs } }) + '\n')
         }
         const response = await frame
         const accepted = Ready.parse(response.value)
@@ -315,9 +315,11 @@ export class WindowsNativeRuntime {
   /**
    * @param owner Managed subprocess provider.
    * @param pollIntervalMs Clipboard and application-readiness polling interval.
+   * @param launchWaitMs Maximum observation wait after a Shell launch; expiry is not a launch failure.
    * @param transport Resolved native Windows or WSL connection method.
    */
-  constructor(private readonly owner: Owner, private readonly pollIntervalMs: number, private readonly transport: WindowsTransport = 'pipe') {}
+  constructor(private readonly owner: Owner, private readonly pollIntervalMs: number, private readonly launchWaitMs: number,
+    private readonly transport: WindowsTransport = 'pipe') {}
 
   /**
    * Connect one Agent without transferring process ownership to that Agent.
@@ -332,7 +334,7 @@ export class WindowsNativeRuntime {
       if (!this.helper || this.helper.ended) this.helper = new WindowsHelper(this.owner, config)
       return this.helper
     }
-    const channel = new WindowsChannel(acquire(), config, this.pollIntervalMs, this.owner, this.transport)
+    const channel = new WindowsChannel(acquire(), config, this.pollIntervalMs, this.launchWaitMs, this.owner, this.transport)
     this.channels.add(channel)
     void channel.done.then(() => this.channels.delete(channel), () => this.channels.delete(channel))
     return channel
