@@ -2,7 +2,7 @@
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
@@ -36,57 +36,38 @@ function validatedCall(dispatch: CuaDispatch) {
   }
 }
 
-async function emit(
-  onText: ((text: string) => void | Promise<void>) | undefined, value: object, options?: CuaObservationOptions,
-): Promise<void> {
-  if (options?.emit !== false) await onText?.(JSON.stringify(value))
-}
-
 /**
  * Create app/window objects using the caller's authorized program dispatcher.
  * @param dispatch - Current tool authority; screenshots resolve to program Images and rejections propagate without retries.
- * @param onText - Optional observation output; emit false suppresses this callback.
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
-export function createCuaApi(dispatch: CuaDispatch, onText?: (text: string) => void | Promise<void>): CuaApi {
+export function createCuaApi(dispatch: CuaDispatch): CuaApi {
   const call = validatedCall(dispatch)
   let capabilities: CuaCapabilities | undefined
-  async function currentCapabilities(): Promise<CuaCapabilities> {
-    if (capabilities === undefined) capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
-    return capabilities
-  }
-  const objects = createCuaObjects(call, onText)
+  const objects = createCuaObjects(call)
 
   const api: CuaApi = {
-    async getCapabilities(options) {
-      const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
-      capabilities = result
-      await emit(onText, result, options)
-      return result
+    async getCapabilities() {
+      capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
+      return capabilities
     },
-    async listApps(options) {
-      const result = AppsResult.parse(await call('listApps', {})).map(app => ({
+    async listApps() {
+      return AppsResult.parse(await call('listApps', {})).map(app => ({
         id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
       }))
-      await emit(onText, result, options)
-      return result
     },
-    async findApps(query, options) {
-      const result = FoundAppsResult.parse(await call('findApps', { query }))
-      await emit(onText, result, options)
-      return result
+    async findApps(query) {
+      return FoundAppsResult.parse(await call('findApps', { query }))
     },
-    async getState(options) {
-      const result = { apps: await api.listApps({ emit: false }), browsers: [] as [] }
-      await emit(onText, result, options)
-      return result
+    async getState() {
+      return { apps: await api.listApps(), browsers: [] }
     },
     async getApp(selector) {
       const request = Request.safeParse({ method: 'getApp', params: { selector } })
       if (!request.success) throw new Error(`getApp ${requestIssueMessage(request.error.issues)}`)
-      const capabilities = await currentCapabilities()
+      const current = capabilities ?? await api.getCapabilities()
       const { appHandle } = AppResult.parse(await call('getApp', { selector }))
-      return objects.createCuaApp(appHandle, capabilities)
+      return objects.createCuaApp(appHandle, current)
     },
   }
   return api
@@ -94,7 +75,7 @@ export function createCuaApi(dispatch: CuaDispatch, onText?: (text: string) => v
 
 type CuaScopeParams = (params: Record<string, JsonValue>) => Record<string, JsonValue>
 
-function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text: string) => void | Promise<void>) | undefined): {
+function createCuaObjects(call: ReturnType<typeof validatedCall>): {
   createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp
 } {
   const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
@@ -134,7 +115,6 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text
           throw new Error('Native observation belongs to another application or window')
         }
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
-        if (options?.emit !== false) await onText?.(state.tree)
         return state.tree
       },
       async listActions(elementId) {
@@ -256,10 +236,8 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text
     return {
       ...base.surface, appHandle,
       async activate() { return base.action('activate', {}) },
-      async getWindows(options) {
-        const windows = WindowsResult.parse(await base.call('listWindows', {}))
-        await emit(onText, windows, options)
-        return windows
+      async getWindows() {
+        return WindowsResult.parse(await base.call('listWindows', {}))
       },
       getWindow(windowId): Promise<CuaWindow> {
         const result = WindowsResult.element.shape.windowId.safeParse(windowId)

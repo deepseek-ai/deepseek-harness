@@ -11,6 +11,8 @@ English | [中文](guide.zh.md)
 
 TypeScript `run_code` programs display selected values through `inspect(...values)`. Function return values and final expressions previously appeared in the result; they are now omitted. Each inspected argument is rendered independently: strings appear directly, and other values use Node's object formatting without depth, array-length or string-length preview limits. Undefined properties, Error objects and circular references remain visible.
 
+CUA observations previously produced output automatically. `getCapabilities()`, `listApps()`, `findApps(query)`, `getState()`, `app.getWindows()` and app or window `getAccessibilityTree()` now return their results to the program. Use `inspect` to display the values you need.
+
 Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images in arrays, Map entries, Set values and enumerable object properties. Nested image selection follows Node's custom formatting. Read CUA window IDs from the window object’s `windowId`.
 
 Other image-producing tools retain their declared program values and automatically attach their pictures to the model context. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.
@@ -26,13 +28,13 @@ Formatting selected values can require more memory than the retained output; see
    inspect(result)
    ```
 
-2. Update CUA bridge callbacks to `text => inspect(text)`. Direct `createCuaApi(dispatch, onText?)` callers supply a dispatcher that returns program Images for screenshots and pass the text callback as the second argument. Call `window.getScreenshot()` and pass its returned Image to `inspect`.
+2. Remove output callbacks from `connectCua` and `createCuaApi`, the `emit` observation option and the unused `disableDiffing` AX option. Pass observations you want to display to `inspect`, for example `inspect(await app.getWindows())`. A custom dispatcher must return a program Image for screenshot operations.
 
    ```js
    const { connectCua } = await import("<host-provided bridge file URL>")
-   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const cua = connectCua(() => tools.cua)
    const app = await cua.getApp("TextEdit")
-   const windows = await app.getWindows({ emit: false })
+   const windows = await app.getWindows()
    const win = await app.getWindow(windows[0].windowId)
    const before = await win.getScreenshot()
    await app.pressKey("Tab")
