@@ -1,18 +1,18 @@
 /** API-key authentication, credential-gated discovery, and the official model listing for the official DeepSeek route. */
 import type { Context } from '@deepseek-ai/cordis'
-import { APP_IDENTITY, LlmError } from '@deepseek-ai/dsh-llm'
+import { APP_IDENTITY, assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmModelBadge } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import {
-  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, requestModelListing, resolveListedCatalog,
-  resolveDeepSeekApiKey,
+  catalogModelInfo, createModelListingCache, refuseListedModel, registerDeepSeekProvider, resolveListedCatalog,
 } from '@deepseek-ai/dsh-llm-deepseek'
-import type { CatalogRefusal, DeepSeekCatalogModel, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
+import type { CatalogRefusal, DeepSeekCatalogModel, DeepSeekRequestAuth, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 import type { ResolvedDeepSeekOptions } from './config.ts'
 
-export { Config, plainOptions, resolveAdapterOptions } from './config.ts'
+export { Config } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
 export const name = 'llm-deepseek-api-key'
 export const inject = ['llm']
@@ -34,28 +34,23 @@ interface OfficialConnection extends ResolvedDeepSeekOptions {
 export function apply(ctx: Context, config: Config): void {
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
-  const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string> => {
-    const ref = connection.apiKeyEnv
-    const key = await resolveDeepSeekApiKey(ctx, ref)
-    if (key !== undefined) return key
-    throw new LlmError(
-      `llm-deepseek: no API key for provider route "${PROVIDER}"; store ${ref} through the credentials`
-      + ` service (the web Models page writes it), or export ${ref} in the launching environment`,
-      'MISSING_CREDENTIAL',
-    )
+  /** The validated API key, or `undefined` when none is configured; store and format failures propagate. */
+  const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
+    const value = await resolveCredentialRef(ctx, connection.apiKeyEnv)
+    return value === undefined ? undefined : assertUsableApiKey(value, 'llm-deepseek', connection.apiKeyEnv)
   }
-  /** The API key, or `undefined` when none is configured; other credential failures propagate. */
-  const presentApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
-    try { return await resolveApiKey(connection) }
-    catch (error) {
-      if (error instanceof LlmError && error.code === 'MISSING_CREDENTIAL') return undefined
-      throw error
-    }
+  const resolveAuth = async (connection: ResolvedDeepSeekOptions): Promise<DeepSeekRequestAuth | undefined> => {
+    const key = await resolveApiKey(connection)
+    return key === undefined ? undefined : { headers: { 'x-api-key': key }, value: key }
   }
+  const missingCredential = (connection: ResolvedDeepSeekOptions) => new LlmError(
+    `llm-deepseek: no API key for provider route "${PROVIDER}"; store ${connection.apiKeyEnv} through the credentials`
+    + ` service (the web Models page writes it), or export ${connection.apiKeyEnv} in the launching environment`,
+    'MISSING_CREDENTIAL',
+  )
   const listings = createModelListingCache(ctx, name, PROVIDER, {
     settings: () => options().listing,
-    credential: async () => presentApiKey(options()),
-    load: (url, apiKey, signal) => requestModelListing(url, { 'x-api-key': apiKey }, signal),
+    credential: async () => (await resolveAuth(options()))?.headers,
   })
   let reportedListing: ModelListing | undefined
   /** Resolve the catalog, reporting each listing's hidden entries and dropped badges once. */
@@ -96,12 +91,18 @@ export function apply(ctx: Context, config: Config): void {
       }
       return connectionOf(connection, view)
     },
-    resolveAuth: async connection => ({ headers: { 'x-api-key': await resolveApiKey(connection) } }),
+    resolveAuth,
+    missingCredential,
+    credential: {
+      kind: 'api-key',
+      reference: connection => connection.apiKeyEnv,
+      configured: connection => credentialRefConfigured(ctx, connection.apiKeyEnv),
+    },
     admit: (connection, model) => { refuseListedModel(model, connection.refusals.get(model)) },
     discoverModels: async (provider) => {
       const connection = options()
       if (connection.listing === undefined) {
-        if (await presentApiKey(connection) === undefined) return []
+        if (await resolveApiKey(connection) === undefined) return []
         return connection.models.map(model => catalogModelInfo(provider, model))
       }
       const view = await listings.view(connection.listing)

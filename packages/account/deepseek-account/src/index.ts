@@ -8,15 +8,14 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import Schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
-import { installAccountTaskCancellation, isRunningAccountTask } from './account-tasks.ts'
 import { mergePlatformCookies, platformClientHeaders, platformWireLocale } from './client-metadata.ts'
-import { type AccountNotification, type AccountNotificationBatch, type AccountNotificationEvent, type AccountNotificationId, type AccountClientMetadata, type AccountDetails, type AccountUserId, type AccountView, type AccountUpdate, type PlatformSession, type SignInAttemptId, type SignInAttemptView } from './types.ts'
+import { type AccountNotification, type AccountNotificationBatch, type AccountNotificationEvent, type AccountNotificationId, type AccountClientMetadata, type AccountDetails, type AccountRequestCredential, type AccountUserId, type AccountView, type AccountUpdate, type PlatformSession, type SignInAttemptId, type SignInAttemptView } from './types.ts'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { AuthorizationSession } from '@deepseek-ai/dsh-authorization'
 import { profile, readAccountDetail } from './details.ts'
 import { readNotificationContent, readNotifications, sendNotificationEvent } from './notifications.ts'
 import { revokeAccount, type LogoutRetryPolicy } from './logout.ts'
-import { AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
+import { ACCOUNT_TOKEN_HEADER, AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
 
 export type * from './types.ts'
 
@@ -122,6 +121,7 @@ export class DeepSeekAccount extends TypertRemoteService {
   private readonly revocations = new Set<Promise<void>>()
   private attempt: Attempt | undefined
   private readonly listeners = new Set<(kind: 'snapshot' | 'credentials-changed' | 'identity') => void>()
+  private readonly runningTaskReports = new Set<() => boolean>()
   /**
    * Latest ready profile read and the grant token it was read with. Binding the token keeps a
    * cached identity from answering for a credential that has since changed.
@@ -134,7 +134,6 @@ export class DeepSeekAccount extends TypertRemoteService {
   /** @param ctx - Host with authorization and credentials services. @param config - deployment options. */
   constructor(ctx: Context, config: Config = {}) {
     super(ctx, 'deepseekAccount', { namespace: 'account' })
-    installAccountTaskCancellation(ctx)
     const resolved = Config(config)
     this.embeddedPageDist = resolved.embeddedPageDist
     this.origin = platformOrigin(resolved.platformOrigin, resolved.allowLoopbackHttp, 'platformOrigin')
@@ -470,6 +469,25 @@ export class DeepSeekAccount extends TypertRemoteService {
   }
 
   /**
+   * Release the account credential for one request to `url` as the request
+   * carries it, together with its invalidation. Host-only.
+   * @param url - actual request destination or API base URL.
+   * @returns the request credential, or undefined for other origins or a signed-out account.
+   */
+  async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined> {
+    const token = await this.resolveToken(url)
+    if (token === undefined) return undefined
+    return {
+      headers: { [ACCOUNT_TOKEN_HEADER]: token },
+      value: token,
+      reject: async () => {
+        try { await this.rejectToken(token) }
+        catch (_credentialRemovalFailed) { /* The destination's rejection is the failure to report; the next rejection retries. */ }
+      },
+    }
+  }
+
+  /**
    * Join an active attempt or start browser authorization.
    * @param client - identity of the requesting UI; a new attempt captures it, and joining retains the original attempt's identity.
    * @param callbackOrigin - browser-accessible loopback HTTP origin, including any SSH local port.
@@ -571,12 +589,25 @@ export class DeepSeekAccount extends TypertRemoteService {
   }
 
   /**
+   * Register a report of running work that signing out would interrupt. The
+   * plugin billing the account to a model route registers one from within
+   * `ctx.effect()`; without any report nothing is known to be running.
+   * @param report - answers whether such work is running now.
+   * @returns the disposer removing the report.
+   */
+  registerRunningTaskReport(report: () => boolean): () => void {
+    this.runningTaskReports.add(report)
+    return () => { this.runningTaskReports.delete(report) }
+  }
+
+  /**
    * Inspect running work before sign-out.
-   * @returns whether a running task's latest request uses the account route; false when the optional agents service is absent.
+   * @returns whether a registered report says a running task uses the account; false without reports.
    */
   @Remote
   hasRunningAccountTasks(): boolean {
-    return this.ctx.get('agents')?.list().some(isRunningAccountTask) ?? false
+    for (const report of this.runningTaskReports) if (report()) return true
+    return false
   }
 
   /**

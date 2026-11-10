@@ -1,7 +1,7 @@
 /** Direct Messages transport with one cancellable lifecycle per model request. */
 
 import { attributionHeaders, LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, RouteCredential, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekLlmApiExtensionRequest, DeepSeekLlmApiJson } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { modelInfo } from './model-info.ts'
@@ -47,6 +47,23 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     if (entry === undefined) throw new LlmError(`DeepSeek model "${model}" has no declared image projection`, 'UNKNOWN_MODEL')
     return resolveRequestImageTarget(entry, image)
   }
+  override routeCredential(_provider: string): RouteCredential | undefined {
+    const publication = this.dependencies.credential
+    if (publication === undefined) return undefined
+    // One configuration generation serves the whole published object, as it does one model request.
+    const connection = this.dependencies.options()
+    const reference = publication.reference?.(connection)
+    return {
+      kind: publication.kind,
+      baseURL: connection.baseURL,
+      ...reference === undefined ? {} : { reference },
+      configured: endpoint => publication.configured(connection, endpoint),
+      resolve: async (endpoint, signal) => {
+        signal?.throwIfAborted()
+        return await this.dependencies.resolveAuth(connection, endpoint)
+      },
+    }
+  }
   override async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall> {
     const connection = await this.connection(signal)
     this.dependencies.admit?.(connection, model)
@@ -60,6 +77,11 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
 
   private connection(signal: AbortSignal | undefined): Promise<C> {
     return this.dependencies.connect?.(signal) ?? Promise.resolve(this.dependencies.options())
+  }
+
+  private missingCredential(connection: C, provider: string): LlmError {
+    return this.dependencies.missingCredential?.(connection, provider)
+      ?? new LlmError(`llm-deepseek: no credential for provider route "${provider}"`, 'MISSING_CREDENTIAL')
   }
 
   private async * generate(options: GenerateOptions<string>, connection: C): AsyncGenerator<StreamChunk> {
@@ -95,7 +117,8 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
     const { messages, versions } = await prepareImages(
       options.messages, connection, options.model, this.dependencies.resolveAttachments?.(), this.imageAccess, signal,
     )
-    const auth = await this.dependencies.resolveAuth(connection)
+    const auth = await this.dependencies.resolveAuth(connection, connection.baseURL)
+    if (auth === undefined) throw this.missingCredential(connection, options.provider)
     try {
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,

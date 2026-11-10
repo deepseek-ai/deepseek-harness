@@ -9,7 +9,7 @@
   ],
   "references": [
     { "path": "../../credentials/credentials" },
-    { "path": "../../credentials/deepseek-account" },
+    { "path": "../../account/deepseek-account" },
     {
       "path": "../../../vendor/cosmokit"
     },

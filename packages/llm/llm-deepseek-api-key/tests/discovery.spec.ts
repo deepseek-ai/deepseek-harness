@@ -44,3 +44,26 @@ it('reports malformed credentials during discovery', async () => {
     vi.unstubAllEnvs()
   }
 })
+
+it('publishes the route API key for its consumers from the credential planes it reads itself', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'fixture-api-key')
+  const ctx = new Context()
+  try {
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(ApiKey, { baseURL: 'https://route.deepseek.test/anthropic' })
+    const credential = ctx.llm.routeCredential('deepseek-official')
+    expect(credential).toMatchObject({ kind: 'api-key', baseURL: 'https://route.deepseek.test/anthropic', reference: 'DEEPSEEK_API_KEY' })
+    const endpoint = 'https://route.deepseek.test/v1/tools/search'
+    await expect(credential!.configured(endpoint)).resolves.toBe(true)
+    await expect(credential!.resolve(endpoint)).resolves.toEqual({ headers: { 'x-api-key': 'fixture-api-key' }, value: 'fixture-api-key' })
+    vi.stubEnv('DEEPSEEK_API_KEY', '')
+    await expect(credential!.configured(endpoint)).resolves.toBe(false)
+    await expect(credential!.resolve(endpoint)).resolves.toBeUndefined()
+    vi.stubEnv('DEEPSEEK_API_KEY', 'invalid\nheader')
+    await expect(credential!.configured(endpoint)).resolves.toBe(true)
+    await expect(credential!.resolve(endpoint)).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+  } finally {
+    await ctx.fiber.dispose()
+    vi.unstubAllEnvs()
+  }
+})

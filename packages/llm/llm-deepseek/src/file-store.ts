@@ -6,6 +6,7 @@ import { DeepSeekFilesClient, isFilesQuotaError } from './files-api.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 import { messagesApiRoot } from './messages-api.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from './upload-index.ts'
+import { serializeAuthHeaders } from './auth-headers.ts'
 import type { DeepSeekUploadRecord } from './upload-index.ts'
 
 /** Shared Files-store limit for each request image, including file-id references. */
@@ -47,10 +48,7 @@ interface SharedUpload {
 
 /** The Files resource's parent URL identifies the upload namespace. */
 function fileScope(connection: DeepSeekFileConnection) {
-  return deepSeekFileScope(
-    messagesApiRoot(connection.baseURL),
-    JSON.stringify(Object.entries(connection.headers).sort(([left], [right]) => left.localeCompare(right))),
-  )
+  return deepSeekFileScope(messagesApiRoot(connection.baseURL), serializeAuthHeaders(connection.headers))
 }
 
 function abortReason(signal: AbortSignal): Error {

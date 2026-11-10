@@ -34,8 +34,9 @@ function transportInput(input, transportEndpoint) {
 /** Provide the signed-in account and start the Search endpoint; both end with the plugin fiber. */
 export async function apply(ctx) {
   ctx.provide('deepseekAccount', {
-    resolveToken: async endpoint => endpoint.startsWith('https://api.deepseek.com/') ? ACCOUNT_TOKEN : undefined,
-    rejectToken: async () => {},
+    resolveRequestCredential: async endpoint => endpoint.startsWith('https://api.deepseek.com/')
+      ? { headers: { 'x-dsh-auth-token': ACCOUNT_TOKEN }, value: ACCOUNT_TOKEN, reject: async () => {} }
+      : undefined,
   })
   let restoreFetch = () => {}
   await applyLoopbackServerEffect(ctx, {

@@ -333,7 +333,7 @@
     { "path": "./packages/document/office-kit" },
     { "path": "./packages/document/tool-office" },
 
-    { "path": "./packages/credentials/deepseek-account" },
+    { "path": "./packages/account/deepseek-account" },
     { "path": "./packages/client/ui-deliverables/tsconfig.host.json" },
     { "path": "./vendor/cosmokit" },
     { "path": "./vendor/schemastery" },

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for account.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/account.md
+/deepseek-account:
+  en: 2302e2999588bac3
+  zh: 5e0ac058b50036dc
+/deepseek-account/request-credentials:
+  en: 76f2eb1df1948c8a
+  zh: 70f698243f8e3ae8
+/deepseek-account/embedded-platform-credentials:
+  en: 9a651d70acbe83a6
+  zh: 4624b0299f5fdd8e
+/deepseek-account/cordis-api/deepseek-account-events/deepseek-account-signed-out-emit:
+  en: b2c8c533124a121c
+  zh: c2a5c227b5a01146

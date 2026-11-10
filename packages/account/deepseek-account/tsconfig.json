@@ -18,16 +18,13 @@
       "path": "../../util/brand"
     },
     {
-      "path": "../../core/agent"
+      "path": "../../util/values"
     },
     {
-      "path": "../../llm/llm"
+      "path": "../../credentials/authorization"
     },
     {
-      "path": "../authorization"
-    },
-    {
-      "path": "../credentials"
+      "path": "../../credentials/credentials"
     },
     {
       "path": "../../../vendor/schemastery"

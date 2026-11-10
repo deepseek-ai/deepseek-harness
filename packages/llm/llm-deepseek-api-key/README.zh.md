@@ -11,7 +11,7 @@ kind: "package-reference"
 
 为 `deepseek-official` 注册鉴权、模型发现和官方模型列表。通过 [llm-deepseek](../llm-deepseek/README.zh.md) 共用 Messages 请求实现；本包拥有凭据解析、目录可用性判断和模型准入。
 
-鉴权解析将验证后的 API key 放入 `x-api-key`，供 Messages 和 Files 请求共同使用。
+鉴权解析将验证后的 API key 放入 `x-api-key`，供 Messages、Files 和列表请求使用，并通过 `ctx.llm.routeCredential('deepseek-official')` 连同路由的基础地址和 `apiKeyEnv` 引用发布同一密钥，使 DeepSeek Web 提供方以 Bearer 令牌把它发往同一部署。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用此包
 
-`apiKeyEnv` 默认为 `DEEPSEEK_API_KEY`，在每次请求和模型发现时解析凭据。已组合 credentials 服务时，按其优先级解析；只有未组合该服务时才直接读取启动环境。请求时凭据缺失以 `MISSING_CREDENTIAL` 失败；格式错误以 `INVALID_CREDENTIAL` 失败。模型发现在凭据缺失时返回空目录，在模型选择器中隐藏该路由，但保留其设置入口。凭据格式错误和其他读取失败继续上报。添加或删除密钥会影响下一次模型发现。
+`apiKeyEnv` 默认为 `DEEPSEEK_API_KEY`，在每次请求和模型发现时解析凭据。密钥通过 [`dsh-credentials`](../../credentials/credentials/README.zh.md) 的凭据引用函数读取：已组合 credentials 服务时，按其优先级解析；只有未组合该服务时才直接读取启动环境。请求时凭据缺失以 `MISSING_CREDENTIAL` 失败；格式错误以 `INVALID_CREDENTIAL` 失败。模型发现在凭据缺失时返回空目录，在模型选择器中隐藏该路由，但保留其设置入口。凭据格式错误和其他读取失败继续上报。添加或删除密钥会影响下一次模型发现。
 
 ```yaml
 - id: llm-deepseek
@@ -55,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-API key 读取调用[共享凭据模块](../llm-deepseek/src/credential.ts)的 `resolveDeepSeekApiKey`。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
+API key 读取调用 `dsh-credentials` 的 `resolveCredentialRef` 与 `credentialRefConfigured`，并用 `dsh-llm` 的 `assertUsableApiKey` 校验值；共享传输层不读取任何凭据。注册和监听随插件生命周期释放，释放时会中止进行中的列表请求。共享 Host 绑定提供附件访问、请求扩展、匿名标识和重试策略的原子更新；本包只注册自己的路由，并通过传输层的 `connect` 与 `admit` 钩子接入列表目录和门控。列表请求、缓存和目录解析来自共享传输包；缓存只在内存中，以端点和 API key 的 SHA-256 为键，因此换一个 key 会加载它自己的列表。一个 `loader/volatile-update` 监听器在路由开始或停止使用列表时丢弃缓存的列表。
 
 <a id="further-exploration"></a>
 ## 进一步探索

@@ -306,6 +306,35 @@ it('allows real account credentials only on the exact official HTTPS origin', as
   }
 })
 
+it('releases the request credential for an allowed destination and removes the rejected token through it', async () => {
+  const f = await fixture(undefined, {}, false, {}, 'http://inference.example.test:8094')
+  f.exchangeResponse({ token: 'test-account-token' })
+  await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'desktop')
+  await f.wait('waiting-browser')
+  await fetch(f.callback(), { redirect: 'manual' })
+  await f.wait('succeeded')
+  const endpoint = 'http://inference.example.test:8094/v1/tools/search'
+  expect(await f.account.resolveRequestCredential('https://api.deepseek.com/v1/tools/search')).toBeUndefined()
+  const credential = await f.account.resolveRequestCredential(endpoint)
+  expect(credential).toMatchObject({ headers: { 'x-dsh-auth-token': 'test-account-token' }, value: 'test-account-token' })
+  await credential!.reject()
+  expect((await f.account.getState()).status).toBe('signed-out')
+  expect(await f.account.resolveRequestCredential(endpoint)).toBeUndefined()
+})
+
+it('contains a storage failure while removing a rejected token', async () => {
+  const f = await fixture(undefined, {}, false, {}, 'http://inference.example.test:8094')
+  f.exchangeResponse({ token: 'test-account-token' })
+  await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'desktop')
+  await f.wait('waiting-browser')
+  await fetch(f.callback(), { redirect: 'manual' })
+  await f.wait('succeeded')
+  const credential = await f.account.resolveRequestCredential('http://inference.example.test:8094/v1/tools/search')
+  await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({ kind: 'api-key', key: 'wrong-kind' }))
+  await expect(credential!.reject()).resolves.toBeUndefined()
+  await expect(f.account.rejectToken('test-account-token')).rejects.toThrow('account: storage')
+})
+
 it('restricts platform destinations to the configured origin and route', () => {
   expect(() => platformOrigin('http://localhost:8081', false, 'platformOrigin')).toThrow()
   expect(platformOrigin('http://localhost:8081', true, 'platformOrigin')).toBe('http://localhost:8081')

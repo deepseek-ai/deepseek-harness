@@ -111,6 +111,24 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/**
+ * The account credential released for one request destination, as the request
+ * carries it. Host-only: it holds the token and never crosses the Remote.
+ */
+export interface AccountRequestCredential {
+  /** Request headers carrying the account token. */
+  readonly headers: Readonly<Record<string, string>>
+  /** The bare token. */
+  readonly value: string
+  /**
+   * Remove the stored token after the destination rejected it, unless a newer
+   * sign-in replaced it. Storage failures are contained: the caller reports
+   * the destination's rejection, and the next rejection retries the removal.
+   * @returns settlement after the removal attempt.
+   */
+  reject(): Promise<void>
+}
+
 /** Host-only credentials for an embedded Platform document; never expose through account RPC. */
 export interface PlatformSession {
   readonly origin: string

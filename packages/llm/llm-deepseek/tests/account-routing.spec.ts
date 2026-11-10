@@ -1,8 +1,7 @@
 /** Account route cancellation uses the real loop, registry, and tool lifecycle. */
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
-import { installAccountTaskCancellation } from '@deepseek-ai/dsh-deepseek-account/src/account-tasks.ts'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk, ToolCallId } from '@deepseek-ai/dsh-llm'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
@@ -33,7 +32,6 @@ function listingRequest(input: string | URL | Request): Response | undefined {
 async function harness() {
   const ctx = new Context()
   contexts.push(ctx)
-  installAccountTaskCancellation(ctx)
   for (const plugin of [
     LlmRuntime, SessionStore, SessionProjectionRegistry, SystemPrompt, ToolRuntime, NativeToolExecutor, AgentRegistry,
   ]) {
@@ -186,7 +184,7 @@ it('never borrows an account token for a missing API key', async () => {
   const ctx = new Context()
   contexts.push(ctx)
   const resolveToken = vi.fn(async (_url: string) => 'fixture-account-token')
-  ctx.provide('deepseekAccount', { resolveToken: (url: string): Promise<string | undefined> => resolveToken(url) } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: url => resolveToken(url) }))
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(DeepSeek, {})
   await ctx.plugin(AccountProvider, {})
@@ -200,7 +198,7 @@ it('never borrows an account token for a missing API key', async () => {
 
 it('propagates account sign-out to the HTTP request signal', async () => {
   const ctx = await harness()
-  ctx.provide('deepseekAccount', { resolveToken: async (_url: string) => 'fixture-account-token' } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: () => 'fixture-account-token' }))
   const started = Promise.withResolvers<AbortSignal>()
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
     const listed = listingRequest(url)
@@ -254,7 +252,7 @@ it('lists each DeepSeek route only when its own credential is present', async ()
   vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => Promise.resolve(listingRequest(input) ?? new Response(null, { status: 500 }))))
   const ctx = await harness()
   let token: string | undefined
-  ctx.provide('deepseekAccount', { resolveToken: async (url: string) => new URL(url).origin === 'https://api.deepseek.com' ? token : undefined } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: url => new URL(url).origin === 'https://api.deepseek.com' ? token : undefined }))
   expect(await ctx.llm.listModels('deepseek-account')).toEqual([])
   expect(await ctx.llm.listModels('deepseek-official')).toEqual([])
   token = 'fixture-account-token'
@@ -269,7 +267,7 @@ it('lists each DeepSeek route only when its own credential is present', async ()
 
 it('surfaces credential storage failures during catalog discovery', async () => {
   const ctx = await harness()
-  ctx.provide('deepseekAccount', { resolveToken: async (_url: string): Promise<string | undefined> => { throw new Error('storage unavailable') } } as DeepSeekAccount)
+  ctx.provide('deepseekAccount', accountStub({ token: () => { throw new Error('storage unavailable') } }))
   await expect(ctx.llm.listModels('deepseek-account')).rejects.toThrow('storage unavailable')
 })
 

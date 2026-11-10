@@ -30,7 +30,7 @@
       "path": "../ui-settings-account"
     },
     {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../account/deepseek-account"
     },
     {
       "path": "../../host/webserver"

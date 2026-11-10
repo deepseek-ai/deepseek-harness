@@ -10,13 +10,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
-import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import * as Account from '@deepseek-ai/dsh-llm-deepseek-account'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
+import { accountStub } from '../../../account/deepseek-account/tests/account-stub.ts'
 
 const cleanups: Array<() => Promise<void>> = []
 
@@ -83,7 +83,7 @@ async function bootComposition(web: Record<string, unknown>, environment: Record
     }
     host.loader.internal = modules
     host.provide('launchEnvironment', createLaunchEnvironmentSnapshot([{ source: 'process', values: environment }]))
-    host.provide('deepseekAccount', { resolveToken: async () => 'account-token' } as Pick<DeepSeekAccount, 'resolveToken'> as DeepSeekAccount)
+    host.provide('deepseekAccount', accountStub({ token: () => 'account-token' }))
   })
   cleanups.push(async () => { await ctx.fiber.dispose() })
   const sent = (): Sent[] => fetchMock.mock.calls.flatMap(([endpoint, init]) => {

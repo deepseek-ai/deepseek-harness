@@ -296,8 +296,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'LLM adapter registry',
     mode: 'seam',
     implementations: ['llm-deepseek', 'llm-pi-ai', 'llm-replay'],
-    consumers: ['agent-loop', 'compaction-basic'],
-    note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
+    consumers: ['agent-loop', 'compaction-basic', 'web-deepseek-api', 'web-search-deepseek'],
+    note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service, and the DeepSeek web providers read the credential a route publishes.',
   },
   {
     key: 'sessionLogDeepSeek',
@@ -486,7 +486,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Credential seam',
     mode: 'seam',
     implementations: ['credentials-local'],
-    consumers: ['api-settings-controller', 'llm-deepseek', 'llm-pi-ai'],
+    consumers: ['api-settings-controller', 'llm-deepseek-api-key', 'llm-pi-ai', 'web-deepseek-api', 'web-search-deepseek'],
     note: 'Configuration carries references to secrets; providers own the values. Consumers resolve per operation, so a rotated credential reaches the very next request; the settings controller exposes value-free views and write-only storage.',
   },
   {
@@ -495,8 +495,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'DeepSeek account',
     mode: 'service',
     implementations: [],
-    consumers: ['llm-deepseek'],
-    note: 'The Host owns browser authorization and local credentials; UI consumers receive state without tokens.',
+    consumers: ['llm-deepseek-account', 'web-deepseek-api'],
+    note: 'The Host owns browser authorization and local credentials and releases per-request credentials to the account model route and the web providers; UI consumers receive state without tokens.',
   },
   {
     key: 'authorization',

@@ -13,7 +13,7 @@ getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导�
 
 `desktopPlatform` 默认为 `null`，此时携带 `x-client-platform: web`；Desktop profile 提供 `darwin` 或 `win32`，改为 `desktop-mac` 或 `desktop-win`。五个请求头均由 provider 拥有，部署配置无法覆盖；`x-client-bundle-id` 有意保持为空，`x-client-locale` 将调用方语言归约为 `zh_CN` 或 `en_US`。PlatformSession 只携带部署请求头，内嵌客户端为自行打开的 Platform 文档和 API 请求组装同样的五个请求头，且仅在配置来源发送。
 
-资料和余额接口返回 HTTP 401 或顶层响应码 `40003`（鉴权失效）时清除被拒绝的本地凭据，并发送实时 `deepseek-account/session-expired` 通知。并发响应共用一次清除操作；已失效凭据代次的响应不能清除替换后的凭据。其他 HTTP 错误保留凭据。Host 推理调用方可以通过 `rejectToken` 报告被拒绝的请求 token；仅当它仍匹配当前登录凭据时才执行清除。
+资料和余额接口返回 HTTP 401 或顶层响应码 `40003`（鉴权失效）时清除被拒绝的本地凭据，并发送实时 `deepseek-account/session-expired` 通知。并发响应共用一次清除操作；已失效凭据代次的响应不能清除替换后的凭据。其他 HTTP 错误保留凭据。Host 推理调用方可以通过 `rejectToken` 报告被拒绝的请求 token；仅当它仍匹配当前登录凭据时才执行清除。`resolveRequestCredential(url)` 把一个允许目标的凭据以请求头、裸 token 和 `reject()` 的形式释放；`reject()` 在 HTTP 401 后执行上述清除并隔离存储失败。账号模型路由和 DeepSeek Web 提供方使用它，而不自行组装请求头。
 
 ## 概述
 
@@ -36,9 +36,9 @@ getPlatformSession 仅在已存授权的 issuer 与 platformOrigin 一致时导�
 
 `DeepSeekAccount` 是具体服务，拥有登录、凭证和 Remote 操作。`/types` 提供不加载服务实现的类型出口。`watch` 返回完整状态与 `snapshot` 或 `credentials-changed` 类型；仅 Host 的 `watch(signal, true)` 还接收资料身份变化，Remote 订阅不启用该选项。
 
-`/client-metadata` 为 Host 使用方提供纯函数形式的 Platform 请求头和 Cookie 辅助函数。配置 schema 为 `DeepSeekAccount.Config`；插件入口不导出辅助函数。挂载服务时会安装账号任务取消逻辑。
+`/client-metadata` 为 Host 使用方提供纯函数形式的 Platform 请求头和 Cookie 辅助函数。配置 schema 为 `DeepSeekAccount.Config`；插件入口不导出辅助函数。
 
-`agents` 服务为可选依赖。未提供时，`hasRunningAccountTasks()` 返回 false；提供时，检查使用账号服务的运行中任务。
+`hasRunningAccountTasks()` 通过模型路由在 `ctx.effect()` 内用 `registerRunningTaskReport()` 注册的报告作答；没有报告时视为没有运行中的工作。`llm-deepseek-account` 路由注册一份报告，并负责在退登后取消其运行中的 Agent。
 
 账号资料投影将 `id_profile.picture` 映射为 `avatarUrl`，没有配置头像时返回 null。
 

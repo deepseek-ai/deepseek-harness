@@ -13,7 +13,7 @@ getPlatformSession exports the stored grant only when its issuer matches platfor
 
 `desktopPlatform` defaults to `null`, which sends `x-client-platform: web`; the Desktop profile supplies `darwin` or `win32`, becoming `desktop-mac` or `desktop-win`. The service owns all five headers, so deployment configuration cannot override them; `x-client-bundle-id` is intentionally empty, and `x-client-locale` reduces the caller's language to `zh_CN` or `en_US`. PlatformSession carries deployment headers only, and the embedding client composes the same five headers for the Platform documents and API requests it opens, only at the configured origin.
 
-Profile and balance HTTP 401 responses or top-level response code `40003` (invalid authorization) clear the rejected local grant and emit the live `deepseek-account/session-expired` notification. Concurrent responses share one removal; responses from an invalidated credential generation cannot clear its replacement. Other HTTP failures retain the grant. Host inference consumers can report a rejected request token through `rejectToken`; removal requires that it still matches the stored login.
+Profile and balance HTTP 401 responses or top-level response code `40003` (invalid authorization) clear the rejected local grant and emit the live `deepseek-account/session-expired` notification. Concurrent responses share one removal; responses from an invalidated credential generation cannot clear its replacement. Other HTTP failures retain the grant. Host inference consumers can report a rejected request token through `rejectToken`; removal requires that it still matches the stored login. `resolveRequestCredential(url)` releases the credential for one allowed destination as the request headers, the bare token, and a `reject()` that performs that removal after an HTTP 401 while containing storage failures; the account model route and the DeepSeek web providers use it instead of composing headers themselves.
 
 ## Summary
 
@@ -36,9 +36,9 @@ The service exposes its client-safe operations through the `account` Remote name
 
 `DeepSeekAccount` is the concrete service owning login, credentials, and Remote operations. The `/types` entry exposes types without loading the service implementation. `watch` returns complete state tagged as `snapshot` or `credentials-changed`; Host-only `watch(signal, true)` also receives profile-identity changes, while Remote subscriptions omit that option.
 
-The `/client-metadata` entry provides pure Platform header and cookie helpers for Host consumers. The configuration schema is `DeepSeekAccount.Config`; the plugin entry exports no helper functions. Mounting the service installs account-task cancellation.
+The `/client-metadata` entry provides pure Platform header and cookie helpers for Host consumers. The configuration schema is `DeepSeekAccount.Config`; the plugin entry exports no helper functions.
 
-The `agents` service is optional. `hasRunningAccountTasks()` returns false when it is absent; when present, it checks running tasks for the account provider.
+`hasRunningAccountTasks()` answers through the reports model routes register with `registerRunningTaskReport()` inside `ctx.effect()`; without a report, nothing is known to be running. The `llm-deepseek-account` route registers one and owns cancelling its running Agents after sign-out.
 
 The profile projection maps `id_profile.picture` to `avatarUrl`, using null when no picture is configured.
 

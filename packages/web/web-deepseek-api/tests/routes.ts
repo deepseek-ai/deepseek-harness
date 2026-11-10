@@ -1,48 +1,61 @@
-/** Stand-in model and loader services that expose DeepSeek model routes the way the provider directory does. */
-import { FiberState, type Context } from '@deepseek-ai/cordis'
+/** A stand-in model service publishing DeepSeek route credentials the way the route plugins do. */
+import type { Context } from '@deepseek-ai/cordis'
+import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
+import type {} from '@deepseek-ai/dsh-deepseek-account'
+import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import type { RouteCredential } from '@deepseek-ai/dsh-llm'
 import { Config as AccountConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
+import { plainAccountOptions, resolveAccountOptions } from '@deepseek-ai/dsh-llm-deepseek-account/src/config.ts'
 import { Config as OfficialConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
+import { plainOptions, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek-api-key/src/config.ts'
 
 /** One model route row. */
 export interface RouteRow {
   /** Provider id the route registers. */
   provider: 'deepseek-official' | 'deepseek-account'
-  /** Route plugin config, parsed by the route package's own schema. */
+  /** Route plugin config; the route package's own resolver turns it into the published base URL and key reference. */
   config?: Record<string, unknown>
-  /** Loader package name; defaults to the package that registers the provider. */
-  name?: string
-  /** Loader fiber state; defaults to active. */
-  state?: FiberState
-  /** Provider directory settings path; defaults to the entry root. */
-  settingsPath?: string[]
+  /** Publish no credential, as an adapter another package registers under this id does. Defaults to false. */
+  withoutCredential?: boolean
+  /** Value `routeCredential()` throws instead of publishing. */
+  throws?: unknown
 }
 
-const PACKAGES = {
-  'deepseek-official': '@deepseek-ai/dsh-llm-deepseek-api-key',
-  'deepseek-account': '@deepseek-ai/dsh-llm-deepseek-account',
-} as const
+/** The credential `route` publishes, resolved from its config as the route plugin resolves it on each call. */
+function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
+  const environment = launchEnvironmentOf(ctx)
+  if (route.provider === 'deepseek-official') {
+    const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
+    const ref = resolved.apiKeyEnv
+    return {
+      kind: 'api-key', baseURL: resolved.baseURL, reference: ref,
+      configured: () => credentialRefConfigured(ctx, ref),
+      resolve: async () => {
+        const key = await resolveCredentialRef(ctx, ref)
+        return key === undefined ? undefined : { headers: { 'x-api-key': key }, value: key }
+      },
+    }
+  }
+  const resolved = resolveAccountOptions(plainAccountOptions(AccountConfig(route.config ?? {})), environment)
+  return {
+    kind: 'account', baseURL: resolved.protocol.baseURL,
+    configured: async endpoint => (await ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint)) !== undefined,
+    resolve: endpoint => ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint) ?? Promise.resolve(undefined),
+  }
+}
 
 /**
- * Provide `llm` and `loader` stand-ins whose rows describe `routes`.
+ * Provide an `llm` stand-in whose `routeCredential()` answers for `routes`.
  * @param ctx - the root context.
- * @param routes - route rows; each gets its own loader entry.
+ * @param routes - route rows, one per provider id.
  */
 export function provideRoutes(ctx: Context, routes: readonly RouteRow[]): void {
-  const rows = routes.map((route, index) => ({
-    route,
-    entry: {
-      options: { id: `route-${String(index)}`, name: route.name ?? PACKAGES[route.provider] },
-      fiber: {
-        state: route.state ?? FiberState.ACTIVE,
-        effectiveConfig: route.provider === 'deepseek-official' ? OfficialConfig(route.config ?? {}) : AccountConfig(route.config ?? {}),
-      },
-    },
-  }))
   ctx.provide('llm', {
-    listProviders: () => rows.map(({ route }) => ({ id: route.provider })),
-    listConfigurableProviders: () => rows.map(({ route, entry }) => ({
-      provider: route.provider, settingsNs: entry.options.id, settingsPath: route.settingsPath ?? [],
-    })),
+    routeCredential: (provider: string): RouteCredential | undefined => {
+      const route = routes.find(row => row.provider === provider)
+      if (route === undefined || route.withoutCredential === true) return undefined
+      if (route.throws !== undefined) throw route.throws
+      return credentialOf(ctx, route)
+    },
   } as never)
-  ctx.provide('loader', { entries: () => rows.map(({ entry }) => entry).values() } as never)
 }
