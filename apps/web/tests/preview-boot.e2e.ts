@@ -20,7 +20,7 @@
  * The site is served the way a static host serves it: bytes from `dist/` with
  * no rewrite rules, so a missing file is a 404 rather than the index page.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { gunzipSync } from 'node:zlib'
 import { once } from 'node:events'
@@ -609,9 +609,23 @@ async function requestLazyChunk(page: Page, site: Site, manifest: ImageManifest)
 }
 
 /**
+ * Optional bundles whose manifest declares `dsh.bundle.profile`. Each composes its own profile alone, so layering it
+ * over the Web profile would duplicate its services; the plugin page lists it without offering a switch.
+ * @returns Package names in `OPTIONAL_BUNDLES` order.
+ */
+function standaloneProfileBundles(): string[] {
+  const declaring = new Set<string>()
+  for (const path of globSync('packages/*/*/package.json', { cwd: REPO_ROOT })) {
+    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, path), 'utf8')) as { name?: string; dsh?: { bundle?: { profile?: unknown } } }
+    if (manifest.name !== undefined && manifest.dsh?.bundle?.profile !== undefined) declaring.add(manifest.name)
+  }
+  return OPTIONAL_BUNDLES.filter(name => declaring.has(name))
+}
+
+/**
  * Open the Plugins page, prove every optional bundle and installed plugin reads
- * its metadata, then switch each optional bundle on and off. Both changes apply
- * live; the session-titles layer applies after the base layers, and the
+ * its metadata, then switch each layerable optional bundle on and off. Both changes
+ * apply live; the session-titles layer applies after the base layers, and the
  * Inspector bundle runs Session Inspector without the NodeJS Inspector Worker.
  * @param page - Booted preview page.
  */
@@ -637,7 +651,9 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
   expect(mask.url).toMatch(/^blob:/u)
   expect(mask.unresolved).toBe(false)
   expect(mask.width).toBeGreaterThan(0)
-  const result = await page.evaluate(async () => {
+  const standalone = standaloneProfileBundles()
+  expect(standalone).toEqual(['@deepseek-ai/dsh-cua-mcp'])
+  const result = await page.evaluate(async ({ standalone }) => {
     type Result<T> = { result: { ok: true; value: T } | { ok: false; error: { message: string } } }
     const transport = (globalThis as typeof globalThis & {
       __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
@@ -681,9 +697,10 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
     }> = []
     // The packed worker composition cannot mount the Liveshare declaration row and its share host in
     // the same patch batch without racing the declaration service; the ordinary Web scaffold covers
-    // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it.
+    // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it. A bundle that
+    // declares its own profile is listed but never layered over the Web profile, so the toggle list skips it too.
     for (const entry of bundles.filter(candidate => candidate.optional
-      && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare')) {
+      && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare' && !standalone.includes(candidate.name))) {
       const enable = await remote<{ application: string; error?: unknown }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: true })
       const plugins = await remote<Plugin[]>('pluginManager/listPlugins', {})
       const disable = await remote<{ application: string }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: false })
@@ -709,8 +726,10 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
         .map(row => ({ moduleName: row.moduleName, error: row.meta?.error })),
       toggles,
     }
-  })
+  }, { standalone })
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
+  // The standalone bundle is listed with its metadata and stays switched off; no toggle targets it.
+  expect(result.toggles.map(toggle => toggle.name).filter(name => standalone.includes(name))).toEqual([])
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
   expect(result.optional.filter(entry => entry.error !== null)).toEqual([
     expect.objectContaining({ name: '@deepseek-ai/dsh-cua-bundle', error: { code: 'unsupported-platform' } }),
