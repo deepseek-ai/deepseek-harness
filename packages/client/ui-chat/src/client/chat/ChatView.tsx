@@ -62,7 +62,7 @@ export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
   loadOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
-  usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
+  usePresentation, useProjection, useInteractionIds, useWorkingDirectory, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
   const getMarkdownTriggerProps = useCallback((target: MarkdownMenuTarget) => getTriggerProps(() => {
@@ -96,16 +96,20 @@ export function ChatView({
   )
   const inbox = useProjection('inbox') as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
-  const cwd = useSessions(s => s.byId[sessionId]?.cwd)
+  // Relative image paths resolve like file links: from the Session's current
+  // working directory, falling back to that root.
+  const rootCwd = useSessions(s => s.byId[sessionId]?.cwd)
+  const currentCwd = useWorkingDirectory(directory => directory)
+  const imageCwd = currentCwd ?? rootCwd
   const fileImages = useMemo(() => ({
     fileDrag,
-    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(cwd, path)),
-    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(cwd, path)),
+    resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(imageCwd, path)),
+    resourceAddress: (path: string) => sessionFileAddress(sessionId, resolveWorkspacePath(imageCwd, path)),
     labels: {
       open: t('image.open'), loading: t('image.loading'), failed: t('image.failed'),
       dialog: t('image.dialog'), close: t('image.close'),
     },
-  }), [cwd, t, fileDrag, sessionId])
+  }), [imageCwd, t, fileDrag, sessionId])
   const running = useSession(s => s.running)
   // Fold transitions run while a Turn is live, while an input is pending, and briefly after settling.
   const [motionTail, setMotionTail] = useState(false)
@@ -251,7 +255,7 @@ export function ChatView({
             >
               {renderSlot('conversation.chat.flow', {
                 entries, pendingInputs, lastInputTurn, deferCollapse,
-                cwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
+                cwd: rootCwd, openFile: requestOpenFile, inspectCall, forkAt, loadImage,
               }, { hookContext: flowContext })}
             </MarkdownDelegateProvider>
             <div ref={interactionSurfaceRef} className={css.textInteraction} data-text-interaction-surface=""

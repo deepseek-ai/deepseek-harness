@@ -534,6 +534,7 @@ function makeHarness(
     useStore: bindSnapshotSelector(chat),
     actions: chat.actions,
     useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
+    useWorkingDirectory: bindSnapshotSelector(createSnapshotStore<string | null | undefined>(undefined)),
     dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
@@ -753,6 +754,25 @@ describe('Chat node rendering', () => {
     const view = render(<h.ChatView {...h.props} />)
     fireEvent.click(view.getByRole('button', { name: 'source' }))
     expect(h.openFile).toHaveBeenCalledWith('src/index.ts', { line: 24 })
+  })
+
+  it('resolves relative Markdown images from the Session\'s current working directory', () => {
+    const h = makeHarness({
+      nodes: [user(1, 'draw'), assistant(2, '![chart](tmp/a.png)', 1)],
+      turnEnds: new Map([[1, 2]]),
+    })
+    const sessions = createSnapshotStore<SessionListState>({
+      ids: [SID], phase: 'ready', projectionsBySession: {},
+      byId: { [SID]: { id: SID, displayTitle: 'proj', cwd: '/proj', running: false, blank: false, updatedAt: 1, retainedBy: {} } },
+    })
+    h.props.useSessions = bindSnapshotSelector(sessions)
+    const directory = createSnapshotStore<string | null>('/proj/.agents/worktrees/w')
+    h.props.useWorkingDirectory = bindSnapshotSelector(directory)
+    const view = render(<h.ChatView {...h.props} />)
+    const source = () => new URL(view.getByRole('img', { name: 'chart' }).getAttribute('src')!, document.baseURI).searchParams.get('path')
+    expect(source()).toBe('/proj/.agents/worktrees/w/tmp/a.png')
+    act(() => { directory.set(null) })
+    expect(source()).toBe('/proj/tmp/a.png')
   })
 
   it('threads the injected file-mention vocabulary into the closing prose only', () => {
