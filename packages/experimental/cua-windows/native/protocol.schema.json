@@ -248,12 +248,12 @@
             "maxElements": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100000
+              "maximum": 10000
             },
             "maxDepth": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 512
+              "maximum": 100
             }
           },
           "required": [
@@ -925,12 +925,12 @@
             "maxElements": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 100000
+              "maximum": 10000
             },
             "maxDepth": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 512
+              "maximum": 100
             }
           },
           "required": [

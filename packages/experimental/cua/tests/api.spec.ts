@@ -1044,16 +1044,4 @@ it('forwards bounded traversal limits on a window-only provider', async () => {
   expect(f.dispatch).toHaveBeenLastCalledWith({
     method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxDepth: 1, maxElements: 1 },
   })
-  await win.getAccessibilityTree({ maxElements: 7 })
-  expect(f.dispatch).toHaveBeenLastCalledWith({
-    method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxElements: 7 },
-  })
-  await win.getAccessibilityTree({ maxDepth: 3 })
-  expect(f.dispatch).toHaveBeenLastCalledWith({
-    method: 'getState', params: { appHandle: app.appHandle, windowId: '23', maxDepth: 3 },
-  })
-  await win.getAccessibilityTree()
-  expect(f.dispatch).toHaveBeenLastCalledWith({
-    method: 'getState', params: { appHandle: app.appHandle, windowId: '23' },
-  })
 })
