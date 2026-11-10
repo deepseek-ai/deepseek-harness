@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_wait",
         "name": "run_code",
-        "argumentsDelta": "{\"description\":\"Wait for an external file policy change\",\"code\":\"await tools.wait_for_mode_change({}); inspect(await new Promise(() => {}));\"}"
+        "argumentsDelta": "{\"description\":\"Wait for an external file policy change\",\"code\":\"await tools.wait_for_mode_change({}); await new Promise(() => {});\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_wait",
           "name": "run_code",
-          "arguments": "{\"description\":\"Wait for an external file policy change\",\"code\":\"await tools.wait_for_mode_change({}); inspect(await new Promise(() => {}));\"}"
+          "arguments": "{\"description\":\"Wait for an external file policy change\",\"code\":\"await tools.wait_for_mode_change({}); await new Promise(() => {});\"}"
         }
       },
       {
