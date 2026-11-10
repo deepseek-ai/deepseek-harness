@@ -14,7 +14,8 @@ import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { FILE_REFERENCE_PROMPT } from '@deepseek-ai/dsh-file-reference'
-import LocalFileReferenceService, { WorkspaceFileSearch } from '../src/index.ts'
+import LocalFileReferenceService from '../src/index.ts'
+import { WorkspaceFileSearch } from '../src/search.ts'
 
 const roots: string[] = []
 

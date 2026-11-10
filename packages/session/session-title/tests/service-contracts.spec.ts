@@ -387,11 +387,13 @@ describe('SessionTitleService Provider validation and stale scheduling', () => {
       automatic: 'sometimes' as never,
       generate,
     })).toThrow(/automatic mode is invalid/)
-    expect(() => ctx.sessionTitle.register({
+    const missingGenerate: SessionTitleProvider = {
       id: SessionTitleProviderId('missing-generate'),
       automatic: 'first-prompt',
-      generate: undefined,
-    } as unknown as SessionTitleProvider)).toThrow(/requires generate/)
+      generate,
+    }
+    Reflect.set(missingGenerate, 'generate', undefined)
+    expect(() => ctx.sessionTitle.register(missingGenerate)).toThrow(/requires generate/)
   })
 
   it('drops automatic work when its provider is disposed before the queued start', async () => {
