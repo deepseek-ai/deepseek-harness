@@ -333,6 +333,36 @@ describe('Agent.cancel()', () => {
     expect(userTexts(agent)).toEqual(['active'])
   })
 
+  it('does not wake an Agent disposed by its accepted input notification', async () => {
+    const adapter = new MockAdapter([textResponse('must not run')])
+    const ctx = await harness(adapter)
+    try {
+      const handle = await ctx.agents.create({
+        sessionId: SessionId('dispose-on-acceptance'),
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+      const { agent } = handle
+      const message = createUserMessage({ content: [{ type: 'text', text: 'accepted before disposal' }], source: { kind: 'user' } })
+      let disposal: Promise<void> | undefined
+      ctx.on('agent/inbox/inserted', ({ agent: subject }) => {
+        if (subject === agent) disposal = handle.dispose()
+      })
+
+      expect(() => { agent.steer(message) }).not.toThrow()
+      expect(disposal).toBeDefined()
+      await disposal
+
+      const events = agent.session.snapshotEvents()
+      expect(events.some(event => event.type === 'agent/inbox/spliced'
+        && event.data.inserted.some(input => input.id === message.id))).toBe(true)
+      expect(events.filter(event => event.type === 'turn/start')).toHaveLength(0)
+      expect(adapter.requests).toHaveLength(0)
+      expect(ctx.agents.get(agent.id)).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it.each(['before scope cleanup', 'during scope cleanup'])('rejects idle Agent input %s after disposal begins', async (window) => {
     const adapter = new MockAdapter([textResponse('late reply')])
     const ctx = await harness(adapter)

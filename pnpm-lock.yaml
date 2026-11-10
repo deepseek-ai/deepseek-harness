@@ -1130,6 +1130,12 @@ importers:
       '@deepseek-ai/dsh-session':
         specifier: workspace:*
         version: link:../packages/core/session
+      '@deepseek-ai/dsh-session-control':
+        specifier: workspace:*
+        version: link:../packages/session/session-control
+      '@deepseek-ai/dsh-session-control-local':
+        specifier: workspace:*
+        version: link:../packages/session/session-control-local
       '@deepseek-ai/dsh-session-format':
         specifier: workspace:*
         version: link:../packages/session/session-format
