@@ -65,9 +65,9 @@ Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["control"])
 Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
 
-var node = new AccessibilityNode { ControlType = "Edit", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Actions = ["Press", "Focus"] };
+var node = new AccessibilityNode { ControlType = "Edit", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Actions = ["Invoke.Invoke", "Value.SetValue"] };
 var text = AccessibilityText.Format(node, 3, false);
-Check(text == "- [3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" actions=[\"Focus\"]",
+Check(text == "- [3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" actions=[\"Invoke.Invoke\", \"Value.SetValue\"]",
     "Rows expose the native ControlType name without a subrole");
 foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "TabItem", "Table", "DataGrid" })
     Check(AccessibilityText.Format(new() { ControlType = controlType }, null, false) == "- " + controlType,
@@ -75,10 +75,16 @@ foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "T
 Check(!AccessibilityText.Retain(new() { ControlType = "Other" }), "Empty fallback containers can collapse");
 Check(AccessibilityText.Retain(new() { ControlType = "Other", Name = "Custom content" }), "Named fallback containers retain their row");
 Check(text.Contains("= \"\" placeholder=\"Title\""), "Empty values and placeholders remain distinct");
-Check(!text.Contains("\"Press\"") && text.Contains("\"Focus\""), "Common actions compact without hiding secondary actions");
-Check(AccessibilityText.Format(node, 3, true).Contains("\"Press\""), "Details retain complete action names");
+Check(AccessibilityText.Format(node, 3, true) == text, "Both detail modes expose every action");
+var selectionActions = new AccessibilityNode { ControlType = "ListItem", Actions = [
+    "SelectionItem.Select", "SelectionItem.AddToSelection", "SelectionItem.RemoveFromSelection",
+    "ExpandCollapse.Expand", "ExpandCollapse.Collapse", "ScrollItem.ScrollIntoView",
+] };
+foreach (var details in new[] { false, true })
+    Check(AccessibilityText.Format(selectionActions, 0, details) == "- [0] ListItem actions=[\"SelectionItem.Select\", \"SelectionItem.AddToSelection\", \"SelectionItem.RemoveFromSelection\", \"ExpandCollapse.Expand\", \"ExpandCollapse.Collapse\", \"ScrollItem.ScrollIntoView\"]",
+        "Multi-action patterns retain all operations in tree output");
 Check(!AccessibilityText.Retain(new() { ControlType = "Group" }), "Empty structural containers can collapse");
-Check(AccessibilityText.Retain(new() { ControlType = "Group", Actions = ["Copy"] }), "Actionable containers retain their row");
+Check(AccessibilityText.Retain(new() { ControlType = "Group", Actions = ["Value.SetValue"] }), "Actionable containers retain their row");
 Check(AccessibilityText.Format(new() { ControlType = "Document", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, 0, false)
     .Contains("selection=unavailable"), "Out-of-range selections do not describe valid text");
 Console.WriteLine($"{checks} portable CUA checks passed");

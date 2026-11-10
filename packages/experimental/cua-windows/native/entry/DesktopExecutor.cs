@@ -213,7 +213,7 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                     await mta.Invoke(() =>
                     {
                         var element = Accessibility.Element(app, target, String(parameters, "snapshotId"), String(parameters, "elementId"), context);
-                        AccessibilityActions.Perform(app, element, String(parameters, "action"), argument, context);
+                        AccessibilityActions.Perform(element, String(parameters, "action"), argument, context);
                         return true;
                     }, cancellation);
                     return ActionResult(foreground);

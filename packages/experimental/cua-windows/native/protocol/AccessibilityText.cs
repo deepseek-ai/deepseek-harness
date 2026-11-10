@@ -58,8 +58,7 @@ public static class AccessibilityText
             else text.Append(" selection=unavailable");
             if (node.SelectedText is { Length: > 0 } selectedText) text.Append(" selectedText=").Append(Quote(selectedText));
         }
-        var actions = details ? node.Actions : node.Actions.Where(action => action is not ("Press" or "Pick" or "ScrollToVisible")).ToArray();
-        if (actions.Length != 0) text.Append(" actions=[").Append(string.Join(", ", actions.Select(Quote))).Append(']');
+        if (node.Actions.Length != 0) text.Append(" actions=[").Append(string.Join(", ", node.Actions.Select(Quote))).Append(']');
         if (details)
         {
             if (node.Identifier is { Length: > 0 } identifier) text.Append(" id=").Append(Quote(identifier));

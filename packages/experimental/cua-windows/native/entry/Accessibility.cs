@@ -15,12 +15,9 @@ internal static class Accessibility
     private static readonly AutomationProperty[] Properties = [
         AutomationElement.ControlTypeProperty, AutomationElement.NameProperty, AutomationElement.HelpTextProperty,
         AutomationElement.AutomationIdProperty, AutomationElement.IsEnabledProperty,
-        AutomationElement.HasKeyboardFocusProperty, AutomationElement.IsKeyboardFocusableProperty, AutomationElement.IsPasswordProperty,
-        AutomationElement.BoundingRectangleProperty, AutomationElement.IsInvokePatternAvailableProperty,
-        AutomationElement.IsValuePatternAvailableProperty, AutomationElement.IsRangeValuePatternAvailableProperty,
-        AutomationElement.IsTextPatternAvailableProperty, AutomationElement.IsSelectionItemPatternAvailableProperty,
-        AutomationElement.IsTogglePatternAvailableProperty, AutomationElement.IsExpandCollapsePatternAvailableProperty,
-        AutomationElement.IsScrollItemPatternAvailableProperty, ValuePattern.ValueProperty, ValuePattern.IsReadOnlyProperty,
+        AutomationElement.HasKeyboardFocusProperty, AutomationElement.IsPasswordProperty,
+        AutomationElement.BoundingRectangleProperty, AutomationElement.IsTextPatternAvailableProperty,
+        ValuePattern.ValueProperty, ValuePattern.IsReadOnlyProperty,
         RangeValuePattern.ValueProperty, RangeValuePattern.IsReadOnlyProperty, SelectionItemPattern.IsSelectedProperty,
         TogglePattern.ToggleStateProperty, ExpandCollapsePattern.ExpandCollapseStateProperty,
     ];
@@ -37,7 +34,7 @@ internal static class Accessibility
         var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
-        foreach (var property in Properties) cache.Add(property);
+        foreach (var property in Properties.Concat(PatternActions.Patterns.Select(pattern => pattern.Available))) cache.Add(property);
         var truncated = false;
         var count = 0;
         var nextIndex = 0;
@@ -125,14 +122,7 @@ internal static class Accessibility
     private static AccessibilityNode Read(AutomationElement element, WindowState window, WindowGeometry geometry, RequestContext context)
     {
         var type = Property(element, AutomationElement.ControlTypeProperty) as ControlType;
-        var actions = new List<string>();
-        if (Flag(element, AutomationElement.IsInvokePatternAvailableProperty)) actions.Add("Press");
-        if (Flag(element, AutomationElement.IsTogglePatternAvailableProperty)) actions.Add("Toggle");
-        if (Flag(element, AutomationElement.IsSelectionItemPatternAvailableProperty)) actions.Add("Pick");
-        if (Flag(element, AutomationElement.IsExpandCollapsePatternAvailableProperty)) { actions.Add("Expand"); actions.Add("Collapse"); }
-        if (Flag(element, AutomationElement.IsScrollItemPatternAvailableProperty)) actions.Add("ScrollToVisible");
-        if (Flag(element, AutomationElement.IsKeyboardFocusableProperty)) actions.Add("Focus");
-        if (type == ControlType.Window) actions.Add("Raise");
+        var actions = PatternActions.Names(pattern => Flag(element, pattern.Available));
         var password = Flag(element, AutomationElement.IsPasswordProperty);
         string? value = null;
         var hasValue = false;
@@ -187,7 +177,7 @@ internal static class Accessibility
             Enabled = Property(element, AutomationElement.IsEnabledProperty) as bool?, Focused = Property(element, AutomationElement.HasKeyboardFocusProperty) as bool?,
             Selected = Property(element, SelectionItemPattern.IsSelectedProperty) as bool?, Expanded = expanded,
             HasSelection = hasSelection, Selection = selection, SelectedText = selectedText, SelectionWritable = selectionWritable,
-            Actions = actions.ToArray(), Bounds = bounds,
+            Actions = actions, Bounds = bounds,
         };
     }
 
