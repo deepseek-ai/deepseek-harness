@@ -21,7 +21,7 @@ export type AttentionIndicatorProps =
   & PropsLocale<typeof NS>
 
 /**
- * Render a red dot, named for assistive technology, while any bound change
+ * Render a yellow dot, named for assistive technology, while any bound change
  * request has failing checks, requested changes, or a merge conflict.
  * @param props - panel snapshot hook and copy.
  * @returns the indicator, or null while nothing needs attention.
