@@ -149,7 +149,7 @@ describe.skipIf(MODE === 'record')('web e2e: jobs panel layering', () => {
     await page.keyboard.press('Enter')
     const panel = page.locator('[data-session-panel]')
     await panel.waitFor()
-    const list = panel.getByRole('list', { name: 'Background jobs' })
+    const list = panel.locator('[data-session-panel-section="background-jobs"]').getByRole('list')
     await list.getByRole('button', { name: /Show live output/ }).waitFor({ timeout: 15_000 })
     const expectedPlacement = {
       dockMode: 'push', presentation: 'overlay', insideBody: true, clearOfBrowser: true,

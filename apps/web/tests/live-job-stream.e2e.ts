@@ -86,7 +86,7 @@ describe.skipIf(MODE === 'record')('web e2e: live job stream', () => {
   it('streams a running job\'s real output into the expanded row, then settles it in place on kill', async () => {
     let phase = 'streaming'
     onTestFailed(() => saveFailureShot(page, `web-e2e-live-job-${phase}`))
-    const list = page.locator(SECTION).getByRole('list', { name: 'Background jobs' })
+    const list = page.locator(SECTION).getByRole('list')
     await showSessionPanel(page)
     expect(await list.count()).toBe(0)
 

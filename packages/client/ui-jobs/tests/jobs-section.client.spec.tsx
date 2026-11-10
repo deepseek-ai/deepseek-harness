@@ -145,7 +145,8 @@ describe('JobsSection rows', () => {
     render(<JobsSection {...props([
       job({ id: 'subagent-1' as JobView['id'], kind: 'subagent', label: 'explore the repo', status: 'completed', finishedAt: 1_700_000_003_000 }),
     ])} />)
-    expect(screen.getByRole('list', { name: zh['list.aria'] })).toBeDefined()
+    // The section heading names the region, so the list carries no name of its own.
+    expect(screen.getByRole('list').hasAttribute('aria-label')).toBe(false)
     expect(screen.getByText('explore the repo')).toBeDefined()
     expect(screen.queryByRole('button', { name: zh['row.expandAria'].replace('{label}', 'explore the repo') })).toBeNull()
   })
@@ -159,7 +160,7 @@ describe('JobsSection rows', () => {
   it('shows the live progress line in place of the status word', () => {
     render(<JobsSection {...props([job({ status: 'stopping', progress: 'winding down' })])} />)
     openList()
-    const list = screen.getByRole('list', { name: zh['list.aria'] })
+    const list = screen.getByRole('list')
     expect(within(list).getByText('pnpm run build')).toBeDefined()
     expect(within(list).getByText('bash · winding down')).toBeDefined()
   })
@@ -241,7 +242,7 @@ describe('JobsSection rows', () => {
     ])} />)
     openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') }))
-    const list = screen.getByRole('list', { name: zh['list.aria'] })
+    const list = screen.getByRole('list')
     const items = within(list).getAllByRole('listitem')
     // The section line is a listitem too now: live row, section, settled row.
     expect(items).toHaveLength(3)
@@ -272,7 +273,7 @@ describe('JobsSection rows', () => {
     ])} />)
     openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '5') }))
-    const labels = within(screen.getByRole('list', { name: zh['list.aria'] }))
+    const labels = within(screen.getByRole('list'))
       .getAllByRole('listitem')
       .map(item => item.querySelector('[data-job-label]')?.textContent)
       .filter((label): label is string => label != null)
@@ -403,7 +404,7 @@ describe('JobsSection observation', () => {
     render(<JobsSection {...props([job()], undefined, { 'bash-1': view })} />)
     openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
-    expect(screen.getByRole('list', { name: zh['list.aria'] }).querySelector('[data-running]')).not.toBeNull()
+    expect(screen.getByRole('list').querySelector('[data-running]')).not.toBeNull()
     expect(screen.queryByText(zh['terminal.noOutput'])).toBeNull()
   })
 

@@ -414,7 +414,8 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
   )
 
   return (
-    <ul className={css.list} aria-label={t('list.aria')} data-jobs-section="">
+    // The section's heading names the region; a list name would repeat it.
+    <ul className={css.list} data-jobs-section="">
       {liveRows.map(item)}
       {settledRows.length > 0
         ? (

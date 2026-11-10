@@ -1,6 +1,6 @@
 - region "Background jobs":
   - heading "Background jobs" [level=2]
-  - list "Background jobs":
+  - list:
     - listitem:
       - button "Show live output of for _ in $(seq 1 3000); do [ -e .background-job-list.release ] && break; sleep 0.2; done": for _ in $(seq 1 3000); do [ -e .background-job-list.release ] && break; sleep 0.2; done bash · running {{duration}}
       - button "Stop task for _ in $(seq 1 3000); do [ -e .background-job-list.release ] && break; sleep 0.2; done"

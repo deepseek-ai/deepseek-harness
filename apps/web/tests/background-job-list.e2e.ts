@@ -87,7 +87,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     onTestFailed(() => saveFailureShot(page, `web-e2e-background-job-${phase}`))
     const toggle = sessionPanelToggle(page)
     const section = (await showSessionPanel(page)).locator(SECTION)
-    const list = section.getByRole('list', { name: 'Background jobs' })
+    const list = section.getByRole('list')
     // The mounted section keeps the roster stream open but renders no rows
     // yet, so the panel hides it with its title. A one-shot check: polling for
     // zero would pass at t=0 before delivery and prove nothing.
@@ -204,7 +204,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
       expect(await original.evaluate(element => element.isConnected && element === document.activeElement)).toBe(true)
       const panel = await showSessionPanel(page)
       expect(await panel.getAttribute('data-session-panel')).toBe('overlay')
-      const list = panel.locator(SECTION).getByRole('list', { name: 'Background jobs' })
+      const list = panel.locator(SECTION).getByRole('list')
       await list.getByRole('button', { name: 'Finished 1', exact: true }).waitFor()
       // The long command truncates inside its row instead of widening the panel past the viewport.
       const fit = await panel.evaluate((element) => {
