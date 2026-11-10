@@ -215,11 +215,9 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
       <span className={css.duration}>{duration}</span>
     </>
   )
-  const killTitle = kill === undefined
-    ? undefined
-    : kill.state === 'armed'
-      ? t('kill.confirm')
-      : kill.state === 'failed' ? t('kill.failed') : t('kill.stop', { label: job.label })
+  const killTitle = kill?.state === 'armed'
+    ? t('kill.confirm')
+    : kill?.state === 'failed' ? t('kill.failed') : t('kill.stop', { label: job.label })
   return (
     <li className={css.item}>
       {/* A command its cell clips crawls into view while the pointer rests on the row. */}
@@ -239,7 +237,7 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
           : <span className={css.row}>{body}</span>}
         {kill !== undefined
           ? (
-            <Tooltip label={killTitle ?? ''} side="bottom" align="end" delayMs={500} portal>
+            <Tooltip label={killTitle} side="bottom" align="end" delayMs={500} portal>
               <button
                 type="button"
                 className={
