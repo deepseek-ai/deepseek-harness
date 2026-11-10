@@ -575,10 +575,22 @@ describe('im_read_file', () => {
     mounted.im.media.items.set('1.2', {
       ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
     })
-    expect(value(await mounted.call('im_read_file', { id: '1.2' }))).toEqual({
-      id: '1.2', chat: CHAT, file: attachment, path: '/work/.dsh/im/1.2-report.pdf',
+    const result = value(await mounted.call('im_read_file', { id: '1.2' }))
+    expect(result).toMatchObject({ id: '1.2', chat: CHAT, file: attachment })
+    const path = result.path as string
+    expect(path).toMatch(/^\/work\/\.dsh\/im\/[0-9a-f]{8}\/1\.2-report\.pdf$/)
+    expect(mounted.fs.writes).toEqual([{ key: path, data }])
+  })
+
+  it('stages the same media label of two chats into separate files', async () => {
+    const mounted = await mount()
+    mounted.im.media.items.set('1.2', {
+      ref, file: { type: 'file', attachment: attachment as never }, mime: 'application/pdf', bytes: 3, data,
     })
-    expect(mounted.fs.writes).toEqual([{ key: '/work/.dsh/im/1.2-report.pdf', data }])
+    const first = value(await mounted.call('im_read_file', { id: '1.2', chat: CHAT }))
+    const second = value(await mounted.call('im_read_file', { id: '1.2', chat: OTHER }))
+    expect(first.path).not.toBe(second.path)
+    expect(mounted.fs.writes).toHaveLength(2)
   })
 
   it('reports a stored file whose bytes the store did not hand back', async () => {

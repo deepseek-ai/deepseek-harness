@@ -14,6 +14,7 @@
  * - **Results.** Values are replayable JSON (`schema.ts`); the rendered text is bounded by `config.tools.maxReadBytes`
  *   and a publication result carries `report.summary()`. `config.tools.readOnly` registers no publishing tool.
  */
+import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { h, type Element } from '@deepseek-ai/cordis-plugin-im-core'
@@ -185,7 +186,9 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         }
         const cwd = await scoped.workingDirectory.ensure(agent, exec.signal)
         // A relative POSIX-shaped path: the execution world may not be this host, so no host separator is baked in.
-        const relative = `${config.tools.fileDir}/${item.ref.seq}.${item.ref.index}-${attachment.name}`
+        // The chat names a directory of its own: `seq` and the media index are unique inside one chat only, and every
+        // chat of a shared session stages into the same working directory.
+        const relative = `${config.tools.fileDir}/${chatDirectory(chat)}/${item.ref.seq}.${item.ref.index}-${attachment.name}`
         const target = await scoped.fs.resolve(relative, { cwd, signal: exec.signal })
         await scoped.fs.writeBytes(target, data, undefined, exec.signal)
         return {
@@ -374,6 +377,16 @@ function sendValue(result: ImSendResult): SendView {
     ...result.report === undefined ? {} : { report: result.report.summary() },
     ...result.error === undefined ? {} : { error: result.error },
   }
+}
+
+/**
+ * Stable directory name of one chat under `tools.fileDir`, so two chats staging `#1.1` into one shared workspace cannot
+ * overwrite each other's file. A digest because a chat key is `bot|chatId` and may contain any character.
+ * @param chat - the chat whose staged files belong together.
+ * @returns eight hex characters, one directory per chat.
+ */
+function chatDirectory(chat: ImChatKey): string {
+  return createHash('sha256').update(chat).digest('hex').slice(0, 8)
 }
 
 /** Extension of one file name, lower-cased. */
