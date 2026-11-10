@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-explicit-ptc-output.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-explicit-ptc-output.md
+/agent-note-explicit-text-and-image-output-in-ptc:
+  en: b62f1fc259e6f4a7
+  zh: 340942c222a38e2a
+/agent-note-explicit-text-and-image-output-in-ptc/problem:
+  en: 51667474a3f9053d
+  zh: 70c6af69e943f4f5
+/agent-note-explicit-text-and-image-output-in-ptc/decision:
+  en: 3cdaea6192f0db4f
+  zh: 0f6914a8bc1c894a
+/agent-note-explicit-text-and-image-output-in-ptc/alternatives-considered:
+  en: cfbca328947567f3
+  zh: 3b2f619365d2250e
+/agent-note-explicit-text-and-image-output-in-ptc/consequences:
+  en: 636609d91f12a960
+  zh: b26397c72f972827

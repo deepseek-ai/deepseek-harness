@@ -2,7 +2,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ShowResult, WindowsResult } from './protocol.ts'
 
 /** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
@@ -15,23 +15,8 @@ export type CuaOperation = z.output<typeof SystemPointerRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
-/** Encoded model-request image with the format, pixel dimensions and window reported by the Host. */
-export type CuaScreenshot = Pick<z.output<typeof ScreenshotResult>, 'mimeType' | 'pixelWidth' | 'pixelHeight' | 'windowId'> & {
-  bytes: Uint8Array
-}
-/** Optional output owned by the caller; persistence and image admission are external. */
-export interface CuaObservationSink {
-  /**
-   * Emit text.
-   * @param value - observed application state.
-   */
-  text(value: string): void | Promise<void>
-  /**
-   * Emit an image.
-   * @param screenshot - encoded image and its validated format, dimensions and window.
-   */
-  image(screenshot: CuaScreenshot): void | Promise<void>
-}
+/** Stored screenshot returned to a program for explicit inspection. */
+export type CuaProgramImage = { readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
 /** Full observations of the requested content; each read replaces the application's current snapshot. */
@@ -190,10 +175,9 @@ export interface CuaWindow extends CuaSurface {
   readonly windowId: number
   /**
    * Capture the selected window.
-   * @param options - emission options.
-   * @returns encoded model-request image with its format, pixel dimensions and window; use mimeType when saving or declaring the image.
+   * @returns Stored Image with a readable path and pixel dimensions, ready for explicit inspection.
    */
-  getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
+  getScreenshot(): Promise<CuaProgramImage>
   /**
    * Request a mouse move to an element or a point without pressing a button.
    * The provider reports the route and whether the system pointer moved.

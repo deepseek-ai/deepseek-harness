@@ -73,24 +73,25 @@ it('enumerates every available method once in its catalog entry', () => {
 
 it('documents option fields and return fields', () => {
   for (const token of ['emit', 'includeMenus', 'details', 'maxElements', 'maxDepth', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
-  for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'bytes', 'mimeType', 'pixelWidth', 'pixelHeight', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
+  for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'path', 'width', 'height', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 
-it('inlines discovery, restoration, screenshot, and mouse-move return records', () => {
+it('inlines discovery, restoration, and mouse-move return records', () => {
   const lines = COMMON_GUIDANCE.split('\n')
-  for (const name of ['cua.getCapabilities', 'cua.listApps', 'cua.findApps', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'getScreenshot', 'mouseMove']) {
+  for (const name of ['cua.getCapabilities', 'cua.listApps', 'cua.findApps', 'cua.getState', 'app.getWindows', 'app.show', 'window.show', 'mouseMove']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
   expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
   expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: true, pid: number }[]')
   expect(COMMON_GUIDANCE).toContain('({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[]')
+  expect(COMMON_GUIDANCE).toContain('getScreenshot() -> Image')
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
 })
 
 it('defines every non-builtin type name used in method signatures', () => {
   const signatures = COMMON_GUIDANCE.split('\n').filter(line => line.startsWith('- ')).map(line => line.split(' — ')[0]).join('\n')
   const names = signatures.replace(/'[^']*'/g, '').match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? []
-  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'JsonValue', 'Uint8Array', 'Window'])
+  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JsonValue', 'Window'])
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
@@ -98,8 +99,7 @@ it('defines every non-builtin type name used in method signatures', () => {
   expect(COMMON_GUIDANCE).toContain('Signatures show resolved return values after await')
 })
 
-it('preserves image formats and pointer modifier enums without restricting keyboard names', () => {
-  expect(COMMON_GUIDANCE).toContain("mimeType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'")
+it('documents pointer modifiers and platform-defined keyboard names', () => {
   const lines = COMMON_GUIDANCE.split('\n')
   for (const name of ['click', 'drag']) {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toContain("modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[]")
@@ -124,7 +124,7 @@ it('keeps consent, lock, emission, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('consent')
   expect(COMMON_GUIDANCE).toContain('SESSION_LOCKED')
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
-  expect(COMMON_GUIDANCE).toContain('emit: false suppresses sink output only')
+  expect(COMMON_GUIDANCE).toContain('emit: false suppresses automatic observation output')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
   expect(COMMON_GUIDANCE).toContain('snapshotId')
@@ -142,8 +142,7 @@ it('separates facade options from raw RPC parameters', () => {
 })
 
 it('documents emitted observations and key arguments without assuming a transport', () => {
-  expect(COMMON_GUIDANCE).not.toContain('not a preinstalled global')
-  expect(COMMON_GUIDANCE).toContain('void await')
+  expect(COMMON_GUIDANCE).toContain('Text observations emit through inspect')
   expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })

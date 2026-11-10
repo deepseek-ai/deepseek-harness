@@ -640,7 +640,7 @@ describe('current working directory', () => {
           if (read === undefined) throw new Error('missing read binding')
           const value = await read({ file_path: 'note.txt' })
           expect(JSON.stringify(value)).toContain('current')
-          return { logs: [], value }
+          return { output: [], value }
         }
       }
       await ctx.plugin(ReadBindingRuntime)

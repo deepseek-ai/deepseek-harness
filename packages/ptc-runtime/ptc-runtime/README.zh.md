@@ -29,7 +29,11 @@ kind: "package-reference"
 
 ### 运行一个程序
 
-传入程序和绑定命名空间，依次调用 `resolve(request)` 和 `run(spec)`。解析阶段验证 cwd、超时与沙盒选项，并应用提供方默认值。`programFormat: PtcProgramFormat` 选择支持顶层 `await`、`return` 的异步函数体，或支持顶层声明、`await` 和末尾表达式的 REPL/Script 语句。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。无损 JSON 完成值进入 `result.value`，文本进入 `result.logs`，失败进入 `result.error`。
+传入程序和绑定命名空间，依次调用 `resolve(request)` 和 `run(spec)`。解析阶段验证 cwd、超时与沙盒选项，并应用提供方默认值。`programFormat: PtcProgramFormat` 选择支持顶层 `await`、`return` 的异步函数体，或支持顶层声明、`await` 和末尾表达式的 REPL/Script 语句。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。无损 JSON 完成值进入 `result.value`，文本和图片按发出顺序进入 `result.output`，失败进入 `result.error`。
+
+设置 `discardCompletion: true` 可跳过成功完成值的 JSON 验证与序列化，并从结果中省略该值；捕获日志与失败信息仍会返回。TypeScript 工具执行器通过此选项提供显式程序输出，workflow 消费方则继续保留完成值。
+
+宿主绑定可以返回 `new PtcImage(path, attachment)`，向 Node 程序提供已存储的图片。显式展示会将 `{ type: 'image', attachment }` 条目追加到 `result.output`，与 `{ type: 'text', text }` 条目按发出顺序排列。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
@@ -51,7 +55,7 @@ const result = await ctx.ptcRuntime.run(spec)
 
 ### 可移植地命名绑定
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za-z_][A-Za-z0-9_]*`，避开每个可移植目标语言的保留字，并避开后端拥有的槽位，因此同一份命名空间列表对每个后端都有效。`$tools`、`lambda` 或 `console` 之类的名称会在运行开始前失败；确切的排除集是 seam 约定的一部分。
+binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za-z_][A-Za-z0-9_]*`，避开每个可移植目标语言的保留字，并避开后端拥有的槽位，因此同一份命名空间列表对每个后端都有效。`$tools`、`lambda`、`console` 或 `inspect` 之类的名称会在运行开始前失败；确切的排除集是 seam 约定的一部分。
 
 ### 可能出什么问题
 
@@ -83,11 +87,11 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配 `[A-Za
 
 ### 词汇
 
-`PtcRunRequest` 携带程序、Host 绑定、取消和可选执行选择。`PtcRunSpec` 要求已解析的 cwd 和明确的数值或 null 截止选择。`PtcBindingNamespace` 声明程序全局对象与可选的类型化拒绝构造器。`PtcRunResult` 将日志／值、失败与 `PtcRunSandbox` 事实分开；确切字段与提供方义务见 [`src/types.ts`](src/types.ts)。
+`PtcRunRequest` 携带程序、Host 绑定、取消和可选执行选择。`PtcRunSpec` 要求已解析的 cwd 和明确的数值或 null 截止选择。`PtcBindingNamespace` 声明程序全局对象与可选的类型化拒绝构造器。`PtcRunResult` 将输出／值、失败与 `PtcRunSandbox` 事实分开；确切字段与提供方义务见 [`src/types.ts`](src/types.ts)。
 
 ### 可移植标识符
 
-binding-global 与 error-class 名称是语言可移植的：必须匹配标识符子集 `[A-Za-z_][A-Za-z0-9_]*`（不含 JS 专有的 `$`）并通过 seam 导出的排除集，因此同一份 `bindings` 列表对每个后端都有效。本包导出每个后端都执行的约定——`PORTABLE_RESERVED_WORDS`（ECMAScript ∪ Python 保留字）、`RESERVED_BINDING_GLOBALS`（如 `console`、`__dsh_main__` 等后端拥有的 global）、`RESERVED_ERROR_MEMBERS` 与 `DUNDER_MEMBER`（error-member 排除）——因此 `$tools`、`lambda` 或 `__dsh_main__` 之类的名称会让 `run()` 在任何后端上作为 seam 误用而 reject。确切集合见 `src/index.ts`。
+binding-global 与 error-class 名称是语言可移植的：必须匹配标识符子集 `[A-Za-z_][A-Za-z0-9_]*`（不含 JS 专有的 `$`）并通过 seam 导出的排除集，因此同一份 `bindings` 列表对每个后端都有效。本包导出每个后端都执行的约定——`PORTABLE_RESERVED_WORDS`（ECMAScript ∪ Python 保留字）、`RESERVED_BINDING_GLOBALS`（如 `console`、`inspect`、`Image`、`__dsh_main__` 等后端拥有的 global）、`RESERVED_ERROR_MEMBERS` 与 `DUNDER_MEMBER`（error-member 排除）——因此 `$tools`、`lambda` 或 `__dsh_main__` 之类的名称会让 `run()` 在任何后端上作为 seam 误用而 reject。确切集合见 `src/index.ts`。
 
 ### 源码地图
 
@@ -129,7 +133,7 @@ binding-global 与 error-class 名称是语言可移植的：必须匹配标识�
 
 这些限制说明 seam 不能做什么；它们是当前包约束，不是任务积压。
 
-- **`run()` 是一次性的**——`logs` 只有在 `PtcRunResult` resolve 后才能获得；seam 不提供正在运行的程序所产生输出的流式日志或进度接口。
+- **`run()` 是一次性的**——`output` 只有在 `PtcRunResult` resolve 后才能获得；seam 不提供正在运行的程序所产生输出的流式日志或进度接口。
 - **保留内存可以丢失**：提供方可以为显式所有者保留状态；重启、释放以及提供方指定的失败会清除状态。程序、绑定调用和结果仍由消费者记录；运行中的对象不会被序列化或回放。
 - **提供方的约束能力不同**——已发布 Node 提供方强制执行已解析文件策略，私有实验性 Python 提供方拒绝显式策略。不提供容器提供方。
 - **提供方之间没有统一的绑定字节上限**——各提供方负责自己的传输限制；绑定仍可能在结果到达这些限制前分配内存。

@@ -13,6 +13,7 @@ import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -66,17 +67,33 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
           calls.push({ phase, method: operation.method })
           const result = await executeToolFixture(ctx, { agent: handle.agent, signal: new AbortController().signal,
             callId: ToolCallId(`external-cua-${++count}`), name: 'cua', arguments: operation })
+          if (result.isError) throw new Error(result.error.message)
           images += result.content.filter(block => block.type === 'image').length
-          return result.value ?? null
+          const image = result.content.find(block => block.type === 'image')
+          if (image !== undefined) {
+            const path = ctx.attachments.imageHostPath(image.attachment)
+            if (path === undefined) throw new Error('Fixture image path is unavailable')
+            return new PtcImage(path, image.attachment)
+          }
+          return result.value
         } } }],
       }))
       expect((await run('await import("@deepseek-ai/dsh-cua/bridge")', 'unresolved')).error?.message).toContain('Cannot find package')
       const section = (await ctx.systemPrompt.assemble()).sections.find(value => value.name === 'computer-use:dsh-cua')
       const initialization = section?.text.match(/Persistent PTC initialization:\n\n```ts\n([\s\S]*?)\n```/u)?.[1]
       expect(initialization).toContain('/lib/bridge.js')
-      const first = await run(`${initialization}\nvar app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); var shot = await win.getScreenshot(); ({ mimeType: shot.mimeType, pixelWidth: shot.pixelWidth, pixelHeight: shot.pixelHeight, windowId: shot.windowId, byteLength: shot.bytes.length });`, 'first')
+      const first = await run(`${initialization}
+        var app = await cua.getApp("test.fixture");
+        var win = await app.getWindow(7);
+        await win.getAccessibilityTree({ emit: false });
+        await win.click("0");
+        var shot = await win.getScreenshot();
+        var { readFile } = await import("node:fs/promises");
+        ({ isImage: shot instanceof Image, width: shot.width, height: shot.height,
+          windowId: win.windowId, byteLength: (await readFile(shot.path)).byteLength });
+      `, 'first')
       expect(first.error).toBeUndefined()
-      expect(first.value).toEqual({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7, byteLength: 90 })
+      expect(first.value).toEqual({ isImage: true, width: 1, height: 1, windowId: 7, byteLength: 90 })
       expect(images).toBe(1)
       expect(JSON.stringify(first)).not.toContain('iVBORw0KGgo')
       const invalid = await run('await cua.findApps("");', 'invalid')

@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-console-enabled
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc-console-enabled
+  pin: true
+  systemPromptSource: ptc-turn

@@ -215,14 +215,9 @@ class _LogStream(io.TextIOBase):
     """A newline-coalescing text stream backed by a :class:`LogBuffer`.
 
     Installed as ``sys.stdout`` / ``sys.stderr`` before executing the model
-    program. ``print(...)`` calls ``write`` once per argument, separator, and
-    newline, so a raw one-push-per-write stream would emit
-    ``["a", " ", "b", "\\n"]`` for ``print("a", "b")`` — and PTC mode renders
-    ``logs`` with ``join('\\n')``, turning that into spurious blank lines. This
-    stream instead buffers writes and pushes one LogBuffer entry per completed
-    LINE (the text up to each ``\\n``, newline stripped), so the rendered join
-    reproduces ``a b``. Any unterminated tail is flushed by :meth:`flush_line`
-    after the program settles.
+    program. Writes are buffered into complete lines including their original
+    newline. Explicit flushes and program settlement emit unterminated tails
+    without adding a newline. Each emitted fragment is charged as written.
     """
 
     def __init__(self, logs: LogBuffer) -> None:
@@ -290,22 +285,10 @@ class _LogStream(io.TextIOBase):
             pos = 0
             if self._pending or self._pending_blocks:
                 newline = text.index("\n")
-                # The +3 cheap-bound overhead (quotes + separator) belongs to a
-                # NEW entry. While an `open` entry is accumulating, the closing
-                # line is that entry's TAIL: its cheap bound is the content
-                # length alone, matching `_push_locked`'s open-aware bound.
-                # This bound's observable behavior is invariant under the
-                # overhead either way: when the +3 form trips and the open-aware
-                # form does not (pending + newline in [remaining - 2, remaining]),
-                # _push_bounded_prefix re-slices the SAME line text (the extra
-                # slice `text[:newline]` carries no newline) and _push_locked
-                # admits it under the same open-aware billing, byte for byte.
-                # The open-aware form only keeps _push_bounded_prefix's "certain
-                # to reject" precondition true, which is exactly what the scan
-                # pre-check below does NOT preserve (its slice carries the
-                # newline, so push genuinely rejects and truncates).
+                # A complete line includes its newline. New entries also pay
+                # the quotes and separator; open entries already paid them.
                 overhead = 3 if not self._logs._open_started else 0
-                if self._pending_chars + newline + overhead > self._logs.remaining:
+                if self._pending_chars + newline + 1 + overhead > self._logs.remaining:
                     # The reconstructed first line cannot fit the ledger, so
                     # LogBuffer would reject it whole: copy only the prefix that
                     # fails its cheap bound and drop the chunks. The slice is
@@ -314,9 +297,9 @@ class _LogStream(io.TextIOBase):
                     # join was (measured: MemoryError inside `sys.stdout.write`
                     # under a 400 MiB addressSpaceMb), and `remaining + 4`
                     # characters are all the helper can use.
-                    self._push_bounded_prefix(text[: min(newline, self._logs.remaining + 4)])
+                    self._push_bounded_prefix(text[: min(newline + 1, self._logs.remaining + 4)])
                 else:
-                    self._pending.append(text[:newline])
+                    self._pending.append(text[:newline + 1])
                     line = "".join(self._pending_parts())
                     self._pending = []
                     self._pending_blocks = []
@@ -341,10 +324,10 @@ class _LogStream(io.TextIOBase):
                 # prefix is longer than `remaining`), so the marker is emitted
                 # and the oversized line is never materialized.
                 overhead = 3 if not self._logs._open_started else 0
-                if newline - pos + overhead > self._logs.remaining:
+                if newline - pos + 1 + overhead > self._logs.remaining:
                     self._logs.push(text[pos:pos + self._logs.remaining + 4])
                     break
-                self._logs.push(text[pos:newline])
+                self._logs.push(text[pos:newline + 1])
                 pos = newline + 1
             if pos < length:
                 if self._logs.remaining > 0:
@@ -368,14 +351,8 @@ class _LogStream(io.TextIOBase):
                     # cheap length lower bound rejects immediately, emits the
                     # marker, and never encodes the tail — and a push after the
                     # marker is already out returns without emitting a second.
-                    # Reaching 0 EXACTLY (65 one-character lines against the
-                    # default 3-byte-per-entry serialized charge) leaves
-                    # `_truncated` unset, so without this the tail vanished with
-                    # no marker at all. Sliced to a budget-sized prefix, not the
-                    # whole tail: the tail can be hundreds of megabytes and the
-                    # copy would be the RLIMIT_AS death this bound exists to
-                    # avoid, while push only needs enough characters to fail its
-                    # own cheap length check.
+                    # Keep the rejected prefix bounded even when the unscanned
+                    # tail is much larger than the output budget.
                     self._logs.push(text[pos:pos + self._logs.remaining + 4])
         else:
             self._pending.append(text)
@@ -476,9 +453,8 @@ class _LogStream(io.TextIOBase):
                 self._pending = []
                 self._pending_blocks = []
                 self._pending_chars = 0
-                # The line has NO trailing newline: mark the frame `open` so the
-                # host appends the next log frame to the same entry instead of
-                # inserting a fake newline between two entries.
+                # Keep unterminated fragments in the same billed entry across
+                # explicit flushes and the next newline-terminated write.
                 self._logs.push(line, open=True)
 
 

@@ -21,7 +21,7 @@ class ControlledRuntime extends PtcRuntime {
   override get programFormat() { return 'repl' as const }
   override get executionInstructions() { return 'Top-level await is supported; the last expression is returned.' }
   override get timeout() { return { defaultMs: 120_000, maxMs: 600_000 } }
-  behavior: (spec: PtcRunSpec) => Promise<PtcRunResult> = async () => ({ logs: [] })
+  behavior: (spec: PtcRunSpec) => Promise<PtcRunResult> = async () => ({ output: [] })
 
   resolve(request: PtcRunRequest): PtcRunSpec {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? this.timeout.defaultMs }
@@ -96,9 +96,11 @@ describe('registered program tool factory', () => {
       expect(request.program).toBe('await cua.inspect()')
       expect(request.stateOwner).toBe(agent)
       expect(Object.keys(request.bindings[0]!.functions)).toEqual(['cua'])
-      return { logs: [], value: await request.bindings[0]!.functions.cua!({}) }
+      expect(request.discardCompletion).toBe(true)
+      expect(await request.bindings[0]!.functions.cua!({})).toBe('private result')
+      return { output: [{ type: 'text', text: 'private result' }] }
     }
-    expect((await execute()).results[0]?.result).toMatchObject({ isError: false, value: { logs: [], result: 'private result' } })
+    expect((await execute()).results[0]?.result).toMatchObject({ isError: false, value: { logs: ['private result'] } })
     expect(body).toHaveBeenCalledOnce()
     expect(unrelated).not.toHaveBeenCalled()
     expect(Object.isFrozen(definition.parameters)).toBe(false)
@@ -117,7 +119,7 @@ describe('registered program tool factory', () => {
       ? { reason: 'Computer operation blocked', info: { name: 'ComputerGuardError', code: 'COMPUTER_BLOCKED' } } : undefined)
     runtime.behavior = async (request) => {
       await expect(request.bindings[0]!.functions.cua!({})).rejects.toThrow()
-      return { logs: [] }
+      return { output: [] }
     }
     expect((await execute()).results[0]?.result.isError).toBe(false)
     approval = 'allowed-once'
@@ -141,7 +143,7 @@ describe('registered program tool factory', () => {
     runtime.behavior = async (request) => {
       expect(request.stateOwner).toBeUndefined()
       expect(request.sandboxPolicy?.mode).toBe('workspace-write')
-      return { logs: [], sandbox: { mode: 'workspace-write', denied: true } }
+      return { output: [], sandbox: { mode: 'workspace-write', denied: true } }
     }
     const result = (await execute({ sandbox_permissions: 'workspace-write', justification: 'Write computer output' })).results[0]!.result
     expect(result.isError).toBe(false)
@@ -149,14 +151,14 @@ describe('registered program tool factory', () => {
     expect(JSON.stringify(result.content)).toContain('Nested tools retain their own policies and approvals')
   })
 
-  it('records nested results while forwarding screenshots and deferred context after the program', async () => {
+  it('records nested results while forwarding images and deferred context from private tools', async () => {
     type Attachment = Extract<ContentBlock, { type: 'image' }>['attachment']
     const image: ContentBlock = { type: 'image', attachment: {
       attachmentId: brandString<Attachment['attachmentId']>('sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'),
       mediaType: 'image/png', width: 1, height: 1, bytes: 1,
     } }
     const definition = defineTool({
-      name: 'cua', description: 'Capture the test computer.', parameters: {},
+      name: 'capture', description: 'Capture the test computer.', parameters: {},
       output: {
         schema: { type: 'string' }, render: () => [image], presentationMeta: () => ({ screen: 1 }),
       },
@@ -169,8 +171,8 @@ describe('registered program tool factory', () => {
     const { ctx, runtime, session, execute } = await setup(definition)
     ctx.on('tools/ptc-dispatch-log', async () => [{ type: 'text', text: 'durable screenshot preview' }])
     runtime.behavior = async (request) => {
-      expect(await request.bindings[0]!.functions.cua!({})).toBe('raw snapshot')
-      return { logs: ['inspection complete'] }
+      expect(await request.bindings[0]!.functions.capture!({})).toBe('raw snapshot')
+      return { output: [{ type: 'text', text: 'inspection complete' }] }
     }
     const batch = await execute()
     expect(batch.results[0]?.result.content).toEqual([{ type: 'text', text: 'inspection complete' }])
@@ -179,7 +181,7 @@ describe('registered program tool factory', () => {
     const events = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch')
     expect(events.map(event => event.type)).toEqual(['tool/ptc-dispatch-start', 'tool/ptc-dispatch'])
     expect(events[1]?.data).toMatchObject({
-      rootCallId: 'program', parentCallId: 'program', subCallId: 'program:ptc:1', name: 'cua', arguments: {},
+      rootCallId: 'program', parentCallId: 'program', subCallId: 'program:ptc:1', name: 'capture', arguments: {},
       isError: false, content: [{ type: 'text', text: 'durable screenshot preview' }], meta: { screen: 1 },
     })
   })
@@ -205,7 +207,7 @@ describe('registered program tool factory', () => {
       await new Promise<void>((resolve) => {
         request.signal?.addEventListener('abort', () => { resolve() }, { once: true })
       })
-      return { logs: [], error: { kind: 'abort', message: 'runtime cancelled' } }
+      return { output: [], error: { kind: 'abort', message: 'runtime cancelled' } }
     }
     const running = execute()
     let disposing: Promise<void> | undefined
@@ -238,7 +240,7 @@ describe('registered program tool factory', () => {
     runtime.behavior = async (request) => {
       await request.bindings[0]!.functions.cua!({})
       await expect(request.bindings[0]!.functions.cua!({})).rejects.toThrow('cua_run_code exceeded its limit of 1 tool calls')
-      return { logs: [], error: { kind: 'abort', message: 'allowance exhausted' } }
+      return { output: [], error: { kind: 'abort', message: 'allowance exhausted' } }
     }
     const result = (await execute({ timeoutMs: 1000 })).results[0]!.result
     expect(result).toMatchObject({ isError: true, error: { info: { code: 'CODE_RUN_FAILED' } } })

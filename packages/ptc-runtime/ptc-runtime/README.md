@@ -29,7 +29,11 @@ Choose this package when you compose a deployment that executes model-written pr
 
 ### Run a program
 
-Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat: PtcProgramFormat` selects an async function body with top-level `await` and `return`, or REPL/Script statements with top-level declarations, `await`, and a final expression. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. Lossless-JSON completion becomes `result.value`, text becomes `result.logs`, and failures become `result.error`.
+Call `resolve(request)` followed by `run(spec)` with a program and binding namespaces. Resolution validates cwd, timeout and sandbox choices and applies provider defaults. `programFormat: PtcProgramFormat` selects an async function body with top-level `await` and `return`, or REPL/Script statements with top-level declarations, `await`, and a final expression. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. Lossless-JSON completion becomes `result.value`, captured text and images become ordered `result.output` entries, and failures become `result.error`.
+
+Set `discardCompletion: true` to omit the successful completion without JSON validation or serialization; captured logs and failures are still returned. The TypeScript tool executor selects this option for explicit program output, while workflow consumers retain completion values.
+
+Host bindings can return `new PtcImage(path, attachment)` to expose a stored image in Node programs. Explicit inspection appends `{ type: 'image', attachment }` entries to `result.output`, alongside `{ type: 'text', text }` entries in emission order. Text entries retain emitted newline characters; concatenate adjacent text without separators.
 
 ```text
 const spec = ctx.ptcRuntime.resolve({
@@ -51,7 +55,7 @@ For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-
 
 ### Name your bindings portably
 
-Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, or `console` fails the run before it starts; the exact exclusion sets are part of the seam contract.
+Binding-global and error-class names are language-portable: they must match `[A-Za-z_][A-Za-z0-9_]*`, avoid every portable target language's reserved words, and avoid backend-owned slots, so one namespace list is valid against every backend. A name like `$tools`, `lambda`, `console`, or `inspect` fails the run before it starts; the exact exclusion sets are part of the seam contract.
 
 ### What can go wrong
 
@@ -83,11 +87,11 @@ The exhaustive semantics live in the [PTC runtime subsystem reference](../../../
 
 ### Vocabulary
 
-`PtcRunRequest` carries the program, host bindings, cancellation and optional execution choices. `PtcRunSpec` requires the resolved cwd and an explicit numeric or null deadline choice. `PtcBindingNamespace` declares program globals and optional typed rejection constructors. `PtcRunResult` separates logs/value, failure and `PtcRunSandbox` facts; exact fields and provider obligations live in [`src/types.ts`](src/types.ts).
+`PtcRunRequest` carries the program, host bindings, cancellation and optional execution choices. `PtcRunSpec` requires the resolved cwd and an explicit numeric or null deadline choice. `PtcBindingNamespace` declares program globals and optional typed rejection constructors. `PtcRunResult` separates output/value, failure and `PtcRunSandbox` facts; exact fields and provider obligations live in [`src/types.ts`](src/types.ts).
 
 ### Portable identifiers
 
-Binding-global and error-class names are language-portable: they must match the identifier subset `[A-Za-z_][A-Za-z0-9_]*` (no JS-only `$`) and clear the seam-exported exclusion sets, so one `bindings` list is valid against every backend. The package exports the contract every backend enforces — `PORTABLE_RESERVED_WORDS` (ECMAScript ∪ Python reserved words), `RESERVED_BINDING_GLOBALS` (backend-owned globals such as `console` and `__dsh_main__`), `RESERVED_ERROR_MEMBERS` and `DUNDER_MEMBER` (error-member exclusions) — so a name like `$tools`, `lambda`, or `__dsh_main__` makes `run()` reject as seam misuse on any backend. See `src/index.ts` for the exact sets.
+Binding-global and error-class names are language-portable: they must match the identifier subset `[A-Za-z_][A-Za-z0-9_]*` (no JS-only `$`) and clear the seam-exported exclusion sets, so one `bindings` list is valid against every backend. The package exports the contract every backend enforces — `PORTABLE_RESERVED_WORDS` (ECMAScript ∪ Python reserved words), `RESERVED_BINDING_GLOBALS` (backend-owned globals such as `console`, `inspect`, `Image` and `__dsh_main__`), `RESERVED_ERROR_MEMBERS` and `DUNDER_MEMBER` (error-member exclusions) — so a name like `$tools`, `lambda`, or `__dsh_main__` makes `run()` reject as seam misuse on any backend. See `src/index.ts` for the exact sets.
 
 ### Source map
 
@@ -129,7 +133,7 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 
 These limits define what the seam cannot do; they are current package constraints, not a task backlog.
 
-- **`run()` is one-shot** — `logs` arrive only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
+- **`run()` is one-shot** — `output` arrives only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
 - **Retained memory is disposable**: providers may keep state for an explicit owner; restart, release, and provider-specific failures discard it. Programs, binding calls and results remain logged by consumers; live objects are neither serialized nor replayed.
 - **Providers have different confinement capabilities** — the shipped Node provider enforces a resolved file policy, while the private experimental Python provider rejects an explicit policy. No container provider is supplied.
 - **No uniform binding byte cap applies across providers** — each provider owns its transport limits; a binding can still allocate memory before its result reaches those limits.

@@ -14,7 +14,7 @@ import type { CuaConfig } from './index.ts'
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
   + 'The global cua object is ready to use; retain application and window objects across calls. '
   + 'Only tools.cua is available inside the program. Call other session tools directly. '
-  + 'Print the values you need or leave a final expression; screenshots are attached after the program finishes.'
+  + 'Use inspect(...values) to display selected text and images.'
 
 /**
  * Register raw CUA for its configured PTC preset and a persistent program tool for other presets.
@@ -42,7 +42,7 @@ Persistent PTC initialization:
 
 \`\`\`ts
 var { connectCua } = await import(${ptcBridgeUrl});
-var cua = connectCua(() => tools.cua, text => console.log(text));
+var cua = connectCua(() => tools.cua, text => inspect(text));
 \`\`\``
   } }
   const register = (scope: Context, definition: ToolDefinition, instructions: PromptSection): (() => void) => {
@@ -92,7 +92,7 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
         apply(owner: Context) {
           owner.effect(function* () {
             yield owner.ptcRuntime.registerEnvironmentInitializer(
-              `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
+              `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => inspect(text));`,
             )
             const child = owner.plugin({
               name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory'],

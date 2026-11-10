@@ -12,7 +12,7 @@ Computer Use 需要在标准及其他 preset 中复用应用和窗口对象，�
 
 CUA 保留 `agentPreset: ptc`，用默认选择器指定获得原始 `cua` 工具的 preset。其他已组合的 preset 获得 `cua_run_code`；未组合 preset 的 agent（智能体）不获得这两个工具。`agentPreset: false` 保留全局原始工具注册。基础注册的所有者通过 Agent 作用域管理注册和销毁，因此启停提供方会影响已有和后续 Agent，无需修改 preset。原始工具的注册只依赖基础 CUA 服务和 preset 选择。私有程序工具的提供方按定义对象的身份发布和撤回其定义；私有依赖缺失或启动失败时，原始工具和提示词仍然可用。
 
-`cua_run_code` 将共享[程序工具工厂](../../../../packages/core/tool-executor-ptc/README.zh.md)与 CUA 提供方持有的单个隔离 Node `persistent-in-memory` 运行时组合。Agent 的 `stateOwner` 身份选择各自独立的保留进程。它只绑定私有 `tools.cua` 定义；模型直接调用其他普通会话工具。嵌套 CUA 操作保留工具策略、guard、派发事件和图像接纳。任一程序工具结束时，提供方都会释放该程序仍按住的键。提供方卸载时，先等待自己持有的 CUA 程序结束再清理原生资源；释放其他 PTC 程序持有的输入时，不等待这些程序中的其他工作。状态保存在内存中，独立于 profile 的 PTC 状态，随所属 Agent 或提供方释放。
+`cua_run_code` 将共享[程序工具工厂](../../../../packages/core/tool-executor-ptc/README.zh.md)与 CUA 提供方持有的单个隔离 Node `persistent-in-memory` 运行时组合。Agent 的 `stateOwner` 身份选择各自独立的保留进程。它只绑定私有 `tools.cua` 定义；模型直接调用其他普通会话工具。嵌套 CUA 操作保留工具策略、guard、派发事件和图像接纳。程序通过 `inspect(...values)` 选择文字和截图，遵循[显式输出决策](2026-11-09-explicit-ptc-output.zh.md)。任一程序工具结束时，提供方都会释放该程序仍按住的键。提供方卸载时，先等待自己持有的 CUA 程序结束再清理原生资源；释放其他 PTC 程序持有的输入时，不等待这些程序中的其他工作。状态保存在内存中，独立于 profile 的 PTC 状态，随所属 Agent 或提供方释放。
 
 CUA 在隔离运行时首次接纳运行前，通过 `registerEnvironmentInitializer` 注册一段源码。每个新环境安装本次绑定后执行该程序一次，包括临时提权环境。子进程等待 Host 确认后才开始执行模型代码。初始化与首次运行共享时间和输出预算；失败会丢弃环境并阻止模型代码执行，但不回滚外部效果。独立求值保留模型源码位置。初始化程序所属的作用域只依赖运行时，因此程序工具的依赖重载时仍保留这项注册。PTC 保留显式 bridge 初始化。
 

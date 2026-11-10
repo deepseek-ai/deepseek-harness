@@ -3,7 +3,7 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-source", "name": "run_code", "arguments": "{\"code\":\"return await tools.read_image({ file_path: 'red.png' })\",\"description\":\"Read the source image\"}" } },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-source", "name": "run_code", "arguments": "{\"code\":\"const image = await tools.read_image({ file_path: 'red.png' }); inspect(image.path.slice(image.path.lastIndexOf('/.dsh/') + 1), image);\",\"description\":\"Read the source image\"}" } },
       { "type": "usage", "usage": { "inputTokens": 3, "outputTokens": 3 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]
@@ -12,7 +12,7 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-object", "name": "run_code", "arguments": "{\"code\":\"return await tools.read_image({ file_path: '{{fromRequest:<path>(.+)/red\\.png</path>}}/.dsh/attachments/v1/objects/b1/b1ff9c8ea3a780bad09b346c423d2d0e46815926879b18e841d928376a946640' })\",\"description\":\"Read the normalized attachment object directly\"}" } },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "code-image-object", "name": "run_code", "arguments": "{\"code\":\"inspect(await tools.read_image({ file_path: '{{fromRequest:([.]dsh[/]attachments[/]v1[/]objects[/][a-f0-9]{2}[/][a-f0-9]{64})}}' }));\",\"description\":\"Read the normalized attachment object directly\"}" } },
       { "type": "usage", "usage": { "inputTokens": 3, "outputTokens": 3 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

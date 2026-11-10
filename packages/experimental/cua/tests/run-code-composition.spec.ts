@@ -32,8 +32,8 @@ import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
 
 const programs = [
-  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getScreenshot(); ({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })',
-  'globalThis.visits++; await win.getAccessibilityTree({emit:false}); await win.click("0"); ({ visits, sameCua: cua === initialCua, app: app.appHandle, window: win.windowId, tree: await win.getAccessibilityTree({emit:false}), pid: process.pid })',
+  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })); inspect(screenshot)',
+  'globalThis.visits++; await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getScreenshot(); inspect(JSON.stringify({ visits, sameCua: cua === initialCua, app: app.appHandle, window: win.windowId, tree: await win.getAccessibilityTree({emit:false}), pid: process.pid }))',
   'await win.click("0")',
 ]
 
@@ -164,12 +164,13 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(dispatches.map(event => event.data.subCallId)).toEqual(guarded)
   expect(dispatches.every(event => event.data.name === 'cua')).toBe(true)
   expect(dispatches.filter(event => event.data.rootCallId === 'cua-program-2')
-    .map(event => Request.parse(event.data.arguments).method)).toEqual(['getState', 'click', 'getState'])
+    .map(event => Request.parse(event.data.arguments).method)).toEqual(['getState', 'click', 'screenshot', 'getState'])
   expect(dispatches.at(-1)?.data).toMatchObject({ rootCallId: 'cua-program-3', isError: true,
     error: { name: 'FixtureGuardError', code: 'FIXTURE_CLICK_DENIED' } })
   expect(native.calls.map(call => call.id)).toEqual(guarded.slice(0, -1))
   const images = model.requests[1]!.messages.flatMap(message => message.content.filter(block => block.type === 'image'))
   expect(images).toHaveLength(1)
+  expect(model.requests[2]!.messages.flatMap(message => message.content.filter(block => block.type === 'image'))).toHaveLength(1)
   const image = images[0]!
   expect(image.attachment).toMatchObject({ mediaType: 'image/png', width: 1, height: 1 })
   expect(Buffer.from((await ctx.attachments.readImage(image.attachment)).data).toString('base64')).toBe(png)
@@ -185,9 +186,9 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
 
 it('recreates the automatic facade when its environment is rebuilt', async () => {
   const { agent, run } = await setup([
-    'var previousCua = cua; "created"',
+    'var previousCua = cua; inspect("created")',
     'process.exit(0)',
-    '({ ready: typeof cua.getApp === "function", previous: typeof previousCua })',
+    'inspect(JSON.stringify({ ready: typeof cua.getApp === "function", previous: typeof previousCua }))',
   ])
   await run()
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
@@ -198,7 +199,7 @@ it('recreates the automatic facade when its environment is rebuilt', async () =>
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {
   const { ctx, native, agent, provider, run } = await setup([
-    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); process.pid',
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); inspect(process.pid)',
     'await win.click("0")',
   ])
   const started = native.holdNextClick()

@@ -3,7 +3,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from './api.ts'
 import type { CuaApi, CuaOperation } from './types.ts'
 
-/** Standard tools.cua binding; its image content is admitted by the host tool pipeline. */
+/** Standard tools.cua binding; screenshots resolve to stored program images. */
 export type CuaToolBinding = (operation: CuaOperation) => Promise<JsonValue>
 
 /**
@@ -13,9 +13,5 @@ export type CuaToolBinding = (operation: CuaOperation) => Promise<JsonValue>
  * @returns Application and window objects using the current tool binding. Rejections propagate without retries.
  */
 export function connectCua(getTool: () => CuaToolBinding, onText?: (text: string) => void | Promise<void>): CuaApi {
-  return createCuaApi(operation => getTool()(operation), {
-    text: value => onText?.(value),
-    // The standard tools.cua result already carries the screenshot attachment.
-    image: () => {},
-  })
+  return createCuaApi(operation => getTool()(operation), onText)
 }

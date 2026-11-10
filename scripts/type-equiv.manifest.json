@@ -1278,6 +1278,17 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcImage",
+      "source": "packages/ptc-runtime/ptc-runtime/src/image.ts",
+      "projection": "public-api"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcOutput",
+      "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcBindingNamespace",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },

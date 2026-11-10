@@ -1,9 +1,8 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
-import { Buffer } from 'node:buffer'
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ScreenshotResult, ShowResult, StateResult, WindowsResult } from './protocol.ts'
-import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaObservationSink, CuaOperation, CuaScreenshot, CuaSurface, CuaWindow } from './types.ts'
+import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaObservationOptions, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
 function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readonly PropertyKey[] = []): string {
@@ -37,47 +36,49 @@ function validatedCall(dispatch: CuaDispatch) {
   }
 }
 
-async function emit(sink: CuaObservationSink | undefined, value: object, options?: CuaObservationOptions): Promise<void> {
-  if (options?.emit !== false) await sink?.text(JSON.stringify(value))
+async function emit(
+  onText: ((text: string) => void | Promise<void>) | undefined, value: object, options?: CuaObservationOptions,
+): Promise<void> {
+  if (options?.emit !== false) await onText?.(JSON.stringify(value))
 }
 
 /**
- * Create app/window objects using the caller's authorized dispatcher.
- * @param dispatch - Current tool authority; rejects propagate without retries.
- * @param sink - Optional text/image output; emit false suppresses this sink only.
+ * Create app/window objects using the caller's authorized program dispatcher.
+ * @param dispatch - Current tool authority; screenshots resolve to program Images and rejections propagate without retries.
+ * @param onText - Optional observation output; emit false suppresses this callback.
  * @returns Objects independent of variable storage and evaluator lifecycle.
  */
-export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): CuaApi {
+export function createCuaApi(dispatch: CuaDispatch, onText?: (text: string) => void | Promise<void>): CuaApi {
   const call = validatedCall(dispatch)
   let capabilities: CuaCapabilities | undefined
   async function currentCapabilities(): Promise<CuaCapabilities> {
     if (capabilities === undefined) capabilities = CapabilitiesResult.parse(await call('getCapabilities', {}))
     return capabilities
   }
-  const objects = createCuaObjects(call, sink)
+  const objects = createCuaObjects(call, onText)
 
   const api: CuaApi = {
     async getCapabilities(options) {
       const result = CapabilitiesResult.parse(await call('getCapabilities', {}))
       capabilities = result
-      await emit(sink, result, options)
+      await emit(onText, result, options)
       return result
     },
     async listApps(options) {
       const result = AppsResult.parse(await call('listApps', {})).map(app => ({
         id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
       }))
-      await emit(sink, result, options)
+      await emit(onText, result, options)
       return result
     },
     async findApps(query, options) {
       const result = FoundAppsResult.parse(await call('findApps', { query }))
-      await emit(sink, result, options)
+      await emit(onText, result, options)
       return result
     },
     async getState(options) {
       const result = { apps: await api.listApps({ emit: false }), browsers: [] as [] }
-      await emit(sink, result, options)
+      await emit(onText, result, options)
       return result
     },
     async getApp(selector) {
@@ -93,7 +94,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
 
 type CuaScopeParams = (params: Record<string, JsonValue>) => Record<string, JsonValue>
 
-function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObservationSink | undefined): {
+function createCuaObjects(call: ReturnType<typeof validatedCall>, onText: ((text: string) => void | Promise<void>) | undefined): {
   createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp
 } {
   const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
@@ -133,7 +134,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
           throw new Error('Native observation belongs to another application or window')
         }
         observed.set(target.appHandle, { snapshotId: state.snapshotId, windowId: target.windowId })
-        if (options?.emit !== false) await sink?.text(state.tree)
+        if (options?.emit !== false) await onText?.(state.tree)
         return state.tree
       },
       async listActions(elementId) {
@@ -192,18 +193,14 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
       })
     return {
       ...base.surface, windowId,
-      async getScreenshot(options) {
-        const image = ScreenshotResult.parse(await base.call('screenshot', {}))
-        if (image.windowId !== windowId) throw new Error('Native screenshot belongs to another window')
-        const screenshot: CuaScreenshot = {
-          bytes: Uint8Array.from(Buffer.from(image.data, 'base64')),
-          mimeType: image.mimeType,
-          pixelWidth: image.pixelWidth,
-          pixelHeight: image.pixelHeight,
-          windowId: image.windowId,
+      async getScreenshot() {
+        const value = await base.call('screenshot', {})
+        if (value === null || typeof value !== 'object' || Array.isArray(value)
+          || typeof value.attachmentId !== 'string'
+          || typeof value.path !== 'string' || typeof value.width !== 'number' || typeof value.height !== 'number') {
+          throw new Error('The CUA program binding must return an Image for screenshots')
         }
-        if (options?.emit !== false) await sink?.image(screenshot)
-        return screenshot
+        return value as CuaProgramImage
       },
       async mouseMove(targetPoint, options) {
         const relative = options?.relative === undefined ? {} : { relative: options.relative }
@@ -261,7 +258,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>, sink: CuaObser
       async activate() { return base.action('activate', {}) },
       async getWindows(options) {
         const windows = WindowsResult.parse(await base.call('listWindows', {}))
-        await emit(sink, windows, options)
+        await emit(onText, windows, options)
         return windows
       },
       getWindow(windowId): Promise<CuaWindow> {

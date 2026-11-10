@@ -25,7 +25,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
         const run = (program, timeoutMs, bindings = []) => ctx.ptcRuntime.run(ctx.ptcRuntime.resolve({program, timeoutMs, bindings, stateOwner}))
         const first = await run('let count: number = 40; const path = await import("node:path");')
         const initialized = await run('typeof helper === "undefined" ? null : helper.value')
-        const second = await run('count += 2; console.log(path.basename("/a/b")); count')
+        const second = await run('count += 2; inspect(path.basename("/a/b")); count')
         const interrupted = await run('try { await tools.wait({}) } catch {} finally { count++ }', 200, [{ global: 'tools', functions: { wait: () => new Promise(() => {}) } }])
         const preserved = await run('count')
         await ctx.ptcRuntime.release(stateOwner)
@@ -44,6 +44,6 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(observed.first.error).toBeUndefined()
     const helperValue = programFormat === 'repl' ? 7 : null
     expect(observed).toMatchObject({ initialized: { value: helperValue }, reinitialized: { value: helperValue } })
-    expect(observed).toMatchObject({ second: { logs: ['b'], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { logs: [], value: 'undefined' } })
+    expect(observed).toMatchObject({ second: { output: [{ type: 'text', text: 'b\n' }], value: 42 }, interrupted: { error: { kind: 'timeout' } }, preserved: { value: 43 }, fresh: { output: [], value: 'undefined' } })
   })
 })

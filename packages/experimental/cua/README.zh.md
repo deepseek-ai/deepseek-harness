@@ -31,7 +31,7 @@ kind: "package-reference"
 
 挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
-`cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，以最后一个表达式作为结果；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
+`cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，通过 `inspect(...values)` 展示选中的文字和截图；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 
 通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
 
@@ -43,9 +43,9 @@ kind: "package-reference"
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
-观察方法会输出并返回结果。使用 `void await app.getAccessibilityTree()` 只展示一份内容，或使用 `emit:false` 后打印一次返回文本。`window.getScreenshot()` 返回包含 `bytes`、`mimeType`、`pixelWidth`、`pixelHeight` 和 `windowId` 的 `CuaScreenshot`，图片输出回调接收同一个对象。选择文件后缀或声明图片时使用其中的 MIME 类型；格式可能是 PNG、JPEG、WebP 或 GIF。每张截图只进入一次附件处理链；`emit:false` 只抑制对象层的输出。
+观察方法输出并返回结果。通过 `connectCua(() => tools.cua, text => inspect(text))` 连接 PTC 文本输出。`window.getScreenshot()` 返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 和 `height` 对应保存图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 选择展示截图；窗口 ID 从 `window.windowId` 读取。`createCuaApi(dispatch, onText?)` 接收相同的程序分派器和文本回调。
 
-`tools.cua` 直接返回操作结果。截图结果保留图片 Base64，并增加供工具渲染使用的持久 `attachment` 引用；模型内容只包含坐标元数据和一张图片，不包含编码字节。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
+`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 

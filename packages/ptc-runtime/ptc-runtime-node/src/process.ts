@@ -1,15 +1,22 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { inspect } from 'node:util'
 import type { Duplex } from 'node:stream'
-import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
-import { captureStreamWrites, LogBuffer, makeConsoleShim, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
-import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
+import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
+import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
+import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
 import { ImportEvaluationEndedError } from './imports/evaluation-ended.ts'
 import type { ProgramEvaluator, ProgramImportHandler, ProgramImportResult } from './evaluators/types.ts'
 import { PROGRAM_PROTOCOL_VERSION, type ProgramResult, type HostMethods, type ProgramMethods } from './protocol.ts'
+
+const capturedObjectCreate = Object.create
+const capturedObjectDefineProperty = Object.defineProperty
+const capturedObjectFreeze = Object.freeze
+const nativeConsole = globalThis.console
 
 /** Process-owned environment, output and directory control consumed by the child. */
 export interface ProgramProcess {
@@ -68,10 +75,40 @@ export async function runNodeMain(
       return value
     },
   }
+  const images = new WeakMap<object, string>()
+  class Image {
+    readonly [key: string]: PtcJsonValue
+    declare readonly attachmentId: string
+    declare readonly path: string
+    declare readonly width: number
+    declare readonly height: number
+    private constructor() { throw new Error('Images are created by image-producing tools') }
+    [inspect.custom](_depth: number | null, options: ImageInspectOptions): this {
+      collectImage(this, options)
+      return this
+    }
+  }
+  const decodeImage = (wire: PtcImageWire): PtcJsonValue => {
+    const image = capturedObjectCreate(Image.prototype) as Image
+    for (const key of ['attachmentId', 'path', 'width', 'height'] as const) {
+      const descriptor = capturedObjectCreate(null) as PropertyDescriptor
+      descriptor.enumerable = true
+      descriptor.value = wire[key]
+      capturedObjectDefineProperty(image, key, descriptor)
+    }
+    capturedObjectFreeze(image)
+    images.set(image, wire.id)
+    return image
+  }
+  const imageSink = (id: string): void => {
+    const evaluation = context.getStore()
+    if (evaluation && acceptsCalls(evaluation)) void connection.image(id)
+  }
   const logSink = { push(text: string): void {
     const evaluation = context.getStore()
     if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
   } }
+  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink)
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
@@ -118,9 +155,15 @@ export async function runNodeMain(
                 throw error
               }) : checkActive(result)
             })
-            evaluator.globals.console = makeConsoleShim(logSink)
             // Context access must not reserve a function-body parameter named process.
             Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
+            Object.defineProperty(evaluator.globals, 'inspect', {
+              configurable: true, enumerable: true, value: programInspect,
+            })
+            Object.defineProperty(evaluator.globals, 'Image', { configurable: true, enumerable: true, value: Image })
+            if (format !== 'function-body') Object.defineProperty(evaluator.globals, 'console', {
+              configurable: true, enumerable: true, writable: true, value: nativeConsole,
+            })
           }
           for (const namespace of data.namespaces) {
             const descriptor = namespace.errorClass
@@ -130,7 +173,7 @@ export async function runNodeMain(
             const constructor = makeBindingErrorClass(descriptor)
             errors.set(namespace.global, { name: descriptor.name, memberNameProperty: descriptor.memberNameProperty, constructor })
           }
-          const namespaces = makeNamespaces(data, host, errorLookup)
+          const namespaces = makeNamespaces(data, host, errorLookup, decodeImage)
           for (const [index, namespace] of data.namespaces.entries()) {
             Object.defineProperty(evaluator.globals, namespace.global, { configurable: true, enumerable: true, value: namespaces[index] })
             if (namespace.errorClass) {
@@ -159,7 +202,8 @@ export async function runNodeMain(
           if (!canContinue()) return
           programEvaluator.evaluate(data.code, (result) => {
             if (!canContinue()) return
-            evaluation.finish(result.ok ? prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
+            evaluation.finish(result.ok
+              ? data.discardCompletion ? {} : prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
               : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
           })
         } catch (error: unknown) {
@@ -174,7 +218,7 @@ export async function runNodeMain(
       evaluation.revoked = true
       void connection.$rejectPendingCalls(({ reject }) => { reject(new Error('PTC evaluation canceled')) })
     },
-  }, ['ready', 'log', 'outputLimit'], (_error, kind) => {
+  }, ['ready', 'log', 'image', 'outputLimit'], (_error, kind) => {
     if (current?.active || kind === 'protocol') processState.exitCode = 1
     if (current) current.active = false
     closed.resolve()
