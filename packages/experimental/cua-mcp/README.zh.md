@@ -54,7 +54,7 @@ command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP st
 
 ### 接入客户端
 
-`dsh --profile cua-mcp` 就是 stdio 命令。`--help` 打印它自己的帮助；`--print-client-config codex|claude-code|json` 为当前安装和 Harness home 打印可直接使用的配置：一段 `~/.codex/config.toml` 片段、一条 `claude mcp add-json dsh_cua` 命令，或一份通用 `mcpServers` 文档。三者都嵌入绝对可执行路径、`DSH_HOME` 与当前 `DSH_CUA_CONSENT`。Codex 片段把 `startup_timeout_sec = 120` 留给首次 helper 准备，用 `tool_timeout_sec = 600` 对齐默认程序上限，让两个工具直接暴露而不进入工具搜索，并把 `cua_run_code` 的输出预算提高到 25,000 token。Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。
+`dsh --profile cua-mcp` 就是 stdio 命令。`--help` 打印它自己的帮助；`--print-client-config codex|claude-code|json` 为当前安装和 Harness home 打印可直接使用的配置：一段 `~/.codex/config.toml` 片段、一条 `claude mcp add-json dsh_cua` 命令，或一份通用 `mcpServers` 文档。三者都嵌入绝对可执行路径、`DSH_HOME` 与当前 `DSH_CUA_CONSENT`。Codex 片段把 `startup_timeout_sec = 120` 留给首次 helper 准备，用 `tool_timeout_sec = 600` 对齐默认程序上限，让两个工具直接暴露而不进入工具搜索，并把 `cua_run_code` 的输出预算提高到 25,000 token。Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
 
 ```sh
 dsh --profile cua-mcp --print-client-config codex >> ~/.codex/config.toml
