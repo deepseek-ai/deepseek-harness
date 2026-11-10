@@ -75,3 +75,14 @@ export class StrictRenderError extends Error {
     super('strict send rejected: content would be degraded')
   }
 }
+
+/**
+ * A fetched resource outgrew the byte limit of the fetch that asked for it. Raised while the body is read, so the
+ * bytes past the limit are never buffered: the caller learns the outcome instead of the process holding the whole body.
+ */
+export class ResourceTooLargeError extends Error {
+  override name = 'ResourceTooLargeError'
+  constructor(readonly limit: number, readonly declared: number | undefined, message: string) {
+    super(message)
+  }
+}

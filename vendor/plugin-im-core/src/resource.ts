@@ -12,6 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Binary } from '@deepseek-ai/cosmokit'
 import { createHash } from 'node:crypto'
 import type { Adapter } from './bot.ts'
+import { ResourceTooLargeError } from './errors.ts'
 import type { Target } from './protocol.ts'
 
 export type ResourceKind = 'image' | 'audio' | 'video' | 'file'
@@ -343,11 +344,32 @@ function inlineResource(src: string): FetchedResource | undefined {
   return undefined
 }
 
-/** `PrepareContext.fetch` backed by `ctx.http` (http(s), `satori:` via the core fetch hook) and data:/base64: decoding. */
-export function createResourceFetcher(ctx: Context): PrepareContext['fetch'] {
+/** What one {@link createResourceFetcher} bounds. */
+export interface ResourceFetchPolicy {
+  /**
+   * Refuse a resource bigger than this many bytes, deciding from the declared `content-length` and again while the body
+   * is read. The inbound media of a message is downloaded by whoever wrote that message, so without a limit one chat
+   * member decides how much memory this process buffers.
+   */
+  maxBytes?: number
+}
+
+/**
+ * `PrepareContext.fetch` backed by `ctx.http` (http(s), `satori:` via the core fetch hook) and data:/base64: decoding.
+ * @param ctx - the context whose `http` service resolves the non-inline forms.
+ * @param policy - how much one resource may weigh; an over-limit one rejects with {@link ResourceTooLargeError}.
+ * @returns the fetch of one prepare pass.
+ */
+export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy = {}): PrepareContext['fetch'] {
   return async (src, signal) => {
     const inline = inlineResource(src)
-    if (inline) return inline
+    if (inline) {
+      if (policy.maxBytes !== undefined && inline.data.byteLength > policy.maxBytes) {
+        throw new ResourceTooLargeError(policy.maxBytes, inline.data.byteLength,
+          `resource "${preview(src)}" is ${inline.data.byteLength} bytes, over the ${policy.maxBytes}-byte limit`)
+      }
+      return inline
+    }
 
     const http = ctx.get('http')
     if (!http) throw new Error(`cannot fetch ${src}: the http service is not installed`)
@@ -356,9 +378,55 @@ export function createResourceFetcher(ctx: Context): PrepareContext['fetch'] {
     // own hook) and `file:` sources; `responseType` keeps the raw `Response` so the bytes and headers stay ours.
     const response = await http.get(src, { responseType: (raw: globalThis.Response) => raw, signal })
     return {
-      data: new Uint8Array(await response.arrayBuffer()),
+      data: await readBounded(response, policy.maxBytes, src),
       mime: mimeOf(response.headers.get('content-type')),
       name: nameOf(response.headers.get('content-disposition')),
     }
   }
+}
+
+/**
+ * Read one response body, refusing it as soon as it passes `maxBytes`: the declared length first, then every chunk, so
+ * an oversized body is abandoned instead of buffered. Without a limit the body is read in one call, as upstream does.
+ * @param response - the raw response the http service returned.
+ * @param maxBytes - the accepted size, or `undefined` for no limit.
+ * @param src - the resource URL, used in the refusal only through its preview.
+ * @returns the body bytes.
+ */
+async function readBounded(response: globalThis.Response, maxBytes: number | undefined, src: string): Promise<Uint8Array> {
+  if (maxBytes === undefined) return new Uint8Array(await response.arrayBuffer())
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body?.cancel()
+    throw new ResourceTooLargeError(maxBytes, declared,
+      `resource "${preview(src)}" declares ${declared} bytes, over the ${maxBytes}-byte limit`)
+  }
+  const reader = response.body?.getReader()
+  if (reader === undefined) return new Uint8Array(await response.arrayBuffer())
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    total += chunk.value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new ResourceTooLargeError(maxBytes, undefined,
+        `resource "${preview(src)}" is over the ${maxBytes}-byte limit`)
+    }
+    chunks.push(chunk.value)
+  }
+  const data = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    data.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return data
+}
+
+/** One src, shortened to fit a diagnostic (a data: URL can be megabytes long). */
+function preview(src: string): string {
+  const trimmed = src.trim()
+  return trimmed.length <= 120 ? trimmed : `${trimmed.slice(0, 120)}…`
 }

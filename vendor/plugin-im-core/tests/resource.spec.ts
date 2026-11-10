@@ -18,6 +18,7 @@ import {
   type ResourceCache,
   type ResourceKind,
   ResourceRef,
+  ResourceTooLargeError,
   resourceCacheKey,
   type ResolvedResource,
   type Target,
@@ -552,6 +553,40 @@ describe('createResourceFetcher', () => {
     const http = { async get() { throw failure } }
     const fetch = createResourceFetcher(fakeContext(http))
     await expect(fetch('https://example.com/a.png', new AbortController().signal)).rejects.toBe(failure)
+  })
+
+  it('refuses a body whose declared length is over the policy limit', async () => {
+    const { http } = fakeHttp(() => new Response(new Uint8Array(10), { headers: { 'content-length': '10' } }))
+    const fetch = createResourceFetcher(fakeContext(http), { maxBytes: 4 })
+    await expect(fetch('https://example.com/big.bin', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTooLargeError)
+  })
+
+  it('stops reading a body once it passes the policy limit', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(3))
+        controller.enqueue(new Uint8Array(3))
+        controller.close()
+      },
+    })
+    // No `content-length`, so the limit has to hold while reading: the second chunk takes it over.
+    const http = { async get(_src: string, config: any) { return await config.responseType(new Response(body)) } }
+    const fetch = createResourceFetcher(fakeContext(http), { maxBytes: 4 })
+    await expect(fetch('https://example.com/stream.bin', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTooLargeError)
+  })
+
+  it('keeps a body that fits the policy limit', async () => {
+    const { http } = fakeHttp(() => new Response(new Uint8Array([1, 2, 3])))
+    const fetch = createResourceFetcher(fakeContext(http), { maxBytes: 4 })
+    expect([...(await fetch('https://example.com/ok.bin', new AbortController().signal)).data]).toEqual([1, 2, 3])
+  })
+
+  it('refuses an inline resource over the policy limit', async () => {
+    const fetch = createResourceFetcher(fakeContext(undefined), { maxBytes: 1 })
+    await expect(fetch('data:text/plain,hello', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTooLargeError)
   })
 })
 

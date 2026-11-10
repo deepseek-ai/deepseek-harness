@@ -11,7 +11,7 @@
  * `im_read_file` materializes in the caller's own filesystem.
  */
 import type { Context } from '@deepseek-ai/cordis'
-import { createResourceFetcher, type Element, type PrepareContext } from '@deepseek-ai/cordis-plugin-im-core'
+import { createResourceFetcher, ResourceTooLargeError, type Element, type PrepareContext } from '@deepseek-ai/cordis-plugin-im-core'
 import { AttachmentId, type AttachmentStore, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { FileBlock, ImageBlock } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
@@ -328,6 +328,8 @@ export class ImMediaStore {
         : await this.storeFile(ref, fetched, attachments)
     } catch (error) {
       if (signal?.aborted) throw error
+      // A body over `media.maxBytes` is refused while it is read, which is the same outcome as the check above.
+      if (error instanceof ResourceTooLargeError) return { ref, skipped: 'too-large' }
       return { ref, skipped: error instanceof Error ? error.message : String(error) }
     }
   }
@@ -370,9 +372,12 @@ export class ImMediaStore {
     }
   }
 
-  /** Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms. */
+  /**
+   * Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms, refused past
+   * `media.maxBytes` while they are read.
+   */
   private fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
-    this.fetcher ??= createResourceFetcher(this.ctx)
+    this.fetcher ??= createResourceFetcher(this.ctx, { maxBytes: this.config.media.maxBytes })
     return this.fetcher(src, signal ?? new AbortController().signal)
   }
 }
