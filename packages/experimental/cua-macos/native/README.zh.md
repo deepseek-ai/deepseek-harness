@@ -119,6 +119,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 键盘修饰键名称是普通字符串。共享对象 API 原样传递名称；macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，未知名称返回 `INVALID_ARGUMENT`。它不解析组合键字符串。
 
+执行 `AXZoomWindow` 前，helper 读取目标窗口的大小。若 AppKit 返回 `kAXErrorAttributeUnsupported`（`-25205`），只有再次读取同一窗口并确认大小已改变时，helper 才报告成功。缩放动作只执行一次。
+
 读取树或枚举动作时，某个元素的动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。枚举时跳过无法确认可写性的属性。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
 
 `selectText` 要求新近元素快照和可写 AXSelectedTextRange。它匹配唯一的字面文本，可用紧邻的 prefix/suffix 缩小范围，然后选中文本或将光标放在前后。匹配和返回范围采用 UTF-16 偏移。歧义或缺失文本会失败，helper 不改写内容，并重新核实值和选区。AX 文本包含可用的可写性、禁用状态、选中状态和选区信息；AXAccess 持有元素 ID 和原生引用，AXTextFormatter 渲染已观察的值。

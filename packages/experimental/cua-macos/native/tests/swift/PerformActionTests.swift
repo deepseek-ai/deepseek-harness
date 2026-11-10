@@ -1,4 +1,4 @@
-// Attribute-setting dispatch accepts only complete Role.Attribute.Set names and direct JSON values.
+// Native and attribute-setting AX action dispatch.
 import ApplicationServices
 import CoreGraphics
 import Foundation
@@ -102,5 +102,36 @@ import Testing
         } catch let error as NativeFailure {
             #expect(error.code == "INVALID_ARGUMENT" || error.code == "UNSUPPORTED")
         } catch { Issue.record("Unexpected error: \(error)") }
+    }
+}
+
+@Test func zoomReconcilesOnlyAnObservedResizeAfterAttributeUnsupported() {
+    let small = CGSize(width: 600, height: 400)
+    let large = CGSize(width: 950, height: 400)
+    let cases: [(CGSize?, CGSize?, AXError, AXError)] = [
+        (small, large, .attributeUnsupported, .success),
+        (large, small, .attributeUnsupported, .success),
+        (small, small, .attributeUnsupported, .attributeUnsupported),
+        (nil, large, .attributeUnsupported, .attributeUnsupported),
+        (small, nil, .attributeUnsupported, .attributeUnsupported),
+        (.zero, large, .attributeUnsupported, .attributeUnsupported),
+        (small, .zero, .attributeUnsupported, .attributeUnsupported),
+        (small, large, .cannotComplete, .cannotComplete),
+        (small, large, .apiDisabled, .apiDisabled),
+        (nil, nil, .success, .success),
+    ]
+    for (before, after, reply, expected) in cases {
+        var calls = 0
+        var reads = 0
+        let result = AXAccess.performZoom(readSize: {
+            reads += 1
+            return calls == 0 ? before : after
+        }, dispatch: {
+            calls += 1
+            return reply
+        })
+        #expect(result == expected)
+        #expect(calls == 1)
+        #expect(reads == (reply == .attributeUnsupported && (before?.width ?? 0) > 0 ? 2 : 1))
     }
 }
