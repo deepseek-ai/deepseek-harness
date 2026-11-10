@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[检查器](../../../../scripts/verify-empty-catch.ts)通过 `pnpm run verify-empty-catch` 运行，使用 TypeScript 语法树解析第一方 JavaScript 和 TypeScript，并报告未命名、未说明原因或包裹多语句 `try` 的空子句；空子句指主体中除 `;` 外不含任何语句的子句。单独的 `_` 视为未命名；lint 要求未使用的绑定以 `_` 开头，因此 `_alreadyGone` 这类符合要求的名称可以说明预期的失败。主体含有其他语句的子句不属于此规则的范围，因为语法无法表明它是否处理了错误。检查器确认形式；审查依据 [dsh-error-handling](../../../skills/dsh-error-handling/SKILL.md#catch-recover-or-stop) 中的指引确认名称和原因属实。
+[检查器](../../../../scripts/verify-empty-catch.ts)通过 `pnpm run verify-empty-catch` 运行，使用 TypeScript 语法树解析第一方 JavaScript 和 TypeScript，并报告未命名、未说明原因或包裹多语句 `try` 的空子句；空子句指主体中除 `;` 外不含任何语句的子句。单独的 `_` 视为未命名；lint 要求未使用的绑定以 `_` 开头，因此 `_alreadyGone` 这类符合要求的名称可以说明预期的失败。主体含有其他语句的子句不属于此规则的范围，因为语法无法表明它是否处理了错误。检查器确认形式；审查依据 [dsh-error-handling](../../../skills/dsh-error-handling/SKILL.md#empty-catch-clauses) 中的指引确认名称和原因属实。
 
 现有子句使用精确基线记录，键由仓库相对路径、子句语法 token 连同其违反条件的 SHA-256 摘要及出现次数组成。摘要包含违反条件，因此把已记录的单语句 `try` 扩大为多语句 `try`，或删除已记录的原因，都会产生新的检查发现；而在 `try` 内部进行不改变其违反条件的修改，不改变子句的标识。基线沿用 [unknown 类型断言清单](2026-09-19-no-unknown-casts.zh.md)的做法，两个检查器共用[清单模块](../../../../scripts/baseline-inventory.ts)：基线修改只能删除条目或减少次数，`--prune` 删除已失效的条目并在存在新发现时拒绝写入，且没有任何命令可以添加放行。unknown 类型断言清单要求先解决断言，才能将其移至未登记的文件；与之不同，移动包含已记录子句的文件时，须在同一变更中重命名其基线键，因为收窄已记录的 `try` 由其所属模块负责，而不属于移动文件的变更。
 

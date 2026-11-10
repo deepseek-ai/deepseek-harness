@@ -173,8 +173,8 @@ describe('empty catch inventory', () => {
     const root = fixture()
     write(root, sourcePath, broken)
     const skillPath = '.agents/skills/dsh-error-handling/SKILL.md'
-    expect(() => verifyEmptyCatch(root)).toThrow(`(see ${skillPath}#catch-recover-or-stop)`)
-    expect(readFileSync(join(import.meta.dirname, '..', skillPath), 'utf8')).toMatch(/^## Catch, recover, or stop$/mu)
+    expect(() => verifyEmptyCatch(root)).toThrow(`(see ${skillPath}#empty-catch-clauses)`)
+    expect(readFileSync(join(import.meta.dirname, '..', skillPath), 'utf8')).toMatch(/^### Empty catch clauses$/mu)
   })
 
   it('requires pruning retired counts while preserving the remaining clause', () => {

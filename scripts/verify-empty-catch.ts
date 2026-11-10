@@ -169,7 +169,7 @@ const gate: InventoryGate<EmptyCatch> = {
   baselinePath: 'scripts/empty-catch.baseline.json',
   scan: scanEmptyCatches,
   rejection: 'an empty catch must name the discarded error, state why it needs no handling,'
-    + ' and keep its try to one statement (see .agents/skills/dsh-error-handling/SKILL.md#catch-recover-or-stop).',
+    + ' and keep its try to one statement (see .agents/skills/dsh-error-handling/SKILL.md#empty-catch-clauses).',
   describe: finding => `${finding.file}:${String(finding.line)} (${finding.defects.join(', ')})`,
   success: count => `verify-empty-catch: no new silent catches; ${String(count)} recorded clauses remain.`,
 }
