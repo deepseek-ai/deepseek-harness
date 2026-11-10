@@ -29,6 +29,7 @@ import { CHANGES_ID, changesAddress, changesDefinition, type ChangesSource } fro
 import {
   ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsInjected, type ChangeRequestsSectionInjected,
 } from './ChangeRequestsSection.tsx'
+import { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
 import { ChangesTabTitle } from './ChangesTabTitle.tsx'
@@ -385,6 +386,7 @@ function registerUi(ctx: Context): void {
       order: 100,
       label: () => t('tab.title'),
       locale: NS,
+      store: createChangeRequestsSectionStore(),
       inject: sectionFace,
     }, ChangeRequestsSection)
     yield ctx.slots.register({

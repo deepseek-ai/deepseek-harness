@@ -193,6 +193,17 @@ describe('JobsSection rows', () => {
     expect(screen.queryByText('settled work')).toBeNull()
   })
 
+  it('keeps the settled fold the user opened when the section mounts again for the same Session', () => {
+    const store = createJobsSectionStore().create()
+    const settled = job({ id: 'bash-2' as JobView['id'], label: 'settled work', status: 'completed', finishedAt: 1_700_000_012_000 })
+    const toggle = (): HTMLElement => screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })
+    const first = render(<JobsSection {...props([job(), settled], undefined, {}, undefined, undefined, store)} />)
+    fireEvent.click(toggle())
+    first.unmount()
+    render(<JobsSection {...props([job(), settled], undefined, {}, undefined, undefined, store)} />)
+    expect([toggle().getAttribute('aria-expanded'), screen.queryByText('settled work') !== null]).toEqual(['true', true])
+  })
+
   it('opens the settled tail by default when nothing is live', () => {
     render(<JobsSection {...props([
       job({ status: 'completed', finishedAt: 1_700_000_012_000 }),

@@ -307,9 +307,9 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
   const observedViews = useJobs(state => state.observed)
   const [expandedKey, setExpandedKey] = useState<string | undefined>(undefined)
   const [now, setNow] = useState(() => Date.now())
-  // Settled-section fold: an explicit user toggle wins; before one, the tail
-  // folds only while live work exists (a settled-only list opens expanded).
-  const [settledOpen, setSettledOpen] = useState<boolean | undefined>(undefined)
+  // Settled-section fold: the user's choice, kept per Session, wins; before one,
+  // the tail folds only while live work exists (a settled-only list opens expanded).
+  const settledOpen = useStore(state => state.settledOpen)
   // Rows the user cleared from the settled tail (client-side hide only; the
   // registry keeps its records and a later settlement reappears normally).
   const cleared = useStore(state => state.cleared)
@@ -424,7 +424,7 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
               type="button"
               className={css.sectionToggle}
               aria-expanded={settledExpanded}
-              onClick={() => { setSettledOpen(!settledExpanded) }}
+              onClick={() => { actions.settledOpened(!settledExpanded) }}
             >
               {t('section.settledCount', { count: settledRows.length })}
               <IconChevronDownOutlineRegular size={14} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />

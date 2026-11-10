@@ -1,12 +1,13 @@
 /** Session panel section listing the Session's change requests, and its title control. */
 
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
 import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCard.tsx'
+import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import type { NS } from './locales.ts'
 import type { PanelSnapshot } from './source.ts'
 import { defaultExpanded } from './status.ts'
@@ -54,6 +55,7 @@ export interface ChangeRequestsSectionInjected {
 export type ChangeRequestsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
   & InjectFace<ChangeRequestsSectionInjected>
+  & PropsStore<ReturnType<typeof createChangeRequestsSectionStore>>
   & PropsLocale<typeof NS>
 
 /** Business face of the section's title control. */
@@ -102,19 +104,20 @@ function SignIn({ state, copyText, t }: {
 /**
  * Render the Session's change request cards. The section shows only while the
  * Session binds at least one change request; the sign-in notice and a lost
- * stream show above the cards. The only open change request starts expanded;
- * once the user expands or collapses a card, that choice holds across updates.
+ * stream show above the cards. A card starts expanded when the Session binds
+ * exactly one change request; a card the user expands or collapses keeps that
+ * choice in the Session's store, across updates and while the panel is hidden.
  * Viewing changes closes the panel's overlay.
  * @param props - panel snapshot hooks, card actions, panel owner values, and copy.
  * @returns the cards, or null without bound change requests.
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, reconnect, refresh, remove, markReady, merge, readChecks,
-  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
-  const [chosen, setChosen] = useState<ReadonlySet<string> | null>(null)
+  const chosen = useStore(current => current.expanded)
   const state = snapshot.state
   if (state === null || state.changeRequests.length === 0) return null
   const actions: ChangeRequestActions = {
@@ -125,13 +128,9 @@ export function ChangeRequestsSection({
       dismissOverlay()
     },
   }
-  const expanded = chosen ?? defaultExpanded(state.changeRequests)
-  const toggle = (url: string): void => {
-    const next = new Set(expanded)
-    if (next.has(url)) next.delete(url)
-    else next.add(url)
-    setChosen(next)
-  }
+  const defaults = defaultExpanded(state.changeRequests)
+  const expanded = (url: string): boolean => chosen[url] ?? defaults.has(url)
+  const toggle = (url: string): void => { store.toggled(url, !expanded(url)) }
   const now = Date.now()
   return (
     <div className={css.cards} data-forge-panel="">
@@ -147,7 +146,7 @@ export function ChangeRequestsSection({
           <ChangeRequestCard
             key={entry.url}
             entry={entry}
-            expanded={expanded.has(entry.url)}
+            expanded={expanded(entry.url)}
             onToggle={() => { toggle(entry.url) }}
             now={now}
             actions={actions}

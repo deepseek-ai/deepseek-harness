@@ -19,6 +19,7 @@ import { CheckoutRow, LocalChangesRow, type CheckoutRowProps, type LocalChangesR
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
+import { createChangeRequestsSectionStore } from '../src/client/change-requests-store.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
 
 afterEach(cleanup)
@@ -30,8 +31,12 @@ function panelStore(state: ForgePanelState | null, disconnected = false) {
   return createSnapshotStore<PanelSnapshot>({ state, disconnected })
 }
 
-function section(state: ForgePanelState | null, options: { disconnected?: boolean } = {}) {
+/** One Session's section store, as the registration mints it. */
+type SectionStore = ReturnType<ReturnType<typeof createChangeRequestsSectionStore>['create']>
+
+function section(state: ForgePanelState | null, options: { disconnected?: boolean; store?: SectionStore } = {}) {
   const panel = panelStore(state, options.disconnected)
+  const store = options.store ?? createChangeRequestsSectionStore().create()
   const handlers = {
     reconnect: vi.fn<() => void>(),
     refresh: vi.fn<() => Promise<void>>(async () => {}),
@@ -49,13 +54,15 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     presentation: 'docked',
     usePanel: bindSnapshotSelector(panel),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
+    useStore: bindSnapshotSelector(store),
+    actions: store.actions,
     ...handlers,
     t,
   } as Pick<ChangeRequestsSectionProps,
-    'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'dismissOverlay' | 'reconnect' | 'refresh' | 'remove' | 'markReady'
-    | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 't'> as ChangeRequestsSectionProps
+    'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'reconnect' | 'refresh'
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
-  return { view, panel, ...handlers }
+  return { view, panel, store, ...handlers }
 }
 
 /** The expansion state of each rendered card, in list order. */
@@ -109,6 +116,23 @@ describe('ChangeRequestsSection', () => {
     expect(expansion(b.view)).toEqual([false, true])
     fireEvent.click(b.view.getByRole('button', { name: 'Collapse #2' }))
     expect(expansion(b.view)).toEqual([false, false])
+  })
+
+  it('keeps each card the user chose, while later cards follow the default and the panel is hidden and shown again', () => {
+    const one = section(ready({ changeRequests: [entry(1, snapshot(1))] }))
+    expect(expansion(one.view)).toEqual([true])
+    fireEvent.click(one.view.getByRole('button', { name: 'Collapse #1' }))
+    const two = ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2))] })
+    act(() => { one.panel.set({ state: two, disconnected: false }) })
+    fireEvent.click(one.view.getByRole('button', { name: 'Expand #2' }))
+    const three = ready({ changeRequests: [entry(1, snapshot(1)), entry(2, snapshot(2)), entry(3, snapshot(3))] })
+    act(() => { one.panel.set({ state: three, disconnected: false }) })
+    expect(expansion(one.view)).toEqual([false, true, false])
+    // Hiding the panel unmounts the section; the Session's store keeps the choices for the next mount.
+    one.view.unmount()
+    const again = section(two, { store: one.store })
+    expect(expansion(again.view)).toEqual([false, true])
+    expect(expansion(section(ready({ changeRequests: [entry(1, snapshot(1))] })).view)).toEqual([true])
   })
 
   it('wires the card menu, the changes row, and retry to the section actions', async () => {
