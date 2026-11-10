@@ -116,6 +116,7 @@ describe('product identifiers', () => {
     'packages/client/ui-entry-customization/tests/menu.client.spec.tsx',
     'packages/client/ui-workspace/tests/workspaces-service.client.spec.ts',
     'packages/extensions/cordis-host-runner/tests/inspect-registry.spec.ts',
+    'packages/experimental/cua/tests/agent-scopes.spec.ts',
     'scripts/gen-tool-catalog.ts',
     'snapshots/session/cordis-inspect-liveness/client-fixture.mjs',
     'snapshots/session/cordis-inspect-timeout/client-fixture.mjs',

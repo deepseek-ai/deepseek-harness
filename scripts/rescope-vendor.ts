@@ -106,6 +106,7 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'packages/experimental/creation-recommendations/src/index.ts', upstream: ['cordis'] },
   { file: 'packages/experimental/creation-recommendations/tests/creation.spec.ts', upstream: ['cordis'] },
   { file: 'packages/experimental/creation-recommendations/tests/loader-composition.spec.ts', upstream: ['cordis'] },
+  { file: 'packages/experimental/cua/tests/agent-scopes.spec.ts', upstream: ['cordis'] },
   // Preset selection, reminder policy and UI copy use the same product id.
   { file: 'apps/cli/tests/optional-bundle-transitions.e2e.ts', upstream: ['cordis'] },
   { file: 'apps/web/tests/agent-preset-selection.e2e.ts', upstream: ['cordis'] },
