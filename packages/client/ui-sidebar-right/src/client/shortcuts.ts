@@ -71,9 +71,8 @@ export function registerSidebarShortcuts(shortcuts: Pick<Shortcuts, 'register' |
         'web:windows': web, ...(kind === 'close' ? { 'web:macos': web } : {}) },
       regions: ['page', 'editable', 'terminal'], modals: kind === 'close' ? ['settings', 'shortcuts', 'platform', 'other'] : [],
       resolve: ({ target: element, source, modal }) => {
-        // The Desktop Platform page offers only a back action, so Close page closes the window as on a page.
-        if (kind === 'close' && modal === 'platform') return { status: 'handled', run: closeWindow }
-        if (kind === 'close' && modal !== null) {
+        // The Platform page layer registers no close action, so Close page acts as on a page and Desktop closes the window.
+        if (kind === 'close' && modal !== null && modal !== 'platform') {
           return { status: 'handled', run: () => { closeTopModal(document) } }
         }
         const target = sidebar.focusedTarget(element)

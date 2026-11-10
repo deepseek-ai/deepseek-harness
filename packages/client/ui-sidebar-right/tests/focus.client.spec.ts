@@ -12,6 +12,8 @@ import { createSidebarRightController } from '../src/client/service.ts'
 import { createSidebarRightStore } from '../src/client/stores.ts'
 import { SidebarRightTabRegistry } from '../src/client/tab-registry.ts'
 import { ShortcutRegistry } from '@deepseek-ai/dsh-client-shortcuts/src/client/registry.ts'
+import { installNativeKeyboard } from '@deepseek-ai/dsh-client-shortcuts/src/client/native.ts'
+import type { DesktopShortcutInput } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { registerSidebarShortcuts } from '../src/client/shortcuts.ts'
 import { en } from '../src/client/locales.ts'
@@ -614,11 +616,14 @@ describe('page close and refresh', () => {
     const closeWindow = vi.fn(), closeModal = vi.fn()
     releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
     render(createElement(Modal, { open: true, title: 'Settings', shortcutModal: 'settings', closeLabel: 'Close', onClose: closeModal }))
-    const context = { target: document.activeElement, region: 'page' as const, modal: 'platform' }
-    const gesture = { code: 'KeyW', meta: platform === 'macos', control: platform !== 'macos', alt: false,
-      shift: false, repeat: false, composing: false, defaultPrevented: false }
-    registry.dispatch(gesture, context, vi.fn())
-    registry.invoke('page.close' as ShortcutCommandId, context)
+    render(createElement('div', { role: 'dialog', 'aria-modal': 'true', 'data-shortcut-modal': 'platform' }))
+    let deliver: (input: DesktopShortcutInput) => void = () => {}
+    releases.push(installNativeKeyboard(window, { subscribe: (listener) => { deliver = listener; return () => {} }, closeWindow: vi.fn() },
+      registry, () => registry.config.getSnapshot()))
+    const revision = registry.config.getSnapshot().revision
+    deliver({ kind: 'keyboard', frameName: '', revision, code: 'KeyW', control: platform !== 'macos', alt: false, shift: false,
+      meta: platform === 'macos', repeat: false })
+    deliver({ kind: 'menu', commandId: 'page.close' as ShortcutCommandId, revision })
     expect(closeWindow).toHaveBeenCalledTimes(2)
     expect(closeModal).not.toHaveBeenCalled()
   })
