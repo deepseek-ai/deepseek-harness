@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -38,7 +38,18 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
+
+/** Whether a hovered anchor's tooltip shows before and at 500ms of hover. */
+function tooltipAfterHover(anchor: Element): { readonly early: boolean; readonly at500: boolean } {
+  vi.useFakeTimers()
+  fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
+  act(() => { vi.advanceTimersByTime(499) })
+  const early = screen.queryByRole('tooltip', { hidden: true }) !== null
+  act(() => { vi.advanceTimersByTime(1) })
+  return { early, at500: screen.queryByRole('tooltip', { hidden: true }) !== null }
+}
 
 describe('SessionPanelToggle', () => {
   function toggleProps(gutter: number | undefined, visibility: SessionPanelVisibility, toggle = vi.fn()) {
@@ -84,6 +95,12 @@ describe('SessionPanelToggle', () => {
     const { props, renderSlot } = toggleProps(NARROW, DOCKED)
     render(<SessionPanelToggle {...props} />)
     expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.indicator', { panelShown: false })
+  })
+
+  it('shows its tooltip after 500ms of hover', () => {
+    const { props } = toggleProps(WIDE, DOCKED)
+    render(<SessionPanelToggle {...props} />)
+    expect(tooltipAfterHover(screen.getByRole('button'))).toEqual({ early: false, at500: true })
   })
 
   it('is unavailable and says why while no Chat View shows the Session', () => {
@@ -347,6 +364,9 @@ describe('ProjectRow', () => {
     fireEvent.keyDown(document.body, { key: 'Tab' })
     fireEvent.focus(view.container.querySelector('[data-session-panel-project] [tabindex="0"]') as HTMLElement)
     expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('工作目录\n~/projects/app/.worktrees/fix')
+    fireEvent.blur(view.container.querySelector('[data-session-panel-project] [tabindex="0"]') as HTMLElement)
+    expect(tooltipAfterHover(view.container.querySelector('[data-session-panel-project] [tabindex="0"]') as HTMLElement))
+      .toEqual({ early: false, at500: true })
     expect(renderFactorySlot).toHaveBeenCalledWith('contextMenu.button', expect.objectContaining({
       target: { kind: 'directory', value: { sessionId: SID, path: '/Users/me/projects/app/.worktrees/fix' } },
       label: '工作目录操作',

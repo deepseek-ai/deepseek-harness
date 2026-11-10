@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-`@deepseek-ai/dsh-web-app` 套件默认加载本包。开关是会话标题栏的第一个工具按钮，位于变更请求、共享和计划任务目录之前。它是图标按钮：无障碍名称由面板名称和其角标组成，提示文字说明按下后是显示还是隐藏面板，`aria-expanded` 表示面板当前是否显示。
+`@deepseek-ai/dsh-web-app` 套件默认加载本包。开关是会话标题栏的第一个工具按钮，位于变更请求、共享和计划任务目录之前。它是图标按钮：无障碍名称由面板名称和其角标组成，提示文字说明按下后是显示还是隐藏面板（悬停 500ms 后显示，键盘聚焦时立即显示），`aria-expanded` 表示面板当前是否显示。
 
 ### 停靠与浮层
 
@@ -40,7 +40,7 @@ kind: "package-reference"
 
 一个分栏是 `conversation.session.panel.section` 列表里的一次注册：`id` 用于寻址，`order` 升序排列，必填的 `label` 是标题，面板按当前语言绘制。分栏组件通过 owner props 收到 `presentation`（`docked` 或 `overlay`）和 `dismissOverlay()`；它负责渲染正文，没有内容时什么都不渲染，标题随之隐藏。标题尾部的控件（例如计数或刷新按钮）注册到以分栏 `id` 为键的 keyed slot `conversation.session.panel.section.actions`。缺少 label 的分栏会报告到控制台，并且不显示。
 
-多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。拥有共享分栏的插件用同样方式声明自己的行 slot。
+多个插件共用一个标题时，把行注册到分栏拥有者的行 slot 中。内置「环境」分栏（`id: 'environment'`，`order: 0`）声明 `conversation.session.panel.environment.row`；其 `project` 行（`order: 0`）显示会话的工作目录：`workingDirectory` 投影记录的当前目录；投影尚未送达或没有记录时，依次取会话创建时所在的目录、列出本会话的工作区目录。该行先显示目录名，再以三级文字色显示父目录，放不下时以省略号截断；悬停 500ms 后出现的提示写明工作目录并给出完整路径。两处都把宿主家目录缩写为 `~`。右键该行或点其「更多」按钮会打开共享的 `directory` 上下文菜单。拥有共享分栏的插件用同样方式声明自己的行 slot。
 
 面板隐藏时也要可见的标记（例如需要处理的红点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。
 

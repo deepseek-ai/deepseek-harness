@@ -39,7 +39,7 @@ export function ProjectRow({
       menu={renderFactorySlot('contextMenu.button', { target, label: t('project.actions') })}
       data-session-panel-project=""
     >
-      <Tooltip label={`${t('project.label')}\n${shown}`} side="left">
+      <Tooltip label={`${t('project.label')}\n${shown}`} side="left" delayMs={500}>
         <span className={css.folder} tabIndex={0}>
           <span className={css.name}>{name}</span>
           {parent !== '' && <span className={css.parent}>{parent}</span>}

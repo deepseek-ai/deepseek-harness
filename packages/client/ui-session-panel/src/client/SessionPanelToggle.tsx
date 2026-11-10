@@ -24,7 +24,7 @@ export function SessionPanelToggle({
   const open = available && shown
   const label = available ? t(open ? 'toggle.hide' : 'toggle.show') : t('toggle.unavailable')
   return (
-    <Tooltip label={label} side="bottom">
+    <Tooltip label={label} side="bottom" delayMs={500}>
       <Button
         size="sm"
         id={toggleElementId(sessionId)}
