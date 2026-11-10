@@ -229,7 +229,7 @@ inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.conte
       description: 'Inspect independent image result budgets',
     })
     expect(result.isError).toBe(false)
-    expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length })] })
+    expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length }) + '\n'] })
     const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
     expect(dispatches).toHaveLength(3)
     for (const dispatch of dispatches) expect(cost(dispatch.content)).toBeLessThanOrEqual(CAP)
