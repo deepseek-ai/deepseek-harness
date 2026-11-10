@@ -485,7 +485,11 @@ describe('minimal image reading', () => {
     page = await openSession(pagedId)
     await page.getByText('Later image-history message 53', { exact: true }).waitFor()
     expect(await page.locator('[data-tool="read_image"]').count()).toBe(0)
-    await page.getByRole('button', { name: 'Load earlier', exact: true }).click()
+    // Scrolling the button into view can automatically consume the last page before activation.
+    await page.getByRole('button', { name: 'Load earlier', exact: true }).evaluate((button) => {
+      button.focus({ preventScroll: true })
+    })
+    await page.keyboard.press('Enter')
     card = await imageCard(page)
     await expect.poll(() => card.locator('img').first().evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
 
