@@ -1,0 +1,30 @@
+/* Single-line text that clips with an ellipsis at rest. While a marquee crawls
+   it, the ellipsis drops and both clipping edges fade in over 12px instead of
+   hard-cutting a character: the start once the text has moved off its start
+   (data-scrolled), the end while text still remains beyond the cell
+   (data-clipped). At the far edge the end fade lifts so the final character
+   reads at full strength. */
+.text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text[data-scrolled],
+.text[data-clipped] {
+  text-overflow: clip;
+}
+
+.text[data-scrolled] {
+  mask-image: linear-gradient(to right, transparent, #000 12px);
+}
+
+.text[data-clipped] {
+  mask-image: linear-gradient(to left, transparent, #000 12px);
+}
+
+.text[data-scrolled][data-clipped] {
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
