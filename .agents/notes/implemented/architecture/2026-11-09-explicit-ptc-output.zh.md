@@ -16,7 +16,7 @@ TypeScript `run_code` 程序通过顶层 `inspect(...values)` 选择文本、对
 
 Node 环境同时提供 `inspect` 和完整的原生 console。程序与导入的库均可使用原生 console 方法，其 stdout 和 stderr 写入共用捕获输出序列。模型指引要求程序通过 `inspect` 选择输出。
 
-`read_image` 和 CUA 截图绑定提供已存储的 `Image` 值。只读的 `attachmentId`、`path`、`width` 和 `height` 标识已存储图片及其在执行环境中可读取的文件。尺寸描述该文件的像素，也对应 CUA 坐标换算所用的图片。[CUA 对象 API](2026-09-17-experimental-cua-object-api.zh.md)直接返回程序 Image，并通过调用方的回调输出文本观察。
+`read_image` 和 CUA 截图绑定提供已存储的 `Image` 值。只读的 `attachmentId`、`path`、`width` 和 `height` 标识已存储图片及其在执行环境中可读取的文件。尺寸描述该文件的像素，也对应 CUA 坐标换算所用的图片。[CUA 对象 API](2026-09-17-experimental-cua-object-api.zh.md)将截图的 `Image` 和观察文本直接返回给程序。程序将选中的值传给 `inspect` 展示。
 
 宿主将附件引用与程序可读取的路径一起传递。运行时传输图片元数据，并用进程拥有的图片 ID 保存对应的附件引用。展示时，该 ID 直接解析为已登记的引用。图片身份由运行时建立，仅有相同对象属性不能取得图片输出权限。保留在程序中的 Image 跟随其所属进程的生命周期。
 
