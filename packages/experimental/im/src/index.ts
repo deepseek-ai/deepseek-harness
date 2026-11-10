@@ -108,9 +108,24 @@ export class ImService extends Service implements ImApi {
 
   async* [Service.init](): AsyncGenerator<() => Promise<void>, void> {
     const ctx = this.home
-    await this.store.start()
-    await this.sessions.start()
-    await this.sender.start()
+    try {
+      await this.store.start()
+      await this.sessions.start()
+      await this.sender.start()
+    } catch (error) {
+      // A load that fails halfway releases what it already opened: the domain facility keeps a handle until its owner
+      // closes it, so a crashed load used to leave `im_messages` open and make every later reload fail with
+      // `already-open im_messages` even once the real problem was fixed. Reverse order, and a secondary failure is
+      // reported rather than masking the first one.
+      for (const started of [this.sender, this.sessions, this.store]) {
+        try {
+          await started.dispose()
+        } catch (failure: unknown) {
+          ctx.logger.warn('IM shutdown after a failed load did not finish: %s', String(failure))
+        }
+      }
+      throw error
+    }
     yield async () => {
       clearInterval(this.timer)
       await this.intake.dispose()

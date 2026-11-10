@@ -15,6 +15,9 @@ import {
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
 import { ImService } from '../src/index.ts'
+import { imSessionsDomain } from '../src/sessions.ts'
+import { imDomain } from '../src/state.ts'
+import { ImStore } from '../src/store.ts'
 import { boot, cleanRoots, COMPOSITION, type SessionsHarness } from './support/sessions-harness.ts'
 
 /** The chat every facade test admits. */
@@ -246,5 +249,28 @@ describe('ImService facade', () => {
     expect(base.ctx.im).toBeDefined()
     await base.ctx.fiber.dispose()
     expect(base.ctx.get('im')).toBeUndefined()
+  })
+
+  it('releases the message domain when a later store cannot open', async () => {
+    const base = await boot({ withoutStart: true, config: { sources: SOURCES } })
+    const ctx = base.ctx
+    await ctx.plugin(Satori)
+    await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    ctx.provide('attachments', { saveImages: async () => [] } as never)
+    // Occupy `im_sessions`: the host opens `im_messages` first and fails on this one.
+    const taken = await ctx.storageDomain.open(imSessionsDomain)
+    const released = vi.spyOn(ImStore.prototype, 'dispose')
+
+    try {
+      await ctx.plugin(ImService, Config({ sources: SOURCES }))
+    } catch {
+      // A refused load is the scenario; what it leaves behind is what this test pins.
+    }
+    await vi.waitFor(() => { expect(released).toHaveBeenCalled() })
+
+    // The failed load holds no domain, so the same profile can mount again once the real problem is fixed.
+    await expect(ctx.storageDomain.open(imDomain)).resolves.toBeDefined()
+    await taken.close()
+    released.mockRestore()
   })
 })
