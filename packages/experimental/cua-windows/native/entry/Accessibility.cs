@@ -16,7 +16,7 @@ internal static class Accessibility
         AutomationElement.ControlTypeProperty, AutomationElement.NameProperty, AutomationElement.HelpTextProperty,
         AutomationElement.AutomationIdProperty, AutomationElement.IsEnabledProperty,
         AutomationElement.HasKeyboardFocusProperty, AutomationElement.IsPasswordProperty,
-        AutomationElement.BoundingRectangleProperty, AutomationElement.IsTextPatternAvailableProperty,
+        AutomationElement.BoundingRectangleProperty,
         ValuePattern.ValueProperty, ValuePattern.IsReadOnlyProperty,
         RangeValuePattern.ValueProperty, RangeValuePattern.IsReadOnlyProperty, SelectionItemPattern.IsSelectedProperty,
         TogglePattern.ToggleStateProperty, ExpandCollapsePattern.ExpandCollapseStateProperty,
@@ -88,7 +88,7 @@ internal static class Accessibility
             if (retained)
             {
                 int? index = null;
-                if (node.Enabled != false && (node.Actions.Length != 0 || node.ValueWritable == "true" || node.SelectionWritable == true))
+                if (node.Enabled != false && (node.Patterns.Length != 0 || node.ValueWritable == "true" || node.SelectionWritable == true))
                 {
                     index = nextIndex++;
                     elements.Add(index.Value, new(element, window));
@@ -122,7 +122,7 @@ internal static class Accessibility
     private static AccessibilityNode Read(AutomationElement element, WindowState window, WindowGeometry geometry, RequestContext context)
     {
         var type = Property(element, AutomationElement.ControlTypeProperty) as ControlType;
-        var actions = PatternActions.Names(pattern => Flag(element, pattern.Available));
+        var patterns = PatternActions.Patterns.Where(pattern => Flag(element, pattern.Available)).ToArray();
         var password = Flag(element, AutomationElement.IsPasswordProperty);
         string? value = null;
         var hasValue = false;
@@ -177,7 +177,7 @@ internal static class Accessibility
             Enabled = Property(element, AutomationElement.IsEnabledProperty) as bool?, Focused = Property(element, AutomationElement.HasKeyboardFocusProperty) as bool?,
             Selected = Property(element, SelectionItemPattern.IsSelectedProperty) as bool?, Expanded = expanded,
             HasSelection = hasSelection, Selection = selection, SelectedText = selectedText, SelectionWritable = selectionWritable,
-            Actions = actions, Bounds = bounds,
+            Patterns = patterns.Select(pattern => pattern.Name).ToArray(), Bounds = bounds,
         };
     }
 

@@ -6,7 +6,10 @@ using DeepSeek.Cua.Protocol;
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record PatternAction(string Name, Func<JsonElement?, Action<BasePattern>> Bind);
-internal sealed record PatternOperations(AutomationPattern Pattern, AutomationProperty Available, PatternAction[] Actions);
+internal sealed record PatternOperations(AutomationPattern Pattern, AutomationProperty Available, PatternAction[] Actions)
+{
+    internal string Name => Pattern.ProgrammaticName[..^"PatternIdentifiers.Pattern".Length];
+}
 
 internal static class PatternActions
 {
@@ -74,6 +77,13 @@ internal static class PatternActions
                 (pattern, inputType) => pattern.StartListening(inputType)),
             NoArgument<SynchronizedInputPattern>(nameof(SynchronizedInputPattern.Cancel), pattern => pattern.Cancel()),
         ]),
+        new(SelectionPattern.Pattern, AutomationElement.IsSelectionPatternAvailableProperty, []),
+        new(GridPattern.Pattern, AutomationElement.IsGridPatternAvailableProperty, []),
+        new(GridItemPattern.Pattern, AutomationElement.IsGridItemPatternAvailableProperty, []),
+        new(TablePattern.Pattern, AutomationElement.IsTablePatternAvailableProperty, []),
+        new(TableItemPattern.Pattern, AutomationElement.IsTableItemPatternAvailableProperty, []),
+        new(TextPattern.Pattern, AutomationElement.IsTextPatternAvailableProperty, []),
+        new(ItemContainerPattern.Pattern, AutomationElement.IsItemContainerPatternAvailableProperty, []),
     ];
 
     internal static string[] Names(Func<PatternOperations, bool> supported) => Patterns
@@ -85,7 +95,7 @@ internal static class PatternActions
         foreach (var pattern in Patterns)
             foreach (var action in pattern.Actions)
                 if (action.Name == name) return (pattern.Pattern, action.Bind(argument));
-        throw new NativeFailure("UNSUPPORTED", "Use an exact Pattern.Action name from a fresh observation or listActions");
+        throw new NativeFailure("UNSUPPORTED", "Use an exact Pattern.Action name from listActions");
     }
 
     private static PatternAction NoArgument<T>(string method, Action<T> invoke) where T : BasePattern =>

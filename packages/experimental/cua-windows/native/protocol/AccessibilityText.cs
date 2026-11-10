@@ -23,7 +23,7 @@ public sealed record AccessibilityNode
     public bool HasSelection { get; init; }
     public TextMatch? Selection { get; init; }
     public string? SelectedText { get; init; }
-    public string[] Actions { get; init; } = [];
+    public string[] Patterns { get; init; } = [];
     public (double X, double Y, double Width, double Height)? Bounds { get; init; }
 }
 
@@ -32,7 +32,7 @@ public static class AccessibilityText
     private static string Quote(string value) => JsonSerializer.Serialize(value, WireJson.Options);
 
     public static bool Retain(AccessibilityNode node) => node.ControlType is not ("Group" or "Other")
-        || node.Name.Length != 0 || !string.IsNullOrEmpty(node.Help) || node.HasValue || node.Actions.Length != 0
+        || node.Name.Length != 0 || !string.IsNullOrEmpty(node.Help) || node.HasValue || node.Patterns.Length != 0
         || node.Enabled == false || node.Focused == true || node.Selected.HasValue || node.Expanded.HasValue;
 
     public static string Format(AccessibilityNode node, int? index, bool details)
@@ -58,7 +58,7 @@ public static class AccessibilityText
             else text.Append(" selection=unavailable");
             if (node.SelectedText is { Length: > 0 } selectedText) text.Append(" selectedText=").Append(Quote(selectedText));
         }
-        if (node.Actions.Length != 0) text.Append(" actions=[").Append(string.Join(", ", node.Actions.Select(Quote))).Append(']');
+        if (node.Patterns.Length != 0) text.Append(" patterns=[").Append(string.Join(", ", node.Patterns.Select(Quote))).Append(']');
         if (details)
         {
             if (node.Identifier is { Length: > 0 } identifier) text.Append(" id=").Append(Quote(identifier));
