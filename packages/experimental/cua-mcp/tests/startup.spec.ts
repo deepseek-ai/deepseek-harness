@@ -70,7 +70,7 @@ async function boot(args: string[], config: Partial<frontend.Config> = {}) {
   ctx.provide('profileContext', {
     name: 'cua-mcp', dir: '/profiles/cua-mcp', patchPath: '/profiles/cua-mcp/cordis.patch.yml',
     installAnchor: '/dsh/package.json', cwd: '/workspace', home: '/home/me/.dsh',
-    startedBundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-cua-mcp'], overlays: [], telemetryDisabledEnv: undefined,
+    startedBundles: ['@deepseek-ai/dsh-cua-mcp'], overlays: [], telemetryDisabledEnv: undefined,
   })
   await ctx.plugin(frontend, frontend.Config(config))
   return { ctx, exit, stdout, stderr, stdin, ready: () => {

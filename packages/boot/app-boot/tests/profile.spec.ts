@@ -17,7 +17,9 @@ import {
   createRuntimeResolution,
   getDshRuntimeVersion,
   initProfile,
+  bundleProfileName,
   loadProfile,
+  shippedProfileTemplate,
   loadProfileDirectory,
   PROFILE_COMPATIBILITY_FILENAME,
   PROFILE_PATCH_FILENAME,
@@ -31,7 +33,7 @@ import {
   type Profile,
   type RuntimeResolution,
 } from '../src/index.ts'
-import { PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
+import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '@deepseek-ai/dsh-official-bundles'
 import { installRuntimeInterception } from '../src/profile-resolution/resolver.ts'
 
 const tempRoots: string[] = []
@@ -47,7 +49,7 @@ const tmp = (): string => {
 
 /** Stage a fake installed app: package.json with deps and a node_modules holding bundles. */
 function stageInstallation(
-  bundles: Record<string, { patch?: string; deps?: Record<string, string>; platforms?: string[] }>,
+  bundles: Record<string, { patch?: string; deps?: Record<string, string>; platforms?: string[]; profile?: unknown }>,
   appName = 'dsh-app',
 ): string {
   const root = tmp()
@@ -64,7 +66,11 @@ function stageInstallation(
       type: 'module',
       main: './index.js',
       dependencies: spec.deps ?? {},
-      ...spec.patch === undefined ? {} : { dsh: { bundle: { patch: './cordis.patch.yml', ...spec.platforms === undefined ? {} : { platforms: spec.platforms } } } },
+      ...spec.patch === undefined ? {} : { dsh: { bundle: {
+        patch: './cordis.patch.yml',
+        ...spec.platforms === undefined ? {} : { platforms: spec.platforms },
+        ...spec.profile === undefined ? {} : { profile: spec.profile },
+      } } },
     }))
     writeFileSync(join(dir, 'index.js'), `export const packageName = ${JSON.stringify(name)}\n`)
     if (spec.patch !== undefined) writeFileSync(join(dir, 'cordis.patch.yml'), spec.patch)
@@ -362,6 +368,28 @@ describe('loadProfile', () => {
     loadProfile('t', 'web', anchor, home)
     expect(readProfileManifest('t', resolveProfileDir('web', home)).dsh?.profile?.bundles)
       .toEqual([...PROFILE_TEMPLATES.web?.bundles ?? []])
+  })
+
+  it('initializes a profile that one shipped optional bundle declares, and only that one', () => {
+    const [shipped, other] = OPTIONAL_BUNDLES
+    const anchor = stageInstallation({
+      [shipped!]: { patch: '- insert: []\n', profile: 'standalone' },
+      [other!]: {},
+      'not-shipped': { patch: '- insert: []\n', profile: 'unlisted' },
+    })
+    const home = tmp()
+    const profileDir = (profile: string) => resolveProfileDir(profile, home)
+    expect(shippedProfileTemplate('t', 'standalone', anchor, profileDir('standalone'))).toEqual([shipped])
+    expect(shippedProfileTemplate('t', 'unlisted', anchor, profileDir('unlisted'))).toBeUndefined()
+    expect(shippedProfileTemplate('t', 'web', anchor, profileDir('web'))).toEqual(PROFILE_TEMPLATES.web?.bundles)
+    loadProfile('t', 'standalone', anchor, home)
+    expect(readProfileManifest('t', resolveProfileDir('standalone', home)).dsh?.profile?.bundles).toEqual([shipped])
+    expect(() => loadProfile('t', 'unlisted', anchor, home)).toThrow('profile "unlisted" does not exist')
+    const duplicated = stageInstallation({ [shipped!]: { patch: '- insert: []\n', profile: 'dup' }, [other!]: { patch: '- insert: []\n', profile: 'dup' } })
+    expect(() => shippedProfileTemplate('t', 'dup', duplicated, profileDir('dup'))).toThrow('declared by several shipped bundles')
+    const invalid = stageInstallation({ [shipped!]: { patch: '- insert: []\n', profile: 7 } })
+    expect(() => shippedProfileTemplate('t', 'anything', invalid, profileDir('anything'))).toThrow('dsh.bundle.profile must be a nonempty profile name')
+    expect(bundleProfileName({ patch: './cordis.patch.yml' })).toBeUndefined()
   })
 
   it('normalizes only the exact installation-owned headless bundle tuple', () => {

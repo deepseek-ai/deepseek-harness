@@ -6,14 +6,13 @@ const launch: ClientLaunch = {
   command: '/opt/node/bin/node',
   args: ['/opt/dsh/lib/bin.js', '--profile', 'cua-mcp'],
   env: { DSH_HOME: "/Users/o'neil/.dsh", DSH_CUA_CONSENT: 'elicit' },
-  setup: 'dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp',
 }
 
 describe('client configuration', () => {
-  it('renders a Codex TOML fragment with the launch command, limits, and the setup command as a comment', () => {
+  it('renders a Codex TOML fragment with the launch command and limits', () => {
     const toml = renderClientConfig('codex', launch)
     expect(toml).toMatchInlineSnapshot(`
-      "# ~/.codex/config.toml — run once first: dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp
+      "# ~/.codex/config.toml — the first start initializes the profile and prepares the Computer Use helper
       [mcp_servers.dsh_cua]
       command = "/opt/node/bin/node"
       args = ["/opt/dsh/lib/bin.js", "--profile", "cua-mcp"]
@@ -32,10 +31,10 @@ describe('client configuration', () => {
 
   it('renders a shell-safe claude mcp add-json command with the stdio entry', () => {
     const command = renderClientConfig('claude-code', launch)
-    const [comment, line] = command.trimEnd().split('\n')
-    expect(comment).toBe('# run once first: dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp')
-    const match = /^claude mcp add-json dsh_cua '(.*)'$/.exec(line ?? '')
-    if (match === null) throw new Error(`unexpected command line: ${String(line)}`)
+    const lines = command.trimEnd().split('\n')
+    expect(lines).toHaveLength(1)
+    const match = /^claude mcp add-json dsh_cua '(.*)'$/.exec(lines[0] ?? '')
+    if (match === null) throw new Error(`unexpected command line: ${String(lines[0])}`)
     // The single-quoted shell argument closes, escapes, and reopens around the apostrophe in the home path.
     const shellValue = match[1]!.replaceAll(String.raw`'\''`, "'")
     expect(JSON.parse(shellValue)).toEqual({
@@ -60,7 +59,6 @@ describe('launch resolution', () => {
       .toEqual({
         command: '/opt/node', args: ['--import', 'tsx/esm', '/repo/apps/cli/src/bin.ts', '--profile', 'cua-mcp'],
         env: { DSH_HOME: '/home/me/.dsh', DSH_CUA_CONSENT: 'allow' },
-        setup: 'dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp',
       })
   })
 

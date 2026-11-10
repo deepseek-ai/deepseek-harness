@@ -1,4 +1,4 @@
-# ~/.codex/config.toml — run once first: dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp
+# ~/.codex/config.toml — the first start initializes the profile and prepares the Computer Use helper
 [mcp_servers.dsh_cua]
 command = "{{node}}"
 args = ["{{bin}}", "--profile", "cua-mcp"]

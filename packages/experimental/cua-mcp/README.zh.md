@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-这个实验性组合包把一个 `dsh` profile 变成 Computer Use 的 MCP stdio 服务器。每个 DSH 安装都自带它且默认关闭；一条命令即可为 `cua-mcp` profile 选中它，随后 `dsh --profile cua-mcp` 向一个 MCP 客户端提供 `cua_run_code` 与 `cua_reset`。一个连接拥有一个 Agent，其程序在多次调用之间于内存中保留应用与窗口对象。应用与指针访问的授权可无人值守放行，或作为 elicitation 转发给客户端。该 profile 不运行模型回合；模型归接入的 harness 所有。
+这个实验性组合包独立组成 `cua-mcp` profile，即 Computer Use 的 MCP stdio 服务器。每个 DSH 安装都自带它；首次 `dsh --profile cua-mcp` 初始化组合包声明的 profile，并向一个 MCP 客户端提供 `cua_run_code` 与 `cua_reset`。该 profile 只由本组合包构成：不加载任何模型适配器、提示侧工具或遥测行。一个连接拥有一个 Agent，其程序在多次调用之间于内存中保留应用与窗口对象。应用与指针访问的授权可无人值守放行，或作为 elicitation 转发给客户端；模型归接入的 harness 所有。
 
 ## 目录
 
@@ -26,30 +26,14 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-### 安装到 profile
+### 启动服务器
 
-组合包是 `dsh` 安装的运行时依赖，因此选中它既不需要 pnpm 也不需要网络：
-
-```sh
-dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp
-dsh plugin --profile cua-mcp disable @deepseek-ai/dsh-cua-mcp
-```
-
-`enable` 在 profile 缺失时从 `@deepseek-ai/dsh-base` 初始化它，并把本组合包追加到 `dsh.profile.bundles`；`disable` 移除该选择。源码 checkout 在 `pnpm run build` 之后通过 `pnpm dsh` 运行同样的命令。Python runtime wheel 自带同一份安装，训练 harness 可以自行写入 profile manifest，或通过 wheel 的可执行程序运行 `enable`，然后把该可执行程序用作 stdio 命令：
+组合包是 `dsh` 安装的运行时依赖，并通过 `dsh.bundle.profile` 声明 `cua-mcp` profile，因此首次 `dsh --profile cua-mcp` 就用这一个组合包层初始化 `$DSH_HOME/profiles/cua-mcp`；不涉及 pnpm、网络或任何 `dsh plugin` 步骤。源码 checkout 在 `pnpm run build` 之后通过 `pnpm dsh` 运行同样的命令。Python runtime wheel 自带同一份安装，训练 harness 直接把它的可执行程序用作 stdio 命令：
 
 ```python
-import json, os
-from pathlib import Path
 from deepseek_harness_runtime import resolve_bundled_launch_args
 
-home = Path(os.environ["DSH_HOME"])
-profile = home / "profiles" / "cua-mcp"
-profile.mkdir(parents=True, exist_ok=True)
-(profile / "package.json").write_text(json.dumps({
-    "name": "dsh-profile-cua-mcp", "private": True, "dependencies": {},
-    "dsh": {"profile": {"bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-cua-mcp"]}},
-}))
-command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command
+command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command; the first start initializes the profile
 ```
 
 ### 接入客户端
@@ -92,7 +76,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[patch](cordis.patch.yml) 禁用 `dsh-base` 的标题、HMR、凭据、授权和账号行，插入带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 是启动必需条目，前端无法激活时 profile 停止启动。
+[patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。`dsh.bundle.profile` 声明 `cua-mcp` profile，app-boot 在首次启动时用这一个组合包初始化它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 是启动必需条目，前端无法激活时 profile 停止启动。
 
 [`server.ts`](src/server.ts) 在一个 `McpServer` 上注册两个工具。连接的 Agent 挂载注册表的默认 preset 并记录启动目录。`cua_run_code` 带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 调用 `ctx.cuaPrograms.reset`。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者；[`client-config.ts`](src/client-config.ts) 渲染客户端片段。
 
@@ -136,6 +120,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。
 - 不暴露程序沙箱提权和原始 `cua` 工具；`DSH_PERMISSION_MODE` 选择程序进程启动时的文件沙箱。
 - 根工具调用不是 Session 事件；接入 harness 的 transcript 才是调用与结果的记录。
+- patch 显式列出该 profile 的依赖闭包；CUA 或 PTC 包新增服务注入时，必需启动条目会大声失败，直到 patch 补上该行。
 
 <a id="dev-note"></a>
 ### 开发备注

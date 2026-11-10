@@ -1,5 +1,5 @@
 /** Explicit CLI exemptions use the profile lock and never become pnpm arguments. */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -175,57 +175,4 @@ it('applies version approvals to the existing Desktop profile without replacing 
   expect(existsSync(join(dir, 'package.json.lock'))).toBe(false)
   expect(runPluginCommand).not.toHaveBeenCalled()
   expect(runProfilePnpm).not.toHaveBeenCalled()
-})
-
-/** An installed package the profile can select: a bundle, or a plain dependency without a patch. */
-function installPackage(dir: string, name: string, manifest: Record<string, unknown>): void {
-  const packageDir = join(dir, 'node_modules', ...name.split('/'))
-  mkdirSync(packageDir, { recursive: true })
-  writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ name, version: '1.0.0', ...manifest }))
-  writeFileSync(join(packageDir, 'cordis.patch.yml'), '[]\n')
-}
-
-function bundlesOf(dir: string): string[] {
-  return (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }).dsh.profile.bundles
-}
-
-it('enables and disables an installed bundle by editing the manifest without pnpm', async () => {
-  const { dir, stdout } = fixture()
-  initProfile(dir, PROFILE_TEMPLATES.web!.bundles)
-  installPackage(dir, '@example/bundle', { dsh: { bundle: { patch: './cordis.patch.yml' } } })
-  expect(await runPlugin('test', ['enable', '@example/bundle'])).toBe(0)
-  expect(bundlesOf(dir)).toEqual([...PROFILE_TEMPLATES.web!.bundles, '@example/bundle'])
-  expect(stdout).toHaveBeenLastCalledWith('dsh: enabled @example/bundle in profile test; restart the profile to apply\n')
-  expect(await runPlugin('test', ['enable', '@example/bundle'])).toBe(0)
-  expect(stdout).toHaveBeenLastCalledWith('dsh: profile test already has @example/bundle enabled\n')
-  expect(await runPlugin('test', ['disable', '@example/bundle'])).toBe(0)
-  expect(bundlesOf(dir)).toEqual(PROFILE_TEMPLATES.web!.bundles)
-  expect(runPluginCommand).not.toHaveBeenCalled()
-})
-
-it('initializes a missing profile from the default bundles before enabling', async () => {
-  const { dir } = fixture()
-  mkdirSync(join(dir, 'node_modules'), { recursive: true })
-  installPackage(dir, '@example/bundle', { dsh: { bundle: { patch: './cordis.patch.yml' } } })
-  expect(await runPlugin('test', ['enable', '@example/bundle'])).toBe(0)
-  expect(bundlesOf(dir)).toEqual(['@deepseek-ai/dsh-base', '@example/bundle'])
-})
-
-it.each([
-  { args: ['enable'], message: 'usage: dsh plugin enable <bundle...>' },
-  { args: ['enable', '@example/absent'], message: "@example/absent is not installed: run 'dsh plugin --profile test add @example/absent'" },
-  { args: ['enable', '@example/plain'], message: '@example/plain declares no dsh.bundle' },
-  { args: ['enable', '@example/elsewhere'], message: `Bundle supports Host platforms ${process.platform === 'aix' ? 'sunos' : 'aix'}` },
-  { args: ['enable', '@example/old'], message: 'is incompatible with dsh' },
-  { args: ['disable', '@deepseek-ai/dsh-base'], message: 'bundle of the test profile template and cannot be disabled' },
-])('refuses $args without changing the selection', async ({ args, message }) => {
-  const { dir, stderr } = fixture()
-  initProfile(dir, PROFILE_TEMPLATES.web!.bundles)
-  installPackage(dir, '@example/plain', {})
-  installPackage(dir, '@example/elsewhere', { dsh: { bundle: { patch: './cordis.patch.yml', platforms: [process.platform === 'aix' ? 'sunos' : 'aix'] } } })
-  installPackage(dir, '@example/old', { dsh: { bundle: { patch: './cordis.patch.yml' } }, engines: { dsh: '^0.0.1' } })
-  expect(await runPlugin('test', args)).toBe(1)
-  expect(stderr.mock.calls.map(call => call[0]).join('')).toContain(message)
-  expect(bundlesOf(dir)).toEqual(PROFILE_TEMPLATES.web!.bundles)
-  expect(runPluginCommand).not.toHaveBeenCalled()
 })

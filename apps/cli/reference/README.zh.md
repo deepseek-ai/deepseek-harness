@@ -84,8 +84,6 @@ dsh --profile web --patch ./extra.yml --dump-config
 
 `dsh plugin --profile <name> <args...>` 在 profile 缺失时先初始化它（有随附模板的用模板，其他名称只装 `@deepseek-ai/dsh-base`），然后以 profile 目录为工作目录，把 `<args...>` 转发给 `pnpm`：`add`、`remove`、`why`、`update` 及其他所有 pnpm 子命令都照常可用；pnpm 必须在 PATH 上。相对路径 spec（`.`、`../plugin` 及其 `file:`/`link:` 形式）会先锚定到调用目录，因此在插件 checkout 中执行 `add .` 安装的是该 checkout，而不是 profile。每次成功运行后，系统都会根据当前安装状态更新 `dsh.profile.bundles`：如果某项依赖解析到的包在 manifest 中声明了 `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`，该依赖就会加入配置层栈；如果某项依赖在 `update` 后获得该声明，也会随即激活。没有组合包声明的依赖仍作为普通依赖保留，并显示一次性警告；已移除的依赖则从配置层栈中删除。
 
-`dsh plugin --profile <name> enable <bundle...>` 与 `disable <bundle...>` 只修改 `dsh.profile.bundles`，不运行 pnpm。`enable` 在平台声明和版本兼容性检查通过后，选择安装自带的组合包（例如[可选组合包](../../../packages/util/official-bundles/README.zh.md)）或 profile 已安装的组合包；`disable` 取消选择。两者都拒绝 profile 随附模板中的组合包，会先初始化缺失的 profile 并打印变更；正在运行的 profile 在重启后应用。
-
 `dsh plugin` 只在被转发的参数之前读取 `--profile`；被转发的参数从它无法识别的第一个 token 开始，因此 `--profile <name>` 必须写在最前面。被转发的参数以 pnpm 命令开头时，该命令之后的所有内容都会原样交给 pnpm，包括 `-h` 和 `--help`。被转发的参数以 `--filter <selector>` 或 `-r` 等 pnpm 选项开头时，后面的 `-h` 或 `--help` 仍会打印转发器的帮助而不是 pnpm 的帮助，因此要查看 pnpm 的帮助，需把 pnpm 命令写在它们之前。在任何被转发的参数之前出现的 `-h` 或 `--help` 会打印转发器自身的帮助并以 0 退出。
 
 Codex 与 Claude Code subagent 提供方是两个彼此独立的可选组合包。可以只添加一个包、在同一命令中添加两个包，或独立移除任一包：

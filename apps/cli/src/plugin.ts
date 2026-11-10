@@ -1,11 +1,8 @@
-/** Profile package management, manifest-only bundle selection, and explicit, exact-version compatibility approvals. */
-import { bundleManifest, runPluginCommand, runProfilePnpm, setProfileVersionExemption, type PackageOperationOptions } from '@deepseek-ai/dsh-plugin-manager/operations'
+/** Profile package management and explicit, exact-version compatibility approvals. */
+import { runPluginCommand, runProfilePnpm, setProfileVersionExemption, type PackageOperationOptions } from '@deepseek-ai/dsh-plugin-manager/operations'
 import { INSTALL_ANCHOR } from './profile-boot.ts'
-import {
-  assertBundlePlatform, evaluatePluginCompatibility, initProfile, pluginCompatibilityWarning, readProfileCompatibility,
-  readProfileManifest, readProfileVersionExemptions, resolveProfileDir, writeProfileBundles, type ProfileContext,
-} from '@deepseek-ai/dsh-app-boot'
-import { PROFILE_TEMPLATES, DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { initProfile, readProfileCompatibility, resolveProfileDir, shippedProfileTemplate, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
@@ -48,7 +45,7 @@ async function versionCommand(profile: string, args: readonly string[]): Promise
     if (profile !== 'desktop') await mkdir(dir, { recursive: true })
     await withFileLock(join(dir, 'package.json'), async () => {
       if (profile === 'desktop') requireDesktopProfile(dir)
-      else if (!existsSync(join(dir, 'package.json'))) initProfile(dir, PROFILE_TEMPLATES[profile]?.bundles ?? DEFAULT_PROFILE_BUNDLES)
+      else if (!existsSync(join(dir, 'package.json'))) initProfile(dir, shippedProfileTemplate('dsh', profile, INSTALL_ANCHOR, dir) ?? DEFAULT_PROFILE_BUNDLES)
       if (request === undefined) {
         const { exemptions, warnings } = readProfileCompatibility(dir)
         for (const warning of warnings) process.stderr.write(`dsh: warning: ${warning}\n`)
@@ -65,62 +62,9 @@ async function versionCommand(profile: string, args: readonly string[]): Promise
   }
 }
 
-/**
- * Select or deselect installed bundles by editing `dsh.profile.bundles` alone, the way the Plugins page switch does;
- * pnpm never runs. `enable` admits a bundle the installation ships or the profile installed after its platform and
- * version checks pass; `disable` removes a selection. Bundles of the profile's shipped template are refused.
- */
-async function selectionCommand(profile: string, args: readonly string[]): Promise<number | undefined> {
-  const [command, ...names] = args
-  if (command !== 'enable' && command !== 'disable') return undefined
-  try {
-    if (names.length === 0 || names.some(name => name.startsWith('-'))) throw new Error(`usage: dsh plugin ${command} <bundle...>`)
-    const template = PROFILE_TEMPLATES[profile]?.bundles ?? DEFAULT_PROFILE_BUNDLES
-    const dir = resolveProfileDir(profile)
-    if (profile !== 'desktop') await mkdir(dir, { recursive: true })
-    await withFileLock(join(dir, 'package.json'), () => {
-      if (profile === 'desktop') requireDesktopProfile(dir)
-      else if (!existsSync(join(dir, 'package.json'))) initProfile(dir, template)
-      const manifest = readProfileManifest('dsh', dir)
-      const previous = manifest.dsh?.profile?.bundles ?? []
-      const bundles = [...previous]
-      for (const name of names) {
-        if (template.includes(name)) throw new Error(`${name} is a bundle of the ${profile} profile template and cannot be ${command}d`)
-        if (command === 'disable') {
-          const index = bundles.indexOf(name)
-          if (index >= 0) bundles.splice(index, 1)
-          continue
-        }
-        let metadata: ReturnType<typeof bundleManifest>
-        try {
-          metadata = bundleManifest(name, dir, INSTALL_ANCHOR)
-        } catch (error) {
-          throw new Error(`${name} is not installed: run 'dsh plugin --profile ${profile} add ${name}', or enable a bundle this installation ships`, { cause: error })
-        }
-        if (metadata === undefined) throw new Error(`${name} declares no dsh.bundle; only bundles can be enabled`)
-        assertBundlePlatform(metadata.dsh?.bundle?.platforms, process.platform)
-        const issue = evaluatePluginCompatibility(metadata, readProfileVersionExemptions(dir))
-        if (issue !== undefined && !issue.exempted) throw new Error(pluginCompatibilityWarning(issue))
-        if (!bundles.includes(name)) bundles.push(name)
-      }
-      if (JSON.stringify(bundles) === JSON.stringify(previous)) {
-        process.stdout.write(`dsh: profile ${profile} already has ${names.join(', ')} ${command}d\n`)
-        return Promise.resolve()
-      }
-      writeProfileBundles(dir, manifest, bundles)
-      process.stdout.write(`dsh: ${command}d ${names.join(', ')} in profile ${profile}; restart the profile to apply\n`)
-      return Promise.resolve()
-    }, { waitMs: 120000 })
-    return 0
-  } catch (error) {
-    process.stderr.write(`dsh: ${String(error)}\n`)
-    return 1
-  }
-}
-
 /** Run package management for a profile.
  * @param profile Profile name; Desktop's reserved profile must already be initialized by the application.
- * @param args DSH exemption or bundle selection command, or pnpm arguments relative to the invoking directory.
+ * @param args DSH exemption command or pnpm arguments relative to the invoking directory.
  * @param packageManager Installation-owned executable and environment for pnpm operations.
  * @returns Zero on success; nonzero on invalid approval or package-manager failure.
  */
@@ -133,8 +77,6 @@ export async function runPlugin(profile: string, args: readonly string[], packag
   }
   const versionResult = await versionCommand(profile, args)
   if (versionResult !== undefined) return versionResult
-  const selectionResult = await selectionCommand(profile, args)
-  if (selectionResult !== undefined) return selectionResult
   const dir = resolveProfileDir(profile)
   if (existsSync(join(dir, 'package.json'))) {
     for (const warning of readProfileCompatibility(dir).warnings) process.stderr.write(`dsh: warning: ${warning}\n`)

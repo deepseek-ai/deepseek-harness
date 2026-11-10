@@ -75,6 +75,11 @@ export interface DshBundleManifest {
   patch: string | string[]
   /** Show the bundle in GUI lists before the profile enables or installs it; omission means true. */
   listedByDefault?: boolean
+  /**
+   * Name of the standalone profile this bundle alone composes. `dsh --profile <name>` initializes a missing profile of
+   * that name with this single bundle layer when the installation ships the bundle; omission declares no profile.
+   */
+  profile?: string
 }
 
 /** The bundle composition declared by a profile directory. */

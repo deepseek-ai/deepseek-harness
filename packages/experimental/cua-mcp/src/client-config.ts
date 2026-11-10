@@ -19,8 +19,6 @@ export interface ClientLaunch {
   readonly args: readonly string[]
   /** Environment the client passes to the process. */
   readonly env: Readonly<Record<string, string>>
-  /** Shell command that installs the profile once; rendered as a comment where the format allows one. */
-  readonly setup: string
 }
 
 /** The process facts a generated client configuration embeds. */
@@ -37,7 +35,7 @@ export interface LaunchFacts {
  * @param facts - Current process executable, Node options, and arguments.
  * @param profile - Launched profile.
  * @param consent - Consent mode the generated environment pins.
- * @returns Absolute command, arguments, environment, and the one-time profile setup command.
+ * @returns Absolute command, arguments, and environment.
  * @throws Error when a script-launched process has no script argument.
  */
 export function clientLaunch(facts: LaunchFacts, profile: Pick<ProfileContext, 'name' | 'home'>, consent: ConsentMode): ClientLaunch {
@@ -48,7 +46,6 @@ export function clientLaunch(facts: LaunchFacts, profile: Pick<ProfileContext, '
     command: facts.execPath,
     args: facts.sea ? selection : [...facts.execArgv, script as string, ...selection],
     env: { DSH_HOME: profile.home, DSH_CUA_CONSENT: consent },
-    setup: `dsh plugin --profile ${profile.name} enable @deepseek-ai/dsh-cua-mcp`,
   }
 }
 
@@ -84,7 +81,7 @@ export function renderClientConfig(target: ClientConfigTarget, launch: ClientLau
   switch (target) {
     case 'codex':
       return [
-        `# ~/.codex/config.toml — run once first: ${launch.setup}`,
+        '# ~/.codex/config.toml — the first start initializes the profile and prepares the Computer Use helper',
         `[mcp_servers.${MCP_SERVER_NAME}]`,
         `command = ${tomlString(launch.command)}`,
         `args = [${launch.args.map(tomlString).join(', ')}]`,
@@ -102,7 +99,6 @@ export function renderClientConfig(target: ClientConfigTarget, launch: ClientLau
     case 'claude-code': {
       const json = JSON.stringify({ ...entry, timeout: TOOL_TIMEOUT_SECONDS * 1000, alwaysLoad: true })
       return [
-        `# run once first: ${launch.setup}`,
         `claude mcp add-json ${MCP_SERVER_NAME} '${json.replaceAll("'", String.raw`'\''`)}'`,
         '',
       ].join('\n')

@@ -10,6 +10,7 @@ import { loadOverlayPatches } from '../packages/boot/app-boot/src/index.ts'
 import { readPluginMeta } from '../packages/boot/app-boot/src/package-meta.ts'
 import { bundlePatchPaths, composeEntries, initProfile, readProfileManifest } from '../packages/boot/app-boot/src/profile.ts'
 import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '../packages/util/official-bundles/src/bundles.ts'
+import { HIDDEN_BUNDLES } from '../packages/util/official-bundles/src/plugin-manager.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { createPluginProfile } from '../apps/desktop/src/project-manager.ts'
 
@@ -105,7 +106,22 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
-  it.each(OPTIONAL_BUNDLES)('%s composes over the Web profile without a skipped patch', (name) => {
+  // A bundle that declares its own profile composes alone; the plugin page never layers it over a GUI profile.
+  const standalone = OPTIONAL_BUNDLES.filter(name => bundles.get(name)?.manifest.dsh?.bundle?.profile !== undefined)
+  const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))
+
+  it.each(standalone)('%s composes its declared profile alone over the empty root and stays off the plugin page', (name) => {
+    const { patches } = bundle(name)
+    const warnings: string[] = []
+    const composed = composeEntries([patches], message => warnings.push(message))
+    expect(warnings).toEqual([])
+    const topLevelIds = composed.flatMap(entry => typeof entry.id === 'string' ? [entry.id] : [])
+    expect(topLevelIds.length).toBeGreaterThan(0)
+    expect(topLevelIds).toHaveLength(new Set(topLevelIds).size)
+    expect(HIDDEN_BUNDLES).toContain(name)
+  })
+
+  it.each(layered)('%s composes over the Web profile without a skipped patch', (name) => {
     const { patches } = bundle(name)
     const warnings: string[] = []
     const composed = composeEntries([...shipped, patches], message => warnings.push(message))

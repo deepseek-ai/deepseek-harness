@@ -73,8 +73,7 @@ profile directory
 
 Arguments:
   args              pnpm arguments, forwarded verbatim (add <pkg>, remove <pkg>,
-                    why <pkg>, ...), or enable|disable <bundle> to select an
-                    installed bundle without pnpm
+                    why <pkg>, ...)
 
 Options:
   --profile <name>  the profile whose plugins to manage (initialized on first

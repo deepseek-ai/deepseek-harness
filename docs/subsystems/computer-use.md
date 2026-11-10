@@ -21,7 +21,7 @@ The [shared object API](../../packages/experimental/cua/README.md) uses `connect
 
 ## Serve Computer Use to another harness
 
-[Computer use MCP server](../../packages/experimental/cua-mcp/README.md) is a shipped optional bundle for the `cua-mcp` profile. `dsh --profile cua-mcp` serves `cua_run_code` and `cua_reset` to one MCP client such as Codex or Claude Code; each connection owns one Agent whose programs retain application and window objects, and consent is granted unattended or forwarded to the client as an elicitation. `dsh --profile cua-mcp --print-client-config codex|claude-code|json` prints the client configuration. The profile runs no model turn and records no root tool calls in its Session.
+[Computer use MCP server](../../packages/experimental/cua-mcp/README.md) is a shipped optional bundle that composes the standalone `cua-mcp` profile; the first `dsh --profile cua-mcp` initializes it. `dsh --profile cua-mcp` serves `cua_run_code` and `cua_reset` to one MCP client such as Codex or Claude Code; each connection owns one Agent whose programs retain application and window objects, and consent is granted unattended or forwarded to the client as an elicitation. `dsh --profile cua-mcp --print-client-config codex|claude-code|json` prints the client configuration. The profile runs no model turn and records no root tool calls in its Session.
 
 ## Choose a provider
 

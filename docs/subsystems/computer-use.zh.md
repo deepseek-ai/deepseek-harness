@@ -21,7 +21,7 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 
 ## 向其他 harness 提供 Computer Use
 
-[Computer Use MCP 服务器](../../packages/experimental/cua-mcp/README.zh.md)是随安装提供的可选组合包，服务于 `cua-mcp` profile。`dsh --profile cua-mcp` 向一个 MCP 客户端（如 Codex 或 Claude Code）提供 `cua_run_code` 和 `cua_reset`；每个连接拥有一个 Agent，其程序保留应用与窗口对象，授权可无人值守放行或作为 elicitation 转发给客户端。`dsh --profile cua-mcp --print-client-config codex|claude-code|json` 打印客户端配置。该 profile 不运行模型回合，其 Session 中不记录根工具调用。
+[Computer Use MCP 服务器](../../packages/experimental/cua-mcp/README.zh.md)是随安装提供的可选组合包，独立组成 `cua-mcp` profile；首次 `dsh --profile cua-mcp` 即初始化该 profile。`dsh --profile cua-mcp` 向一个 MCP 客户端（如 Codex 或 Claude Code）提供 `cua_run_code` 和 `cua_reset`；每个连接拥有一个 Agent，其程序保留应用与窗口对象，授权可无人值守放行或作为 elicitation 转发给客户端。`dsh --profile cua-mcp --print-client-config codex|claude-code|json` 打印客户端配置。该 profile 不运行模型回合，其 Session 中不记录根工具调用。
 
 ## 选择提供方
 

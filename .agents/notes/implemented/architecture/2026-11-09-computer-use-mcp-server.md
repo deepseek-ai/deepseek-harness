@@ -10,7 +10,7 @@ Computer Use training data should come from several agent harnesses, not only fr
 
 ## Decision
 
-`@deepseek-ai/dsh-cua-mcp` is an experimental bundle in `OPTIONAL_BUNDLES`: a profile frontend over `dsh-base` selected with `dsh plugin --profile cua-mcp enable @deepseek-ai/dsh-cua-mcp` and started with `dsh --profile cua-mcp`. It is the only MCP application path; no package bin or SDK escape exists, and a shipped profile template waits for CUA promotion because templates cannot name experimental packages.
+`@deepseek-ai/dsh-cua-mcp` is an experimental bundle in `OPTIONAL_BUNDLES` that composes the standalone `cua-mcp` profile from one insert over the empty root and declares that profile through `dsh.bundle.profile`, so the first `dsh --profile cua-mcp` initializes the profile from this single bundle. It is the only MCP application path; no package bin or SDK escape exists, and the bundle stays out of `PROFILE_TEMPLATES` because templates cannot name experimental packages.
 
 The server runs inside the profile process and calls `ctx.tools.execute` with the connection's Agent and no model step. One stdio connection owns one Agent: creation after client initialization, disposal at stdin EOF. Agent ownership already selects the retained program process, native connection, and session-scoped grants, so connection lifetime and state lifetime coincide. The empty default preset `cua-mcp` gives that Agent `cua_run_code` and nothing else, because the provider registers program tools only for composed presets.
 
@@ -18,7 +18,7 @@ Two tools form the surface. `cua_run_code` forwards `code`, an optional `descrip
 
 Consent has two modes. `DSH_CUA_CONSENT=allow` answers every approval question of the connection's Agent with its approving label for the session. The default `elicit` forwards each question to the client as a form elicitation whose enum is the question's labels. No Session event is added: the training side consumes MCP tool results, and the connected harness's transcript records calls; DSH retains nested `tool/ptc-dispatch` events for diagnosis.
 
-`dsh plugin enable|disable` selects installed bundles by editing `dsh.profile.bundles` without pnpm, the same operation as the Plugins page switch, so the Python runtime wheel and offline training Hosts need no registry access. `--print-client-config codex|claude-code|json` renders the client entry for the exact installation.
+The composition lists its dependency closure, twenty-five rows, instead of layering on `dsh-base`: no model adapter, prompt-side tool, telemetry, or session-management row loads, and a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row. Initialization needs no `dsh plugin` step, so the Python runtime wheel and offline training Hosts need no registry access. `--print-client-config codex|claude-code|json` renders the client entry for the exact installation.
 
 ## Alternatives considered
 
@@ -31,6 +31,10 @@ Consent has two modes. `DSH_CUA_CONSENT=allow` answers every approval question o
 **Session events for root MCP calls.** The data consumers need only MCP results; a `tool/call` without a model step would invent a step the Session never ran.
 
 **Exposing the raw `cua` tool or program sandbox escalation.** Raw operations need per-method schemas the external model would relearn, and escalation needs an approval answerer the profile does not have.
+
+**A profile frontend layered on `dsh-base` with model rows disabled.** The composed profile carried about a hundred rows without a consumer: model adapters, web tools, subagents, compaction, telemetry, and session management. The explicit closure is a quarter of that and fails loud on drift.
+
+**A `dsh plugin enable|disable` subcommand that selects the shipped bundle.** It duplicated the plugin manager's manifest-only selection inside the launcher and still produced a base-backed profile; a bundle-declared profile needs no step.
 
 ## Consequences
 

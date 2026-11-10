@@ -1,4 +1,4 @@
-/** The shipped cua-mcp bundle: enabled through the real CLI, serving Computer Use programs over stdio to an MCP client. */
+/** The shipped cua-mcp bundle: the real CLI initializes its declared profile and serves Computer Use programs over stdio. */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
@@ -26,7 +26,7 @@ function textOf(block: CallResult['content'][number] | undefined): string {
 }
 
 describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
-  it('enables the shipped bundle, prints client configuration, serves programs over stdio, and exits on EOF', async () => {
+  it('initializes the declared profile on first start, prints client configuration, serves programs over stdio, and exits on EOF', async () => {
     const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-mcp-profile-'))
     const home = join(temporary, 'home')
     const workspace = join(temporary, 'workspace')
@@ -41,13 +41,10 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     await execFileAsync(process.execPath, ['-e', 'require("node:fs").mkdirSync(process.argv[1], { recursive: true })', workspace])
     const options = { cwd: workspace, env, timeout: 120_000, maxBuffer: 4_000_000 }
 
-    // One command selects the installation-owned bundle without pnpm or network access.
-    const enabled = await execFileAsync(process.execPath, [bin, 'plugin', '--profile', 'cua-mcp', 'enable', '@deepseek-ai/dsh-cua-mcp'], options)
-    expect(enabled.stdout).toBe('dsh: enabled @deepseek-ai/dsh-cua-mcp in profile cua-mcp; restart the profile to apply\n')
-    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
-    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-cua-mcp'])
-
+    // The first start initializes the profile the shipped bundle declares, without pnpm or network access.
     const printed = await execFileAsync(process.execPath, [bin, '--profile', 'cua-mcp', '--print-client-config', 'codex'], options)
+    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
+    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-cua-mcp'])
     const normalized = printed.stdout
       .split(JSON.stringify(process.execPath).slice(1, -1)).join('{{node}}')
       .split(JSON.stringify(bin).slice(1, -1)).join('{{bin}}')
@@ -67,7 +64,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
 
     const first = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
       code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
-        + 'await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })',
+        + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })',
     } }) as CallResult
     expect(first.isError).toBeUndefined()
     expect(first.content.map(block => block.type)).toEqual(['text', 'text', 'text', 'image'])

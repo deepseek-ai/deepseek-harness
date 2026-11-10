@@ -28,7 +28,7 @@ import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import type { DshBundleManifest, DshPackageManifest } from '@deepseek-ai/dsh-package-manifest'
-import { INSTALLATION_OWNED_PROFILE_TUPLES, PROFILE_TEMPLATES, RETIRED_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { INSTALLATION_OWNED_PROFILE_TUPLES, OPTIONAL_BUNDLES, PROFILE_TEMPLATES, RETIRED_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { assertBundlePlatform } from './bundle-platform.ts'
 import { evaluatePluginCompatibility, pluginCompatibilityWarning } from './plugin-compatibility.ts'
 import { readProfileVersionExemptions } from './profile-compatibility.ts'
@@ -57,6 +57,46 @@ export function bundlePatchFiles(bundle: DshBundleManifest): string[] {
     throw new Error('dsh.bundle.patch must be a file path or a list of file paths')
   }
   return declared
+}
+
+/**
+ * Validate a bundle's standalone profile declaration.
+ * @param bundle - the bundle's `dsh.bundle` declaration, as read from package.json.
+ * @returns the profile name this bundle alone composes, or undefined when it declares none.
+ * @throws {Error} when `profile` is present but not a nonempty string.
+ */
+export function bundleProfileName(bundle: DshBundleManifest): string | undefined {
+  if (bundle.profile === undefined) return undefined
+  if (typeof bundle.profile !== 'string' || bundle.profile === '') throw new Error('dsh.bundle.profile must be a nonempty profile name')
+  return bundle.profile
+}
+
+/**
+ * The bundle layers a missing profile initializes with: the shipped template of that name, otherwise the one
+ * installation-shipped optional bundle whose `dsh.bundle.profile` names it. A profile a bundle declares is opened
+ * only by name, so it stays out of the default product.
+ * @param binName - the diagnostic prefix on thrown errors.
+ * @param name - the profile name.
+ * @param installAnchor - absolute path of the owning dsh app's package.json.
+ * @param profileDir - the profile directory being initialized; a bundle the installation lacks may resolve there.
+ * @returns the ordered bundle list, or undefined when nothing shipped declares a profile of that name.
+ * @throws {Error} when a shipped optional bundle cannot be resolved, several declare the same profile name, or a
+ * declaration is invalid.
+ */
+export function shippedProfileTemplate(
+  binName: string, name: string, installAnchor: string, profileDir: string,
+): readonly string[] | undefined {
+  const template = PROFILE_TEMPLATES[name]
+  if (template !== undefined) return template.bundles
+  const declaring = OPTIONAL_BUNDLES.filter((packageName) => {
+    const bundle = readProfileManifest(binName, resolveBundleDir(binName, packageName, installAnchor, profileDir)).dsh?.bundle
+    return bundle !== undefined && bundleProfileName(bundle) === name
+  })
+  if (declaring.length > 1) {
+    throw new Error(`${binName}: profile ${JSON.stringify(name)} is declared by several shipped bundles: ${declaring.join(', ')}`)
+  }
+  const [single] = declaring
+  return single === undefined ? undefined : [single]
 }
 
 /**
@@ -731,13 +771,13 @@ export function loadProfile(
 ): Profile {
   const dir = resolveProfileDir(name, home)
   if (!existsSync(join(dir, 'package.json'))) {
-    const template = PROFILE_TEMPLATES[name]
-    if (template === undefined) {
+    const bundles = shippedProfileTemplate(binName, name, installAnchor, dir)
+    if (bundles === undefined) {
       throw new Error(
         `${binName}: profile ${JSON.stringify(name)} does not exist; create it with 'dsh plugin --profile ${name} add <package>'`,
       )
     }
-    initProfile(dir, template.bundles)
+    initProfile(dir, bundles)
   }
   removeLinkProjections(dir)
   normalizeShippedProfile(name, dir, readProfileManifest(binName, dir))
