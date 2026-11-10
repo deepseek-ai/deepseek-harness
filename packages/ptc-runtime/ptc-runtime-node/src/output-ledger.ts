@@ -2,6 +2,12 @@
 import type { PtcOutput, PtcJsonValue, PtcRunFailure, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 
+/** Measure a text entry or an image descriptor against the remaining JSON-byte budget. */
+function entryBytes(entry: PtcOutput, available: number): number | undefined {
+  return entry.type === 'text' ? jsonStringBytesUpTo(entry.text, available)
+    : jsonValueBytesUpTo({ ...entry, attachment: { ...entry.attachment } }, available)
+}
+
 /** One run's combined outer-output ledger; binding values never enter it. */
 export class OutputLedger {
   private bytes = 2 // JSON serialization of the empty output array: []
@@ -13,8 +19,7 @@ export class OutputLedger {
   admit(entry: PtcOutput, sink: PtcOutput[]): boolean {
     const separatorBytes = this.entries > 0 ? 1 : 0
     const remaining = this.maxBytes - this.bytes - separatorBytes
-    const bytes = entry.type === 'text' ? jsonStringBytesUpTo(entry.text, remaining)
-      : jsonValueBytesUpTo({ ...entry, attachment: { ...entry.attachment } }, remaining)
+    const bytes = entryBytes(entry, remaining)
     if (bytes === undefined) return false
     this.bytes += bytes + separatorBytes
     this.entries += 1
@@ -45,8 +50,7 @@ export class OutputLedger {
     for (const entry of output) {
       const separatorBytes = retained.length > 0 ? 1 : 0
       const availableBytes = logBudget - retainedBytes - separatorBytes
-      const bytes = entry.type === 'text' ? jsonStringBytesUpTo(entry.text, availableBytes)
-        : jsonValueBytesUpTo({ ...entry, attachment: { ...entry.attachment } }, availableBytes)
+      const bytes = entryBytes(entry, availableBytes)
       if (bytes !== undefined) {
         retained.push(entry)
         retainedBytes += bytes + separatorBytes
