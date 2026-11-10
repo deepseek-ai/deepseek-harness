@@ -1,6 +1,7 @@
-/* Review controls of the changes toolbar. The lens draws the segmented track and raised indicator of the shared
-   segmented control at the toolbar's 28px control height and 12px text, with each segment's file count after its label. */
-.lens {
+/* Review controls of the changes toolbar. The segmented radio group of the lens and the thread list's filter draws the
+   track and raised indicator of the shared segmented control at the toolbar's 28px control height and 12px text, with
+   each segment's count after its label. */
+.segmented {
   box-sizing: border-box;
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
@@ -121,27 +122,41 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 4px;
   color: var(--dsw-alias-label-secondary);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.bar {
-  position: relative;
-  width: 64px;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--dsw-alias-border-l3);
+.progressForm {
+  display: inline-flex;
+  align-items: center;
 }
 
-.fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  corner-shape: round;
-  background: var(--dsw-alias-state-success-primary);
+/* A narrow toolbar shows this form in place of the label. */
+.progressForm[data-forge-progress='compact'] {
+  display: none;
+}
+
+/* The ring starts at twelve o’clock and fills clockwise with the viewed share. */
+.ring {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+}
+
+.ringTrack,
+.ringFill {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.ringTrack {
+  stroke: var(--dsw-alias-border-l3);
+}
+
+.ringFill {
+  stroke: var(--dsw-alias-state-success-primary);
 }

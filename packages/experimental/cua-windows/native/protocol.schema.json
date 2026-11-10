@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Generated from the shared CUA operation schema. Do not edit.",
   "title": "dsh-cua native request",
-  "description": "Host resource fields and private continuations are not model tool parameters. App handles and snapshots belong to one helper; coordinates use window-local native units.",
+  "description": "The Host resolves resource limits before dispatch. Private continuations are available only to the Host. App handles and snapshots belong to one helper; coordinates use window-local native units.",
   "oneOf": [
     {
       "type": "object",
@@ -168,7 +168,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
@@ -233,7 +234,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "includeMenus": {
               "description": "Expand menu contents; omitted or false shows menu-bar entries only.",
@@ -287,7 +289,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -332,7 +335,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -419,7 +423,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -466,7 +471,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -493,7 +499,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -546,7 +553,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -612,7 +620,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -702,7 +711,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -785,7 +795,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -849,7 +860,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "text": {
               "type": "string"
@@ -887,7 +899,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "text": {
               "type": "string"
@@ -956,7 +969,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "key": {
               "type": "string",
@@ -1001,7 +1015,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "key": {
               "type": "string",
@@ -1048,7 +1063,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -1109,7 +1125,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "mouseButton": {
               "type": "string",
@@ -1201,7 +1218,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [

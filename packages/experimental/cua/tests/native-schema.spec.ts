@@ -35,7 +35,7 @@ it('retains optional resource fields and tuple-valued parameters without inventi
 it('generates opaque string admission for native window targets', () => {
   const index = Request.options.findIndex(schema => schema.shape.method.value === 'screenshot')
   expect(JSON.parse(nativeProtocol().json)).toHaveProperty(
-    ['oneOf', index, 'properties', 'params', 'properties', 'windowId'], { type: 'string' },
+    ['oneOf', index, 'properties', 'params', 'properties', 'windowId'], { type: 'string', minLength: 1 },
   )
 })
 

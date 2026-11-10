@@ -414,6 +414,13 @@ export interface Config {
    * `testPaths` and before the built-in rules.
    */
   interfacePaths?: string[]
+  /** Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit and update time. */
+  maxCachedReviewBytes?: number
+  /**
+   * Age in milliseconds at which review threads kept in memory are read from the code host again; a GitHub pull
+   * request's update time does not change when a thread is resolved.
+   */
+  reviewRefreshMs?: number
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -438,12 +445,15 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/not-bound': Record<string, never>
     /**
      * The change request's head is no longer the commit the request named: the head the user confirmed for a merge,
-     * the head displayed for complete checks, or the head of the latest status for a diff. A diff read polls the change
+     * the head displayed for complete checks, the head of the latest status for a diff, or the head of the displayed
+     * diff for review threads and viewed marks. A diff, review, or viewed mark read the host refuses polls the change
      * request again at once, so a later status names the current head.
      */
     'forgePanel/stale-head': Record<string, never>
     /** The code host refused the change or could not be reached; the message gives the host's reason. */
     'forgePanel/action-failed': Record<string, never>
+    /** The code host did not confirm whether it applied the change, which must be checked there before trying again. */
+    'forgePanel/action-unknown': Record<string, never>
     /** The Session's directory is not inside a Git checkout, so it has no local changes. */
     'forgePanel/not-a-checkout': Record<string, never>
     /**
@@ -468,6 +478,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/commits-missing': Record<string, never>
     /** A chosen commit after the first lacks the commit listed before it as its first parent, so two ends cannot name the run. */
     'forgePanel/commits-not-linear': Record<string, never>
+    /** The code host did not provide the signed-in user's viewed marks on the change request's files; the message says why. */
+    'forgePanel/viewed-failed': Record<string, never>
+    /** The code host did not list the accounts a review can be requested from; the message says why. */
+    'forgePanel/reviewers-failed': Record<string, never>
+    /** The code host's provider cannot read review threads, so the changes view shows none. */
+    'forgePanel/review-unsupported': Record<string, never>
+    /** The code host did not provide the change request's review threads, or its status has not been read yet; the message says why. */
+    'forgePanel/review-failed': Record<string, never>
   }
 }
 

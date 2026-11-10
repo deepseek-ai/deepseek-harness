@@ -1,5 +1,6 @@
 /** Worktree Sessions and the change request panel through the real optional bundle, a Git checkout, and a scripted GitHub CLI. */
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -10,7 +11,7 @@ import { pluginRecordOf, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { initialShortcutConfig, type DesktopShortcutInput, type ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import {
   captureStableAria, compareOrRefreshGolden, fixtureUserPrompts, launchWebScaffold, readPersistedEvents, watchConsole,
@@ -49,8 +50,18 @@ const run = promisify(execFile)
  * `pr-N.diff`, or, when `pr-N.refused` exists, fails with that JSON error body
  * and the matching diagnostic as GitHub's HTTP 406 refusal. The raw contents API
  * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
- * request 7 serves `commits.json`, oldest first. Every invocation is appended to
- * `calls.jsonl`.
+ * request 7 serves `commits.json`, oldest first. The review thread read serves
+ * `threads.json` as its one page of threads, with the viewer `lin`, who may write
+ * to the repository and did not open either pull request, or no threads without it. `overview.json` replaces fields
+ * of pull request 7, such as its checks and reviewers, and the viewer's
+ * permission. Viewed marks start from `viewed.json`, keyed by path; reading
+ * them fails while `viewed.unreadable` exists. Mutations, which arrive as
+ * JSON on stdin, change what later reads report through `state.json`: replies,
+ * which join the pending review whenever one exists, resolution, comment edits and
+ * deletions, the pending review of `lin` with its new threads, which a
+ * submission publishes, viewed marks, which fail while `viewed.refused` exists,
+ * review requests, and branch updates. Each mutation is appended to
+ * `mutations.jsonl`, each REST rerun to `reruns.jsonl`, and every invocation to `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -127,8 +138,82 @@ if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vn
   process.stdout.write(text)
   process.exit(0)
 }
+if (args[0] === 'api' && args[3] === '--method' && args[4] === 'POST' && args[5].startsWith('repos/octo/demo/actions/')) {
+  appendFileSync(join(here, 'reruns.jsonl'), args[5] + '\\n')
+  state.reruns = [...state.reruns ?? [], args[5]]
+  save()
+  process.exit(0)
+}
 if (args[0] === 'auth' && args[1] === 'status') {
   process.stdout.write('github.com\\n  Logged in to github.com account octo\\n')
+  process.exit(0)
+}
+const review = () => ({ pending: null, published: [], replies: {}, resolved: {}, bodies: {}, deleted: [], ...state.review })
+/** The signed-in reviewer, who did not open the pull requests. */
+const VIEWER = 'lin'
+/** One review comment node by \`login\`, which the viewer may change when it is the viewer's own. */
+const commentNode = (id, body, login, pending) => ({ id, state: pending ? 'PENDING' : 'SUBMITTED', createdAt: '2026-10-09T01:00:00Z',
+  url: pending ? null : 'https://github.com/octo/demo/pull/7#discussion_' + id, body,
+  viewerCanUpdate: login === VIEWER, viewerCanDelete: login === VIEWER, author: { __typename: 'User', login, avatarUrl: null } })
+if (args[0] === 'api' && args[1] === 'graphql' && args.includes('--input')) {
+  const { query, variables } = JSON.parse(readFileSync(0, 'utf8'))
+  const field = query.match(/\\{\\s*(\\w+)\\(input:/)[1]
+  appendFileSync(join(here, 'mutations.jsonl'), JSON.stringify({ field, variables }) + '\\n')
+  const current = review()
+  const draft = thread => ({ id: 'new-' + (current.published.length + (current.pending?.threads.length ?? 0) + 1),
+    path: thread.path, side: thread.side, line: thread.line, startLine: thread.startLine ?? null, body: thread.body })
+  let payload
+  if (field === 'markFileAsViewed' || field === 'unmarkFileAsViewed') {
+    if (existsSync(join(here, 'viewed.refused'))) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ type: 'FORBIDDEN', message: readFileSync(join(here, 'viewed.refused'), 'utf8') }] }))
+      process.exit(0)
+    }
+    state.viewed = { ...state.viewed, [variables.path]: field === 'unmarkFileAsViewed' ? 'UNVIEWED' : 'VIEWED' }
+    payload = { clientMutationId: null }
+  } else if (field === 'requestReviews') {
+    // The reviewer lookup names each user \`user-<login>\`.
+    state.requested = [...new Set([...state.requested ?? [], ...(variables.input.userIds ?? []).map(id => id.slice('user-'.length))])]
+    payload = { clientMutationId: null }
+  } else if (field === 'updatePullRequestBranch') {
+    if (variables.input.expectedHeadOid !== 'a'.repeat(40)) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ type: 'UNPROCESSABLE', message: 'expected head sha did not match current head ref' }] }))
+      process.exit(0)
+    }
+    state.updated = variables.input.updateMethod
+    payload = { clientMutationId: null }
+  } else if (field === 'addPullRequestReview') {
+    current.pending = { id: 'review-1', commit: variables.commit, threads: [] }
+    for (const thread of variables.threads ?? []) current.pending.threads.push(draft(thread))
+    payload = { pullRequestReview: { id: 'review-1' } }
+  } else if (field === 'addPullRequestReviewThread') {
+    current.pending.threads.push(draft(variables))
+    payload = { thread: { id: current.pending.threads.at(-1).id } }
+  } else if (field === 'addPullRequestReviewThreadReply') {
+    const replies = current.replies[variables.thread] ??= []
+    // As on GitHub, a reply joins the pending review whenever one exists.
+    replies.push({ id: variables.thread + '-reply-' + replies.length, body: variables.body, pending: variables.review !== null || current.pending !== null })
+    payload = { comment: { id: replies.at(-1).id } }
+  } else if (field === 'resolveReviewThread' || field === 'unresolveReviewThread') {
+    current.resolved[variables.thread] = field === 'resolveReviewThread'
+    payload = { thread: { id: variables.thread } }
+  } else if (field === 'updatePullRequestReviewComment') {
+    current.bodies[variables.comment] = variables.body
+    payload = { pullRequestReviewComment: { id: variables.comment } }
+  } else if (field === 'deletePullRequestReviewComment') {
+    current.deleted.push(variables.comment)
+    payload = { clientMutationId: null }
+  } else if (field === 'submitPullRequestReview' || field === 'deletePullRequestReview') {
+    if (field === 'submitPullRequestReview') current.published.push(...current.pending.threads)
+    for (const replies of Object.values(current.replies)) {
+      for (const reply of replies) if (reply.pending && field === 'deletePullRequestReview') current.deleted.push(reply.id)
+      for (const reply of replies) reply.pending = false
+    }
+    current.pending = null
+    payload = { pullRequestReview: { id: variables.review } }
+  }
+  state.review = current
+  save()
+  process.stdout.write(JSON.stringify({ data: { [field]: payload } }))
   process.exit(0)
 }
 if (args[0] === 'api' && args[1] === 'graphql') {
@@ -136,18 +221,27 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   const check = (name, conclusion, completedAt, databaseId = 101) => ({
     __typename: 'CheckRun', id: 'check-' + databaseId, name, status: 'COMPLETED', conclusion, databaseId,
     detailsUrl: 'https://github.com/octo/demo/actions/runs/1', startedAt: '2026-10-09T00:00:00Z', completedAt,
-    checkSuite: { app: { id: 'github-actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
+    checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 1, event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
   })
+  const overview = existsSync(join(here, 'overview.json')) ? JSON.parse(readFileSync(join(here, 'overview.json'), 'utf8')) : {}
+  const none = { totalCount: 0, nodes: [] }
+  const requested = (state.requested ?? []).map(login => ({ asCodeOwner: false, requestedReviewer: { __typename: 'User', login, avatarUrl: null } }))
+  const requests = overview.reviewRequests ?? none
+  const reviewing = { totalCount: requests.totalCount + requested.length, nodes: [...requests.nodes, ...requested] }
   const pulls = {
     7: {
       id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
       updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40), baseRefOid: BASE,
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
-      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
+      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: overview.checks ?? {
         pageInfo: { hasNextPage: true, endCursor: 'checks-100' },
         nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
+      viewerCanUpdateBranch: (overview.viewerCanUpdateBranch ?? false) && state.updated === undefined, canBeRebased: overview.canBeRebased ?? false,
+      reviewRequests: reviewing, latestReviews: overview.latestReviews ?? none, latestOpinionatedReviews: overview.latestOpinionatedReviews ?? none,
+      closingIssuesReferences: overview.closingIssues ?? none,
+      ...overview.mergeable === undefined ? {} : { mergeable: overview.mergeable },
     },
     9: {
       id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
@@ -158,6 +252,8 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
         pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
+      viewerCanUpdateBranch: false, canBeRebased: true, reviewRequests: none, latestReviews: none, latestOpinionatedReviews: none,
+      closingIssuesReferences: none,
     },
   }
   if (query.includes('commits(first: $first')) {
@@ -171,9 +267,74 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     } } } } }))
     process.exit(0)
   }
-  if (query.includes('pullRequest(number: $number)')) {
+  const number = Number(args.find(arg => arg.startsWith('number='))?.slice('number='.length))
+  if (query.includes('files(first: $first')) {
+    if (existsSync(join(here, 'viewed.unreadable'))) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ message: readFileSync(join(here, 'viewed.unreadable'), 'utf8') }] }))
+      process.exit(0)
+    }
+    const paths = readFileSync(join(here, 'pr-' + number + '.diff'), 'utf8').split('\\n')
+      .filter(line => line.startsWith('diff --git ')).map(line => line.split(' b/').at(-1))
+    const marks = { ...existsSync(join(here, 'viewed.json')) ? JSON.parse(readFileSync(join(here, 'viewed.json'), 'utf8')) : {}, ...state.viewed }
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, files: {
+      totalCount: paths.length, pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: paths.map(path => ({ path, viewerViewedState: marks[path] ?? 'UNVIEWED' })),
+    } } } } }))
+    process.exit(0)
+  }
+  if (query.includes('user(login: $u0)')) {
+    const users = Object.fromEntries(args.flatMap(arg => /^u\\d+=/.test(arg) ? [[arg.split('=')[0], { id: 'user-' + arg.slice(arg.indexOf('=') + 1) }]] : []))
+    process.stdout.write(JSON.stringify({ data: users }))
+    process.exit(0)
+  }
+  if (query.includes('assignableUsers')) {
+    const people = [['mona', 'Mona Lisa'], ['hubot', null], ['lin-reviewer', 'Lin']].map(([login, name]) => ({ login, name, avatarUrl: null }))
+    const search = args.find(arg => arg.startsWith('search=')).slice('search='.length)
+    process.stdout.write(JSON.stringify({ data: { repository: {
+      assignableUsers: { nodes: people.filter(person => person.login.includes(search)) },
+      pullRequest: { author: { login: 'octo' }, suggestedReviewers: [{ reviewer: people[2] }] },
+    } } }))
+    process.exit(0)
+  }
+  if (query.includes('viewer { login }')) {
     const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
-    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, baseRefOid: BASE } } } }))
+    const current = review()
+    const page = nodes => ({ pageInfo: { hasNextPage: false, endCursor: null }, nodes })
+    const written = (thread, pending) => ({
+      id: thread.id, isOutdated: false, isResolved: false, path: thread.path, diffSide: thread.side, startDiffSide: thread.startLine === null ? null : thread.side,
+      line: thread.line, startLine: thread.startLine, originalLine: thread.line, originalStartLine: thread.startLine, subjectType: 'LINE',
+      viewerCanReply: true, viewerCanResolve: true, viewerCanUnresolve: false,
+      root: { nodes: [{ diffHunk: '@@ -1,5 +1,5 @@', commit: { oid: pulls[number].headRefOid }, originalCommit: { oid: pulls[number].headRefOid } }] },
+      comments: page([commentNode(thread.id + '-0', thread.body, VIEWER, pending)]),
+    })
+    const stored = existsSync(join(here, 'threads.json')) ? JSON.parse(readFileSync(join(here, 'threads.json'), 'utf8')) : []
+    const threads = [...stored, ...current.published.map(thread => written(thread, false)),
+      ...(current.pending?.threads ?? []).map(thread => written(thread, true))].map((thread) => {
+      const replies = (current.replies[thread.id] ?? []).map(reply => commentNode(reply.id, reply.body, VIEWER, reply.pending))
+      const comments = [...thread.comments.nodes, ...replies].filter(comment => !current.deleted.includes(comment.id))
+        .map(comment => ({ ...comment, body: current.bodies[comment.id] ?? comment.body }))
+      return { ...thread, isResolved: current.resolved[thread.id] ?? thread.isResolved, comments: page(comments) }
+    }).filter(thread => thread.comments.nodes.length > 0)
+    const pendingComments = threads.flatMap(thread => thread.comments.nodes).filter(comment => comment.state === 'PENDING').length
+    process.stdout.write(JSON.stringify({ data: { viewer: { login: VIEWER }, repository: { isArchived: false, viewerPermission: 'WRITE',
+      pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid, locked: false,
+        reviews: { nodes: current.pending === null ? [] : [{ id: current.pending.id, viewerDidAuthor: true, comments: { totalCount: pendingComments } }] },
+        reviewThreads: page(threads) } } } }))
+    process.exit(0)
+  }
+  if (query.includes('reviews(states: PENDING')) {
+    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
+    const pending = review().pending
+    // Every thread and comment the double serves belongs to the pull request it was read from.
+    const target = args.some(arg => arg.startsWith('target=')) ? { target: { pullRequest: { id: 'pull-' + number } } } : {}
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { id: 'pull-' + number, headRefOid: pulls[number].headRefOid,
+      reviews: { nodes: pending === null ? [] : [{ id: pending.id, viewerDidAuthor: true }] } } }, ...target } }))
+    process.exit(0)
+  }
+  if (query.includes('pullRequest(number: $number)')) {
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: {
+      id: 'pull-' + number, headRefOid: pulls[number].headRefOid, baseRefOid: BASE,
+    } } } }))
     process.exit(0)
   }
   if (query.includes('node(id: $id)')) {
@@ -184,7 +345,8 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     process.exit(0)
   }
   const settings = {
-    squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: 'WRITE', viewerDefaultMergeMethod: 'SQUASH',
+    squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: overview.viewerPermission ?? 'WRITE',
+    viewerDefaultMergeMethod: 'SQUASH',
   }
   const data = {}
   let repository
@@ -544,7 +706,7 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await header.click()
   const change = page.locator(`[data-forge-change="${PULL}"]`)
   await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
-  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  await change.getByText('等待评审', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
   await expect.poll(async () => {
@@ -631,7 +793,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const title = change.getByRole('link', { name: 'Add the pull request panel', exact: true })
   await title.waitFor({ timeout: 20_000 })
   // The only open change request starts expanded.
-  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  await change.getByText('等待评审', { exact: true }).waitFor()
   // The random branch suffix can read as a duration, so the branch is replaced before the capture normalizes durations.
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
     await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
@@ -640,7 +802,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
-  await expect.poll(() => checks.getByRole('menuitem').allTextContents()).toEqual([expect.stringMatching(/^test/), expect.stringMatching(/^lint/)])
+  // Failed checks are listed with the rerun; passed ones wait behind a toggle.
+  await expect.poll(() => checks.getByRole('menuitem').allTextContents())
+    .toEqual(['重跑失败项', expect.stringMatching(/^test/), '显示其余 1 项（通过、跳过）'])
   const afterChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(afterChecks.filter(args => args.includes('id=rollup-7'))).toHaveLength(1)
   await page.keyboard.press('Escape')
@@ -1021,7 +1185,10 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(narrowComment.x + narrowComment.width).toBeLessThanOrEqual(390)
   await page.setViewportSize({ width: 1680, height: 1000 })
   await panelFile.getByRole('button', { name: '开始评审', exact: true }).click()
-  await panelFile.locator('[data-forge-review-thread="pending"]').getByText('请核对边界条件', { exact: true }).waitFor()
+  // The comment starts the pending review on GitHub, and the threads read again show it there.
+  const pendingThread = panelFile.locator('[data-forge-thread="new-1"]')
+  await pendingThread.getByText('请核对边界条件', { exact: true }).waitFor({ timeout: 20_000 })
+  await pendingThread.getByText('待提交', { exact: true }).waitFor()
   await page.setViewportSize({ width: 1680, height: 500 })
   const changesScroll = view.locator('[data-forge-changes-scroll]')
   await changesScroll.evaluate((element) => { element.scrollTop = element.scrollHeight })
@@ -1052,11 +1219,16 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
     await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
   await reviewDialog.getByRole('button', { name: '提交评审', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '已提交评审' }).waitFor()
-  await panelFile.locator('[data-forge-review-thread="published"]').getByText('请核对边界条件', { exact: true }).waitFor()
-  await compareOrRefreshGolden(join(EXPECTED, 'review-record.expected.md'), await captureStableAria(page, '[data-forge-review-thread="published"]', scaffold.workspaceCwd), MODE)
-  const published: unknown = JSON.parse((await readFile(join(root, 'reviews.jsonl'), 'utf8')).trim())
-  expect(published).toEqual({ endpoint: 'repos/octo/demo/pulls/7/reviews', body: { commit_id: HEAD7, event: 'REQUEST_CHANGES', body: '需要补充边界检查',
-    comments: [{ path: 'src/panel.ts', side: 'RIGHT', line: 4, start_line: 2, start_side: 'RIGHT', body: '请核对边界条件' }] } })
+  await expect.poll(() => pendingThread.getByText('待提交', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-record.expected.md'),
+    await captureStableAria(page, '[data-forge-thread="new-1"]', scaffold.workspaceCwd), MODE)
+  const mutations = (await readFile(join(root, 'mutations.jsonl'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line))
+  expect(mutations).toEqual([
+    { field: 'addPullRequestReview', variables: { pull: 'pull-7', commit: HEAD7,
+      threads: [{ path: 'src/panel.ts', body: '请核对边界条件', line: 4, side: 'RIGHT', startLine: 2, startSide: 'RIGHT' }] } },
+    { field: 'submitPullRequestReview', variables: { review: 'review-1', event: 'REQUEST_CHANGES', body: '需要补充边界检查' } },
+  ])
+  expect(existsSync(join(root, 'reviews.jsonl'))).toBe(false)
   await page.getByRole('button', { name: '退出全屏', exact: true }).click()
   await panelFile.getByRole('button', { name: '6 行未变更', exact: true }).click()
   await panelFile.getByText('export const n6 = 6', { exact: true }).first().waitFor({ timeout: 20_000 })
@@ -1080,7 +1252,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   expect(await panelFile.evaluate((element, original) => element === original, originalFile)).toBe(true)
   await expect.poll(() => docsFile.getAttribute('data-expanded')).toBe(null)
   await expect.poll(() => scrollport.evaluate(element => element.scrollTop)).toBe(position)
-  expect(await panelFile.locator('[data-forge-review-thread="published"]').count()).toBe(1)
+  expect(await panelFile.locator('[data-forge-thread="new-1"]').count()).toBe(1)
   await page.setViewportSize({ width: 1680, height: 1000 })
   await page.locator('[data-dockkit-tab]').filter({ hasText: '#7 的变更' }).locator('[data-dockkit-tab-close]').click()
   await expect.poll(() => view.count()).toBe(0)
@@ -1353,7 +1525,9 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
   expect(await file.getByRole('textbox').count()).toBe(0)
   await page.mouse.up()
   await file.getByRole('region', { name: '评论 R6–8', exact: true }).waitFor()
-  expect(await plus('R6').count()).toBe(0)
+  // The open editor leaves the hover plus for the next comment.
+  await code(3).hover()
+  expect(await plus('R3').isVisible()).toBe(true)
   await file.getByRole('button', { name: '取消', exact: true }).click()
   await file.getByRole('textbox').waitFor({ state: 'detached' })
 
@@ -1451,7 +1625,7 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   expect(tripwire.warnings).toEqual([])
 })
 
-it.skipIf(MODE === 'record')('keeps localized status columns separate and long file lists inside one vertical scroller', async () => {
+it.skipIf(MODE === 'record')('aligns localized status rows by their glyphs and keeps long file lists inside one vertical scroller', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-layout')
   await page.locator('[data-forge-current-branch]').waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'worktree-option.expected.md'),
@@ -1507,38 +1681,36 @@ it.skipIf(MODE === 'record')('keeps localized status columns separate and long f
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 700 })
       await expect.poll(() => change.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(width)
-      await change.getByText(labels[3], { exact: true }).hover()
+      // Each row names its fact for assistive technology only; the row starts with its glyph.
+      const rowOf = (label: string) => change.getByText(label, { exact: true }).locator('xpath=../..')
+      await rowOf(labels[3]).hover()
+      const offsets = new Set<number>()
       for (const label of labels) {
-        const geometry = await change.getByText(label, { exact: true }).evaluate((element) => {
-          const value = element.nextElementSibling
-          if (value === null) throw new Error('Status label must have a value')
-          const range = document.createRange()
-          range.selectNodeContents(element)
-          const name = range.getBoundingClientRect()
-          const content = value.getBoundingClientRect()
-          const row = element.parentElement!
-          const icon = element.previousElementSibling!
+        const geometry = await rowOf(label).evaluate((row) => {
+          const icon = row.firstElementChild!
+          const cell = icon.nextElementSibling!
+          const value = cell.lastElementChild!
+          const trailing = cell.nextElementSibling?.matches('[class*="rowTrailing"]') === true ? cell.nextElementSibling : null
           const rowRect = row.getBoundingClientRect()
+          const content = value.getBoundingClientRect()
           return {
-            gap: content.left - name.right,
             iconInset: icon.getBoundingClientRect().left - rowRect.left,
             rowInset: rowRect.left - row.closest('[data-forge-change]')!.getBoundingClientRect().left,
-            labelWidth: element.getBoundingClientRect().width,
             valueOffset: content.left - rowRect.left,
-            right: content.right,
+            gap: trailing === null ? 8 : trailing.getBoundingClientRect().left - content.right,
+            right: Math.max(content.right, trailing?.getBoundingClientRect().right ?? 0),
             width: document.documentElement.clientWidth,
           }
         })
-        expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.iconInset).toBe(8)
         expect(geometry.rowInset).toBeGreaterThanOrEqual(6)
         expect(geometry.rowInset).toBeLessThanOrEqual(7)
-        if (locale === 'zh') {
-          expect(geometry.labelWidth).toBe(32)
-          expect(geometry.valueOffset).toBe(76)
-        }
+        offsets.add(geometry.valueOffset)
+        expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.right).toBeLessThanOrEqual(geometry.width)
       }
+      // Every value starts in the same column after its glyph.
+      expect([...offsets]).toEqual([32])
     }
   }
   expect(tripwire.pageErrors).toEqual([])
@@ -1719,7 +1891,7 @@ it.skipIf(MODE === 'record').each([120, 4000])('types a review comment beside %i
   expect(await file.getByRole('button', { name: '开始评审', exact: true }).isDisabled()).toBe(true)
   await input.fill('检查边界条件')
   await file.getByRole('button', { name: '开始评审', exact: true }).click()
-  await file.locator('[data-forge-review-thread="pending"]').getByText('检查边界条件', { exact: true }).waitFor()
+  await file.locator('[data-forge-thread]').getByText('检查边界条件', { exact: true }).waitFor({ timeout: 20_000 })
   expect(tripwire.pageErrors).toEqual([])
 })
 
@@ -1778,6 +1950,8 @@ it.skipIf(MODE === 'record')('reviews a change request by layer, hides test file
   await page.keyboard.press('v')
   await expect.poll(() => panel.getAttribute('data-viewed')).toBe('viewed')
   await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 2 / 3')
+  // Each mark stays disabled until GitHub saved it.
+  await expect.poll(() => view.getByRole('checkbox', { disabled: true }).count()).toBe(0)
   await compareOrRefreshGolden(join(EXPECTED, 'review-layers.expected.md'),
     await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
 
@@ -1856,6 +2030,174 @@ it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a 
   expect(tripwire.pageErrors).toEqual([])
 })
 
+/**
+ * One review thread node of pull request 7 as the GraphQL thread read returns it, its comments by `lin`, the viewer, then
+ * `octo`, the pull request's author; the viewer may reply, resolve, and change their own comments.
+ */
+function threadNode(
+  id: string, fields: Record<string, unknown>, bodies: readonly string[], commit: string = HEAD7,
+): Record<string, unknown> {
+  return {
+    id, isOutdated: false, isResolved: false, path: 'src/panel.ts', diffSide: 'RIGHT', startDiffSide: null, line: null, startLine: null,
+    originalLine: null, originalStartLine: null, subjectType: 'LINE', viewerCanReply: true, viewerCanResolve: true, viewerCanUnresolve: true, ...fields,
+    root: { nodes: [{ diffHunk: '@@ -1,5 +1,5 @@\n export const n1 = 1\n-export const n2 = 2\n+export const n2 = \'two\'',
+      commit: { oid: commit }, originalCommit: { oid: commit } }] },
+    comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: bodies.map((body, index) => ({
+      id: `${id}-${index}`, state: 'SUBMITTED', createdAt: '2026-10-09T00:00:00Z', url: `${PULL}#discussion_${id}_${index}`, body,
+      viewerCanUpdate: index === 0, viewerCanDelete: index === 0, author: { __typename: 'User', login: index === 0 ? 'lin' : 'octo', avatarUrl: null },
+    })) },
+  }
+}
+
+/** Threads of pull request 7: on new line 2, on old line 15, resolved on new line 15, outdated, and on the whole of `docs/panel.md`. */
+const THREADS = [
+  threadNode('on-line', { line: 2, originalLine: 2 }, ['Why **two**?', 'It reads better.']),
+  threadNode('old-side', { diffSide: 'LEFT', line: 15, originalLine: 15 }, ['The old fifteen was a number.']),
+  threadNode('resolved', { isResolved: true, line: 15, originalLine: 15 }, ['Settled.']),
+  threadNode('outdated', { isOutdated: true, originalLine: 9 }, ['This line moved.'], 'f'.repeat(40)),
+  threadNode('whole-file', { path: 'docs/panel.md', subjectType: 'FILE' }, ['Add a screenshot.']),
+]
+
+it.skipIf(MODE === 'record')('overlays the review threads of a change request and opens them from the thread list', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-threads', 'follow-up')
+  await writeFile(join(root, 'threads.json'), JSON.stringify(THREADS))
+  // Comments were written two hours before the browser's clock, so their relative times stay fixed.
+  await page.clock.setFixedTime(Date.parse('2026-10-09T02:00:00Z'))
+  const { view, sessionId } = await openReview(page, scaffold)
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const onLine = panel.locator('[data-forge-thread="on-line"]')
+  await onLine.getByText('two', { exact: true }).waitFor({ timeout: 20_000 })
+  // The thread follows the row of its last line, in the column of its side: under the new side and the old side.
+  const placement = (card: Element, number: string) => {
+    const row = card.closest('[data-forge-notes]')
+    const column = Array.from(row?.children ?? []).findIndex(cell => cell.contains(card))
+    return { line: row?.previousElementSibling?.querySelector(number)?.textContent, column }
+  }
+  expect(await onLine.evaluate(placement, '[data-new-line]')).toEqual({ line: 'export const n2 = \'two\'', column: 1 })
+  expect(await panel.locator('[data-forge-thread="old-side"]').evaluate(placement, '[data-old-line]')).toEqual({ line: 'export const n15 = 15', column: 0 })
+  await panel.locator('[data-forge-thread="resolved"]').getByText('已解决的讨论 · lin', { exact: true }).waitFor()
+  await panel.locator('[data-forge-outdated-threads]').getByText('1 条讨论已过期：所在代码已被后续提交修改', { exact: true }).waitFor()
+  await view.locator('[data-forge-diff-file="docs/panel.md"] [data-forge-thread="whole-file"]').getByText('文件级讨论', { exact: true }).waitFor()
+  const count = panel.getByRole('button', { name: 'panel.ts 有 3 条未解决的讨论，跳到下一条', exact: true })
+  await count.waitFor()
+  await view.getByRole('navigation').getByTitle('3 条未解决的讨论', { exact: true }).waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'review-threads.expected.md'),
+    await captureStableAria(page, '[data-forge-diff-file="src/panel.ts"]', scaffold.workspaceCwd), MODE)
+
+  // The count steps through the file's unresolved threads in display order: R2, L15, then the outdated one.
+  const centered = async (id: string): Promise<boolean> => await panel.locator(`[data-forge-thread="${id}"]`).evaluate((card) => {
+    const viewport = card.closest('[data-forge-changes-scroll]')!.getBoundingClientRect()
+    const box = card.getBoundingClientRect()
+    return box.top + box.height / 2 > viewport.top && box.top + box.height / 2 < viewport.bottom
+  })
+  for (const id of ['on-line', 'old-side', 'outdated']) {
+    await count.click()
+    await expect.poll(() => centered(id)).toBe(true)
+  }
+  expect(await view.locator('[data-forge-thread-list]').count()).toBe(0)
+
+  await view.getByRole('button', { name: '讨论列表，共 5 个', exact: true }).click()
+  const list = view.getByRole('complementary', { name: '讨论列表，共 5 个' })
+  await expect.poll(() => list.getByRole('radio', { checked: true }).allTextContents()).toEqual(['未解决4'])
+  await expect.poll(() => list.locator('[data-forge-thread-item]').evaluateAll(items => items.map(item => item.getAttribute('data-forge-thread-item'))))
+    .toEqual(['whole-file', 'on-line', 'old-side', 'outdated'])
+  await list.getByRole('radio', { name: /^已解决/ }).click()
+  await list.locator('[data-forge-thread-item="resolved"]').click()
+  // Opening a resolved thread unfolds it inside its file, and the docked list stays.
+  await panel.locator('[data-forge-thread="resolved"]').getByText('Settled.', { exact: true }).waitFor()
+  await list.getByRole('radio', { name: /^全部/ }).click()
+  await expect.poll(() => list.locator('[data-forge-thread-item]').count()).toBe(5)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-list.expected.md'),
+    await captureStableAria(page, '[data-forge-thread-list]', scaffold.workspaceCwd), MODE)
+  // A view narrower than 480px gives the list the files' whole width and closes it before opening a thread.
+  await view.evaluate((element) => { element.style.width = '420px'; element.style.flex = 'none' })
+  await expect.poll(() => list.evaluate(element => [getComputedStyle(element).position, element.getBoundingClientRect().width]))
+    .toEqual(['absolute', 420])
+  await list.locator('[data-forge-thread-item="on-line"]').click()
+  await list.waitFor({ state: 'detached' })
+  await view.evaluate((element) => { element.style.width = ''; element.style.flex = '' })
+
+  await onLine.getByRole('button', { name: '添加到输入框', exact: true }).click()
+  await page.locator('[data-composer-input]').first().getByText('panel.ts R2', { exact: true }).first().waitFor()
+  const sent = scaffold.whenTurnSettled()
+  await page.locator('[data-composer-input]').first().press('Enter')
+  await sent
+  await page.getByText(FOLLOW_UP_REPLY, { exact: true }).waitFor()
+  // The quoted thread reaches the model only inside the ordinary logged user message.
+  const quotes = (await readPersistedEvents(scaffold, sessionId)).flatMap(event => event.type === 'user/message'
+    ? event.data.content.flatMap(block => block.type === 'text' && block.text.includes('## Review Thread') ? [block.text] : []) : [])
+  expect(quotes).toHaveLength(1)
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-message.expected.md'), quotes.join('').trimEnd(), MODE)
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
+  const reads = calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('viewer { login }')))
+  expect(reads.length).toBeGreaterThan(0)
+  expect(reads[0]).toEqual(expect.arrayContaining(['owner=octo', 'name=demo', 'number=7', 'first=100']))
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('replies to, edits, deletes, and resolves review threads, and discards a pending review started from a reply', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-writes')
+  await writeFile(join(root, 'threads.json'), JSON.stringify(THREADS))
+  await page.clock.setFixedTime(Date.parse('2026-10-09T02:00:00Z'))
+  const { view } = await openReview(page, scaffold)
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const onLine = panel.locator('[data-forge-thread="on-line"]')
+  await onLine.getByText('two', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: '回复…', exact: true }).click()
+  await onLine.getByRole('textbox', { name: '回复…', exact: true }).fill('已改为字符串')
+  await compareOrRefreshGolden(join(EXPECTED, 'review-thread-reply.expected.md'),
+    await captureStableAria(page, '[data-forge-thread="on-line"]', scaffold.workspaceCwd), MODE)
+  await onLine.getByRole('button', { name: '回复', exact: true }).click()
+  await onLine.getByText('已改为字符串', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: 'lin 的评论操作', exact: true }).first().click()
+  await page.getByRole('menuitem', { name: '编辑', exact: true }).click()
+  await onLine.getByRole('textbox', { name: '编辑评论', exact: true }).fill('Why a **word**?')
+  await onLine.getByRole('button', { name: '保存', exact: true }).click()
+  await onLine.getByText('word', { exact: true }).waitFor({ timeout: 20_000 })
+
+  await onLine.getByRole('button', { name: 'lin 的评论操作', exact: true }).last().click()
+  await page.getByRole('menuitem', { name: '删除', exact: true }).click()
+  await onLine.getByRole('group', { name: '删除这条评论？', exact: true }).getByRole('button', { name: '删除', exact: true }).click()
+  await expect.poll(() => onLine.getByText('已改为字符串', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+
+  await onLine.getByRole('button', { name: '解决讨论', exact: true }).click()
+  await onLine.getByText('已解决的讨论 · lin', { exact: true }).waitFor({ timeout: 20_000 })
+
+  const oldSide = panel.locator('[data-forge-thread="old-side"]')
+  await oldSide.getByRole('button', { name: '回复…', exact: true }).click()
+  await oldSide.getByRole('textbox', { name: '回复…', exact: true }).fill('稍后一起提交')
+  await oldSide.getByRole('button', { name: '回复选项', exact: true }).click()
+  await page.getByRole('menuitem', { name: '开始评审', exact: true }).click()
+  await oldSide.getByText('待提交', { exact: true }).waitFor({ timeout: 20_000 })
+  await view.getByRole('button', { name: '提交评审 (1)', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: '提交评审', exact: true })
+  await dialog.getByRole('button', { name: '丢弃评审', exact: true }).click()
+  await compareOrRefreshGolden(join(EXPECTED, 'discard-review.expected.md'),
+    await captureStableAria(page, '[role="dialog"][aria-label="提交评审"]', scaffold.workspaceCwd), MODE)
+  await dialog.getByRole('group', { name: '丢弃评审', exact: true }).getByRole('button', { name: '丢弃评审', exact: true }).click()
+  await page.getByRole('alert').filter({ hasText: '已丢弃评审' }).waitFor()
+  await expect.poll(() => oldSide.getByText('稍后一起提交', { exact: true }).count(), { timeout: 20_000 }).toBe(0)
+  await view.getByRole('button', { name: '提交评审', exact: true }).waitFor()
+
+  const mutations = (await readFile(join(root, 'mutations.jsonl'), 'utf8')).trim().split('\n').map((line): unknown => JSON.parse(line))
+  expect(mutations).toEqual([
+    { field: 'addPullRequestReviewThreadReply', variables: { thread: 'on-line', body: '已改为字符串', review: null } },
+    { field: 'updatePullRequestReviewComment', variables: { comment: 'on-line-0', body: 'Why a **word**?' } },
+    { field: 'deletePullRequestReviewComment', variables: { comment: 'on-line-reply-0' } },
+    { field: 'resolveReviewThread', variables: { thread: 'on-line' } },
+    { field: 'addPullRequestReview', variables: { pull: 'pull-7', commit: HEAD7, threads: null } },
+    { field: 'addPullRequestReviewThreadReply', variables: { thread: 'old-side', body: '稍后一起提交', review: 'review-1' } },
+    { field: 'deletePullRequestReview', variables: { review: 'review-1' } },
+  ])
+  // Every write checked the head of pull request 7 first.
+  const calls = (await readFile(join(root, 'calls.jsonl'), 'utf8')).split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as string[])
+  expect(calls.filter(args => args.some(arg => arg.startsWith('query=') && arg.includes('reviews(states: PENDING') && !arg.includes('viewer { login }'))))
+    .toHaveLength(mutations.length - 1)
+  expect(tripwire.pageErrors).toEqual([])
+})
+
 it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu inside its card and its name under the pointer', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-narrow-header', 'normal', { branch: 'feat' })
   const from = 'src/original-review-module-with-a-long-name.ts'
@@ -1901,5 +2243,296 @@ it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu
   await page.getByRole('tooltip').filter({ hasText: `${from} → ${to}` }).waitFor()
   await viewed.check()
   await expect.poll(() => file.getAttribute('data-viewed')).toBe('viewed')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** One GraphQL mutation the GitHub CLI double received: the mutation field and its variables. */
+interface GhMutation {
+  readonly field: string
+  readonly variables: Record<string, unknown>
+}
+
+/** GraphQL mutations the GitHub CLI double received, in order. */
+async function mutationsOf(root: string): Promise<GhMutation[]> {
+  const text = await readFile(join(root, 'mutations.jsonl'), 'utf8').catch(() => '')
+  return text.split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as GhMutation)
+}
+
+/** REST paths of the check reruns the GitHub CLI double received, in order. */
+async function rerunsOf(root: string): Promise<string[]> {
+  return (await readFile(join(root, 'reruns.jsonl'), 'utf8').catch(() => '')).split('\n').filter(line => line.length > 0)
+}
+
+it.skipIf(MODE === 'record')('reads and saves the viewed files of a change request on GitHub, keeping chosen commits in the browser', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-viewed-sync')
+  await writeReviewFixture(root)
+  await writeFile(join(root, 'viewed.json'), JSON.stringify({ 'docs/panel.md': 'VIEWED', 'src/panel.ts': 'DISMISSED' }))
+  const { view } = await openReview(page, scaffold)
+  const docs = view.locator('[data-forge-diff-file="docs/panel.md"]')
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const manifest = view.locator('[data-forge-diff-file="package.json"]')
+  const progress = view.getByRole('progressbar', { name: '已审阅的文件', exact: true })
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('viewed')
+  expect(await docs.getAttribute('data-expanded')).toBe(null)
+  await expect.poll(() => panel.getAttribute('data-viewed')).toBe('changed')
+  await panel.getByText('有新改动', { exact: true }).waitFor()
+  await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 6')
+
+  await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).check()
+  await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
+  await expect.poll(async () => (await mutationsOf(root)).map(entry => [entry.field, entry.variables.path]))
+    .toEqual([['markFileAsViewed', 'package.json']])
+  await docs.getByRole('checkbox', { name: '将 panel.md 标记为已审阅', exact: true }).uncheck()
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+  await expect.poll(async () => (JSON.parse(await readFile(join(root, 'state.json'), 'utf8')) as { readonly viewed?: Record<string, string> }).viewed)
+    .toEqual({ 'package.json': 'VIEWED', 'docs/panel.md': 'UNVIEWED' })
+
+  // A refused mark returns to what GitHub keeps and says why.
+  await writeFile(join(root, 'viewed.refused'), 'Resource not accessible by integration')
+  const spec = view.locator('[data-forge-diff-file="src/panel.spec.ts"]')
+  await spec.getByRole('checkbox', { name: '将 panel.spec.ts 标记为已审阅', exact: true }).check()
+  await page.getByText('已审阅状态未能保存到 GitHub：Resource not accessible by integration', { exact: true }).waitFor()
+  await expect.poll(() => spec.getAttribute('data-viewed')).toBe('unviewed')
+  await rm(join(root, 'viewed.refused'))
+
+  // GitHub keeps the marks, so a reload reads them again.
+  await page.reload()
+  await view.locator('[data-forge-diff-file="package.json"]').waitFor({ timeout: 20_000 })
+  await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+
+  // Without GitHub's marks no file can be marked, and the notice offers to read them again.
+  await writeFile(join(root, 'viewed.unreadable'), 'API rate limit exceeded')
+  await view.getByRole('button', { name: '刷新变更', exact: true }).click()
+  await view.getByText('未能读取 GitHub 上的已审阅状态，暂时不能标记文件：API rate limit exceeded', { exact: true }).waitFor({ timeout: 20_000 })
+  expect(await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).isDisabled()).toBe(true)
+  await rm(join(root, 'viewed.unreadable'))
+  await view.getByRole('button', { name: '重试', exact: true }).click()
+  await expect.poll(() => manifest.getAttribute('data-viewed'), { timeout: 20_000 }).toBe('viewed')
+  expect(await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).isDisabled()).toBe(false)
+
+  // Chosen commits keep their marks in the browser.
+  await view.getByRole('button', { name: '查看的提交：全部提交', exact: true }).click()
+  await page.locator(`[data-forge-commit="${'2'.repeat(40)}"]`).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['locale/zh.json', 'src/panel.spec.ts'])
+  const before = (await mutationsOf(root)).length
+  await spec.getByRole('checkbox', { name: '将 panel.spec.ts 标记为已审阅', exact: true }).check()
+  await expect.poll(() => spec.getAttribute('data-viewed')).toBe('viewed')
+  expect((await mutationsOf(root)).length).toBe(before)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await view.getByRole('button', { name: '查看的提交：2222222', exact: true }).click()
+  await page.locator('[data-forge-commit-menu]').getByRole('menuitem', { name: /^全部提交/ }).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toHaveLength(6)
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** Pull request 7 with failed, running, passed, and skipped checks, five reviewers, a branch behind its base, and two closing issues. */
+const OVERVIEW = {
+  viewerPermission: 'WRITE',
+  viewerCanUpdateBranch: true,
+  canBeRebased: true,
+  checks: {
+    pageInfo: { hasNextPage: false, endCursor: null },
+    nodes: [
+      ...[['node 24 / static', 'FAILURE', 11], ['windows / coverage', 'FAILURE', 12], ['lint', 'SUCCESS', 13], ['typecheck', 'SUCCESS', 14],
+        ['docs', 'SKIPPED', 15]].map(([name, conclusion, id]) => ({
+        __typename: 'CheckRun', id: `check-${String(id)}`, name, status: 'COMPLETED', conclusion, databaseId: id,
+        detailsUrl: `https://github.com/octo/demo/actions/runs/41/job/${String(id)}`, startedAt: '2026-10-09T00:00:00Z', completedAt: '2026-10-09T00:04:12Z',
+        checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 41, event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
+      })),
+      {
+        __typename: 'CheckRun', id: 'check-16', name: 'e2e / web', status: 'IN_PROGRESS', conclusion: null, databaseId: 16,
+        detailsUrl: 'https://github.com/octo/demo/actions/runs/42/job/16', startedAt: '2026-10-09T00:00:00Z', completedAt: null,
+        checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 42, event: 'pull_request', workflow: { id: 'e2e', name: 'E2E' } } },
+      },
+      { __typename: 'StatusContext', context: 'ci/jenkins', state: 'FAILURE', targetUrl: 'https://ci.example.test/7', createdAt: '2026-10-09T00:01:00Z' },
+    ],
+  },
+  reviewRequests: { totalCount: 2, nodes: [
+    { asCodeOwner: false, requestedReviewer: { __typename: 'User', login: 'lin-reviewer', avatarUrl: null } },
+    { asCodeOwner: true, requestedReviewer: { __typename: 'Team', combinedSlug: 'octo/forge', avatarUrl: null } },
+  ] },
+  latestReviews: { totalCount: 1, nodes: [{ state: 'COMMENTED', commit: { oid: HEAD7 }, author: { __typename: 'Bot', login: 'review-bot', avatarUrl: null } }] },
+  latestOpinionatedReviews: { totalCount: 2, nodes: [
+    { state: 'CHANGES_REQUESTED', commit: { oid: '1'.repeat(40) }, author: { __typename: 'User', login: 'zhou-dev', avatarUrl: null } },
+    { state: 'APPROVED', commit: { oid: HEAD7 }, author: { __typename: 'User', login: 'qian-dev', avatarUrl: null } },
+  ] },
+  closingIssues: { totalCount: 2, nodes: [
+    { number: 6, title: 'Show review progress in the panel', state: 'OPEN', url: 'https://github.com/octo/demo/issues/6',
+      repository: { name: 'demo', owner: { login: 'octo' } } },
+    { number: 12, title: 'Rerun failed checks from DSH', state: 'OPEN', url: 'https://github.com/octo/tracker/issues/12',
+      repository: { name: 'tracker', owner: { login: 'octo' } } },
+  ] },
+}
+
+it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state in one line each and acts on them from their menus', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-overview')
+  await writeFile(join(root, 'overview.json'), JSON.stringify(OVERVIEW))
+  const { settled } = await sendPrompt(page, scaffold)
+  const session = scaffold.ctx.sessions.get(await settled)
+  if (session === undefined) throw new Error('Session must stay loaded')
+  scaffold.ctx.forgeSession.track(session, PULL)
+  await page.locator('[data-forge-header]').click()
+  const card = page.locator(`[data-forge-change="${PULL}"]`)
+  // The card chooses its default expansion once its first status arrives, which names the title.
+  await card.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  if (await card.getAttribute('data-expanded') === null) await card.getByRole('button', { name: '展开 #7', exact: true }).click()
+  const checks = card.locator('[data-forge-checks]')
+  await expect.poll(() => checks.textContent(), { timeout: 20_000 }).toBe('检查3 项失败 · 1 项进行中')
+  await expect.poll(() => card.locator('[data-forge-threads]').getAttribute('data-forge-threads')).toBe('1')
+
+  // The checks menu lists what needs attention and the rest on request; the external status names no rerun.
+  await checks.click()
+  const menu = page.getByRole('menu')
+  await expect.poll(() => menu.locator('[data-forge-check-group]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-forge-check-group'))))
+    .toEqual(['failed', 'running'])
+  await menu.getByRole('menuitem', { name: '显示其余 3 项（通过、跳过）', exact: true }).waitFor()
+  await menu.getByRole('menuitem', { name: '重跑失败项', exact: true }).click()
+  await page.getByText('已请求重跑 #7 的检查', { exact: true }).waitFor()
+  expect(await rerunsOf(root)).toEqual(['repos/octo/demo/actions/runs/41/rerun-failed-jobs'])
+
+  // The review row shows the first avatars; its menu lists every reviewer and the requests.
+  const review = card.locator('[data-forge-review]')
+  await review.click()
+  await expect.poll(() => menu.locator('[data-forge-reviewer]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-forge-reviewer'))))
+    .toEqual(['lin-reviewer', 'octo/forge', 'review-bot', 'zhou-dev', 'qian-dev'])
+  await menu.getByRole('menuitem', { name: '请求其他人评审…', exact: true }).click()
+  await menu.getByRole('menuitem', { name: /lin-reviewer/ }).waitFor()
+  await page.keyboard.type('mon')
+  await menu.getByRole('menuitem', { name: /^mona/ }).click()
+  await page.getByText('已请求 mona 评审 #7', { exact: true }).waitFor()
+  await review.click()
+  await menu.getByRole('menuitem', { name: '重新请求 zhou-dev 评审', exact: true }).click()
+  await expect.poll(async () => (await mutationsOf(root)).filter(entry => entry.field === 'requestReviews').map(entry => entry.variables.input))
+    .toEqual([
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-mona'] },
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-zhou-dev'] },
+    ])
+
+  // The linked issues take one row, each a link named by its number with its title in the name.
+  const issues = card.locator('[data-forge-closing-issues]')
+  expect(await issues.textContent()).toBe('关联 issue #6、octo/tracker#12')
+  await issues.getByRole('link', { name: '打开 issue #6：Show review progress in the panel', exact: true }).waitFor()
+  await issues.getByRole('link', { name: '打开 issue octo/tracker#12：Rerun failed checks from DSH', exact: true }).waitFor()
+
+  const update = card.locator('[data-forge-update-branch]')
+  await expect.poll(() => update.textContent()).toBe('合并无冲突 · 落后于 main更新分支')
+  await update.click()
+  await page.getByRole('menuitem', { name: /^变基更新/ }).click()
+  await page.getByRole('menuitem', { name: '确认更新', exact: true }).click()
+  await page.getByText('已开始更新 #7 的分支', { exact: true }).waitFor()
+  expect((await mutationsOf(root)).at(-1)?.variables.input).toEqual({ pullRequestId: 'pull-7', expectedHeadOid: HEAD7, updateMethod: 'REBASE' })
+  await expect.poll(() => update.count(), { timeout: 20_000 }).toBe(0)
+
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/**
+ * Launch the panel on a branch whose README.md replaces its first line and adds eight more, so a side-by-side view
+ * pairs a deletion with an addition, then open the Session's local changes full screen.
+ * @param failureShot - screenshot name for a failure.
+ * @returns the launch and the local changes view.
+ */
+async function openLocalChanges(failureShot: string): Promise<PanelLaunch & { readonly view: Locator }> {
+  const launch = await launchPanel(failureShot)
+  const { scaffold, page, project } = launch
+  await git(project, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await git(project, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+  await writeFile(join(project, 'README.md'), `changed\n${Array.from({ length: 8 }, (_, line) => `line ${line + 2}\n`).join('')}`)
+  await writeFile(join(project, 'notes.md'), 'note\n')
+  const { settled } = await sendPrompt(page, scaffold)
+  await settled
+  await page.locator('[data-forge-header]').click()
+  await page.locator('[data-forge-panel]').getByRole('button', { name: '刷新状态', exact: true }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click()
+  const view = page.locator('[data-forge-changes="local"]')
+  await view.locator('[data-forge-diff-file="README.md"]').waitFor()
+  await page.getByRole('button', { name: '全屏', exact: true }).click()
+  return { ...launch, view }
+}
+
+it.skipIf(MODE === 'record')('keeps the changes toolbar and header on one line, folding view controls into the More menu as they narrow', async () => {
+  const { page, view, tripwire } = await openLocalChanges('web-e2e-forge-toolbar-fold')
+  const toolbar = view.locator('[data-fold]')
+  const more = toolbar.getByRole('button', { name: '更多视图选项', exact: true })
+  const create = view.getByRole('button', { name: '创建变更请求', exact: true })
+  const layout = () => toolbar.evaluate((row) => {
+    const header = row.closest('[data-forge-changes]')!.firstElementChild!
+    return { fold: row.getAttribute('data-fold'), overflow: row.scrollWidth - row.clientWidth, height: row.getBoundingClientRect().height,
+      header: header.getBoundingClientRect().height }
+  })
+  // The button keeps a fixed height when its label wraps, so the label's own height tells one line from two.
+  const labelHeight = () => create.evaluate((button) => {
+    const range = document.createRange()
+    range.selectNodeContents(button)
+    return Math.round(range.getBoundingClientRect().height)
+  })
+  const lineHeight = await labelHeight()
+  const seen: string[] = []
+  for (const width of [1680, 700, 560, 390, 340]) {
+    await page.setViewportSize({ width, height: 800 })
+    await expect.poll(async () => (await layout()).overflow).toBeLessThanOrEqual(0)
+    const { fold, height, header } = await layout()
+    // One 28px control row inside the toolbar's padding, and the header keeps its single-line height.
+    expect([width, height]).toEqual([width, 38])
+    expect([width, header]).toEqual([width, 44])
+    expect([width, await labelHeight()]).toEqual([width, lineHeight])
+    seen.push(`${width}:${fold}`)
+  }
+  expect(seen[0]).toBe('1680:0')
+  expect(seen.at(-1)).toBe('340:3')
+  expect(await more.isVisible()).toBe(true)
+
+  await page.setViewportSize({ width: 390, height: 800 })
+  await expect.poll(() => toolbar.getAttribute('data-fold')).toBe('2')
+  // Folded controls leave the row; the progress turns into the ring and the bare count.
+  expect(await toolbar.getByRole('button', { name: '左右对比', exact: true }).isVisible()).toBe(false)
+  expect(await toolbar.getByRole('switch', { name: '隐藏测试文件', exact: true }).isVisible()).toBe(false)
+  expect(await toolbar.locator('[data-forge-progress="compact"]').innerText()).toBe('0/2')
+  await more.click()
+  const menu = page.getByRole('menu')
+  expect(await menu.getByRole('menuitem').allTextContents()).toEqual(['全部折叠', '左右对比', '自动换行', '隐藏测试文件'])
+  const code = view.locator('[data-forge-diff-file="README.md"] [data-review]')
+  expect(await code.getAttribute('data-split')).toBe('')
+  await menu.getByRole('menuitem', { name: '左右对比', exact: true }).click()
+  await expect.poll(() => code.getAttribute('data-split')).toBe(null)
+  expect(await page.getByRole('menu').count()).toBe(0)
+  await page.setViewportSize({ width: 1680, height: 800 })
+  await expect.poll(() => toolbar.getAttribute('data-fold')).toBe('0')
+  expect(await more.isVisible()).toBe(false)
+  expect(await toolbar.getByRole('button', { name: '左右对比', exact: true }).getAttribute('aria-pressed')).toBe('false')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+it.skipIf(MODE === 'record')('writes a left and a right comment at once, each inside its own column of the side-by-side row', async () => {
+  const { page, view, tripwire } = await openLocalChanges('web-e2e-forge-side-comments')
+  const readme = view.locator('[data-forge-diff-file="README.md"]')
+  const open = async (name: string) => {
+    await readme.getByRole('button', { name: `选择第 ${name} 行`, exact: true }).click()
+    await readme.getByRole('button', { name: '添加评论', exact: true }).click()
+    return readme.getByRole('region', { name: `评论 ${name}`, exact: true })
+  }
+  const left = await open('L1')
+  const right = await open('R1')
+  await right.getByRole('textbox').fill('右侧的评论')
+  for (const width of [1680, 1000, 780]) {
+    await page.setViewportSize({ width, height: 900 })
+    const boxes = await readme.evaluate((section) => {
+      const pair = section.querySelector('[data-diff-pair]')!
+      const [l, r] = Array.from(pair.children, cell => cell.getBoundingClientRect())
+      const [a, b] = Array.from(section.querySelectorAll('[data-forge-comment]'), form => form.getBoundingClientRect())
+      return { l: [l!.left, l!.right], r: [r!.left, r!.right], a: [a!.left, a!.right, a!.top], b: [b!.left, b!.right, b!.top] }
+    })
+    // Each comment stays inside its side's column, and both share one row.
+    expect(boxes.a[0]!).toBeGreaterThan(boxes.l[0]!)
+    expect(boxes.a[1]!).toBeLessThan(boxes.l[1]!)
+    expect(boxes.b[0]!).toBeGreaterThan(boxes.r[0]!)
+    expect(boxes.b[1]!).toBeLessThan(boxes.r[1]!)
+    expect(boxes.a[2]).toBe(boxes.b[2])
+  }
+  await left.getByRole('button', { name: '取消', exact: true }).click()
+  expect(await left.count()).toBe(0)
+  expect(await right.getByRole('textbox').inputValue()).toBe('右侧的评论')
   expect(tripwire.pageErrors).toEqual([])
 })

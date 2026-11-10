@@ -53,6 +53,20 @@ func refusesInvalidRequestEnvelopes(_ source: String) {
     #expect(window.json["isOnScreen"] == .bool(true))
 }
 
+@Test(arguments: [
+    (0, false, false, 200.0, true), (0, false, true, 0.0, true),
+    (3, true, true, 200.0, true), (3, false, true, 200.0, false),
+    (25, true, false, 200.0, false), (3, true, true, 0.0, false),
+])
+func discoversNormalWindowsAndVisibleAuxiliaryWindows(layer: Int, onScreen: Bool, currentSpace: Bool,
+                                                      width: Double, expected: Bool) {
+    let window = WindowInfo(windowID: 7, pid: 42, appName: "Fixture", title: "",
+                            bounds: WindowBounds(x: 0, y: 0, width: width, height: 100),
+                            isOnScreen: onScreen, onCurrentSpace: currentSpace, layer: layer)
+    #expect(window.json.object?["cacheOnly"] == (expected ? nil : .bool(true)))
+    #expect(window.json.object?.keys.contains("layer") == false)
+}
+
 @Test func separatesUnsupportedMethodsFromInvalidParameters() throws {
     let unsupported = try NativeRequest(data: Data(#"{"id":"call","method":"absent","params":{}}"#.utf8))
     do {

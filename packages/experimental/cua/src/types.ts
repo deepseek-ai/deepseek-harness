@@ -42,6 +42,10 @@ export interface CuaAxOptions extends CuaObservationOptions {
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
+  maxDepth?: number
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
@@ -103,8 +107,8 @@ export interface CuaSurface {
   /**
    * Read the full accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
-   * @param options - emission, menu expansion and field detail options.
-   * @returns Full accessibility tree text with element ids, subject to the provider's traversal limits.
+   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAxOptions): Promise<string>
   /**
@@ -180,7 +184,7 @@ export interface CuaSurface {
 /**
  * An explicit window with screenshot and pointer input operations.
  * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
- * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
+ * Coordinate input requires a successful AX observation covering the window or a screenshot, and rejects resizing since that observation.
  */
 export interface CuaWindow extends CuaSurface {
   /** Opaque window identifier issued by the platform provider. */
@@ -241,9 +245,10 @@ export interface CuaApp extends CuaSurface {
    */
   getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
   /**
-   * Observe a specific window.
-   * @param windowId - Decimal-string ID obtained from getWindows, passed unchanged.
-   * @returns A window object with its initial accessibility tree read silently; this updates the application's current snapshot.
+   * Select a specific window.
+   * @param windowId - String ID obtained from getWindows, passed unchanged.
+   * @returns A window object without a native request; selection leaves the accessibility snapshot unchanged.
+   * Providers reject a closed or foreign window when operating on it.
    */
   getWindow(windowId: string): Promise<CuaWindow>
 }
@@ -275,9 +280,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, and launch it only where the provider supports launch; selection never activates it.
+   * Select an app, obtain consent, and launch it only where the provider supports launch, without reading AX; selection never activates it.
    * @param selector - Provider-issued ID, or a supported exact name, bundle ID or absolute path; ambiguous selectors reject.
-   * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
+   * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>
 }

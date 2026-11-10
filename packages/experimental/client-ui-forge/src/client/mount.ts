@@ -7,19 +7,21 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { IconBranchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, type QuoteSummary } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
+import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
 import { ReviewQueue } from './review-queue.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
+import { formatThreadQuote, threadQuoteSummary } from './review-threads.ts'
 import { ActionToast } from './ActionToast.tsx'
 import { CHANGES_ID, changesDefinition } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
@@ -147,20 +149,30 @@ function registerUi(ctx: Context): void {
       () => { notices.report('toast.promptFailed') },
     )
   }
-  const addReviewToInput = (sessionId: SessionId, selection: ReviewSelection): boolean => {
+  /** Insert one quote into the Session's main input, numbering it after the quotes of the same heading already there. */
+  const quoteInInput = (sessionId: SessionId, heading: RegExp, quote: (index: number) => string, summary: QuoteSummary): boolean => {
     const scope = ctx.sessions.scope(sessionId)
     const conversation = scope?.get('conversation')
     if (scope === undefined || conversation === undefined) return false
     const input = conversation.input.for(scope)
-    const numbers = Array.from(input.state.getSnapshot().draft.matchAll(/(?:^|\n)(?:> )?## User Comment (\d+)/g), match => Number(match[1]))
-    if (!input.insertQuote(formatReviewComment(selection, Math.max(0, ...numbers) + 1), reviewQuoteSummary(selection.comment))) return false
+    const numbers = Array.from(input.state.getSnapshot().draft.matchAll(heading), match => Number(match[1]))
+    if (!input.insertQuote(quote(Math.max(0, ...numbers) + 1), summary)) return false
     input.focus()
     return true
   }
+  const addReviewToInput = (sessionId: SessionId, selection: ReviewSelection): boolean => quoteInInput(sessionId,
+    /(?:^|\n)(?:> )?## User Comment (\d+)/g, index => formatReviewComment(selection, index), reviewQuoteSummary(selection.comment))
+  const addThreadToInput = (sessionId: SessionId, thread: ForgeReviewThread, url: string, range: string | null): boolean =>
+    quoteInInput(sessionId, /(?:^|\n)(?:> )?## Review Thread (\d+)/g, index => formatThreadQuote(thread, url, index),
+      threadQuoteSummary(thread, range))
   /** How toasts name a change request: its number, else its title, else its URL. */
   const nameOf = (entry: ForgePanelChangeRequest): string => {
     const number = numberOf(entry)
     return number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number })
+  }
+  /** Tell the reader that the code host may have applied an action it did not confirm, which they should check there. */
+  const reportUnknown = (entry: ForgePanelChangeRequest): void => {
+    notices.report('toast.actionUnknown', { params: { name: nameOf(entry) } })
   }
   const remove = (sessionId: SessionId, entry: ForgePanelChangeRequest): void => {
     void ctx.remote.forgePanel.dismiss(sessionId, entry.url).then((result) => {
@@ -208,13 +220,41 @@ function registerUi(ctx: Context): void {
       markReady: async (entry) => {
         const result = await ctx.remote.forgePanel.markReady(sessionId, entry.url)
         if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
         else notices.report('toast.markReadyFailed', { params: { message: result.error.message } })
       },
       merge: async (entry, request) => {
         const result = await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha)
         if (result.ok) notices.report('toast.merged', { tone: 'success', params: { name: nameOf(entry) } })
         else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
         else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
+      },
+      rerunChecks: async (entry, request) => {
+        const result = await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request)
+        if (result.ok) notices.report('toast.rerunRequested', { tone: 'success', params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.rerunStale', { params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
+        else notices.report('toast.rerunFailed', { params: { message: result.error.message } })
+      },
+      requestReviews: async (entry, reviewers) => {
+        const result = await ctx.remote.forgePanel.requestReviews(sessionId, entry.url, reviewers)
+        const login = reviewers.map(reviewer => reviewer.login).join(', ')
+        if (result.ok) notices.report('toast.reviewRequested', { tone: 'success', params: { name: nameOf(entry), login } })
+        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
+        else notices.report('toast.reviewRequestFailed', { params: { message: result.error.message } })
+      },
+      reviewerCandidates: async (url, query, signal) => {
+        const result = await ctx.remote.forgePanel.reviewerCandidates(sessionId, url, query, signal)
+        if (!result.ok) throw new Error(result.error.message)
+        return result.value
+      },
+      updateBranch: async (entry, request) => {
+        const result = await ctx.remote.forgePanel.updateBranch(sessionId, entry.url, request.method, request.headSha)
+        if (result.ok) notices.report('toast.branchUpdated', { tone: 'success', params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.branchUpdateStale', { params: { name: nameOf(entry) } })
+        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
+        else notices.report('toast.branchUpdateFailed', { params: { message: result.error.message } })
       },
       restore: () => {
         void restore(sessionId).then((message) => {
@@ -240,8 +280,14 @@ function registerUi(ctx: Context): void {
       changeRequestDiff: (url, commits, signal) => ctx.remote.forgePanel.changeRequestDiff(sessionId, url, commits, signal),
       changeRequestCommits: (url, signal) => ctx.remote.forgePanel.changeRequestCommits(sessionId, url, signal),
       viewedFiles: store.viewed,
+      changeRequestViewed: (url, headSha, signal) => ctx.remote.forgePanel.changeRequestViewed(sessionId, url, headSha, signal),
+      setFileViewed: (url, request) => ctx.remote.forgePanel.setFileViewed(sessionId, url, request),
       changeRequestText: (url, commit, path) => ctx.remote.forgePanel.changeRequestText(sessionId, url, commit, path),
       addReviewToInput: selection => addReviewToInput(sessionId, selection),
+      addThreadToInput: (thread, url, range) => addThreadToInput(sessionId, thread, url, range),
+      changeRequestReview: (url, headSha, fresh, signal) =>
+        ctx.remote.forgePanel.changeRequestReview(sessionId, url, headSha, fresh, signal),
+      changeRequestReviewWrite: (url, write) => ctx.remote.forgePanel.changeRequestReviewWrite(sessionId, url, write),
       reviewQueue: ({ id, signal }) => {
         let queue = store.reviews.get(signal)
         if (queue === undefined) {
@@ -265,7 +311,7 @@ function registerUi(ctx: Context): void {
       copyPath,
       createChangeRequest: () => { createChangeRequest(sessionId) },
       report: (key, params) => {
-        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' ? 'success' : 'failure',
+        notices.report(key, { tone: key === 'review.published' || key === 'review.submitted' || key === 'review.discarded' ? 'success' : 'failure',
           ...params === undefined ? {} : { params } })
       },
     }

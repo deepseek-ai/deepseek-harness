@@ -157,6 +157,9 @@ actor AXWorker {
         return result
     }
     private func element(_ handle: String, _ params: RequestParameters) throws -> AXUIElement {
+        if let windowID = try params.optionalWindowID() {
+            _ = try NativePlatform.ownedWindow(validateIdentity(handle).pid, windowID)
+        }
         let value = try snapshot(handle, params.string("snapshotId"))
         let index = try params.elementIdIndex()
         guard let element = value.elements[index] else { throw RequestParameters.invalid("elementId is absent from the selected snapshot") }
@@ -227,7 +230,14 @@ actor AXWorker {
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null]))
         }
-        if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
+        if method == "listApps" {
+            // listApps enumerates running applications only, so each entry reports its running state.
+            return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map { app in
+                var value = app.json.object ?? [:]
+                value["isRunning"] = .bool(true)
+                return .object(value)
+            }))
+        }
         try NativePlatform.requireUnlocked(locked)
         if method == "getApp" {
             let selector = try params.string("selector")
@@ -267,7 +277,7 @@ actor AXWorker {
         }
         let identity = try validateIdentity(handle)
         if method == "listWindows" {
-            let windows = NativePlatform.windows().filter { $0.pid == identity.pid }
+            let windows = NativePlatform.applicationWindows(identity.pid)
             // Remove closed window scopes using the current WindowServer identity set.
             let ids = Set(windows.map(\.windowID))
             snapshots = snapshots.filter { key, _ in key.appHandle != handle || (key.windowID.map { ids.contains($0) } ?? true) }
@@ -304,7 +314,7 @@ actor AXWorker {
             let projection: AXProjection
             do {
                 projection = try ax().project(identity: identity, windowID: window,
-                    maxElements: params.integer("maxElements", in: 1...10000), maxDepth: params.integer("maxDepth", in: 1...100),
+                    maxElements: params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: params.integer("maxDepth", in: NativeProtocol.depthRange),
                     includeMenus: params.optionalBoolean("includeMenus") ?? false, details: params.optionalBoolean("details") ?? false)
             } catch let failure as NativeFailure {
                 throw Self.observationFailure(failure)
@@ -314,7 +324,7 @@ actor AXWorker {
             try NativePlatform.requireAccessibility()
             if let window { _ = try NativePlatform.ownedWindow(identity.pid, window) }
             try cancellation.check()
-            let observedWindows = NativePlatform.windows().filter { $0.pid == identity.pid }
+            let observedWindows = NativePlatform.applicationWindows(identity.pid)
             let id = try identifier("snapshot")
             let scope = SnapshotScope(appHandle: handle, windowID: window)
             snapshots[scope] = NativeSnapshot(id: id, scope: scope, elements: projection.indexed)
@@ -340,7 +350,7 @@ actor AXWorker {
             return .paste(PastePlan(handle: handle, text: try params.string("text"), format: try params.optionalString("format") ?? "text",
                                    maxBytes: try params.integer("maxClipboardBytes", in: 1024...Int.max),
                                    readTimeout: .milliseconds(try params.integer("pasteReadTimeoutMs", in: 1...2147483647)),
-                                   maxElements: try params.integer("maxElements", in: 1...10000), maxDepth: try params.integer("maxDepth", in: 1...100)))
+                                   maxElements: try params.integer("maxElements", in: NativeProtocol.elementRange), maxDepth: try params.integer("maxDepth", in: NativeProtocol.depthRange)))
         case "sendKeyEvent":
             try inputs().0.keyDown(params.string("key"), app: handle, run: params.string("runId")) {
                 try ax().keyboardRecipient(identity, catalog: catalog)
