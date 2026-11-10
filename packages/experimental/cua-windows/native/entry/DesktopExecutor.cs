@@ -1,4 +1,5 @@
 // The shared Host policy authorizes handles before these platform operations execute.
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using DeepSeek.Cua.Protocol;
@@ -92,12 +93,28 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 return new { appHandle = selected.Handle, pid = 4, name = selected.Name,
                     running = selected.IsRunning, authorization = selected.Authorization };
             }
-            if (request.Method == "launchApp")
-                throw new NativeFailure("UNSUPPORTED", "Windows application selection does not launch applications");
             var app = state.App(String(parameters, "appHandle"));
             var foreground = Win32.GetForegroundWindow();
             switch (request.Method)
             {
+                case "launchApp":
+                {
+                    var before = Windows.Refresh(app, context)
+                        .Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)).ToHashSet();
+                    await sta.Invoke(() => ShellBroker.Launch(@"shell:AppsFolder\" + app.AppId), cancellation);
+                    var elapsed = Stopwatch.StartNew();
+                    WindowState[] windows;
+                    while (true)
+                    {
+                        windows = Windows.Refresh(app, context);
+                        if (!before.SetEquals(windows.Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)))) break;
+                        var remaining = config.LaunchWaitMs - elapsed.ElapsedMilliseconds;
+                        if (remaining <= 0) break;
+                        await Task.Delay((int)Math.Min(config.PollIntervalMs, remaining), cancellation);
+                    }
+                    context.Check();
+                    return new { appHandle = app.Handle, pid = 4, name = app.Name, running = windows.Length != 0 };
+                }
                 case "listWindows":
                     return Windows.DescribeAll(app, Windows.Refresh(app, context), context).Values;
                 case "getState":

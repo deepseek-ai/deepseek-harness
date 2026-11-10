@@ -32,7 +32,7 @@ internal static class ShellBroker
         }
         catch (Exception error) when (error is COMException or TargetInvocationException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
         {
-            throw new NativeFailure("LAUNCH_FAILED", "Windows Explorer could not launch this executable; open the application and select its observed PID");
+            throw new NativeFailure("LAUNCH_FAILED", "Windows Explorer could not confirm launch of the requested target; inspect listApps before retrying, or open the application manually");
         }
         finally
         {

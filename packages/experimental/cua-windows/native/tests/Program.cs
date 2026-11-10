@@ -21,7 +21,12 @@ Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getSta
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");
 Refuses(() => WireJson.Parse("""{"params":{"x":1,"x":2}}"""), "INVALID_REQUEST");
-Check(NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}""")).Method == "launchApp", "Host launch continuation remains admitted");
+var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
+Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
+    "Host launch continuation retains the selected application handle");
+foreach (var parameters in new[] { "{}", "{\"appHandle\":\"\"}", "{\"selector\":\"Example.App\"}",
+    "{\"appHandle\":\"pending\",\"appId\":\"Other.App\"}", "{\"appHandle\":\"pending\",\"arguments\":\"--other\"}" })
+    Refuses(() => NativeRequest.Parse(WireJson.Parse("{\"id\":\"launch\",\"method\":\"launchApp\",\"params\":" + parameters + "}")), "INVALID_ARGUMENT");
 
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"close"}"""), null) == NativeControl.Close, "Connection close needs no active operation");
 Check(NativeControlFrame.Parse(WireJson.Parse("""{"type":"cancel","id":"one"}"""), "one") == NativeControl.Cancel, "Cancellation matches the live operation");

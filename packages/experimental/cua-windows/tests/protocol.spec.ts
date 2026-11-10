@@ -23,6 +23,11 @@ it('resolves Windows input defaults without a compiler path setting', () => {
   const resolved = Config({})
   expect(resolved).not.toHaveProperty('dotnetPath')
   expect(resolved.pollIntervalMs).toBe(25)
+  expect(resolved.launchWaitMs).toBe(1000)
+  expect(Config({ launchWaitMs: 750 }).launchWaitMs).toBe(750)
+  for (const launchWaitMs of [0, -1, 0.5, 2 ** 31, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() => Config({ launchWaitMs })).toThrow()
+  }
   expect(resolved.textEventIntervalMs).toBe(0)
   expect(() => Config({ pollIntervalMs: 0 })).toThrow()
   expect(() => Config({ maxResponseBytes: 2 ** 31 })).toThrow()

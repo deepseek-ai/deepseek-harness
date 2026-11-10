@@ -11,7 +11,7 @@ it.skipIf(!helperPath)('admits Windows desktop requests through managed WSL or n
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(LocalSubprocessRuntime)
-  const runtime = new WindowsNativeRuntime(ctx, 25, process.platform === 'win32' ? 'pipe' : 'stdio')
+  const runtime = new WindowsNativeRuntime(ctx, 25, 1000, process.platform === 'win32' ? 'pipe' : 'stdio')
   onTestFinished(() => runtime.dispose())
   const client = new NativeClient(ctx, { ...Config({}), helperPath: helperPath!, cwd: process.cwd() },
     (_owner, config) => runtime.connect(config))

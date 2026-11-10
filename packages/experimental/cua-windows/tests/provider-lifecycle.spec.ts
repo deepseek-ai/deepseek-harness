@@ -37,10 +37,10 @@ it('rejects relative overrides before installing a native provider', async () =>
   expect(native.install).not.toHaveBeenCalled()
 })
 it('uses an absolute fixture without compiling and disposes the Host runtime', async () => {
-  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13 })
+  const ctx = owner(), config = Config({ helperPath: resolve('fixture.exe'), pollIntervalMs: 13, launchWaitMs: 750 })
   await apply(ctx, config)
   expect(native.prepare).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 'pipe')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 13, 750, 'pipe')
   const backend = native.install.mock.calls[0]![2]
   expect(backend.helperPath).toBe(config.helperPath)
   expect(native.architecture).not.toHaveBeenCalled()
@@ -103,7 +103,7 @@ it('prepares the Windows architecture and stdio transport for WSL', async () => 
   await apply(ctx, Config({}))
   expect(native.prepare.mock.calls[0]![0].architecture).toBe('arm64')
   expect(native.architecture).not.toHaveBeenCalled()
-  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 'stdio')
+  expect(native.construct).toHaveBeenCalledWith(ctx, 25, 1000, 'stdio')
   expect(native.install.mock.calls[0]![2].helperPath).toBe('/mnt/c/cache/helper.exe')
 })
 

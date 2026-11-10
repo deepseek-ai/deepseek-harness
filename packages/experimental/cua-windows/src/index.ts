@@ -34,6 +34,8 @@ export interface Config extends CuaConfig {
   windowsPowerShellPath: string
   /** Milliseconds between application-readiness and clipboard-release observations. */
   pollIntervalMs: number
+  /** Maximum milliseconds to observe window changes after a Shell launch; expiry returns the last observed running state. */
+  launchWaitMs: number
 }
 
 /** Validate platform configuration before locating and launching the helper. */
@@ -42,6 +44,7 @@ export const Config = Schema.object({
   connectTimeoutMs: CuaConfigFields.connectTimeoutMs.default(30_000),
   windowsPowerShellPath: Schema.string().min(1).default('powershell.exe'),
   pollIntervalMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(25),
+  launchWaitMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(1000),
   textEventIntervalMs: CuaConfigFields.textEventIntervalMs.default(0),
   maxRequestBytes: CuaConfigFields.maxRequestBytes.max(2 ** 31 - 1),
   maxResponseBytes: CuaConfigFields.maxResponseBytes.max(2 ** 31 - 1),
@@ -79,7 +82,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, 'cua-windows.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
-  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, host === 'wsl' ? 'stdio' : 'pipe')
+  const runtime = new WindowsNativeRuntime(ctx, config.pollIntervalMs, config.launchWaitMs, host === 'wsl' ? 'stdio' : 'pipe')
   ctx.effect(() => () => runtime.dispose(), 'cua-windows.native-runtime')
   installCua(ctx, config, {
     helperPath, createChannel: (_owner, native) => runtime.connect(native), getGuidance: () => GUIDANCE, capabilities: CAPABILITIES,

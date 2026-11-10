@@ -9,11 +9,11 @@ using Timer = System.Threading.Timer;
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record NativeConfig(int MaxRequestBytes, int MaxResponseBytes, int AxTimeoutMs,
-    double TextEventIntervalMs, int ScreenshotTimeoutMs, int TimeoutMs, int GraceMs, int PollIntervalMs, int MaxClickHoldMs)
+    double TextEventIntervalMs, int ScreenshotTimeoutMs, int TimeoutMs, int GraceMs, int PollIntervalMs, int LaunchWaitMs, int MaxClickHoldMs)
 {
     internal static NativeConfig Parse(JsonElement value)
     {
-        string[] fields = ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs", "pollIntervalMs", "maxClickHoldMs"];
+        string[] fields = ["maxRequestBytes", "maxResponseBytes", "axTimeoutMs", "textEventIntervalMs", "screenshotTimeoutMs", "timeoutMs", "graceMs", "pollIntervalMs", "launchWaitMs", "maxClickHoldMs"];
         if (value.ValueKind != JsonValueKind.Object || value.EnumerateObject().Any(item => !fields.Contains(item.Name))
             || fields.Any(field => !value.TryGetProperty(field, out _))) throw new NativeFailure("INVALID_CONFIG", "Expected explicit native resource limits");
         int Positive(string field)
@@ -24,7 +24,7 @@ internal sealed record NativeConfig(int MaxRequestBytes, int MaxResponseBytes, i
         var interval = value.GetProperty("textEventIntervalMs").GetDouble();
         if (!double.IsFinite(interval) || interval < 0 || interval > 1000) throw new NativeFailure("INVALID_CONFIG", "Invalid text event interval");
         return new(Positive("maxRequestBytes"), Positive("maxResponseBytes"), Positive("axTimeoutMs"), interval,
-            Positive("screenshotTimeoutMs"), Positive("timeoutMs"), Positive("graceMs"), Positive("pollIntervalMs"), Positive("maxClickHoldMs"));
+            Positive("screenshotTimeoutMs"), Positive("timeoutMs"), Positive("graceMs"), Positive("pollIntervalMs"), Positive("launchWaitMs"), Positive("maxClickHoldMs"));
     }
 }
 
