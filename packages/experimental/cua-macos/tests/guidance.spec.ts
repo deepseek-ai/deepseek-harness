@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
 import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
-import { GUIDANCE, PLATFORM_GUIDANCE } from '../src/guidance.ts'
+import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
 const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
@@ -10,6 +10,15 @@ const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
 const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'click', 'scroll', 'drag']
+
+it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
+  for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
+    expect(GUIDANCE).toContain(name)
+    expect(PROGRAM_GUIDANCE).not.toContain(name)
+  }
+  expect(PROGRAM_GUIDANCE).toContain('node:fs/promises')
+  expect(PROGRAM_GUIDANCE).toContain('session’s file tools')
+})
 
 it('keeps exactly three ordered operation headings', () => {
   const heads = COMMON_GUIDANCE.match(/^## .+$/gm)
@@ -132,9 +141,8 @@ it('separates facade options from raw RPC parameters', () => {
   expect(COMMON_GUIDANCE).toContain('raw operation schema')
 })
 
-it('documents facade initialization, emitted observations, and separate key arguments', () => {
-  expect(COMMON_GUIDANCE).toContain('host-provided bridge initialization once')
-  expect(COMMON_GUIDANCE).toContain('not a preinstalled global')
+it('documents emitted observations and key arguments without assuming a transport', () => {
+  expect(COMMON_GUIDANCE).not.toContain('not a preinstalled global')
   expect(COMMON_GUIDANCE).toContain('void await')
   expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')

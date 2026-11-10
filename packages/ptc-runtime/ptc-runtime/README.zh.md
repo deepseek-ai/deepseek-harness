@@ -40,11 +40,14 @@ const result = await ctx.ptcRuntime.run(spec)
 // result.value === 3
 ```
 
+<a id="choose-a-backend"></a>
 ### 选择后端
 
 后端以 `language` 与 `isolation` 提供诊断描述符；两者都不授予权限或证明约束。[`dsh-ptc-runtime-node`](../ptc-runtime-node/README.zh.md) 在全新的受管 Node 进程中按已解析沙箱策略执行可擦除 TypeScript。私有的 [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.zh.md) 提供方在全新 CPython 子进程中执行 Python，不提供文件约束。`sandboxMode` 声明提供方的部署文件策略模式；不支持该能力时则缺省。
 
 使用可选的[Node 内存保留模式](../ptc-runtime-node/README.zh.md#persistent-repl)时，跨调用传入同一个 `stateOwner` 对象，并在所有者结束时等待 `release(owner)`。不同对象不会共享环境；省略所有者时使用临时环境。无状态提供方忽略所有权。同一保留环境的调用不能重叠。
+
+`registerEnvironmentInitializer(program)` 注册一段源码，在每个新环境安装本次绑定后、执行用户代码前运行一次。必须在首次接纳运行前注册，且只允许注册一个初始化程序。初始化与首次运行共享日志、截止时间、取消和输出预算，其完成值会被丢弃。失败会阻止用户代码执行并丢弃环境，但不回滚外部效果。调用方负责管理返回的异步注销函数；它会取消已接纳的运行，等待这些运行结束，并释放环境。清理失败会阻止新的执行，直到重试注销成功。即使所有环境都已释放，首次接纳运行后仍不能注册。不支持的提供方和模式会拒绝注册；支持的语法见 [Node 提供方](../ptc-runtime-node/README.zh.md#persistent-repl)。
 
 ### 可移植地命名绑定
 

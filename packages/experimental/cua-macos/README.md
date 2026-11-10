@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Inspect macOS permissions, select running applications and windows, read accessibility trees, capture screenshots from a selected window, and send input. The object API can be retained by an external persistent execution environment. The Swift helper uses macOS frameworks directly and adapts selected MIT-licensed Cua Driver behavior. This package owns neither a PTC runtime nor variable persistence.
+Inspect macOS permissions, select running applications and windows, read accessibility trees, capture screenshots from a selected window, and send input. Standard and other non-PTC presets use retained objects through `cua_run_code`; PTC uses its existing runtime. The Swift helper uses macOS frameworks directly and adapts selected MIT-licensed Cua Driver behavior. The [shared CUA package](../cua/README.md) owns tool registration and the dedicated runtime; this provider owns native operations.
 
 ## Table of Contents
 
@@ -57,7 +57,8 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `agentPreset` | `ptc` | Register tools and guidance only for Agents bound to this preset; `false` registers globally. |
+| `agentPreset` | `ptc` | Give this preset raw `cua` and other composed presets `cua_run_code`; `false` registers raw `cua` globally. |
+| `standaloneRunCode.runtime` / `standaloneRunCode.executor` | shared Node / PTC limits | Resource, launch, and nested-call settings for the dedicated CUA runtime; see [CUA](../cua/README.md). |
 | `allowedApps` | `[]` | Legacy path/signature grants, imported once for removal; they do not authorize new bundle-ID identities. |
 | `helperPath` | package-owned executable | Absolute executable inside the signed helper `.app`; a bare binary fails with `NATIVE_APPLICATION_REQUIRED`. |
 | `requireSystemPointerApproval` | `true` | Ask on the first explicit request to move the system pointer. With `false`, only explicitly requested moves use it. |
@@ -81,7 +82,7 @@ The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-exper
 
 `pressKey(key, modifiers?)` presses and releases one key. For shortcuts, pass held modifiers separately, as in `pressKey('a', ['command'])`. Pressing a modifier itself, as in `pressKey('shift')`, sets its flag on press and clears it on release. A single `+` or `plus` sends Shift+=. The macOS helper accepts `command`/`cmd`, `shift`, `option`/`alt`, `control`/`ctrl`, and `fn`, and maps them to their physical keys. Key names are platform-defined; keypad names (`KP_0` through `KP_9`, `KP_Enter`, and keypad operators) retain their physical key codes. `typeText` sends literal text, including its line breaks and tabs. Use the App object's `pressKey` for a short press.
 
-For a long press, call `app.sendKeyEvent('w', 'down')` inside `run_code`. The first down holds the key across subsequent tool calls. For an ordinary key already held by this execution, each additional down sends one key-down marked as a repeat to the original process. Choose the interval between calls. A control can filter synthetic repeats, so check its response. One up releases the key. Choose when to send each up: after W down, D down and D up, W stays down. When the program returns, exits with an error, or the user pauses it, the helper releases the remaining keys at the processes that received their downs. A later execution cannot release an earlier execution's keys.
+For a long press, call `app.sendKeyEvent('w', 'down')` inside `run_code` or `cua_run_code`. The first down holds the key across subsequent tool calls. For an ordinary key already held by this execution, each additional down sends one key-down marked as a repeat to the original process. Choose the interval between calls. A control can filter synthetic repeats, so check its response. One up releases the key. Choose when to send each up: after W down, D down and D up, W stays down. When the program returns, exits with an error, or the user pauses it, the helper releases the remaining keys at the processes that received their downs. A later execution cannot release an earlier execution's keys.
 
 Agent disposal and plugin unload cancel and await the complete tool call, including image admission and attachment storage. An image write already in progress must settle before disposal returns; a canceled call cannot return a successful screenshot.
 
@@ -93,7 +94,7 @@ AX observations show menu-bar entries by default. Use `app.getAccessibilityTree(
 
 Values and placeholders are separate. Named, stateful or actionable groups and scroll areas retain their own rows. Repeated names, descriptions and help text on one node are shown once. Values, placeholders and URLs keep their distinct meanings even when their text matches; body text shared by distinct nodes remains intact. Writability is explicit on relevant controls, including `AXIncrementor`; `unknown` means the system did not report it. Missing optional state fields do not imply false. During tree observation, an AXValue or AXSelectedTextRange writability probe returning -25200 leaves that field unknown and preserves the remaining nodes. Actual writes remain strict; permission, communication and invalid-element errors still propagate. UTF-16 ranges outside the observed value are marked unavailable. Compact tree labels can omit AppKit target and selector details. Pass the exact name returned by `listActions(elementId)` to `performAction`.
 
-Observations emit by default and also return their value. In persistent PTC, use `void await app.getAccessibilityTree()` for one emitted copy, or `emit:false` and one explicit print. Capturing a screenshot after an emitted tree can fail independently; retain the successful AX output.
+Observations emit by default and also return their value. In persistent PTC or `cua_run_code`, use `void await app.getAccessibilityTree()` for one emitted copy, or `emit:false` and one explicit print. Capturing a screenshot after an emitted tree can fail independently; retain the successful AX output.
 
 Screenshot diagnostics use `[cua-screenshot]` records keyed by the tool request ID. Native phase records return over the originating Agent connection and cover window/AX geometry checks, system capture, PNG/Base64 encoding and response writing. Host debug logs add dispatch, reply and cleanup timings. Each request retains at most 8192 bytes of complete diagnostic records, with explicit truncation; screenshot failures append these records to the error for Session export. Records contain stages, timings and error codes, not window titles, AX text or image bytes.
 
@@ -101,7 +102,7 @@ Native preparation serializes building and signing with a file lock. It retains 
 
 ### Connect an external execution environment
 
-To run through persistent PTC, add `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`; the package does not install a global object or keep variables alive:
+To run through persistent PTC, add `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`. In other composed presets, `cua_run_code` already supplies the global object and retains variables through the [shared CUA package](../cua/README.md):
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
@@ -175,16 +176,16 @@ Node roles and metadata share one AX batch per observation. Group and scroll-are
 
 #### What the model sees
 
-The plugin contributes one `cua` operation tool with method-specific parameters. Standard PTC presentation exposes it as `tools.cua` through `run_code`. The following package-owned guidance is emitted verbatim:
+The configured PTC preset receives one `cua` operation tool with method-specific parameters through `run_code`. Other composed presets receive `cua_run_code`, with the global `cua` object ready to use and only `tools.cua` bound inside the program. The verbatim block below shows the PTC operation guidance, which uses `tools.write`, `tools.grep`, and `tools.read` for large AX trees. The `cua_run_code` variant uses `node:fs/promises` to save a tree and ordinary session tools outside the program to search it; initialization and program instructions are selected by the [shared CUA package](../cua/README.md#model-experience).
 
-##### Operation guidance (verbatim)
+##### PTC operation guidance (verbatim)
 
 ```markdown
 macOS: accessibility tree operations are available at app or window level. Simulated keyboard input is available at app level. Simulated mouse input is available at window level. For pointer input on a sheet, select its window ID with app.getWindow(id). For menu items outside a window, use app.invoke(id). findApps searches /Applications, /System/Applications, and ~/Applications. Use the Computer Use permission page to grant the helper application Accessibility and Screen Recording permissions in System Settings. Native window and AX bounds use macOS points, while delivered screenshots carry their own pixel dimensions. show does not switch Spaces, and Stage Manager can present reduced window geometry; explain any required foreground step before calling app.activate() or performing an advertised AXRaise action.
 
 Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async; observation options default to { emit: true }, and emit: false suppresses sink output only, leaving returned values unchanged. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 
-In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global. Use void await for observations that emit, and never stringify screenshot image bytes.
+Use void await for observations that emit, and never stringify screenshot image bytes.
 
 Signatures show resolved return values after await. ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }; foregroundChanged is omitted when not sampled and null when the sample is unavailable. JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }; numbers must be finite. App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level. Window is the window object with readonly window.windowId: number and the methods listed below for window level. Neither object carries pid.
 
@@ -226,7 +227,7 @@ Available at app or window level depending on the platform.
 - typeText(text: string) -> ActionResult — type literal text at the app's current focus; line endings send Return and tabs send Tab.
 - paste(text: string, options?: { format?: 'text' | 'html' }) -> ActionResult — deliver text or HTML through the app's Paste command, restoring prior clipboard contents unless another writer changes them; a Paste failure is surfaced without substituting typeText, and PASTE_NOT_CONSUMED means inspect before any retry.
 - pressKey(key: string, modifiers?: string[]) -> ActionResult — press and release one complete keystroke. For example pressKey('Tab', ['shift']) or pressKey('+'). Key and modifier names are platform-defined strings. Pass key and modifiers separately; do not pack them into a chord string.
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one run_code, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this run_code returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
+- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.
 
 Raw tools use { method, params }: include appHandle for app calls and windowId for window calls, and use snapshotId with elementId for element routes. The emit option is facade-only: emit is local output control, so raw callers must follow the raw operation schema for admitted params. getAccessibilityTree maps to getState; getWindow has no raw method; getWindows maps to listWindows; getScreenshot maps to screenshot; cua.getState maps to listApps; every other named operation uses the same method name.
 
@@ -261,7 +262,7 @@ The queue orders individual native requests. Holding an app object does not rese
 - Release packaging does not automatically verify GUI startup, helper identity or exit cleanup. Release maintainers can run the [distribution smoke](native/README.md#build-and-service) on a logged-in Mac before publication; a successful package build does not establish those runtime results.
 - Saved permission rows show the name, path and icon of one approved copy, not an inventory of every installation sharing its identity. Removing that copy can leave its icon unavailable. Revocation still applies to every copy with the same identity.
 - If macOS does not expose a running application’s bundle identifier, the helper checks its reported bundle only when its executable matches the observed process path, then falls back to that path. Consent identity creation fails only when both the bundle identifier and actual executable path are unavailable; process-instance verification can still fail independently.
-- Persistent PTC is an external dependency assumption, not an implementation in this package. Real-model task success requires separate evaluation beyond native and protocol fixtures.
+- The shared CUA package and PTC providers own program execution and retained state; this package owns native operations. Real-model task success requires separate evaluation beyond native and protocol fixtures.
 
 -----
 

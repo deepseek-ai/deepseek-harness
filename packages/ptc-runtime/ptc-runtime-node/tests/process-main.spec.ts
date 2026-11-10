@@ -28,6 +28,7 @@ async function setup(limit = 4096, namespaces: ProgramBootData['namespaces'] = [
   const logs: string[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(undefined) },
+    initialized: async () => {},
     invoke: async () => encodePtcJsonWire(42),
     log: (text) => { logs.push(text) },
     outputLimit: () => {},
@@ -109,6 +110,7 @@ it.each([
   ['throw new Error("boom")', 'boom'],
   ['throw "raw-throw"', 'raw-throw'],
   ['const e = new Error("bare"); e.stack = undefined; throw e', 'bare'],
+  ['delete missing; return 1', 'Delete of an unqualified identifier in strict mode'],
 ])('returns bounded program exceptions for %s', async (code, message) => {
   const h = await setup(65_536)
   const result = await h.run(code, 65_536)

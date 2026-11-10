@@ -8,14 +8,15 @@ import { HarnessError } from '@deepseek-ai/dsh-llm'
 export class ToolCallLimitExceededError extends Error {
   /**
    * Describe the rejected call and how to correct the program.
-   * @param limit - Timeout-derived maximum tool-call attempts for one run_code invocation.
+   * @param limit - Timeout-derived maximum tool-call attempts for one program.
    * @param callNumber - One-based attempt rejected without invoking the tool.
-   * @param callsPerMinute - Attempts granted per minute of run_code timeout.
+   * @param callsPerMinute - Attempts granted per minute of program timeout.
+   * @param toolName - Program tool name.
    */
-  constructor(limit: number, callNumber: number, callsPerMinute: number) {
-    super(`run_code exceeded its limit of ${limit} tool calls (${callsPerMinute} per minute of its timeout); `
-      + `call ${callNumber} was not dispatched. The run_code program may contain an infinite loop. `
-      + 'Check loop termination or split the work into smaller run_code calls.')
+  constructor(limit: number, callNumber: number, callsPerMinute: number, toolName: string) {
+    super(`${toolName} exceeded its limit of ${limit} tool calls (${callsPerMinute} per minute of its timeout); `
+      + `call ${callNumber} was not dispatched. The ${toolName} program may contain an infinite loop. `
+      + `Check loop termination or split the work into smaller ${toolName} calls.`)
     this.name = 'ToolCallLimitExceededError'
   }
 }

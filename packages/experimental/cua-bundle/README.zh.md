@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从插件页为已有和新建 PTC 会话开启 macOS Computer Use。Windows 支持正在开发中。本组合包暂放在 `experimental`，待 Windows 支持完成后迁回 `computer-use` 组。随 DSH 提供且默认关闭，在 macOS Host 的实验性插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+从插件页为已有和新建会话开启 macOS Computer Use。标准、创造、极简及自定义 preset 获得 `cua_run_code`；PTC 继续通过 `run_code` 使用 `cua` 绑定。Windows 支持正在开发中。组合包保留在 `experimental`，待 Windows 支持完成后迁入 `computer-use`。它随 DSH 提供且默认关闭，在 macOS Host 的实验性插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,7 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，按需设置 PTC，并为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
+在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -33,7 +33,7 @@ pnpm dsh web
 
 源码 Desktop 的启动方式和独立开发配置档见[桌面开发说明](../../../apps/desktop/README.zh.md)。需要使用 Computer Use 的配置档分别开启该功能。
 
-开关将组合包选择保存到 profile 的 `package.json`。Computer Use 仅安装在 PTC 会话中。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
+开关将组合包选择保存到 profile 的 `package.json`。PTC 会话获得原始 `cua` 绑定；其他已组合的 preset 获得 `cua_run_code`，其中自动初始化 `cua` 对象，并保留独立的持久状态。通过卡片或详情页启用时，系统权限未就绪会显示设置引导。详情页提供“设为 PTC”按钮来修改新会话默认模式，已有会话保留原 preset。开关保持 PTC 执行方式和其他设置不变。详情页的“设为持久化”按钮单独开启 PTC 跨调用的内存状态保留，作用范围和重载行为见[权限页面](../cua/README.zh.md)。其他 preset 的 CUA 程序状态独立于此设置。提供方加载时准备本机组件，已有与源码摘要匹配的可执行文件时直接复用。
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
@@ -51,7 +51,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面，为该 preset 选择原始 CUA，为其他 preset 选择 `cua_run_code`。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 
@@ -67,26 +67,26 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <a id="model-experience"></a>
 ## 模型体验
 
-### Computer Use in PTC sessions
+### 各 preset 中的 Computer Use
 
 #### What the model sees
 
-已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。关闭撤回这些贡献，保留 PTC 展示方式。其他 preset 不获得 CUA 贡献。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
+已有和新建 PTC 会话通过生成的 SDK 与 `run_code` 使用 `cua`，并获得 CUA 指引。其他已组合的 preset 获得 `cua_run_code` 和相同的操作指引。关闭会撤回这些贡献，并释放专用 CUA 运行时。完整接口与输出约定由 [CUA](../cua/README.zh.md) 和 [PTC](../../ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl) 说明。
 
 #### Token effect
 
-CUA 生效时添加其指引。关闭撤回这些指引，现有 PTC 执行说明保留。
+CUA 生效时添加所选 preset 对应的工具 schema 和指引。关闭会撤回这些贡献，现有 PTC 执行说明保留。
 
 #### KV Cache effect
 
-CUA 生效和卸载会改变 PTC SDK 与系统指引，后续请求使用更新后的前缀。顶层 `run_code` 工具保持存在。
+CUA 生效和卸载会改变工具 schema 与系统指引，后续请求使用更新后的前缀。PTC 保留其顶层 `run_code` 工具。
 
 ## 已知限制与延后工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
 - 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
-- PTC 执行方式由 profile 共享，需单独配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
+- PTC 执行方式由 profile 共享，与 CUA 提供方持有的程序运行时分别配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -107,7 +107,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 `typeText` 和 `pressKey` 面向所选进程当前获得焦点的控件，不指定窗口。`pressKey` 向目标 PID 依次发送修饰键和一个主键的按下事件，再逆序释放。操作中途取消也会逆序释放已按下的键。键盘事件直接发给目标进程，绕过全局 HID 队列。按键名由平台定义；KP_0 和 KP_Enter 等数字键盘名称保留物理键码。后台鼠标操作可能改变键盘焦点。文本逐个 Unicode 字符输入，不使用剪贴板。LF、CR 和 CRLF 发送一次 Return，制表符发送 Tab。应用保留缩进和焦点导航等正常编辑行为。`typeText` 的每次按下和抬起后等待配置的文本事件间隔；`pressKey` 使用自己的按下与释放节奏，分派完成不证明应用已消费全部事件。取消可能中断部分文本或手势，无法撤销已接收事件。很长的文本可能超过 Host 操作期限。继续输入前应核实应用状态。
 
-宿主为每次 `run_code` 的 `sendKeyEvent` 附上执行标识。按下时，helper 保存已选应用、接收进程的 PID 与启动时间、物理键码及对应的松开事件。持有方再次按下普通键时，helper 复用原记录，向接收进程发送一次带 `keyboardEventAutorepeat` 标志的按下事件。AppKit 视图可能只收到首次按下和最终松开，过滤中间的重复事件。重复、显式松键和执行结束时都会核对原进程身份。其他执行尝试按下或松开同一个键时，错误会指出键名，并区分其他会话和同一连接内的其他执行。正常返回、异常退出或用户暂停时，宿主等待在途原生请求结束，再通知 helper 释放该执行持有的其余按键。连接断开时，helper 也会清理该连接持有的按键。
+宿主为每次 `run_code` 或 `cua_run_code` 的 `sendKeyEvent` 附上执行标识。按下时，helper 保存已选应用、接收进程的 PID 与启动时间、物理键码及对应的松开事件。持有方再次按下普通键时，helper 复用原记录，向接收进程发送一次带 `keyboardEventAutorepeat` 标志的按下事件。AppKit 视图可能只收到首次按下和最终松开，过滤中间的重复事件。重复、显式松键和执行结束时都会核对原进程身份。其他执行尝试按下或松开同一个键时，错误会指出键名，并区分其他会话和同一连接内的其他执行。正常返回、异常退出或用户暂停时，宿主等待在途原生请求结束，再通知 helper 释放该执行持有的其余按键。连接断开时，helper 也会清理该连接持有的按键。
 
 所选 helper 应用需要 macOS 辅助功能权限以读取 AX 和输入，需要屏幕录制权限以截图。能力预检和权限错误不授予权限。截图会拒绝在读取图片期间移动或缩放的窗口。无法确认归属的系统面板及仅后台辅助类型的应用不可选择。
 
@@ -164,7 +164,6 @@ Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests
 隔离的 Electron/Chromium 检查使用 `python3 packages/experimental/cua-macos/native/tests/electron_e2e.py --electron /absolute/path/to/Electron.app/Contents/MacOS/Electron`。省略 `--electron` 时使用桌面工作区已安装的运行时，检查不下载 Electron。渲染器禁用 Node 集成，启用上下文隔离和 Chromium 沙箱，使用独立 userData/sessionData/log 目录及本地 fixture 页面。渲染器的点击/输入事件通过主进程写出独立观察，测试动作仍通过原生 helper 执行。AX 轮询等待 Chromium 辅助功能启用后的真实控件。原生和 Electron 子进程组由测试持有，在删除临时文件前停止。可选产物包含仅有 fixture 的截图和私有请求记录。
 
 运行 `python3 packages/experimental/cua-macos/native/tests/capabilities_e2e.py --helper /absolute/helper --artifacts /private/evidence`，通过隔离的 AppKit 接收方验证未运行应用的发现和启动、Unicode 选区、多行纯文本/HTML 粘贴、带修饰键的中键手势、W 和 D 同时按住时的事件顺序及数字键盘键码。需要已有辅助功能/屏幕录制权限，接收方实际状态与分派结果分开记录。添加 `--keyboard-only` 可用后台窗口验证 W、D 同时按住两秒、单独释放 D 和收尾时释放 W。添加 `--click-only` 可在后台测试窗口中验证按住时长、AX 路由和取消、超时后的松开事件，不发送键盘或剪贴板输入。
-
 
 运行 `python3 packages/experimental/cua-macos/native/tests/paste_e2e.py --artifacts /private/evidence`，验证自有 AppKit 应用在后台接收 Paste 动作但不读取数据时返回 `PASTE_NOT_CONSUMED`，以及前台读取同一次粘贴后成功。测试要求 Mac 已解锁并已授予辅助功能权限，只激活自有的两个应用，并独立记录收到的动作和文本以核对 helper 回复。
 

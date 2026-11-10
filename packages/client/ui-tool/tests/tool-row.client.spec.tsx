@@ -53,6 +53,9 @@ describe('tool-call-model', () => {
     expect(classifyTool('grep')).toBe('search')
     expect(classifyTool('write')).toBe('write')
     expect(classifyTool('edit')).toBe('edit')
+    expect(classifyTool('run_code')).toBe('code')
+    expect(classifyTool('cua_run_code')).toBe('code')
+    expect(classifyTool('cua_run_code_extra')).toBe('others')
     expect(classifyTool('cordis_runtime_inspect')).toBe('read')
     // The v3 run-control verbs: `others` is the decided intent, not an
     // unclassified default (there is no program to show and no file to open).

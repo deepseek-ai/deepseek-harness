@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "現在は macOS のみ対応し、Windows 対応は開発中です。既存および新規の PTC セッションに Computer Use を読み込みます。PTC モードに切り替え、アクセシビリティと画面収録の権限を許可して使用してください。",
+    "description": "現在は macOS のみ対応し、Windows 対応は開発中です。標準、クリエイター、PTC などのモードで、既存および新規セッションに Computer Use を追加します。使用前にアクセシビリティと画面収録の権限を許可してください。",
     "detail": "docs/DETAIL.md"
   }
 }

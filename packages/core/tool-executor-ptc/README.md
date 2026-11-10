@@ -42,6 +42,10 @@ This package declares `ctx.ptcRuntime` and `ctx.systemPrompt` as required inject
 
 Shared dispatch events and the `ptc-mode` message-source declaration live in `@deepseek-ai/dsh-tool-executor-ptc/types`; Client code imports the same declarations through `@deepseek-ai/dsh-tool-executor-ptc/client`. Both entries exclude Host service declarations. Host policy extensions use `import type` from the package entry for `PtcDispatchLog` and `tools/ptc-dispatch-log` without mounting the executor.
 
+The `/run-code` entry exports `createRunCodeTool` for plugins that register a named program tool alongside native tools. Supply an explicit runtime and the complete private `ToolDefinition` list, then register the returned definition in the owning scope. Programs can call only that list, even when the Agent can call other native tools; the private definitions do not enter the tool registry. Nested calls retain normal approvals, guards, dispatch logs, screenshots, deferred context, and turn completion. `RunCodeConfig` exposes the same validated call-allowance and concurrency settings as this executor.
+
+The caller owns the supplied runtime and must keep it available until the factory's context finishes disposal. For runtimes that retain state or enforce a sandbox, disposal cancels active Agent programs and waits for nested calls; Agent disposal releases its retained environment. Environment initialization belongs to the supplied [runtime's registration API](../../ptc-runtime/ptc-runtime/README.md#choose-a-backend); register it before exposing the program tool. The factory appends runtime syntax and execution guidance to the caller's description; the caller supplies instructions for the private bindings.
+
 [Configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-executor-ptc)
 
 -----
@@ -125,6 +129,20 @@ Fixed per-request cost proportional to the visible definitions. PTC mode trades 
 #### KV Cache effect
 
 Prefix-stable while the PTC mode selection, generated SDK, transport schema, and visible tool set are unchanged. Mode or filter changes may invalidate reuse from the first changed prompt or schema token. Changing `maxSubCallsPerMinute` does not change prompt or schema tokens.
+
+### Registered program tools
+
+#### What the model sees
+
+A factory-created tool presents its caller-supplied name and description with the same program parameters, runtime instructions, and result rendering as `run_code`. Its private bindings do not produce direct tool schemas or an SDK prompt section. The consumer owns its binding guidance.
+
+#### Token effect
+
+One program tool schema joins the existing native schemas. The caller's binding guidance adds its own prompt cost; intermediate values remain outside model history unless the program emits them or a nested tool defers context.
+
+#### KV Cache effect
+
+The schema remains stable while the caller's description and runtime settings remain unchanged. Initialization runs inside the runtime and does not add program source to model requests.
 
 ## Known Limitations and Deferred Work
 

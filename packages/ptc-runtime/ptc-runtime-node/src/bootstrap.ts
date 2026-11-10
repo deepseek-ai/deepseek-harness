@@ -84,6 +84,9 @@ export class LogBuffer {
     this.sink(text)
   }
 
+  /** Whether captured text has exceeded the shared output budget. */
+  get overflowed(): boolean { return this.truncated }
+
   /** Remaining exact JSON-byte budget for the completion value or failure message. */
   remainingOutputBytes(): number {
     return this.maxBytes - this.bytes
@@ -182,8 +185,12 @@ export function prepareCompletion(
   return { value: encodePtcJsonWire(snapshot) }
 }
 
-/** Build the fixed overflow fragment without carrying rejected variable bytes. */
-function outputLimit(maxOutputBytes: number): ProgramResult {
+/**
+ * Build the fixed overflow fragment without carrying rejected variable bytes.
+ * @param maxOutputBytes Configured limit reported to the caller.
+ * @returns The output-limit failure shared by evaluation phases.
+ */
+export function outputLimit(maxOutputBytes: number): ProgramResult {
   return { error: { kind: 'output-limit', message: `outer output exceeded ${maxOutputBytes} bytes` } }
 }
 

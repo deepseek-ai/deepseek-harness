@@ -63,11 +63,12 @@ export class ProgramWorker {
    * @param processes - Session policy invalidation and cleanup coordination.
    * @param mode - Evaluator syntax and TypeScript erasure.
    * @param retainsState - Whether this process belongs to an owner and survives completed evaluations.
+   * @param pendingInitialization - Type-erased setup source, or undefined when no initialization is required.
    */
   constructor(
     private readonly ctx: Context, private readonly config: ResolvedConfig,
     readonly policy: SandboxExecutionPolicy, processes: PolicyProcesses, private readonly mode: ExecutionMode,
-    private readonly retainsState: boolean,
+    private readonly retainsState: boolean, private pendingInitialization: string | undefined,
   ) {
     this.unregister = processes.register(policy, () => this.dispose())
   }
@@ -136,6 +137,7 @@ export class ProgramWorker {
       completion: undefined,
       data: {
         code: '', programFormat: this.mode.format, retainsState: this.retainsState,
+        ...this.pendingInitialization === undefined ? {} : { initialization: this.pendingInitialization },
         maxOutputBytes: this.config.maxOutputBytes,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
@@ -155,12 +157,14 @@ export class ProgramWorker {
         evaluation.settled = true
         clearTimeout(timer)
         spec.signal?.removeEventListener('abort', onAbort)
+        const initializationIncomplete = this.pendingInitialization !== undefined
+        if (initializationIncomplete && error?.kind === 'exception') error = { ...error, message: this.message(error.message) }
         const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
           : error ? output.failure(logs, error) : output.success(logs, value)
         const outcome = complete()
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
-          let preserved = this.retainsState && !discard && outcome.error?.kind !== 'output-limit'
+          let preserved = this.retainsState && !initializationIncomplete && !discard && outcome.error?.kind !== 'output-limit'
           if (preserved && interrupted) preserved = await this.interruptEvaluation(evaluation)
           let drained = true
           if (!preserved) drained = await this.terminate()
@@ -185,7 +189,9 @@ export class ProgramWorker {
     spec.signal?.addEventListener('abort', onAbort, { once: true })
     if (spec.signal?.aborted) onAbort()
     else {
-      try { evaluation.data.code = this.mode.stripTypes(spec.program) } catch (error: unknown) {
+      try {
+        evaluation.data.code = this.mode.stripTypes(spec.program)
+      } catch (error: unknown) {
         // A parse failure before startup has no process state or authority to retain.
         evaluation.finish({ kind: 'exception', message: messageOf(error) }, undefined, !this.ready)
         return await result.promise
@@ -261,6 +267,10 @@ export class ProgramWorker {
     evaluation.completion = completion
     void completion?.then(({ error, value }) => {
       if (evaluation.settled) return
+      if (this.pendingInitialization !== undefined && error === undefined) {
+        this.fail('protocol', 'environment initialization completed without Host acceptance')
+        return
+      }
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
     }).catch((error: unknown) => {
@@ -316,6 +326,17 @@ export class ProgramWorker {
         if (this.ready || !this.active) { this.fail('protocol', 'duplicate program readiness'); return }
         this.ready = true
         this.dispatch(this.active)
+      },
+      initialized: () => {
+        const evaluation = this.active
+        if (!this.ready || !evaluation || this.pendingInitialization === undefined) {
+          return refuse('unexpected environment initialization acknowledgement')
+        }
+        if (evaluation.settled || evaluation.spec.signal?.aborted) {
+          throw new Error('PTC evaluation ended before initialization completed')
+        }
+        this.pendingInitialization = undefined
+        return Promise.resolve()
       },
       log: (text: unknown) => {
         if (!this.ready || !this.active || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }

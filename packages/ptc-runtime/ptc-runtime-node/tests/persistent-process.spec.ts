@@ -21,6 +21,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
   const seen: Record<string, unknown>[] = []
   const methods: HostMethods = {
     ready: () => { ready.resolve(true) },
+    initialized: async () => {},
     invoke: async (global, name, args) => {
       seen.push({ type: 'call', global, name, args })
       return encodePtcJsonWire(42)
@@ -33,15 +34,146 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
   const close = async () => { peer.$close(); host.destroy(); child.destroy(); await main }
   onTestFinished(close)
   await ready.promise
-  const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024) => {
-    return peer.run('/', { code, namespaces, maxOutputBytes, programFormat, retainsState: true }).then((result) => {
+  const run = (code: string, namespaces: ProgramBootData['namespaces'] = [], maxOutputBytes = 1024, initialization?: string) => {
+    return peer.run('/', { code, namespaces, maxOutputBytes, programFormat, retainsState: true,
+      ...initialization === undefined ? {} : { initialization } }).then((result) => {
       seen.push({ type: 'done', ...result })
       return result
     })
   }
 
-  return { state, nativeEnvironment, run, seen, peer, main, close, host, setCall: (handler: HostMethods['invoke']) => { methods.invoke = handler } }
+  return { state, nativeEnvironment, run, seen, peer, main, close, host,
+    setCall: (handler: HostMethods['invoke']) => { methods.invoke = handler },
+    setInitialized: (handler: HostMethods['initialized']) => { methods.initialized = handler },
+  }
 }
+
+it('runs initialization before the program in the same REPL and discards its completion', async () => {
+  const h = await setup()
+  const namespaces = [{ global: 'tools', names: ['echo'] }]
+  const initialization = 'globalThis.helper ??= { read: () => tools.echo({}) }; console.log("initialize"); helper'
+  expect(decodePtcJsonWire((await h.run('var saved = helper; await helper.read()', namespaces, 1024, initialization)).value)).toBe(42)
+  h.setCall(async () => encodePtcJsonWire(43))
+  expect(decodePtcJsonWire((await h.run('({ value: await helper.read(), same: helper === saved })', namespaces)).value))
+    .toEqual({ value: 43, same: true })
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize'])
+  expect(decodePtcJsonWire((await h.run('42', [], 1024, '')).value)).toBe(42)
+})
+
+it.each([false, true])('closes program output and bindings before queued microtasks with initialization %s', async (initialize) => {
+  const h = await setup()
+  const namespaces = [{ global: 'tools', names: ['echo'] }]
+  const result = await h.run(
+    'queueMicrotask(() => { console.log("late"); void tools.echo({}).catch(() => {}) }); 42',
+    namespaces, 1024, initialize ? 'globalThis.ready = true' : undefined,
+  )
+  expect(decodePtcJsonWire(result.value)).toBe(42)
+  await setImmediate()
+  expect(h.seen.filter(item => item.type === 'log' || item.type === 'call')).toEqual([])
+  expect(decodePtcJsonWire((await h.run('await tools.echo({})', namespaces)).value)).toBe(42)
+  expect(h.seen.filter(item => item.type === 'call')).toHaveLength(1)
+})
+
+it('does not adopt a REPL completion Promise without explicit await', async () => {
+  const h = await setup()
+  expect((await h.run('Promise.resolve(42)')).error?.kind).toBe('invalid-output')
+  expect(decodePtcJsonWire((await h.run('await Promise.resolve(42)')).value)).toBe(42)
+})
+
+it('prevents the program after initialization exceptions and output overflow', async () => {
+  const h = await setup()
+  await h.run('var entered = 0;')
+  expect((await h.run('entered++', [], 4096, 'const =')).error?.kind).toBe('exception')
+  const failed = await h.run('entered++', [], 1024, 'throw "initialization failed"')
+  expect(failed.error?.kind).toBe('exception')
+  expect(failed.error?.message).toContain('initialization failed')
+  expect((await h.run('entered++', [], 64, 'console.log("x".repeat(100))')).error?.kind).toBe('output-limit')
+  expect(decodePtcJsonWire((await h.run('entered')).value)).toBe(0)
+})
+
+it('does not resume the program after initialization reports an asynchronous failure', async () => {
+  const h = await setup()
+  const failed = await h.run('globalThis.programRan = true', [], 4096,
+    'var resume; await new Promise(resolve => { resume = resolve; setImmediate(() => { throw new Error("initialization failed") }) })')
+  expect(failed.error?.kind).toBe('exception')
+  expect(decodePtcJsonWire((await h.run('resume(); await new Promise(resolve => setImmediate(resolve)); typeof programRan')).value))
+    .toBe('undefined')
+})
+
+it('does not start the program when initialization catches a revoked binding', async () => {
+  const h = await setup()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const pending = Promise.withResolvers<ReturnType<typeof encodePtcJsonWire>>()
+  onTestFinished(() => { pending.resolve(encodePtcJsonWire(null)) })
+  h.setCall(() => { entered.resolve(); return pending.promise })
+  const first = h.run('globalThis.programRan = true', [{ global: 'tools', names: ['echo'] }], 1024,
+    'try { await tools.echo({}) } catch {}')
+  await entered.promise
+  await h.peer.revoke()
+  expect(await first).toEqual({})
+  expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+})
+
+it('waits for Host acceptance before starting the user program', async () => {
+  const h = await setup()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  const started = vi.fn()
+  Object.defineProperty(h.state, 'started', { value: started })
+  h.setInitialized(() => { entered.resolve(); return accepted.promise })
+  const pending = h.run('process.started(); 42', [], 1024, 'globalThis.helper = {}')
+  try {
+    await entered.promise
+    expect(started).not.toHaveBeenCalled()
+    accepted.resolve()
+    expect(decodePtcJsonWire((await pending).value)).toBe(42)
+    expect(started).toHaveBeenCalledOnce()
+  } finally { accepted.resolve(); await pending }
+})
+
+it('does not start the user program when Host acceptance rejects', async () => {
+  const h = await setup()
+  h.setInitialized(async () => { throw new Error('initialization was canceled') })
+  const result = await h.run('globalThis.programRan = true', [], 4096, 'globalThis.helper = {}')
+  expect(result.error?.kind).toBe('exception')
+  expect(result.error?.message).toContain('initialization was canceled')
+  expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+})
+
+it('cancels initialization while its Host acceptance is pending', async () => {
+  const h = await setup()
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setInitialized(() => { entered.resolve(); return accepted.promise })
+  const pending = h.run('globalThis.programRan = true', [], 1024, 'globalThis.helper = {}')
+  try {
+    await entered.promise
+    await h.peer.revoke()
+    expect(await pending).toEqual({})
+    expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+  } finally { accepted.resolve(); await pending }
+})
+
+it('checks revocation after accepting an initialization reply', async () => {
+  const h = await setup()
+  const request: PromiseWithResolvers<string> = Promise.withResolvers()
+  const accepted: PromiseWithResolvers<void> = Promise.withResolvers()
+  h.setInitialized(() => accepted.promise)
+  const wire = rawPeer(h.host, (message) => {
+    if (typeof message === 'object' && message !== null && 'm' in message && message.m === 'initialized'
+      && 'i' in message && typeof message.i === 'string') request.resolve(message.i)
+  })
+  const pending = h.run('globalThis.programRan = true', [], 1024, 'globalThis.helper = {}')
+  try {
+    const id = await request.promise
+    await Promise.all([
+      wire.send({ t: 's', i: id }),
+      wire.send({ t: 'q', m: 'revoke', a: [] }),
+    ])
+    expect(await pending).toEqual({})
+    expect(decodePtcJsonWire((await h.run('typeof programRan')).value)).toBe('undefined')
+  } finally { accepted.resolve(); wire.close(); await pending }
+})
 
 it('keeps an injected process local to the REPL while it runs and after it closes', async () => {
   const hostProcess = globalThis.process

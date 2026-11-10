@@ -10,7 +10,7 @@ import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } f
 import { createSharedNativeChannel } from './shared-native.ts'
 import { installHeldKeys } from './held-keys.ts'
 import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
-import { GUIDANCE } from './guidance.ts'
+import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
 const CAPABILITIES: CuaStartupCapabilities = {
@@ -65,7 +65,7 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
-    guidance: GUIDANCE, capabilities: CAPABILITIES,
+    getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
     permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
