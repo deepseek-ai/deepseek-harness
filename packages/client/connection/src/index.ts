@@ -75,15 +75,6 @@ declare module '@deepseek-ai/cordis' {
 /** Headroom for RPC JSON fields around aggregate base64 image payloads. */
 const REQUEST_ENVELOPE_HEADROOM_BYTES = 1024 * 1024
 
-/**
- * Environment switch naming a deployment that owns its browser surface: a
- * process reachable only through the proxy that forwards to it (Caddy on the
- * loopback) has no second party to authenticate, so `dsh web` skips the
- * launch-token handshake and the proxy is the entrance. Anything else keeps the
- * launch token and the signed browser cookie.
- */
-const OPEN_FACE_ENV = 'DSH_CONNECTION_OPEN'
-
 function assertImageBodyCapacity(ctx: Context, maxRequestBodyBytes: number): void {
   const attachments = ctx.get('attachments')
   if (attachments === undefined) return
@@ -146,7 +137,6 @@ export async function apply(ctx: Context, config?: ConnectionConfig): Promise<vo
     ctx,
     trustedHosts,
     await BrowserAuth.create(ctx.root, ctx.credentials, cookieMaxAgeDays),
-    process.env[OPEN_FACE_ENV] === '1',
   )
   ctx.inject(['webServer'], (webCtx) => {
     assertImageBodyCapacity(webCtx, maxRequestBodyBytes)

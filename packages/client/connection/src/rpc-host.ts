@@ -79,30 +79,17 @@ export class HostConnectionService extends Service implements HostConnectionHand
   readonly allowsRemoteAuthorities: boolean
 
   /**
-   * Whether this process owns its browser surface outright, selected by
-   * `DSH_CONNECTION_OPEN=1`: a deployment that reaches the listeners only
-   * through a proxy it trusts (the loopback hop a reverse proxy makes) has no
-   * second party to authenticate, so the launch token and the signed browser
-   * cookie are both skipped and the trust fence is the remaining check.
-   */
-  private readonly open: boolean
-
-  /**
    * Provide the Host half over the active HTTP server.
    * @param ctx - owning Connection plugin context.
    * @param trustedHosts - deployment authorities accepted by the Host/Origin fence.
    * @param browserAuth - process token and persistent browser-session owner.
-   * @param open - whether this process is the only server behind its listeners,
-   * so every fenced request is the owner's; skips the launch-token handshake.
    */
   constructor(
     ctx: Context,
     private readonly trustedHosts: readonly string[],
     private readonly browserAuth: BrowserAuth,
-    open = false,
   ) {
     super(ctx, 'connection')
-    this.open = open
     this.owner = ctx
     this.browserPeer = new Peer(ctx, { principal: { kind: 'owner' } })
     ctx.effect(() => async () => {
@@ -142,9 +129,6 @@ export class HostConnectionService extends Service implements HostConnectionHand
   admit(request: ConnectionTrustRequest): PeerAdmission {
     if (!this.isTrusted(request)) return { rejection: 403 }
     if (this.disposed) return { rejection: 401 }
-    // An open face has no browser to authenticate: the deployment's own proxy
-    // is the caller, and the trust fence above already decided the authority.
-    if (this.open) return { peer: this.browserPeer }
     const secure = this.owner.get('webServer')?.protocol === 'https:'
     if (this.browserAuth.isAuthenticated(request, secure)) return { peer: this.browserPeer }
     const id = this.browserAuth.authenticateApi(request, secure)
@@ -207,16 +191,12 @@ export class HostConnectionService extends Service implements HostConnectionHand
    * Authenticate an index request; native TLS listeners mint Secure cookies.
    */
   authorizeIndex(request: ConnectionIndexRequest, response: ConnectionIndexResponse): boolean {
-    // An open face serves its document to the proxy that forwards it: there is
-    // no browser cookie to mint and no token to exchange.
-    if (this.open) return true
     return this.browserAuth.authorizeIndex(request, response, this.ctx.get('webServer')?.protocol === 'https:')
   }
 
   /** Add this process's launch token to the clean application URL. */
   authenticatedUrl(baseUrl: string): string {
-    // An open face has no handshake to announce: the clean URL is the entry.
-    return this.open ? baseUrl : this.browserAuth.authenticatedUrl(baseUrl)
+    return this.browserAuth.authenticatedUrl(baseUrl)
   }
 
   /**
