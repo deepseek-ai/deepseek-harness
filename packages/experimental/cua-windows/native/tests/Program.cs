@@ -93,12 +93,29 @@ Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["control"])
 Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
 
+var button = new AccessibilityNode { ControlType = "Button", Name = "保存", HelpText = "保存当前文档", AutomationId = "saveButton" };
+foreach (var details in new[] { false, true })
+{
+    Check(AccessibilityText.Format(button, "1/2/3", details) == "- [1/2/3] Button \"保存\" helpText=\"保存当前文档\" automationId=\"saveButton\"",
+        "Name, HelpText and AutomationId are available in both detail modes");
+    Check(AccessibilityText.Format(button with { Enabled = false }, "1/2/3", details) == "- [1/2/3] Button disabled \"保存\" helpText=\"保存当前文档\" automationId=\"saveButton\"",
+        "Disabled controls retain RuntimeId and metadata");
+    Check(AccessibilityText.Format(new() { ControlType = "Text", Name = "说明" }, "42/-7/9", details) == "- [42/-7/9] Text \"说明\"",
+        "Controls without patterns also expose their RuntimeId");
+    Check(AccessibilityText.Format(button with { HelpText = "保存" }, "1/2/3", details).Contains("helpText=\"保存\""),
+        "Nonempty HelpText is retained even when it equals Name");
+    Check(AccessibilityText.Format(button with { HelpText = "", AutomationId = "" }, "1/2/3", details) == "- [1/2/3] Button \"保存\"",
+        "Empty optional metadata is omitted");
+    Check(AccessibilityText.Format(button with { HelpText = null, AutomationId = null }, "1/2/3", details) == "- [1/2/3] Button \"保存\"",
+        "Missing optional metadata is omitted");
+}
+Check(AccessibilityText.Retain(new() { ControlType = "Group", AutomationId = "toolbar" }), "AutomationId keeps otherwise empty containers visible");
 var node = new AccessibilityNode { ControlType = "Edit", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Patterns = ["Invoke", "Value", "Text"] };
 var text = AccessibilityText.Format(node, "1/2/3", false);
 Check(text == "- [1/2/3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" patterns=[\"Invoke\", \"Value\", \"Text\"]",
     "Rows expose native control and pattern names without action names");
 foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "TabItem", "Table", "DataGrid" })
-    Check(AccessibilityText.Format(new() { ControlType = controlType }, null, false) == "- " + controlType,
+    Check(AccessibilityText.Format(new() { ControlType = controlType }, "1/2/3", false) == "- [1/2/3] " + controlType,
         "Formatting preserves distinct Windows control types: " + controlType);
 Check(!AccessibilityText.Retain(new() { ControlType = "Other" }), "Empty fallback containers can collapse");
 Check(AccessibilityText.Retain(new() { ControlType = "Other", Name = "Custom content" }), "Named fallback containers retain their row");
@@ -117,7 +134,7 @@ Check(!AccessibilityText.Retain(new() { ControlType = "Group" }), "Empty structu
 Check(AccessibilityText.Retain(new() { ControlType = "Group", Patterns = ["Value"] }), "Actionable containers retain their row");
 var queryOnly = new AccessibilityNode { ControlType = "Group", Patterns = ["Selection", "Grid", "Table"] };
 Check(AccessibilityText.Retain(queryOnly), "Query-only patterns keep otherwise empty containers visible");
-Check(AccessibilityText.Format(queryOnly, null, false) == "- Group patterns=[\"Selection\", \"Grid\", \"Table\"]",
+Check(AccessibilityText.Format(queryOnly, "1/2/3", false) == "- [1/2/3] Group patterns=[\"Selection\", \"Grid\", \"Table\"]",
     "Query-only patterns are visible without claiming executable actions");
 Check(AccessibilityText.Format(new() { ControlType = "Document", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, "1/2/3", false)
     .Contains("selection=unavailable"), "Out-of-range selections do not describe valid text");

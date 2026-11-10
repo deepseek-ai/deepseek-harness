@@ -29,7 +29,7 @@ internal static class Accessibility
         var target = Windows.Resolve(app, selected, context);
         if (!all.Any(window => window.Id == target.Id)) all = [.. all, target];
         var targets = new[] { target };
-        var rows = new List<string> { "AX scope=window offsets=UTF-16" };
+        var rows = new List<string>();
         var elements = new Dictionary<string, ElementReference>(StringComparer.Ordinal);
         var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -37,10 +37,10 @@ internal static class Accessibility
         foreach (var property in Properties.Concat(PatternActions.Patterns.Select(pattern => pattern.Available))) cache.Add(property);
         var truncated = false;
         var count = 0;
-        var bytes = Encoding.UTF8.GetByteCount(rows[0]);
+        var bytes = 0;
         void Add(string row)
         {
-            bytes += Encoding.UTF8.GetByteCount(row) + 1;
+            bytes += Encoding.UTF8.GetByteCount(row) + (rows.Count == 0 ? 0 : 1);
             if (bytes > context.Config.MaxResponseBytes) throw new NativeFailure("NATIVE_RESPONSE_LIMIT", "Accessibility text exceeds the response limit; select a narrower window or reduce traversal limits");
             rows.Add(row);
         }
@@ -88,13 +88,8 @@ internal static class Accessibility
             var retained = AccessibilityText.Retain(node);
             if (retained)
             {
-                string? elementId = null;
-                if (node.Enabled != false && (node.Patterns.Length != 0 || node.ValueWritable == "true" || node.SelectionWritable == true))
-                {
-                    elementId = runtimeId;
-                    elements.Add(elementId, new(element, window));
-                }
-                Add(new string(' ', indent * 2) + AccessibilityText.Format(node, elementId, details));
+                elements.Add(runtimeId, new(element, window));
+                Add(new string(' ', indent * 2) + AccessibilityText.Format(node, runtimeId, details));
             }
             if (!includeMenus && node.ControlType == nameof(ControlType.Menu))
             {
@@ -172,8 +167,8 @@ internal static class Accessibility
             ? state == ExpandCollapseState.Expanded ? true : state == ExpandCollapseState.Collapsed ? false : (bool?)null : null;
         return new()
         {
-            ControlType = ControlTypeName(type), Name = Text(element, AutomationElement.NameProperty), Help = Text(element, AutomationElement.HelpTextProperty),
-            Identifier = Text(element, AutomationElement.AutomationIdProperty),
+            ControlType = ControlTypeName(type), Name = Text(element, AutomationElement.NameProperty), HelpText = Text(element, AutomationElement.HelpTextProperty),
+            AutomationId = Text(element, AutomationElement.AutomationIdProperty),
             Value = value, HasValue = hasValue, ValueWritable = writable,
             Enabled = Property(element, AutomationElement.IsEnabledProperty) as bool?, Focused = Property(element, AutomationElement.HasKeyboardFocusProperty) as bool?,
             Selected = Property(element, SelectionItemPattern.IsSelectedProperty) as bool?, Expanded = expanded,
@@ -222,7 +217,6 @@ internal static class Accessibility
         if (!snapshot.Elements.TryGetValue(elementId, out var element)) throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
         if (element.Window.Id != window.Id)
             throw new NativeFailure("STALE_SNAPSHOT", "The element belongs to another window; read fresh AX state");
-        if (!context.Ax(() => element.Element.Current.IsEnabled)) throw new NativeFailure("ELEMENT_DISABLED", "The element is disabled");
         return element;
     }
 

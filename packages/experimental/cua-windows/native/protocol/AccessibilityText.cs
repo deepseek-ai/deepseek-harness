@@ -9,8 +9,8 @@ public sealed record AccessibilityNode
 {
     public required string ControlType { get; init; }
     public string Name { get; init; } = "";
-    public string? Help { get; init; }
-    public string? Identifier { get; init; }
+    public string? HelpText { get; init; }
+    public string? AutomationId { get; init; }
     public string? Value { get; init; }
     public string? Placeholder { get; init; }
     public bool HasValue { get; init; }
@@ -32,13 +32,14 @@ public static class AccessibilityText
     private static string Quote(string value) => JsonSerializer.Serialize(value, WireJson.Options);
 
     public static bool Retain(AccessibilityNode node) => node.ControlType is not ("Group" or "Other")
-        || node.Name.Length != 0 || !string.IsNullOrEmpty(node.Help) || node.HasValue || node.Patterns.Length != 0
+        || node.Name.Length != 0 || !string.IsNullOrEmpty(node.HelpText) || !string.IsNullOrEmpty(node.AutomationId)
+        || node.HasValue || node.Patterns.Length != 0
         || node.Enabled == false || node.Focused == true || node.Selected.HasValue || node.Expanded.HasValue;
 
-    public static string Format(AccessibilityNode node, string? elementId, bool details)
+    public static string Format(AccessibilityNode node, string elementId, bool details)
     {
         var text = new StringBuilder("- ");
-        if (elementId is not null) text.Append('[').Append(elementId).Append("] ");
+        text.Append('[').Append(elementId).Append("] ");
         text.Append(node.ControlType);
         if (node.Enabled == false) text.Append(" disabled");
         if (node.Focused == true) text.Append(" focused");
@@ -49,7 +50,8 @@ public static class AccessibilityText
         if (node.Name.Length != 0) text.Append(' ').Append(Quote(node.Name));
         if (node.HasValue) text.Append(" = ").Append(node.Value is { } value ? Quote(value) : "unavailable");
         if (node.Placeholder is { } placeholder) text.Append(" placeholder=").Append(Quote(placeholder));
-        if (node.Help is { Length: > 0 } help && help != node.Name) text.Append(" help=").Append(Quote(help));
+        if (node.HelpText is { Length: > 0 } helpText) text.Append(" helpText=").Append(Quote(helpText));
+        if (node.AutomationId is { Length: > 0 } automationId) text.Append(" automationId=").Append(Quote(automationId));
         if (node.HasSelection)
         {
             if (node.Selection is { } range && node.Value is { } value && range.Start >= 0 && range.Length >= 0
@@ -59,13 +61,9 @@ public static class AccessibilityText
             if (node.SelectedText is { Length: > 0 } selectedText) text.Append(" selectedText=").Append(Quote(selectedText));
         }
         if (node.Patterns.Length != 0) text.Append(" patterns=[").Append(string.Join(", ", node.Patterns.Select(Quote))).Append(']');
-        if (details)
-        {
-            if (node.Identifier is { Length: > 0 } identifier) text.Append(" id=").Append(Quote(identifier));
-            if (elementId is not null && node.Bounds is { } bounds)
-                text.Append(" bounds=[").Append(string.Join(",", new[] { bounds.X, bounds.Y, bounds.Width, bounds.Height }
-                    .Select(number => number.ToString("G", CultureInfo.InvariantCulture)))).Append(']');
-        }
+        if (details && node.Bounds is { } bounds)
+            text.Append(" bounds=[").Append(string.Join(",", new[] { bounds.X, bounds.Y, bounds.Width, bounds.Height }
+                .Select(number => number.ToString("G", CultureInfo.InvariantCulture)))).Append(']');
         return text.ToString();
     }
 }
