@@ -145,7 +145,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-feishu-cli` | yes | Feishu through the official lark-cli: the CLI by its absolute path, its embedded skills, and account operations over Remote |
+| `@deepseek-ai/dsh-feishu` | yes | Feishu plugin: the official lark-cli with its embedded skills, and account connection from the Plugins page |
 
 ## context
 

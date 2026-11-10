@@ -25,8 +25,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`cli-account/`](cli-account/README.zh.md) | 为 CLI 应用插件按绝对路径运行厂商 CLI，在运行时上下文中把这个路径告诉模型，并在 Host 上一次执行一个账号操作 | — |
-| [`feishu/`](feishu/README.zh.md) | 打包飞书插件：`feishu-cli` Host 行及其插件页行 | — |
-| [`feishu-cli/`](feishu-cli/README.zh.md) | 安装官方飞书 `lark-cli`，把它的绝对路径告诉模型，注册其内嵌 skill，并执行插件页发起的账号操作 | 注册到 `ctx.skills`、`ctx.systemPrompt` 与 `ctx.cliAccounts` |
+| [`feishu/`](feishu/README.zh.md) | 飞书插件：安装官方 `lark-cli`，把它的绝对路径告诉模型，注册其内嵌 skill，并执行插件页发起的账号操作 | 注册到 `ctx.skills`、`ctx.systemPrompt` 与 `ctx.connectorAccounts` |
 
 -----
 

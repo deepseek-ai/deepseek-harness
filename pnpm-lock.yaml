@@ -93,9 +93,6 @@ importers:
       '@deepseek-ai/dsh-feishu':
         specifier: workspace:*
         version: link:packages/connector/feishu
-      '@deepseek-ai/dsh-feishu-cli':
-        specifier: workspace:*
-        version: link:packages/connector/feishu-cli
       '@deepseek-ai/dsh-hooks-claude-code':
         specifier: workspace:*
         version: link:packages/experimental/hooks-claude-code
@@ -7608,16 +7605,6 @@ importers:
         version: link:../../core/system-prompt
 
   packages/connector/feishu:
-    dependencies:
-      '@deepseek-ai/dsh-feishu-cli':
-        specifier: workspace:*
-        version: link:../feishu-cli
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
-  packages/connector/feishu-cli:
     dependencies:
       '@deepseek-ai/dsh-brand':
         specifier: workspace:*
