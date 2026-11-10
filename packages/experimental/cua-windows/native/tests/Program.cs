@@ -29,6 +29,21 @@ foreach (var path in new[] { @"C:\Tools\Editor.exe", @"D:\Portable Apps\编辑�
     })));
     Check(selection.Params.GetProperty("selector").GetString() == path, "Executable selection preserves the exact path on the wire");
 }
+foreach (var method in new[] { "listActions", "performAction", "invoke", "mouseMove", "click", "setValue", "selectText" })
+{
+    var parameters = new Dictionary<string, string>
+    {
+        ["appHandle"] = "app", ["windowId"] = "1", ["snapshotId"] = "snapshot", ["elementId"] = "42/-7/9",
+    };
+    if (method == "performAction") parameters["action"] = "Invoke.Invoke";
+    if (method == "setValue") parameters["value"] = "text";
+    if (method == "selectText") parameters["text"] = "text";
+    var operation = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        id = "element", method, @params = parameters,
+    })));
+    Check(operation.Params.GetProperty("elementId").GetString() == "42/-7/9", "Element operations preserve slash-separated RuntimeIds: " + method);
+}
 var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
 Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
     "Host launch continuation retains the selected application handle");
@@ -79,8 +94,8 @@ Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
 
 var node = new AccessibilityNode { ControlType = "Edit", Name = "Title", Value = "", HasValue = true, Placeholder = "Title", ValueWritable = "true", Patterns = ["Invoke", "Value", "Text"] };
-var text = AccessibilityText.Format(node, 3, false);
-Check(text == "- [3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" patterns=[\"Invoke\", \"Value\", \"Text\"]",
+var text = AccessibilityText.Format(node, "1/2/3", false);
+Check(text == "- [1/2/3] Edit valueWritable=true \"Title\" = \"\" placeholder=\"Title\" patterns=[\"Invoke\", \"Value\", \"Text\"]",
     "Rows expose native control and pattern names without action names");
 foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "TabItem", "Table", "DataGrid" })
     Check(AccessibilityText.Format(new() { ControlType = controlType }, null, false) == "- " + controlType,
@@ -88,12 +103,12 @@ foreach (var controlType in new[] { "Group", "Other", "ListItem", "TreeItem", "T
 Check(!AccessibilityText.Retain(new() { ControlType = "Other" }), "Empty fallback containers can collapse");
 Check(AccessibilityText.Retain(new() { ControlType = "Other", Name = "Custom content" }), "Named fallback containers retain their row");
 Check(text.Contains("= \"\" placeholder=\"Title\""), "Empty values and placeholders remain distinct");
-Check(AccessibilityText.Format(node, 3, true) == text, "Both detail modes expose patterns without expanding actions");
+Check(AccessibilityText.Format(node, "1/2/3", true) == text, "Both detail modes expose patterns without expanding actions");
 var selectionPatterns = new AccessibilityNode { ControlType = "ListItem", Patterns = ["SelectionItem", "ExpandCollapse", "ScrollItem"] };
 foreach (var details in new[] { false, true })
 {
-    var row = AccessibilityText.Format(selectionPatterns, 0, details);
-    Check(row == "- [0] ListItem patterns=[\"SelectionItem\", \"ExpandCollapse\", \"ScrollItem\"]",
+    var row = AccessibilityText.Format(selectionPatterns, "42/-7/9", details);
+    Check(row == "- [42/-7/9] ListItem patterns=[\"SelectionItem\", \"ExpandCollapse\", \"ScrollItem\"]",
         "One control exposes all of its patterns, once per pattern rather than once per action");
     Check(!row.Contains("actions=") && !row.Contains("SelectionItem.Select") && !row.Contains("ExpandCollapse.Collapse"),
         "Neither detail mode includes action lists");
@@ -104,6 +119,6 @@ var queryOnly = new AccessibilityNode { ControlType = "Group", Patterns = ["Sele
 Check(AccessibilityText.Retain(queryOnly), "Query-only patterns keep otherwise empty containers visible");
 Check(AccessibilityText.Format(queryOnly, null, false) == "- Group patterns=[\"Selection\", \"Grid\", \"Table\"]",
     "Query-only patterns are visible without claiming executable actions");
-Check(AccessibilityText.Format(new() { ControlType = "Document", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, 0, false)
+Check(AccessibilityText.Format(new() { ControlType = "Document", Value = "abc", HasValue = true, HasSelection = true, Selection = new(2, 5) }, "1/2/3", false)
     .Contains("selection=unavailable"), "Out-of-range selections do not describe valid text");
 Console.WriteLine($"{checks} portable CUA checks passed");

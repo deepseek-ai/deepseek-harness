@@ -1,4 +1,4 @@
-// Formatting owns no native references or snapshot indices.
+// Formatting owns no native references or snapshot element mappings.
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -35,10 +35,10 @@ public static class AccessibilityText
         || node.Name.Length != 0 || !string.IsNullOrEmpty(node.Help) || node.HasValue || node.Patterns.Length != 0
         || node.Enabled == false || node.Focused == true || node.Selected.HasValue || node.Expanded.HasValue;
 
-    public static string Format(AccessibilityNode node, int? index, bool details)
+    public static string Format(AccessibilityNode node, string? elementId, bool details)
     {
         var text = new StringBuilder("- ");
-        if (index is { } number) text.Append('[').Append(number).Append("] ");
+        if (elementId is not null) text.Append('[').Append(elementId).Append("] ");
         text.Append(node.ControlType);
         if (node.Enabled == false) text.Append(" disabled");
         if (node.Focused == true) text.Append(" focused");
@@ -62,7 +62,7 @@ public static class AccessibilityText
         if (details)
         {
             if (node.Identifier is { Length: > 0 } identifier) text.Append(" id=").Append(Quote(identifier));
-            if (index.HasValue && node.Bounds is { } bounds)
+            if (elementId is not null && node.Bounds is { } bounds)
                 text.Append(" bounds=[").Append(string.Join(",", new[] { bounds.X, bounds.Y, bounds.Width, bounds.Height }
                     .Select(number => number.ToString("G", CultureInfo.InvariantCulture)))).Append(']');
         }

@@ -1,4 +1,4 @@
-// One traversal owns both the disclosed indices and their retained UI Automation elements.
+// One traversal owns both the disclosed RuntimeIds and their retained UI Automation elements.
 using System.Globalization;
 using System.Text;
 using System.Windows.Automation;
@@ -8,7 +8,7 @@ using DeepSeek.Cua.Protocol;
 namespace DeepSeek.Cua.Windows;
 
 internal sealed record ElementReference(AutomationElement Element, WindowState Window);
-internal sealed record Snapshot(string Id, nint Scope, WindowState[] Windows, IReadOnlyDictionary<int, ElementReference> Elements);
+internal sealed record Snapshot(string Id, nint Scope, WindowState[] Windows, IReadOnlyDictionary<string, ElementReference> Elements);
 
 internal static class Accessibility
 {
@@ -30,14 +30,13 @@ internal static class Accessibility
         if (!all.Any(window => window.Id == target.Id)) all = [.. all, target];
         var targets = new[] { target };
         var rows = new List<string> { "AX scope=window offsets=UTF-16" };
-        var elements = new Dictionary<int, ElementReference>();
+        var elements = new Dictionary<string, ElementReference>(StringComparer.Ordinal);
         var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
         var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.Full, TreeScope = TreeScope.Element };
         foreach (var property in Properties.Concat(PatternActions.Patterns.Select(pattern => pattern.Available))) cache.Add(property);
         var truncated = false;
         var count = 0;
-        var nextIndex = 0;
         var bytes = Encoding.UTF8.GetByteCount(rows[0]);
         void Add(string row)
         {
@@ -82,18 +81,20 @@ internal static class Accessibility
             context.Check();
             if (count >= maximumElements || depth >= maximumDepth) { truncated = true; return; }
             count++;
-            if (!visited.Add(string.Join(',', context.Ax(element.GetRuntimeId)))) return;
+            var runtimeId = string.Join('/', context.Ax(element.GetRuntimeId)
+                .Select(component => component.ToString(CultureInfo.InvariantCulture)));
+            if (!visited.Add(runtimeId)) return;
             var node = Read(element, window, geometry, context);
             var retained = AccessibilityText.Retain(node);
             if (retained)
             {
-                int? index = null;
+                string? elementId = null;
                 if (node.Enabled != false && (node.Patterns.Length != 0 || node.ValueWritable == "true" || node.SelectionWritable == true))
                 {
-                    index = nextIndex++;
-                    elements.Add(index.Value, new(element, window));
+                    elementId = runtimeId;
+                    elements.Add(elementId, new(element, window));
                 }
-                Add(new string(' ', indent * 2) + AccessibilityText.Format(node, index, details));
+                Add(new string(' ', indent * 2) + AccessibilityText.Format(node, elementId, details));
             }
             if (!includeMenus && node.ControlType == nameof(ControlType.Menu))
             {
@@ -214,13 +215,11 @@ internal static class Accessibility
     internal static ElementReference Element(AppState app, WindowState window, string snapshotId, string elementId,
         RequestContext context)
     {
-        if (!int.TryParse(elementId, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
-            throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
         window.Geometry(app, context);
         if (!app.Snapshots.TryGetValue(window.Id, out var snapshot) || snapshot.Id != snapshotId
             || snapshot.Windows.Length != 1 || snapshot.Windows[0].Id != window.Id)
             throw new NativeFailure("STALE_SNAPSHOT", "Read fresh AX state before using element identifiers");
-        if (!snapshot.Elements.TryGetValue(index, out var element)) throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
+        if (!snapshot.Elements.TryGetValue(elementId, out var element)) throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
         if (element.Window.Id != window.Id)
             throw new NativeFailure("STALE_SNAPSHOT", "The element belongs to another window; read fresh AX state");
         if (!context.Ax(() => element.Element.Current.IsEnabled)) throw new NativeFailure("ELEMENT_DISABLED", "The element is disabled");
