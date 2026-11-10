@@ -1,5 +1,5 @@
 ---
-description: "开启可选 macOS Computer Use 及权限页面。"
+description: "在 macOS 和 Windows 上开启可选 Computer Use 及权限页面。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-从插件页为已有和新建会话开启 macOS Computer Use。标准、创造、极简及自定义 preset 获得 `cua_run_code`；PTC 继续通过 `run_code` 使用 `cua` 绑定。Windows 支持正在开发中。组合包保留在 `experimental`，待 Windows 支持完成后迁入 `computer-use`。它随 DSH 提供且默认关闭，在 macOS Host 的实验性插件列表中显示；关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
+在 macOS 和 Windows 的插件页为已有和新建会话开启 Computer Use。PTC 通过 `run_code` 使用 `cua`，其他预设使用 `cua_run_code`。组合包随 DSH 提供且默认关闭，在受支持 Host 的实验性插件列表中显示。各 Host 加载对应平台的原生提供方和共享权限页面。关闭时不准备本机组件、不注册 CUA 工具或添加其模型指引。
 
 ## 目录
 
@@ -24,7 +24,11 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在 macOS 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。打开它的详情，为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。源码 Web 在仓库根目录运行以下命令：
+在 macOS 或 Windows 上打开“插件 → 更多”，在实验性插件列表中开启 Computer Use。开启后组合包也会出现在插件主列表中，关闭后只留在实验性插件列表。
+
+在 macOS 上，组合包随 DSH 提供并随之升级，开启时无需下载。发布包包含已签名和公证的 helper，用户无需编译工具。源码 Web 和开发 Desktop 在开启时准备临时签名的 helper。请为 `DSH Computer Use.app` 授予辅助功能和屏幕录制权限。
+
+各平台的原生准备和访问要求分别见 [macOS 提供方](../cua-macos/README.zh.md)和 [Windows 提供方](../cua-windows/README.zh.md)。源码 Web 在仓库根目录运行以下命令：
 
 ```sh
 pnpm run build
@@ -37,7 +41,7 @@ pnpm dsh web
 
 关闭会卸载提供方，并从其 Agent 作用域中撤回 CUA 工具。执行器配置、新会话默认值和已保存的授权保留。
 
-Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的可选依赖，共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 Mac Host。
+组合包支持 macOS 和原生 Windows DSH Host，不在 WSL 中启用 Windows Computer Use。原生提供方作为可选依赖提供，各 Host 只加载对应平台的提供方；共享 CUA 和 Client 包仍随安装提供。其他 Host 默认不在插件列表和模型推荐中展示此组合包，并在保存设置前拒绝启用。profile 显式安装的依赖和已保存的选择仍保留管理入口。已选中的组合包会在启动时跳过并报告原因，仍可取消选择；已保存的用户设置保留。其他操作系统上的浏览器可以连接受支持的 DSH Host。
 
 准备失败时，已保存的选择保留，CUA 操作不可用。刷新或重新打开插件页查看组件诊断，修复后重启 DSH。
 
@@ -51,7 +55,7 @@ Computer Use 仅支持 macOS DSH Host。原生提供方是仅在 macOS 安装的
 <details>
 <summary>维护者说明</summary>
 
-组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面，为该 preset 选择原始 CUA，为其他 preset 选择 `cua_run_code`。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件会在其他 Host 上跳过可选的 macOS 提供方。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
+组合包 patch 通过 `agentPreset: ptc` 挂载原生提供方和权限界面。直接将导出的 `cordis.patch.yml` 用作覆盖层时不会经过组合包准入；行级条件确保 macOS 提供方仅在 macOS 加载，Windows 提供方仅在原生 Windows 加载。仅加载共享条目不能提供计算机控制。工具通过现有 Agent 作用域注册，preset 文档保持不变。详情页按钮复用现有设置表单，仅在点击后保存 `agent-preset-registry.selectedDefault: ptc`。[CUA](../cua/README.zh.md)负责注册和销毁。
 
 </details>
 
@@ -85,6 +89,7 @@ CUA 生效和卸载会改变工具 schema 与系统指引，后续请求使用�
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- Windows 的 npm 安装包不含 helper。请按架构准备原生产物，并通过 `helperPath` 指定 exe。见 [Windows 配置说明](../cua-windows/README.zh.md#setup)。
 - 系统权限需用户在 macOS 中确认，开启组合包不会自动授予权限。
 - PTC 执行方式由 profile 共享，与 CUA 提供方持有的程序运行时分别配置。未启用 HMR 的 Host 在重启时应用已保存的变更。
 

@@ -82,8 +82,8 @@ it('inlines discovery, restoration, and mouse-move return records', () => {
     expect(lines.find(line => line.startsWith(`- ${name}(`))).toMatch(/ -> \(?\{ /)
   }
   expect(COMMON_GUIDANCE).toContain("{ platform: string, permissions: { accessibility: boolean, screenRecording: boolean }, appLevelAccessibility: boolean, systemPointer: boolean, keyboard: ('app' | 'window')[], sessionLocked: boolean | null, methods: string[], coordinateSpace: 'screenshot-pixels', browser: false }")
-  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: true, pid: number }[]')
-  expect(COMMON_GUIDANCE).toContain('({ id: string, displayName: string, path: string } & ({ isRunning: true, pid: number } | { isRunning: false }))[]')
+  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, isRunning: boolean, pid?: number }[]')
+  expect(COMMON_GUIDANCE).toContain('{ id: string, displayName: string, path: string, isRunning: boolean, pid?: number }[]')
   expect(COMMON_GUIDANCE).toContain('getScreenshot() -> Image')
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
 })
@@ -95,7 +95,7 @@ it('defines every non-builtin type name used in method signatures', () => {
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
-  expect(COMMON_GUIDANCE).toContain('Window is the window object with readonly window.windowId: number and the methods listed below for window level')
+  expect(COMMON_GUIDANCE).toContain('Window is the window object with readonly window.windowId: string and the methods listed below for window level')
   expect(COMMON_GUIDANCE).toContain('Signatures show resolved return values after await')
 })
 

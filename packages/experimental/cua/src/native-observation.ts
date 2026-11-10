@@ -20,7 +20,7 @@ export function observeNativeWindows(
   request: Extract<CuaOperation, { method: 'getState' | 'listWindows' }>, result: JsonValue, coordinates: CuaCoordinates,
 ): z.output<typeof WindowsResult> | z.output<typeof StateResult> {
   const appHandle = request.params.appHandle as CuaAppHandle
-  function observe(windows: z.output<typeof NativeWindows>, selected?: number) {
+  function observe(windows: z.output<typeof NativeWindows>, selected?: string) {
     coordinates.observe(appHandle, windows, selected)
     return windows.flatMap(({ cacheOnly, ...window }) => !cacheOnly || window.windowId === selected ? [window] : [])
   }

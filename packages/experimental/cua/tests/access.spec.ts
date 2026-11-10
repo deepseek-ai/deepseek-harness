@@ -403,9 +403,30 @@ it('preserves captured launch metadata separately from the current helper parent
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
+  expect(await f.ctx.cuaAccess.systemStatus()).toEqual({ platform: 'darwin', accessibility: false, screenRecording: false,
+    helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
 })
 
+it.each([
+  ['helper', {}], ['parent', {}], ['helper', { pid: 0 }], ['parent', { pid: -1 }],
+  ['helper', { pid: 1.5 }], ['parent', { pid: '1' }],
+] as const)('rejects an invalid macOS %s PID from native permission diagnostics: %j', async (field, processInfo) => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  native.instances.at(-1)!.request.mockResolvedValueOnce({
+    platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 1 }, [field]: processInfo,
+  })
+  await expect(f.ctx.cuaAccess.systemStatus()).rejects.toMatchObject({ issues: [{ path: [field, 'pid'] }] })
+})
+
+it('omits the Windows helper PID while retaining its diagnostic name and path', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const status = { platform: 'windows', sessionLocked: null, captureAvailable: true, elevated: false }
+  const helper = { name: 'dsh-cua-windows', path: 'C:/fixture/dsh-cua-windows.exe' }
+  native.instances.at(-1)!.request.mockResolvedValueOnce({ ...status, helper: { ...helper, pid: 4 } })
+  expect(await f.ctx.cuaAccess.systemStatus()).toEqual({ ...status, helper })
+})
 
 it('omits session-only grants from the permission page and retains their access after another session saves a grant', async () => {
   const f = await setup()

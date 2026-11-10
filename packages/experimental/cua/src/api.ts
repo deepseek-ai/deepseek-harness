@@ -52,9 +52,10 @@ export function createCuaApi(dispatch: CuaDispatch): CuaApi {
       return capabilities
     },
     async listApps() {
-      return AppsResult.parse(await call('listApps', {})).map(app => ({
-        id: app.bundleId || String(app.pid), displayName: app.name, isRunning: true as const, pid: app.pid,
-      }))
+      return AppsResult.parse(await call('listApps', {})).map(({ id, name, bundleId, ...state }) => {
+        const selector = id ?? (bundleId || (state.isRunning && state.pid !== undefined ? String(state.pid) : name))
+        return { id: selector, displayName: name, ...state }
+      })
     },
     async findApps(query) {
       return FoundAppsResult.parse(await call('findApps', { query }))
@@ -78,19 +79,19 @@ type CuaScopeParams = (params: Record<string, JsonValue>) => Record<string, Json
 function createCuaObjects(call: ReturnType<typeof validatedCall>): {
   createCuaApp(appHandle: CuaAppHandle, capabilities: CuaCapabilities): CuaApp
 } {
-  const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: number | undefined }>()
+  const observed = new Map<CuaAppHandle, { snapshotId: string; windowId: string | undefined }>()
   function currentSnapshot(appHandle: CuaAppHandle): string {
     const current = observed.get(appHandle)
     if (current === undefined) throw new Error('Read getAccessibilityTree before using this surface')
     return current.snapshotId
   }
-  function coordinateParams(appHandle: CuaAppHandle, windowId: number): Record<string, JsonValue> {
+  function coordinateParams(appHandle: CuaAppHandle, windowId: string): Record<string, JsonValue> {
     const current = observed.get(appHandle)
     return current !== undefined && (current.windowId === undefined || current.windowId === windowId)
       ? { snapshotId: current.snapshotId } : {}
   }
   function createCuaSurface(
-    target: { appHandle: CuaAppHandle; windowId?: number },
+    target: { appHandle: CuaAppHandle; windowId?: string },
     paramsFor: CuaScopeParams,
     requireAccessibility: () => void,
     requireKeyboard: () => void,
@@ -164,7 +165,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
     }
     return { surface, call: scopedCall, action, elementParams }
   }
-  function createCuaWindow(appHandle: CuaAppHandle, windowId: number, capabilities: CuaCapabilities): CuaWindow {
+  function createCuaWindow(appHandle: CuaAppHandle, windowId: string, capabilities: CuaCapabilities): CuaWindow {
     const base = createCuaSurface({ appHandle, windowId },
       params => ({ ...params, appHandle, windowId }), () => undefined, () => {
         if (!capabilities.keyboard.includes('window')) {

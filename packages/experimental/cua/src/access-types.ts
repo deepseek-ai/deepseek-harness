@@ -4,13 +4,13 @@ export type { CuaApplicationGrant, CuaApplicationId } from './application-types.
 
 /** macOS privileges used by the native provider. */
 export type CuaSystemPermission = 'accessibility' | 'screenRecording'
-/** Observed process; neither the helper nor its parent is assumed to be the TCC owner. */
+/** Observed macOS process; the helper and its parent may differ from the TCC owner. */
 export interface CuaPermissionProcess {
   pid: number
   path?: string | undefined
   name?: string | undefined
 }
-/** Native access observations tagged with Node platform identifiers; distinct from model capability platform names. */
+/** Native access observations tagged with the provider's CUA platform; distinct from Node process.platform values. */
 export type CuaSystemPermissionState = {
   platform: 'darwin'
   accessibility: boolean
@@ -20,11 +20,11 @@ export type CuaSystemPermissionState = {
   /** Application macOS reports as responsible for the helper, captured at startup; absent when it cannot be identified. */
   launchApplication?: { name: string; path: string; icon?: string | undefined } | undefined
 } | {
-  platform: 'win32'
+  platform: 'windows'
   sessionLocked: boolean | null
   captureAvailable: boolean
   elevated: boolean
-  helper: CuaPermissionProcess
+  helper: Omit<CuaPermissionProcess, 'pid'>
 }
 /** Saved grants and refused applications, independent of native permission checks and icons. */
 export interface CuaApplicationState {

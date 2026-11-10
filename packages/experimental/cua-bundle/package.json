@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-cua-bundle",
-  "description": "Optional macOS Computer Use and permission setup",
+  "description": "Optional Computer Use for macOS and Windows",
   "version": "0.2.2-rc.1",
   "icon": "./icon.svg",
   "publishConfig": {
@@ -40,7 +40,8 @@
     "bundle": {
       "patch": "./cordis.patch.yml",
       "platforms": [
-        "darwin"
+        "darwin",
+        "win32"
       ]
     }
   },
@@ -58,6 +59,7 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:~"
   },
   "optionalDependencies": {
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"
+    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
+    "@deepseek-ai/dsh-cua-windows": "workspace:*"
   }
 }
