@@ -1,5 +1,9 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { expect, it } from 'vitest'
+import { expect, it, onTestFinished } from 'vitest'
 import { resolvePersistentExecution } from '../src/configuration.ts'
 import { mountRuntime } from './setup.ts'
 
@@ -137,5 +141,17 @@ it('runs environment initialization once and carries its top-level bindings into
     output: [{ type: 'text', text: 'initialized\n' }, { type: 'text', text: '1 2\n' }],
   })
   expect(await run('const initConst = 5\ninspect(initConst, derived)')).toMatchObject({ output: [{ type: 'text', text: '5 3\n' }] })
+  await runtime.release(stateOwner)
+})
+
+it('keeps Node experimental warnings from an initializer import out of program output while program warnings still print', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-scoped-repl-warning-'))
+  onTestFinished(async () => { await rm(directory, { recursive: true, force: true }) })
+  await writeFile(join(directory, 'dependency.mjs'), 'export const value = 1')
+  const { runtime, stateOwner, run } = await scopedReplRuntime()
+  runtime.registerEnvironmentInitializer(`globalThis.dependency = await import(${JSON.stringify(pathToFileURL(join(directory, 'dependency.mjs')).href)})`)
+  expect(await run('inspect(dependency.value)')).toMatchObject({ output: [{ type: 'text', text: '1\n' }] })
+  const warned = await run('process.emitWarning("program warning")\nawait new Promise(resolve => setTimeout(resolve, 50))')
+  expect(warned.output?.map(entry => entry.type === 'text' ? entry.text : '').join('')).toContain('Warning: program warning')
   await runtime.release(stateOwner)
 })

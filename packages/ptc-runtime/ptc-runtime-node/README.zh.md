@@ -136,7 +136,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 Host 负责策略、截止时间、绑定查找和进程清理。子进程负责程序求值与绑定代理；即使使用预期的控制描述符，模型编写的代码仍是不可信对端。
 
-`createExecution()` 在提供方加载时一次性确定配置对应的语法、类型擦除、模型指导和进程生命周期。提供方处理执行准入与取消。统一的执行所有者创建临时进程，或在启用状态保留时复用所有者的进程；二者都由 `ProgramWorker` 负责启动、截止时间、绑定分派和清理。共用的子进程循环根据本次执行数据选择 `createProgramEvaluator()`；异步函数、REPL、Script 和 scoped REPL 实现提供全局变量、求值与清理操作，与进程生命周期独立。运行时等待初始化求值结束，不等待或展开其完成值；随后等待 Host 确认，再执行用户程序。求值器报告完成时立即结算用户程序；随后运行的微任务不能再输出内容或调用绑定。REPL 诊断也可以结算当前运行。scoped REPL 求值器还接受三个创建参数：`strict`（默认开）、`codeGeneration`（默认关）和 `finalExpression`（默认开）。运行时总是取默认值，scoped REPL 的模型说明描述的也是默认值；其他取值是设计上为以后的配置预留的，两种状态都有测试。重复声明通知同样是预留的钩子，不输出任何内容。[scoped REPL 决策](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.zh.md)记录每个参数改变什么。
+`createExecution()` 在提供方加载时一次性确定配置对应的语法、类型擦除、模型指导和进程生命周期。提供方处理执行准入与取消。统一的执行所有者创建临时进程，或在启用状态保留时复用所有者的进程；二者都由 `ProgramWorker` 负责启动、截止时间、绑定分派和清理。子进程会丢弃运行时自身触发的实验性功能警告（`vm.USE_MAIN_CONTEXT_DEFAULT_LOADER` 和 `stripTypeScriptTypes`），它们不会进入程序输出；程序自己发出的警告照常打印，宿主擦除类型时也不打印 `stripTypeScriptTypes` 警告。共用的子进程循环根据本次执行数据选择 `createProgramEvaluator()`；异步函数、REPL、Script 和 scoped REPL 实现提供全局变量、求值与清理操作，与进程生命周期独立。运行时等待初始化求值结束，不等待或展开其完成值；随后等待 Host 确认，再执行用户程序。求值器报告完成时立即结算用户程序；随后运行的微任务不能再输出内容或调用绑定。REPL 诊断也可以结算当前运行。scoped REPL 求值器还接受三个创建参数：`strict`（默认开）、`codeGeneration`（默认关）和 `finalExpression`（默认开）。运行时总是取默认值，scoped REPL 的模型说明描述的也是默认值；其他取值是设计上为以后的配置预留的，两种状态都有测试。重复声明通知同样是预留的钩子，不输出任何内容。[scoped REPL 决策](../../../.agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.zh.md)记录每个参数改变什么。
 
 ### 启动与控制
 
