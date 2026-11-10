@@ -5,8 +5,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  Bot, createRenderReport, h, normalize, PartialSendError, PlatformError, RefusedContentError, type Fragment,
-  type MessageHandle, type MessageStream, type SendOptions, type SendResult, type Target,
+  Bot, createRenderReport, h, normalize, PartialSendError, PlatformError, type Fragment, type MessageHandle,
+  type MessageStream, type SendOptions, type SendResult, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import { createTextMode, mountFakeAdapter, type FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -343,17 +343,6 @@ describe('ImSender.send', () => {
     expect(result.status).toBe('failed')
     expect(result.report?.degraded.length).toBeGreaterThan(0)
     expect(bot.operations.filter(operation => operation.op === 'send')).toHaveLength(0)
-  })
-
-  it('marks refused content as failed instead of blaming the platform', async () => {
-    const { sender, stub } = await boot()
-    stub.answer = () => Promise.reject(new RefusedContentError(
-      'the publication carries the resource "file:///home/u/secret.png", which this host will not fetch',
-    ))
-    const result = await sender.send(STUB_CHAT, h.text('hello'), { operationId: 'op-refused' })
-    expect(result.status).toBe('failed')
-    expect(result.error).toMatch(/will not fetch/)
-    expect(result.error).not.toMatch(/platform refused/)
   })
 
   it('marks a timed-out publication as uncertain', async () => {

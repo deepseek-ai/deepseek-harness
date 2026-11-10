@@ -12,9 +12,9 @@ import { Http } from '@deepseek-ai/cordis-plugin-http'
 import { type ButtonEvent, type Child, type Element, h, toText } from '@deepseek-ai/satori-element'
 import {
   Adapter, defineMode, ElementRegistry, type MessageHandle, type Mode, PlatformError,
-  PartialSendError, type Prepared, type PrepareContext, RefusedContentError, type ResolvedResource, type ResourceKind,
-  type ResourceRef, Satori, type SendContext, type SendResult, type SentPart, type SerializeContext, Status,
-  type StreamDriver, StrictRenderError, type Target,
+  PartialSendError, type Prepared, type PrepareContext, type ResolvedResource, type ResourceKind, type ResourceRef,
+  Satori, type SendContext, type SendResult, type SentPart, type SerializeContext, Status, type StreamDriver,
+  StrictRenderError, type Target,
 } from '@deepseek-ai/cordis-plugin-im-core'
 
 // ---- a tiny mode ---------------------------------------------------------------------------------------------------
@@ -225,15 +225,6 @@ class TestAdapter extends TestAdapterBase {
 
 type AdapterClass = new (ctx: Context, config: TestConfig) => TestAdapterBase
 
-/** Uploads like a real platform adapter: the bytes come from the publication's own resource references. */
-class FetchingAdapter extends TestAdapterBase {
-  override async upload(ref: ResourceRef, scope: string, ctx: PrepareContext): Promise<ResolvedResource> {
-    const fetched = await ctx.fetch(ref.src, ctx.signal)
-    this.ops.push({ op: 'upload', ref, scope, target: ctx.target })
-    return { key: `up:${scope}:${ref.kind}:${fetched.data.byteLength}` }
-  }
-}
-
 const target: Target = { chat: { id: 'c1', type: 'group' } }
 const message = (...children: Child[]) => h('message', ...children)
 
@@ -349,22 +340,6 @@ describe('bot.send', () => {
     const keys = adapter.ops.filter(op => op.op === 'sendPayload').map(op => (op.payload as TestPayload).media[0])
     expect(keys).toEqual(['up:c1:image:https://a.test/1.png', 'up:c1:image:https://a.test/1.png'])
     expect((first.handle.parts[0]!.id)).not.toBe(second.handle.parts[0]!.id)
-  })
-
-  it('refuses a publication whose resource this host would have to fetch', async () => {
-    const { adapter, bot } = await setup(FetchingAdapter)
-    for (const src of ['file:///home/u/secret.png', 'http://169.254.169.254/latest/meta-data/iam/']) {
-      const error = await bot.send(target, message(h('img', { src })))
-        .then(() => undefined, (reason: unknown) => reason)
-      expect(error).toBeInstanceOf(RefusedContentError)
-      expect(String(error)).toContain('will not fetch')
-    }
-    // The refusal happens in prepare: no part of the publication reached the platform.
-    expect(adapter.ops.filter(op => op.op === 'sendPayload')).toHaveLength(0)
-    // Inline bytes still publish, which is how a local file reaches a chat (`im_send_file` publishes a data: URL).
-    await bot.send(target, message(h('img', { src: 'data:image/png;base64,UE5H' })))
-    expect(adapter.ops.filter(op => op.op === 'upload').length).toBe(1)
-    expect(adapter.ops.filter(op => op.op === 'sendPayload').length).toBe(1)
   })
 
   it('rejects content that renders nothing', async () => {

@@ -75,14 +75,3 @@ export class StrictRenderError extends Error {
     super('strict send rejected: content would be degraded')
   }
 }
-
-/**
- * Content the host refuses to publish: a resource reference the platform would make this host fetch, such as a
- * `file:` path or an internal address. Nothing reached the chat.
- */
-export class RefusedContentError extends Error {
-  override name = 'RefusedContentError'
-  constructor(message: string) {
-    super(message)
-  }
-}

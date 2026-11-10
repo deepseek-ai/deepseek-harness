@@ -12,7 +12,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Binary } from '@deepseek-ai/cosmokit'
 import { createHash } from 'node:crypto'
 import type { Adapter } from './bot.ts'
-import { RefusedContentError } from './errors.ts'
 import type { Target } from './protocol.ts'
 
 export type ResourceKind = 'image' | 'audio' | 'video' | 'file'
@@ -344,45 +343,17 @@ function inlineResource(src: string): FetchedResource | undefined {
   return undefined
 }
 
-/**
- * Resource schemes one publication may reference: bytes its own content carries (`data:`, `base64:`) and resources
- * the core resolves itself (`satori:`). Everything else — `file:` above all — would have this host fetch the resource.
- */
-export const PUBLISHABLE_SCHEMES = ['data:', 'base64:', 'satori:'] as const
-
-/** What one {@link createResourceFetcher} accepts beyond the inline forms. */
-export interface ResourceFetchPolicy {
-  /**
-   * Schemes this fetch accepts, matched case-insensitively on the src prefix. Absent accepts every scheme the http
-   * service resolves (`http(s):`, `file:`, `satori:` …), which is what reading platform resources needs.
-   */
-  schemes?: readonly string[]
-}
-
-/**
- * `PrepareContext.fetch` backed by `ctx.http` (http(s), `satori:` via the core fetch hook) and data:/base64: decoding.
- * @param ctx - the context whose `http` service resolves the non-inline forms.
- * @param policy - which schemes are accepted; a refused one rejects with {@link RefusedContentError} before any I/O.
- * @returns the fetch of one prepare pass.
- */
-export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy = {}): PrepareContext['fetch'] {
+/** `PrepareContext.fetch` backed by `ctx.http` (http(s), `satori:` via the core fetch hook) and data:/base64: decoding. */
+export function createResourceFetcher(ctx: Context): PrepareContext['fetch'] {
   return async (src, signal) => {
     const inline = inlineResource(src)
     if (inline) return inline
-
-    if (policy.schemes !== undefined) {
-      const resolved = src.trim().toLowerCase()
-      if (!policy.schemes.some(scheme => resolved.startsWith(scheme))) {
-        throw new RefusedContentError(`the publication carries the resource "${preview(src)}", which this host will `
-          + `not fetch: a published message references ${PUBLISHABLE_SCHEMES.join(', ')} resources only.`)
-      }
-    }
 
     const http = ctx.get('http')
     if (!http) throw new Error(`cannot fetch ${src}: the http service is not installed`)
 
     // `ctx.http` runs the `http/fetch` waterfall, which is what resolves `satori:` internal URLs (plugin-im-core's
-    // own hook); `responseType` keeps the raw `Response` so the bytes and headers stay ours.
+    // own hook) and `file:` sources; `responseType` keeps the raw `Response` so the bytes and headers stay ours.
     const response = await http.get(src, { responseType: (raw: globalThis.Response) => raw, signal })
     return {
       data: new Uint8Array(await response.arrayBuffer()),
@@ -390,10 +361,4 @@ export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy 
       name: nameOf(response.headers.get('content-disposition')),
     }
   }
-}
-
-/** One src, shortened to fit a diagnostic (a data: URL can be megabytes long). */
-function preview(src: string): string {
-  const trimmed = src.trim()
-  return trimmed.length <= 120 ? trimmed : `${trimmed.slice(0, 120)}…`
 }

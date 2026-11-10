@@ -12,11 +12,9 @@ import {
   collectResources,
   createResourceFetcher,
   MemoryResourceCache,
-  PUBLISHABLE_SCHEMES,
   type PrepareContext,
   type PrepareOptions,
   prepare,
-  RefusedContentError,
   type ResourceCache,
   type ResourceKind,
   ResourceRef,
@@ -547,35 +545,6 @@ describe('createResourceFetcher', () => {
     const fetch = createResourceFetcher(fakeContext(undefined))
     await expect(fetch('https://example.com/a.png', new AbortController().signal))
       .rejects.toThrow(/http service is not installed/)
-  })
-
-  it('refuses a src outside the publication policy before any I/O', async () => {
-    const { http, calls } = fakeHttp(() => new Response(new Uint8Array([1])))
-    const fetch = createResourceFetcher(fakeContext(http), { schemes: PUBLISHABLE_SCHEMES })
-    for (const src of [
-      'file:///home/u/secret.png',
-      'FILE:///tmp/secret.png',
-      'http://169.254.169.254/latest/meta-data/iam/',
-      'https://example.com/a.png',
-    ]) {
-      const error = await fetch(src, new AbortController().signal).then(() => undefined, (reason: unknown) => reason)
-      expect(error).toBeInstanceOf(RefusedContentError)
-      expect(String(error)).toContain('will not fetch')
-    }
-    // Nothing reached the http service: a refusal is decided before the host reads anything.
-    expect(calls).toHaveLength(0)
-  })
-
-  it('keeps the inline forms and satori: resources under the publication policy', async () => {
-    const { http, calls } = fakeHttp(() => new Response(new Uint8Array([7]), {
-      headers: { 'content-type': 'image/jpeg' },
-    }))
-    const fetch = createResourceFetcher(fakeContext(http), { schemes: PUBLISHABLE_SCHEMES })
-    const signal = new AbortController().signal
-    expect([...(await fetch('data:image/png;base64,UE5H', signal)).data]).toEqual([0x50, 0x4e, 0x47])
-    expect([...(await fetch('base64:UE5H', signal)).data]).toEqual([0x50, 0x4e, 0x47])
-    expect([...(await fetch('satori:lark/on_1/messages/om_1/resources/file_1', signal)).data]).toEqual([7])
-    expect(calls.map(call => call.src)).toEqual(['satori:lark/on_1/messages/om_1/resources/file_1'])
   })
 
   it('propagates a fetch failure', async () => {
