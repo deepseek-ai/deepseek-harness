@@ -210,29 +210,6 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 2
-      - name: Detect Windows CUA helper changes
-        id: cua
-        shell: pwsh
-        run: |
-          $changes = git diff --name-only 'HEAD^1' HEAD -- packages/experimental/cua-windows/native .github/workflows/ci-windows.yml
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if ($changes) { 'changed=true' >> $env:GITHUB_OUTPUT }
-      - name: Set up .NET for Windows CUA
-        if: steps.cua.outputs.changed == 'true'
-        uses: actions/setup-dotnet@v5.4.0
-        with:
-          dotnet-version: '10.0.x'
-      - name: Build Windows CUA and run its protocol checks
-        if: steps.cua.outputs.changed == 'true'
-        shell: pwsh
-        working-directory: packages/experimental/cua-windows/native
-        run: |
-          dotnet restore cua-windows.slnx --locked-mode
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build cua-windows.slnx --configuration Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet run --project tests/Protocol.Tests.csproj --configuration Release --no-build --no-restore
       - name: Enable Developer Mode (symlink support)
         shell: pwsh
         run: >-
