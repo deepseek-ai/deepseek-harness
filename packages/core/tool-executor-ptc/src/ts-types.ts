@@ -312,6 +312,7 @@ export function renderToolsSdk(schemas: readonly ToolSdkSchema[], programFormat:
   for (const schema of sorted) {
     argsMembers.push(...docLines(schema.description, 1))
     argsMembers.push(`${pad(1)}${renderKey(schema.name)}: ${jsonSchemaToTs(schema.parameters, 1)};`)
+    // FIXME: Derive program return types from tool-declared adaptations, together with the binding adapter in ptc.ts.
     const output = schema.name === 'read_image' ? 'Image'
       : `${schema.name === 'cua' ? 'Image | ' : ''}${jsonSchemaToTs(schema.output, 1)}`
     outputMembers.push(`${pad(1)}${renderKey(schema.name)}: ${output};`)
