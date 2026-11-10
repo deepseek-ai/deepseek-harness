@@ -3,20 +3,24 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { inspect, types } from 'node:util'
+import { inspect, types, type InspectOptions } from 'node:util'
 import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
-const { isNativeError, isArrayBufferView, isProxy } = types
+const { isNativeError } = types
 const {
   create: capturedObjectCreate,
   defineProperty: capturedObjectDefineProperty,
-  keys: capturedObjectKeys,
-  getOwnPropertyDescriptor: capturedObjectGetOwnPropertyDescriptor,
 } = Object
+
+/** Node formatting options shared with the runtime-owned Image hook. */
+export interface ImageInspectOptions extends InspectOptions {
+  /** Collect an Image reached during this formatting call. */
+  ptcImageCollector?: (image: object) => void
+}
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -120,33 +124,21 @@ export function makeInspect(
         emitImage(directImage)
         continue
       }
+      const nested: string[] = []
+      const options: ImageInspectOptions = {
+        depth: null, maxArrayLength: null, maxStringLength: null,
+        ptcImageCollector(image) {
+          const id = images?.get(image)
+          if (id !== undefined) nested.push(id)
+        },
+      }
       try {
-        pending.push(typeof arg === 'string' ? arg : inspect(arg, { depth: null, maxArrayLength: null, maxStringLength: null }))
+        pending.push(typeof arg === 'string' ? arg : inspect(arg, options))
       } catch (error: unknown) {
         flush()
         throw error
       }
-      if (images === undefined || emitImage === undefined) continue
-      const nested: string[] = []
-      const seen = new Set<object>()
-      const visit: unknown[] = [arg]
-      while (visit.length > 0) {
-        const current = visit.pop()
-        if (current === null || typeof current !== 'object') continue
-        const id = images.get(current)
-        if (id !== undefined) {
-          nested.push(id)
-          continue
-        }
-        // Binary contents contain no Images; proxy traps must not run during discovery.
-        if (seen.has(current) || isArrayBufferView(current) || isProxy(current)) continue
-        seen.add(current)
-        for (const key of capturedObjectKeys(current).reverse()) {
-          const property = capturedObjectGetOwnPropertyDescriptor(current, key)
-          if (property !== undefined && 'value' in property) visit.push(property.value)
-        }
-      }
-      if (nested.length === 0) continue
+      if (emitImage === undefined || nested.length === 0) continue
       flush()
       for (const id of nested) emitImage(id)
     }

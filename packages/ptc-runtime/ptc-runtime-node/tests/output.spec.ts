@@ -142,6 +142,52 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(failed.error?.kind).toBe('exception')
   })
 
+  it('emits images in collection entries and enumerable symbol properties without reading accessors', async () => {
+    const { runtime } = await setup()
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const result = await runtime.run(runtime.resolve({
+      program: `
+        const image = await tools.image({});
+        const map = new Map([[image, { image }]]);
+        const set = new Set([image]);
+        map.set('self', map);
+        set.add(set);
+        Object.defineProperty(map, 'forEach', { get() { throw new Error('map getter') } });
+        Object.defineProperty(set, 'forEach', { get() { throw new Error('set getter') } });
+        const container = { map, set, [Symbol('image')]: image };
+        Object.defineProperty(container, 'hidden', { value: image });
+        inspect(container);
+        inspect({ get image() { throw new Error('image getter') } });
+      `,
+      bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output.map(block => block.type)).toEqual(['text', 'image', 'image', 'image', 'image', 'text'])
+    expect(result.output.filter(block => block.type === 'image').map(block => block.attachment)).toEqual(Array(4).fill(image.attachment))
+  })
+
+  it('collects images selected by Node formatting and keeps ordinary formatting as text', async () => {
+    const { runtime } = await setup()
+    const image = new PtcImage('/images/selected.png', { attachmentId: AttachmentId('sha256:selected'), mediaType: 'image/png', bytes: 64, width: 8, height: 4 })
+    const result = await runtime.run(runtime.resolve({
+      program: `
+        const image = await tools.image({});
+        const { inspect: nodeInspect } = await import('node:util');
+        console.log(image);
+        inspect(nodeInspect({ image }));
+        inspect({ image, [nodeInspect.custom]() { return 'summary' } });
+        inspect({ [nodeInspect.custom]() { return { image } } });
+      `,
+      bindings: [{ global: 'tools', functions: { image: () => Promise.resolve(image) } }],
+      discardCompletion: true,
+    }))
+    expect(result.error).toBeUndefined()
+    expect(result.output.map(block => block.type)).toEqual(['text', 'text', 'text', 'text', 'image'])
+    expect(result.output[2]).toEqual({ type: 'text', text: 'summary' })
+    expect(result.output.at(-1)).toEqual({ type: 'image', attachment: image.attachment })
+  })
+
   it('inspects a retained image in a later program', async () => {
     const { runtime } = await setup()
     if (!runtime.retainsState) return

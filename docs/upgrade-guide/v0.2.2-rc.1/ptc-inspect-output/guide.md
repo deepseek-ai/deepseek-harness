@@ -11,7 +11,7 @@ English | [中文](guide.zh.md)
 
 TypeScript `run_code` programs display selected values through `inspect(...values)`. Function return values and final expressions previously appeared in the result; they are now omitted. Each inspected argument is rendered independently: strings appear directly, and other values use Node's object formatting without depth, array-length or string-length preview limits. Undefined properties, Error objects and circular references remain visible.
 
-Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images nested in arrays or objects. Read CUA window IDs from the window object’s `windowId`.
+Only CUA screenshots and `read_image` return ordinary `Image` values in TypeScript programs. Their `path` points to an attachment file readable in the execution environment; `width` and `height` describe its stored pixels. Pass selected images to `inspect` alongside explanatory text, including images in arrays, Map entries, Set values and enumerable object properties. Nested image selection follows Node's custom formatting. Read CUA window IDs from the window object’s `windowId`.
 
 Other image-producing tools retain their declared program values and automatically attach their pictures to the model context. Image adaptation requires a readable attachment path in the program filesystem. `fs-ssh` does not provide this mapping, so `read_image` and CUA screenshot bindings fail in that composition. Use a local filesystem composition for program Images.
 

@@ -1,7 +1,8 @@
 import { runInNewContext } from 'node:vm'
+import { inspect as nodeInspect } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import { LogBuffer, makeBindingErrorClass, makeInspect, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
-import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
+import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
@@ -10,6 +11,17 @@ function host(): Pick<HostMethods, 'invoke'> {
 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
+
+function inspectedImage(path: string, width = 8, height = 4) {
+  const image = { path, width, height }
+  Object.defineProperty(image, nodeInspect.custom, {
+    value(this: object, _depth: number | null, options: ImageInspectOptions): object {
+      options.ptcImageCollector?.(this)
+      return this
+    },
+  })
+  return Object.freeze(image)
+}
 
 describe('LogBuffer', () => {
   it('streams entries to the sink until the byte budget, then emits one fitting prefix and reports the limit once', () => {
@@ -87,8 +99,8 @@ describe('makeInspect', () => {
   })
 
   it('emits registered images in argument order from arrays and objects', () => {
-    const one = Object.freeze({ path: '/one.png', width: 8, height: 4 })
-    const two = Object.freeze({ path: '/two.png', width: 4, height: 8 })
+    const one = inspectedImage('/one.png')
+    const two = inspectedImage('/two.png', 4, 8)
     const images = new WeakMap<object, string>([[one, 'one'], [two, 'two']])
     const value = { first: [one, { second: two }] }
     const text: string[] = []
@@ -107,7 +119,7 @@ describe('makeInspect', () => {
   })
 
   it('does not select images behind getters', () => {
-    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const image = inspectedImage('/image.png')
     const images = new WeakMap<object, string>([[image, 'image']])
     const read = vi.fn(() => image)
     const text: string[] = []
@@ -118,8 +130,95 @@ describe('makeInspect', () => {
     expect(selected).toEqual([])
   })
 
+  it('does not select images hidden by a custom formatter', () => {
+    const image = inspectedImage('/image.png')
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const text: string[] = []
+    const selected: string[] = []
+    makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))({
+      image,
+      [nodeInspect.custom]() { return 'summary' },
+    })
+    expect(text).toEqual(['summary'])
+    expect(selected).toEqual([])
+  })
+
+  it('selects registered images returned by a custom formatter', () => {
+    const image = inspectedImage('/image.png')
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const selected: string[] = []
+    const inspect = makeInspect({ push() {} }, images, id => selected.push(id))
+    inspect({ [nodeInspect.custom]() { return { image } } })
+    inspect({ image: inspectedImage('/forged.png') })
+    expect(selected).toEqual(['image'])
+  })
+
+  it('keeps collectors separate across reentrant inspection calls', () => {
+    const one = inspectedImage('/one.png')
+    const two = inspectedImage('/two.png')
+    const images = new WeakMap<object, string>([[one, 'one'], [two, 'two']])
+    const outer: string[] = []
+    const inner: string[] = []
+    const outerInspect = makeInspect({ push() {} }, images, id => outer.push(id))
+    const innerInspect = makeInspect({ push() {} }, images, id => inner.push(id))
+    outerInspect({
+      [nodeInspect.custom](_depth: number | null, options: ImageInspectOptions) {
+        innerInspect({ image: two })
+        return nodeInspect({ image: one }, options)
+      },
+    })
+    expect(outer).toEqual(['one'])
+    expect(inner).toEqual(['two'])
+  })
+
+  it('discards collected images when their containing value fails to format', () => {
+    const image = inspectedImage('/image.png')
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const text: string[] = []
+    const selected: string[] = []
+    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    expect(() => {
+      inspect('before', {
+        image,
+        bad: { [nodeInspect.custom]() { throw new Error('formatter failed') } },
+      })
+    }).toThrow('formatter failed')
+    expect(text).toEqual(['before'])
+    expect(selected).toEqual([])
+    inspect({ image })
+    expect(selected).toEqual(['image'])
+  })
+
+  it('selects images from Map entries, Set values and enumerable symbol properties', () => {
+    const one = inspectedImage('/one.png')
+    const two = inspectedImage('/two.png', 4, 8)
+    const images = new WeakMap<object, string>([[one, 'one'], [two, 'two']])
+    const selected: string[] = []
+    const inspect = makeInspect({ push() {} }, images, id => selected.push(id))
+    const value = {
+      map: new Map([[one, two]]),
+      set: new Set([two, one]),
+      [Symbol('image')]: one,
+    }
+    Object.defineProperty(value, 'hidden', { value: two })
+    inspect(value)
+    expect(selected).toEqual(['one', 'two', 'two', 'one', 'one'])
+  })
+
+  it('reads Map and Set entries without consulting overridden methods', () => {
+    const image = inspectedImage('/image.png')
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const map = new Map([['image', image]])
+    const set = new Set([image])
+    Object.defineProperty(map, 'forEach', { get() { throw new Error('map getter') } })
+    Object.defineProperty(set, 'forEach', { get() { throw new Error('set getter') } })
+    const selected: string[] = []
+    makeInspect({ push() {} }, images, id => selected.push(id))(map, set)
+    expect(selected).toEqual(['image', 'image'])
+  })
+
   it('finds images in cyclic containers alongside binary views', () => {
-    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const image = inspectedImage('/image.png')
     const images = new WeakMap<object, string>([[image, 'image']])
     const value: Record<string, unknown> = { binary: new Uint8Array([1, 2, 3]), image }
     value.self = value

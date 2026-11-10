@@ -1,10 +1,11 @@
 /** Node child evaluation over typed RPC; the host owns process lifetime. */
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { inspect } from 'node:util'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
-import type { BindingErrorConstructor, PatchableStream } from './bootstrap.ts'
+import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
@@ -82,6 +83,10 @@ export async function runNodeMain(
     declare readonly width: number
     declare readonly height: number
     private constructor() { throw new Error('Images are created by image-producing tools') }
+    [inspect.custom](_depth: number | null, options: ImageInspectOptions): this {
+      options.ptcImageCollector?.(this)
+      return this
+    }
   }
   const decodeImage = (wire: PtcImageWire): PtcJsonValue => {
     const image = capturedObjectCreate(Image.prototype) as Image

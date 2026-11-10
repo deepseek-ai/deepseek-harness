@@ -213,7 +213,9 @@ it('captures image selection during execution and revokes it for late or externa
     try { new Image() } catch (error) { constructorError = error.message }
     if (constructorError !== "Images are created by image-producing tools") throw new Error("Image construction succeeded");
     process.savedInspect = inspect;
-    inspect(process.image);
+    const nodeUtil = await import('node:util');
+    inspect(nodeUtil.inspect(process.image));
+    inspect({ image: process.image });
     setImmediate(() => { inspect(process.image); process.done(); });
   `, 1024, 'script', { discardCompletion: true })
   expect(result.error).toBeUndefined()
