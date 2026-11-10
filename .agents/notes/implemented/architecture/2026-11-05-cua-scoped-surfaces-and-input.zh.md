@@ -16,7 +16,7 @@ Provider 的启动能力是静态的。平台、支持的方法、应用级辅�
 
 键盘输入把按键与修饰键分开：`pressKey(key, modifiers?)` 在按住所列修饰键时按下并释放一个键，其键盘修饰键列表是 provider 定义的普通字符串数组。`sendKeyEvent(key, direction)` 只发送一次按下或抬起，不隐式发送相反事件。因此调用方可以保持修饰键或拆分手势；两个方法都不接受组合键字符串，共享 schema 也不枚举平台按键名。
 
-在单个 API 实例内，对象门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享这份快照，包括对同一应用的重复选择。`getWindow` 静默执行首次树读取；当 provider 报告应用级辅助功能时，`getApp` 也静默读取。之后的 `getAccessibilityTree` 读取会在分派前使上一份快照失效。门面会为元素操作自动附加最新快照 ID；调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是 provider 定义的不透明字符串。只有显式 `CuaWindow` 可以截图或发送指针输入。原生 helper 在该门面之后保留自己的应用快照和可选窗口快照；原生层与门面快照相互独立。外部运行时继续负责变量持久化和最终表达式序列化；门面不加入 evaluator。[原生对象决定](2026-09-17-experimental-cua-object-api.zh.md)负责 evaluator 独立性，[共享 helper 决定](2026-10-09-cua-shared-native-helper.zh.md)负责连接生命期。
+在单个 API 实例内，对象门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享这份快照，包括对同一应用的重复选择。`getApp` 和 `getWindow` 只选择对象，不读取辅助功能或替换该快照；原生窗口操作会拒绝已关闭或属于其他应用的窗口。显式 `getAccessibilityTree` 读取会在分派前使上一份快照失效。门面会为元素操作自动附加最新快照 ID；调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是 provider 定义的不透明字符串。只有显式 `CuaWindow` 可以截图或发送指针输入。原生 helper 在该门面之后保留自己的应用快照和可选窗口快照；原生层与门面快照相互独立。外部运行时继续负责变量持久化和最终表达式序列化；门面不加入 evaluator。[原生对象决定](2026-09-17-experimental-cua-object-api.zh.md)负责 evaluator 独立性，[共享 helper 决定](2026-10-09-cua-shared-native-helper.zh.md)负责连接生命期。
 
 ## 考虑过的替代方案
 

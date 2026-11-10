@@ -7,6 +7,7 @@ import type { ForgeFailure, MergeRequest } from '@deepseek-ai/dsh-experimental-f
 import { ChangeRequestCard, type ChangeRequestActions } from '../src/client/ChangeRequestCard.tsx'
 import { en } from '../src/client/locales.ts'
 import css from '../src/client/ForgeTab.module.css'
+import overview from '../src/client/ChangeRequestOverview.module.css'
 import type { ForgePanelChangeRequest } from '../src/types.ts'
 import { check, entry, snapshot, unserved } from './client-fixtures.client.ts'
 
@@ -45,19 +46,28 @@ function metaOf(b: ReturnType<typeof card>): HTMLElement {
   return meta
 }
 
-/** The value a details row shows next to its label. */
+/** The value a details row shows after its name, which only assistive technology reads. */
 function rowValue(item: HTMLElement, label: string): HTMLElement {
   const value = within(item).getByText(label).nextElementSibling
-  if (!(value instanceof HTMLElement)) throw new Error(`no value next to ${label}`)
+  if (!(value instanceof HTMLElement)) throw new Error(`no value after ${label}`)
   return value
 }
 
-/** Outcome, name, time, and whether it opens a link, of each check the open checks list shows, in display order. */
+/** The tone of the row named `label`. */
+function rowTone(item: HTMLElement, label: string): string | null {
+  return within(item).getByText(label).closest(`.${css.rowValue}`)?.getAttribute('data-tone') ?? null
+}
+
+/**
+ * Each row of the open checks menu in display order: a check as its outcome, name, time, and whether it opens a link;
+ * any other row as its text.
+ */
 function checkRows(): string[] {
   return screen.queryAllByRole('menuitem').map((row) => {
-    const [name, time] = row.querySelector(`.${css.checkItem}`)?.children ?? []
-    const state = row.querySelector('[data-forge-check]')?.getAttribute('data-forge-check') ?? ''
-    return [state, name?.textContent, time?.textContent, row.hasAttribute('disabled') ? 'no link' : 'link'].join('|')
+    const item = row.querySelector('[data-forge-check-item]')
+    if (item === null) return row.textContent ?? ''
+    const [name, time] = item.children
+    return [item.getAttribute('data-forge-check-item'), name?.textContent, time?.textContent, row.hasAttribute('disabled') ? 'no link' : 'link'].join('|')
   })
 }
 
@@ -226,8 +236,12 @@ describe('expanded ChangeRequestCard', () => {
     expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(en['change.ci.none'])
     expect(within(b.item).getByText(en['change.row.checks']).closest('button')).toBeNull()
     expect(rowValue(b.item, en['change.row.review']).textContent).toBe(en['change.review.none'])
+    // Without reviewers or the right to request reviews, the review row opens nothing.
+    expect(within(b.item).getByText(en['change.row.review']).closest('button')).toBeNull()
     expect(rowValue(b.item, en['change.row.merge']).textContent).toBe(en['change.merge.mergeable'])
-    for (const label of [en['change.row.review'], en['change.row.merge']]) expect(rowValue(b.item, label).getAttribute('data-tone')).toBeNull()
+    for (const label of [en['change.row.review'], en['change.row.merge']]) expect(rowTone(b.item, label)).toBeNull()
+    expect(b.item.querySelector('[data-forge-threads]')).toBeNull()
+    expect(b.item.querySelector('[data-forge-closing-issues]')).toBeNull()
     expect(within(b.item).getByText('+12,345')).toBeTruthy()
     expect(within(b.item).getByText(`${MINUS}3`)).toBeTruthy()
 
@@ -249,26 +263,39 @@ describe('expanded ChangeRequestCard', () => {
     ['merge conflicts', { mergeability: 'conflicting' }, 'Conflicts with main', 'error'],
     ['an unknown mergeability', { mergeability: 'unknown' }, en['change.merge.unknown'], null],
   ] as const)('states %s of an open change request', (_label, overrides, text, tone) => {
-    const value = rowValue(card(entry(1, snapshot(1, overrides)), { expanded: true }).item, en['change.row.merge'])
-    expect(value.textContent).toBe(text)
-    expect(value.getAttribute('data-tone')).toBe(tone)
+    const { item } = card(entry(1, snapshot(1, overrides)), { expanded: true })
+    expect(rowValue(item, en['change.row.merge']).textContent).toBe(text)
+    expect(rowTone(item, en['change.row.merge'])).toBe(tone)
   })
 
   it.each([
     ['an approval', { reviewDecision: 'approved' }, en['change.review.approved'], 'success'],
     ['a required review', { reviewDecision: 'review-required' }, en['change.review.required'], null],
     ['requested changes', { reviewDecision: 'changes-requested' }, en['change.review.changesRequested'], 'error'],
-    ['an approval with unresolved threads', { reviewDecision: 'approved', unresolvedThreads: 2 }, 'Approved · 2 unresolved', 'success'],
-    ['requested changes with an unresolved thread', { reviewDecision: 'changes-requested', unresolvedThreads: 1 },
-      'Changes requested · 1 unresolved', 'error'],
-    ['more threads than the provider counted', { reviewDecision: 'review-required', unresolvedThreads: 1200, threadsTruncated: true },
-      'Review required · 1,200+ unresolved', null],
-    ['uncounted threads after resolved ones', { reviewDecision: 'approved', unresolvedThreads: 0, threadsTruncated: true },
-      'Approved · 0+ unresolved', 'success'],
   ] as const)('states the review of %s', (_label, overrides, text, tone) => {
-    const value = rowValue(card(entry(1, snapshot(1, overrides)), { expanded: true }).item, en['change.row.review'])
-    expect(value.textContent).toBe(text)
-    expect(value.getAttribute('data-tone')).toBe(tone)
+    const { item } = card(entry(1, snapshot(1, overrides)), { expanded: true })
+    expect(rowValue(item, en['change.row.review']).textContent).toBe(text)
+    expect(rowTone(item, en['change.row.review'])).toBe(tone)
+  })
+
+  it.each([
+    ['unresolved threads', { unresolvedThreads: 2 }, '2'],
+    ['more threads than the provider counted', { unresolvedThreads: 1200, threadsTruncated: true }, '1,200+'],
+    ['uncounted threads after resolved ones', { unresolvedThreads: 0, threadsTruncated: true }, '0+'],
+  ] as const)('counts %s at the end of the changes row', (_label, overrides, count) => {
+    const { item } = card(entry(1, snapshot(1, overrides)), { expanded: true })
+    const threads = item.querySelector('[data-forge-threads]')
+    expect(threads?.getAttribute('data-forge-threads')).toBe(count)
+    expect(threads?.textContent).toBe(count)
+    expect(threads?.closest(`.${css.rowTrailing}`)?.parentElement?.textContent).toContain('+12')
+  })
+
+  it('names the unresolved threads of a row that opens the changes view in its description', () => {
+    const { item } = card(entry(1, snapshot(1, { unresolvedThreads: 2 })), { expanded: true, actions: { viewChanges: vi.fn() } })
+    const row = within(item).getByRole('button', { name: /^View the changes of #1/ })
+    expect(row.getAttribute('aria-describedby')).not.toBeNull()
+    expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe('2 unresolved threads')
+    expect(item.querySelector('[data-forge-threads]')?.getAttribute('aria-hidden')).toBe('true')
   })
 
   it.each([
@@ -276,16 +303,16 @@ describe('expanded ChangeRequestCard', () => {
     ['closed', { state: 'closed' }, en['change.state.closed']],
   ] as const)('states a %s change request in one line instead of its checks, review, and merge rows', (tone, overrides, text) => {
     const b = card(entry(1, snapshot(1, { ...overrides, mergeability: 'conflicting', reviewDecision: 'changes-requested' })), { expanded: true })
-    const line = within(b.item).getByText(text, { selector: `.${css.rowValue}` })
-    expect(line.getAttribute('data-tone')).toBe(tone)
+    const line = within(b.item).getByText(text, { selector: `.${css.ellipsis}` })
+    expect(line.closest(`.${css.rowValue}`)?.getAttribute('data-tone')).toBe(tone)
     for (const label of [en['change.row.checks'], en['change.row.review'], en['change.row.merge']]) expect(within(b.item).queryByText(label)).toBeNull()
     expect(within(b.item).getByText('+12')).toBeTruthy()
   })
 
   it.each([
     ['a partial preview', true, '8 checks loaded; more available', null],
-    ['a complete list', false, '1 failed · 2 running · 2 passed · 1 cancelled · 2 other', 'error'],
-  ] as const)('lists %s with failures first, then running checks, and their times and links', (_label, checksTruncated, text, tone) => {
+    ['a complete list', false, '1 failed · 2 running · 1 cancelled', 'error'],
+  ] as const)('lists %s by group, the ones needing attention first and the rest on request', (_label, checksTruncated, text, tone) => {
     const checks = [
       check('build'),
       check('docs', { state: 'neutral' }),
@@ -298,10 +325,9 @@ describe('expanded ChangeRequestCard', () => {
     ]
     const b = card(entry(1, snapshot(1, { checks, checksRollup: 'failure', checksTruncated })), { expanded: true })
     const toggle = within(b.item).getByText(en['change.row.checks']).closest('button')
-    if (toggle === null) throw new Error('the checks row does not open a list')
-    const summary = rowValue(b.item, en['change.row.checks'])
-    expect(summary.textContent).toBe(text)
-    expect(summary.getAttribute('data-tone')).toBe(tone)
+    if (toggle === null) throw new Error('the checks row does not open a menu')
+    expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(text)
+    expect(rowTone(b.item, en['change.row.checks'])).toBe(tone)
     // The row leads with the combined outcome.
     expect(toggle.querySelector('[data-forge-check]')?.getAttribute('data-forge-check')).toBe('failure')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -309,22 +335,29 @@ describe('expanded ChangeRequestCard', () => {
 
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getAllByRole('group').map(group => group.getAttribute('aria-label'))).toEqual(['Failed', 'Running', 'Cancelled'])
     expect(checkRows()).toEqual([
       'failure|lint|1h 0m|link',
       'pending|deploy|Queued|no link',
       'pending|test|Running|no link',
+      'cancelled|perf|1h 30m|no link',
+      'Show 4 more (passed, skipped)',
+    ])
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show 4 more (passed, skipped)' }))
+    expect(checkRows().slice(4)).toEqual([
       'success|build|1m 5s|no link',
       'success|package||no link',
       'neutral|docs|1m 5s|no link',
       'skipped|e2e||no link',
-      'cancelled|perf|1h 30m|no link',
     ])
-    expect(screen.queryAllByText('8 checks loaded; more available')).toHaveLength(checksTruncated ? 2 : 0)
 
     fireEvent.click(screen.getAllByRole('menuitem')[0]!)
     expect(b.openLink).toHaveBeenCalledWith('https://ci.example.test/lint')
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(checkRows()).toEqual([])
+    // A reopened menu lists the rest on request again.
+    fireEvent.click(toggle)
+    expect(checkRows().at(-1)).toBe('Show 4 more (passed, skipped)')
   })
 
   it.each([
@@ -341,21 +374,19 @@ describe('expanded ChangeRequestCard', () => {
     fireEvent.click(within(b.item).getByText(en['change.row.checks']))
     expect(readChecks).toHaveBeenCalledWith(partial.url, partial.headSha, expect.any(AbortSignal))
     expect(screen.getByText('old lint')).toBeTruthy()
-    const loading = screen.getByRole('menuitem', { name: en['change.checks.loading'] })
-    expect(loading).toHaveProperty('disabled', true)
-    fireEvent.click(loading)
+    expect(screen.getByRole('status').textContent).toBe(en['change.checks.loading'])
     expect(readChecks).toHaveBeenCalledTimes(1)
     await act(async () => { waiting.reject(failure); await Promise.resolve() })
     expect(screen.getByText('old lint')).toBeTruthy()
     expect(screen.getByText(`Could not load more checks: ${message}`)).toBeTruthy()
-    await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name: en['change.checks.retry'] })) })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: en['change.checks.retry'] })) })
     expect(screen.queryByText('old lint')).toBeNull()
-    expect(screen.getByText('current lint')).toBeTruthy()
-    expect(rowValue(b.item, en['change.row.checks']).textContent).toBe('1 passed')
+    expect(checkRows()).toEqual(['Show 1 more (passed, skipped)'])
+    expect(rowValue(b.item, en['change.row.checks']).textContent).toBe('All 1 checks passed')
   })
 
-  it('keeps a reopened list loading when its cancelled read rejects late', async () => {
-    const partial = snapshot(1, { checks: [check('preview')], checksTruncated: true })
+  it('keeps a reopened menu loading when its cancelled read rejects late', async () => {
+    const partial = snapshot(1, { checks: [check('preview', { state: 'failure' })], checksTruncated: true })
     const older = Promise.withResolvers<ReturnType<typeof snapshot>>()
     const newer = Promise.withResolvers<ReturnType<typeof snapshot>>()
     const readChecks = vi.fn<NonNullable<ChangeRequestActions['readChecks']>>()
@@ -374,9 +405,9 @@ describe('expanded ChangeRequestCard', () => {
     expect(screen.getByText(en['change.checks.loading'])).toBeTruthy()
     expect(screen.getByText('preview')).toBeTruthy()
     expect(screen.queryByText('Could not load more checks: cancelled request')).toBeNull()
-    expect(screen.queryByRole('menuitem', { name: en['change.checks.retry'] })).toBeNull()
+    expect(screen.queryByRole('button', { name: en['change.checks.retry'] })).toBeNull()
 
-    await act(async () => { newer.resolve(snapshot(1, { checks: [check('current result')] })); await Promise.resolve() })
+    await act(async () => { newer.resolve(snapshot(1, { checks: [check('current result', { state: 'failure' })] })); await Promise.resolve() })
     expect(screen.getByText('current result')).toBeTruthy()
     expect(screen.queryByText('preview')).toBeNull()
   })
@@ -393,38 +424,36 @@ describe('expanded ChangeRequestCard', () => {
     else b.view.rerender(<ul><ChangeRequestCard entry={entry(1, { ...partial, headSha: 'b'.repeat(40) })} expanded onToggle={b.onToggle}
       now={NOW} locale="en" actions={{ openLink: b.openLink, copyLink: b.copyLink, retry: b.retry, readChecks }} t={t} /></ul>)
     expect(signal.aborted).toBe(true)
-    await act(async () => { pending.resolve(snapshot(1, { checks: [check('late result')] })); await Promise.resolve() })
+    await act(async () => { pending.resolve(snapshot(1, { checks: [check('late result', { state: 'failure' })] })); await Promise.resolve() })
     expect(screen.queryByText('late result')).toBeNull()
   })
 
-  it('closes the checks list from its row and from an outside press', () => {
-    const b = card(entry(1, snapshot(1, { checks: [check('build')] })), { expanded: true })
+  it('closes the checks menu from its row and from an outside press', () => {
+    const b = card(entry(1, snapshot(1, { checks: [check('build', { state: 'failure' })] })), { expanded: true })
     const toggle = within(b.item).getByText(en['change.row.checks']).closest('button')
-    if (toggle === null) throw new Error('the checks row does not open a list')
+    if (toggle === null) throw new Error('the checks row does not open a menu')
     fireEvent.click(toggle)
     fireEvent.click(toggle)
     expect(checkRows()).toEqual([])
     fireEvent.click(toggle)
-    expect(checkRows()).toEqual(['success|build|1m 5s|no link'])
+    expect(checkRows()).toEqual(['failure|build|1m 5s|no link'])
     fireEvent.pointerDown(document.body)
     expect(checkRows()).toEqual([])
     expect(b.openLink).not.toHaveBeenCalled()
   })
 
   it.each([
-    ['passed checks', [check('build'), check('test')], '2 passed', ['success|build|1m 5s|no link', 'success|test|1m 5s|no link']],
+    ['passed checks', [check('build'), check('test')], 'All 2 checks passed', ['Show 2 more (passed, skipped)']],
     ['running and skipped checks', [
       check('docs', { state: 'skipped', startedAt: null, completedAt: null }),
       check('test', { state: 'pending', completedAt: null }),
-    ], '1 running · 1 other', ['pending|test|Running|no link', 'skipped|docs||no link']],
-  ])('counts %s without an error tone or a truncation note', (_label, checks, text, rows) => {
+    ], '1 running', ['pending|test|Running|no link', 'Show 1 more (passed, skipped)']],
+  ])('summarizes %s without an error tone', (_label, checks, text, rows) => {
     const b = card(entry(1, snapshot(1, { checks, checksRollup: 'pending' })), { expanded: true })
-    const summary = rowValue(b.item, en['change.row.checks'])
-    expect(summary.textContent).toBe(text)
-    expect(summary.getAttribute('data-tone')).toBeNull()
+    expect(rowValue(b.item, en['change.row.checks']).textContent).toBe(text)
+    expect(rowTone(b.item, en['change.row.checks'])).toBeNull()
     fireEvent.click(within(b.item).getByText(en['change.row.checks']))
     expect(checkRows()).toEqual(rows)
-    expect(screen.queryByText(/^Only the first/)).toBeNull()
   })
 
   it('shows only the link actions before the first poll', () => {
@@ -604,6 +633,7 @@ describe('ChangeRequestCard changes', () => {
     const b = card(value, { expanded: true, actions: { viewChanges } })
     const button = within(b.item).getByRole('button', { name: 'View the changes of #7: 12,345 lines added, 3 lines deleted' })
     expect(button.textContent).toBe(`${en['change.row.changes']}+12,345${MINUS}3`)
+    expect(button.querySelector(`.${css.rowChevron}`)).not.toBeNull()
     fireEvent.click(button)
     expect(viewChanges).toHaveBeenCalledWith(value)
   })
@@ -632,6 +662,7 @@ describe('ChangeRequestCard layout', () => {
     const rows = b.item.querySelector(`.${css.rows}`)
     if (!(rows instanceof HTMLElement)) throw new Error('no rows')
     expect([...rows.children].map(row => row.textContent)).toEqual([en['change.state.closed'], `${en['change.row.changes']}+12${MINUS}3`])
+    expect(rows.querySelector(`.${overview.rowAnchor}`)).toBeNull()
   })
 
   it('shows a neutral check glyph without checks', () => {

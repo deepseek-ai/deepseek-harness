@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChangeRequestRef, ForgeFailure, ForgeReviewData, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge'
+import type {
+  ChangeRequestRef, ForgeCommentId, ForgeFailure, ForgeReviewData, ForgeReviewId, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId,
+} from '@deepseek-ai/dsh-experimental-forge'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import ForgePanelController from '../src/index.ts'
 import type { ForgePanelState } from '../src/index.ts'
@@ -29,10 +31,11 @@ async function opened(config: Parameters<typeof bench>[1] = {}): Promise<{ opene
 
 function review(headSha: string, path = 'src/a.ts'): ForgeReviewData {
   return {
-    headSha, truncated: false,
+    headSha, viewer: 'octo', truncated: false, pendingReview: null, viewerCanReview: true,
     threads: [{
       id: 'thread-1' as ForgeThreadId, path, side: 'R', subject: 'line', resolved: false, diffHunk: '@@ -1 +1 @@\n-old\n+new',
       current: { commit: headSha, startLine: 1, endLine: 1 }, original: { commit: headSha, startLine: 1, endLine: 1 }, comments: [],
+      viewerCanReply: true, viewerCanResolve: true,
     }],
   }
 }
@@ -139,6 +142,106 @@ describe('forgePanel change request reviews', () => {
       await expect(read(pullUrl(7))).rejects.toMatchObject({ code: 'forgePanel/review-failed', message: `threads ${code}` })
     }
     expect(readReview).toHaveBeenCalledTimes(codes.length)
+  })
+
+  it('writes through the provider, then drops the kept threads so the next read goes to the host', async () => {
+    const { opened: panel, follower } = await opened()
+    const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
+    const writeReview = vi.fn(async (): Promise<ForgeReviewWriteResult> => ({ ok: true }))
+    Object.assign(panel.provider, { readReview, writeReview })
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await follower.until(state => polledAt(state, pullUrl(7)))
+    const write: ForgeReviewWrite = { kind: 'resolve', headSha: HEAD, thread: 'thread-1' as ForgeThreadId, resolved: true }
+
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    await expect(panel.ctx.forgePanel.changeRequestReviewWrite(panel.session, pullUrl(7), write, signal)).resolves.toEqual({ ok: true })
+    expect(writeReview).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), write, expect.any(AbortSignal))
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    expect(readReview).toHaveBeenCalledTimes(2)
+
+    writeReview.mockRejectedValueOnce(new Error('gh crashed'))
+    await expect(panel.ctx.forgePanel.changeRequestReviewWrite(panel.session, pullUrl(7), write, signal)).rejects.toThrow('gh crashed')
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    expect(readReview).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps no threads read before a write that settled during the read', async () => {
+    const { opened: panel, follower } = await opened()
+    const reading = Promise.withResolvers<ForgeReviewData>()
+    const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
+    readReview.mockReturnValueOnce(reading.promise)
+    Object.assign(panel.provider, { readReview, writeReview: async (): Promise<ForgeReviewWriteResult> => ({ ok: true }) })
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await follower.until(state => polledAt(state, pullUrl(7)))
+
+    const first = panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    await vi.waitFor(() => { expect(readReview).toHaveBeenCalledTimes(1) })
+    await panel.ctx.forgePanel.changeRequestReviewWrite(panel.session, pullUrl(7),
+      { kind: 'delete-comment', headSha: HEAD, comment: 'comment-1' as ForgeCommentId }, signal)
+    reading.resolve(review(HEAD, 'src/before.ts'))
+    await expect(first).resolves.toMatchObject({ threads: [{ path: 'src/before.ts' }] })
+    await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal))
+      .resolves.toMatchObject({ threads: [{ path: 'src/a.ts' }] })
+    expect(readReview).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports a provider without review writes as unsupported and refuses an unbound change request and invalid writes', async () => {
+    const { opened: panel, follower } = await opened()
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await follower.until(state => polledAt(state, pullUrl(7)))
+    const write = (url: string, value: ForgeReviewWrite): Promise<ForgeReviewWriteResult> =>
+      panel.ctx.forgePanel.changeRequestReviewWrite(panel.session, url, value, signal)
+    const thread = 'thread-1' as ForgeThreadId
+    const comment = 'comment-1' as ForgeCommentId
+    const reviewId = 'review-1' as ForgeReviewId
+    const line = { path: 'src/a.ts', side: 'R' as const, startLine: 2, endLine: 3, body: 'Check' }
+
+    await expect(write(pullUrl(7), { kind: 'resolve', headSha: HEAD, thread, resolved: false }))
+      .resolves.toEqual({ ok: false, code: 'unsupported', message: 'This provider does not support review writes' })
+    await expect(write(pullUrl(9), { kind: 'resolve', headSha: HEAD, thread, resolved: false })).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    await expect(write(pullUrl(7), { kind: 'resolve', headSha: 'main', thread, resolved: false })).rejects.toThrow('Invalid review commit')
+    const invalid: ForgeReviewWrite[] = [
+      { kind: 'reply', headSha: HEAD, thread, body: ' ', pending: false },
+      { kind: 'reply', headSha: HEAD, thread: '' as ForgeThreadId, body: 'Done', pending: false },
+      { kind: 'resolve', headSha: HEAD, thread: '' as ForgeThreadId, resolved: true },
+      { kind: 'edit-comment', headSha: HEAD, comment, body: '' },
+      { kind: 'edit-comment', headSha: HEAD, comment: '' as ForgeCommentId, body: 'Text' },
+      { kind: 'delete-comment', headSha: HEAD, comment: '' as ForgeCommentId },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, path: '' } },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, body: '\n' } },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, startLine: 0 } },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, startLine: 1.5 } },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, endLine: 1 } },
+      { kind: 'add-pending', headSha: HEAD, comment: { ...line, endLine: Number.POSITIVE_INFINITY } },
+      { kind: 'submit-pending', headSha: HEAD, review: '' as ForgeReviewId, event: 'comment', body: '' },
+      { kind: 'submit-pending', headSha: HEAD, review: reviewId, event: 'request-changes', body: ' ' },
+      { kind: 'discard-pending', headSha: HEAD, review: '' as ForgeReviewId },
+    ]
+    for (const value of invalid) await expect(write(pullUrl(7), value)).rejects.toThrow('Invalid review write')
+    const valid: ForgeReviewWrite[] = [
+      { kind: 'reply', headSha: HEAD, thread, body: 'Done', pending: true },
+      { kind: 'edit-comment', headSha: HEAD, comment, body: 'Text' },
+      { kind: 'delete-comment', headSha: HEAD, comment },
+      { kind: 'add-pending', headSha: HEAD, comment: line },
+      { kind: 'submit-pending', headSha: HEAD, review: reviewId, event: 'approve', body: '' },
+      { kind: 'submit-pending', headSha: HEAD, review: reviewId, event: 'request-changes', body: 'Fix it' },
+      { kind: 'discard-pending', headSha: HEAD, review: reviewId },
+    ]
+    for (const value of valid) await expect(write(pullUrl(7), value)).resolves.toMatchObject({ ok: false, code: 'unsupported' })
+  })
+
+  it('drops the kept threads after publishing a comment so the next read shows it', async () => {
+    const { opened: panel, follower } = await opened()
+    const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
+    Object.assign(panel.provider, { readReview, submitReview: async () => ({ ok: true as const, url: `${pullUrl(7)}#discussion_r1` }) })
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await follower.until(state => polledAt(state, pullUrl(7)))
+
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    await panel.ctx.forgePanel.submitReview(panel.session, pullUrl(7),
+      { kind: 'comment', headSha: HEAD, comment: { path: 'src/a.ts', side: 'R', startLine: 1, endLine: 1, body: 'Nit' } }, signal)
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    expect(readReview).toHaveBeenCalledTimes(2)
   })
 
   it.each([
