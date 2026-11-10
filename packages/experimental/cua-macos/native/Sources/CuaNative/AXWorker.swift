@@ -157,6 +157,9 @@ actor AXWorker {
         return result
     }
     private func element(_ handle: String, _ params: RequestParameters) throws -> AXUIElement {
+        if let windowID = try params.optionalWindowID() {
+            _ = try NativePlatform.ownedWindow(validateIdentity(handle).pid, windowID)
+        }
         let value = try snapshot(handle, params.string("snapshotId"))
         let index = try params.elementIdIndex()
         guard let element = value.elements[index] else { throw RequestParameters.invalid("elementId is absent from the selected snapshot") }

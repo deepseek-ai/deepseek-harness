@@ -101,6 +101,38 @@ interface ForgeProvider {
    * with `a/` and `b/` path prefixes. Both are full object names; `head` descends from `base`.
    */
   compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Read the signed-in user's viewed marks on the change request's files at head commit `headSha`. The marks are
+   * returned only when the read names `headSha` as the head; once the head is another commit, the read resolves to a
+   * `stale` failure. A provider implements `viewedFiles` and `setViewed` together; omitting either declares that the
+   * host keeps no viewed marks.
+   */
+  viewedFiles?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure>
+  /**
+   * Set or clear the signed-in user's viewed mark on one file while the head is still `request.headSha`, resolving to
+   * undefined once the host saved it.
+   */
+  setViewed?(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Rerun the failed checks of the head commit that name a `rerun` none of whose checks is pending, while the head is
+   * still `request.headSha`, resolving to undefined once the host accepted every rerun. Omission declares that the
+   * provider reruns no checks, and its snapshots then name none.
+   */
+  rerunChecks?(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Request reviews from more reviewers, resolving to undefined once the host accepted the request. A provider implements
+   * `requestReviews` and `reviewerCandidates` together; omitting either declares that it requests no reviews, and its
+   * snapshots then deny `canRequestReviews`.
+   */
+  requestReviews?(ref: ChangeRequestRef, request: ForgeReviewersRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** List accounts whose login or name matches `query`, the host's suggestions first, for a review request. */
+  reviewerCandidates?(ref: ChangeRequestRef, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure>
+  /**
+   * Bring the base branch's new commits into the head branch while its head is still `request.headSha`, resolving to
+   * undefined once the host accepted the update. Omission declares that the provider updates no branches, and its
+   * snapshots then offer no `branchUpdates`.
+   */
+  updateBranch?(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
 ```
 
@@ -173,6 +205,11 @@ interface ChangeRequestCheck {
   readonly startedAt: string | null
   /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
   readonly completedAt: string | null
+  /**
+   * Identity a rerun of this check names, or null when the provider cannot rerun it, as for a commit status. Checks that
+   * name one identity rerun together, and their failed checks can be rerun once none of them is pending.
+   */
+  readonly rerun: ForgeCheckId | null
 }
 ```
 
@@ -230,18 +267,36 @@ interface ChangeRequestSnapshot {
   readonly mergeReady: boolean
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
+  /**
+   * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
+   * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
+   * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
+   */
+  readonly branchUpdates: readonly BranchUpdateMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
+  /** Reviewers whose review is requested, in host order, then other accounts that reviewed, each once; the author is never listed. */
+  readonly reviewers: readonly ChangeRequestReviewer[]
+  /** Whether the host reported more review requests or reviews than the provider read, so `reviewers` may be incomplete. */
+  readonly reviewersTruncated: boolean
+  /** Whether the signed-in user may request reviews of the change request through its provider. */
+  readonly canRequestReviews: boolean
   /** Checks on the head commit in host order. */
   readonly checks: readonly ChangeRequestCheck[]
   /** Combined check outcome. */
   readonly checksRollup: ChecksRollup
   /** Whether the host reported more checks than `checks` contains. */
   readonly checksTruncated: boolean
+  /** Whether the signed-in user may rerun the failed checks that name a `rerun`. */
+  readonly canRerunChecks: boolean
   /** Number of counted review threads that are not resolved. */
   readonly unresolvedThreads: number
   /** Whether the change request has more review threads than the provider counted, so `unresolvedThreads` is a lower bound. */
   readonly threadsTruncated: boolean
+  /** Issues linked to the change request, which the host closes once it merges, in host order. */
+  readonly closingIssues: readonly ChangeRequestIssue[]
+  /** Whether the host reported more closing issues than `closingIssues` holds. */
+  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
@@ -303,13 +358,15 @@ interface MergeRequest {
 ```
 
 ```ts type-equiv
-/** Why a provider could not change a change request. */
+/** Why a provider could not change a change request, or could not confirm that it did. */
 interface ForgeActionFailure {
   /**
    * `unauthenticated`: credentials are missing or rejected; `stale`: the head
-   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached, so nothing changed;
+   * `unknown`: the request reached the host but its answer did not confirm the outcome, so the change may have been
+   * applied and must be checked on the host before it is tried again.
    */
-  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  readonly code: 'unauthenticated' | 'stale' | 'failed' | 'unknown'
   /** Human-readable cause, usually the host's own message. */
   readonly message: string
 }
@@ -515,6 +572,137 @@ type ForgeReviewWrite = {
 type ForgeReviewWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
+```
+
+<a id="overview-and-viewed-marks"></a>
+
+## 概览与已审阅标记
+
+快照还携带变更请求的概览：`reviewers` 及每位评审者最近的结论、合并后托管平台会关闭的 `closingIssues`、能让落后于基线的 head 更新到最新的 `branchUpdates`、当前登录用户能否请求评审或重跑检查，以及每个检查指出的 `rerun`。`ctx.forge.rerunChecks`、`ctx.forge.requestReviews` 与 `ctx.forge.updateBranch` 据此操作，并像上文的操作一样返回 `ForgeActionFailure`，主机的答复无法确认结果时为 `unknown`，提供方答复后立即轮询被监听的变更请求；重跑与更新指明用户看到的 head 提交，head 移动后以 `stale` 拒绝。提供方同时实现 `requestReviews` 与 `reviewerCandidates`，`ctx.forge.reviewerCandidates` 借后者列出可以请求评审的账号；提供方缺少的操作以 `failed` 失败，`reviewerCandidates` 则返回 `unsupported`。GitHub 如何填写各字段并执行这些操作见 [GitHub 提供方 README](../../packages/experimental/forge-github/README.zh.md#use-this-package)。
+
+```ts type-equiv
+/** Opaque host identity of a status check that a rerun names. */
+type ForgeCheckId = Branded<'ForgeCheckId'>
+```
+
+```ts type-equiv
+/** How an update brings the base branch's new commits into the head branch: a merge commit, or a rebase of the head's commits. */
+type BranchUpdateMethod = 'merge' | 'rebase'
+```
+
+```ts type-equiv
+/** Outcome of a reviewer's latest submitted review. */
+type ReviewVerdict = 'approved' | 'changes-requested' | 'commented' | 'dismissed'
+```
+
+```ts type-equiv
+/** An account or team asked to review a change request, or an account that reviewed it. */
+interface ChangeRequestReviewer {
+  /** Whether the reviewer is a person's account, an app or bot account, or a team. */
+  readonly kind: 'user' | 'bot' | 'team'
+  /** Login, or `organization/slug` for a team. */
+  readonly login: string
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether a review from the reviewer is requested now. */
+  readonly requested: boolean
+  /** Whether the host requested the review because the reviewer owns changed paths. */
+  readonly codeOwner: boolean
+  /** Outcome of the reviewer's latest submitted review, or null before the first. */
+  readonly verdict: ReviewVerdict | null
+  /** Commit the latest submitted review was on, or null before the first or when the host reports none. */
+  readonly reviewedSha: string | null
+}
+```
+
+```ts type-equiv
+/** One issue linked to a change request, which the host closes once the change request merges. */
+interface ChangeRequestIssue {
+  /** Repository that holds the issue. */
+  readonly repository: ForgeRepository
+  /** Host-assigned issue number. */
+  readonly number: number
+  /** Title as the author wrote it. */
+  readonly title: string
+  /** Whether the issue is still open. */
+  readonly state: 'open' | 'closed'
+  /** Web page of the issue. */
+  readonly url: string
+}
+```
+
+```ts type-equiv
+/** A rerun of the failed checks of the head commit whose checks the user saw. */
+interface ForgeRerunRequest {
+  /** Head commit whose checks the user saw; the provider refuses with `stale` once the head is another commit. */
+  readonly headSha: string
+}
+```
+
+```ts type-equiv
+/** Reviewers to ask in addition to those whose review is requested now; one who already reviewed is asked again. */
+interface ForgeReviewersRequest {
+  /** The reviewers by kind and login, a team by `organization/slug`. */
+  readonly reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]
+}
+```
+
+```ts type-equiv
+/** An account a review of the change request can be requested from. */
+interface ForgeReviewerCandidate {
+  /** Login as the host spells it. */
+  readonly login: string
+  /** Display name, or null when the account shows none. */
+  readonly name: string | null
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether the host suggests the account for this change request, as from the history of its changed files. */
+  readonly suggested: boolean
+}
+```
+
+```ts type-equiv
+/** A branch update the user confirmed for the head commit they saw. */
+interface BranchUpdateRequest {
+  /** How the base branch's new commits enter the head branch. */
+  readonly method: BranchUpdateMethod
+  /** Commit object name the head must still have; the update is refused once the head moves. */
+  readonly headSha: string
+}
+```
+
+`ctx.forge.viewedFiles` 与 `ctx.forge.setViewed` 在一个 head 提交上读取和修改当前登录用户对变更请求各文件的已审阅标记。只有同时实现两个方法的提供方保存已审阅标记；否则 `viewedFiles` 返回 undefined，`setViewed` 失败，由使用方自行保存标记。`stale` 答复会像过期的 diff 读取一样立即轮询被监听的变更请求。
+
+```ts type-equiv
+/**
+ * The signed-in user's review progress on one changed file: `viewed`, `unviewed`, or `dismissed` once the file
+ * changed after the user marked it viewed.
+ */
+type ForgeViewedState = 'viewed' | 'unviewed' | 'dismissed'
+```
+
+```ts type-equiv
+/** The signed-in user's viewed marks on the files of a change request, read at one head commit. */
+interface ForgeViewedFiles {
+  /** Head commit the marks were read at. */
+  readonly headSha: string
+  /** State of each changed file the host listed, by repository-relative path. */
+  readonly files: Readonly<Record<string, ForgeViewedState>>
+  /** Whether the change request has more files than `files` lists. */
+  readonly truncated: boolean
+}
+```
+
+```ts type-equiv
+/** A viewed mark the user set or cleared on a file of the head commit they saw. */
+interface ForgeViewedRequest {
+  /** Repository-relative path of the changed file. */
+  readonly path: string
+  /** Whether the file is viewed. */
+  readonly viewed: boolean
+  /** Head commit whose changes the user saw; the provider refuses with `stale` once the head is another commit. */
+  readonly headSha: string
+}
 ```
 
 ## Session 绑定
@@ -808,6 +996,8 @@ type ForgeChangeRequestStatesFrame =
 
 `changeRequestReview(session, url, headSha, fresh)` 在视图所显示 diff 的 head 处读取已绑定变更请求的讨论；head 不同时以 `forgePanel/stale-head` 拒绝，提供方不支持读取讨论时返回 `forgePanel/review-unsupported`，其他失败返回 `forgePanel/review-failed`。每个变更请求在内存里保留一次读取结果，以 head 提交和状态的更新时间为键、受 `maxCachedReviewBytes` 约束，保留时间达到 `reviewRefreshMs` 后，或 `fresh` 要求时（读者刷新视图后的第一次读取就是这样）重新读取：在 GitHub 上，新评论和回复会改变 PR 的更新时间，解决讨论则不会。变更视图可见时，每收到一次状态就重新请求一次，并按[面板 README](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package) 所述把讨论叠加到文件上。
 
+`changeRequestViewed(session, url, headSha)` 在视图所示 diff 的 head 上读取已绑定变更请求的已审阅标记，提供方不保存标记时返回 null，head 不同时以 `forgePanel/stale-head` 拒绝，其他失败以 `forgePanel/viewed-failed` 拒绝；`setFileViewed` 在该 head 上保存一个文件的标记。`rerunChecks`、`requestReviews` 与 `updateBranch` 作用于已绑定的变更请求，托管平台未确认的结果以 `forgePanel/action-unknown` 拒绝，`reviewerCandidates` 列出可请求评审的账号，托管平台未列出时以 `forgePanel/reviewers-failed` 拒绝。变更视图随 diff 一起读取整个变更请求的标记，本地变更与所选提交的标记保存在浏览器中；两者以及提供这些操作的卡片行见[面板 README](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)。
+
 `changeRequestReviewWrite(session, url, write)` 检查已绑定变更请求的一个 `ForgeReviewWrite` 的 head 提交、id、文字和行范围后，交给 `ctx.forge.writeReview`，并返回 `ForgeReviewWriteResult`。提供方给出答复后，无论结果如何，都会丢弃该变更请求保留的讨论，以及在此之前开始的所有读取，使下一次 `changeRequestReview` 从托管平台读取；`submitReview` 同样如此。变更视图一次只发送一个写操作，每个可能改变讨论的写操作之后都会重新读取讨论。
 
 ```ts type-equiv
@@ -1087,6 +1277,49 @@ async markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeAction
 async merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 
 /**
+ * Rerun the failed checks of a change request's head commit while the head is still `request.headSha`, then poll it
+ * at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - the head commit whose checks the user saw.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted the rerun, or why it did not; a provider that reruns no checks fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async rerunChecks(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
+ * Request reviews of a change request from more reviewers, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - the reviewers to ask.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted the request, or why it did not; a provider that requests no reviews fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async requestReviews( ref: ChangeRequestRef, request: ForgeReviewersRequest, signal: AbortSignal, ): Promise<ForgeActionFailure | undefined>
+
+/**
+ * List accounts a review of a change request can be requested from.
+ * @param ref - change request served by a registered provider.
+ * @param query - text the login or name contains; empty for the host's suggestions and first accounts.
+ * @param signal - cancellation of the read.
+ * @returns the accounts, the host's suggestions first, or why the host did not list them; a provider that requests no
+ * reviews returns `unsupported`.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async reviewerCandidates( ref: ChangeRequestRef, query: string, signal: AbortSignal, ): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure>
+
+/**
+ * Bring the base branch's new commits into a change request's head branch while its head is still
+ * `request.headSha`, then poll it at once when it is watched.
+ * @param ref - change request served by a registered provider.
+ * @param request - update method and the head commit the user confirmed.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host accepted the update, or why it did not; a provider that updates no branches fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+
+/**
  * Read complete check details independently of periodic polling.
  * @param ref - change request served by a registered provider.
  * @param signal - cancellation of the detail view.
@@ -1133,6 +1366,29 @@ async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): P
  * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
  */
 async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
+
+/**
+ * Read the signed-in user's viewed marks on the files of a change request at one head commit. A `stale` failure
+ * polls a watched change request again as {@link ForgeService.diff} does.
+ * @param ref - change request served by a registered provider.
+ * @param headSha - head commit the marks must be read at, usually the head of the displayed diff.
+ * @param signal - cancellation of the read.
+ * @returns the marks read at `headSha`, why the host did not provide them, or undefined when the provider keeps no
+ * viewed marks.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async viewedFiles(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure | undefined>
+
+/**
+ * Set or clear the signed-in user's viewed mark on one file of a change request while its head is still
+ * `request.headSha`. A `stale` failure polls a watched change request again as {@link ForgeService.diff} does.
+ * @param ref - change request served by a registered provider.
+ * @param request - the file, its mark, and the head commit the user saw.
+ * @param signal - cancellation of the request.
+ * @returns undefined once the host saved the mark, or why it did not; a provider that keeps no viewed marks fails.
+ * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+ */
+async setViewed(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 
 /**
  * List the commits of a change request at its current head.
@@ -1405,6 +1661,33 @@ Serves the forge panel. Following a Session inspects the checkout of its current
 @Remote async changeRequestText(session: Session, url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
 
 /**
+ * Read the signed-in user's viewed marks on the files of a change request of a Session, which the host keeps for the
+ * whole change request.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param headSha - head commit of the shown diff; marks read at another head are refused.
+ * @param signal - request cancellation.
+ * @returns the marks at `headSha`, or null when the provider keeps no viewed marks.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `headSha`, which is then polled again; `forgePanel/viewed-failed`
+ * when the host does not provide the marks otherwise.
+ */
+@Remote async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>
+
+/**
+ * Set or clear the signed-in user's viewed mark on one file of a change request of a Session.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param request - the file, its mark, and the head commit of the shown diff.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+ * reason when the host refuses, cannot be reached, or keeps no viewed marks; `forgePanel/action-unknown` when the host
+ * did not confirm whether it saved the mark.
+ */
+@Remote async setFileViewed(session: Session, url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void>
+
+/**
  * Read the review threads of a change request of a Session at the head commit of its displayed diff. Threads read
  * at the same head commit and update time are reused from memory, for any Session, until they are
  * `reviewRefreshMs` old, `maxCachedReviewBytes` evicts them, or a review write through this panel drops them; a read
@@ -1474,6 +1757,60 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * reason when the host refuses otherwise or cannot be reached.
  */
 @Remote async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user
+ * saw; the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param request - the head commit whose checks the user saw.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+ * reason when the host refuses, cannot be reached, or reruns no checks; `forgePanel/action-unknown` when the host did
+ * not confirm whether it started the rerun.
+ */
+@Remote async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>
+
+/**
+ * Request reviews of a change request of a Session from more reviewers; the change request is polled again once the
+ * host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param reviewers - the reviewers to ask, by kind and login.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/action-failed` with the host's reason when the host refuses, cannot be reached, or requests no reviews;
+ * `forgePanel/action-unknown` when the host did not confirm whether it requested the reviews.
+ */
+@Remote async requestReviews( session: Session, url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal, ): Promise<void>
+
+/**
+ * List accounts a review of a change request of a Session can be requested from.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param query - text the login or name contains; empty for the host's suggestions and first accounts.
+ * @param signal - request cancellation.
+ * @returns the accounts, the host's suggestions first.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/reviewers-failed` when the host does not list them.
+ */
+@Remote async reviewerCandidates(session: Session, url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]>
+
+/**
+ * Bring the base branch's new commits into the head branch of a change request of a Session while its head is still
+ * `headSha`; the change request is polled again once the host answers.
+ * @param session - Session the change request is bound to.
+ * @param url - binding URL of the change request.
+ * @param method - merge commit or rebase.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+ * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's reason when
+ * the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not
+ * confirm whether it started the update.
+ */
+@Remote async updateBranch(session: Session, url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void>
 
 /**
  * Ask for a new worktree before the Session's first turn, replacing an open

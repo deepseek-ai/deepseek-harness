@@ -95,6 +95,10 @@ export interface DiffFileProps {
   readonly tooltip: string
   /** Whether the reader marked this change viewed, or marked an earlier change of the file. */
   readonly viewed: ViewedState
+  /** Tooltip of the viewed mark: where marks are kept, or why the mark cannot change now. */
+  readonly viewedNote: string
+  /** Whether the mark cannot change now, while its write is in flight or the host's marks could not be read. */
+  readonly viewedDisabled: boolean
   /** Review threads of the file from the code host, or undefined while none are read; the view keeps their identity. */
   readonly threads?: FileThreads | undefined
   /** Whether the section draws its lines at once, as the target of a thread jump, whose card must exist to be centered. */
@@ -550,7 +554,7 @@ function FileMenu({ name, file, handlers, t }: {
  * @returns the file section.
  */
 function DiffFileSection(props: DiffFileProps): ReactNode {
-  const { file, expanded, large, revealed, badge, tooltip, viewed, threads, handlers, t } = props
+  const { file, expanded, large, revealed, badge, tooltip, viewed, viewedNote, viewedDisabled, threads, handlers, t } = props
   const name = file.path.slice(file.path.lastIndexOf('/') + 1)
   const element = useRef<HTMLElement | null>(null)
   const [reached, setReached] = useState(false)
@@ -601,8 +605,8 @@ function DiffFileSection(props: DiffFileProps): ReactNode {
           {badge !== '' && <span className={css.badge}>{badge}</span>}
         </span>
         {!file.binary && <Counts file={file} t={t} />}
-        <label className={css.viewed} title={t('viewed.hint')}>
-          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })}
+        <label className={css.viewed} title={viewedNote} data-disabled={viewedDisabled ? '' : undefined}>
+          <input type="checkbox" checked={viewed === 'viewed'} aria-label={t('viewed.aria', { name })} disabled={viewedDisabled}
             onChange={(event) => { handlers.view(file, event.target.checked) }} />
           <span className={css.viewedLabel} aria-hidden="true">{t('viewed.label')}</span>
         </label>

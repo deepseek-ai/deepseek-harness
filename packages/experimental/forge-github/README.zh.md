@@ -34,7 +34,7 @@ kind: "package-reference"
     hosts: [github.com, ghe.example.com]
 ```
 
-即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`maxOutputBytes`、`maxReviewThreads` 与 `maxCommits` 必须是正安全整数；只有 `timeoutMs` 受运行时定时器上限约束。`ghCommand`、`hosts`、`timeoutMs`、`maxOutputBytes`、`maxReviewThreads` 与 `maxCommits` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
+即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`maxOutputBytes`、`maxReviewThreads`、`maxCommits` 与 `maxViewedFiles` 必须是正安全整数；只有 `timeoutMs` 受运行时定时器上限约束。`ghCommand`、`hosts`、`timeoutMs`、`maxOutputBytes`、`maxReviewThreads`、`maxCommits` 与 `maxViewedFiles` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
 
 当主机在配置中时，提供方服务 `https`、`http`、`ssh`、`git` 形式的远端 URL，以及 `git@github.com:owner/name.git` 这类 scp 形式。HTTP(S) 远端在主机标识中保留自定义端口；SSH 和 Git 传输端口不计入主机标识。它服务 `https://<host>/<owner>/<name>/pull/<number>` 形式的 pull request URL，允许其后附带任意路径、查询或片段，并以去掉这些后缀的形式作为规范 URL。就绪探测运行 `gh auth status --hostname <host>`：退出码为 0 时为 `ready`，其他退出码为 `unauthenticated` 并带第一行诊断，`gh` 无法启动时为 `unavailable`。按 head 分支查找时，最多返回 20 个以该分支为 head 的打开状态 pull request，按创建时间从新到旧排列，不包含来自 fork 的 pull request；查找默认分支时返回空结果。
 
@@ -56,6 +56,10 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 `writeReview` 先用一次 GraphQL 查询读出 pull request 的 `headRefOid` 和用户的待提交评审；head 不是 `write.headSha` 时不写入，直接返回 `stale`。随后发送一个 mutation，变量以 JSON 形式经 stdin 传入：回复用 `addPullRequestReviewThreadReply`，待提交的回复加入待提交评审；`resolveReviewThread` 或 `unresolveReviewThread`；`updatePullRequestReviewComment` 或 `deletePullRequestReviewComment`；新评论用 `addPullRequestReviewThread` 加入待提交评审，用户还没有待提交评审时，用 `addPullRequestReview` 在 `write.headSha` 上开始一个评审，并把这条评论作为它的第一个讨论；提交或丢弃用 `submitPullRequestReview` 或 `deletePullRequestReview`，作用于写操作指定的待提交评审，检查时必须仍能找到它。没有待提交评审时，待提交的回复会先在 head 上开始一个空评审，因此需要两个 mutation；回复随后失败时，这个空评审会保留下来。写入讨论或评论时，同一次检查还会读出它所属的 pull request，不是当前 pull request 时不发送 mutation，直接返回 `failed`。用户有待提交评审时，GitHub 会把该用户的每条回复都加入这个评审，即使发送时没有带上评审 id；因此该用户有待提交评审时，立即回复不发送 mutation，直接返回 `failed`。加入待提交评审的讨论使用当前 head 的行号，与评审开始时所在的提交无关。mutation 返回 payload 即表示 GitHub 已执行；错误类型全部表示拒绝（`FORBIDDEN`、`INSUFFICIENT_SCOPES`、`NOT_FOUND`、`RATE_LIMITED`、`UNPROCESSABLE`）的 GraphQL 错误以及 HTTP 400、401、403、404、409、422 拒绝返回 `failed`，`gh` 无法启动时也是如此；其他 GraphQL 错误（例如 GitHub 的超时提示）、`gh` 超时、服务端错误或没有 payload 的响应返回 `unknown`。mutation 从不重试。
 
+每次状态读取还会读取每个 pull request 的概览：最多 25 个评审请求、最近评审、最近的表态评审与关闭的 issue 引用，GitHub 统计到更多时把对应列表标记为截断。评审请求指向用户、bot 或团队，并说明是否为代码所有者请求。作者本人的评审与没有作者的评审被略去；被驳回的评审记为 `dismissed`，较新的表态评审优先于评论决定结论。pull request 未处于 open、GitHub 报告存在冲突或当前登录用户无权更新其 head 时，`branchUpdates` 为空：head 已是最新、或用户无权更新时，GitHub 的 `viewerCanUpdateBranch` 都为 false。否则提供 merge，GitHub 的 `canBeRebased` 为 true 时也提供 rebase。`canBeRebased` 表示该 pull request 能否以 rebase 方式合并，因此跟随仓库的 rebase 合并设置，不允许 rebase 合并的仓库只提供 merge。`mergeStateStatus` 无法判断 head 是否落后于基线，因为 BLOCKED、DIRTY 与 UNSTABLE 优先于 BEHIND：本仓库 23 个 head 落后于基线的 open pull request 中，没有一个报告 BEHIND。`canRequestReviews` 要求 open 的 pull request 与 triage、write、maintain 或 admin 权限，`canRerunChecks` 要求 write、maintain 或 admin 权限。GitHub Actions 工作流的 check run 以其工作流运行作为 `rerun`；状态上下文与其他 check run 没有 `rerun`。
+
+`viewedFiles` 经 GraphQL 每页 100 个列出 pull request 的文件，最多 `maxViewedFiles`（默认 3,000）个，GitHub 统计到更多时设置 `truncated`；GitHub 的 `VIEWED`、`UNVIEWED` 与 `DISMISSED` 分别映射为 `viewed`、`unviewed` 与 `dismissed`，未知状态映射为 `unviewed`。某页的 head 不是请求的提交时读取为 `stale`，分页不前进时为 `unavailable`。`setViewed` 先检查 head，再调用 `markFileAsViewed` 或 `unmarkFileAsViewed`；GitHub 对每个文件和用户只保存一个已审阅标记，与提交无关。`rerunChecks` 读取完整检查，head 已移动时返回 `stale`，再对每个含失败检查且没有进行中检查的工作流运行 POST 一次 `repos/<owner>/<name>/actions/runs/<run>/rerun-failed-jobs`，因为 GitHub 不提供运行中工作流的重跑；它会尝试每个这样的运行，汇总报告被拒绝的运行，只在缺少凭据时提前停止。GitHub 会重跑失败的 job 及依赖它们的 job。`requestReviews` 在一次 GraphQL 查询中把用户登录名与 `organization/slug` 形式的团队名解析为节点 id，再以 `union: true` 调用 `requestReviews`，保留已有请求；bot 登录名加上 `[bot]` 后缀后，随后交给 `requestReviewsByLogin`，GitHub Enterprise Server 3.19 与 3.20 没有该 mutation。`reviewerCandidates` 列出登录名或名称包含查询文本的最多 20 个可指派用户，查询为空时 GitHub 建议的评审者排在最前；作者被略去。`updateBranch` 先检查 head，再以更新方式与 `expectedHeadOid` 调用 `updatePullRequestBranch`，因此新提交到来后 GitHub 会拒绝。这些写操作与 `writeReview` 使用同一个发送方式，把 GraphQL 文档与变量作为 JSON 经标准输入发送，且从不重试：拒绝为 `failed`，无法确认结果的答复为 `unknown`，都附 GitHub 的原因。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -74,7 +78,11 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 | [`src/compare.ts`](src/compare.ts) | 经 compare API 读取两个提交之间的补丁，供所有 diff 读取共用 |
 | [`src/threads.ts`](src/threads.ts) | 读取评审讨论、分页，并映射到 head 位置与原始位置 |
 | [`src/review-writes.ts`](src/review-writes.ts) | head 检查，以及评审讨论与待提交评审的 mutation |
+| [`src/mutation.ts`](src/mutation.ts) | 发送单个 GraphQL mutation 并判定其结果 |
 | [`src/gh.ts`](src/gh.ts) | 在宿主上执行 `gh`，清理环境变量并施加限制 |
+| [`src/viewed.ts`](src/viewed.ts) | 读取与写入已审阅文件 |
+| [`src/overview.ts`](src/overview.ts) | 评审请求、评审者搜索与分支更新 |
+| [`src/pull-request-node.ts`](src/pull-request-node.ts) | 在核对过的 head 上读取 pull request 节点 id，供写操作使用 |
 | [`src/urls.ts`](src/urls.ts) | 解析远端 URL 与 pull request URL，并校验写入请求的名称与提交 |
 
 </details>

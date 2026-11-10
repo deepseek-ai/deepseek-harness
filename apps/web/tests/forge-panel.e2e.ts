@@ -52,12 +52,16 @@ const run = promisify(execFile)
  * serves `contents.json`, keyed by `path@commit`, and the commit listing of pull
  * request 7 serves `commits.json`, oldest first. The review thread read serves
  * `threads.json` as its one page of threads, with the viewer `lin`, who may write
- * to the repository and did not open either pull request, or no threads without it. Review mutations, which arrive as
+ * to the repository and did not open either pull request, or no threads without it. `overview.json` replaces fields
+ * of pull request 7, such as its checks and reviewers, and the viewer's
+ * permission. Viewed marks start from `viewed.json`, keyed by path; reading
+ * them fails while `viewed.unreadable` exists. Mutations, which arrive as
  * JSON on stdin, change what later reads report through `state.json`: replies,
  * which join the pending review whenever one exists, resolution, comment edits and
- * deletions, and the pending review of `lin` with its new threads, which a
- * submission publishes. Each mutation is appended to
- * `mutations.jsonl`, and every invocation to `calls.jsonl`.
+ * deletions, the pending review of `lin` with its new threads, which a
+ * submission publishes, viewed marks, which fail while `viewed.refused` exists,
+ * review requests, and branch updates. Each mutation is appended to
+ * `mutations.jsonl`, each REST rerun to `reruns.jsonl`, and every invocation to `calls.jsonl`.
  */
 const GH = `#!/usr/bin/env node
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -134,6 +138,12 @@ if (args[0] === 'api' && args[3] === '-H' && args[4] === 'Accept: application/vn
   process.stdout.write(text)
   process.exit(0)
 }
+if (args[0] === 'api' && args[3] === '--method' && args[4] === 'POST' && args[5].startsWith('repos/octo/demo/actions/')) {
+  appendFileSync(join(here, 'reruns.jsonl'), args[5] + '\\n')
+  state.reruns = [...state.reruns ?? [], args[5]]
+  save()
+  process.exit(0)
+}
 if (args[0] === 'auth' && args[1] === 'status') {
   process.stdout.write('github.com\\n  Logged in to github.com account octo\\n')
   process.exit(0)
@@ -153,7 +163,25 @@ if (args[0] === 'api' && args[1] === 'graphql' && args.includes('--input')) {
   const draft = thread => ({ id: 'new-' + (current.published.length + (current.pending?.threads.length ?? 0) + 1),
     path: thread.path, side: thread.side, line: thread.line, startLine: thread.startLine ?? null, body: thread.body })
   let payload
-  if (field === 'addPullRequestReview') {
+  if (field === 'markFileAsViewed' || field === 'unmarkFileAsViewed') {
+    if (existsSync(join(here, 'viewed.refused'))) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ type: 'FORBIDDEN', message: readFileSync(join(here, 'viewed.refused'), 'utf8') }] }))
+      process.exit(0)
+    }
+    state.viewed = { ...state.viewed, [variables.path]: field === 'unmarkFileAsViewed' ? 'UNVIEWED' : 'VIEWED' }
+    payload = { clientMutationId: null }
+  } else if (field === 'requestReviews') {
+    // The reviewer lookup names each user \`user-<login>\`.
+    state.requested = [...new Set([...state.requested ?? [], ...(variables.input.userIds ?? []).map(id => id.slice('user-'.length))])]
+    payload = { clientMutationId: null }
+  } else if (field === 'updatePullRequestBranch') {
+    if (variables.input.expectedHeadOid !== 'a'.repeat(40)) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ type: 'UNPROCESSABLE', message: 'expected head sha did not match current head ref' }] }))
+      process.exit(0)
+    }
+    state.updated = variables.input.updateMethod
+    payload = { clientMutationId: null }
+  } else if (field === 'addPullRequestReview') {
     current.pending = { id: 'review-1', commit: variables.commit, threads: [] }
     for (const thread of variables.threads ?? []) current.pending.threads.push(draft(thread))
     payload = { pullRequestReview: { id: 'review-1' } }
@@ -193,18 +221,27 @@ if (args[0] === 'api' && args[1] === 'graphql') {
   const check = (name, conclusion, completedAt, databaseId = 101) => ({
     __typename: 'CheckRun', id: 'check-' + databaseId, name, status: 'COMPLETED', conclusion, databaseId,
     detailsUrl: 'https://github.com/octo/demo/actions/runs/1', startedAt: '2026-10-09T00:00:00Z', completedAt,
-    checkSuite: { app: { id: 'github-actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
+    checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 1, event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
   })
+  const overview = existsSync(join(here, 'overview.json')) ? JSON.parse(readFileSync(join(here, 'overview.json'), 'utf8')) : {}
+  const none = { totalCount: 0, nodes: [] }
+  const requested = (state.requested ?? []).map(login => ({ asCodeOwner: false, requestedReviewer: { __typename: 'User', login, avatarUrl: null } }))
+  const requests = overview.reviewRequests ?? none
+  const reviewing = { totalCount: requests.totalCount + requested.length, nodes: [...requests.nodes, ...requested] }
   const pulls = {
     7: {
       id: 'pull-7', number: 7, url: 'https://github.com/octo/demo/pull/7', title: 'Add the pull request panel', state: 'OPEN', isDraft: false,
       updatedAt: '2026-10-09T00:00:00Z', closedAt: null, author: { login: 'octo' }, headRefName: 'feat', headRefOid: 'a'.repeat(40), baseRefOid: BASE,
       baseRefName: 'main', additions: 128, deletions: 14, mergeable: 'MERGEABLE', mergeStateStatus: 'BLOCKED', reviewDecision: 'REVIEW_REQUIRED',
       reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{ isResolved: false }] },
-      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: {
+      commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-7', state: 'FAILURE', contexts: overview.checks ?? {
         pageInfo: { hasNextPage: true, endCursor: 'checks-100' },
         nodes: Array.from({ length: 100 }, (_, i) => check('lint', 'FAILURE', '2026-10-08T00:00:42Z', i + 1)),
       } } } }] },
+      viewerCanUpdateBranch: (overview.viewerCanUpdateBranch ?? false) && state.updated === undefined, canBeRebased: overview.canBeRebased ?? false,
+      reviewRequests: reviewing, latestReviews: overview.latestReviews ?? none, latestOpinionatedReviews: overview.latestOpinionatedReviews ?? none,
+      closingIssuesReferences: overview.closingIssues ?? none,
+      ...overview.mergeable === undefined ? {} : { mergeable: overview.mergeable },
     },
     9: {
       id: 'pull-9', number: 9, url: 'https://github.com/octo/demo/pull/9', title: 'Add the merge button', state: state.mergedAt === null ? 'OPEN' : 'MERGED',
@@ -215,6 +252,8 @@ if (args[0] === 'api' && args[1] === 'graphql') {
       commits: { nodes: [{ commit: { statusCheckRollup: { id: 'rollup-9', state: 'SUCCESS', contexts: {
         pageInfo: { hasNextPage: false, endCursor: null }, nodes: [check('lint', 'SUCCESS', '2026-10-09T00:00:42Z')],
       } } } }] },
+      viewerCanUpdateBranch: false, canBeRebased: true, reviewRequests: none, latestReviews: none, latestOpinionatedReviews: none,
+      closingIssuesReferences: none,
     },
   }
   if (query.includes('commits(first: $first')) {
@@ -226,6 +265,35 @@ if (args[0] === 'api' && args[1] === 'graphql') {
         author: { name: 'Octo', user: { login: 'octo' } }, parents: { nodes: [{ oid: commit.parent }] },
       } })),
     } } } } }))
+    process.exit(0)
+  }
+  const number = Number(args.find(arg => arg.startsWith('number='))?.slice('number='.length))
+  if (query.includes('files(first: $first')) {
+    if (existsSync(join(here, 'viewed.unreadable'))) {
+      process.stdout.write(JSON.stringify({ data: null, errors: [{ message: readFileSync(join(here, 'viewed.unreadable'), 'utf8') }] }))
+      process.exit(0)
+    }
+    const paths = readFileSync(join(here, 'pr-' + number + '.diff'), 'utf8').split('\\n')
+      .filter(line => line.startsWith('diff --git ')).map(line => line.split(' b/').at(-1))
+    const marks = { ...existsSync(join(here, 'viewed.json')) ? JSON.parse(readFileSync(join(here, 'viewed.json'), 'utf8')) : {}, ...state.viewed }
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, files: {
+      totalCount: paths.length, pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: paths.map(path => ({ path, viewerViewedState: marks[path] ?? 'UNVIEWED' })),
+    } } } } }))
+    process.exit(0)
+  }
+  if (query.includes('user(login: $u0)')) {
+    const users = Object.fromEntries(args.flatMap(arg => /^u\\d+=/.test(arg) ? [[arg.split('=')[0], { id: 'user-' + arg.slice(arg.indexOf('=') + 1) }]] : []))
+    process.stdout.write(JSON.stringify({ data: users }))
+    process.exit(0)
+  }
+  if (query.includes('assignableUsers')) {
+    const people = [['mona', 'Mona Lisa'], ['hubot', null], ['lin-reviewer', 'Lin']].map(([login, name]) => ({ login, name, avatarUrl: null }))
+    const search = args.find(arg => arg.startsWith('search=')).slice('search='.length)
+    process.stdout.write(JSON.stringify({ data: { repository: {
+      assignableUsers: { nodes: people.filter(person => person.login.includes(search)) },
+      pullRequest: { author: { login: 'octo' }, suggestedReviewers: [{ reviewer: people[2] }] },
+    } } }))
     process.exit(0)
   }
   if (query.includes('viewer { login }')) {
@@ -264,8 +332,9 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     process.exit(0)
   }
   if (query.includes('pullRequest(number: $number)')) {
-    const number = Number(args.find(arg => arg.startsWith('number=')).slice('number='.length))
-    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: { headRefOid: pulls[number].headRefOid, baseRefOid: BASE } } } }))
+    process.stdout.write(JSON.stringify({ data: { repository: { pullRequest: {
+      id: 'pull-' + number, headRefOid: pulls[number].headRefOid, baseRefOid: BASE,
+    } } } }))
     process.exit(0)
   }
   if (query.includes('node(id: $id)')) {
@@ -276,7 +345,8 @@ if (args[0] === 'api' && args[1] === 'graphql') {
     process.exit(0)
   }
   const settings = {
-    squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: 'WRITE', viewerDefaultMergeMethod: 'SQUASH',
+    squashMergeAllowed: true, mergeCommitAllowed: true, rebaseMergeAllowed: true, viewerPermission: overview.viewerPermission ?? 'WRITE',
+    viewerDefaultMergeMethod: 'SQUASH',
   }
   const data = {}
   let repository
@@ -636,7 +706,7 @@ it.skipIf(MODE === 'record')('automatically shows a numbered PR when gh JSON omi
   await header.click()
   const change = page.locator(`[data-forge-change="${PULL}"]`)
   await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
-  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  await change.getByText('等待评审', { exact: true }).waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'reference.expected.md'),
     await captureStableAria(page, `[data-forge-change="${PULL}"]`, scaffold.workspaceCwd), MODE)
   await expect.poll(async () => {
@@ -723,7 +793,7 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const title = change.getByRole('link', { name: 'Add the pull request panel', exact: true })
   await title.waitFor({ timeout: 20_000 })
   // The only open change request starts expanded.
-  await change.getByText('等待评审 · 1 条未解决讨论', { exact: true }).waitFor()
+  await change.getByText('等待评审', { exact: true }).waitFor()
   // The random branch suffix can read as a duration, so the branch is replaced before the capture normalizes durations.
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
     await captureStableAria(page, '[data-forge-panel]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
@@ -732,7 +802,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   const checksRow = change.getByRole('button', { name: /^检查/ })
   await checksRow.click()
   const checks = page.getByRole('menu')
-  await expect.poll(() => checks.getByRole('menuitem').allTextContents()).toEqual([expect.stringMatching(/^test/), expect.stringMatching(/^lint/)])
+  // Failed checks are listed with the rerun; passed ones wait behind a toggle.
+  await expect.poll(() => checks.getByRole('menuitem').allTextContents())
+    .toEqual(['重跑失败项', expect.stringMatching(/^test/), '显示其余 1 项（通过、跳过）'])
   const afterChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(afterChecks.filter(args => args.includes('id=rollup-7'))).toHaveLength(1)
   await page.keyboard.press('Escape')
@@ -1553,7 +1625,7 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   expect(tripwire.warnings).toEqual([])
 })
 
-it.skipIf(MODE === 'record')('keeps localized status columns separate and long file lists inside one vertical scroller', async () => {
+it.skipIf(MODE === 'record')('aligns localized status rows by their glyphs and keeps long file lists inside one vertical scroller', async () => {
   const { scaffold, page, project, tripwire } = await launchPanel('web-e2e-forge-layout')
   await page.locator('[data-forge-current-branch]').waitFor()
   await compareOrRefreshGolden(join(EXPECTED, 'worktree-option.expected.md'),
@@ -1609,38 +1681,36 @@ it.skipIf(MODE === 'record')('keeps localized status columns separate and long f
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 700 })
       await expect.poll(() => change.evaluate(element => element.getBoundingClientRect().right)).toBeLessThanOrEqual(width)
-      await change.getByText(labels[3], { exact: true }).hover()
+      // Each row names its fact for assistive technology only; the row starts with its glyph.
+      const rowOf = (label: string) => change.getByText(label, { exact: true }).locator('xpath=../..')
+      await rowOf(labels[3]).hover()
+      const offsets = new Set<number>()
       for (const label of labels) {
-        const geometry = await change.getByText(label, { exact: true }).evaluate((element) => {
-          const value = element.nextElementSibling
-          if (value === null) throw new Error('Status label must have a value')
-          const range = document.createRange()
-          range.selectNodeContents(element)
-          const name = range.getBoundingClientRect()
-          const content = value.getBoundingClientRect()
-          const row = element.parentElement!
-          const icon = element.previousElementSibling!
+        const geometry = await rowOf(label).evaluate((row) => {
+          const icon = row.firstElementChild!
+          const cell = icon.nextElementSibling!
+          const value = cell.lastElementChild!
+          const trailing = cell.nextElementSibling?.matches('[class*="rowTrailing"]') === true ? cell.nextElementSibling : null
           const rowRect = row.getBoundingClientRect()
+          const content = value.getBoundingClientRect()
           return {
-            gap: content.left - name.right,
             iconInset: icon.getBoundingClientRect().left - rowRect.left,
             rowInset: rowRect.left - row.closest('[data-forge-change]')!.getBoundingClientRect().left,
-            labelWidth: element.getBoundingClientRect().width,
             valueOffset: content.left - rowRect.left,
-            right: content.right,
+            gap: trailing === null ? 8 : trailing.getBoundingClientRect().left - content.right,
+            right: Math.max(content.right, trailing?.getBoundingClientRect().right ?? 0),
             width: document.documentElement.clientWidth,
           }
         })
-        expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.iconInset).toBe(8)
         expect(geometry.rowInset).toBeGreaterThanOrEqual(6)
         expect(geometry.rowInset).toBeLessThanOrEqual(7)
-        if (locale === 'zh') {
-          expect(geometry.labelWidth).toBe(32)
-          expect(geometry.valueOffset).toBe(76)
-        }
+        offsets.add(geometry.valueOffset)
+        expect(geometry.gap).toBeGreaterThanOrEqual(8)
         expect(geometry.right).toBeLessThanOrEqual(geometry.width)
       }
+      // Every value starts in the same column after its glyph.
+      expect([...offsets]).toEqual([32])
     }
   }
   expect(tripwire.pageErrors).toEqual([])
@@ -1880,6 +1950,8 @@ it.skipIf(MODE === 'record')('reviews a change request by layer, hides test file
   await page.keyboard.press('v')
   await expect.poll(() => panel.getAttribute('data-viewed')).toBe('viewed')
   await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 2 / 3')
+  // Each mark stays disabled until GitHub saved it.
+  await expect.poll(() => view.getByRole('checkbox', { disabled: true }).count()).toBe(0)
   await compareOrRefreshGolden(join(EXPECTED, 'review-layers.expected.md'),
     await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
 
@@ -2171,6 +2243,188 @@ it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu
   await page.getByRole('tooltip').filter({ hasText: `${from} → ${to}` }).waitFor()
   await viewed.check()
   await expect.poll(() => file.getAttribute('data-viewed')).toBe('viewed')
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** One GraphQL mutation the GitHub CLI double received: the mutation field and its variables. */
+interface GhMutation {
+  readonly field: string
+  readonly variables: Record<string, unknown>
+}
+
+/** GraphQL mutations the GitHub CLI double received, in order. */
+async function mutationsOf(root: string): Promise<GhMutation[]> {
+  const text = await readFile(join(root, 'mutations.jsonl'), 'utf8').catch(() => '')
+  return text.split('\n').filter(line => line.length > 0).map(line => JSON.parse(line) as GhMutation)
+}
+
+/** REST paths of the check reruns the GitHub CLI double received, in order. */
+async function rerunsOf(root: string): Promise<string[]> {
+  return (await readFile(join(root, 'reruns.jsonl'), 'utf8').catch(() => '')).split('\n').filter(line => line.length > 0)
+}
+
+it.skipIf(MODE === 'record')('reads and saves the viewed files of a change request on GitHub, keeping chosen commits in the browser', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-viewed-sync')
+  await writeReviewFixture(root)
+  await writeFile(join(root, 'viewed.json'), JSON.stringify({ 'docs/panel.md': 'VIEWED', 'src/panel.ts': 'DISMISSED' }))
+  const { view } = await openReview(page, scaffold)
+  const docs = view.locator('[data-forge-diff-file="docs/panel.md"]')
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const manifest = view.locator('[data-forge-diff-file="package.json"]')
+  const progress = view.getByRole('progressbar', { name: '已审阅的文件', exact: true })
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('viewed')
+  expect(await docs.getAttribute('data-expanded')).toBe(null)
+  await expect.poll(() => panel.getAttribute('data-viewed')).toBe('changed')
+  await panel.getByText('有新改动', { exact: true }).waitFor()
+  await expect.poll(() => progress.getAttribute('aria-valuetext')).toBe('已审阅 1 / 6')
+
+  await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).check()
+  await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
+  await expect.poll(async () => (await mutationsOf(root)).map(entry => [entry.field, entry.variables.path]))
+    .toEqual([['markFileAsViewed', 'package.json']])
+  await docs.getByRole('checkbox', { name: '将 panel.md 标记为已审阅', exact: true }).uncheck()
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+  await expect.poll(async () => (JSON.parse(await readFile(join(root, 'state.json'), 'utf8')) as { readonly viewed?: Record<string, string> }).viewed)
+    .toEqual({ 'package.json': 'VIEWED', 'docs/panel.md': 'UNVIEWED' })
+
+  // A refused mark returns to what GitHub keeps and says why.
+  await writeFile(join(root, 'viewed.refused'), 'Resource not accessible by integration')
+  const spec = view.locator('[data-forge-diff-file="src/panel.spec.ts"]')
+  await spec.getByRole('checkbox', { name: '将 panel.spec.ts 标记为已审阅', exact: true }).check()
+  await page.getByText('已审阅状态未能保存到 GitHub：Resource not accessible by integration', { exact: true }).waitFor()
+  await expect.poll(() => spec.getAttribute('data-viewed')).toBe('unviewed')
+  await rm(join(root, 'viewed.refused'))
+
+  // GitHub keeps the marks, so a reload reads them again.
+  await page.reload()
+  await view.locator('[data-forge-diff-file="package.json"]').waitFor({ timeout: 20_000 })
+  await expect.poll(() => manifest.getAttribute('data-viewed')).toBe('viewed')
+  await expect.poll(() => docs.getAttribute('data-viewed')).toBe('unviewed')
+
+  // Without GitHub's marks no file can be marked, and the notice offers to read them again.
+  await writeFile(join(root, 'viewed.unreadable'), 'API rate limit exceeded')
+  await view.getByRole('button', { name: '刷新变更', exact: true }).click()
+  await view.getByText('未能读取 GitHub 上的已审阅状态，暂时不能标记文件：API rate limit exceeded', { exact: true }).waitFor({ timeout: 20_000 })
+  expect(await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).isDisabled()).toBe(true)
+  await rm(join(root, 'viewed.unreadable'))
+  await view.getByRole('button', { name: '重试', exact: true }).click()
+  await expect.poll(() => manifest.getAttribute('data-viewed'), { timeout: 20_000 }).toBe('viewed')
+  expect(await manifest.getByRole('checkbox', { name: '将 package.json 标记为已审阅', exact: true }).isDisabled()).toBe(false)
+
+  // Chosen commits keep their marks in the browser.
+  await view.getByRole('button', { name: '查看的提交：全部提交', exact: true }).click()
+  await page.locator(`[data-forge-commit="${'2'.repeat(40)}"]`).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['locale/zh.json', 'src/panel.spec.ts'])
+  const before = (await mutationsOf(root)).length
+  await spec.getByRole('checkbox', { name: '将 panel.spec.ts 标记为已审阅', exact: true }).check()
+  await expect.poll(() => spec.getAttribute('data-viewed')).toBe('viewed')
+  expect((await mutationsOf(root)).length).toBe(before)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await view.getByRole('button', { name: '查看的提交：2222222', exact: true }).click()
+  await page.locator('[data-forge-commit-menu]').getByRole('menuitem', { name: /^全部提交/ }).click()
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toHaveLength(6)
+  expect(tripwire.pageErrors).toEqual([])
+})
+
+/** Pull request 7 with failed, running, passed, and skipped checks, five reviewers, a branch behind its base, and two closing issues. */
+const OVERVIEW = {
+  viewerPermission: 'WRITE',
+  viewerCanUpdateBranch: true,
+  canBeRebased: true,
+  checks: {
+    pageInfo: { hasNextPage: false, endCursor: null },
+    nodes: [
+      ...[['node 24 / static', 'FAILURE', 11], ['windows / coverage', 'FAILURE', 12], ['lint', 'SUCCESS', 13], ['typecheck', 'SUCCESS', 14],
+        ['docs', 'SKIPPED', 15]].map(([name, conclusion, id]) => ({
+        __typename: 'CheckRun', id: `check-${String(id)}`, name, status: 'COMPLETED', conclusion, databaseId: id,
+        detailsUrl: `https://github.com/octo/demo/actions/runs/41/job/${String(id)}`, startedAt: '2026-10-09T00:00:00Z', completedAt: '2026-10-09T00:04:12Z',
+        checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 41, event: 'pull_request', workflow: { id: 'ci', name: 'CI' } } },
+      })),
+      {
+        __typename: 'CheckRun', id: 'check-16', name: 'e2e / web', status: 'IN_PROGRESS', conclusion: null, databaseId: 16,
+        detailsUrl: 'https://github.com/octo/demo/actions/runs/42/job/16', startedAt: '2026-10-09T00:00:00Z', completedAt: null,
+        checkSuite: { app: { id: 'github-actions' }, workflowRun: { databaseId: 42, event: 'pull_request', workflow: { id: 'e2e', name: 'E2E' } } },
+      },
+      { __typename: 'StatusContext', context: 'ci/jenkins', state: 'FAILURE', targetUrl: 'https://ci.example.test/7', createdAt: '2026-10-09T00:01:00Z' },
+    ],
+  },
+  reviewRequests: { totalCount: 2, nodes: [
+    { asCodeOwner: false, requestedReviewer: { __typename: 'User', login: 'lin-reviewer', avatarUrl: null } },
+    { asCodeOwner: true, requestedReviewer: { __typename: 'Team', combinedSlug: 'octo/forge', avatarUrl: null } },
+  ] },
+  latestReviews: { totalCount: 1, nodes: [{ state: 'COMMENTED', commit: { oid: HEAD7 }, author: { __typename: 'Bot', login: 'review-bot', avatarUrl: null } }] },
+  latestOpinionatedReviews: { totalCount: 2, nodes: [
+    { state: 'CHANGES_REQUESTED', commit: { oid: '1'.repeat(40) }, author: { __typename: 'User', login: 'zhou-dev', avatarUrl: null } },
+    { state: 'APPROVED', commit: { oid: HEAD7 }, author: { __typename: 'User', login: 'qian-dev', avatarUrl: null } },
+  ] },
+  closingIssues: { totalCount: 2, nodes: [
+    { number: 6, title: 'Show review progress in the panel', state: 'OPEN', url: 'https://github.com/octo/demo/issues/6',
+      repository: { name: 'demo', owner: { login: 'octo' } } },
+    { number: 12, title: 'Rerun failed checks from DSH', state: 'OPEN', url: 'https://github.com/octo/tracker/issues/12',
+      repository: { name: 'tracker', owner: { login: 'octo' } } },
+  ] },
+}
+
+it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state in one line each and acts on them from their menus', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-overview')
+  await writeFile(join(root, 'overview.json'), JSON.stringify(OVERVIEW))
+  const { settled } = await sendPrompt(page, scaffold)
+  const session = scaffold.ctx.sessions.get(await settled)
+  if (session === undefined) throw new Error('Session must stay loaded')
+  scaffold.ctx.forgeSession.track(session, PULL)
+  await page.locator('[data-forge-header]').click()
+  const card = page.locator(`[data-forge-change="${PULL}"]`)
+  // The card chooses its default expansion once its first status arrives, which names the title.
+  await card.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
+  if (await card.getAttribute('data-expanded') === null) await card.getByRole('button', { name: '展开 #7', exact: true }).click()
+  const checks = card.locator('[data-forge-checks]')
+  await expect.poll(() => checks.textContent(), { timeout: 20_000 }).toBe('检查3 项失败 · 1 项进行中')
+  await expect.poll(() => card.locator('[data-forge-threads]').getAttribute('data-forge-threads')).toBe('1')
+
+  // The checks menu lists what needs attention and the rest on request; the external status names no rerun.
+  await checks.click()
+  const menu = page.getByRole('menu')
+  await expect.poll(() => menu.locator('[data-forge-check-group]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-forge-check-group'))))
+    .toEqual(['failed', 'running'])
+  await menu.getByRole('menuitem', { name: '显示其余 3 项（通过、跳过）', exact: true }).waitFor()
+  await menu.getByRole('menuitem', { name: '重跑失败项', exact: true }).click()
+  await page.getByText('已请求重跑 #7 的检查', { exact: true }).waitFor()
+  expect(await rerunsOf(root)).toEqual(['repos/octo/demo/actions/runs/41/rerun-failed-jobs'])
+
+  // The review row shows the first avatars; its menu lists every reviewer and the requests.
+  const review = card.locator('[data-forge-review]')
+  await review.click()
+  await expect.poll(() => menu.locator('[data-forge-reviewer]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-forge-reviewer'))))
+    .toEqual(['lin-reviewer', 'octo/forge', 'review-bot', 'zhou-dev', 'qian-dev'])
+  await menu.getByRole('menuitem', { name: '请求其他人评审…', exact: true }).click()
+  await menu.getByRole('menuitem', { name: /lin-reviewer/ }).waitFor()
+  await page.keyboard.type('mon')
+  await menu.getByRole('menuitem', { name: /^mona/ }).click()
+  await page.getByText('已请求 mona 评审 #7', { exact: true }).waitFor()
+  await review.click()
+  await menu.getByRole('menuitem', { name: '重新请求 zhou-dev 评审', exact: true }).click()
+  await expect.poll(async () => (await mutationsOf(root)).filter(entry => entry.field === 'requestReviews').map(entry => entry.variables.input))
+    .toEqual([
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-mona'] },
+      { pullRequestId: 'pull-7', union: true, userIds: ['user-zhou-dev'] },
+    ])
+
+  // The linked issues take one row, each a link named by its number with its title in the name.
+  const issues = card.locator('[data-forge-closing-issues]')
+  expect(await issues.textContent()).toBe('关联 issue #6、octo/tracker#12')
+  await issues.getByRole('link', { name: '打开 issue #6：Show review progress in the panel', exact: true }).waitFor()
+  await issues.getByRole('link', { name: '打开 issue octo/tracker#12：Rerun failed checks from DSH', exact: true }).waitFor()
+
+  const update = card.locator('[data-forge-update-branch]')
+  await expect.poll(() => update.textContent()).toBe('合并无冲突 · 落后于 main更新分支')
+  await update.click()
+  await page.getByRole('menuitem', { name: /^变基更新/ }).click()
+  await page.getByRole('menuitem', { name: '确认更新', exact: true }).click()
+  await page.getByText('已开始更新 #7 的分支', { exact: true }).waitFor()
+  expect((await mutationsOf(root)).at(-1)?.variables.input).toEqual({ pullRequestId: 'pull-7', expectedHeadOid: HEAD7, updateMethod: 'REBASE' })
+  await expect.poll(() => update.count(), { timeout: 20_000 }).toBe(0)
+
   expect(tripwire.pageErrors).toEqual([])
 })
 
