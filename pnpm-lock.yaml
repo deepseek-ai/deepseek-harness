@@ -48,9 +48,6 @@ importers:
       '@deepseek-ai/dsh-dingtalk':
         specifier: workspace:*
         version: link:packages/connector/dingtalk
-      '@deepseek-ai/dsh-dingtalk-cli':
-        specifier: workspace:*
-        version: link:packages/connector/dingtalk-cli
       '@deepseek-ai/dsh-experimental-browser-use-chrome-devtools-mcp':
         specifier: workspace:*
         version: link:packages/experimental/browser-use-chrome-devtools-mcp
@@ -7608,16 +7605,6 @@ importers:
         version: link:../../core/system-prompt
 
   packages/connector/dingtalk:
-    dependencies:
-      '@deepseek-ai/dsh-dingtalk-cli':
-        specifier: workspace:*
-        version: link:../dingtalk-cli
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
-  packages/connector/dingtalk-cli:
     dependencies:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*

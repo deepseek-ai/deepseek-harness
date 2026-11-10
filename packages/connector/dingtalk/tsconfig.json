@@ -10,6 +10,33 @@
   "references": [
     {
       "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../skill/skill-filesystem"
+    },
+    {
+      "path": "../../util/values"
+    },
+    {
+      "path": "../../skill/skill"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../util/home-paths"
+    },
+    {
+      "path": "../cli-account"
+    },
+    {
+      "path": "../../core/system-prompt"
+    },
+    {
+      "path": "../../client/ui-connector-account/tsconfig.host.json"
     }
   ]
 }

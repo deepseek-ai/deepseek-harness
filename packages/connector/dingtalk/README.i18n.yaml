@@ -9,8 +9,8 @@
   en: 5dc926b329defff4
   zh: 79cd822afca4f832
 /deepseek-ai-dsh-dingtalk/summary:
-  en: 8362a27ec1d67d45
-  zh: 123d8c1b5e52c488
+  en: 83dcecf4eadcb0dd
+  zh: e5ce368d52efdaea
 /deepseek-ai-dsh-dingtalk/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,26 +18,71 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /deepseek-ai-dsh-dingtalk/use-this-package/install-into-a-profile:
-  en: 313ff7fb94340070
-  zh: 5cee4d423bbe5ebd
+  en: 7bd1fed680219cca
+  zh: e8600b972ea7180f
 /deepseek-ai-dsh-dingtalk/use-this-package/what-you-get:
-  en: 02f6272881ad69f9
-  zh: 3f72a61513f75a71
+  en: d68b9188466daf73
+  zh: 28b8525daf958bd6
+/deepseek-ai-dsh-dingtalk/use-this-package/account-operations:
+  en: d505454078c79c18
+  zh: cbe81439c2be4d10
+/deepseek-ai-dsh-dingtalk/use-this-package/configure:
+  en: a278789109126b58
+  zh: 70b7abc2324929be
 /deepseek-ai-dsh-dingtalk/understand-the-implementation:
-  en: 902d3374e5b6a4d1
-  zh: a24fb0dcdcb6aefa
+  en: 4cb0cac84c9b546b
+  zh: a931d4908d3b8130
 /deepseek-ai-dsh-dingtalk/further-exploration:
-  en: 56bf8d4ffa40e175
-  zh: 005852dd73f20f8f
+  en: 368a05dce9ee8bad
+  zh: 3120133183213943
 /deepseek-ai-dsh-dingtalk/model-experience:
-  en: 337f12fc2810786e
-  zh: d8fcd7353dc9894a
-/deepseek-ai-dsh-dingtalk/model-experience/kv-cache-effect:
-  en: 5bfc4142801b1273
-  zh: 0f1b430d21f43532
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: e99e8d5639c268d9
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 54a4339eb76f9ed6
+  zh: 5abdee68c500f37b
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/token-effect:
+  en: 7448b8025cac4857
+  zh: dddee8822f9354fd
+/deepseek-ai-dsh-dingtalk/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: c755079b7e47e8a7
+  zh: d76f6f3e2679f9f3
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 698bcd0773a8f094
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/what-the-model-sees:
+  en: cfc07ad5e9d6033d
+  zh: 5a124d4672ddf06e
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/token-effect:
+  en: 3c0c41cf49dd46a4
+  zh: ea0891d94a567606
+/deepseek-ai-dsh-dingtalk/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: d32b51405eabddc4
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees:
+  en: 44bf1618899b6b16
+  zh: bf7c66ddc9a65855
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/token-effect:
+  en: 9f6cf4e3a33996fe
+  zh: fb5f8830b63783d2
+/deepseek-ai-dsh-dingtalk/model-experience/cli-path/kv-cache-effect:
+  en: 2cd0ec39868022b9
+  zh: 21eaed1a363a3416
 /deepseek-ai-dsh-dingtalk/known-limitations-and-deferred-work:
-  en: b1feae479657ced7
-  zh: 82cd330c818848e9
+  en: 9f372cd16caa49b5
+  zh: 11eb1388d87fc06d
 /deepseek-ai-dsh-dingtalk/known-limitations-and-deferred-work/dev-note:
-  en: e67f633dc6fe7773
-  zh: 8ec3e73528ddb1a6
+  en: 7267122aef746a1c
+  zh: a5f28e38bd85d44f

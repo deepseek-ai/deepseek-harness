@@ -25,8 +25,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`cli-account/`](cli-account/README.zh.md) | 为 CLI 应用插件按绝对路径运行厂商 CLI，在运行时上下文中把这个路径告诉模型，并在 Host 上一次执行一个账号操作 | — |
-| [`dingtalk/`](dingtalk/README.zh.md) | 打包钉钉插件：`dws` Host 行及其插件页行 | — |
-| [`dingtalk-cli/`](dingtalk-cli/README.zh.md) | 下载固定版本的官方 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其 skill，并执行插件页发起的账号操作 | 注册到 `ctx.skills`、`ctx.systemPrompt` 与 `ctx.cliAccounts` |
+| [`dingtalk/`](dingtalk/README.zh.md) | 钉钉插件：下载固定版本的官方 `dws` 及其技能，把 `dws` 的绝对路径告诉模型，注册其 skill，并执行插件页发起的账号操作 | 注册到 `ctx.skills`、`ctx.systemPrompt` 与 `ctx.connectorAccounts` |
 
 -----
 
