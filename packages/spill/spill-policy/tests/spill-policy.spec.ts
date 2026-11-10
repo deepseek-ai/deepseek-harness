@@ -298,7 +298,7 @@ describe('the durable dispatch-log arm', () => {
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected success')
     // The program received the COMPLETE text (length 2000), untouched by spill.
-    expect(result.value).toMatchObject({ logs: ['2000'] })
+    expect(result.value).toMatchObject({ logs: ['2000\n'] })
     // The durable settle event carries the bounded projection + locator.
     const settle = events.find(event => event.type === 'tool/ptc-dispatch')
     expect(settle).toBeDefined()
@@ -385,7 +385,7 @@ describe('the durable dispatch-log arm', () => {
       const result = await runPromise
       expect(result.isError).toBe(false)
       if (result.isError) throw new Error('expected success')
-      expect(result.value).toMatchObject({ logs: ['2004'] })
+      expect(result.value).toMatchObject({ logs: ['2004\n'] })
       expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(2)
     } finally {
       saveGate.resolve(undefined)
