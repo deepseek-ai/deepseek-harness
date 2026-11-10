@@ -277,7 +277,7 @@
 
 /* `observeToolbarFold` sets `data-fold` on the toolbar row to the shallowest level whose items fit on one line: level 1
    folds the line totals, expansion, side by side, and wrapping into the More menu; level 2 the test switch, with the
-   progress shown as a ring; level 3 refresh. */
+   progress label shortened to the bare count beside its ring; level 3 refresh. */
 .more {
   display: none;
 }
@@ -538,6 +538,13 @@
   .viewed:hover {
     color: var(--dsw-alias-label-primary);
   }
+}
+
+/* While its write is in flight or the host's marks could not be read, the mark keeps its place and shows it cannot change. */
+.viewed[data-disabled],
+.viewed[data-disabled] input {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
 }
 
 .viewed:has(input:focus-visible) {

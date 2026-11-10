@@ -55,6 +55,10 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
   const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
   const readChecks = vi.fn<ForgeTabProps['readChecks']>(async () => snapshot(1))
+  const rerunChecks = vi.fn<ForgeTabProps['rerunChecks']>(async () => {})
+  const requestReviews = vi.fn<ForgeTabProps['requestReviews']>(async () => {})
+  const reviewerCandidates = vi.fn<ForgeTabProps['reviewerCandidates']>(async () => [])
+  const updateBranch = vi.fn<ForgeTabProps['updateBranch']>(async () => {})
   const restore = vi.fn<() => void>()
   const openLink = vi.fn<(url: string) => void>()
   const copyText = vi.fn<(text: string) => void>()
@@ -68,8 +72,8 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     usePanel: bindSnapshotSelector(panel),
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
-    reconnect, refresh, remove, markReady, merge, readChecks, restore, openLink, copyText, copyPath, reportVisible, createChangeRequest,
-    t,
+    reconnect, refresh, remove, markReady, merge, readChecks, rerunChecks, requestReviews, reviewerCandidates, updateBranch, restore,
+    openLink, copyText, copyPath, reportVisible, createChangeRequest, t,
   }
   const view = render(<ForgeTab {...props} />)
   return {

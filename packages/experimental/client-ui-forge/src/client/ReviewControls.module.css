@@ -122,41 +122,21 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 4px;
   color: var(--dsw-alias-label-secondary);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.bar {
-  position: relative;
-  width: 64px;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--dsw-alias-border-l3);
-}
-
-.fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: inherit;
-  corner-shape: round;
-  background: var(--dsw-alias-state-success-primary);
-}
-
 .progressForm {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
 }
 
-/* A narrow toolbar shows this form in place of the label and bar. */
+/* A narrow toolbar shows this form in place of the label. */
 .progressForm[data-forge-progress='compact'] {
   display: none;
-  gap: 6px;
 }
 
 /* The ring starts at twelve o’clock and fills clockwise with the viewed share. */

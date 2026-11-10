@@ -33,7 +33,7 @@ import type {
 } from '../types.ts'
 import type {
   ForgeCommitList, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewThread, ForgeReviewWrite, ForgeReviewWriteResult,
-  ForgeThreadId,
+  ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
@@ -46,6 +46,7 @@ import type { ChangesLens, createChangesStore } from './changes-store.ts'
 import { CommitMenu } from './CommitMenu.tsx'
 import { HideTestsSwitch, LensControl, LensMenu, LENSES, ViewedProgress } from './ReviewControls.tsx'
 import { viewedStateOf, type ViewedFiles, type ViewedMarks } from './viewed-files.ts'
+import { hostViewedOf, useHostViewed, type HostViewed } from './host-viewed.ts'
 import { Counts, DiffFile, type DiffFileAction, type DiffFileHandlers } from './DiffFile.tsx'
 import { SectionReach } from './section-reach.ts'
 import { FileTreePane, type FileTreePosition } from './FileTreePane.tsx'
@@ -102,8 +103,15 @@ export interface ChangesTabInjected {
   ) => Promise<RemoteResult<ForgeChangeRequestDiff>>
   /** List the commits of a change request, or null when its provider does not read commits; `signal` aborts the read. */
   readonly changeRequestCommits: (url: string, signal: AbortSignal) => Promise<RemoteResult<ForgeCommitList | null>>
-  /** The Session's viewed marks, kept in the browser. */
+  /** The Session's viewed marks, kept in the browser for local changes, chosen commits, and hosts that keep none. */
   readonly viewedFiles: ViewedFiles
+  /**
+   * Read the signed-in user's viewed marks on a change request's files at `headSha`, or null when its provider keeps
+   * none; `signal` aborts the read.
+   */
+  readonly changeRequestViewed: (url: string, headSha: string, signal: AbortSignal) => Promise<RemoteResult<ForgeViewedFiles | null>>
+  /** Set or clear the signed-in user's viewed mark on one file of a change request. */
+  readonly setFileViewed: (url: string, request: ForgeViewedRequest) => Promise<RemoteResult<void>>
   /** Read one file of a change request at a commit. */
   readonly changeRequestText: (url: string, commit: string, path: string) => Promise<RemoteResult<string>>
   /** Read the review threads of a change request at the head of its latest status; `signal` aborts the read. */
@@ -156,6 +164,8 @@ type ChangesData =
     readonly localAhead: number | null
     /** Web page of each file at the head. */
     readonly fileUrls: Readonly<Record<string, string>>
+    /** The code host's viewed marks of the whole change request, or null when the browser keeps the marks. */
+    readonly viewed: HostViewed | null
   }
 
 /** Why the code host did not take a review write, and whether it may have applied it. */
@@ -220,11 +230,23 @@ function baseFailureOf(failed: string | null, base: ForgeBaseBranch | null, t: T
   return key === undefined || base === null ? undefined : t(key, { base: base.name })
 }
 
+/**
+ * Read the changes a view shows. The whole change request also reads the host's viewed marks at the head of the latest
+ * status, beside the diff; marks read at another head refuse the read as the diff refuses a moved head.
+ * @param source - local changes or a change request.
+ * @param scope - local scope to read.
+ * @param commits - chosen commits of a change request, or null for all of it.
+ * @param head - head commit of the change request's latest status, or null.
+ * @param reads - the Remote reads.
+ * @param signal - cancellation of the reads.
+ * @returns the changes, or why they could not be read.
+ */
 async function readChanges(
   source: ChangesSource,
   scope: ForgeLocalScope,
   commits: ForgeCommitRange | null,
-  reads: Pick<ChangesTabInjected, 'localDiff' | 'changeRequestDiff'>,
+  head: string | null,
+  reads: Pick<ChangesTabInjected, 'localDiff' | 'changeRequestDiff' | 'changeRequestViewed'>,
   signal: AbortSignal,
 ): Promise<RemoteResult<ChangesData>> {
   if (source.kind === 'local') {
@@ -233,10 +255,15 @@ async function readChanges(
     const { files, base, omitted } = result.value
     return { ok: true, value: { kind: 'local', files, scope, base, omitted } }
   }
-  const result = await reads.changeRequestDiff(source.url, commits, signal)
+  const [result, marks] = await Promise.all([
+    reads.changeRequestDiff(source.url, commits, signal),
+    commits === null && head !== null && head !== '' ? reads.changeRequestViewed(source.url, head, signal) : Promise.resolve(null),
+  ])
   if (!result.ok) return result
+  if (marks !== null && !marks.ok && marks.error.code === 'forgePanel/stale-head') return marks
   const { files, headSha, localAhead, fileUrls } = result.value
-  return { ok: true, value: { kind: 'change', files, url: source.url, headSha, commits, localAhead, fileUrls } }
+  const viewed = hostViewedOf(marks, headSha)
+  return { ok: true, value: { kind: 'change', files, url: source.url, headSha, commits, localAhead, fileUrls, viewed } }
 }
 
 /** The ref that identifies a comparison: the chosen base branch, or null for the automatic fork point and other scopes. */
@@ -457,7 +484,7 @@ function OrphanReviews({ path, actions, t }: PropsLocale<typeof NS> & {
  */
 export function ChangesTab({
   useTabInfo, sessionId, useStore, actions, usePanel, reconnect, localDiff, diffBases, localText, localCommits, changeRequestDiff,
-  changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
+  changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles, changeRequestViewed, setFileViewed,
   openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue, submitReview, report, t,
 }: ChangesTabProps): ReactNode {
   const { tab } = useTabInfo()
@@ -617,23 +644,25 @@ export function ChangesTab({
     if (!tab.visible || read === null || read === finished || waiting) return
     const controller = new AbortController()
     const readAt = latestStatusAt.current
-    void readChanges(source, localScope, changeCommits, { localDiff, changeRequestDiff }, controller.signal).then((result) => {
-      if (controller.signal.aborted) return
-      if (!result.ok && result.error.code === 'forgePanel/stale-head') {
-        setRefused({ read, statusAt: readAt })
-        setFailure(null)
-        return
-      }
-      setFinished(read)
-      if (result.ok) {
-        setLoaded({ key: dataKey, data: result.value })
-        setFailure(null)
-      } else {
-        setFailure({ key: dataKey, code: result.error.code })
-      }
-    })
+    void readChanges(source, localScope, changeCommits, head, { localDiff, changeRequestDiff, changeRequestViewed }, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        if (!result.ok && result.error.code === 'forgePanel/stale-head') {
+          setRefused({ read, statusAt: readAt })
+          setFailure(null)
+          return
+        }
+        setFinished(read)
+        if (result.ok) {
+          setLoaded({ key: dataKey, data: result.value })
+          setFailure(null)
+        } else {
+          setFailure({ key: dataKey, code: result.error.code })
+        }
+      })
     return () => { controller.abort() }
-  }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, dataKey, localDiff, changeRequestDiff])
+  }, [tab.visible, read, refused, waiting, source, localScope, changeCommits, head, dataKey, localDiff, changeRequestDiff,
+    changeRequestViewed])
   const data = loaded !== null && loaded.key === dataKey ? loaded.data : null
   // Threads show only while they were read at the head of the latest status and, for the whole change request, at
   // the head the shown diff was read at, so their positions number the shown files.
@@ -658,7 +687,15 @@ export function ChangesTab({
     allFiles.filter(file => shownBy(file, item, hideTests)).length])) as Record<ChangesLens, number>, [allFiles, hideTests])
   const shownSource = useMemo(() => data === null ? null : reviewSourceOf(data), [data])
   const viewedKey = shownSource === null ? '' : viewedSourceOf(shownSource)
-  const marks = useSyncExternalStore(viewedFiles.subscribe, () => viewedFiles.marksOf(viewedKey))
+  const localMarks = useSyncExternalStore(viewedFiles.subscribe, () => viewedFiles.marksOf(viewedKey))
+  const hostOwner = useMemo(() => data?.kind === 'change' && data.viewed !== null
+    ? { url: data.url, headSha: data.headSha, files: data.files, viewed: data.viewed } : null, [data])
+  const host = useHostViewed(hostOwner, setFileViewed, (failure) => {
+    if (failure.kind === 'stale') report('viewed.syncStale')
+    else if (failure.kind === 'unknown') report('viewed.syncUnknown', { message: failure.message })
+    else report('viewed.syncFailed', { message: failure.message })
+  })
+  const marks = host?.marks ?? localMarks
   // The centered loader marks a first read; the toolbar's glyph turns only while shown changes are read again.
   const rereading = read !== null && finished !== read && data !== null
   const failed = failure !== null && failure.key === dataKey ? failure.code : null
@@ -936,7 +973,9 @@ export function ChangesTab({
   }
   /** Mark a file viewed and collapse it, keeping its header in view, or clear its mark and expand it. */
   const markViewed = (owner: ChangesData, file: ForgeDiffFile, viewed: boolean): void => {
-    if (!viewedFiles.mark(viewedKey, owner.files, file.path, viewed)) {
+    if (host !== null) {
+      if (!host.mark(file.path, viewed)) return
+    } else if (!viewedFiles.mark(viewedKey, owner.files, file.path, viewed)) {
       report('viewed.saveFailed')
       return
     }
@@ -1084,6 +1123,9 @@ export function ChangesTab({
               threads={fileThreads.get(path)}
               drawNow={wanted !== null && wanted.center !== null && wanted.path === path}
               viewed={viewedStateOf(marks, path, file.digest)}
+              viewedNote={host === null ? t('viewed.hint') : host.unavailable ? t('viewed.unavailable')
+                : host.saving(path) ? t('viewed.saving') : t('viewed.hintHost')}
+              viewedDisabled={host !== null && (host.unavailable || host.saving(path))}
               handlers={handlers}
               t={t}
             />
@@ -1215,6 +1257,11 @@ export function ChangesTab({
         <Notice>{t('diff.stale', { count: data.localAhead })}</Notice>
       )}
       {data?.kind === 'local' && data.omitted > 0 && <Notice>{t('diff.omitted', { count: data.omitted })}</Notice>}
+      {data?.kind === 'change' && data.viewed?.kind === 'failed' && (
+        <Notice action={<Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>}>
+          {t('viewed.readFailed', { message: data.viewed.message })}
+        </Notice>
+      )}
       {data?.kind === 'change' && threadRead.failure !== null && (
         <Notice action={<Button size="sm" variant="outline" className={css.noticeAction} onClick={refresh}>{t('retry')}</Button>}>
           {t('thread.loadFailed', { message: threadRead.failure })}
