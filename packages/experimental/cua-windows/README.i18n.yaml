@@ -3,8 +3,47 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-windows/README.md
 /:
-  en: 74cec3b0e35e9bf4
-  zh: 8c7eb35b11ada2b5
+  en: d66919d08b144c72
+  zh: 08566047a1f34c68
 /deepseek-ai-dsh-cua-windows:
-  en: f31869d4398aa0ae
-  zh: b94122bb2bc53a53
+  en: a1211ae1bdb841b5
+  zh: 47b1b00b712658c5
+/deepseek-ai-dsh-cua-windows/summary:
+  en: 3d01094229f39847
+  zh: 2b1f57f387249f1f
+/deepseek-ai-dsh-cua-windows/table-of-contents:
+  en: 873f5e3022e22ff3
+  zh: c8e442bf641a59da
+/deepseek-ai-dsh-cua-windows/interface-semantics:
+  en: 13ff5154e3ed57cf
+  zh: b6a976028b104068
+/deepseek-ai-dsh-cua-windows/interface-semantics/application-discovery:
+  en: 50a841cef8bc070c
+  zh: 3f4bdedd4cb64cd0
+/deepseek-ai-dsh-cua-windows/interface-semantics/application-and-window-selection:
+  en: 7e5bae65d7da5f1d
+  zh: a5303b3883bfa842
+/deepseek-ai-dsh-cua-windows/interaction-rules:
+  en: 6534efafae6f35ed
+  zh: b7e349fd5b676c15
+/deepseek-ai-dsh-cua-windows/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations:
+  en: 38b3250d6ae0f3d6
+  zh: 33d056c416e11d75
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/what-the-model-sees:
+  en: 34591dbfbe4a65e7
+  zh: 4e449111c4ddaeb8
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/token-effect:
+  en: 4ac8b00f08128823
+  zh: cec2692a62e3df3d
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/kv-cache-effect:
+  en: dbf131de7be43807
+  zh: 64fab20ce6c30c69
+/deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work:
+  en: ed913aaae92e5f3e
+  zh: b25c3cdde04f6031
+/deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914
