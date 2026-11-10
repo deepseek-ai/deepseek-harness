@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session 控制",
+    "description": "接收 Agent 编写的 Session 消息，统一协调消息投递。"
+  }
+}

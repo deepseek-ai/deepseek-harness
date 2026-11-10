@@ -4,25 +4,15 @@
  * @module @deepseek-ai/dsh-subagent/continuation-messages
  */
 
-import type { Agent } from '@deepseek-ai/dsh-agent'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentResult } from './types.ts'
 
-/** Durable attribution for one model-authored message between Agents. */
-export interface AgentMessageSource {
-  readonly kind: 'agent-message'
-  /** A message another agent addressed to this one (`relay` context form). */
-  readonly form: 'relay'
-  /** Session id of the Agent whose tool call produced the message. */
-  readonly senderSessionId: SessionId
-}
-
 /**
  * Durable attribution for the runtime's own account of a continuable child
  * settling. Deliberately a different kind from
- * {@link AgentMessageSource}: an Agent message is content the sender chose,
+ * `agent-message`: an Agent message is content the sender chose,
  * while this message is the manager stating what became of the child, and a
  * transcript that merged them would credit the child with words it never wrote.
  */
@@ -40,39 +30,8 @@ export interface SubagentSettledMessageSource {
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
-    'agent-message': AgentMessageSource
     'subagent-settled': SubagentSettledMessageSource
   }
-}
-
-/** Build durable attribution for one Agent message. */
-function agentMessageSource(sender: Agent): AgentMessageSource {
-  return {
-    kind: 'agent-message',
-    form: 'relay',
-    senderSessionId: sender.id,
-  }
-}
-
-/**
- * Build the model-visible and durable representation of one Agent message.
- * @param sender - exact live Agent that authored the message.
- * @param senderName - the sender's model-facing name in its subagent tree.
- * @param content - model-visible message blocks supplied by the sender.
- * @returns the durable user-message representation delivered to the recipient.
- */
-export function createAgentMessage(
-  sender: Agent,
-  senderName: string,
-  content: ContentBlock[],
-): ReturnType<typeof createUserMessage> {
-  return createUserMessage({
-    content: [
-      { type: 'text' as const, text: `Agent ${senderName} sent a message: ` },
-      ...content,
-    ],
-    source: agentMessageSource(sender),
-  })
 }
 
 /**

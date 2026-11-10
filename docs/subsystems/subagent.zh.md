@@ -193,26 +193,18 @@ interface SubagentMemberNames {
 }
 ```
 
+<a id="messages-and-interruption"></a>
 ## 消息与中断
 
 `sendMessage` 要求确切在线发送方和同一根树中的目标 Session id。根和可继续成员可跨分支发消息；接纳时重新校验发送方和根。运行中目标接收 Steer；只冷恢复不在线的目标，其创建祖先可以保持离线。外部执行拒绝后续输入。本地和外部执行仅向仍在线的直接创建者报告最终文本、结构化输出、诊断和状态；caller 投递抑制这些通知。`drainDescendants` 等待整棵树释放；activation 回执的 `dispose()` 仅释放那一次执行。
 
-```ts type-equiv
-/** Durable attribution for one model-authored message between Agents. */
-interface AgentMessageSource {
-  readonly kind: 'agent-message'
-  /** A message another agent addressed to this one (`relay` context form). */
-  readonly form: 'relay'
-  /** Session id of the Agent whose tool call produced the message. */
-  readonly senderSessionId: SessionId
-}
-```
+共享的 `AgentMessageSource` 来源标记和投递排序由 [Session 控制](session-control.zh.md#requests-and-providers)负责；subagent 结束通知仍属于本子系统。
 
 ```ts type-equiv
 /**
  * Durable attribution for the runtime's own account of a continuable child
  * settling. Deliberately a different kind from
- * {@link AgentMessageSource}: an Agent message is content the sender chose,
+ * `agent-message`: an Agent message is content the sender chose,
  * while this message is the manager stating what became of the child, and a
  * transcript that merged them would credit the child with words it never wrote.
  */

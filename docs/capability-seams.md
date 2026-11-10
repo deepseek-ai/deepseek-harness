@@ -167,6 +167,11 @@ flowchart LR
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
   pkg_tool_session_query["tool-session-query"]
+  pkg_session_control["session-control"]
+  svc_sessionControl["ctx.sessionControl<br/>Agent-authored Session messaging"]
+  pkg_session_control_local["session-control-local"]
+  pkg_tool_session_control["tool-session-control"]
+  svc_sessionControlLocal["ctx.sessionControlLocal<br/>Local independent Session delivery"]
   pkg_file_reference["file-reference"]
   svc_fileReferences["ctx.fileReferences<br/>File reference discovery"]
   pkg_file_reference_local["file-reference-local"]
@@ -422,6 +427,9 @@ flowchart LR
   pkg_sandbox_windows_acl --> svc_skills
   pkg_schedule --> svc_schedule
   pkg_session --> svc_sessions
+  pkg_session_control --> svc_sessionControl
+  pkg_session_control_local --> svc_sessionControl
+  pkg_session_control_local --> svc_sessionControlLocal
   pkg_session_log_deepseek --> svc_deepseekLlmApiExtensions
   pkg_session_log_deepseek --> svc_sessionLogDeepSeek
   pkg_session_persistence --> svc_sessionPersistence
@@ -559,6 +567,9 @@ flowchart LR
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_terminal_panel
+  svc_sessionControl --> pkg_subagent
+  svc_sessionControl --> pkg_tool_session_control
+  svc_sessionControlLocal --> pkg_api_session_controller
   svc_sessionPersistence --> pkg_agent_loop
   svc_sessionPersistence --> pkg_hooks_claude_code
   svc_sessionPersistence --> pkg_hooks_codex
@@ -712,6 +723,8 @@ flowchart LR
 | `ctx.sessionFeedback` | `core` | [`command-feedback`](../packages/feedback/command-feedback) | - | - | - | Records one Session-level remark with its category as a log-only feedback/record event on a live Session through the Host unary Remote contract; the /feedback command shares the same producer. |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | [`api-workspace-controller`](../packages/api/workspace-controller), [`api-session-controller`](../packages/api/session-controller) | - | Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections. |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/experimental/tool-session-query) | - | The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering. |
+| `ctx.sessionControl` | `seam` | [`session-control`](../packages/session/session-control) | [`session-control-local`](../packages/session/session-control-local) | [`tool-session-control`](../packages/session/tool-session-control), [`subagent`](../packages/subagent/subagent) | - | Owns sender attribution, target serialization, acceptance receipts, and reversible provider registration; subagent delivery retains its existing tree authority and lifecycle. |
+| `ctx.sessionControlLocal` | `service` | [`session-control-local`](../packages/session/session-control-local) | - | [`api-session-controller`](../packages/api/session-controller) | - | Restores independent Sessions with their recorded preset, supplies caller-owned activation to the API Session Controller, and refuses archived or closing message targets before accepting input. |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | [`api-session-controller`](../packages/api/session-controller) | - | The interface returns path-only completion candidates within an Agent cwd; providers own namespace access and ranking without reading file contents. |
 | `ctx.sessionReferenceResolver` | `core` | [`session-reference`](../packages/context/session-reference) | - | - | - | Projects bounded current-surface conversation snapshots into durable untrusted message context; host adapters own mention syntax. |
 | `ctx.sessionTitle` | `seam` | [`session-title`](../packages/session/session-title) | [`session-title-first-prompt-llm`](../packages/session/session-title-first-prompt-llm), [`session-title-all-prompts-llm`](../packages/experimental/session-title-all-prompts-llm) | - | - | Owns the deterministic fallback, latest-title fold, and sole optional asynchronous provider registration. |

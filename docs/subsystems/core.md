@@ -106,13 +106,16 @@ interface Agent {
   /**
    * Route identified input to an inbox boundary and optionally wake the driver.
    * Waking input submitted after active cancellation is queued for the next
-   * turn and runs when the aborted activity converges to idle; a `disposed`
-   * cancel leaves it parked. A wake submitted while already idle always opens
+   * turn and runs when the aborted activity converges to idle; an explicit
+   * `cancel({ kind: 'disposed' })` leaves it parked without ending the Agent's
+   * lifetime. Owner or factory disposal rejects input before inbox mutation.
+   * A wake submitted while already idle always opens
    * its turn boundary, even when its message is cleared before the driver
    * claims ([driver wake convergence](../../agent-loop/src/agent.ts)).
    * @param message - identified content and the source that supplied it.
    * @param target - the preferred next-turn or next-step inbox boundary.
    * @param wakeup - whether delivery may wake the driver.
+   * @throws `AgentInputClosedError` once lifetime disposal begins.
    */
   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void
 
@@ -120,6 +123,7 @@ interface Agent {
    * Queue an ordinary follow-up turn and wake the driver. The item becomes the
    * sole ordinary message of its own turn.
    * @param message - identified prompt content and the source that supplied it.
+   * @throws `AgentInputClosedError` once lifetime disposal begins.
    */
   followup(message: UserMessage): void
 
@@ -129,6 +133,7 @@ interface Agent {
    * A rejected step leaves steering parked in the inbox until the next
    * wake; cancellation or disposal may discard pending steering.
    * @param message - identified steering content and the source that supplied it.
+   * @throws `AgentInputClosedError` once lifetime disposal begins.
    */
   steer(message: UserMessage): void
 
@@ -139,6 +144,7 @@ interface Agent {
    * wakes them. It may miss a request whose pre-step already claimed its
    * batch. Cancellation or disposal may discard pending context.
    * @param message - identified injected context and the source that supplied it.
+   * @throws `AgentInputClosedError` once lifetime disposal begins.
    */
   inject(message: UserMessage): void
 }

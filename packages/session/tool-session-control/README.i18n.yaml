@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/session/tool-session-control/README.md
+/:
+  en: 64280311783ea8f9
+  zh: 7232a7a738a54b6f
+/deepseek-ai-dsh-tool-session-control:
+  en: d522d0ef201dca36
+  zh: f5e375625963c98d
+/deepseek-ai-dsh-tool-session-control/summary:
+  en: d4b0dbcb2f653978
+  zh: 13a3feae37d6ffce
+/deepseek-ai-dsh-tool-session-control/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 1db86285abf6c499
+/deepseek-ai-dsh-tool-session-control/use-this-package:
+  en: b39d3134300accd4
+  zh: acf4b93dfda6ad9d
+/deepseek-ai-dsh-tool-session-control/understand-the-implementation:
+  en: 56b91c89f27ebea3
+  zh: d595f3fb18f95c84
+/deepseek-ai-dsh-tool-session-control/further-exploration:
+  en: fe4ba3c018c91166
+  zh: 0453432f7defcc45
+/deepseek-ai-dsh-tool-session-control/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-session-control/model-experience/tool-schema-and-result:
+  en: bc924247b1806144
+  zh: 50b27155153bbff2
+/deepseek-ai-dsh-tool-session-control/model-experience/tool-schema-and-result/what-the-model-sees:
+  en: c3e06e43b109ade8
+  zh: 8e4ab0084c62f2e9
+/deepseek-ai-dsh-tool-session-control/model-experience/tool-schema-and-result/token-effect:
+  en: 3b3633fac13e3570
+  zh: e60f123378796fa3
+/deepseek-ai-dsh-tool-session-control/model-experience/tool-schema-and-result/kv-cache-effect:
+  en: 00e0a8382b6777b4
+  zh: 786df385428b8fbd
+/deepseek-ai-dsh-tool-session-control/known-limitations-and-deferred-work:
+  en: 051f9011a7ea7109
+  zh: dec9a5cc13736191
+/deepseek-ai-dsh-tool-session-control/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 8ec3e73528ddb1a6

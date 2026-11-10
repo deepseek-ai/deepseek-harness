@@ -57,6 +57,16 @@
     - id: remote-access
       name: '@deepseek-ai/dsh-api-remote-access'
 
+    - id: session-control
+      name: '@deepseek-ai/dsh-session-control'
+
+    - id: session-control-local
+      name: '@deepseek-ai/dsh-session-control-local'
+
+    - id: tool-session-control
+      name: '@deepseek-ai/dsh-tool-session-control'
+      disabled: true
+
     - id: session-title
       name: '@deepseek-ai/dsh-session-title'
       config:

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Session 制御",
+    "description": "Agent が作成した Session メッセージを、共有の配信調整で受け付けます。"
+  }
+}

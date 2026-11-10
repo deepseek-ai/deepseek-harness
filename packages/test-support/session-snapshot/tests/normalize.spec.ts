@@ -1081,6 +1081,21 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
+  it('preserves an independent Session directory relative to the scenario workspace', () => {
+    const workspace = '/tmp/snapshot-sessions-abc123'
+    const raw = [
+      JSON.stringify({ type: 'session', id: 'recipient', cwd: `${workspace}/recipient` }),
+      JSON.stringify({ type: 'user/message', data: { content: [{
+        type: 'text', text: `Recipient directory: ${workspace}/recipient; sender directory: ${workspace}`,
+      }] } }),
+      '',
+    ].join('\n')
+    const output = tokenizeSessionFixtureCwd(raw, workspace)
+    expect(output).toContain('"cwd":"{{cwd}}/recipient"')
+    expect(output).toContain('Recipient directory: {{cwd}}/recipient; sender directory: {{cwd}}')
+    expect(tokenizeSessionFixtureCwd(output, '{{cwd}}')).toBe(output)
+  })
+
   it('rejects a log without a session cwd', () => {
     expect(() => tokenizeSessionFixtureCwd('')).toThrow(
       'acp-snapshot: cannot tokenize a cwd without a basename',

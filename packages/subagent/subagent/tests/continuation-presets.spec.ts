@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 /** Independent spawn presets and compatibility of persisted child compositions. */
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
@@ -58,6 +59,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [tex
     }))
   }
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   const spawn = await ctx.plugin(SubagentSpawn, { providerName: 'separate' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })

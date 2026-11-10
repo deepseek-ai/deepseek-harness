@@ -16,7 +16,7 @@ import {
   type ApiSessionCreateRequest,
 } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
-import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
+import { installSessionReadTestServices, mountSessionControlTestServices, testSessionPersistence } from './test-remote.ts'
 
 async function expectFailure(operation: Promise<unknown>, code: string): Promise<void> {
   await expect(operation).rejects.toMatchObject({ code })
@@ -55,6 +55,7 @@ async function baseContext(): Promise<Context> {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
+  await mountSessionControlTestServices(ctx)
   return ctx
 }
 

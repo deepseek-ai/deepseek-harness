@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 import { listChildren } from '../src/list-children.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
@@ -87,6 +88,7 @@ async function setupWith(
 ) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  await ctx.plugin(SessionControl)
   let disposePersistence: (() => Promise<void>) | undefined
   let root: string | undefined
   if (options.persistence !== false) {
@@ -811,6 +813,7 @@ describe('SubagentRuntime.startActivation', () => {
 
     const fresh = new Context()
     await mountAgentLoopTestDependencies(fresh)
+    await fresh.plugin(SessionControl)
     const freshPersistence = await fresh.plugin(JsonlSessionPersistence, { root: root! })
     // This context opened a second handle on the same root; register it so
     // afterEach closes it before removing the root (even on a failure path).
@@ -3946,6 +3949,7 @@ describe('continuable errors', () => {
     const adapter = new GatedAdapter([{ chunks: textResponse('child'), gate: hold.promise }])
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(SessionControl)
     const root = mkdtempSync(join(tmpdir(), 'dsh-subagent-continuation-'))
     const persistenceFiber = await ctx.plugin(JsonlSessionPersistence, { root })
     cleanups.push(async () => {

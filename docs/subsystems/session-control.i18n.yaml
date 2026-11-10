@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for session-control.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/subsystems/session-control.md
+/session-control:
+  en: c9e2532430ed1a0a
+  zh: bebd8c99f58acc8c
+/session-control/summary:
+  en: c08f60f84304ab1e
+  zh: c73a2c8ada5dda8f
+/session-control/table-of-contents:
+  en: 4f7615f616b30a6d
+  zh: 774dd51b8198142e
+/session-control/delivery-and-access:
+  en: 42a3525363c3998d
+  zh: 49b2387553138f1a
+/session-control/requests-and-providers:
+  en: 76617091282b0873
+  zh: 0f6a43646b10e6b6
+/session-control/cordis-api/ctx-sessioncontrollocal-sessioncontrollocalprovider:
+  en: 67ce200d49f5caaa
+  zh: 67ce200d49f5caaa
+/session-control/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

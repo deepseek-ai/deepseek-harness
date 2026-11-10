@@ -25,7 +25,7 @@ import {
 } from './child-agent.ts'
 import type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
 import {
-  createAgentMessage, createSettlementMessage, withResultDeliveryGuidance,
+  createSettlementMessage, withResultDeliveryGuidance,
 } from './continuation-messages.ts'
 import { installSubagentArchiveAdmission } from './archive-admission.ts'
 import { foldSubagentDescriptor, snapshotSubagentDescriptor } from './descriptor.ts'
@@ -51,7 +51,6 @@ import type { Activation, ActivationResource, LocalActivation } from './activati
 /** Inputs shared by model steering and human prompt delivery. */
 type ChildDeliveryOptions = {
   readonly delivery: SubagentDelivery
-  readonly source: MessageSource
   readonly signal: AbortSignal
   /** Recheck the original model caller at final inbox admission. */
   readonly authorize?: () => void
@@ -405,10 +404,13 @@ export class SubagentManager {
         const childHeader = child.session.header
         return await this.submitMaterialized(
           activation,
-          spec.delivery !== 'caller'
-            ? withResultDeliveryGuidance(spec.prompt)
-            : spec.prompt,
-          { source: { kind: 'user' }, signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
+          createUserMessage({
+            content: spec.delivery !== 'caller'
+              ? withResultDeliveryGuidance(spec.prompt)
+              : spec.prompt,
+            source: { kind: 'user' },
+          }),
+          { signal, delivery: 'queue', authorize: () => { this.assertAdmitting(parent) } },
           ancestry.root,
           () => {
             this.assertAdmitting(parent)
@@ -560,19 +562,18 @@ export class SubagentManager {
    * Deliver to another agent in the subagent tree, restoring only the target when absent.
    * @param sender - exact live root or resident continuable Agent.
    * @param targetId - another member's durable Session id.
-   * @param content - model-authored message blocks.
+   * @param message - identified model-authored message with the real sender.
    * @param options - cancellation before inbox acceptance.
    * @returns the accepted inbox message id.
    */
-  async sendMessage(sender: Agent, targetId: SessionId, content: ContentBlock[], options: SubagentSendMessageOptions): Promise<MessageId> {
+  async sendMessage(sender: Agent, targetId: SessionId, message: UserMessage, options: SubagentSendMessageOptions): Promise<MessageId> {
     options.signal.throwIfAborted()
     const root = this.rootOf(sender)
     if (sender.id === targetId) throw new SubagentError('send_message requires another agent in the subagent tree', 'UNAUTHORIZED')
     this.assertAdmitting(sender)
-    const message = createAgentMessage(sender, agentAddress(this.pathOf(sender, root), sender.id), content)
     const activation = this.resident.get(sender.id)
-    return this.deliverToMember(root, targetId, [...message.content], {
-      signal: options.signal, delivery: 'steer', source: message.source,
+    return this.deliverToMember(root, targetId, message, {
+      signal: options.signal, delivery: 'steer',
       authorize: () => { this.assertAdmitting(sender) },
       onAccepted: () => {
         if (activation?.kind === 'local' && activation.ancestors.at(-1) === targetId) {
@@ -629,7 +630,7 @@ export class SubagentManager {
   async deliverPrompt(
     childId: SessionId,
     content: ContentBlock[],
-    options: Pick<ChildDeliveryOptions, 'delivery' | 'source' | 'signal'>,
+    options: Pick<ChildDeliveryOptions, 'delivery' | 'signal'> & { readonly source: MessageSource },
   ): Promise<MessageId> {
     options.signal.throwIfAborted()
     let root = this.resident.get(childId)?.root
@@ -637,7 +638,7 @@ export class SubagentManager {
       using source = await this.observeContinuation(childId, options.signal)
       ;({ root } = await this.resolveCreationAncestry(source, options.signal))
     }
-    return this.deliverToMember(root, childId, content, options)
+    return this.deliverToMember(root, childId, createUserMessage({ content, source: options.source }), options)
   }
 
   /** Admit local input synchronously before any teardown can begin. */
@@ -1164,18 +1165,17 @@ export class SubagentManager {
 
   /** Serialize target restoration and inbox admission; closure is awaited outside the lock. */
   private async deliverToMember(
-    root: Agent, childId: SessionId, content: ContentBlock[], options: ChildDeliveryOptions,
+    root: Agent, childId: SessionId, message: UserMessage, options: ChildDeliveryOptions,
   ): Promise<MessageId> {
     while (true) {
       this.assertAdmitting(root)
       options.signal.throwIfAborted()
       const result = await this.locks.run(childId, async () => {
         if (childId === root.id) {
-          if (contentHasImage(content)) await this.assertImageCapable(root, options.signal)
+          if (contentHasImage(message.content)) await this.assertImageCapable(root, options.signal)
           options.signal.throwIfAborted()
           options.authorize?.()
           this.assertAdmitting(root)
-          const message = createUserMessage({ content, source: options.source })
           this.sendWaking(root, message, options.delivery)
           options.onAccepted?.()
           return { messageId: message.id }
@@ -1183,15 +1183,15 @@ export class SubagentManager {
         const activation = this.resident.get(childId)
         if (activation === undefined) {
           const restored = await this.restoreTarget(root, childId, options.signal)
-          return { messageId: await this.submitMaterialized(restored, content, options, root) }
+          return { messageId: await this.submitMaterialized(restored, message, options, root) }
         }
         if (activation.root !== root) throw new SubagentError('target belongs to another subagent tree', 'UNAUTHORIZED')
         requireLocalActivation(activation)
-        if (activation.closing === undefined && contentHasImage(content)) {
+        if (activation.closing === undefined && contentHasImage(message.content)) {
           await this.assertImageCapable(requireLocalActivation(activation).handle.agent, options.signal)
         }
         if (activation.closing !== undefined) return { closing: activation.closing }
-        const messageId = this.submitAdmitted(activation, content, options, root)
+        const messageId = this.submitAdmitted(activation, message, options, root)
         return { messageId }
       })
       if ('messageId' in result) return result.messageId
@@ -1264,19 +1264,19 @@ export class SubagentManager {
   /** Admit a materialized child, commit its creation fact, and release it on failure. */
   private async submitMaterialized(
     activation: Activation,
-    content: ContentBlock[],
+    message: UserMessage,
     options: ChildDeliveryOptions,
     parent: Agent,
     commit?: () => void,
   ): Promise<MessageId> {
     try {
-      if (contentHasImage(content)) {
+      if (contentHasImage(message.content)) {
         await this.assertImageCapable(requireLocalActivation(activation).handle.agent, options.signal)
         if (activation.closing !== undefined) {
           throw new SubagentError(`subagent "${activation.childId}" is closing`, 'ACTIVATION_CLOSING')
         }
       }
-      const messageId = this.submitAdmitted(activation, content, options, parent)
+      const messageId = this.submitAdmitted(activation, message, options, parent)
       commit?.()
       this.accept(activation)
       return messageId
@@ -1292,14 +1292,13 @@ export class SubagentManager {
     }
   }
 
-  /** Build and submit one message across the final synchronous admission cutoff. */
+  /** Submit one identified message across the final synchronous admission cutoff. */
   private submitAdmitted(
     activation: Activation,
-    content: ContentBlock[],
+    message: UserMessage,
     options: ChildDeliveryOptions,
     parent: Agent,
   ): MessageId {
-    const message = createUserMessage({ content, source: options.source })
     options.signal.throwIfAborted()
     options.authorize?.()
     this.assertAdmitting(parent)

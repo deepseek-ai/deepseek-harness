@@ -33,6 +33,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-attachment'
+import type {} from '@deepseek-ai/dsh-session-control'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
@@ -122,7 +123,8 @@ export {
   SubagentDepthError,
 } from './child-agent.ts'
 export type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
-export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
+export type { AgentMessageSource } from '@deepseek-ai/dsh-session-control'
+export type { SubagentSettledMessageSource } from './continuation-messages.ts'
 export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
@@ -224,6 +226,14 @@ export class SubagentRuntime extends TypertRemoteService {
         emitLifecycle: this.emitLifecycle,
       }, () => this.config.maxActiveSubagents.get())
       this.manager = manager
+      childCtx.inject(['sessionControl'], (deliveryCtx) => {
+        deliveryCtx.sessionControl.registerTreeDelivery({
+          senderName: caller => manager.namesOf(caller).self,
+          deliver: async ({ id, message }, { caller, signal }) => ({
+            messageId: await manager.sendMessage(caller, id, message, { signal }),
+          }),
+        })
+      })
       childCtx.effect(() => () => {
         /* v8 ignore else -- one injected binding owns the slot until its fiber disposes. */
         if (this.manager === manager) this.manager = undefined
@@ -371,7 +381,13 @@ export class SubagentRuntime extends TypertRemoteService {
     content: ContentBlock[],
     options: SubagentSendMessageOptions,
   ): Promise<MessageId> {
-    return this.requireManager().sendMessage(sender, targetId, content, options)
+    options.signal.throwIfAborted()
+    this.requireManager().rootOf(sender)
+    const control = this.ctx.get('sessionControl')
+    if (control === undefined) {
+      throw new SubagentError('subagent messaging requires session control', 'CONTINUATION_UNAVAILABLE')
+    }
+    return (await control.sendAgentContent({ id: targetId, content }, { caller: sender, signal: options.signal })).messageId
   }
 
   /**

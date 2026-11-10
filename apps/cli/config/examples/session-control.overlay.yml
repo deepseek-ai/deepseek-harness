@@ -1,0 +1,3 @@
+# Enables messages to independent Sessions across Workspaces and directories.
+- id: tool-session-control
+  disabled: false

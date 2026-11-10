@@ -2883,6 +2883,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sessionControl',
+    summary: 'Shared acceptance service; providers retain their own restoration and closing rules.',
+    description: 'Shared acceptance service; providers retain their own restoration and closing rules.',
+    methods: [
+      {
+        signature: 'register(provider: SessionControlProvider): () => Promise<void>',
+        description: 'Register the independent-Session provider. Unload cancels and drains pending calls.',
+        parameters: [{ name: 'provider', description: 'local or alternative implementation of independent-Session delivery.' }],
+        returns: 'the effect disposer; a replacement may register after it completes.',
+      },
+      {
+        signature: 'registerTreeDelivery(provider: SessionTreeDelivery): () => Promise<void>',
+        description: 'Register the existing subagent manager\'s private delivery capability.',
+        parameters: [{ name: 'provider', description: 'tree naming, authority, restoration, and acceptance owned by that manager.' }],
+        returns: 'the effect disposer, which cancels and drains calls before releasing the capability.',
+      },
+      {
+        signature: 'async sendMessage(request: SessionMessageRequest, runtime: SessionControlContext): Promise<SessionMessageReceipt>',
+        description: 'Send text to an independent Session, returning once its inbox accepts the message. Running targets process it at the next input opportunity; idle targets start a turn.',
+        parameters: [{ name: 'request', description: 'target Session id and nonblank text.' }, { name: 'runtime', description: 'real caller and cancellation before acceptance.' }],
+        returns: 'the accepted message id; no reply is awaited.',
+      },
+      {
+        signature: 'async sendAgentContent(request: SessionAgentContentRequest, runtime: SessionControlContext): Promise<SessionMessageReceipt>',
+        description: 'Deliver existing subagent content under the manager\'s tree authority.',
+        parameters: [{ name: 'request', description: 'target and existing content-block representation.' }, { name: 'runtime', description: 'exact sending Agent and pre-acceptance cancellation.' }],
+        returns: 'the accepted message identity, preserving subagent lifecycle bookkeeping.',
+      },
+    ],
+  },
+  {
     key: 'sessionController',
     summary: 'Host service backing the generated `ctx.remote.session` namespace.',
     description: 'Host service backing the generated `ctx.remote.session` namespace.',
@@ -3044,6 +3075,39 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Stream a complete live-control baseline followed by replacement frames.',
         parameters: [{ name: 'signal', description: 'cancellation owned by the Remote stream carrier.' }],
         returns: 'one complete baseline followed by live replacement frames.',
+      },
+    ],
+  },
+  {
+    key: 'sessionControlLocal',
+    summary: 'Local delivery owner and caller-owned ordinary Session activation.',
+    description: 'Local delivery owner and caller-owned ordinary Session activation.',
+    methods: [
+      {
+        signature: 'async compose(presetId: string | undefined): Promise<OrdinarySessionComposition>',
+        description: 'Resolve the preset and its unpublished setup without starting an Agent.',
+        parameters: [{ name: 'presetId', description: 'requested preset, or the deployment default when omitted.' }],
+        returns: 'resolved preset identity and scoped setup.',
+      },
+      {
+        signature: 'defaultOptions(): AgentOptions',
+        description: 'Supply live deployment defaults until a Session records its own model selection.',
+        parameters: [],
+        returns: 'accessors that read the current default route when the Agent needs it.',
+      },
+      {
+        signature: 'presetForObservation(observation: SessionObservation): string | undefined',
+        description: 'Read the current preset from an exact projected Session observation.',
+        parameters: [{ name: 'observation', description: 'retained observation carrying the registered projections.' }],
+        returns: 'the recorded preset, or undefined when none is recorded.',
+        throws: ['when the observation omits its projection snapshot.'],
+      },
+      {
+        signature: 'async resumeObserved(observation: SessionObservation, signal?: AbortSignal): Promise<AgentHandle>',
+        description: 'Restore an ordinary Session with its recorded preset and deployment defaults. The caller retains the observation until this resolves. Its calling Context owns the returned handle and disposes it on unload. Cancellation covers acquisition and setup, never later Agent work.',
+        parameters: [{ name: 'observation', description: 'exact retained Session observation used to select its preset.' }, { name: 'signal', description: 'cancellation before the Agent handle is returned.' }],
+        returns: 'the acquired Agent handle; callers must retain or dispose it.',
+        throws: ['SessionControlError when subagent routing owns the identity.'],
       },
     ],
   },
@@ -5567,7 +5631,7 @@ export const EVENT_API: readonly EventApiEntry[] = [
     mode: 'waterfall',
     signature: '\'tools/post-execute\'(this: Scoped<ToolsService>, exec: ToolExecution, result: Readonly<ToolExecutionResult>, next: () => Promise<PostToolDecision>): Promise<PostToolDecision>',
     summary: 'Accept, replace, enrich, or block a normalized dispatch result.',
-    description: 'Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent\'s calls.',
+    description: 'Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked, unless the started tool preserves successful acceptance receipts on cancellation. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent\'s calls.',
     parameters: [{ name: 'exec', description: 'the call that just ran (name, parsed arguments, caller agent).' }, { name: 'result', description: 'the dispatch outcome a listener may accept, replace, or block.' }],
   },
   {
@@ -7919,6 +7983,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type OptionalSessionSeq = SessionSeq | null;',
   },
   {
+    name: 'OrdinarySessionComposition',
+    declaration: 'export interface OrdinarySessionComposition {\n    readonly agentPreset?: string;\n    readonly setup: AgentSetup;\n}',
+  },
+  {
     name: 'OTelEventRecord',
     declaration: 'export interface OTelEventRecord {\n    eventName: string;\n    body: string;\n    timestamp: number;\n    severityNumber?: SeverityNumber;\n    attributes?: Record<string, OTelEventScalar | Record<string, OTelEventScalar>>;\n}',
   },
@@ -8779,6 +8847,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionAddress = {\n    readonly kind: \'session\';\n    readonly sessionId: SessionId;\n} | {\n    readonly kind: \'subagent\';\n    readonly parentSessionId: SessionId;\n    readonly childSessionId: SessionId;\n    readonly mode: \'one-shot\' | \'continuable\' | \'unknown\';\n};',
   },
   {
+    name: 'SessionAgentContentRequest',
+    declaration: 'export interface SessionAgentContentRequest {\n    readonly id: SessionId;\n    readonly content: ContentBlock[];\n}',
+  },
+  {
     name: 'SessionAssistantStreamAttempt',
     declaration: 'export interface SessionAssistantStreamAttempt {\n    readonly attemptId: LlmAttemptId;\n    readonly startedAfterSeq: SessionSeqCursor;\n    readonly turn: number;\n    readonly step: number;\n    readonly nextIndex: number;\n    readonly stream: readonly JsonValue[];\n}',
   },
@@ -8823,8 +8895,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionControlBaseline {\n    readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>;\n}',
   },
   {
+    name: 'SessionControlContext',
+    declaration: 'export interface SessionControlContext {\n    readonly caller: Agent;\n    readonly signal: AbortSignal;\n}',
+  },
+  {
     name: 'SessionControlFrame',
     declaration: 'export type SessionControlFrame = {\n    readonly type: \'baseline\';\n    readonly value: SessionControlBaseline;\n} | ({\n    readonly type: \'projection\';\n} & SessionProjectionUpdate);',
+  },
+  {
+    name: 'SessionControlProvider',
+    declaration: 'export interface SessionControlProvider {\n    deliver(request: SessionDeliveryRequest, runtime: SessionControlContext): Promise<SessionMessageReceipt>;\n}',
   },
   {
     name: 'SessionCreateRequest',
@@ -8833,6 +8913,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionCreateValue',
     declaration: 'export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
+  },
+  {
+    name: 'SessionDeliveryRequest',
+    declaration: 'export interface SessionDeliveryRequest {\n    readonly id: SessionId;\n    readonly message: UserMessage;\n}',
   },
   {
     name: 'SessionEndInput',
@@ -9057,6 +9141,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionMessageProjectionContext',
     declaration: 'export interface SessionMessageProjectionContext {\n    nodes: readonly SessionSeq[];\n    events: readonly SessionEvent[];\n    baseSeq: SessionLogOffset;\n    messages: ReadonlyMap<SessionSeq, Message>;\n}',
+  },
+  {
+    name: 'SessionMessageReceipt',
+    declaration: 'export interface SessionMessageReceipt {\n    readonly messageId: MessageId;\n}',
+  },
+  {
+    name: 'SessionMessageRequest',
+    declaration: 'export interface SessionMessageRequest {\n    readonly id: SessionId;\n    readonly message: string;\n}',
   },
   {
     name: 'SessionObservation',
@@ -9357,6 +9449,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionTitleUserMessage',
     declaration: 'export interface SessionTitleUserMessage {\n    readonly seq: SessionSeq;\n    readonly text: string;\n}',
+  },
+  {
+    name: 'SessionTreeDelivery',
+    declaration: 'export interface SessionTreeDelivery extends SessionControlProvider {\n    senderName(caller: Agent): string;\n}',
   },
   {
     name: 'SessionUpdateQueueRequest',
@@ -10120,7 +10216,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ToolDefinition',
-    declaration: 'export interface ToolDefinition extends ToolSchema {\n    readonly output: ToolOutputDefinition;\n    execute(args: unknown, exec: ToolRunContext): Promise<unknown>;\n    projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    finalizeContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    timeoutMs?: number;\n    isConcurrencySafe?(args: unknown): boolean;\n    presentCall?(args: unknown): ToolCallView | undefined;\n    presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined;\n}',
+    declaration: 'export interface ToolDefinition extends ToolSchema {\n    readonly output: ToolOutputDefinition;\n    execute(args: unknown, exec: ToolRunContext): Promise<unknown>;\n    projectContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    finalizeContent?(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): ContentBlock[] | undefined;\n    timeoutMs?: number;\n    readonly preserveSuccessOnCancellation?: boolean;\n    isConcurrencySafe?(args: unknown): boolean;\n    presentCall?(args: unknown): ToolCallView | undefined;\n    presentResult?(args: unknown, result: ToolResult): ToolResultView | undefined;\n}',
   },
   {
     name: 'ToolDispatchExecution',

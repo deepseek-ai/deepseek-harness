@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Control local de sesiones",
+    "description": "Restaura sesiones independientes y acepta mensajes en el entorno de ejecución actual."
+  }
+}

@@ -501,6 +501,8 @@ export interface DefineToolOptions<S extends ParameterSchemaSpec, O extends Valu
   readonly deferLoading?: true
   /** Optional positive cooperative timeout budget in milliseconds. */
   readonly timeoutMs?: number
+  /** Accepted effects retain successful receipts after cancellation; see {@link ToolDefinition.preserveSuccessOnCancellation}. */
+  readonly preserveSuccessOnCancellation?: boolean
   /**
    * Pure classifier for sibling overlap.
    * @param args - typed validated arguments.
@@ -595,6 +597,9 @@ export function defineTool<const S extends ParameterSchemaSpec, const O extends 
     },
     ...(options.deferLoading === true ? { deferLoading: options.deferLoading } : {}),
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+    ...(options.preserveSuccessOnCancellation === undefined ? {} : {
+      preserveSuccessOnCancellation: options.preserveSuccessOnCancellation,
+    }),
     async execute(args: unknown, exec: ToolRunContext): Promise<JsonValue> {
       const violations = validate(args)
       if (violations.length > 0) throw new ToolArgsError(violations)

@@ -5552,14 +5552,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.images\', () => ctx.slots.register(\n      { name: \'tool.call.images\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-tool/src/client/contract/slots.ts:41',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:40',
   },
   {
     key: 'tool.call.toolview',
     kind: 'keyed',
     scope: 'session',
-    summary: 'Keyed Tool view dispatched by wire name, including custom tools.',
-    doc: 'Keyed Tool view dispatched by wire name, including custom tools.\nRegister with `key: \'<tool name>\'`; a typo never renders.\nOccupied keys replace the view; unclaimed keys use the generic row. Owner\nphase data includes `name` and lazy `args`; preparing arguments may be incomplete.',
+    summary: 'All tools dispatch by wire name; register `key: \'<tool name>\'` (typos never render).',
+    doc: 'All tools dispatch by wire name; register `key: \'<tool name>\'` (typos never render).\nOccupied keys replace the view; unclaimed keys use the generic row.\nOwner data includes `name` and lazy `args`, possibly incomplete during preparation.',
     registerOptions: [
       {
         name: 'key',
@@ -5602,7 +5602,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useAccess: (action: RemoteEndpoint) => boolean',
       'useTrajectory: UseTrajectory',
     ],
-    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: apply_patch, ask_user_question, bash, cordis_define, cordis_inspect_list, cordis_inspect_query, cordis_inspect_self, cordis_run, cordis_stop, cordis_undefine, create_goal, edit, get_goal, glob, grep, interrupt_agent, job_kill, job_list, job_output, list_agents, list_subagent_models, lsp, office_convert, office_recalculate, office_render, present, propose_action, ralph, read, read_image, schedule_create, schedule_delete, schedule_edit, schedule_list, schedule_update, schedule_view, send_message, session_event_read, session_event_search, session_event_trace, session_search, session_trace, skill, spawn_teammate, subagent, subagent_fork, team_task_create, team_task_get, team_task_list, team_task_update, terminal_close, terminal_list, terminal_open, terminal_read, terminal_signal, todo_write, update_goal, wait_agent, web_fetch, web_search, workflow, write',
+    keyDomain: 'open: any string the owner dispatches (no compile-time key set), already taken: apply_patch, ask_user_question, bash, cordis_define, cordis_inspect_list, cordis_inspect_query, cordis_inspect_self, cordis_run, cordis_stop, cordis_undefine, create_goal, edit, get_goal, glob, grep, interrupt_agent, job_kill, job_list, job_output, list_agents, list_subagent_models, lsp, office_convert, office_recalculate, office_render, present, propose_action, ralph, read, read_image, schedule_create, schedule_delete, schedule_edit, schedule_list, schedule_update, schedule_view, send_message, session_event_read, session_event_search, session_event_trace, session_search, session_send_message, session_trace, skill, spawn_teammate, subagent, subagent_fork, team_task_create, team_task_get, team_task_list, team_task_update, terminal_close, terminal_list, terminal_open, terminal_read, terminal_signal, todo_write, update_goal, wait_agent, web_fetch, web_search, workflow, write',
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'conversation.chat.node\' (client-ui-tool), so it exists while that entry is mounted',
@@ -5635,6 +5635,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'client-ui-tool DetailsRow key \'subagent_fork\'',
       'client-ui-tool DetailsRow key \'list_agents\'',
       'client-ui-tool DetailsRow key \'send_message\'',
+      'client-ui-tool DetailsRow key \'session_send_message\'',
       'client-ui-tool DetailsRow key \'interrupt_agent\'',
       'client-ui-tool DetailsRow key \'job_list\'',
       'client-ui-tool DetailsRow key \'job_output\'',
@@ -5672,7 +5673,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'tool.call.toolview\', () => ctx.slots.register(\n      { name: \'tool.call.toolview\', key: \'<one key the owner dispatches>\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-tool/src/client/contract/slots.ts:23',
+    source: 'packages/client/ui-tool/src/client/contract/slots.ts:22',
   },
   {
     key: 'tool.view.cordis',

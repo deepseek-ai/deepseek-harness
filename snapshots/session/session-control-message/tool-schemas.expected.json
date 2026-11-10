@@ -1,0 +1,26 @@
+{
+  "initial": [
+    {
+      "name": "session_send_message",
+      "description": "Send a message to an independent session. A working session receives it at its next input boundary; an idle session starts a turn, and an inactive session resumes first. Returns an acceptance receipt without waiting for a reply.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "description": "The target session ID."
+          },
+          "message": {
+            "type": "string",
+            "description": "Nonblank message to deliver."
+          }
+        },
+        "required": [
+          "session_id",
+          "message"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

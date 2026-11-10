@@ -179,6 +179,14 @@ const homeAndGuide = pairedPages([
     order: 2,
   },
   {
+    source: 'docs/user/session-control.md',
+    route: 'guide/session-control.md',
+    label: { root: '跨会话消息', en: 'Cross-Session messages' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '自动化', en: 'Automation' },
+    order: 3,
+  },
+  {
     source: 'docs/user/guide/plugin-market.md',
     route: 'guide/plugin-market.md',
     label: { root: '插件索引', en: 'Plugin indexes' },
@@ -328,6 +336,7 @@ const subsystemGroups = [
   ['会话与持久化', 'Sessions and persistence', [
     ['session.md', '会话', 'Sessions'],
     ['session-query.md', '会话查询', 'Session query'],
+    ['session-control.md', '会话控制', 'Session control'],
     ['session-reference.md', '会话引用', 'Session references'],
     ['session-title.md', '会话标题', 'Session titles'],
     ['session-projection.md', '会话投影', 'Session projections'],

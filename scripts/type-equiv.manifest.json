@@ -1512,9 +1512,9 @@
       "source": "packages/subagent/subagent/src/types.ts"
     },
     {
-      "doc": "docs/subsystems/subagent.md",
+      "doc": "docs/subsystems/session-control.md",
       "symbol": "AgentMessageSource",
-      "source": "packages/subagent/subagent/src/continuation-messages.ts"
+      "source": "packages/session/session-control/src/types.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
@@ -2946,6 +2946,46 @@
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeViewedRequest",
       "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlContext",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionMessageRequest",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionAgentContentRequest",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionMessageReceipt",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionDeliveryRequest",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionControlProvider",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "SessionTreeDelivery",
+      "source": "packages/session/session-control/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-control.md",
+      "symbol": "OrdinarySessionComposition",
+      "source": "packages/session/session-control-local/src/index.ts"
     }
   ]
 }

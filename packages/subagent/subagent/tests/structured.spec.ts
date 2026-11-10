@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 import { executeToolFixture, executeModelToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, it } from 'vitest'
@@ -63,6 +64,7 @@ async function setup(script: Script, options: SetupOptions = {}) {
   await mountLocalActivations(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   const disposeProvider = ctx.subagents.registerProvider({
     name: 'spawn',

@@ -1,0 +1,40 @@
+{
+  "patches": [
+    {
+      "at": 0,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "session-message-1",
+              "name": "session_send_message",
+              "arguments": "{\"session_id\":\"{{fromRequest:Recipient Session: ([a-z-]+)}}\",\"message\":\"FIRST\"}"
+            }
+          },
+          {
+            "type": "usage",
+            "usage": {
+              "inputTokens": 10,
+              "outputTokens": 5
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

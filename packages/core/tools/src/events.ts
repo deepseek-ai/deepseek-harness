@@ -32,7 +32,8 @@ declare module '@deepseek-ai/cordis' {
      * accepts it unchanged; thrown tools still reach this waterfall as errors. Async
      * listeners must observe `exec.signal`; after they settle, caller
      * cancellation replaces only a successful accepted outcome with the code
-     * selected by whether the tool body was invoked.
+     * selected by whether the tool body was invoked, unless the started tool
+     * preserves successful acceptance receipts on cancellation.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.
      * @param exec - the call that just ran (name, parsed arguments, caller agent).
      * @param result - the dispatch outcome a listener may accept, replace, or block.

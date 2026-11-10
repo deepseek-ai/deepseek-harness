@@ -385,6 +385,8 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 |---|---|---|
 | `@deepseek-ai/dsh-message-quotes` | no | Selected-text quotation and Markdown blockquote presentation |
 | `@deepseek-ai/dsh-session-checkpoint-policy` | no | Semantic session durability checkpoints before model requests and tool side effects |
+| `@deepseek-ai/dsh-session-control` | no | Shared Agent-attributed Session message acceptance |
+| `@deepseek-ai/dsh-session-control-local` | no | Local independent Session activation and message delivery |
 | `@deepseek-ai/dsh-session-log-deepseek` | yes | Incremental lossless session-log request extension for the official DeepSeek LLM API |
 | `@deepseek-ai/dsh-session-persistence-jsonl` | yes | JSONL durable session persistence backend for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-projection` | no | Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state |
@@ -394,6 +396,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-session-title` | yes | Log-backed session title service and provider registry for the DeepSeek Harness |
 | `@deepseek-ai/dsh-session-title-first-prompt-llm` | yes | First-message LLM provider plugin for DeepSeek Harness session titles |
 | `@deepseek-ai/dsh-session-turn-outline` | no | Whole-log turn outline projection (turnOutline) for the DeepSeek Harness |
+| `@deepseek-ai/dsh-tool-session-control` | no | Send model-authored messages to Sessions with acceptance receipts |
 | `@deepseek-ai/dsh-tool-working-directory` | no | Read and change the active Session working directory |
 | `@deepseek-ai/dsh-working-directory` | yes | Session working directories with durable changes and model context |
 

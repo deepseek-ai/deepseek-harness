@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** Parent result delivery independent of a local child's messaging tool. */
 
@@ -18,6 +19,7 @@ it.each(['absent', 'unused'] as const)('returns the closing answer when send_mes
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   if (availability !== 'absent') await ctx.plugin(Control)
@@ -47,6 +49,7 @@ it('delivers structured output to the parent when the child has send_message', a
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   await ctx.plugin(Control)

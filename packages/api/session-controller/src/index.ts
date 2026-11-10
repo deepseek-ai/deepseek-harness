@@ -3,6 +3,7 @@
 import { hostname } from 'node:os'
 import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-fs'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -144,6 +145,7 @@ export class SessionController extends TypertRemoteService {
     'sessions',
     'sessionProjections',
     'sessionQuery',
+    'sessionControlLocal',
     'typert',
     'typertGateway',
     'workspaceRegistry',

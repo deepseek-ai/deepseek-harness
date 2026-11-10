@@ -16,7 +16,7 @@ import {
   ApiSessionAgentController,
   ApiSessionCwdConflict,
 } from '../src/agent.ts'
-import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
+import { installSessionReadTestServices, mountSessionControlTestServices, testSessionPersistence } from './test-remote.ts'
 
 const roots: Context[] = []
 
@@ -41,6 +41,7 @@ async function harness(): Promise<{ ctx: Context; agents: ApiSessionAgentControl
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
+  await mountSessionControlTestServices(ctx)
   const agents = new ApiSessionAgentController(ctx)
   agents.initialize()
   return { ctx, agents }

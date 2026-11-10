@@ -16,7 +16,7 @@ import SessionStore, { Session, SessionId, SessionLogOffset, TurnEndReason } fro
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import AgentRegistry, { type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { AgentInputClosedError, type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
@@ -310,7 +310,7 @@ describe('Agent.cancel()', () => {
     expect(agent.inbox.nextTurn).toHaveLength(0)
   })
 
-  it('does not latch a wake landing after disposal begins', async () => {
+  it('rejects input while disposal drains the active turn', async () => {
     const adapter = new MockAdapter(['hang-slow', textResponse('late reply')])
     const ctx = await harness(adapter)
     const handle = await ctx.agents.create({
@@ -324,14 +324,16 @@ describe('Agent.cancel()', () => {
     send(agent, 'active')
     await streaming.promise
     const disposal = handle.dispose()
-    send(agent, 'late wake')
+    const events = agent.session.snapshotEvents()
+    expect(() => { send(agent, 'late wake') }).toThrow(AgentInputClosedError)
+    expect(agent.session.snapshotEvents()).toEqual(events)
     await disposal
 
     expect(adapter.requests).toHaveLength(1)
     expect(userTexts(agent)).toEqual(['active'])
   })
 
-  it.each(['before scope cleanup', 'during scope cleanup'])('does not start an idle Agent after disposal begins %s', async (window) => {
+  it.each(['before scope cleanup', 'during scope cleanup'])('rejects idle Agent input %s after disposal begins', async (window) => {
     const adapter = new MockAdapter([textResponse('late reply')])
     const ctx = await harness(adapter)
     const cleanupStarted = Promise.withResolvers<undefined>()
@@ -349,7 +351,14 @@ describe('Agent.cancel()', () => {
       })
       disposal = handle.dispose()
       if (window === 'during scope cleanup') await cleanupStarted.promise
-      send(agent, 'late wake')
+      const events = agent.session.snapshotEvents()
+      for (const method of ['followup', 'steer', 'inject'] as const) {
+        const message = createUserMessage({ content: [{ type: 'text', text: 'late input' }], source: { kind: 'user' } })
+        expect(() => { agent[method](message) }).toThrow(expect.objectContaining({
+          name: 'AgentInputClosedError', code: 'AGENT_INPUT_CLOSED',
+        }))
+      }
+      expect(agent.session.snapshotEvents()).toEqual(events)
       await agent.whenIdle()
 
       expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(0)

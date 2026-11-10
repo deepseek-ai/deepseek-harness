@@ -33,6 +33,8 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
+import * as ToolSessionControl from '@deepseek-ai/dsh-tool-session-control'
+import SessionControlService from '@deepseek-ai/dsh-session-control'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -207,6 +209,18 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-tool-session-control',
+    dir: 'tool-session-control',
+    source: 'packages/session/tool-session-control/src/index.ts',
+    requires: ['ctx.tools', 'ctx.sessionControl', 'a calling Agent'],
+    writes: ['tool/call', 'agent/inbox/spliced in the recipient', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(AgentRegistry)
+      await ctx.plugin(SessionControlService)
+      await ctx.plugin(ToolSessionControl)
+    },
+  },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',
     dir: 'plugin-manager',

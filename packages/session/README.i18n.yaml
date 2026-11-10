@@ -3,26 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/README.md
 /:
-  en: 4301d9cb9fc0a0e9
-  zh: 3127f24ac355656b
+  en: b18e64d3ef7d84be
+  zh: cd0bddddcce1e78e
 /session-durable-session-data-plane:
   en: 16a515a77b72eab0
   zh: 005647121230f6ec
 /session-durable-session-data-plane/summary:
-  en: 4cced6bd65f9b42c
-  zh: 1e5c5fd08f3e2655
+  en: 82604902a4ec8874
+  zh: 92d89675dea6855a
 /session-durable-session-data-plane/table-of-contents:
   en: 1eb35b015a6c423f
   zh: a8a3dceee2c9e943
 /session-durable-session-data-plane/packages:
-  en: 7be50f4cafe40dab
-  zh: a6f06f187e686c05
+  en: 18a7eff4bc529dc5
+  zh: 1a4c405744b52c1d
 /session-durable-session-data-plane/packages/persistence:
   en: cbe033c3f37b8aa7
   zh: 69aa84f0712d0111
 /session-durable-session-data-plane/packages/projection:
   en: 706441e1ab2fa853
   zh: a7fa44caab3ddada
+/session-durable-session-data-plane/packages/controls:
+  en: 97c2bc65bac501e3
+  zh: 0415108c74795b2c
 /session-durable-session-data-plane/packages/titles:
   en: 81245e5ca5f8b773
   zh: 0abee7434238c342
@@ -30,8 +33,8 @@
   en: e0edfc0566463495
   zh: 4af9904d7ba97d97
 /session-durable-session-data-plane/related-documentation:
-  en: 9380a0278b1453e8
-  zh: 6cf3e8d1e5e9f27a
+  en: 13375db5dbc84a91
+  zh: 2d737dd9b365996f
 /session-durable-session-data-plane/dev-note:
   en: b75c8458928b72b9
   zh: 003ba4e17b4b5269

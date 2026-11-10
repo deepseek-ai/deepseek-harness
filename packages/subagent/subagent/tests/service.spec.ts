@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 import { bindSubagentActivation } from './manager-internals.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { describe, expect, expectTypeOf, it, onTestFinished, vi } from 'vitest'
@@ -79,6 +80,7 @@ async function service(withAgents = true): Promise<{ ctx: Context; subagents: Su
   const ctx = new Context()
   if (withAgents) {
     await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(SessionControl)
     await ctx.plugin(AgentLoop, { agents: [] })
   } else {
     await ctx.plugin(SessionProjectionRegistry)
@@ -195,6 +197,41 @@ describe('SubagentRuntime', () => {
     await fiber.dispose()
 
     expect(ctx.sessionProjections.snapshot(parent).values.subagentCatalog).toBeUndefined()
+  })
+
+  it('withdraws and rebinds tree delivery with its manager', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(SessionControl)
+    await mountWorkingDirectoryFixture(ctx)
+    const fiber = await ctx.plugin(SubagentRuntime)
+    const { agent } = await ctx.agents.create({ sessionId: SessionId('delivery-root') })
+    const send = () => ctx.sessionControl.sendAgentContent(
+      { id: agent.id, content: [{ type: 'text', text: 'self' }] },
+      { caller: agent, signal: new AbortController().signal },
+    )
+    await expect(send()).rejects.toMatchObject({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    await fiber.dispose()
+    await expect(async () => send()).rejects.toMatchObject({
+      name: 'SessionControlError', code: 'SESSION_CONTROL_UNAVAILABLE',
+    })
+    await ctx.plugin(SubagentRuntime)
+    await expect(send()).rejects.toMatchObject({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+  })
+
+  it('reports unavailable messaging when shared Session control is absent', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await mountWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SubagentRuntime)
+    const { agent } = await ctx.agents.create({ sessionId: SessionId('delivery-root') })
+    await expect(ctx.subagents.sendMessage(agent, SessionId('target'), [{ type: 'text', text: 'message' }], {
+      signal: new AbortController().signal,
+    })).rejects.toMatchObject({ name: 'SubagentError', code: 'CONTINUATION_UNAVAILABLE' })
   })
 
   it('registers, looks up, starts, and removes providers', async () => {

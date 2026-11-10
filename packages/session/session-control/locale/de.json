@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Sitzungssteuerung",
+    "description": "Nimmt von Agenten verfasste Sitzungsnachrichten mit gemeinsamer Zustellkoordination an."
+  }
+}

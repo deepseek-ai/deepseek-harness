@@ -1,0 +1,12 @@
+version: 1
+scenario: session-control-message
+profile: headless
+composition: session-control-message
+recording: authored
+header:
+  class: session-control-message
+  pin: true
+replay:
+  override: true
+workspace:
+  final: true

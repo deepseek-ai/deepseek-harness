@@ -69,6 +69,14 @@ export interface ToolDefinition extends ToolSchema {
    */
   timeoutMs?: number
   /**
+   * Preserve a successful result when caller cancellation arrives after the
+   * body starts. Use only when successful return confirms an accepted effect
+   * that cancellation cannot retract. Captured before policy begins; omitted
+   * or false keeps the ordinary cancellation result. Pre-dispatch cancellation
+   * and failed policy or execution outcomes remain failures. Never model-visible.
+   */
+  readonly preserveSuccessOnCancellation?: boolean
+  /**
    * Pure synchronous classifier for overlap with sibling tool calls. Only
    * `true` opts in; omission, exceptions, non-`true` returns, and invalid
    * `defineTool` arguments are exclusive. This metadata is never model-visible.

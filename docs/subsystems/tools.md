@@ -8,7 +8,7 @@ Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index
 
 ## `ToolDefinition` — a registered tool
 
-A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. The registry's `schemas()` builds the model-facing `ToolSchema[]` by an explicit allowlist — `output`/`execute`/`projectContent`/`finalizeContent`/`timeoutMs`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
+A `ToolSchema` (the model-facing fields) plus a mandatory canonical output declaration, the `execute` function, host-only scheduler metadata, an optional final-content callback, and optional UI presenters. The registry holds these; the loop dispatches calls through them. The registry's `schemas()` builds the model-facing `ToolSchema[]` by an explicit allowlist — `output`/`execute`/`projectContent`/`finalizeContent`/`timeoutMs`/`preserveSuccessOnCancellation`/`isConcurrencySafe`/`presentCall`/`presentResult` must never leak into a model request.
 
 ```ts type-equiv
 /** Tool-owned canonical output contract used after the body returns a JSON value. */
@@ -68,6 +68,14 @@ interface ToolDefinition extends ToolSchema {
    * cooperative implementation that can reach quiescence when the signal aborts.
    */
   timeoutMs?: number
+  /**
+   * Preserve a successful result when caller cancellation arrives after the
+   * body starts. Use only when successful return confirms an accepted effect
+   * that cancellation cannot retract. Captured before policy begins; omitted
+   * or false keeps the ordinary cancellation result. Pre-dispatch cancellation
+   * and failed policy or execution outcomes remain failures. Never model-visible.
+   */
+  readonly preserveSuccessOnCancellation?: boolean
   /**
    * Pure synchronous classifier for overlap with sibling tool calls. Only
    * `true` opts in; omission, exceptions, non-`true` returns, and invalid
@@ -803,7 +811,7 @@ Source: [`packages/core/tools/src/events.ts`](../../packages/core/tools/src/even
 
 #### `tools/post-execute` — waterfall
 
-Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.
+Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts it unchanged; thrown tools still reach this waterfall as errors. Async listeners must observe `exec.signal`; after they settle, caller cancellation replaces only a successful accepted outcome with the code selected by whether the tool body was invoked, unless the started tool preserves successful acceptance receipts on cancellation. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.
 
 ```ts cordis-catalog
 /**
@@ -811,7 +819,8 @@ Accept, replace, enrich, or block a normalized dispatch result. `next()` accepts
  * accepts it unchanged; thrown tools still reach this waterfall as errors. Async
  * listeners must observe `exec.signal`; after they settle, caller
  * cancellation replaces only a successful accepted outcome with the code
- * selected by whether the tool body was invoked.
+ * selected by whether the tool body was invoked, unless the started tool
+ * preserves successful acceptance receipts on cancellation.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent's calls.
  * @param exec - the call that just ran (name, parsed arguments, caller agent).
  * @param result - the dispatch outcome a listener may accept, replace, or block.

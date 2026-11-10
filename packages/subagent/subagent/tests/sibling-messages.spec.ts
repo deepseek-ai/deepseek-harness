@@ -1,3 +1,4 @@
+import SessionControl from '@deepseek-ai/dsh-session-control'
 import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -69,6 +70,7 @@ async function setup(replies: Record<string, Reply[]>, maxActiveSubagents = 16) 
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
+  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime, { maxActiveSubagents })
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   const adapter = new RoutedAdapter(new Map(Object.entries(replies)))
