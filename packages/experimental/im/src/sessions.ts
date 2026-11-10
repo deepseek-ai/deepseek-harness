@@ -125,6 +125,8 @@ export class ImSessionHost implements ImSessions {
   /** Current generation's session id → key. */
   private readonly ids = new Map<SessionId, string>()
   private readonly deliveries = new Map<string, StoredDelivery>()
+  /** Session ids a reset retired: nothing recorded for one of them can be admitted any more. */
+  private readonly retired = new Set<SessionId>()
   private readonly triggers = new Map<SessionId, ImMessage>()
   /** Per-session admission order. */
   private readonly chains = new Map<SessionId, Promise<unknown>>()
@@ -251,34 +253,46 @@ export class ImSessionHost implements ImSessions {
     await this.write(() => this.domainOf().table('deliveries').put(id, stored))
     this.deliveries.set(id, stored)
     await this.admit(record.sessionId, id, true)
+    // A reset that ran while this intent was being recorded drops the undelivered intents of the generation it
+    // replaced, this one included: refuse, so the caller re-delivers into the generation that replaced it.
+    if (!this.deliveries.has(id)) {
+      throw new ImError('unavailable', `IM delivery ${delivery.id} was discarded by a session reset.`)
+    }
   }
 
   async reset(key: string, reason: string): Promise<void> {
-    const old = this.records.get(key)
-    if (!old) return
-    await this.serial(old.sessionId, async () => {
-      this.deps.agents.live(old.sessionId)?.cancel({ kind: 'user' })
-      await this.deps.agents.dispose(old.sessionId)
+    const known = this.records.get(key)
+    if (!known) return
+    // The whole lifecycle of the generation being replaced — cancel, dispose, and the record advance that publishes
+    // the next one — runs as ONE serial operation for that session id, because `admit()` queues on the same chain.
+    // Releasing the chain between the dispose and the write let a queued admission read the disposed generation and
+    // write its stale record back, which rolled the counter back and made the cleared session current again.
+    const { old, record } = await this.serial(known.sessionId, async () => {
+      const current = this.records.get(key) ?? known
+      this.deps.agents.live(current.sessionId)?.cancel({ kind: 'user' })
+      await this.deps.agents.dispose(current.sessionId)
+      const advanced = await this.write(async () => {
+        // Re-read inside the write: disposing the agent awaited, and an ensure()/bind() may have committed a newer
+        // record (another chat's binding) meanwhile. Advancing the generation from the stale copy would drop it.
+        const latest = this.records.get(key) ?? current
+        for (const [id, stored] of this.deliveries) {
+          if (stored.session !== latest.sessionId || stored.admitted) continue
+          await this.domainOf().table('deliveries').delete(id)
+          this.deliveries.delete(id)
+        }
+        this.ids.delete(latest.sessionId)
+        this.retired.add(latest.sessionId)
+        this.triggers.delete(latest.sessionId)
+        const generation = latest.generation + 1
+        const sessionId = sessionIdOf(key, generation)
+        const now = Date.now()
+        const next: ImSessionRecord = { ...latest, sessionId, generation, createdAt: now, lastActiveAt: now }
+        await this.save(next)
+        return next
+      })
+      return { old: current, record: advanced }
     })
-    const record = await this.write(async () => {
-      // Re-read inside the write: disposing the agent awaited, and an ensure()/bind() may have committed a newer
-      // record (another chat's binding) meanwhile. Advancing the generation from the stale copy would drop it.
-      const current = this.records.get(key) ?? old
-      for (const [id, stored] of this.deliveries) {
-        if (stored.session !== current.sessionId || stored.admitted) continue
-        await this.domainOf().table('deliveries').delete(id)
-        this.deliveries.delete(id)
-      }
-      this.ids.delete(current.sessionId)
-      this.triggers.delete(current.sessionId)
-      const generation = current.generation + 1
-      const sessionId = sessionIdOf(key, generation)
-      const now = Date.now()
-      const next: ImSessionRecord = { ...current, sessionId, generation, createdAt: now, lastActiveAt: now }
-      await this.save(next)
-      return next
-    })
-    // Announced after the write settled: a listener may call back into this host.
+    // Announced after the serial operation settled: a listener may call back into this host.
     this.ctx.emit('im/session/reset', old, reason)
     this.ctx.emit('im/session/created', record)
   }
@@ -350,7 +364,13 @@ export class ImSessionHost implements ImSessions {
       const stored = this.deliveries.get(id)
       if (stored === undefined || stored.admitted) return
       const record = this.hosted(sessionId)
-      if (!record) throw new ImError('unavailable', `IM session ${sessionId} of delivery ${id} is no longer hosted.`)
+      if (!record) {
+        // A reset replaced this generation, so nothing can ever admit the intent: forget it, so recovery does not warn
+        // about it forever, and refuse, so the caller re-delivers into the generation that replaced it. A record that is
+        // merely unknown (a store this process has not loaded) keeps its intents pending.
+        if (this.retired.has(sessionId)) await this.discard(id)
+        throw new ImError('unavailable', `IM session ${sessionId} of delivery ${id} is no longer hosted.`)
+      }
       const { delivery } = stored
       const agent = await this.deps.agents.open(record)
       const messageId = deliveryMessageId(sessionId, delivery.id)
@@ -373,11 +393,17 @@ export class ImSessionHost implements ImSessions {
       })
       const admitted: StoredDelivery = { ...stored, admitted: true }
       await this.write(async () => {
+        // Re-read inside the write: admission awaited the agent, and a concurrent ensure()/bind() may have committed a
+        // newer record (another chat's binding) meanwhile. Writing the record read before that await would drop it,
+        // and a record that a reset replaced must never be written back — that is what rolled a generation back.
+        const current = this.hosted(sessionId)
+        if (!current) {
+          await this.domainOf().table('deliveries').delete(id)
+          this.deliveries.delete(id)
+          throw new ImError('unavailable', `IM session ${sessionId} was reset while delivery ${id} was admitted.`)
+        }
         await this.domainOf().table('deliveries').put(id, admitted)
         this.deliveries.set(id, admitted)
-        // Re-read inside the write: admission awaited the agent, and a concurrent ensure()/bind() may have committed a
-        // newer record (another chat's binding) meanwhile. Writing the record read before that await would drop it.
-        const current = this.hosted(sessionId) ?? record
         await this.save({ ...current, lastActiveAt: Date.now() })
       })
       if (record.ephemeral && delivery.mode !== 'inject') {
@@ -427,6 +453,14 @@ export class ImSessionHost implements ImSessions {
   private async save(record: ImSessionRecord): Promise<void> {
     await this.domainOf().table('sessions').put(record.key, record)
     this.index(record)
+  }
+
+  /** Forget one delivery intent whose generation is gone, so no recovery pass retries it. */
+  private async discard(id: string): Promise<void> {
+    await this.write(async () => {
+      await this.domainOf().table('deliveries').delete(id)
+      this.deliveries.delete(id)
+    })
   }
 
   private write<T>(operation: () => Promise<T>): Promise<T> {

@@ -373,6 +373,32 @@ describe('reset', () => {
     await harness.host.reset(record.key, 'restart')
     expect(harness.host.pendingDeliveries()).toBe(0)
   })
+
+  it('never lets a delivery that races the reset write the replaced generation back', async () => {
+    const harness = await booted()
+    const record = await harness.host.ensure(spec())
+    // Hold the dispose: the reset owns the session's serial chain while a delivery arrives from another chat.
+    const dispose = harness.agents.dispose.bind(harness.agents)
+    let release = (): void => {}
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const slow = vi.spyOn(harness.agents, 'dispose').mockImplementation(async (sessionId) => {
+      await held
+      await dispose(sessionId)
+    })
+
+    const resetting = harness.host.reset(record.key, '/clear')
+    await vi.waitFor(() => { expect(slow).toHaveBeenCalled() })
+    const racing = harness.host.deliver(record.key, delivery('followup', 'from the other chat'))
+    release()
+
+    // The intent belongs to a generation that is gone: it is refused (the caller re-delivers) and forgotten.
+    await expect(racing).rejects.toThrow(/discarded by a session reset|no longer hosted/)
+    await resetting
+    expect(harness.host.get(record.key)!.generation).toBe(1)
+    expect(harness.host.get(record.sessionId)).toBeUndefined()
+    expect(harness.host.pendingDeliveries()).toBe(0)
+    slow.mockRestore()
+  })
 })
 
 describe('ephemeral sessions', () => {
