@@ -21,7 +21,10 @@ export interface PanelRowProps extends Omit<HTMLAttributes<HTMLElement>, 'childr
   readonly menu?: ReactNode
   /** Make the whole row one button with this action; the trailing area and the menu stay separate controls above it. */
   readonly onActivate?: (() => void) | undefined
-  /** Accessible name of the `onActivate` button when its visible content does not describe the action. */
+  /**
+   * Accessible name of the `onActivate` button when its visible content does not describe the action; it starts with
+   * the visible text, so speech input that names what the row shows reaches the button.
+   */
   readonly actionLabel?: string | undefined
 }
 

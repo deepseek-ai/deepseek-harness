@@ -2,7 +2,7 @@
   - region "环境":
     - heading "环境" [level=2]
     - text: workspace {{cwd}} feat 项目目录
-    - button "查看本会话的变更：4 个文件，新增 4 行，删除 1 行": 本地变更 · 4 个文件
+    - button "本地变更 · 4 个文件，新增 4 行，删除 1 行": 本地变更 · 4 个文件
     - text: +4 −1
     - button "本地变更操作"
   - region "变更请求":

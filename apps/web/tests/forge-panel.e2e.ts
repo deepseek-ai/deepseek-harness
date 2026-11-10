@@ -666,9 +666,9 @@ it.skipIf(MODE === 'record')('reads local Git with full access when the sandbox 
   await confirmation.getByRole('button', { name: '启用完全权限' }).click()
   await showSessionPanel(page)
   const local = page.locator('[data-forge-local]')
-  await local.getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true }).waitFor({ timeout: 20_000 })
+  await local.getByRole('button', { name: '本地变更 · 1 个文件，新增 1 行，删除 0 行', exact: true }).waitFor({ timeout: 20_000 })
   await compareOrRefreshGolden(join(EXPECTED, 'full-access.expected.md'), await captureStableAria(page, '[data-forge-local]', scaffold.workspaceCwd), MODE)
-  await local.getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true }).click()
+  await local.getByRole('button', { name: '本地变更 · 1 个文件，新增 1 行，删除 0 行', exact: true }).click()
   await page.locator('[data-forge-diff-file="README.md"]').getByText('changed', { exact: true }).waitFor()
 
   await permission.click()
@@ -691,7 +691,7 @@ it.skipIf(MODE === 'record')('reports incomplete filter configuration and retrie
   await settled
   await page.getByText('LIGHTHOUSE', { exact: true }).waitFor()
   await showSessionPanel(page)
-  const openChanges = page.locator('[data-forge-local]').getByRole('button', { name: '查看本会话的变更：1 个文件，新增 1 行，删除 0 行', exact: true })
+  const openChanges = page.locator('[data-forge-local]').getByRole('button', { name: '本地变更 · 1 个文件，新增 1 行，删除 0 行', exact: true })
   await openChanges.waitFor({ timeout: 20_000 })
   const key = `filter.${'long'.repeat(200)}.clean`
   await git(project, 'config', key, 'cat')
@@ -980,7 +980,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   // opening the panel inspects it again.
   await showSessionPanel(page)
   const card = page.locator('[data-forge-local]')
-  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click({ timeout: 20_000 })
+  await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).click({ timeout: 20_000 })
 
   const local = page.locator('[data-forge-changes="local"]')
   await local.getByRole('button', { name: '基准分支：origin/main', exact: true }).waitFor({ timeout: 20_000 })
@@ -1054,7 +1054,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await showSessionPanel(page)
   const change = page.locator(`[data-forge-change="${PULL}"]`)
   await change.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
-  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
+  await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).waitFor()
   // The open change request of the checked-out branch replaces the offer to create one.
   await card.getByRole('button', { name: '本地变更操作', exact: true }).click()
   await page.getByRole('menuitem', { name: '查看变更', exact: true }).waitFor()
@@ -1062,7 +1062,7 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await card.getByRole('button', { name: '本地变更操作', exact: true }).click()
   await compareOrRefreshGolden(join(EXPECTED, 'local-and-pr.expected.md'),
     await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd), MODE)
-  await card.getByRole('button', { name: '查看本会话的变更：4 个文件，新增 4 行，删除 1 行', exact: true }).click()
+  await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).click()
   await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
   await showSessionPanel(page)
   await change.getByRole('button', { name: '查看 #7 的变更：新增 128 行，删除 14 行', exact: true }).click()
@@ -1406,7 +1406,7 @@ it.skipIf(MODE === 'record')('uses horizontal arrows to navigate files while pre
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await showSessionPanel(page)
-  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更：3 个文件/ }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /本地变更 · 3 个文件/ }).click()
   const view = page.locator('[data-forge-changes="local"]')
   const scroll = view.getByRole('region', { name: '全部 3 个文件', exact: true })
   await scroll.waitFor()
@@ -1485,7 +1485,7 @@ it.skipIf(MODE === 'record')('opens a comment from the hover plus in one press w
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await showSessionPanel(page)
-  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^本地变更 · / }).click()
   const view = page.locator('[data-forge-changes="local"]')
   const file = view.locator('[data-forge-diff-file="README.md"]')
   const number = (name: string) => file.getByRole('button', { name: `选择第 ${name} 行`, exact: true })
@@ -1605,7 +1605,7 @@ it.skipIf(MODE === 'record')('keeps tall branch and changed-file menus aligned w
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   const panel = await showSessionPanel(page)
-  await panel.getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).click()
+  await panel.getByRole('button', { name: /^本地变更 · 60 个文件/ }).click()
   const changes = page.locator('[data-forge-changes="local"]')
   const files = changes.getByRole('button', { name: '全部 60 个文件', exact: true })
   await files.click()
@@ -1650,7 +1650,7 @@ it.skipIf(MODE === 'record')('aligns localized status rows by their glyphs in th
   if (session === undefined) throw new Error('The Session must stay loaded')
   scaffold.ctx.forgeSession.track(session, PULL)
   const panel = await showSessionPanel(page)
-  await panel.locator('[data-forge-local]').getByRole('button', { name: /^查看本会话的变更：60 个文件/ }).waitFor({ timeout: 20_000 })
+  await panel.locator('[data-forge-local]').getByRole('button', { name: /^本地变更 · 60 个文件/ }).waitFor({ timeout: 20_000 })
   const change = panel.locator(`[data-forge-change="${PULL}"]`)
   for (const [locale, labels] of [
     ['zh', ['检查', '评审', '合并', '变更']],
@@ -1770,7 +1770,7 @@ it.skipIf(MODE === 'record').each(['darwin', 'win32'] as const)('closes diff men
   const { settled } = await sendPrompt(page, scaffold)
   const sessionId = await settled
   await showSessionPanel(page)
-  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更：1 个文件/ }).click()
+  await page.locator('[data-forge-local]').getByRole('button', { name: /本地变更 · 1 个文件/ }).click()
   const view = page.locator('[data-forge-changes="local"]')
   await view.locator('[data-forge-diff-file="README.md"]').waitFor()
   for (const name of ['分支', '全部 1 个文件', 'README.md 的更多操作']) {
@@ -1986,7 +1986,7 @@ it.skipIf(MODE === 'record')('keeps local viewed marks across reloads, clears a 
   await settled
   await showSessionPanel(page)
   const card = page.locator('[data-forge-local]')
-  await card.getByRole('button', { name: /^查看本会话的变更：3 个文件/ }).click({ timeout: 20_000 })
+  await card.getByRole('button', { name: /^本地变更 · 3 个文件/ }).click({ timeout: 20_000 })
   const local = page.locator('[data-forge-changes="local"]')
   const app = local.locator('[data-forge-diff-file="src/app.ts"]')
   await app.getByRole('checkbox', { name: '将 app.ts 标记为已审阅', exact: true }).check({ timeout: 20_000 })
@@ -2203,7 +2203,7 @@ it.skipIf(MODE === 'record')('keeps a narrow file header\'s viewed mark and menu
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await showSessionPanel(page)
-  await page.locator('[data-forge-local]').getByRole('button', { name: /^查看本会话的变更/ }).click({ timeout: 20_000 })
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^本地变更 · / }).click({ timeout: 20_000 })
   const local = page.locator('[data-forge-changes="local"]')
   const name = 'renamed-review-module-with-an-even-longer-name.ts'
   const file = local.locator(`[data-forge-diff-file="${to}"]`)
@@ -2429,7 +2429,7 @@ async function openLocalChanges(failureShot: string): Promise<PanelLaunch & { re
   const { settled } = await sendPrompt(page, scaffold)
   await settled
   await showSessionPanel(page)
-  await page.locator('[data-forge-local]').getByRole('button', { name: /查看本会话的变更/ }).click({ timeout: 20_000 })
+  await page.locator('[data-forge-local]').getByRole('button', { name: /^本地变更 · / }).click({ timeout: 20_000 })
   const view = page.locator('[data-forge-changes="local"]')
   await view.locator('[data-forge-diff-file="README.md"]').waitFor()
   await page.getByRole('button', { name: '全屏', exact: true }).click()

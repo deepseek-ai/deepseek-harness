@@ -1,3 +1,3 @@
-- 'button "View the changes of this Session: 60 files, 60 lines added, 0 lines deleted"': Local changes · 60 files
+- button "Local changes · 60 files, 60 lines added, 0 lines deleted": Local changes · 60 files
 - text: +60 −0
 - button "Local changes actions"

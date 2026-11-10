@@ -16,7 +16,7 @@ import {
   ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsProps, type ChangeRequestsSectionProps,
 } from '../src/client/ChangeRequestsSection.tsx'
 import { CheckoutRow, LocalChangesRow, type CheckoutRowProps, type LocalChangesRowProps } from '../src/client/EnvironmentRows.tsx'
-import { en } from '../src/client/locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
@@ -392,12 +392,17 @@ describe('LocalChangesRow', () => {
     expect(row(state).view.container.innerHTML).toBe('')
   })
 
+  it.each(Object.entries({ zh, en, ja, es, fr, de, ru, pt }))('names the row button with its visible text first in %s', (_locale, copy) => {
+    const fill = (text: string): string => text.replace('{count}', '2').replace('{added}', '5').replace('{deleted}', '1')
+    expect(fill(copy['changes.local.viewAria']).startsWith(fill(copy['changes.local.summary']))).toBe(true)
+  })
+
   it('sums the branch changes, opens them, and asks the Agent for a change request', () => {
     const b = row(ready({ local }))
     const element = b.view.container.querySelector('[data-forge-local]') as HTMLElement
     expect(within(element).getByText('Local changes · 2 files')).toBeTruthy()
     expect(within(element).getByText('+5')).toBeTruthy()
-    fireEvent.click(within(element).getByRole('button', { name: 'View the changes of this Session: 2 files, 5 lines added, 1 lines deleted' }))
+    fireEvent.click(within(element).getByRole('button', { name: 'Local changes · 2 files, 5 lines added, 1 lines deleted' }))
     expect(b.viewLocalChanges).toHaveBeenCalledOnce()
     fireEvent.click(within(element).getByRole('button', { name: en['changes.local.actions'] }))
     fireEvent.click(screen.getByRole('menuitem', { name: en['change.viewChanges'] }))
