@@ -1,0 +1,73 @@
+# Bilingual-pair consistency record for 2026-11-09-retained-ptc-scoped-repl.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-retained-ptc-scoped-repl.md
+/agent-note-scoped-repl-evaluator-for-retained-ptc:
+  en: ea465612c52ff8a6
+  zh: 1c4021aecb7550c6
+/agent-note-scoped-repl-evaluator-for-retained-ptc/problem:
+  en: 9e115eb5c8b8d168
+  zh: d47b2a783e154664
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision:
+  en: 02e060e10da7bb75
+  zh: d4b01038283943bd
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior:
+  en: 14dff09dd91c1533
+  zh: d199bef553f9439c
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/syntax-and-results:
+  en: 4f0c54f87042943e
+  zh: 34b88dbb1d50a2c6
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/across-calls:
+  en: d389222669ca94d7
+  zh: cf19a71bce644ee4
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/environment:
+  en: b1d35c4055c7f381
+  zh: 404b3843b2348fec
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/errors:
+  en: 5b4209a69447bfac
+  zh: 3b1cb6297962b6c1
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/asynchronous-failures-and-lifecycle:
+  en: 70c47aba7a23fc4f
+  zh: 1d7d5f0809e748aa
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/comparison-with-node-repl-and-vm-script:
+  en: 013bfbf3d3944637
+  zh: eba400efadf6229b
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/context-and-options:
+  en: 14fc1abb8e437555
+  zh: 38a37fdb8ca7e17c
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/wrapper:
+  en: d886821f764b6804
+  zh: a073534825d639a2
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/kernel-scope-chain-acorn-scan-and-compilation:
+  en: 10d0459a356cd33d
+  zh: 07e7cd70119c4d4d
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/scope-chain-state-and-the-steps-of-a-call:
+  en: fbb63be77e727e07
+  zh: 12f24e0d0672907c
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/failed-calls:
+  en: 64937f1d5acd7147
+  zh: f262dff89139086f
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/asynchronous-failures-aligned-with-the-repl:
+  en: 7f867b69623f3652
+  zh: 551a456448700171
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/dynamic-import:
+  en: 2607ffb07f5c4b4b
+  zh: 5882d8c58d5a775b
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/redeclaration-notice-reserved:
+  en: c3eef0f99686acfe
+  zh: 9093c1e84abff335
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/out-of-scope:
+  en: 725a4139f28961c3
+  zh: b32da1bf86095e65
+/agent-note-scoped-repl-evaluator-for-retained-ptc/decision/integration:
+  en: e77a6fd3f37c6049
+  zh: 7902fb0975d9a711
+/agent-note-scoped-repl-evaluator-for-retained-ptc/alternatives-considered:
+  en: e548d12c174bb44e
+  zh: 9f67908a564d6f78
+/agent-note-scoped-repl-evaluator-for-retained-ptc/consequences:
+  en: d75ef0e16dcdcee2
+  zh: 22ae67a41c1461ca
+/agent-note-scoped-repl-evaluator-for-retained-ptc/testing:
+  en: ac3b7db56e6fa832
+  zh: 1d2d33262e3822ba

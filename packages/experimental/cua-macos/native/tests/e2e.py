@@ -171,6 +171,16 @@ def main():
             secondary_params = {**owner, "windowId": secondary["windowId"], "maxElements": 300, "maxDepth": 20}
             if args.selection_only:
                 call("click", {**owner, "windowId": primary["windowId"], "x": 20, "y": 20}, "STALE_SNAPSHOT")
+                original_size = actual["secondaryWindowSize"]
+                for zoomed in (True, False):
+                    current = call("getState", secondary_params)
+                    zoom = next(e for e in current["elements"] if "AXZoomWindow" in e["actions"])
+                    reply = call("performAction", {**owner, "windowId": secondary["windowId"],
+                                 "snapshotId": current["snapshotId"], "elementId": zoom["elementId"], "action": "AXZoomWindow"})
+                    assert reply["dispatched"], reply
+                    state = wait_state(lambda s: (s["secondaryWindowSize"] != original_size) == zoomed,
+                                       "Secondary window did not zoom or restore")
+                    assert state["primaryWindowSize"] == actual["primaryWindowSize"], state
                 observed = call("getState", {**owner, "maxElements": 300, "maxDepth": 20})
                 button = next(e for e in observed["elements"] if e["role"] == "AXButton" and e["title"] == "Increment primary")
                 field = next(e for e in observed["elements"] if e["role"] == "AXTextField")
@@ -198,7 +208,7 @@ def main():
                         call(method, {**target, "windowId": window_id, **extra}, "WINDOW_UNAVAILABLE")
                 assert json.loads(state_path.read_text())["count"] == 1
                 helper.eof()
-                print("PASS: coordinate observation, application snapshot, and selected-window rejection")
+                print("PASS: coordinate observation, window zoom and restore, application snapshot, and selected-window rejection")
                 return
             limited = call("getState", {**primary_params, "maxElements": 1})
             assert limited["truncated"] and "maxElements=1" in limited["tree"], limited

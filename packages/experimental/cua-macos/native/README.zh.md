@@ -119,6 +119,8 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 键盘修饰键名称是普通字符串。共享对象 API 原样传递名称；macOS helper 接受 `command`/`cmd`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`，未知名称返回 `INVALID_ARGUMENT`。它不解析组合键字符串。
 
+helper 只派发一次 `AXZoomWindow`。如果 `AXUIElementPerformAction` 返回 `kAXErrorAttributeUnsupported`（`-25205`），且派发前后两次读取的同一窗口尺寸均有效且不同，helper 会报告成功。窗口仅移动位置，或在第二次读取后才改变大小时，helper 会保留原错误。如果用户或应用恰好在两次读取之间调整了窗口大小，也会被判为成功。
+
 读取树或枚举动作时，某个元素的动作名查询返回一般性 AX 失败，helper 将其视为缺少动作元数据。枚举时跳过无法确认可写性的属性。`invoke` 需要成功查询元素动作才能报告没有默认动作。`setValue` 仅在元素确认 `AXValue` 可写时尝试写入。
 
 `selectText` 要求新近元素快照和可写 AXSelectedTextRange。它匹配唯一的字面文本，可用紧邻的 prefix/suffix 缩小范围，然后选中文本或将光标放在前后。匹配和返回范围采用 UTF-16 偏移。歧义或缺失文本会失败，helper 不改写内容，并重新核实值和选区。AX 文本包含可用的可写性、禁用状态、选中状态和选区信息；AXAccess 持有元素 ID 和原生引用，AXTextFormatter 渲染已观察的值。
@@ -155,7 +157,7 @@ AppKit 在主事件循环上运行。阻塞式 socket 接收与握手使用后�
 
 使用 `--panels-only` 验证通过文档窗口操作 sheet 控件时会返回该 sheet 的窗口 ID，并验证选择 sheet 后能读取该控件。fixture 窗口可加入应用集合，避免 Stage Manager 在后台输入时缩小它们。使用 `e2e.py` 或 `electron_e2e.py` 的 `--hover-only`，可独立于键盘和文件面板场景验证悬停。为 `e2e.py` 加上 `--alternate-hover` 可验证 AX 展开、进入子控件、点击和移出，并采样确认系统指针不变。`--input-overlays` 验证穿透鼠标的覆盖窗口允许悬停、拦截输入的覆盖窗口拒绝悬停且不移动指针。
 
-构建后运行 `python3 packages/experimental/cua-macos/native/tests/e2e.py`，操作一个隔离的双窗口 AppKit fixture。fixture 独立记录按钮计数、Unicode 文本、实际滚动位置、右键回调和拖动释放位置。滚动、右键按下/抬起和拖动按下/抬起计数每次手势必须恰好增加一次。检查还验证真实 NSOpenPanel sheet、路径输入的键盘路由和选中文件 URL，并覆盖范围内快照替换、截图尺寸、过期应用清理和 EOF 退出。`--artifacts DIRECTORY` 写出仅包含 fixture 的截图和私有协议记录；协议记录包含运行中应用清单，不用于公开发布。
+构建后运行 `python3 packages/experimental/cua-macos/native/tests/e2e.py`，操作一个隔离的双窗口 AppKit fixture。fixture 独立记录按钮计数、Unicode 文本、实际滚动位置、右键回调和拖动释放位置。滚动、右键按下/抬起和拖动按下/抬起计数每次手势必须恰好增加一次。检查还验证真实 NSOpenPanel sheet、路径输入的键盘路由和选中文件 URL，并覆盖范围内快照替换、截图尺寸、过期应用清理和 EOF 退出。`--artifacts DIRECTORY` 写出仅包含 fixture 的截图和私有协议记录；协议记录包含运行中应用清单，不用于公开发布。加上 `--selection-only` 后，测试会缩放并还原第二个窗口，用测试应用记录的尺寸核对两个窗口。
 
 Blender 键盘检查使用 `python3 packages/experimental/cua-macos/native/tests/blender_keyboard_e2e.py --blender /absolute/path/to/Blender.app/Contents/MacOS/Blender`。它以独立用户目录启动一个采用出厂配置的 GUI，观察 Text Editor 的实际文本、选区和修饰键标志，检查 Command+A 替换、Shift+Left 选区及修饰键释放后的普通输入。需要解锁的 macOS 会话和辅助功能权限。测试会激活自建实例，运行时避免并发桌面自动化。`--helper` 选择以前兼容的二进制作为反例对照，`--artifacts` 指定新建私有证据目录的父目录。不下载 Blender 运行时。
 

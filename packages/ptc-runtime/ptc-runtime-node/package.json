@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-ptc-runtime-node",
-  "description": "Node PTC execution with async function, REPL and VM Script evaluators and optional retained state",
+  "description": "Node PTC execution with async function, REPL, scoped REPL and VM Script evaluators and optional retained state",
   "version": "0.2.2-rc.1",
   "publishConfig": {
     "access": "public"
