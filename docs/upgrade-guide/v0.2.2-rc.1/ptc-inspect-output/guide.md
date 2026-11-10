@@ -40,5 +40,5 @@ Other image-producing tools retain their declared program values and automatical
 
 3. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
 4. Third-party `PtcRuntime` providers replace returned `logs` arrays with `output: PtcOutput[]`; direct runtime consumers read `result.output`. Text entries are `{ type: 'text', text }`, image entries are `{ type: 'image', attachment }`, and array order is display order.
-5. Upgrade preinstalled Node bootstraps selected by `launch.bootstrapPath` to protocol version 3 alongside the host. Readiness rejects incompatible revisions before program dispatch.
+5. For custom `launch.bootstrapPath` deployments, follow the [Node PTC bootstrap upgrade guide](../ptc-bootstrap-protocol/guide.md).
 6. Run an updated program and verify that inspected values appear once and its final expression adds no output.

@@ -40,5 +40,5 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
 
 3. 直接调用运行时的消费方可设置 `discardCompletion: true`，选择相同的显式输出行为。
 4. 第三方 `PtcRuntime` 提供方将返回的 `logs` 数组替换为 `output: PtcOutput[]`；直接消费运行时结果的调用方改为读取 `result.output`。文本条目为 `{ type: 'text', text }`，图片条目为 `{ type: 'image', attachment }`，数组顺序就是展示顺序。
-5. 随宿主一起将 `launch.bootstrapPath` 选用的预装 Node bootstrap 升级至协议版本 3。启动就绪检查会在派发程序前拒绝不兼容版本。
+5. 使用自定义 `launch.bootstrapPath` 的部署，请按 [Node PTC bootstrap 升级指南](../ptc-bootstrap-protocol/guide.zh.md)更新。
 6. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。
