@@ -19,9 +19,9 @@ function text(value: string): CallToolResult['content'][number] {
 
 /**
  * Project a settled `cua_run_code` or `cua_reset` outcome onto an MCP call result.
- * Result text keeps the model-facing rendering; images deferred by nested screenshot calls follow it, in
- * capture order, as inline Base64 blocks of the version the program observed, so pixel coordinates in the
- * program's text match the delivered image. Other block kinds are named, not rendered.
+ * Result text keeps the model-facing rendering; images the program inspected, and any image a nested call
+ * deferred, follow it in emission order as inline Base64 blocks of the version the program observed, so pixel
+ * coordinates in the program's text match the delivered image. Other block kinds are named, not rendered.
  * @param result - Settled DSH execution outcome.
  * @param deferred - Deferred context messages the execution produced, in order.
  * @param delivery - Attachment store and the provider's request target.

@@ -26,6 +26,8 @@ interface PtcRunRequest {
    * becomes {@link PtcRunResult.value}.
    */
   program: string
+  /** Discard the completion without JSON validation when true; omission preserves the completion value. */
+  discardCompletion?: boolean
   /**
    * Object-identity owner for optional in-memory state. Omission requests a fresh
    * environment. Consumers must await runtime.release(owner) when the owner ends.
@@ -93,11 +95,12 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -150,7 +153,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -171,7 +174,7 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` and the resolution value MUST be lossless JSON. A runtime rejects a
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
  * lossy or non-cloneable value with a descriptive error rather than corrupting
  * the run. No seam-level byte cap applies to a binding resolution. A rejection
  * of this function surfaces inside the program as a rejection of the
@@ -182,7 +185,29 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是纯字符串。每个来源通道保留自身的发出顺序；由于通道元数据不属于 seam，相互独立的通道如何交错由后端决定。运行时捕获程序的 console 与流输出，Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
+`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
+
+```ts public-api
+/** A stored image readable from the program's execution environment. */
+declare class PtcImage {
+  readonly [key: string]: PtcJsonValue;
+  /** Absolute attachment file path readable in the execution world. */
+  readonly path: string;
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>;
+  /**
+   * Describe one immutable image file in the execution world.
+   * @param path - Absolute path to the stored image.
+   * @param attachment - Reference to the immutable stored image.
+   */
+  constructor(path: string, attachment: ImageAttachmentRef);
+}
+```
+
+```ts type-equiv
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
+type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
+```
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 

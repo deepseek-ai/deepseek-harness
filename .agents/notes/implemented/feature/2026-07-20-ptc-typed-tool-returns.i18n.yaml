@@ -9,32 +9,32 @@
   en: e2403bc358c4e14b
   zh: dd37923097a3b24c
 /agent-note-typed-tool-returns-in-ptc-mode/decision:
-  en: 2218fac13ef57c77
-  zh: d4a18daa9debc77c
+  en: 6dd62ee16c69536c
+  zh: aec9fa1c74be28e5
 /agent-note-typed-tool-returns-in-ptc-mode/decision/generated-sdk:
   en: 30583e9ac6715952
   zh: 3a85c9482abf574c
 /agent-note-typed-tool-returns-in-ptc-mode/decision/binding-values-and-failures:
-  en: ecb95cafa2dc1297
-  zh: ccdf300ca936ca12
+  en: 8b10f08e67ca9323
+  zh: e57adb520049f407
 /agent-note-typed-tool-returns-in-ptc-mode/decision/outer-result-and-output-ledger:
-  en: d907d0a8205157e1
-  zh: 1ed99168266a7ca4
+  en: d57456d76fed9c6d
+  zh: 453775faad48588c
 /agent-note-typed-tool-returns-in-ptc-mode/decision/typed-handles-and-lifetime:
   en: b2b9318c2812e3a4
   zh: 73cf34bfd487e2f1
 /agent-note-typed-tool-returns-in-ptc-mode/decision/persistence-metadata-and-spill:
-  en: c388619f862a92ba
-  zh: d557eae40c7b6b7a
+  en: 2c3ad4ec376ed2d5
+  zh: 49e8206a4c17b1b3
 /agent-note-typed-tool-returns-in-ptc-mode/testing:
-  en: 728513c779f031f8
-  zh: f6d869f18add7242
+  en: 81a4355914c918cf
+  zh: 36aa414cd382ff9c
 /agent-note-typed-tool-returns-in-ptc-mode/alternatives-considered:
-  en: dedd87b9b35d8fab
-  zh: 78db4c7e8c4e5f61
+  en: 069a1e170c7d1dfb
+  zh: 14ce5a56e602595c
 /agent-note-typed-tool-returns-in-ptc-mode/consequences:
   en: f5726b5e7a2fc73f
   zh: 0b9aa884db5d920f
 /agent-note-typed-tool-returns-in-ptc-mode/known-limitations-and-deferred-work:
-  en: a42af629ad6872cc
-  zh: 41e5c0bb3de0ae4d
+  en: 19828c2e5796df2d
+  zh: 2ef63df81fca7a72

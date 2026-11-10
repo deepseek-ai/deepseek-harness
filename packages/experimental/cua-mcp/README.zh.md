@@ -73,7 +73,7 @@ claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","
 
 ### 你会得到什么
 
-`cua_run_code` 就是该 Agent 的 DSH 注册项以 MCP 工具的形式提供：每次 `tools/list` 都从工具注册表读取它的名称、描述和参数 schema，因此提供方的定义是唯一来源，`description` 按该定义必填，`timeoutMs` 限制单个程序。投影省略注册项中的沙箱提权字段 `sandbox_permissions` 与 `justification`，指定它们的调用在执行前被拒绝；其余参数原样交给 DSH 工具执行器，由它校验参数并回答未知名称，因此非法调用返回 DSH 的错误结果。程序作为 TypeScript REPL 语句在提供方保留的 Node 环境中对全局 `cua` 对象运行。结果以文本携带程序打印的行和最终表达式，随后把程序捕获的每张截图以内联图片附上，且图片正是程序观察到的那一版，因此文本中的像素坐标与图片一致。一个连接的首个结果以 `cua` API 参考开头；执行规则在工具描述里。同一连接的程序按到达顺序逐个运行；取消调用会取消其程序。
+`cua_run_code` 就是该 Agent 的 DSH 注册项以 MCP 工具的形式提供：每次 `tools/list` 都从工具注册表读取它的名称、描述和参数 schema，因此提供方的定义是唯一来源，`description` 按该定义必填，`timeoutMs` 限制单个程序。投影省略注册项中的沙箱提权字段 `sandbox_permissions` 与 `justification`，指定它们的调用在执行前被拒绝；其余参数原样交给 DSH 工具执行器，由它校验参数并回答未知名称，因此非法调用返回 DSH 的错误结果。程序作为 TypeScript REPL 语句在提供方保留的 Node 环境中对全局 `cua` 对象运行。结果携带程序传给 `inspect(...)` 的内容：文本成为文本块，每张被 inspect 的截图成为内联图片，且图片正是程序观察到的那一版，因此文本中的像素坐标与图片一致；没有 inspect 任何值的程序返回一条完成提示。一个连接的首个结果以 `cua` API 参考开头；执行规则在工具描述里。同一连接的程序按到达顺序逐个运行；取消调用会取消其程序。
 
 `cua_reset` 丢弃程序环境：变量、导入以及应用或窗口对象，并取消仍在运行的 `cua_run_code` 程序。应用授权、本机连接和应用本身保留；下一个程序在新进程中启动，其结果重复 API 参考。在声明冲突或环境不可用之后使用它。
 

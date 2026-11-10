@@ -9,7 +9,7 @@ import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import {
   assertFinalWorkspaceSnapshot, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, recordFixture, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -19,7 +19,7 @@ const UI_EXPECTED = join(SNAPSHOT_DIR, 'approval.expected.md')
 const MODE = webSnapshotMode()
 const PROMPT = 'Use run_code with timeoutMs 120000 and direct Node filesystem access to create approved.txt in the working directory containing exactly "approved\\n". '
   + 'Use await import("node:fs/promises") and writeFile; do not call nested tools. First attempt the write under the current read-only sandbox without escalation. '
-  + 'In that first program, catch only filesystem errors with code EPERM, EACCES or EROFS and return exactly "EXPECTED_SANDBOX_DENIAL"; rethrow any other error. '
+  + 'In that first program, catch only filesystem errors with code EPERM, EACCES or EROFS and use `inspect(...)` to display exactly "EXPECTED_SANDBOX_DENIAL"; rethrow any other error. '
   + 'If the sandbox denies it, explicitly retry the program with sandbox_permissions "workspace-write" and justification "Create the file requested by the user". '
   + 'I will answer the approval prompt. After the file is written, reply DONE and stop.'
 
@@ -52,7 +52,7 @@ describe('web e2e: PTC program sandbox escalation', () => {
 
   it('keeps the file absent until approval and records the granted program', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-escalation'))
-    if (MODE !== 'record') expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual([PROMPT])
+    if (MODE !== 'record') expect(fixtureUserPrompts(await readFile(await selectedSessionFixture(FIXTURE), 'utf8'))).toEqual([PROMPT])
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })
     await page.locator('[aria-label^="Access mode"]').click()

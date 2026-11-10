@@ -27,6 +27,7 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
       return encodePtcJsonWire(42)
     },
     log: (text) => { seen.push({ type: 'log', text }) },
+    image: () => {},
     outputLimit: () => { seen.push({ type: 'output-limit' }) },
   }
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, limit, methods, ['revoke'], () => {})
@@ -51,12 +52,12 @@ async function setup(limit = 4096, chdir: (cwd: string) => void = () => {}, prog
 it('runs initialization before the program in the same REPL and discards its completion', async () => {
   const h = await setup()
   const namespaces = [{ global: 'tools', names: ['echo'] }]
-  const initialization = 'globalThis.helper ??= { read: () => tools.echo({}) }; console.log("initialize"); helper'
+  const initialization = 'globalThis.helper ??= { read: () => tools.echo({}) }; inspect("initialize"); helper'
   expect(decodePtcJsonWire((await h.run('var saved = helper; await helper.read()', namespaces, 1024, initialization)).value)).toBe(42)
   h.setCall(async () => encodePtcJsonWire(43))
   expect(decodePtcJsonWire((await h.run('({ value: await helper.read(), same: helper === saved })', namespaces)).value))
     .toEqual({ value: 43, same: true })
-  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize'])
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize\n'])
   expect(decodePtcJsonWire((await h.run('42', [], 1024, '')).value)).toBe(42)
 })
 
@@ -64,7 +65,7 @@ it.each([false, true])('closes program output and bindings before queued microta
   const h = await setup()
   const namespaces = [{ global: 'tools', names: ['echo'] }]
   const result = await h.run(
-    'queueMicrotask(() => { console.log("late"); void tools.echo({}).catch(() => {}) }); 42',
+    'queueMicrotask(() => { inspect("late"); void tools.echo({}).catch(() => {}) }); 42',
     namespaces, 1024, initialize ? 'globalThis.ready = true' : undefined,
   )
   expect(decodePtcJsonWire(result.value)).toBe(42)
@@ -87,7 +88,7 @@ it('prevents the program after initialization exceptions and output overflow', a
   const failed = await h.run('entered++', [], 1024, 'throw "initialization failed"')
   expect(failed.error?.kind).toBe('exception')
   expect(failed.error?.message).toContain('initialization failed')
-  expect((await h.run('entered++', [], 64, 'console.log("x".repeat(100))')).error?.kind).toBe('output-limit')
+  expect((await h.run('entered++', [], 64, 'inspect("x".repeat(100))')).error?.kind).toBe('output-limit')
   expect(decodePtcJsonWire((await h.run('entered')).value)).toBe(0)
 })
 
@@ -196,9 +197,9 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   const h = await setup(diagnosticBudget)
   const declarations = [{ global: 'tools', names: ['echo'], errorClass: { name: 'ToolCallError', memberNameProperty: 'toolName' } }]
   expect(await h.run('let count = 1; const saved = tools.echo;', declarations)).toEqual({})
-  const result = await h.run('count++; process.stdout.write("raw"); console.log("value", count); await saved({})', declarations)
+  const result = await h.run('count++; process.stdout.write("raw"); inspect("value", count); await saved({})', declarations)
   expect(decodePtcJsonWire(result.value)).toBe(42)
-  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2\n'])
   expect(h.state.env).toEqual({})
   expect(h.nativeEnvironment).toEqual({ PATH: '/native' })
   const failed = await h.run('throw new Error("failed")', [], diagnosticBudget)
@@ -240,7 +241,7 @@ it('contains directory failures and output overflow in the active evaluation', a
   expect(failed).toMatchObject({ error: { kind: 'exception' } })
   expect((failed.error as { message: string }).message).toContain('directory missing')
   const h = await setup()
-  await h.run('console.log("x".repeat(100))', [], 20)
+  await h.run('inspect("x".repeat(100))', [], 20)
   expect(h.seen.some(item => item.type === 'output-limit')).toBe(true)
 })
 
@@ -253,7 +254,7 @@ it('closes the process channel when a terminal result cannot fit its write budge
 it('ignores output and rejects new tool calls from a completed evaluation', async () => {
   const h = await setup()
   const declarations = [{ global: 'tools', names: ['echo'] }]
-  await h.run('let finish; let old; const trigger = new Promise(resolve => { finish = resolve }); void trigger.then(async () => { console.log("late"); try { await tools.echo({}) } catch (error) { old = error.message } });', declarations)
+  await h.run('let finish; let old; const trigger = new Promise(resolve => { finish = resolve }); void trigger.then(async () => { inspect("late"); try { await tools.echo({}) } catch (error) { old = error.message } });', declarations)
   const result = await h.run('finish(); await new Promise(resolve => setImmediate(resolve)); old', declarations)
   expect(decodePtcJsonWire(result.value)).toBe('PTC evaluation ended')
   expect(h.seen.some(item => item.type === 'log' || item.type === 'call')).toBe(false)
@@ -326,7 +327,7 @@ it.each(['repl', 'script'] as const)('keeps run pending until an arbitrary user 
   const started = Promise.withResolvers<undefined>()
   // A host-controlled Promise models asynchronous work outside the managed binding wait.
   Object.defineProperty(h.state, 'wait', { value: () => { started.resolve(undefined); return resume.promise } })
-  const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; console.log("late"); ({ get value() { serialized++; return 1 } })')
+  const first = h.run('var mutation = 0; var serialized = 0; await process.wait(); mutation++; inspect("late"); ({ get value() { serialized++; return 1 } })')
   await started.promise
   const settled = vi.fn()
   void first.then(settled)

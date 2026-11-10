@@ -39,19 +39,23 @@ Bash, formatters, code generators, and scripts can overwrite concurrent edits wi
 
 `run_code` takes two required arguments: `code`, the body of an async TypeScript function (erasable syntax only — no `enum` or namespaces; type annotations are advisory, the code runs type-stripped), and `description`, a short summary of what the program does. The declarations below are SDK bindings for this program. A declaration does not make its name a directly callable tool; only names supplied as separate tool schemas may be called directly. When no separate `bash` schema is supplied, invoke a declared `bash` binding inside `run_code`:
 
-`run_code({ code: "return await tools.bash({ description: 'Show current directory', command: 'pwd' })", description: "Show current directory" })`
+`run_code({ code: "inspect(await tools.bash({ description: 'Show current directory', command: 'pwd' }))", description: "Show current directory" })`
 
 Inside the program:
 
-- Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to the tool's typed canonical JSON value. Tool arguments must be lossless JSON.
+- Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
-- Emit results with `return` and/or `console.log(...)`. Only what you print or return is program output. A successful tool result containing an image is attached after the run so you can inspect it on the next step; every other intermediate result stays out of the conversation, so extract just what you need.
+- Show selected values and images with `inspect(...values)`; every other intermediate result stays out of the conversation, so extract just what you need.
 
 Program-only SDK bindings:
 
 ```ts
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
+
+declare class Image { private constructor(); readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number; }
+
+declare function inspect(...values: unknown[]): void;
 
 interface ToolArgsMap {
   /** Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions. */
@@ -436,22 +440,7 @@ interface ToolOutputMap {
     }[];
     totalLines: number;
   };
-  read_image: {
-    /** Canonical absolute path in the filesystem execution world. */
-    path: string;
-    image: {
-      attachmentId: string;
-      mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
-      bytes: number;
-      width: number;
-      height: number;
-      name?: string;
-      originalDimensions?: {
-        width: number;
-        height: number;
-      };
-    };
-  };
+  read_image: Image;
   send_message: {
     messageId: string;
   };

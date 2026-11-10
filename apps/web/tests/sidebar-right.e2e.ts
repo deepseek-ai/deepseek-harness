@@ -1045,9 +1045,11 @@ describe('web e2e: shipped right Sidebar', () => {
       await proseChip(page).click()
       await expect.poll(async () => await tabTitles(first)).toEqual(['Files', SAMPLE_NAME])
       const order = await tabTitles(first)
-      // The insertion index is measured against chip midpoints, not strip width.
-      await dragTo(page, first.locator('[data-dockkit-tab]').last(),
-        await pointIn(first.locator('[data-dockkit-tab]').first(), 0.25, 0.5),
+      const tabs = first.locator('[data-dockkit-tab]')
+      const firstTab = tabs.first()
+      // Drag coordinates are viewport-relative. Wait for the strip to settle before measuring the first chip.
+      await firstTab.hover({ trial: true })
+      await dragTo(page, tabs.last(), await pointIn(firstTab, 0.25, 0.5),
         strip.locator('[data-dockkit-caret="0"]'))
       await expect.poll(async () => await tabTitles(first)).toEqual([...order].reverse())
 

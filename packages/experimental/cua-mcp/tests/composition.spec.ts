@@ -156,7 +156,7 @@ describe('Computer Use MCP composition', () => {
     expect(registered.description.length).toBeGreaterThan(1000)
 
     const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
-      + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })', { description: 'Open the fixture' })
+      + 'await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid }), await win.getScreenshot())', { description: 'Open the fixture' })
     expect(first.isError).not.toBe(true)
     const [reference, ...rest] = first.content
     expect(reference).toMatchObject({ type: 'text' })
@@ -168,16 +168,15 @@ describe('Computer Use MCP composition', () => {
     const result = JSON.parse((rest[0] as Extract<Block, { type: 'text' }>).text) as { visits: number; window: number; pid: number }
     expect(result).toMatchObject({ visits: 1, window: 7 })
     expect(result.pid).not.toBe(process.pid)
-    // The nested screenshot arrives after the program text: its metadata, then the image the program observed.
-    expect(JSON.parse((rest[1] as Extract<Block, { type: 'text' }>).text)).toMatchObject({ windowId: 7, coordinateSpace: 'screenshot-pixels', pixelWidth: 1, pixelHeight: 1 })
-    const image = rest[2]
+    // The inspected screenshot follows the program text as the image the program observed; nothing else is emitted.
+    const image = rest[1]
     if (image?.type !== 'image') throw new Error(`expected an image block, got ${JSON.stringify(image)}`)
     expect(image.mimeType).toMatch(/^image\//)
     expect(Buffer.from(image.data, 'base64').length).toBeGreaterThan(0)
-    expect(rest).toHaveLength(3)
+    expect(rest).toHaveLength(2)
     expect(native.state).toMatchObject({ count: 1, openedChannels: 1, closedChannels: 0 })
 
-    const second = await run('globalThis.visits++; await win.getAccessibilityTree({ emit: false }); await win.click("0"); ({ visits, sameWindow: win.windowId === 7, pid: process.pid })')
+    const second = await run('globalThis.visits++; await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, sameWindow: win.windowId === 7, pid: process.pid }))')
     expect(second.isError).not.toBe(true)
     expect(second.content).toHaveLength(1)
     expect(lastJson(second)).toEqual({ visits: 2, sameWindow: true, pid: result.pid })
@@ -195,8 +194,8 @@ describe('Computer Use MCP composition', () => {
   it('serializes concurrent programs, reports program failures, and recovers after cancellation', async () => {
     const { run, client } = await setup()
     const [a, b] = await Promise.all([
-      run('globalThis.order = ["a"]; await new Promise(resolve => setTimeout(resolve, 50)); "a"'),
-      run('globalThis.order.push("b"); globalThis.order'),
+      run('globalThis.order = ["a"]; await new Promise(resolve => setTimeout(resolve, 50)); inspect("a")'),
+      run('globalThis.order.push("b"); inspect(JSON.stringify(globalThis.order))'),
     ])
     expect(a.isError).not.toBe(true)
     expect(lastJson(b)).toEqual(['a', 'b'])
@@ -207,7 +206,7 @@ describe('Computer Use MCP composition', () => {
     const hanging = run('await new Promise(resolve => setTimeout(resolve, 60_000))', {}, controller.signal)
     setTimeout(() => { controller.abort() }, 100)
     await expect(hanging).rejects.toThrow()
-    expect(lastJson(await run('1 + 1'))).toBe(2)
+    expect(lastJson(await run('inspect(1 + 1)'))).toBe(2)
     // Argument validation belongs to the DSH executor: a program without the required description is refused there.
     const invalid = await client.callTool({ name: 'cua_run_code', arguments: { code: '1' } })
     expect(invalid.isError).toBe(true)
@@ -216,12 +215,12 @@ describe('Computer Use MCP composition', () => {
 
   it('resets the program environment while keeping the native connection, then repeats the reference', async () => {
     const { native, run, client } = await setup()
-    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); process.pid')
+    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); inspect(process.pid)')
     const pid = lastJson(first) as number
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).not.toBe(true)
     expect(texts(reset)[0]).toContain('Program environment cleared')
-    const next = await run('({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", pid: process.pid })')
+    const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", pid: process.pid }))')
     expect(next.content).toHaveLength(2)
     expect(texts(next)[0]).toContain('## cua API reference')
     const state = lastJson(next) as { visits: null; hasApp: boolean; pid: number }
@@ -254,7 +253,7 @@ describe('Computer Use MCP composition', () => {
 
   it('grants consent without a human in allow mode and explains a client without elicitation', async () => {
     const allowed = await setup({ consent: 'allow', granted: false })
-    const result = await allowed.run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); win.windowId')
+    const result = await allowed.run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); inspect(win.windowId)')
     expect(result.isError).not.toBe(true)
     expect(lastJson(result)).toBe(7)
 

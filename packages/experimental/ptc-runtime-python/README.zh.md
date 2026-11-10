@@ -43,9 +43,13 @@ The program is the body of an async Python function. Top-level await and return 
 
 包的默认导出是 `PythonPtcRuntime` 插件。其公开面还重新导出宿主侧协议词汇：`validateChildFrame`（重建每条入站帧）、无损 JSON codec 与计量器（`encodeJsonPlain`、`checkDoneValue`、`hasUnsafeIntegerToken`、`hasNonLosslessNumber`）、`logTruncationMarker`（共享截断标记文本），以及 `resolvePythonBin`（对照当前 `PATH` 的解释器查找）、`readProcessStart`（供测试用的进程启动统计）、`detachResidual`（已结算运行的资源清理测试 seam）与 `hostFrameParseCeiling`（给定堆上限可容纳的堆推导帧解析上限）。每个上限都是带默认值并经校验的 `Config` 字段：`cpuSeconds`（60）、`maxWallMs`（600000）、`addressSpaceMb`（512，Darwin 上不生效）、`maxLogBytes`（65536）、`maxValueBytes`（32768）、`graceMs`（3000）与 `pythonBin`（`python3`，在加载期解析、检查可执行性，在五秒强制终止期限内探测版本并固定）。每个子进程只接收 `TMPDIR`；环境中的凭证、`PATH`、`HOME` 与其他宿主状态均不可见。
 
+`resolve` 在启动 Python 进程前拒绝 `discardCompletion: true`。省略该选项或设为 false 时保留程序完成值。
+
+`result.output` 的文本条目保留实际写入的换行和未换行尾段；用 `join('')` 连接各条目的 `text`。`print('a', 'b')` 输出 `'a b\n'`，而 `sys.stdout.write('a'); sys.stdout.write('b')` 输出 `'ab'`。子进程与宿主都将换行的 JSON 转义开销计入 `maxLogBytes`。
+
 ### wire
 
-帧在子进程 fd 3 上以 JSON-lines 传输——每行一个对象——因此 stdout/stderr 留给程序自己的输出。子进程 → 宿主：`boot-ack`、`call`、`log`、`done`。宿主 → 子进程：`boot`（首帧，携带全部上限与命名空间声明）、`run`（`boot-ack` 之后，只携带程序体）与每个 `call` 一个 `reply`。伪造帧可在 `done` 上同时携带 `value` 与 `error`，因此消费方必须先检查 `error`，在它存在时忽略 `value`。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧追加到同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条 `'ab'` 条目而不是假换行（拆分计费算术见 fd-3 协议 Agent Note 的 wire-contract 一节）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。
+帧在子进程 fd 3 上以 JSON-lines 传输——每行一个对象——因此 stdout/stderr 留给程序自己的输出。子进程 → 宿主：`boot-ack`、`call`、`log`、`done`。宿主 → 子进程：`boot`（首帧，携带全部上限与命名空间声明）、`run`（`boot-ack` 之后，只携带程序体）与每个 `call` 一个 `reply`。伪造帧可在 `done` 上同时携带 `value` 与 `error`，因此消费方必须先检查 `error`，在它存在时忽略 `value`。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧追加到同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条带有原始换行的 `'ab\n'` 条目（拆分计费算术见 fd-3 协议 Agent Note 的 wire-contract 一节）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。
 
 ### 可能出错的地方
 
@@ -71,7 +75,7 @@ The program is the body of an async Python function. Top-level await and return 
 
 ### wire 契约
 
-帧为 `boot`／`run`（宿主 → 子进程）与 `boot-ack`／`call`／`log`／`done` （子进程 → 宿主），以及每个 `call` 对应一个 `reply`（宿主 → 子进程）。`log` 帧的 `truncated` 标志标记的就是子进程账本自己的截断标记帧，因此宿主在与子进程相同的点停止捕获，而不是从自己的预算推断。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧合并进同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条 `'ab'` 条目而不是假换行（拆分计费算术在 fd-3 协议 Agent Note 的 wire-contract 段）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。`done.error.kind` 为 `exception`、`invalid-output`、`output-limit` 或模型代码返回后 CPU 检查产生的 `timeout` 之一；墙钟截止、中止与基底死亡在宿主侧观察。
+帧为 `boot`／`run`（宿主 → 子进程）与 `boot-ack`／`call`／`log`／`done` （子进程 → 宿主），以及每个 `call` 对应一个 `reply`（宿主 → 子进程）。`log` 帧的 `truncated` 标志标记的就是子进程账本自己的截断标记帧，因此宿主在与子进程相同的点停止捕获，而不是从自己的预算推断。`log` 帧的 `open` 标志标记由显式 flush 提交的未结束行：宿主把下一个 log 帧合并进同一条目，因此 `print('a', end='', flush=True); print('b')` 读回为一条带有原始换行的 `'ab\n'` 条目（拆分计费算术在 fd-3 协议 Agent Note 的 wire-contract 段）。合并的唯一例外是截断：当后续超预算帧触发账本时，已计费的前缀作为独立条目先提交，截断 marker 跟在后面（marker 保持末位，无重复计费）。`done.error.kind` 为 `exception`、`invalid-output`、`output-limit` 或模型代码返回后 CPU 检查产生的 `timeout` 之一；墙钟截止、中止与基底死亡在宿主侧观察。
 
 ### 无损 JSON 跨越
 
@@ -127,16 +131,16 @@ The program is the body of an async Python function. Top-level await and return 
 
 - **跨语言 guard 覆盖执行的表面与帧字段形状，而非字段类型**——mirror e2e 比较必填／可选字段集，而非 `cpuSeconds` 在两侧是否都是 `int`；类型级漂移由评审加后端的真实子进程套件捕获。
 - **以 `setsid()` 逃出子进程组后代不被组拆卸回收**——`kill(-pid)` 够不到它；运行仍按 done 帧决定的值结算，若该孤儿持有管道，close 截止兜底会强制结算，但孤儿本身在自行退出前一直存活到 fiber 之外。
-- **结算后到达的 `log` 帧被丢弃**——运行一旦结算，宿主侧捕获即关闭；迟到的 fd-3 `log` 帧（来自比 done 帧存活更久的线程）会被丢弃，而不是追加到 `logs`。
+- **结算后到达的 `log` 帧被丢弃**——运行一旦结算，宿主侧捕获即关闭；迟到的 fd-3 `log` 帧（来自比 done 帧存活更久的线程）会被丢弃，而不是追加到 `result.output`。
 - **binding 回复值没有 seam 级字节或深度上限**——`maxValueBytes` 只计量 done 帧的完成值；宽 binding 回复在宿主侧重建（`snapshotJsonValue` 遍历）并整帧编码，两侧都只受进程内存约束（与没有子进程侧预算的 binding 实参一样）。
 - **已发布 profile 均不挂载本提供方**——keyless `ptc-python-turn` 快照通过真实 Loader 替换 headless PTC 运行时；已发布 profile 使用沙箱 Node 进程后端。
 - **工作流执行需要 Node**——使用本 Python 提供方的组合禁用 `workflow-ptc`、`tool-workflow` 和 `tool-ralph`；工作流提供方在加载时拒绝不兼容的运行时。
-- **跨通道日志交错由后端决定**——Python stdout、stderr 与 fd-3 日志帧彼此独立传输；每个通道保留自身顺序，但它们在 `result.logs` 中的总顺序可能不同。
+- **跨通道日志交错由后端决定**——Python stdout、stderr 与 fd-3 日志帧彼此独立传输；每个通道保留自身顺序，但它们在 `result.output` 中的总顺序可能不同。
 - **需要 CPython 3.10 或更高版本**——配置的可执行文件会在加载期完成解析与版本探测；不受支持的解释器会在 `ctx.ptcRuntime` 注册前失败。
 - **执行限于本地 Unix 宿主**——解释器、工作目录与沙箱 runner 必须位于运行本插件的宿主上。提供方使用 POSIX 资源限制和进程组信号；不支持 Windows 或远程执行提供方。
 - **沙箱强制能力继承后端限制**——成功的程序也可能报告部分强制能力，文件约束不构成多租户隔离或完整的后代清理保证。
 - **诊断前缀省略包名中的 experimental 限定词**——标记 `[dsh-ptc-runtime-python] log capture truncated at <N> bytes` 独立于 npm 包名来标识本提供方。协议镜像检查 TypeScript 与 Python 的标记字节完全相同。
-- **`run()` 是一次性的**——`logs` 只有在 `PtcRunResult` resolve 后才能获得；没有为运行中程序产生的输出提供流式日志或进度接口。
+- **`run()` 是一次性的**——`output` 只有在 `PtcRunResult` resolve 后才能获得；没有为运行中程序产生的输出提供流式日志或进度接口。
 - **运行之间不保留状态**——每次请求都在全新子进程中执行；持久 REPL 风格内核在某个后端带来自己的日志方案之前保持延期。
 - **原始长度超过有效帧解析上限的 fd-3 帧会让本次运行以 worker-exit 结算**——上限为 64 MiB，或当宿主的配置堆无法安全解析接近上限的帧时更低（`hostFrameParseCeiling`）；`maxLogBytes`/`maxValueBytes` 在加载期被限制到同一上限，因此诚实子进程的帧总能放得下；模型构造的超过该上限的 binding 实参（一个在 seam 层没有预算的值）会触发同一上限——这是该 OOM 防护的已接受残余。
 - **停止读取回复的子进程会在回复积压超过 1024 帧时以 worker-exit 结算运行**——宿主每次写一条回复，管道满时等待 `drain`；只持续发送调用而不消费回复的子进程会让保留的积压（及其钉住的 binding 结果）一直增长到墙钟，因此积压上限让运行提前失败。binding 结果在 seam 层没有字节上限，所以这是计数上限而非字节上限。

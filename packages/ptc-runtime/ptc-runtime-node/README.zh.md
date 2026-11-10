@@ -27,6 +27,8 @@ kind: "package-reference"
 
 在提供 `fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 的组合中挂载本提供方。`dsh-tool-executor-ptc`传入调用 Session 的目录和常设策略；直接运行时消费方在执行前解析这些选项。
 
+程序通过顶层 `inspect(...values)` 展示文本、对象与 `Image`；同一次调用可混合多段文本和多张图片，图片也可嵌入数组或对象。`Image.attachmentId` 与模型收到的图片说明中的附件 ID 一致。`Image.path` 是执行环境可读取的已存储附件文件，`width` 与 `height` 为该文件的像素尺寸。图片元数据与文本共用 `maxOutputBytes` 预算。
+
 ### 配置
 
 在所需服务可用后，配置提供方条目：
@@ -65,11 +67,17 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 ### 执行与结果
 
-`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.logs` 返回捕获文本。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+`per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
+
+`inspect(...values)` 直接渲染字符串，其他值使用 Node 的 `util.inspect` 格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。注册的 Image 可以直接输出，也可以在 Node 格式化嵌套值时输出，包括 Map 条目、Set 的值以及可枚举的 Symbol 属性。自定义 inspect 方法决定会访问哪些嵌套值。文本和所选图片在共享输出预算内遵循参数顺序。如果对象格式化抛错，此前 inspect 的参数仍然可见。每个文本输出组以换行结尾，原始流写入则保留实际文本。
+
+所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
+
+`run_code` 设置 `discardCompletion: true`：函数返回值和末尾表达式的值不经过 JSON 序列化，也不出现在结果中，显式 inspect 的输出仍然可见。直接调用运行时的消费方在未设置此选项时，仍可取得原有的无损 JSON 完成值。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
 
-设置 `executionMode: vm-script`，即可通过 `node:vm` Script 求值可擦除 TypeScript。支持顶层声明和 `await`，例如 `var fs = await import("node:fs/promises"); await fs.readdir(".")`。不支持顶层 `return` 和静态 `import`/`export`。运行时等待末尾表达式，并返回其无损 JSON 值；`console.log(...)` 也会产生输出。相对动态导入以传入的工作目录为基准解析。除非程序显式启用严格模式，否则 Script 使用非严格语法；context 不是安全边界，Node 访问仍受进程沙箱约束。
+设置 `executionMode: vm-script`，即可通过 `node:vm` Script 求值可擦除 TypeScript。支持顶层声明和 `await`，例如 `var fs = await import("node:fs/promises"); inspect(await fs.readdir("."))`。不支持顶层 `return` 和静态 `import`/`export`。运行时等待末尾表达式；未启用 `discardCompletion` 时，返回其无损 JSON 值。相对动态导入以传入的工作目录为基准解析。除非程序显式启用严格模式，否则 Script 使用非严格语法；context 不是安全边界，Node 访问仍受进程沙箱约束。
 
 `scriptPersistence: false` 是默认值：每次调用都使用全新进程和 context，忽略 `stateOwner`。设为 `true` 后，运行时按下述生命周期规则为每个所有者保留 context。顶层声明、函数与对象身份可供后续调用使用，包括通过顶层 `await` 初始化的值。函数局部变量仍只在函数内有效。该选项要求 `executionMode: vm-script`；两种设置接受相同语法。
 
@@ -93,7 +101,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 保存补丁，在使用 PTC 工具展示的配置中通过 `dsh headless --patch <path>` 加载。`per-call` 模式和 `scriptPersistence: false` 的 Script 模式不跨调用保留程序内存。修改配置会重载提供方并释放其执行资源。单文件打包宿主默认使用内嵌载体；宿主在每次执行中发送所选的程序格式和保留标志，因此内嵌的 `process.js` bootstrap 同时服务单次执行和保留执行。远端脚本部署使用 `node-script` 启动方式，并将 `launch.bootstrapPath` 指向本包构建出的 `persistent-process.js`。
 
-在 REPL 模式下，每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)`、`console.log(...)` 和末尾 JSON 表达式；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
+在 REPL 模式下，每个存活 Agent 保留独立进程，跨 `run_code` 调用和轮次保留顶层变量、函数及导入模块。使用 `await import(...)` 和 `inspect(...)`；不支持顶层 `return`。Node REPL 使用非严格模式，给未声明的名称赋值会创建保留的全局变量。`_` 和 `_error` 是普通的保留全局变量，不使用交互式 REPL 的结果设置器。声明遵循 Node REPL 规则，包括重复声明已有 `let`、`const` 或 `class` 名称时报错；应给可变绑定赋值或选择新名称。开头的 `{ ... }` 按语句块执行，可以包含顶层 await 和临时声明；需要返回对象表达式时，用圆括号包裹。保留的函数和工具方法引用调用当前执行的绑定。必须等待所有工具调用；已完成执行的回调不能在后续执行中调用工具。
 
 在 `persistent-in-memory` 模式下，于运行时首次接纳运行前调用 `registerEnvironmentInitializer(program)`，注册在每个新环境中只执行一次的 REPL 源码。运行时先安装本次绑定，再独立于用户程序求值初始化；二者共享首次调用的截止时间、取消和输出上限。初始化的完成值会被丢弃，打印输出加入结果。新所有者、无所有者执行，以及释放或进程丢失后的运行会创建新环境并再次执行初始化；普通调用复用已初始化的状态。给已初始化的全局变量赋值不会触发初始化。初始化行不会偏移用户程序的位置。其他模式会拒绝注册。
 
@@ -113,7 +121,7 @@ PTC 消费方按 [dsh-tool-executor-ptc](../../core/tool-executor-ptc/README.zh.
 
 ### 失败
 
-程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。有损完成值为 `invalid-output`，外层结果超限为 `output-limit`，并保留能容纳的日志前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
+程序解析错误与抛出异常为 `exception`；截止到期为 `timeout`；取消为 `abort`；无法解析或超量的控制通信以及无效的程序消息为 `protocol`；约束不可用为 `sandbox-unavailable`；进程提前退出、控制通道丢失或受管清理失败为 `worker-exit`。控制通道 I/O 失败时，在观测到的进程退出状态之外保留通道诊断原因。进程提供方保留与执行基底无关的失败名 `worker-exit`。捕获完成值时，有损值为 `invalid-output`，外层结果超限为 `output-limit`，并在诊断之外保留预算内有序的图文前缀。无效或不支持的选项，以及资源释放后的调用，以调用方误用拒绝。
 
 -----
 
@@ -228,9 +236,10 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **Script 值可能跨 realm**——绑定结果、绑定拒绝类和导入模块可能使用 Script context 之外的构造器。这些值的 `instanceof Array` 或 `instanceof Error` 可能为 false；应使用 `Array.isArray` 和声明的绑定错误类。
 - **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
+- **格式化先分配内存再核算输出**——完整格式化对象和 TypedArray 所需的内存可能远大于保留的输出。输出预算不限制这些临时分配；耗尽配置的堆上限可能以 `worker-exit` 结束执行。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
 - **预装 bootstrap 需要兼容的协议版本**——就绪握手会在派发代码前拒绝缺失或不匹配的版本。请将 `launch.bootstrapPath` 与宿主一同升级；运行时不会安装远端 bootstrap 更新。
-- **console shim 有五个方法**——`log`、`info`、`warn`、`error` 与 `debug`。
+- **图片引用随进程保留**——每张已获取图片的宿主元数据保留到进程终止或所有者释放，包括程序尚未展示的图片。保留环境中的长截图循环会累积这些引用。
 
 <a id="dev-note"></a>
 ### 开发备注

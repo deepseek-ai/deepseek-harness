@@ -59,22 +59,21 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
 
     const first = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
       code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
-        + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })',
+        + 'await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid }), await win.getScreenshot())',
       description: 'Open the fixture window',
     } }) as CallResult
     expect(first.isError).toBeUndefined()
-    expect(first.content.map(block => block.type)).toEqual(['text', 'text', 'text', 'image'])
+    expect(first.content.map(block => block.type)).toEqual(['text', 'text', 'image'])
     await expect(`${textOf(first.content[0])}\n`).toMatchFileSnapshot('./expected/reference.md')
     const state = JSON.parse(textOf(first.content[1])) as { visits: number; window: number; pid: number }
     expect(state).toMatchObject({ visits: 1, window: 7 })
-    expect(JSON.parse(textOf(first.content[2]))).toMatchObject({ windowId: 7, coordinateSpace: 'screenshot-pixels', pixelWidth: 1, pixelHeight: 1 })
-    const image = first.content[3]
+    const image = first.content[2]
     if (image?.type !== 'image') throw new Error('expected an image block')
     expect(image.mimeType).toMatch(/^image\//)
     expect(Buffer.from(image.data, 'base64').length).toBeGreaterThan(0)
 
     const second = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: 'globalThis.visits++; ({ visits, sameWindow: win.windowId === 7, pid: process.pid })', description: 'Count another visit',
+      code: 'globalThis.visits++; inspect(JSON.stringify({ visits, sameWindow: win.windowId === 7, pid: process.pid }))', description: 'Count another visit',
     } }) as CallResult
     expect(second.content).toHaveLength(1)
     expect(JSON.parse(textOf(second.content[0]))).toEqual({ visits: 2, sameWindow: true, pid: state.pid })
@@ -83,7 +82,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     expect(reset.isError).toBeUndefined()
     expect(textOf(reset.content[0])).toContain('Program environment cleared')
     const third = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: '({ visits: globalThis.visits ?? null, hasWindow: typeof win !== "undefined", pid: process.pid })', description: 'Inspect the fresh environment',
+      code: 'inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasWindow: typeof win !== "undefined", pid: process.pid }))', description: 'Inspect the fresh environment',
     } }) as CallResult
     expect(third.content).toHaveLength(2)
     expect(textOf(third.content[0])).toContain('## cua API reference')

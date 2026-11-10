@@ -1,4 +1,7 @@
 /** Managed Node process shared by temporary and owner-retained evaluations. */
+import { randomUUID } from 'node:crypto'
+import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
 import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
@@ -13,7 +16,7 @@ import type { BirpcReturn } from 'birpc'
 import { createProcessRpc } from './rpc.ts'
 import { bootstrapArgs } from './launch.ts'
 import { STARTUP_ENVIRONMENT_NAMES } from './environment.ts'
-import { decodePtcJsonWire } from './json-wire.ts'
+import { decodePtcJsonWire, type PtcImageWire } from './json-wire.ts'
 import { OutputLedger } from './output-ledger.ts'
 import { drainOutput, terminateProcess } from './output-stream.ts'
 import { readProgramResult, PROGRAM_PROTOCOL_VERSION, type ProgramBootData, type ProgramMethods, type HostMethods } from './protocol.ts'
@@ -30,6 +33,7 @@ interface Evaluation {
   pending: number
   pendingBytes: number
   admit(text: string): void
+  image(attachment: PtcImage['attachment']): void
   finish(error?: PtcRunFailure, value?: PtcJsonValue, discard?: boolean): void
 }
 
@@ -49,6 +53,7 @@ export class ProgramWorker {
   private termination: Promise<boolean> | undefined
   private starting?: Promise<void>
   private exitOutcome?: SubprocessOutcome
+  private readonly images = new Map<string, PtcImage['attachment']>()
   private readonly controller = new AbortController()
   closed = false
 
@@ -120,8 +125,8 @@ export class ProgramWorker {
       return output.failure([], failure)
     }
     this.stderr = ''
-    const output = this.output()
-    const logs: string[] = []
+    const ledger = this.output()
+    const output: PtcOutput[] = []
     let overflowed = false
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
@@ -139,17 +144,27 @@ export class ProgramWorker {
         code: '', programFormat: this.mode.format, retainsState: this.retainsState,
         ...this.pendingInitialization === undefined ? {} : { initialization: this.pendingInitialization },
         maxOutputBytes: this.config.maxOutputBytes,
+        discardCompletion: spec.discardCompletion === true,
         namespaces: [...bindings.values()].map(binding => ({
           global: binding.global, names: Object.keys(binding.functions), ...binding.errorClass ? { errorClass: binding.errorClass } : {},
         })),
       },
-      spec, bindings, invoke: AsyncLocalStorage.bind(invokeBinding), pending: 0, pendingBytes: 0,
+      spec, bindings, pending: 0, pendingBytes: 0,
+      invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
       admit: (text) => {
         if (overflowed) return
-        if (!output.admit(text, logs)) {
+        if (!ledger.admit({ type: 'text', text }, output)) {
           overflowed = true
-          logs.push(text)
+          output.push({ type: 'text', text })
           evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+        }
+      },
+      image: (attachment) => {
+        if (overflowed || evaluation.settled) return
+        if (!ledger.admit({ type: 'image', attachment }, output)) {
+          overflowed = true
+          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+          return
         }
       },
       finish: (error, value, discard = false) => {
@@ -159,8 +174,8 @@ export class ProgramWorker {
         spec.signal?.removeEventListener('abort', onAbort)
         const initializationIncomplete = this.pendingInitialization !== undefined
         if (initializationIncomplete && error?.kind === 'exception') error = { ...error, message: this.message(error.message) }
-        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? output.limit(logs)
-          : error ? output.failure(logs, error) : output.success(logs, value)
+        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? ledger.limit(output)
+          : error ? ledger.failure(output, error) : ledger.success(output, value)
         const outcome = complete()
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
@@ -174,14 +189,14 @@ export class ProgramWorker {
           const completed = complete()
           // The final interruption diagnostic also consumes output budget.
           if (completed.error?.kind === 'output-limit' && preserved) drained = await this.terminate()
-          return drained ? completed : output.failure(logs, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
+          return drained ? completed : ledger.failure(output, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
         }
         void cleanup().then((completed) => {
           this.active = undefined
           result.resolve(completed)
         }, (failure: unknown) => {
           this.active = undefined
-          result.resolve(output.failure(logs, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
+          result.resolve(ledger.failure(output, { kind: 'worker-exit', message: `managed process cleanup failed: ${messageOf(failure)}` }))
         })
       },
     }
@@ -236,6 +251,7 @@ export class ProgramWorker {
   private terminate(): Promise<boolean> {
     if (this.termination) return this.termination
     this.closed = true
+    this.images.clear()
     this.cleanupPending = true
     this.controller.abort()
     this.channel?.$close()
@@ -284,6 +300,12 @@ export class ProgramWorker {
 
   private exitMessage(outcome: SubprocessOutcome): string {
     return this.withControlFailure(`Node process exited (${String(outcome.exitCode)}, signal ${String(outcome.signal)})${this.stderr ? `: ${this.stderr}` : ''}`)
+  }
+
+  private registerImage(image: PtcImage): PtcImageWire {
+    const id = randomUUID()
+    this.images.set(id, image.attachment)
+    return { kind: 'image', id, attachmentId: image.attachment.attachmentId, path: image.path, width: image.attachment.width, height: image.attachment.height }
   }
 
   private async start(cwd: string): Promise<void> {
@@ -341,6 +363,11 @@ export class ProgramWorker {
       log: (text: unknown) => {
         if (!this.ready || !this.active || typeof text !== 'string') { this.fail('protocol', 'invalid program log'); return }
         if (!this.active.settled) this.active.admit(text)
+      },
+      image: (id: unknown) => {
+        const image = typeof id === 'string' ? this.images.get(id) : undefined
+        if (!this.ready || !this.active || image === undefined) { this.fail('protocol', 'invalid program image'); return }
+        this.active.image(image)
       },
       outputLimit: () => {
         if (!this.ready || !this.active) { this.fail('protocol', 'idle PTC output limit'); return }
