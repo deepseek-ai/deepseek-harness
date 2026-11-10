@@ -305,6 +305,17 @@ describe('ImOutputRegistry buttons', () => {
     expect(harness.stopped).toEqual([hosted.sessionId])
   })
 
+  it('refuses an interaction whose admitting source was removed', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    // The chat record outlives the rule in `im_messages`; the click must not fall through to "no allowlist".
+    harness.sources.delete('team')
+
+    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    expect(harness.buttons).toEqual([])
+    expect(harness.stopped).toEqual([])
+  })
+
   it('keeps a click without a stored message unattributed and ignores foreign chats', async () => {
     const harness = booted()
     harness.host({ output: 'probe' })

@@ -205,7 +205,11 @@ export class ImOutputRegistry implements ImOutputs {
     const chat = this.deps.im.chat(ImChatKey(interaction.bot.id, interaction.chat.id))
     if (chat === undefined) return
     const source = this.deps.im.source(chat.source)
-    if (source !== undefined && !allows(source.users, interaction.user.id)) return
+    // The rule this chat was admitted by is gone (a config edit removed it), while its record survives in
+    // `im_messages`. Refuse the interaction: skipping the allowlist there would let every member of the old chat press
+    // a control the session still owns, `/stop` included.
+    if (source === undefined) return
+    if (!allows(source.users, interaction.user.id)) return
     const message = interaction.message === undefined
       ? undefined
       : this.deps.im.history.get(ImMessageKey(interaction.bot.id, interaction.message.id))
