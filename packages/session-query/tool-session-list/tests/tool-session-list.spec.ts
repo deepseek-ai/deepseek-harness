@@ -1,8 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { performance } from 'node:perf_hooks'
-import { scheduler } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -107,7 +105,6 @@ async function mount(options: {
   archived?: string[]
   cached?: Array<[string, CheckpointRecord]>
   cache?: boolean
-  config?: ToolSessionList.Config
 } = {}) {
   const workspaces = options.workspaces ?? []
   const ctx = new Context()
@@ -139,7 +136,7 @@ async function mount(options: {
   }
   await ctx.sessionProjections.register(titleProjectionDefinition)
   await ctx.plugin(ListingQuery)
-  const fiber = await ctx.plugin(ToolSessionList, options.config)
+  const fiber = await ctx.plugin(ToolSessionList)
   const read = vi.spyOn(ctx.sessionQuery, 'readSession')
   const titles = vi.spyOn(ctx.sessionQuery, 'readTitleSnapshots')
   const open = vi.spyOn(ctx.sessionPersistence, 'open')
@@ -170,19 +167,6 @@ function prompt(session: Session) {
   return session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Human prompt' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
-}
-
-function measureRows(ctx: Context, summaryMs: number) {
-  const clock = { now: 0 }
-  const trace: string[] = []
-  const cachedSnapshot = ctx.sessionProjectionCache.cachedSnapshot.bind(ctx.sessionProjectionCache)
-  vi.spyOn(ctx.sessionProjectionCache, 'cachedSnapshot').mockImplementation((meta, keys) => {
-    clock.now += summaryMs
-    trace.push(meta.id)
-    return cachedSnapshot(meta, keys)
-  })
-  vi.spyOn(performance, 'now').mockImplementation(() => clock.now)
-  return { clock, trace }
 }
 
 describe('read-only Session list tools', () => {
@@ -349,89 +333,5 @@ describe('read-only Session list tools', () => {
     await mounted.fiber.dispose()
     expect(mounted.ctx.tools.get('list_workspace')).toBeUndefined()
     expect(mounted.ctx.tools.get('list_session')).toBeUndefined()
-  })
-})
-
-describe('Session list work slices', () => {
-  const headers = [header('first', 30), header('middle', 20), header('last', 10)]
-
-  it('resolves the default and explicit work slice through Loader configuration', () => {
-    expect(ToolSessionList.Config({})).toEqual({ listWorkSliceMs: 16 })
-    expect(ToolSessionList.Config({ listWorkSliceMs: 8 })).toEqual({ listWorkSliceMs: 8 })
-  })
-
-  it.each([0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid work slice %s before registering a projection or tool', async (listWorkSliceMs) => {
-      const ctx = new Context()
-      contexts.push(ctx)
-      await expect(ToolSessionList.apply(ctx, { listWorkSliceMs })).rejects.toThrow(
-        'tool-session-list: listWorkSliceMs must be a positive safe integer',
-      )
-    },
-  )
-
-  it('keeps cheap metadata reads in one synchronous slice', async () => {
-    const mounted = await mount({ headers })
-    const { trace } = measureRows(mounted.ctx, 2)
-    const yieldWork = vi.spyOn(scheduler, 'yield')
-    expect(value(await mounted.call('list_session'))).toEqual([item('first', 30), item('middle', 20), item('last', 10)])
-    expect(trace).toEqual(['first', 'middle', 'last'])
-    expect(yieldWork).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    { listWorkSliceMs: undefined, summaryMs: 8 },
-    { listWorkSliceMs: 8, summaryMs: 4 },
-  ])('resumes after an exhausted $listWorkSliceMs slice and resets the deadline after waiting', async ({ listWorkSliceMs, summaryMs }) => {
-    const mounted = await mount({ headers, config: listWorkSliceMs === undefined ? {} : { listWorkSliceMs } })
-    if (listWorkSliceMs === undefined) {
-      await mounted.fiber.dispose()
-      await mounted.ctx.plugin({ inject: ToolSessionList.inject, apply: (ctx: Context) => ToolSessionList.apply(ctx) })
-    }
-    const { clock, trace } = measureRows(mounted.ctx, summaryMs)
-    const yieldWork = vi.spyOn(scheduler, 'yield').mockImplementation(async () => {
-      trace.push('yield')
-      clock.now += 1_000
-    })
-    expect(value(await mounted.call('list_session'))).toEqual([item('first', 30), item('middle', 20), item('last', 10)])
-    expect(trace).toEqual(['first', 'middle', 'yield', 'last'])
-    expect(yieldWork).toHaveBeenCalledOnce()
-  })
-
-  it('returns the final completed row without a trailing yield', async () => {
-    const mounted = await mount({ headers: [header('last', 10)] })
-    measureRows(mounted.ctx, 16)
-    const yieldWork = vi.spyOn(scheduler, 'yield')
-    expect(value(await mounted.call('list_session'))).toEqual([item('last', 10)])
-    expect(yieldWork).not.toHaveBeenCalled()
-  })
-
-  it('checks the work slice while classifying rows that the filters exclude', async () => {
-    const mounted = await mount({
-      headers: headers.map(meta => ({ ...meta, origin: 'subagent', parentSession: SessionId('outside') })),
-    })
-    const cached = vi.spyOn(mounted.ctx.sessionProjectionCache, 'cachedSnapshot')
-    // Classification consumes the first slice even though no metadata row is read.
-    vi.spyOn(performance, 'now').mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(16)
-    const yieldWork = vi.spyOn(scheduler, 'yield').mockResolvedValue()
-    expect(value(await mounted.call('list_session'))).toEqual([])
-    expect(yieldWork).toHaveBeenCalledOnce()
-    expect(cached).not.toHaveBeenCalled()
-    expect(mounted.open).not.toHaveBeenCalled()
-  })
-
-  it('cancels at a yielded row without reading later metadata or returning a partial list', async () => {
-    const mounted = await mount({ headers, config: { listWorkSliceMs: 4 } })
-    const { trace } = measureRows(mounted.ctx, 4)
-    const controller = new AbortController()
-    const yieldWork = vi.spyOn(scheduler, 'yield').mockImplementation(async () => {
-      controller.abort(new Error('stop between rows'))
-    })
-    const result = await mounted.call('list_session', {}, controller.signal)
-    expect(result.error?.info).toMatchObject({ name: 'AbortError', code: 'ABORTED' })
-    expect(result.value).toBeUndefined()
-    expect(trace).toEqual(['first'])
-    expect(yieldWork).toHaveBeenCalledOnce()
-    expect(mounted.open).not.toHaveBeenCalled()
   })
 })

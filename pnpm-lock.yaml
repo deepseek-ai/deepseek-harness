@@ -14737,10 +14737,6 @@ importers:
         version: link:../session-query
 
   packages/session-query/tool-session-list:
-    dependencies:
-      '@deepseek-ai/schemastery':
-        specifier: link:../../../vendor/schemastery
-        version: link:../../../vendor/schemastery
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

@@ -4,7 +4,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import z from '@deepseek-ai/schemastery'
 import { registerSessionListMetadata } from '@deepseek-ai/dsh-session-query'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { listSessions, listWorkspaces } from './list.ts'
@@ -14,17 +13,6 @@ export const name = 'tool-session-list'
 /** Services needed for header-only listing and live metadata. */
 export const inject = ['tools', 'sessions', 'sessionQuery', 'workspaceRegistry', 'sessionProjections']
 
-/** Deployment-owned responsiveness for large Session lists. */
-export interface Config {
-  /** Positive integral work slice in milliseconds; defaults to 16. Checked between complete rows. */
-  readonly listWorkSliceMs?: number
-}
-
-/** Loader configuration for cooperative list scheduling. */
-export const Config: z<Config> = z.object({
-  listWorkSliceMs: z.number().step(1).min(1).default(16),
-})
-
 const pagination = {
   limit: { type: 'integer', description: 'Maximum entries to return, from 1 to 100. Defaults to 20.' },
   offset: { type: 'integer', description: 'Number of matching entries to skip. Defaults to 0.' },
@@ -33,14 +21,9 @@ const pagination = {
 /**
  * Grant tools access to all Workspace and Session metadata in this runtime.
  * @param ctx - scoped context granting these tools to its callers.
- * @param config - deployment work-slice choice; omitted uses 16 milliseconds.
  * @returns when the shared list metadata projection and tools are registered.
  */
-export async function apply(ctx: Context, config: Config = {}): Promise<void> {
-  const workSliceMs = config.listWorkSliceMs ?? 16
-  if (!Number.isSafeInteger(workSliceMs) || workSliceMs < 1) {
-    throw new TypeError('tool-session-list: listWorkSliceMs must be a positive safe integer')
-  }
+export async function apply(ctx: Context): Promise<void> {
   const readMetadata = await registerSessionListMetadata(ctx)
   ctx.tools.register(defineTool({
     name: 'list_workspace',
@@ -93,7 +76,7 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
       render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
     },
     isConcurrencySafe: () => true,
-    execute: (args, exec) => listSessions(ctx, readMetadata, args, exec.signal, workSliceMs),
+    execute: (args, exec) => listSessions(ctx, readMetadata, args, exec.signal),
     presentCall: args => ({ card: 'generic', title: 'List sessions', kind: 'read', rawInput: args.workspace_id }),
   }))
 }

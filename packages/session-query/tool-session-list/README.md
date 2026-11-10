@@ -25,7 +25,7 @@ Discover workspaces and sessions without resuming an agent or reading cold conve
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this optional plugin where the intended callers receive tools. It is absent from the default profiles.
+Mount this optional plugin where the intended callers receive tools. It has no configuration fields and is absent from the default profiles.
 
 ### Access and composition
 
@@ -41,10 +41,6 @@ The plugin requires `tools`, `sessions`, `sessionQuery`, `workspaceRegistry`, an
       name: '@deepseek-ai/dsh-tool-session-list'
 ```
 
-| Field | Default | Meaning |
-|---|---|---|
-| `listWorkSliceMs` | `16` | Positive safe integer work slice in milliseconds for Session metadata reads; checked between complete rows |
-
 When the composition already mounts `workspaceRegistry`, add only the tool row. Workspace initialization follows the [registry's existing history bootstrap](../../workspace/workspace/README.md); listing calls do not create or attach sessions or change registry records.
 
 ### Listing behavior
@@ -55,7 +51,7 @@ Both tools return an array directly. The [tool catalog](../../../docs/tool-catal
 
 Session order is descending `updated_at`, then ascending Session ID for ties. Activity time is the later of creation and the latest human-authored prompt; assistant activity and title changes do not advance it. Titles come from live projections or persisted projection metadata. Unavailable titles are `null`, and unavailable activity metadata falls back to creation time. Timestamps are ISO 8601 strings. Pin order and manual sidebar order do not affect the results.
 
-Session metadata reads yield between complete rows when the configured work slice expires and check cancellation before continuing. The slice is not a hard latency bound: it cannot split one synchronous row, query enumeration, or final sorting. The list does not promise one snapshot across all Sessions.
+After header enumeration, filtering, metadata reads, and sorting run synchronously. The call does not promise prompt handling of new cancellation requests during this work or one snapshot across all Sessions.
 
 ### Failures
 

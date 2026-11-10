@@ -1,7 +1,5 @@
 /** Header-only selection and cached metadata for the read-only listing tools. */
 
-import { performance } from 'node:perf_hooks'
-import { scheduler } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionListMetadata } from '@deepseek-ai/dsh-session-query'
@@ -80,7 +78,6 @@ export function listWorkspaces(ctx: Context, input: PageInput, signal: AbortSign
  * @param readLiveMetadata - ready reader owned by this plugin's registration.
  * @param input - filters and pagination arguments.
  * @param signal - caller cancellation, forwarded to the corpus listing.
- * @param workSliceMs - resolved positive integral work slice between complete rows.
  * @returns filtered Session metadata ordered by activity, then identity.
  */
 export async function listSessions(
@@ -88,7 +85,6 @@ export async function listSessions(
   readLiveMetadata: (session: Session) => SessionListMetadata,
   input: SessionListInput,
   signal: AbortSignal,
-  workSliceMs: number,
 ): Promise<SessionListItem[]> {
   const { limit, offset } = resolvePage(input)
   signal.throwIfAborted()
@@ -108,14 +104,8 @@ export async function listSessions(
   const headers = new Map(records.map(record => [record.header.id, record.header]))
   const nearestWorkspace = ancestorWorkspaceReader(headers, ownership)
   const items = []
-  let yieldDeadline = performance.now() + workSliceMs
   for (const { header } of records) {
     signal.throwIfAborted()
-    if (performance.now() >= yieldDeadline) {
-      await scheduler.yield()
-      signal.throwIfAborted()
-      yieldDeadline = performance.now() + workSliceMs
-    }
     if (!input.contain_subagent && header.origin === 'subagent') continue
     if (archived.has(header.id) !== (input.archived ?? false)) continue
     if (workspaceId !== undefined) {

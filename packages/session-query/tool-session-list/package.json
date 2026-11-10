@@ -67,8 +67,5 @@
     "@deepseek-ai/dsh-session-title": {
       "optional": true
     }
-  },
-  "dependencies": {
-    "@deepseek-ai/schemastery": "workspace:~"
   }
 }
