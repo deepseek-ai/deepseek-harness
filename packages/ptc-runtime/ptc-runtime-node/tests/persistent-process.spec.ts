@@ -57,7 +57,7 @@ it('runs initialization before the program in the same REPL and discards its com
   h.setCall(async () => encodePtcJsonWire(43))
   expect(decodePtcJsonWire((await h.run('({ value: await helper.read(), same: helper === saved })', namespaces)).value))
     .toEqual({ value: 43, same: true })
-  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize'])
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['initialize\n'])
   expect(decodePtcJsonWire((await h.run('42', [], 1024, '')).value)).toBe(42)
 })
 
@@ -199,7 +199,7 @@ it('keeps an environment while capturing each evaluation and binding replies sep
   expect(await h.run('let count = 1; const saved = tools.echo;', declarations)).toEqual({})
   const result = await h.run('count++; process.stdout.write("raw"); inspect("value", count); await saved({})', declarations)
   expect(decodePtcJsonWire(result.value)).toBe(42)
-  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2'])
+  expect(h.seen.filter(item => item.type === 'log').map(item => item.text)).toEqual(['raw', 'value 2\n'])
   expect(h.state.env).toEqual({})
   expect(h.nativeEnvironment).toEqual({ PATH: '/native' })
   const failed = await h.run('throw new Error("failed")', [], diagnosticBudget)

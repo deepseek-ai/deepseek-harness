@@ -51,7 +51,7 @@ describe('Node program process', () => {
     const result = await run({ program: 'const n: number = 6; inspect("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ n: 42, cwd, env: {} })
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ready'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ready\n'])
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
   })
 
@@ -181,7 +181,7 @@ describe('Node program process', () => {
       controller.abort('stop')
       const result = await pending
       expect(result.error?.kind).toBe('abort')
-      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before hot loop'])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before hot loop\n'])
     } finally { controller.abort(); await pending }
   })
 
@@ -320,10 +320,10 @@ describe('Node program process', () => {
   })
 })
 
-it('preserves empty console entries and bounds native output overflow', async () => {
+it('preserves empty inspected entries and bounds native output overflow', async () => {
   const { run } = await setup({ maxOutputBytes: 100 })
   const lines = await run({ program: 'inspect("a"); inspect(""); inspect("b")', bindings: [] })
-  expect(lines.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a', '', 'b'])
+  expect(lines.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a\n', '\n', 'b\n'])
   const overflow = await run({ program: 'const fs=await import("node:fs"); fs.writeSync(1,"HEAD-"+"x".repeat(100000));', bindings: [] })
   expect(overflow.error?.kind).toBe('output-limit')
   expect(overflow.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('HEAD-')

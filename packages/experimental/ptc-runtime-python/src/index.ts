@@ -223,7 +223,7 @@ const CLOSE_REAP_MARGIN_MS = 2_000
  * of astral characters is ~4x the budget in each string that holds it. The
  * heaviest path holds THREE such copies at once: a single
  * `sys.stdout.write(line + "\n")` keeps the caller's `text` argument (alive for
- * the whole `write` call, ~4x), the line slice `text[pos:newline]` handed to
+ * the whole `write` call, ~4x), the line slice `text[pos:newline + 1]` handed to
  * `LogBuffer.push` (~4x), and the `text.encode("utf-8")` copy `_push_locked`
  * takes to charge and ship it (~4x). The settlement `flush_line` path holds only
  * two (its `"".join(...)` and that encode copy — it drops the pending chunks
@@ -1290,13 +1290,8 @@ export class PythonPtcRuntime extends PtcRuntime {
       // Stray-byte capture: anything the child writes to its stdout/stderr
       // (native prints, C-extension writes) still counts against the ledger.
       //
-      // Output is admitted per LINE, not per transport chunk. `logs` entries
-      // are joined with `\n` downstream (PTC mode), so each entry must be one
-      // line: pushing a raw `data` chunk would turn every arbitrary pipe-read
-      // boundary into a model-visible newline, so a single 200 KiB native write
-      // split across pipe reads would read back with spurious line breaks. The
-      // child's own `log` frames are already line-granular; stray capture
-      // matches them by splitting on `\n`.
+      // Complete lines retain their newline; final residuals retain their
+      // unterminated text. Transport chunk boundaries do not add separators.
       //
       // Buffered as raw `Buffer` chunks with a running SERIALIZED-cost counter,
       // exactly like the fd-3 reader below and for the same reasons: a string
@@ -1340,7 +1335,7 @@ export class PythonPtcRuntime extends PtcRuntime {
           stray.blocks = []
           let newline: number
           while ((newline = buffered.indexOf(0x0a)) >= 0) {
-            admit(buffered.subarray(0, newline).toString('utf8'))
+            admit(buffered.subarray(0, newline + 1).toString('utf8'))
             buffered = buffered.subarray(newline + 1)
           }
           // Carry the residual as a fresh right-sized copy, not the subarray view
@@ -1446,8 +1441,8 @@ export class PythonPtcRuntime extends PtcRuntime {
           stray.blocks = []
           // Do not admit an EMPTY entry: when the whole residual is a single
           // unfinished multibyte sequence, `full` was drained into `keep` and no
-          // complete byte stream remains to admit. `admit('')` would push a
-          // model-visible bogus empty line (logs are joined with '\n' downstream).
+          // complete byte stream remains to admit. `admit('')` would push an
+          // empty output entry whose wrapper would consume the ledger.
           if (full.length > 0) admit(full.toString('utf8'))
         } else {
           stray.chunks = []

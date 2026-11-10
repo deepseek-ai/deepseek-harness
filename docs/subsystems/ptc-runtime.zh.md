@@ -95,7 +95,8 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text and inspected images. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
@@ -184,7 +185,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
+`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -204,7 +205,7 @@ declare class PtcImage {
 ```
 
 ```ts type-equiv
-/** One captured text entry or explicitly inspected image, in emission order. */
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
 type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 ```
 

@@ -84,7 +84,7 @@ export async function runNodeMain(
     declare readonly height: number
     private constructor() { throw new Error('Images are created by image-producing tools') }
     [inspect.custom](_depth: number | null, options: ImageInspectOptions): this {
-      options.ptcImageCollector?.(this)
+      collectImage(this, options)
       return this
     }
   }
@@ -108,6 +108,7 @@ export async function runNodeMain(
     const evaluation = context.getStore()
     if (evaluation && acceptsCalls(evaluation)) evaluation.logs.push(text)
   } }
+  const { inspect: programInspect, collectImage } = makeInspect(logSink, images, imageSink)
   captureStreamWrites(logSink, processState.stdout)
   captureStreamWrites(logSink, processState.stderr)
   const connection = createProcessRpc<HostMethods, ProgramMethods>(stream, maxMessageBytes, {
@@ -157,7 +158,7 @@ export async function runNodeMain(
             // Context access must not reserve a function-body parameter named process.
             Object.defineProperty(evaluator.globals, 'process', { configurable: true, writable: true, value: processState })
             Object.defineProperty(evaluator.globals, 'inspect', {
-              configurable: true, enumerable: true, value: makeInspect(logSink, images, imageSink),
+              configurable: true, enumerable: true, value: programInspect,
             })
             Object.defineProperty(evaluator.globals, 'Image', { configurable: true, enumerable: true, value: Image })
             if (format !== 'function-body') Object.defineProperty(evaluator.globals, 'console', {

@@ -33,7 +33,7 @@ kind: "package-reference"
 
 设置 `discardCompletion: true` 可跳过成功完成值的 JSON 验证与序列化，并从结果中省略该值；捕获日志与失败信息仍会返回。TypeScript 工具执行器通过此选项提供显式程序输出，workflow 消费方则继续保留完成值。
 
-宿主绑定可以返回 `new PtcImage(path, attachment)`，向 Node 程序提供已存储的图片。显式展示会将 `{ type: 'image', attachment }` 条目追加到 `result.output`，与 `{ type: 'text', text }` 条目按发出顺序排列。
+宿主绑定可以返回 `new PtcImage(path, attachment)`，向 Node 程序提供已存储的图片。显式展示会将 `{ type: 'image', attachment }` 条目追加到 `result.output`，与 `{ type: 'text', text }` 条目按发出顺序排列。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。
 
 ```text
 const spec = ctx.ptcRuntime.resolve({

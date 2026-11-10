@@ -53,7 +53,7 @@ it('clears the environment and returns a binding result after captured output', 
   }
   const result = await h.run('const doubled = await tools.echo({ n: 21 }); inspect("got", doubled); return { doubled };')
   expect(decodePtcJsonWire(result.value)).toEqual({ doubled: 42 })
-  expect(h.logs).toEqual(['got 42'])
+  expect(h.logs).toEqual(['got 42\n'])
   expect(h.state.env).toEqual({})
   expect(h.state.env).not.toBe(h.nativeEnvironment)
   expect(Object.getPrototypeOf(h.state.env)).toBeNull()
@@ -69,7 +69,7 @@ it.each(['function-body', 'repl', 'script'] as const)('provides console in the o
   const result = await h.run('inspect(typeof console.log, typeof console.dir, typeof console.table);', 1024, format,
     { discardCompletion: true })
   expect(result).toEqual({})
-  expect(h.logs).toEqual(['function function function'])
+  expect(h.logs).toEqual(['function function function\n'])
   expect(Object.getOwnPropertyDescriptor(globalThis, 'console')).toEqual(nativeConsole)
 })
 

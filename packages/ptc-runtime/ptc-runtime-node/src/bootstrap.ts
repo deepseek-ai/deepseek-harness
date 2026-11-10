@@ -18,8 +18,8 @@ const {
 
 /** Node formatting options shared with the runtime-owned Image hook. */
 export interface ImageInspectOptions extends InspectOptions {
-  /** Collect an Image reached during this formatting call. */
-  ptcImageCollector?: (image: object) => void
+  /** Primitive token retained by Node when passing options to a formatter in another VM context. */
+  ptcImageCollector?: symbol
 }
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
@@ -107,17 +107,21 @@ export class LogBuffer {
  * @param logs - the buffer every rendered line is pushed into.
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
- * @returns The program's inspect function.
+ * @returns The program's inspect function and its matching Image collection hook.
  * @throws If object formatting fails; preceding arguments remain visible.
  */
 export function makeInspect(
   logs: Pick<LogBuffer, 'push'>, images: Pick<WeakMap<object, string>, 'get'>, emitImage: (id: string) => void,
-): (...args: unknown[]) => void {
-  return (...args: unknown[]): void => {
+): {
+  inspect: (...args: unknown[]) => void
+  collectImage: (image: object, options: ImageInspectOptions) => void
+} {
+  const collectors = new Map<symbol, string[]>()
+  const programInspect = (...args: unknown[]): void => {
     const pending: string[] = []
     const flush = (): void => {
       if (pending.length === 0) return
-      logs.push(pending.join(' '))
+      logs.push(pending.join(' ') + '\n')
       pending.length = 0
     }
     for (const arg of args) {
@@ -128,25 +132,33 @@ export function makeInspect(
         continue
       }
       const nested: string[] = []
+      const collector = Symbol()
       const options: ImageInspectOptions = {
         depth: null, maxArrayLength: null, maxStringLength: null,
-        ptcImageCollector(image) {
-          const id = images.get(image)
-          if (id !== undefined) nested.push(id)
-        },
+        ptcImageCollector: collector,
       }
+      collectors.set(collector, nested)
       try {
         pending.push(typeof arg === 'string' ? arg : inspect(arg, options))
       } catch (error: unknown) {
         flush()
         throw error
+      } finally {
+        collectors.delete(collector)
       }
       if (nested.length === 0) continue
       flush()
       for (const id of nested) emitImage(id)
     }
     flush()
-    if (args.length === 0) logs.push('')
+    if (args.length === 0) logs.push('\n')
+  }
+  return {
+    inspect: programInspect,
+    collectImage(image, options) {
+      const id = images.get(image)
+      if (id !== undefined && options.ptcImageCollector !== undefined) collectors.get(options.ptcImageCollector)?.push(id)
+    },
   }
 }
 

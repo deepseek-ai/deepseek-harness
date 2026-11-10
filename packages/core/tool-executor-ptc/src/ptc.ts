@@ -270,15 +270,17 @@ function renderRunOutput(
   for (const block of output) {
     if (block.type === 'text') remaining.push(block.text)
     else {
-      appendText(remaining.join('\n'))
+      appendText(remaining.join(''))
       remaining.length = 0
       content.push(block)
     }
   }
-  if (value.result !== undefined) remaining.push(renderValue(value.result))
-  if (value.sandbox?.enforcement === 'partial') remaining.push('File sandbox enforcement is partial on this host.')
-  if (value.sandbox?.denied) remaining.push(`The ${value.sandbox.mode} file sandbox denied an operation.${guidance}`)
-  appendText(remaining.filter(text => text.length > 0).join('\n'))
+  appendText(remaining.join(''))
+  const details: string[] = []
+  if (value.result !== undefined) details.push(renderValue(value.result))
+  if (value.sandbox?.enforcement === 'partial') details.push('File sandbox enforcement is partial on this host.')
+  if (value.sandbox?.denied) details.push(`The ${value.sandbox.mode} file sandbox denied an operation.${guidance}`)
+  appendText(details.filter(text => text.length > 0).join('\n'))
   return content.length > 0 ? content : [{ type: 'text', text: `(${toolName} completed with no output)` }]
 }
 
@@ -779,7 +781,7 @@ export function createRunCodeTransport(
               failure.name = 'AbortError'
             } else {
               const logsText = logs.length > 0 && !hasImages
-                ? `\nCaptured output:\n${logs.join('\n')}` : ''
+                ? `\nCaptured output:\n${logs.join('')}` : ''
               const sandboxText = result.sandbox === undefined ? ''
                 : `\nFile sandbox: ${result.sandbox.mode}${result.sandbox.enforcement === undefined ? '' : `; enforcement: ${result.sandbox.enforcement}`}${result.sandbox.denied ? '; operation denied' : ''}.`
               const failureText = limitError === undefined || limitError.message === result.error.message

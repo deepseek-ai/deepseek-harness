@@ -15,6 +15,8 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
 
 其他图片工具保留其声明的程序返回值，并将图片自动附加到模型上下文。图片适配要求附件在程序文件系统中有可读路径。`fs-ssh` 未提供这项映射，因此该组合中的 `read_image` 与 CUA 截图绑定会失败。需要程序 Image 时，使用本地文件系统组合。
 
+格式化选定的值所需内存可能大于保留的输出；参见 [Node 格式化的内存限制](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)。
+
 ## 迁移
 
 1. 将依赖完成值的程序，改为显式 inspect 所需的值：
@@ -39,6 +41,6 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
    ```
 
 3. 直接调用运行时的消费方可设置 `discardCompletion: true`，选择相同的显式输出行为。
-4. 第三方 `PtcRuntime` 提供方将返回的 `logs` 数组替换为 `output: PtcOutput[]`；直接消费运行时结果的调用方改为读取 `result.output`。文本条目为 `{ type: 'text', text }`，图片条目为 `{ type: 'image', attachment }`，数组顺序就是展示顺序。
+4. 第三方 `PtcRuntime` 提供方将返回的 `logs` 数组替换为 `output: PtcOutput[]`；直接消费运行时结果的调用方改为读取 `result.output`。文本条目为 `{ type: 'text', text }`，图片条目为 `{ type: 'image', attachment }`，数组顺序就是展示顺序。保留实际输出的换行，相邻文本条目直接拼接，不额外插入分隔符。
 5. 使用自定义 `launch.bootstrapPath` 的部署，请按 [Node PTC bootstrap 升级指南](../ptc-bootstrap-protocol/guide.zh.md)更新。
 6. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。

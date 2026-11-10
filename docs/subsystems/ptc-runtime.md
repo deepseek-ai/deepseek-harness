@@ -95,7 +95,8 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text and inspected images. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
@@ -184,7 +185,7 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## Captured output and the failure taxonomy
 
-`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
 
 ```ts public-api
 /** A stored image readable from the program's execution environment. */
@@ -204,7 +205,7 @@ declare class PtcImage {
 ```
 
 ```ts type-equiv
-/** One captured text entry or explicitly inspected image, in emission order. */
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
 type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 ```
 

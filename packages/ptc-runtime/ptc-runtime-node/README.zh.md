@@ -69,7 +69,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 `per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
-`inspect(...values)` 直接渲染字符串，其他值使用 Node 的 `util.inspect` 格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。注册的 Image 可以直接输出，也可以在 Node 格式化嵌套值时输出，包括 Map 条目、Set 的值以及可枚举的 Symbol 属性。自定义 inspect 方法决定会访问哪些嵌套值。文本和所选图片在共享输出预算内遵循参数顺序。如果对象格式化抛错，此前 inspect 的参数仍然可见。
+`inspect(...values)` 直接渲染字符串，其他值使用 Node 的 `util.inspect` 格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。注册的 Image 可以直接输出，也可以在 Node 格式化嵌套值时输出，包括 Map 条目、Set 的值以及可枚举的 Symbol 属性。自定义 inspect 方法决定会访问哪些嵌套值。文本和所选图片在共享输出预算内遵循参数顺序。如果对象格式化抛错，此前 inspect 的参数仍然可见。每个文本输出组以换行结尾，原始流写入则保留实际文本。
 
 所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
 
@@ -236,6 +236,7 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **Script 值可能跨 realm**——绑定结果、绑定拒绝类和导入模块可能使用 Script context 之外的构造器。这些值的 `instanceof Array` 或 `instanceof Error` 可能为 false；应使用 `Array.isArray` 和声明的绑定错误类。
 - **内存保留环境为每个存活所有者保留一个进程**——空闲所有者保留进程及堆内存，直到显式释放、所有者销毁或执行失败。并行创建多个所有者会保留多个进程；空闲过期机制留待后续处理。
 - **输出上限拒绝超量内容，而不保留每个字节**——溢出只能保存本提供方交付的有界结果。
+- **格式化先分配内存再核算输出**——完整格式化对象和 TypedArray 所需的内存可能远大于保留的输出。输出预算不限制这些临时分配；耗尽配置的堆上限可能以 `worker-exit` 结束执行。
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
 - **预装 bootstrap 需要兼容的协议版本**——就绪握手会在派发代码前拒绝缺失或不匹配的版本。请将 `launch.bootstrapPath` 与宿主一同升级；运行时不会安装远端 bootstrap 更新。
 - **图片引用随进程保留**——每张已获取图片的宿主元数据保留到进程终止或所有者释放，包括程序尚未展示的图片。保留环境中的长截图循环会累积这些引用。

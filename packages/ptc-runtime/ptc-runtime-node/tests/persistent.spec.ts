@@ -75,7 +75,7 @@ describe.each([
   it('retains declarations, closures, object identity, and imports across evaluations', async () => {
     const { run, cwd } = await setup()
     expect((await run('const box: { count: number } = { count: 1 }; let alias = box; function increment() { return ++box.count }; const path = await import("node:path");')).error).toBeUndefined()
-    expect(await run('inspect("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ output: [{ type: 'text', text: 'second call' }], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
+    expect(await run('inspect("second call"); ({ count: increment(), same: box === alias, dir: path.basename(process.cwd()), env: Object.keys(process.env) })')).toMatchObject({ output: [{ type: 'text', text: 'second call\n' }], value: { count: 2, same: true, dir: cwd.split(/[\\/]/).at(-1), env: [] } })
   })
 
 
@@ -95,8 +95,8 @@ describe.each([
     const { run } = await setup()
     await run('let total = 0;')
     const code = '{ const amount = await tools.value({}); total += amount; inspect(amount); }'
-    expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ output: [{ type: 'text', text: '2' }] })
-    expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ output: [{ type: 'text', text: '3' }] })
+    expect(await run(code, { bindings: bindings(async () => 2) })).toMatchObject({ output: [{ type: 'text', text: '2\n' }] })
+    expect(await run(code, { bindings: bindings(async () => 3) })).toMatchObject({ output: [{ type: 'text', text: '3\n' }] })
     expect(await run('({ total, local: typeof amount })')).toMatchObject({ output: [], value: { total: 5, local: 'undefined' } })
   })
 
@@ -236,7 +236,7 @@ describe.each([
     await entered.promise
     if (action === 'abort') controller.abort()
     const result = await pending
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop\n'])
     expect(result.error?.kind).toBe(action)
     expect(result.error?.message).toContain('retained variables were preserved')
     expect((await run('({ count: kept.count, same: kept === alias, effects })')).value)
@@ -259,7 +259,7 @@ describe.each([
       await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
       if (action === 'abort') controller.abort()
       const result = await pending
-      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop'])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before stop\n'])
       expect(result.error?.kind).toBe(action)
       expect(result.error?.message).toContain('retained variables were cleared')
       expect((await run('typeof kept')).value).toBe('undefined')

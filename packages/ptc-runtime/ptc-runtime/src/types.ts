@@ -9,7 +9,7 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SandboxEnforcement, SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 
-/** One captured text entry or explicitly inspected image, in emission order. */
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
 export type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 
 /** Source evaluation form, independent of retained program state. */
@@ -170,7 +170,8 @@ export interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text and inspected images. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */

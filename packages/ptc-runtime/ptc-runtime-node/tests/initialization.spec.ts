@@ -28,7 +28,7 @@ describe('Node environment initialization', () => {
     const { run } = await setup({}, 'globalThis.helper = { read: () => tools.value({}) }; inspect("initialized"); helper')
     expect(await run('var saved = helper; await helper.read()', {
       bindings: tools({ value: async () => 'first' }),
-    })).toMatchObject({ output: [{ type: 'text', text: 'initialized' }], value: 'first' })
+    })).toMatchObject({ output: [{ type: 'text', text: 'initialized\n' }], value: 'first' })
     expect(await run('({ value: await helper.read(), same: saved === helper })', {
       bindings: tools({ value: async () => 'second' }),
     })).toMatchObject({ output: [], value: { value: 'second', same: true } })
@@ -151,7 +151,7 @@ describe('Node environment initialization', () => {
     const { run } = await setup({ maxOutputBytes: 256 }, 'globalThis.resource = 42; inspect("x".repeat(120))')
     const result = await run('inspect("y".repeat(120)); "z".repeat(50)')
     expect(result.error?.kind).toBe('output-limit')
-    expect(result.output[0]?.type === 'text' ? result.output[0].text : undefined).toBe('x'.repeat(120))
+    expect(result.output[0]?.type === 'text' ? result.output[0].text : undefined).toBe('x'.repeat(120) + '\n')
     expect(result.error?.message).toContain('retained variables were cleared')
     expect((await run('resource')).value).toBe(42)
   })
