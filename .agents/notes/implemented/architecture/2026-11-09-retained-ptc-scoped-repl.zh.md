@@ -421,7 +421,7 @@ REPL 用 Node 的 `domain` 接住程序启动的异步工作里抛出的错误�
 | `ptc-runtime-node` 的 `config.ts` | 布尔字段 `replScoped`，默认 false，只能和 `persistent-in-memory` 一起用，否则加载时报错 |
 | `ptc-runtime-node` 的 `execution.ts` | `persistent-in-memory` 分支里 `replScoped` 为 true 时：格式 `scoped-repl`，`retainsState` 为 true，TypeScript 按 REPL 语句擦除，配一段新的模型说明 |
 | `ptc-runtime-node` 的 `evaluators/index.ts` | 求值器表含 `scoped-repl`，三个开关取默认值 |
-| `ptc-runtime-node` 的 `protocol.ts` | 协议版本是 3，旧 bootstrap 在就绪阶段报错；升级指南 `docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol-3/` 同时说明 `PtcProgramFormat` 新增的成员 |
+| `ptc-runtime-node` 的 `protocol.ts` | 协议版本是 3，旧 bootstrap 在就绪阶段报错；升级指南 `docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol/` 同时说明 `PtcProgramFormat` 新增的成员 |
 | workflow-ptc 的 `host.ts` | `scoped-repl` 用和 `repl` 一样的包装 `await (async () => {…})()` |
 | `ptc-runtime-node` 的 `configuration.ts`（CUA 用它合并配置） | `resolvePersistentExecution` 返回 `executionMode`、`scriptPersistence`、`replScoped` 三个字段，一起合并：`scoped-repl` 对应 `replScoped: true`，其余格式为 `false`，覆盖 profile 里残留的值 |
 | 文档、快照和测试 | 包 README 的配置项、行为说明和"已知限制"、config catalog、快照场景 `ptc-scoped-repl`；构建产物的 e2e 含 `replScoped: true` 用例 |

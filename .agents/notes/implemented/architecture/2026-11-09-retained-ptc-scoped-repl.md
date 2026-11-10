@@ -421,7 +421,7 @@ The `scoped-repl` format connects the evaluator with only the changes the connec
 | `config.ts` in `ptc-runtime-node` | The boolean field `replScoped`, default false, accepted only with `persistent-in-memory` and rejected at load otherwise |
 | `execution.ts` in `ptc-runtime-node` | In the `persistent-in-memory` branch with `replScoped`, format `scoped-repl`, `retainsState` true, REPL-statement TypeScript erasure, and new model guidance |
 | `evaluators/index.ts` in `ptc-runtime-node` | The evaluator table maps `scoped-repl` to this evaluator with the default of all three options |
-| `protocol.ts` in `ptc-runtime-node` | The protocol version is 3, so older bootstraps fail at readiness; the upgrade guide `docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol-3/` also covers the new `PtcProgramFormat` member |
+| `protocol.ts` in `ptc-runtime-node` | The protocol version is 3, so older bootstraps fail at readiness; the upgrade guide `docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol/` also covers the new `PtcProgramFormat` member |
 | `host.ts` in workflow-ptc | `scoped-repl` uses the same wrapper as `repl`, `await (async () => {…})()` |
 | `configuration.ts` in `ptc-runtime-node` (used by CUA to merge settings) | `resolvePersistentExecution` returns `executionMode`, `scriptPersistence`, and `replScoped` to merge together: `scoped-repl` yields `replScoped: true` and every other format `false`, replacing a stale profile value |
 | Documentation, snapshots, and tests | Package README configuration, behavior, and known limitations; the config catalog; the snapshot scenario `ptc-scoped-repl`; a built-artifact e2e case with `replScoped: true` |
