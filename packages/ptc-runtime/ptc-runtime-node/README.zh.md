@@ -69,7 +69,9 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 `per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
-`inspect(...values)` 独立渲染参数，并按参数顺序输出文本和选中的图片。所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
+`inspect(...values)` 接受无损 JSON 值和已注册的 Image，包括数组和对象中嵌套的 Image。字符串直接展示；其他 JSON 值按两空格缩进的 JSON 格式展示。格式化遵循原生 `JSON.stringify` 的嵌套深度限制。数组和字符串在共享输出预算内完整展示。undefined 参数被省略。容器中应省略 undefined 属性，Error 对象应改为 inspect `error.message`。二进制视图、循环引用等无效值会抛出指明参数位置的异常；此前已 inspect 的参数仍然可见。文本与选中的图片按参数顺序输出。
+
+所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
 
 `run_code` 设置 `discardCompletion: true`：函数返回值和末尾表达式的值不经过 JSON 序列化，也不出现在结果中，显式 inspect 的输出仍然可见。直接调用运行时的消费方在未设置此选项时，仍可取得原有的无损 JSON 完成值。
 
@@ -233,7 +235,6 @@ AsyncFunction 和 Node REPL 共用同步 `registerHooks` 和以 symbol 为键的
 - **绑定在传输接纳时受限**——控制限制不约束 Host 绑定生成结果期间分配的内存。
 - **预装 bootstrap 需要兼容的协议版本**——就绪握手会在派发代码前拒绝缺失或不匹配的版本。请将 `launch.bootstrapPath` 与宿主一同升级；运行时不会安装远端 bootstrap 更新。
 - **图片引用随进程保留**——每张已获取图片的宿主元数据保留到进程终止或所有者释放，包括程序尚未展示的图片。保留环境中的长截图循环会累积这些引用。
-- **图片查找范围超出文本预览**——对象文本最多展示四层深度、100 个数组条目及每个字符串的 10,000 个字符。二进制视图与 Proxy 按文本预览展示，不扫描其中的图片。图片查找沿其他容器的可枚举数据属性遍历，包括文本预览省略的位置。需要明确对应关系时，将所选图片直接与说明文字一起传入。
 
 <a id="dev-note"></a>
 ### 开发备注

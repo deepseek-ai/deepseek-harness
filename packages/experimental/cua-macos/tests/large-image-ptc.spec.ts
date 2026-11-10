@@ -164,7 +164,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   expect(image.attachment.width).toBeGreaterThan(0)
   expect(image.attachment.width).toBeLessThan(WIDTH)
   expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
-    .toContain(`width: ${image.attachment.width}`)
+    .toContain(`"width": ${image.attachment.width}`)
   const stored = await context.attachments.readImage(image.attachment)
   const path = context.attachments.imageHostPath(image.attachment)
   if (path === undefined) throw new Error('The real local attachment has no disk path')

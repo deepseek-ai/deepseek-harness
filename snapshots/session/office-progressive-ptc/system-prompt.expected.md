@@ -42,7 +42,7 @@ Inside the program:
 - Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
-- Show selected results with `inspect(...values)`. Each call accepts text, objects, and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Select the values you need to display.
+- Show selected results with `inspect(...values)`. Each call accepts JSON values and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Extract just what you need.
 
 Program-only SDK bindings:
 
@@ -555,7 +555,7 @@ Inside the program:
 - Call tools as `await tools.name(args)` — quoted access for exotic names: `tools["my-tool"](args)`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with `ToolCallError`, whose `toolName` identifies the failed tool and whose `message` is human-readable — `try/catch` it to handle and continue.
 - Independent read-only calls MAY overlap under `Promise.all` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with `await`.
-- Show selected results with `inspect(...values)`. Each call accepts text, objects, and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Select the values you need to display.
+- Show selected results with `inspect(...values)`. Each call accepts JSON values and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Extract just what you need.
 
 Program-only SDK bindings:
 

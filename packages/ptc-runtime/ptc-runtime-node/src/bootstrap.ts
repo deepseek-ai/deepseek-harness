@@ -15,7 +15,6 @@ const capturedJsonStringify = JSON.stringify
 const capturedObjectCreate = Object.create
 const capturedObjectDefineProperty = Object.defineProperty
 const capturedObjectKeys = Object.keys
-const capturedObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -100,7 +99,7 @@ export class LogBuffer {
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
  * @returns The program's inspect function.
- * @throws If a defined argument is not lossless JSON with optional registered Images.
+ * @throws If a defined argument is not lossless JSON with optional registered Images, or native JSON formatting fails.
  */
 export function makeInspect(
   logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
@@ -112,7 +111,7 @@ export function makeInspect(
       logs.push(pending.join(' '))
       pending.length = 0
     }
-    for (const arg of args) {
+    for (const [index, arg] of args.entries()) {
       const direct = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
       if (direct !== undefined && emitImage !== undefined) { flush(); emitImage(direct); continue }
       if (arg === undefined) continue
@@ -125,9 +124,14 @@ export function makeInspect(
       }
       if (value === undefined) {
         flush()
-        throw new CapturedError('inspect values must be lossless JSON or Images')
+        throw new CapturedError(`inspect argument ${index + 1} must be lossless JSON or an Image; omit undefined properties and pass error.message for Errors`)
       }
-      pending.push(typeof value === 'string' ? value : capturedJsonStringify(value, undefined, 2))
+      try {
+        pending.push(typeof value === 'string' ? value : capturedJsonStringify(value, undefined, 2))
+      } catch (error: unknown) {
+        flush()
+        throw error
+      }
       if (images === undefined || emitImage === undefined) continue
       const nested: string[] = []
       const visit: unknown[] = [value]
@@ -137,8 +141,7 @@ export function makeInspect(
         const id = images.get(current)
         if (id !== undefined) { nested.push(id); continue }
         for (const key of capturedObjectKeys(current).reverse()) {
-          const property = capturedObjectGetOwnPropertyDescriptor(current, key)
-          if (property !== undefined && 'value' in property) visit.push(property.value)
+          visit.push((current as Record<string, unknown>)[key])
         }
       }
       if (nested.length > 0) {

@@ -69,7 +69,9 @@ Profile editors can import `resolvePersistentExecution` from `@deepseek-ai/dsh-p
 
 In `per-call` mode, programs are async function bodies: top-level `await` and `return` work, and only erasable TypeScript is accepted. Node globals remain available, and a function body may declare a local `process`, including `const process = await import("node:process")`. A successful call returns its lossless-JSON value as `result.value` and captured text and images as ordered `result.output` entries. `result.sandbox` reports the selected mode, observed denial and the backend's full or partial enforcement independently of the program outcome.
 
-`inspect(...values)` renders arguments independently and emits text and selected images in argument order. All execution modes provide the complete native Node console, whose stdout and stderr writes enter the captured output. Model instructions say: "Use inspect(...values) to display output. Do not use console."
+`inspect(...values)` accepts lossless JSON values and registered Images, including Images nested in arrays and objects. Strings render directly; other JSON values use two-space JSON formatting. Formatting follows the nesting limits of native `JSON.stringify`. Arrays and strings remain complete within the shared output budget. Undefined arguments are omitted. Omit undefined properties from containers and inspect `error.message` for Error objects. Invalid values, including binary views and cycles, throw an exception naming the argument; preceding inspected arguments remain visible. Text and selected images follow argument order.
+
+All execution modes provide the complete native Node console, whose stdout and stderr writes enter the captured output. Model instructions say: "Use inspect(...values) to display output. Do not use console."
 
 `run_code` sets `discardCompletion: true`: function return values and final expression values are omitted without JSON serialization, while inspected output remains visible. Direct runtime consumers receive the usual lossless-JSON completion unless they set this option.
 
@@ -233,7 +235,6 @@ These limits qualify the execution guarantees and retained output.
 - **Bindings are bounded at transport admission** — control limits do not bound the memory a host binding allocates while producing its result.
 - **Preinstalled bootstraps require a compatible protocol revision** — readiness rejects a missing or mismatched revision before dispatching code. Upgrade `launch.bootstrapPath` with the host; the runtime does not install remote bootstrap updates.
 - **Image references live with the process** — every acquired image retains host metadata until the process terminates or its owner is released, including images that the program never displays. Long capture loops in retained environments accumulate these references.
-- **Image discovery traverses beyond the text preview** — object text uses depth 4, at most 100 array entries and 10,000 characters per string. Binary views and Proxies render as text previews without image discovery. Image discovery follows enumerable data properties through other containers, including positions omitted from the text preview. Pass selected images directly with labels when their association must be explicit.
 
 <a id="dev-note"></a>
 ### Dev Note

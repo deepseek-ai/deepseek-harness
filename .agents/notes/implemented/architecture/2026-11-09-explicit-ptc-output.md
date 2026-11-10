@@ -10,7 +10,7 @@ PTC lets a program acquire and filter intermediate tool results before choosing 
 
 ## Decision
 
-TypeScript `run_code` programs select text, objects and images through top-level `inspect(...values)`. Arguments are rendered independently, and images can occur inside arrays or objects. One output sequence preserves the relationship between explanatory text and selected images.
+TypeScript `run_code` programs select text, objects and images through top-level `inspect(...values)`. Arguments are rendered independently: strings appear directly, and other lossless JSON values use two-space JSON formatting. Undefined arguments are omitted; invalid JSON values throw. Images can occur inside arrays or objects. One output sequence preserves the relationship between explanatory text and selected images.
 
 The tool executor requests `discardCompletion: true`, so completion values are discarded before JSON validation and serialization. This is a consumer choice: direct runtime and workflow consumers retain completion values when their protocols require them. The [PTC foundation](../feature/2026-06-15-ptc.md) owns dispatch and settlement. The [typed-return decision](../feature/2026-07-20-ptc-typed-tool-returns.md) continues to own ordinary JSON binding values, failures and output accounting; this note owns TypeScript output selection and image projection.
 
@@ -29,6 +29,8 @@ Nested tool dispatches retain their complete rendered content in the Session log
 **Automatically forward every acquired image.** Acquisition then implies model-context cost, even when the program needs several screenshots to select one. Explicit inspection gives text and images the same selection rule.
 
 **Keep a CUA byte-returning facade and image sink.** This maintains a separate screenshot representation and a second image-emission path. Returning the runtime's Image lets file reads and screenshots share inspection and preserves the stored attachment reference through display.
+
+**Node inspection previews for selected values.** Item and string preview limits can omit file contents that a program explicitly selected. JSON formatting keeps those values complete within the shared output budget.
 
 **Restrict console availability.** Missing bindings and incomplete replacements can break program code and imported libraries. The native console preserves Node methods while prompt guidance directs output selection through `inspect`.
 

@@ -36,61 +36,109 @@ describe('makeInspect', () => {
     const seen: string[] = []
     const inspect = makeInspect(new LogBuffer(1_000, text => seen.push(text)))
     inspect('plain', { a: 1 })
-    expect(seen).toEqual(['plain { a: 1 }'])
+    expect(seen).toEqual(['plain {\n  "a": 1\n}'])
   })
 
-  it('renders binary views alongside selected sibling images', () => {
-    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
-    const images = new WeakMap<object, string>([[image, 'image']])
-    const bytes = new Uint8Array([1, 2, 3])
+  it.each([
+    ['Buffer', Buffer.from([1, 2, 3])],
+    ['TypedArray', new Uint8Array([1, 2, 3])],
+    ['DataView', new DataView(new ArrayBuffer(3))],
+    ['ArrayBuffer', new ArrayBuffer(3)],
+    ['function', () => 1],
+    ['Error', new Error('inspection failure')],
+    ['bigint', 1n],
+    ['non-finite number', Infinity],
+    ['negative zero', -0],
+    ['undefined property', { value: undefined }],
+  ])('rejects a %s argument after preserving preceding text', (_name, value) => {
     const text: string[] = []
-    const selected: string[] = []
-    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
-    inspect({ bytes, view: new DataView(bytes.buffer), image })
-    expect(text[0]).toContain('Uint8Array(3)')
-    expect(text[0]).toContain('DataView')
-    expect(selected).toEqual(['image'])
+    const inspect = makeInspect({ push: line => text.push(line) })
+    expect(() => { inspect('before', value, 'after') }).toThrow('must be lossless JSON or an Image')
+    expect(text).toEqual(['before'])
   })
 
-  it('previews proxies without invoking their enumeration traps', () => {
-    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
-    const images = new WeakMap<object, string>([[image, 'image']])
+  it('reports revoked proxies and throwing accessors as invalid inspected values', () => {
     const revoked = Proxy.revocable({}, {})
     revoked.revoke()
-    const ownKeys = vi.fn(() => { throw new Error('enumeration trap') })
-    const getOwnPropertyDescriptor = vi.fn(() => { throw new Error('descriptor trap') })
-    const proxy = new Proxy({ image }, { ownKeys, getOwnPropertyDescriptor })
-    const text: string[] = []
-    const selected: string[] = []
-    const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
-    inspect('before', { revoked: revoked.proxy, proxy, image }, 'after')
-    expect(text[0]).toContain('<Revoked Proxy>')
-    expect(text.at(-1)).toBe('after')
-    expect(selected).toEqual(['image'])
-    expect(ownKeys).not.toHaveBeenCalled()
-    expect(getOwnPropertyDescriptor).not.toHaveBeenCalled()
+    const throwing = { get value() { throw new Error('getter') } }
+    for (const value of [revoked.proxy, throwing]) {
+      const inspect = makeInspect({ push() {} })
+      expect(() => { inspect(value) }).toThrow('must be lossless JSON or an Image')
+    }
   })
 
-  it('emits registered images in argument order, including nested images and cyclic containers', () => {
+  it.each([{ code: undefined }, new Error('tool failed')])('identifies the invalid argument and explains JSON conversion', (value) => {
+    const text: string[] = []
+    const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)))
+    expect(() => { inspect('before', value) }).toThrow(
+      'inspect argument 2 must be lossless JSON or an Image; omit undefined properties and pass error.message for Errors',
+    )
+    expect(text).toEqual(['before'])
+  })
+
+  it('renders complete arrays, long strings and nested JSON values', () => {
+    const value = {
+      lines: Array.from({ length: 330 }, (_, index) => ({ number: index + 1, text: `line ${index + 1}` })),
+      text: 'x'.repeat(12_000),
+      nested: { a: { b: { c: { d: { e: { answer: 42 } } } } } },
+    }
+    const text: string[] = []
+    makeInspect(new LogBuffer(100_000, line => text.push(line)))(value)
+    expect(text).toHaveLength(1)
+    expect(JSON.parse(text[0]!)).toEqual(value)
+  })
+
+  it('preserves preceding arguments when native JSON formatting fails', () => {
+    let value: unknown = 0
+    for (let depth = 0; depth < 10_000; depth++) value = { child: value }
+    const text: string[] = []
+    const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)))
+    expect(() => { inspect('before', value, 'after') }).toThrow(RangeError)
+    expect(text).toEqual(['before'])
+  })
+
+  it('emits registered images in argument order from arrays and objects', () => {
     const one = Object.freeze({ path: '/one.png', width: 8, height: 4 })
     const two = Object.freeze({ path: '/two.png', width: 4, height: 8 })
     const images = new WeakMap<object, string>([[one, 'one'], [two, 'two']])
-    const value: Record<string, unknown> = { first: [one, { second: two }], get unread() { throw new Error('getter') } }
-    value.cycle = value
+    const value = { first: [one, { second: two }] }
     const text: string[] = []
     const selected: string[] = []
     const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
     inspect('before', value, 'after', one)
     expect(selected).toEqual(['one', 'two', 'one'])
-    expect(text[0]).toContain('before')
-    expect(text[0]).toContain('[Getter]')
+    expect(JSON.parse(text[0]!.slice('before '.length))).toEqual(value)
     expect(text[1]).toBe('after')
     inspect({ path: '/fake.png', width: 1, height: 1 }, null)
     inspect()
     expect(selected).toEqual(['one', 'two', 'one'])
-    expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null", ''])
+    expect(text.slice(2)).toEqual(['{\n  "path": "/fake.png",\n  "width": 1,\n  "height": 1\n} null', ''])
     makeInspect({ push: line => text.push(line) }, images)(one)
-    expect(text.at(-1)).toBe("{ path: '/one.png', width: 8, height: 4 }")
+    expect(JSON.parse(text.at(-1)!)).toEqual(one)
+  })
+
+  it('uses one JSON snapshot for text and image selection', () => {
+    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const read = vi.fn(() => image)
+    const text: string[] = []
+    const selected: string[] = []
+    makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))({ get image() { return read() } })
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(text[0]!)).toEqual({ image })
+    expect(selected).toEqual(['image'])
+  })
+
+  it('omits undefined arguments and rejects cycles', () => {
+    const text: string[] = []
+    const inspect = makeInspect({ push: line => text.push(line) })
+    inspect(undefined)
+    expect(text).toEqual([])
+    inspect(null)
+    expect(text).toEqual(['null'])
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    expect(() => { inspect(cyclic) }).toThrow('must be lossless JSON or an Image')
   })
 })
 

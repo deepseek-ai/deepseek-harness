@@ -26,42 +26,62 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const { run } = await setup()
     const result = await run('inspect("%s %d %j %%", "text", 7, { n: 1 }, [2, 3]);')
     expect(result.error).toBeUndefined()
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['%s %d %j %% text 7 { n: 1 } [ 2, 3 ]'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['%s %d %j %% text 7 {\n  "n": 1\n} [\n  2,\n  3\n]'])
     expect(result.value).toBeUndefined()
   })
 
-  it('inspects large binary views with a bounded text preview', async () => {
+  it.each(['Buffer.alloc(16 * 1024 * 1024)', 'new Uint8Array(16 * 1024 * 1024)'])('rejects non-JSON binary output: %s', async (value) => {
     const { run } = await setup()
     const result = await run(`
       const { Buffer } = await import('node:buffer');
-      inspect(Buffer.alloc(16 * 1024 * 1024), new Uint8Array(16 * 1024 * 1024));
+      inspect('before', ${value});
+      inspect('after');
     `)
-    expect(result.error).toBeUndefined()
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toHaveLength(1)
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)[0]).toContain('<Buffer')
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)[0]).toContain('Uint8Array(')
-    expect(result.output.filter(block => block.type === 'text').map(block => block.text)[0]!.length).toBeLessThan(2_000)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('must be lossless JSON or an Image')
+    expect(result.output).toEqual([{ type: 'text', text: 'before' }])
   })
 
-  it('previews revoked and throwing proxies without interrupting the program', async () => {
+  it('reports invalid JSON inspection and accepts a subsequent program', async () => {
     const { run } = await setup()
     const result = await run(`
       const revoked = Proxy.revocable({}, {});
       revoked.revoke();
-      const proxy = new Proxy({ value: 42 }, {
-        ownKeys() { throw new Error('enumeration trap'); },
-        getOwnPropertyDescriptor() { throw new Error('descriptor trap'); },
-      });
-      inspect('before', revoked.proxy, proxy);
+      inspect('before', revoked.proxy);
       inspect('after');
     `)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('must be lossless JSON or an Image')
+    expect(result.output).toEqual([{ type: 'text', text: 'before' }])
+    const recovered = await run('inspect("recovered")')
+    expect(recovered.error).toBeUndefined()
+    expect(recovered.output).toEqual([{ type: 'text', text: 'recovered' }])
+  })
+
+  it('displays complete JSON arrays and long strings', async () => {
+    const { run } = await setup()
+    const result = await run(`inspect({
+      lines: Array.from({ length: 330 }, (_, index) => ({ number: index + 1, text: "line " + (index + 1) })),
+      text: "x".repeat(12000),
+      nested: { a: { b: { c: { d: { e: { answer: 42 } } } } } },
+    })`)
     expect(result.error).toBeUndefined()
-    expect(result.output).toHaveLength(2)
-    const preview = result.output[0]
-    if (preview?.type !== 'text') throw new Error('Expected the proxy preview')
-    expect(preview.text).toContain('before <Revoked Proxy>')
-    expect(preview.text).toContain('value: 42')
-    expect(result.output[1]).toEqual({ type: 'text', text: 'after' })
+    const text = result.output[0]
+    if (text?.type !== 'text') throw new Error('Expected JSON output')
+    expect(JSON.parse(text.text)).toEqual({
+      lines: Array.from({ length: 330 }, (_, index) => ({ number: index + 1, text: `line ${index + 1}` })),
+      text: 'x'.repeat(12_000),
+      nested: { a: { b: { c: { d: { e: { answer: 42 } } } } } },
+    })
+    expect(result.output).toHaveLength(1)
+  })
+
+  it('preserves preceding text when native JSON formatting fails', async () => {
+    const { run } = await setup()
+    const result = await run('let value = 0; for (let i = 0; i < 10000; i++) value = [value]; inspect("before", value)')
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('Maximum call stack size exceeded')
+    expect(result.output).toEqual([{ type: 'text', text: 'before' }])
   })
 
   it('emits selected images among text and objects and preserves immutable image properties', async () => {
@@ -87,17 +107,17 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     expect(result.error).toBeUndefined()
     expect(result.output).toEqual([
       { type: 'text', text: 'true sha256:before /images/before.png 8 4 true' },
-      { type: 'text', text: 'before { windowId: 23 }' },
+      { type: 'text', text: 'before {\n  "windowId": 23\n}' },
       { type: 'image', attachment: before.attachment },
       { type: 'text', text: expect.stringContaining('after [') as string },
       { type: 'image', attachment: after.attachment },
       { type: 'image', attachment: before.attachment },
-      { type: 'text', text: expect.stringContaining('forged:') as string },
+      { type: 'text', text: expect.stringContaining('"forged":') as string },
     ])
     const preview = result.output[3]
     if (preview?.type !== 'text') throw new Error('Expected the nested image preview')
-    expect(preview.text).toContain("attachmentId: 'sha256:before'")
-    expect(preview.text).toContain("attachmentId: 'sha256:after'")
+    expect(preview.text).toContain('"attachmentId": "sha256:before"')
+    expect(preview.text).toContain('"attachmentId": "sha256:after"')
     expect(result.output.find(block => block.type === 'image')?.attachment).toBe(before.attachment)
   })
 
@@ -152,6 +172,18 @@ describe.each(modes)('program output in $executionMode with retention $scriptPer
     const selected = await runtime.run(runtime.resolve({ program: 'inspect(await tools.image({}))', bindings, discardCompletion: true }))
     expect(selected.error?.kind).toBe('output-limit')
     expect(selected.output).toEqual([])
+  })
+
+  it('retains an inspected JSON prefix within the outer output budget', async () => {
+    const { runtime } = await mountRuntime(new Context(), { ...mode, maxOutputBytes: 128 })
+    const result = await runtime.run(runtime.resolve({
+      program: 'inspect({ value: "x".repeat(512) })', bindings: [], discardCompletion: true,
+    }))
+    expect(result.error?.kind).toBe('output-limit')
+    const prefix = result.output[0]
+    if (prefix?.type !== 'text') throw new Error('Expected a JSON text prefix')
+    expect(prefix.text).toMatch(/^\{\n  "value": "x+/)
+    expect(Buffer.byteLength(prefix.text)).toBeLessThan(128)
   })
 
   it('discards completion values without reading their getters or requiring lossless JSON', async () => {
