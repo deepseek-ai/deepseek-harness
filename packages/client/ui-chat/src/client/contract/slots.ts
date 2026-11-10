@@ -333,8 +333,6 @@ export interface ChatViewInjected {
     interactionIds: ObservableSnapshot<readonly string[]>
     /** Live presentation policy derived from the accepted work-details mode. */
     presentation: ObservableSnapshot<ChatPresentationPolicy>
-    /** Session's recorded current directory; null or undefined falls back to the list row's workspace root. */
-    workingDirectory: ObservableSnapshot<string | null | undefined>
   }
   keyedHooks: {
     /** Resolve the stable source for one Chat Node key. */

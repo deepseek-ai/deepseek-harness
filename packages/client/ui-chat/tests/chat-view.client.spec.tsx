@@ -32,6 +32,7 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import type { KeyedSnapshotSelectorHook, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type {} from '@deepseek-ai/dsh-working-directory/client'
 import type { ConnectionState } from '@deepseek-ai/dsh-client-connection/client'
 import { EMPTY_CONVERSATION_SNAPSHOT } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -561,7 +562,6 @@ function makeHarness(
     useStore: bindSnapshotSelector(chat),
     actions: chat.actions,
     useInteractionIds: bindSnapshotSelector(createSnapshotStore<readonly string[]>([])),
-    useWorkingDirectory: bindSnapshotSelector(createSnapshotStore<string | null | undefined>(undefined)),
     dispatchInteraction: () => null,
     usePresentation: bindSnapshotSelector(derivePresentationPolicy(transcriptView, collapseTiming, foldedReplies)),
     // The fixture implements the concrete flow dispatch behind the generic slot signature.
@@ -800,7 +800,13 @@ describe('Chat node rendering', () => {
     })
     h.props.useSessions = bindSnapshotSelector(sessions)
     const directory = createSnapshotStore<string | null>('/proj/.agents/worktrees/w')
-    h.props.useWorkingDirectory = bindSnapshotSelector(directory)
+    const useDirectory = bindSnapshotSelector(directory)
+    const useOther = h.props.useProjection
+    h.props.useProjection = (key: 'inbox' | 'workingDirectory') => {
+      const current = useDirectory(value => value)
+      const other: unknown = useOther(key)
+      return key === 'workingDirectory' ? current : other
+    }
     const view = render(<h.ChatView {...h.props} />)
     const source = () => new URL(view.getByRole('img', { name: 'chart' }).getAttribute('src')!, document.baseURI).searchParams.get('path')
     expect(source()).toBe('/proj/.agents/worktrees/w/tmp/a.png')

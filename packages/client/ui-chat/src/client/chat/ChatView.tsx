@@ -6,6 +6,7 @@ import type {
   NodeKey, RenderEntry,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
+import type {} from '@deepseek-ai/dsh-working-directory/client'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   Button, FenceCodeBlock, IconChevronDownOutlineRegular, MarkdownDelegateProvider, Modal,
@@ -64,7 +65,7 @@ export function ChatView({
   useSession, useChat, useConversation, useSessions, renderSlot,
   sessionId, openFile, openExternalLink, resolveFilePath, useContextMenu,
   loadOlder, consumeOlder, loadThrough, loadImage, inspectCall, chatScroll, forkAt,
-  usePresentation, useProjection, useInteractionIds, useWorkingDirectory, dispatchInteraction, t, fileDrag,
+  usePresentation, useProjection, useInteractionIds, dispatchInteraction, t, fileDrag,
 }: ChatViewSlotProps) {
   const { getTriggerProps } = useContextMenu()
   const getMarkdownTriggerProps = useCallback((target: MarkdownMenuTarget) => getTriggerProps(() => {
@@ -98,11 +99,9 @@ export function ChatView({
   )
   const inbox = useProjection('inbox') as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
-  // Relative image paths resolve like file links: from the Session's current
-  // working directory, falling back to that root.
   const rootCwd = useSessions(s => s.byId[sessionId]?.cwd)
-  const currentCwd = useWorkingDirectory(directory => directory)
-  const imageCwd = currentCwd ?? rootCwd
+  // Relative images resolve like file links: from the current directory, else that root.
+  const imageCwd = useProjection('workingDirectory') ?? rootCwd
   const fileImages = useMemo(() => ({
     fileDrag,
     resolve: (path: string) => fileMediaUrl(document.baseURI, resolveWorkspacePath(imageCwd, path)),
