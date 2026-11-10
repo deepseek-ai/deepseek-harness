@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computernutzung",
-    "description": "Unterstützt derzeit macOS; Die Windows-Unterstützung befindet sich in der Entwicklung. Lädt die Computernutzung für bestehende und neue PTC-Sitzungen. Wechseln Sie in den PTC-Modus und erteilen Sie die Berechtigungen für Barrierefreiheit und Bildschirmaufzeichnung, um ihn zu verwenden.",
+    "description": "Unterstützt derzeit macOS; die Windows-Unterstützung befindet sich in Entwicklung. Ermöglicht die Computernutzung in bestehenden und neuen Sitzungen im Standardmodus, Erstellermodus, PTC-Modus und weiteren Modi. Erteilen Sie vor der Verwendung die Berechtigungen für Barrierefreiheit und Bildschirmaufzeichnung.",
     "detail": "docs/DETAIL.md"
   }
 }

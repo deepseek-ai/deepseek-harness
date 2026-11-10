@@ -8103,6 +8103,9 @@ importers:
       '@deepseek-ai/dsh-session-projection':
         specifier: workspace:*
         version: link:../../session/session-projection
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:*
+        version: link:../system-prompt
       '@deepseek-ai/dsh-tool-executor-native':
         specifier: workspace:*
         version: link:../tool-executor-native
@@ -9954,6 +9957,12 @@ importers:
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:*
         version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tool-executor-native':
+        specifier: workspace:*
+        version: link:../../core/tool-executor-native
+      '@deepseek-ai/dsh-tool-executor-ptc':
+        specifier: workspace:*
+        version: link:../../core/tool-executor-ptc
       '@deepseek-ai/dsh-tools':
         specifier: workspace:*
         version: link:../../core/tools

@@ -49,6 +49,7 @@ describe('PtcRuntime service seam', () => {
     expect(runtime.executionInstructions).toBe('')
     expect(runtime.timeout).toBeUndefined()
     await expect(runtime.release({})).resolves.toBeUndefined()
+    expect(() => runtime.registerEnvironmentInitializer('')).toThrow('environment initialization is unsupported')
 
     const calls: unknown[] = []
     const result = await runtime.run(runtime.resolve({

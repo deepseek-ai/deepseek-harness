@@ -9,8 +9,8 @@ const CELL: TrajectoryCellProps = {
 }
 
 describe('recorded code programs', () => {
-  it('keeps the program and arguments verbatim', () => {
-    expect(codeProgram(CELL)).toEqual({
+  it.each(['run_code', 'cua_run_code'])('keeps the %s program and arguments verbatim', (toolName) => {
+    expect(codeProgram({ ...CELL, toolName })).toEqual({
       rawInput: CELL.inputDetail,
       source: 'return 42\n', description: 'Compute the answer',
       arguments: { code: 'return 42\n', description: 'Compute the answer' }, language: undefined,
@@ -122,6 +122,7 @@ describe('recorded code programs', () => {
   it('does not specialize other tools or non-tool records', () => {
     expect(codeProgram({ ...CELL, kind: 'message' })).toBeUndefined()
     expect(codeProgram({ ...CELL, toolName: 'run_code_extra' })).toBeUndefined()
+    expect(codeProgram({ ...CELL, toolName: 'cua_run_code_extra' })).toBeUndefined()
     expect(codeProgram({ ...CELL, kind: 'subtool' })?.source).toBe('return 42\n')
   })
 })

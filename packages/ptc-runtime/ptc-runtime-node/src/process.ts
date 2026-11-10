@@ -4,7 +4,7 @@ import { inspect } from 'node:util'
 import type { Duplex } from 'node:stream'
 import type { PtcProgramFormat, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { createProcessRpc } from './rpc.ts'
-import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, prepareCompletion, prepareException } from './bootstrap.ts'
+import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
 import { clearProgramEnvironment } from './environment.ts'
@@ -128,7 +128,13 @@ export async function runNodeMain(
         },
       }
       current = evaluation
-      context.run(evaluation, () => {
+      const canContinue = (): boolean => {
+        if (!evaluation.active) return false
+        if (!evaluation.revoked) return true
+        evaluation.finish({})
+        return false
+      }
+      void context.run(evaluation, async () => {
         try {
           processState.chdir(cwd)
           if (evaluator === undefined) {
@@ -175,15 +181,32 @@ export async function runNodeMain(
               })
             }
           }
-          evaluator.evaluate(data.code, (result) => {
-            if (!evaluation.active) return
-            if (evaluation.revoked) { evaluation.finish({}); return }
+          const programEvaluator = evaluator
+          const initialization = data.initialization
+          if (initialization !== undefined) {
+            await new Promise<void>((resolve, reject) => {
+              programEvaluator.evaluate(initialization, (result) => {
+                if (result.ok) resolve()
+                // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Programs may throw non-Error values.
+                else reject(result.error)
+              })
+            })
+            if (!canContinue()) return
+            if (logs.overflowed) {
+              evaluation.finish(outputLimit(data.maxOutputBytes))
+              return
+            }
+            await connection.initialized()
+          }
+          if (!canContinue()) return
+          programEvaluator.evaluate(data.code, (result) => {
+            if (!canContinue()) return
             evaluation.finish(result.ok
               ? data.discardCompletion ? {} : prepareCompletion(result.value, logs.remainingOutputBytes(), data.maxOutputBytes)
               : prepareException(result.error, logs.remainingOutputBytes(), data.maxOutputBytes))
           })
         } catch (error: unknown) {
-          evaluation.finish(prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes))
+          if (canContinue()) evaluation.finish(prepareException(error, logs.remainingOutputBytes(), data.maxOutputBytes))
         }
       })
       return await completion.promise

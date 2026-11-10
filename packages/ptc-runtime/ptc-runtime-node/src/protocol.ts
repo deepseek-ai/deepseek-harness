@@ -9,6 +9,8 @@ export const PROGRAM_PROTOCOL_VERSION = 3
 export interface ProgramBootData {
   /** Type-stripped JavaScript source. */
   code: string
+  /** Environment initialization, supplied only until the Host accepts initialized(). */
+  initialization?: string
   /** Evaluation syntax; omitted uses the installed bootstrap's default. */
   programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
@@ -38,6 +40,12 @@ export interface HostMethods {
    * @param version - Bootstrap wire revision, checked against the host.
    */
   ready(version: number): void
+  /**
+   * Accept successful environment initialization while the first run remains active.
+   * The child awaits the RPC reply before starting user code; cancellation rejects.
+   * @returns Host acceptance before user code may start.
+   */
+  initialized(): Promise<void>
   /**
    * Invoke a binding under its originating host execution context.
    * @param global - Namespace global.
