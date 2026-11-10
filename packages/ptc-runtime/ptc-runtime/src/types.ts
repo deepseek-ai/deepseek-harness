@@ -13,7 +13,7 @@ import type { SandboxEnforcement, SandboxExecutionPolicy, SandboxMode } from '@d
 export type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
 
 /** Source evaluation form, independent of retained program state. */
-export type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+export type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 
 /**
  * One host-side function exposed to the program as an async callable. The
@@ -81,7 +81,7 @@ export interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
    * follows the provider's programFormat: an async function body supports
-   * top-level `await` and `return`; REPL and Script programs support top-level
+   * top-level `await` and `return`; REPL (`repl`, `scoped-repl`) and Script programs support top-level
    * declarations, `await`, and a final expression, but not top-level `return`.
    * The Script provider lowers top-level await; its executionInstructions and
    * documentation define retained-binding semantics. The completion value

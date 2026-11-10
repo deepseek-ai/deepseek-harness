@@ -418,7 +418,7 @@ it('omits session-only grants from the permission page and retains their access 
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
+it.each(['function-body', 'repl', 'script', 'scoped-repl'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
   const f = await setup()
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
   await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
@@ -426,10 +426,10 @@ it.each(['function-body', 'repl', 'script'] as const)('enables retention for eff
   const runtime = { programFormat, retainsState: false }
   const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
     expect(received).toBe(entry)
-    // Effective mode can come from a lower profile; a stale local flag must be replaced.
-    expect(change({ timeoutMs: 4200, scriptPersistence: true })).toEqual({
+    // Effective mode can come from a lower profile; stale local flags must be replaced.
+    expect(change({ timeoutMs: 4200, scriptPersistence: true, replScoped: programFormat !== 'scoped-repl' })).toEqual({
       timeoutMs: 4200, executionMode: programFormat === 'script' ? 'vm-script' : 'persistent-in-memory',
-      scriptPersistence: programFormat === 'script',
+      scriptPersistence: programFormat === 'script', replScoped: programFormat === 'scoped-repl',
     })
     runtime.retainsState = true
   })

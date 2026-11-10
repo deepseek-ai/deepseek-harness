@@ -7,10 +7,10 @@ import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 import { resolvePersistentExecution } from '../src/configuration.ts'
 
-it.each([undefined, 'function-body', 'repl', 'script'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
+it.each([undefined, 'function-body', 'repl', 'script', 'scoped-repl'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
   const { runtime } = await mountRuntime(new Context(), resolvePersistentExecution(programFormat))
   expect(runtime.retainsState).toBe(true)
-  expect(runtime.programFormat).toBe(programFormat === 'script' ? 'script' : 'repl')
+  expect(runtime.programFormat).toBe(programFormat === 'script' || programFormat === 'scoped-repl' ? programFormat : 'repl')
 })
 
 it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
