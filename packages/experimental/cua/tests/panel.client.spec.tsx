@@ -12,7 +12,7 @@ import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
 const value: CuaApplicationState & { system: Extract<CuaSystemPermissionState, { platform: 'darwin' }> } = { system: { platform: 'darwin' as const, accessibility: false, screenRecording: true,
-  helper: { path: '/native/helper' }, parent: { path: '/host/node' } },
+  helper: { pid: 9, path: '/native/helper' }, parent: { pid: 8, path: '/host/node' } },
 allowedApps: [], blockedApps: [], persistentAvailable: true }
 
 function observe(value: CuaApplicationState & { system: CuaSystemPermissionState }) {
@@ -235,7 +235,7 @@ it.each([en, zh])('shows four requirements with the target application beside ea
   const f = fixture()
   render(<PermissionPanel {...f.props} t={makeTranslate(dictionary)} />)
   const application = { name: 'Visual Studio Code.app', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
-  f.publish({ ...observe({ ...value, system: { ...value.system, parent: { path: '/sbin/launchd' }, launchApplication: application } }) })
+  f.publish({ ...observe({ ...value, system: { ...value.system, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication: application } }) })
   const requirements = screen.getByRole('region', { name: dictionary.title })
   expect(within(requirements).getAllByRole('group')).toHaveLength(4)
   expect(screen.getByRole('region', { name: dictionary.applicationsTitle })).toBeTruthy()

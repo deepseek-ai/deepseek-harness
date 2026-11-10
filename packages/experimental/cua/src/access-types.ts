@@ -4,8 +4,9 @@ export type { CuaApplicationGrant, CuaApplicationId } from './application-types.
 
 /** macOS privileges used by the native provider. */
 export type CuaSystemPermission = 'accessibility' | 'screenRecording'
-/** Observed process; neither the helper nor its parent is assumed to be the TCC owner. */
+/** Observed macOS process; the helper and its parent may differ from the TCC owner. */
 export interface CuaPermissionProcess {
+  pid: number
   path?: string | undefined
   name?: string | undefined
 }
@@ -23,7 +24,7 @@ export type CuaSystemPermissionState = {
   sessionLocked: boolean | null
   captureAvailable: boolean
   elevated: boolean
-  helper: CuaPermissionProcess
+  helper: Omit<CuaPermissionProcess, 'pid'>
 }
 /** Saved grants and refused applications, independent of native permission checks and icons. */
 export interface CuaApplicationState {

@@ -7,7 +7,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermissionState } from '../src/access-types.ts'
 import { PermissionController } from '../src/client/controller.ts'
 
-const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: {}, parent: {} }
+const value: CuaSystemPermissionState = { platform: 'darwin' as const, accessibility: true, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } }
 const applications: CuaApplicationState = {
   allowedApps: [], blockedApps: [], persistentAvailable: true }
 type CuaRemote = Context['remote']['cuaAccess']

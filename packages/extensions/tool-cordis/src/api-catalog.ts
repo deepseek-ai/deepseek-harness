@@ -6527,7 +6527,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaPermissionProcess',
-    declaration: 'export interface CuaPermissionProcess {\n    path?: string | undefined;\n    name?: string | undefined;\n}',
+    declaration: 'export interface CuaPermissionProcess {\n    pid: number;\n    path?: string | undefined;\n    name?: string | undefined;\n}',
   },
   {
     name: 'CuaSystemPermission',
@@ -6535,7 +6535,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'CuaSystemPermissionState',
-    declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'windows\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: CuaPermissionProcess;\n};',
+    declaration: 'export type CuaSystemPermissionState = {\n    platform: \'darwin\';\n    accessibility: boolean;\n    screenRecording: boolean;\n    helper: CuaPermissionProcess;\n    parent: CuaPermissionProcess;\n    launchApplication?: {\n        name: string;\n        path: string;\n        icon?: string | undefined;\n    } | undefined;\n} | {\n    platform: \'windows\';\n    sessionLocked: boolean | null;\n    captureAvailable: boolean;\n    elevated: boolean;\n    helper: Omit<CuaPermissionProcess, \'pid\'>;\n};',
   },
   {
     name: 'DailyInput',

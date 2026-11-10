@@ -9,7 +9,7 @@ description: "迁移 CUA 脚本和自定义原生提供方，使用显式窗口�
 
 ## 变更
 
-截图和指针输入要求显式选择窗口。App（`appHandle`）和 Window（`windowId`）对象共享所属应用句柄的最新辅助功能快照。窗口 ID 是不透明字符串，权限信息不再包含 PID，macOS 应用发现结果保留每个运行进程的 PID。
+截图和指针输入要求显式选择窗口。App（`appHandle`）和 Window（`windowId`）对象共享所属应用句柄的最新辅助功能快照。窗口 ID 是不透明字符串，macOS 应用发现保留运行进程的 PID，权限诊断保留 `helper.pid` 和 `parent.pid`。Windows 权限诊断不提供 PID。
 
 提供方声明启动能力，并实现 `getGuidance(kind)`，不再传入 `guidance` 字符串。`raw` 选择原始 `cua` 工具的指引，`standalone` 选择 `cua_run_code` 的指引。原生 helper 返回运行时权限和会话锁定状态，Host 将其与启动能力合并到 `getCapabilities()` 中。供权限页面使用的响应带有 `darwin` 或 `windows` 平台标记。
 

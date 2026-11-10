@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-Screenshots and pointer input require explicit windows. App (`appHandle`) and Window (`windowId`) objects share their application handle's latest accessibility snapshot. Window IDs are opaque strings. Permission metadata omits process IDs. macOS application discovery retains PIDs for running processes.
+Screenshots and pointer input require explicit windows. App (`appHandle`) and Window (`windowId`) objects share their application handle's latest accessibility snapshot. Window IDs are opaque strings. macOS retains running application PIDs and permission `helper.pid` and `parent.pid`. Windows permission metadata omits PIDs.
 
 Providers supply startup capabilities and implement `getGuidance(kind)` instead of supplying a `guidance` string. `raw` selects instructions for the raw `cua` tool; `standalone` selects instructions for `cua_run_code`. The native helper reports runtime permissions and session lock state; the Host combines these with startup capabilities in `getCapabilities()`. Human-facing permission responses carry a `darwin` or `windows` platform tag.
 
