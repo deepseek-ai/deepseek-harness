@@ -9,8 +9,8 @@ const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
 const traversalLimit = z.number().min(1).multipleOf(1)
 const nativeTraversalLimits = z.object({
-  maxElements: z.number().int().min(1).max(10000),
-  maxDepth: z.number().int().min(1).max(100),
+  maxElements: z.number().int().min(1).max(100000),
+  maxDepth: z.number().int().min(1).max(512),
 }).strict()
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),

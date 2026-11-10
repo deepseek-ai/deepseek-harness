@@ -48,6 +48,6 @@ export const CuaConfigFields = {
   maxResponseBytes: Schema.number().step(1).min(1024).default(32 * 1024 * 1024),
   textEventIntervalMs: Schema.number().min(0).max(1000).default(0.25),
   graceMs: Schema.number().step(1).min(1).max(2 ** 31 - 1).default(3000),
-  maxElements: Schema.number().step(1).min(1).max(10000).default(2000),
-  maxDepth: Schema.number().step(1).min(1).max(100).default(25),
+  maxElements: Schema.number().step(1).min(1).max(100000).default(5000),
+  maxDepth: Schema.number().step(1).min(1).max(512).default(50),
 }

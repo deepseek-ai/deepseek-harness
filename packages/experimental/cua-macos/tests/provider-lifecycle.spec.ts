@@ -113,7 +113,7 @@ it('projects shared controls and macOS signing without adding signing to the sha
   for (const field of ['sourceSigning', 'permissionPollIntervalMs', 'agentPreset', 'helperPath']) {
     expect(projected.schema.anyOf?.[0]).toHaveProperty(`properties.${field}`)
   }
-  expect(CuaConfig({})).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(CuaConfig({})).toMatchObject({ maxElements: 5000, maxDepth: 50 })
   expect(NativeProvider.Config({})).toMatchObject({ maxElements: 5000, maxDepth: 50 })
   const limits = { maxElements: 100000, maxDepth: 512 }
   expect(NativeProvider.Config(limits)).toMatchObject(limits)
