@@ -2,3 +2,4 @@
 **/obj/
 .build/
 **/.vs
+*.user

@@ -41,6 +41,8 @@
           "JsonSchema.Net": "[9.4.0, )"
         }
       }
-    }
+    },
+    "net10.0-windows10.0.19041/win-arm64": {},
+    "net10.0-windows10.0.19041/win-x64": {}
   }
 }

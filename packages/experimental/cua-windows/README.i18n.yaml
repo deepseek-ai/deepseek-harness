@@ -12,8 +12,11 @@
   en: 3d01094229f39847
   zh: 6ef07286fab57de1
 /deepseek-ai-dsh-cua-windows/table-of-contents:
-  en: 873f5e3022e22ff3
-  zh: c8e442bf641a59da
+  en: 8ee204b4021505b9
+  zh: 67040b79fcd9643b
+/deepseek-ai-dsh-cua-windows/setup-and-configuration:
+  en: 9dec4721f40cfe32
+  zh: c1ec768912e6d752
 /deepseek-ai-dsh-cua-windows/interface-semantics:
   en: 13ff5154e3ed57cf
   zh: b6a976028b104068
@@ -21,11 +24,11 @@
   en: 50a841cef8bc070c
   zh: 3f4bdedd4cb64cd0
 /deepseek-ai-dsh-cua-windows/interface-semantics/application-and-window-selection:
-  en: 7e5bae65d7da5f1d
-  zh: a5303b3883bfa842
+  en: ea1d0bc4fd95bec1
+  zh: 242e07a4d73ac771
 /deepseek-ai-dsh-cua-windows/interaction-rules:
-  en: 6534efafae6f35ed
-  zh: b7e349fd5b676c15
+  en: 7c6e48717022a5e7
+  zh: c4ca64066538381c
 /deepseek-ai-dsh-cua-windows/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -42,8 +45,8 @@
   en: 1a91ac329caa77d8
   zh: 25eafe98efcf7860
 /deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work:
-  en: 1751f0c8dcc8504f
-  zh: 2f01b08512a230bd
+  en: 2cfd5e0280457c57
+  zh: 6f99c1f84677bd5e
 /deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: 9f56528562c7c914

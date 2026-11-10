@@ -13,10 +13,18 @@ kind: "package-reference"
 
 ## 目录
 
+- [运行条件与配置](#setup)
 - [接口语义](#interface-semantics)
 - [交互规范](#interaction-rules)
 - [模型体验](#model-experience)
 - [已知限制与后续工作](#known-limitations-and-deferred-work)
+
+<a id="setup"></a>
+## 运行条件与配置
+
+在原生 Windows 的源码检出中，提供方启用时通过 PATH 中的 .NET 10 SDK 构建当前架构的 helper，输出到 `native/bin/win-<arch>`。`helperPath` 可指定现有 exe 的绝对路径。手动构建时，在本包中执行 `pnpm run build:native:x64` 或 `pnpm run build:native:arm64`。使用 `build:native` 生成的 `native/bin/local` 产物时，需要匹配的 Windows .NET 运行时，并显式配置 `helperPath`。独立的 win-x64 ZIP 需完整解压，当前 npm 发布流程尚未装入该载荷。
+
+`buildTimeoutMs` 默认 300000，`connectTimeoutMs` 默认 30000，`pollIntervalMs` 默认 25。辅助功能树默认最多读取 2000 个节点、深度 25。一次读取可传入 `maxElements` 和 `maxDepth`。组合包仅在原生 Windows 上加载此提供方。显式在 WSL 中配置提供方时，`windowsPowerShellPath` 默认是 `powershell.exe`。目前 WSL 缓存只复制 exe，多文件发布目录不能直接从该缓存启动。
 
 <a id="interface-semantics"></a>
 ## 接口语义
@@ -33,7 +41,7 @@ kind: "package-reference"
 
 - `cua.getApp(id)` 请求应用授权，成功后返回 App。它不读取辅助功能树，也不激活应用。Windows 不支持启动应用；无窗口应用的选择还受下方限制约束。
 - `app.getWindows()` 读取应用当前的窗口列表。一个应用可以跨多个进程拥有多个窗口；窗口关闭后，列表也可以变为空。
-- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是十进制字符串，应原样保留，不要转换为 JavaScript 数字。执行窗口操作时会检查目标是否仍属于所选应用。
+- `app.getWindow(windowId)` 返回 Window 对象，不读取辅助功能树。窗口 ID 是提供方返回的不透明字符串，请原样传递。执行窗口操作时会检查目标是否仍属于所选应用。
 - `window.getAccessibilityTree()` 显式读取辅助功能树。元素 ID 属于当前观察；读取同一 App 的另一个窗口会替换门面当前使用的快照。不要跨窗口混用元素或快照。
 - `window.getScreenshot()` 截取明确指定的窗口，不读取或替换辅助功能树。辅助功能读取失败时，截图仍可能可用。
 - `app.activate()` 显式请求前台激活。`app.show()` 恢复默认窗口而不请求激活；`window.show()` 恢复指定窗口。没有默认窗口时返回 `WINDOW_NOT_FOUND`，无法唯一确定默认窗口时返回 `AMBIGUOUS_WINDOW`。
@@ -43,7 +51,7 @@ kind: "package-reference"
 
 1. 选择操作前先检查 `cua.getCapabilities()`。Windows 的辅助功能和键盘输入仅支持窗口作用域；截图和指针操作也必须使用 Window 对象。
 2. 使用元素 ID 前先读取辅助功能树。绝对指针坐标采用最近一次返回的截图像素，以该窗口为原点。`relative: true` 在相应的 AX 观察或截图之后使用 0 到 999 的整数千分比坐标。窗口尺寸变化后重新截图。
-3. 系统键盘和指针输入要求目标窗口位于前台。解释必要的焦点切换，显式激活应用或让用户聚焦目标窗口，再重新观察。不要假定选择 App 或 Window 会改变焦点。
+3. 快捷键中 `option` 表示 Alt，`control` 表示 Ctrl。提供方拒绝使用 Windows 键的 `command` 快捷键。系统键盘和指针输入要求目标窗口位于前台。解释必要的焦点切换，显式激活应用或让用户聚焦目标窗口，再重新观察。不要假定选择 App 或 Window 会改变焦点。
 4. `dispatched` 只表示分派情况，不证明预期效果已经发生。继续操作前先观察结果。窗口变化、快照过期、超时或取消后，不要盲目重放输入，也不要自动切换目标窗口。
 5. 授权针对当前会话中的应用。尊重拒绝和撤销，不使用其他工具绕过。重新连接会使已保留的句柄失效，继续操作前必须重新选择应用。
 
@@ -70,7 +78,6 @@ kind: "package-reference"
 
 - 不支持 `findApps`、启动应用、应用级辅助功能和持续按键 `sendKeyEvent`。请让用户打开所需应用或窗口。
 - 可以发现 `isRunning: false` 的应用，但当前 `getApp` 流程会尝试未支持的启动操作，并以 `UNSUPPORTED` 失败。选择这类应用前应先打开窗口。
-- Windows 当前忽略按次传入的 `maxElements` 和 `maxDepth` 覆盖值，仍使用提供方配置中的限制。
 - 观察和输入需要可访问、未锁定的交互式 Windows 会话。截图需要 Windows Graphics Capture 支持；列出的窗口仍可能无法截图或接收输入。
 - 应用授权不提供 **Always allow（始终允许）** 选项。其他会话需要分别获得授权。
 

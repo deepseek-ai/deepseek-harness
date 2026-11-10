@@ -249,12 +249,11 @@ it('settles an in-flight native call before releasing the provider connection an
   expect(ctx.tools.get('cua_run_code', agent)).toBeUndefined()
 })
 
-it('keeps Windows accessibility reads within the configured traversal limits', async () => {
+it('forwards per-read accessibility limits to the Windows backend', async () => {
   const { run, native } = await setup([
-    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree({ maxElements: 9999, maxDepth: 100, emit: false })',
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree({ maxElements: 30, maxDepth: 3, emit: false })',
   ], 'windows')
   await run()
-  const defaults = CuaConfig({})
   expect(native.calls.find(call => call.method === 'getState')?.params)
-    .toMatchObject({ maxElements: defaults.maxElements, maxDepth: defaults.maxDepth })
+    .toMatchObject({ maxElements: 30, maxDepth: 3 })
 })

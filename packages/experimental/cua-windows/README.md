@@ -13,10 +13,18 @@ Discover Windows applications, obtain consent, then inspect and operate their wi
 
 ## Table of Contents
 
+- [Setup and configuration](#setup)
 - [Interface semantics](#interface-semantics)
 - [Interaction rules](#interaction-rules)
 - [Model Experience](#model-experience)
 - [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+
+<a id="setup"></a>
+## Setup and configuration
+
+In a native Windows source checkout, activation uses the .NET 10 SDK on PATH to build the helper for the current architecture under `native/bin/win-<arch>`. Set `helperPath` to the absolute path of an existing executable to use it instead. For a manual build, run `pnpm run build:native:x64` or `pnpm run build:native:arm64` in this package. The framework-dependent `build:native` output in `native/bin/local` requires a matching Windows .NET runtime and an explicit `helperPath`. Extract the complete standalone win-x64 ZIP. The npm release pipeline does not yet stage that payload.
+
+`buildTimeoutMs` defaults to 300000, `connectTimeoutMs` to 30000, and `pollIntervalMs` to 25. Accessibility reads default to 2000 nodes and depth 25. Pass `maxElements` and `maxDepth` to override either limit for one read. The bundle loads this provider only on native Windows. When configured explicitly in WSL, `windowsPowerShellPath` defaults to `powershell.exe`. The WSL cache currently copies only the exe, so a multi-file publish cannot start from that cache.
 
 <a id="interface-semantics"></a>
 ## Interface semantics
@@ -33,7 +41,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 - `cua.getApp(id)` requests application consent and returns an App on success. It does not read accessibility state or activate the application. Windows does not support application launch; the windowless-selection limitation below applies.
 - `app.getWindows()` reads the application's current window list. One application can have multiple windows across multiple processes, and the list can become empty as windows close.
-- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Window IDs are decimal strings; preserve them without converting them to JavaScript numbers. Window operations check that the target still belongs to the selected application.
+- `app.getWindow(windowId)` returns a Window object without reading accessibility state. Pass the opaque window ID returned by the provider unchanged. Window operations check that the target still belongs to the selected application.
 - `window.getAccessibilityTree()` explicitly reads accessibility state. Element IDs belong to the current observation; reading another window of the same App replaces the facade's current snapshot. Do not mix elements or snapshots across windows.
 - `window.getScreenshot()` captures that explicit window and does not read or replace its accessibility tree. Screenshots can remain usable when an accessibility read fails.
 - `app.activate()` explicitly requests foreground activation. `app.show()` restores a default window without requesting activation; `window.show()` restores the named window. An absent default returns `WINDOW_NOT_FOUND`; an ambiguous default returns `AMBIGUOUS_WINDOW`.
@@ -43,7 +51,7 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 
 1. Check `cua.getCapabilities()` before choosing an operation. Accessibility and keyboard input are window-scoped on Windows; screenshots and pointer actions also require a Window object.
 2. Read an accessibility tree before using element IDs. Absolute pointer coordinates use pixels in the latest returned screenshot, relative to that window. `relative: true` uses integer thousandths from 0 to 999 after an appropriate AX observation or screenshot. Capture again after a resize.
-3. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
+3. In shortcuts, `option` selects Alt and `control` selects Ctrl. The provider rejects Windows-key shortcuts using `command`. System keyboard and pointer input require the intended foreground window. Explain any necessary focus change, explicitly activate the application or ask the user to focus the target, and observe again. Do not assume that selecting an App or Window changes focus.
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
 5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
 
@@ -70,7 +78,6 @@ New observations append to history; retaining an App or Window object does not i
 
 - `findApps`, application launch, app-level accessibility, and held-key `sendKeyEvent` are unavailable. Ask the user to open the required application or window.
 - Applications with `isRunning: false` can be discovered, but the current `getApp` flow attempts an unsupported launch and fails with `UNSUPPORTED`. Open a window before selecting such an application.
-- Per-read `maxElements` and `maxDepth` overrides are currently ignored on Windows; the provider's configured limits remain effective.
 - Observation and input require an accessible, unlocked interactive Windows session. Screenshots require Windows Graphics Capture support; a listed window can still be unavailable for capture or input.
 - Application consent does not offer an **Always allow** grant. Another conversation needs its own consent.
 

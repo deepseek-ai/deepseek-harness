@@ -240,10 +240,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
           ? { ...params, maxClipboardBytes: config.maxClipboardBytes, pasteReadTimeoutMs: config.pasteReadTimeoutMs,
             maxElements: config.maxElements, maxDepth: config.maxDepth }
           : method === 'getState'
-            // Windows keeps its configured limits until per-read overrides are implemented natively.
-            ? backend.capabilities.platform === 'windows'
-              ? { ...params, maxElements: config.maxElements, maxDepth: config.maxDepth }
-              : { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
+            ? { maxElements: config.maxElements, maxDepth: config.maxDepth, ...params }
             : method === 'drag' ? { ...params, durationMs: config.dragDurationMs, steps: config.dragSteps }
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
@@ -286,7 +283,6 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }).parse(result)
         await access.select(agent, client, prepared.appHandle, authorization, signal, applicationIcon)
         signal.throwIfAborted()
-        // TODO: launchApp on Windows
         const selected = prepared.running
           ? prepared
           : AppResult.parse(await access.run(client, prepared.appHandle, signal,
