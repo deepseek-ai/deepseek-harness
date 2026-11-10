@@ -254,9 +254,9 @@ describe('forgePanel lenses over change requests', () => {
     '',
   ].join('\n')
 
-  async function bound(overrides: Partial<{ baseSha: string | undefined }> = { baseSha: BASE }): Promise<Bench> {
+  async function bound(base: string | null = BASE): Promise<Bench> {
     const opened = await open(await project())
-    opened.provider.overrides.set(7, { headSha: HEAD, ...overrides })
+    opened.provider.overrides.set(7, { headSha: HEAD, ...base === null ? {} : { baseSha: base } })
     opened.provider.patches.set(7, PATCH)
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     const follower = follow(opened.ctx, opened.session)
@@ -318,7 +318,7 @@ describe('forgePanel lenses over change requests', () => {
   })
 
   it('fails reads of an old side the provider cannot locate and retries a failed merge base lookup', async () => {
-    const withoutBase = await bound({ baseSha: undefined })
+    const withoutBase = await bound(null)
     await provideLens(withoutBase.ctx, exportsLens())
     const { files } = await withoutBase.ctx.forgePanel.changeRequestDiff(withoutBase.session, pullUrl(7), null, signal)
     const request: ForgeLensRequest = { source: { kind: 'change', url: pullUrl(7), commits: null }, version: lensVersion(files), lens: 'fixture/exports' }

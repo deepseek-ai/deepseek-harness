@@ -1185,7 +1185,7 @@ export class ForgePanelController extends TypertRemoteService {
       const read = await this.commitFiles(ref, commits, signal)
       files = read.files
       newCommit = commits.to
-      oldCommit = async () => read.parent
+      oldCommit = () => Promise.resolve(read.parent)
     }
     return {
       key: JSON.stringify(['change', changeRequestKey(ref), newCommit, commits]),

@@ -177,7 +177,7 @@ export async function runLens(
     progress: (done, total) => { if (!operation.aborted) progress(done, total) },
   }
   const stopped = new Promise<never>((_resolve, reject) => {
-    operation.addEventListener('abort', () => { reject(operation.reason) }, { once: true })
+    operation.addEventListener('abort', () => { reject(new Error('the lens run stopped', { cause: operation.reason })) }, { once: true })
   })
   // The race observes `stopped`; this handler only keeps a later abort from rejecting unobserved.
   void stopped.catch(() => undefined)
@@ -212,21 +212,22 @@ export async function* lensFrames(
   run: (progress: (done: number, total: number) => void) => Promise<LensFiles>,
 ): AsyncIterable<ForgeLensFrame> {
   // A box, so the reads below see what the progress callback writes.
-  const reports: { latest: { readonly done: number; readonly total: number } | null } = { latest: null }
+  const reports: { latest: { readonly done: number; readonly total: number } | null; finished: boolean } = { latest: null, finished: false }
+  // A function, so each check reads what the settlement wrote rather than the value the loop condition narrowed.
+  const finished = (): boolean => reports.finished
   let wake = Promise.withResolvers<void>()
-  let finished = false
   const outcome = run((done, total) => {
     reports.latest = { done, total }
     wake.resolve()
   })
-  const settled = outcome.then(() => { finished = true }, () => { finished = true })
-  while (!finished) {
+  const settled = outcome.then(() => { reports.finished = true }, () => { reports.finished = true })
+  while (!finished()) {
     const current = wake
     await Promise.race([current.promise, settled])
     wake = Promise.withResolvers()
     const reported = reports.latest
     reports.latest = null
-    if (reported !== null && !finished) yield { kind: 'progress', done: reported.done, total: reported.total }
+    if (reported !== null && !finished()) yield { kind: 'progress', done: reported.done, total: reported.total }
   }
   yield { kind: 'result', files: await outcome }
 }

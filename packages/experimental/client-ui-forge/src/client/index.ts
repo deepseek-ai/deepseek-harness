@@ -11,6 +11,13 @@ export { inject } from './mount.ts'
 export type { ForgePanelKey } from './locales.ts'
 export type { ChangeRequestActions, ChangeRequestCardProps } from './ChangeRequestCard.tsx'
 export type { ChangesParams, ChangesSource, ChangesTarget } from './changes-address.ts'
+export type {
+  ForgeAnnotationSource, ForgeChangesService, ForgeChangesSidebar, ForgeLensDescription, ForgeLineAnnotation,
+} from './changes-service.ts'
+export type {
+  ForgeChangeRequestCardActionsProps, ForgeChangesFileMenuProps, ForgeChangesToolbarProps, ForgeCommentActionsProps,
+  ForgeLineAnnotationProps,
+} from './slots.ts'
 export type { ChangesTabInjected, ChangesTabProps } from './ChangesTab.tsx'
 export type { ChangesTabTitleProps } from './ChangesTabTitle.tsx'
 export type { DiffFileAction, DiffFileProps, DiffFileText } from './DiffFile.tsx'
