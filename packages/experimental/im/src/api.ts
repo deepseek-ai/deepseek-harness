@@ -129,7 +129,7 @@ export interface ImMessageEvent {
   send(content: Fragment, options?: ImSendOptions): Promise<ImSendResult>
   /**
    * Convenience: deliver this message into a session. `id` defaults to the message key (idempotent on
-   * re-dispatch), `content` to `[message]` (formatted with `ctx.im.format`), `trigger` to the message.
+   * re-dispatch), `content` to `[message]` (formatted with `ctx.im.format`), `trigger` to the last delivered message.
    */
   deliver(target: SessionId | string, options: ImEventDelivery): Promise<void>
 }

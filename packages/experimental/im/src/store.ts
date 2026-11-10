@@ -22,6 +22,17 @@ const RECENT_OUTCOMES = 100
 const noop = () => {}
 
 /**
+ * Byte size of one message-shaped value, the one budget `maxInputBytes` bounds everywhere: the draft the intake
+ * accepts, and the delivery intent a session records. Both measure the JSON they are going to store, so a message that
+ * passes one check passes the other — the two used to measure different objects and disagree by a factor of two.
+ * @param value - the draft, intent or stored record to measure.
+ * @returns its UTF-8 JSON size in bytes.
+ */
+export function inputBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value))
+}
+
+/**
  * Durable message store.
  *
  * Every write goes through {@link ImStore.serialize}, so the check-then-write sequences (idempotency per key, the

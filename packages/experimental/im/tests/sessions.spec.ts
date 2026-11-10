@@ -227,6 +227,8 @@ describe('delivery', () => {
 
     expect(harness.formats).toHaveLength(1)
     expect(harness.model.promptText(0)).toContain('from the chat')
+    // No explicit trigger: the delivery quotes the message it delivered last, so nothing is stored twice.
+    expect(harness.host.trigger(record.sessionId)).toBe(trigger)
     await expect(harness.host.deliver('missing', delivery('followup', 'x'))).rejects.toThrow(/No IM session missing is hosted/)
   })
 

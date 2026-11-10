@@ -14,6 +14,7 @@ import {
   ImChatKey, ImMessageKey, ImSourceId, type ImConfig, type ImMessage, type ImSourceConfig,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
+import { ImError } from '../src/error.ts'
 import { admit, draftOf, ImIntake, parseCommand } from '../src/intake.ts'
 import { ImStore } from '../src/store.ts'
 
@@ -336,6 +337,27 @@ describe('ImIntake pump', () => {
     expect(attempts).toBe(2)
     expect(store.state(key)?.dispatch).toBe('done')
     expect(dispatched).toHaveLength(2)
+  })
+
+  it('settles a message no delivery can fit and keeps the chat draining', async () => {
+    const harness = await boot()
+    const { ctx, intake, dispatched, store } = harness
+    ctx.on('im/message', async (event, next) => {
+      if (event.message.text === 'huge') {
+        throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.')
+      }
+      return next()
+    })
+    await record(harness, inbound({ id: 'huge', content: h('message', h.text('huge')) }))
+    await record(harness, inbound({ id: 'small', content: h('message', h.text('small')) }))
+
+    intake.pump()
+    await intake.idle()
+
+    // Dropped rather than retried forever: the message behind it is dispatched in the same pass (the pump used to stop
+    // the chat at the first failure, so `small` never got an event at all).
+    expect(store.state(ImMessageKey('fake:bot', 'huge'))?.dispatch).toBe('done')
+    expect(dispatched.map(message => message.text)).toEqual(['huge', 'small'])
   })
 
   it('stops draining a chat whose first message failed and resumes in order', async () => {

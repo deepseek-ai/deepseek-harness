@@ -11,7 +11,9 @@ import {
   ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImChat, type ImCommand, type ImConfig, type ImMessage,
   type ImMessageEvent, type ImOutcome, type ImSourceConfig,
 } from './api.ts'
+import { ImError } from './error.ts'
 import type { ImDispatchState, ImMessageDraft, ImStore } from './store.ts'
+import { inputBytes } from './store.ts'
 
 /** What the dispatch loop needs from the service to build waterfall events. */
 export interface ImIntakeHost {
@@ -225,7 +227,7 @@ export class ImIntake {
    */
   private enriched(draft: ImMessageDraft, read: InboundMessage): ImMessageDraft {
     const next: ImMessageDraft = { ...draft, content: read.content, text: toText(read.content) }
-    return Buffer.byteLength(JSON.stringify(next)) > this.config.maxInputBytes ? draft : next
+    return inputBytes(next) > this.config.maxInputBytes ? draft : next
   }
 
   /**
@@ -271,7 +273,7 @@ export class ImIntake {
       await this.store.remember(key, { digest, receivedAt })
       return
     }
-    const bytes = Buffer.byteLength(JSON.stringify(draft))
+    const bytes = inputBytes(draft)
     if (bytes > this.config.maxInputBytes) {
       // Acknowledge and dedupe like a drifted redelivery: a refusal would leave the frame unacked, and the platform
       // would redeliver a message that can never be accepted.
@@ -329,6 +331,19 @@ export class ImIntake {
       await this.store.settle(message.key, await this.ctx.waterfall('im/message', event, fallback))
       return true
     } catch (error) {
+      if (error instanceof ImError && error.code === 'capacity') {
+        // The message can never be dispatched: it is over the size the delivery budget allows. Settling it keeps the
+        // chat draining — one oversized message used to stay pending forever, so every later message of that chat
+        // (including the `/stop` and `/clear` that would have unstuck it) waited behind it.
+        this.ctx.logger.warn('IM message %s cannot be dispatched and was dropped: %s', message.key, String(error))
+        try {
+          await this.store.settle(message.key, { kind: 'ignored', reason: error.message })
+        } catch (failure) {
+          this.ctx.logger.error('IM message %s could not be settled: %s', message.key, String(failure))
+          return false
+        }
+        return true
+      }
       this.ctx.logger.warn('IM message %s was not dispatched and stays pending: %s', message.key, String(error))
       return false
     }

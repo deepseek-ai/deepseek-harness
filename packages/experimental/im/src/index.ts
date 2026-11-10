@@ -288,7 +288,6 @@ export class ImService extends Service implements ImApi {
         ...options,
         id: options.id ?? message.key,
         content: options.content ?? [message],
-        trigger: options.trigger ?? message,
       }),
     }
   }

@@ -23,6 +23,7 @@ import { ImError } from './error.ts'
 import type { ImFormatter } from './format.ts'
 import { sessionIdOf, type ImAgentHost } from './hosting.ts'
 import { isStoredMessage, isStoredRecord, storedChatKey, storedSessionId } from './state.ts'
+import { inputBytes } from './store.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -247,7 +248,9 @@ export class ImSessionHost implements ImSessions {
       return
     }
     const stored: StoredDelivery = { session: record.sessionId, delivery, createdAt: Date.now(), admitted: false }
-    if (Buffer.byteLength(JSON.stringify(stored)) > this.config.maxInputBytes) {
+    // The same budget the intake applied to the message, measured on the same payload: the intent repeats the messages
+    // it carries, not a second copy of each (`trigger` is derived at admission).
+    if (inputBytes(delivery) > this.config.maxInputBytes) {
       throw new ImError('capacity', 'IM delivery exceeds the configured byte limit.')
     }
     await this.write(() => this.domainOf().table('deliveries').put(id, stored))
@@ -382,7 +385,10 @@ export class ImSessionHost implements ImSessions {
               media: delivery.media === true, ...delivery.header === undefined ? {} : { header: delivery.header },
             })
             : delivery.content
-          if (delivery.mode !== 'inject' && delivery.trigger) this.triggers.set(sessionId, delivery.trigger)
+          // A delivery that names no trigger quotes the message it delivered last: the intent already carries those
+          // messages, and repeating one of them as `trigger` doubled what a delivery had to fit into the budget.
+          const trigger = delivery.trigger ?? (isMessages(delivery.content) ? delivery.content.at(-1) : undefined)
+          if (delivery.mode !== 'inject' && trigger !== undefined) this.triggers.set(sessionId, trigger)
           const message: UserMessage = {
             id: messageId, role: 'user', content,
             source: { kind: 'im', form: 'relay' },
