@@ -134,7 +134,6 @@ These constraints apply to the host integration and accepted calls.
 
 - **Program Images cover read_image and CUA screenshots** — other image-producing tools keep their declared values and automatically attach their pictures as additional model context.
 - **Program Images require attachment path mapping** — the filesystem must map stored host attachments to readable program paths. `fs-ssh` has no such mapping, so image adaptation rejects in that composition.
-
 - **No built-in reset control** — the shipped Loader plugin does not expose its executor instance through a service, GUI control or SDK endpoint. Hosts needing reset must mount and retain `PtcExecutor` in their own composition; that integration owns retries after a failed reset.
 - **PTC mode's SDK language follows the one loaded runtime, and a presentation is per agent rather than per tool** — PTC execution rejects prompt assembly unless `ctx.ptcRuntime.language` has a registered SDK renderer; within one agent no tool can be native-only while another is ptc-only.
 - **PTC mode intermediate values are execution-local and unbounded by bytes** — they cannot be reconstructed from session replay and may exhaust process or worker memory; only the outer `run_code` output has the worker's configurable hard cap.
