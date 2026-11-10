@@ -472,7 +472,7 @@ tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使
 
 **不收集块里的 `var`。** 块里的 `var` 会和拷贝语句撞名，整段程序报 `already declared`，这个名字也带不到之后的调用；收集它只需约 15 行语句遍历，不分析引用，所以采用收集。
 
-**堆栈里只显示 `.ptc-repl-<序号>.js`，不带目录。** 文件名去掉目录后，默认加载器按导入那一刻的 cwd 解析相对 `import()`，和有 import 处理器时不一致；用 `//# sourceURL` 只显示短名时，V8 不再应用 `lineOffset`，每个行号多 1；把 import 交给回调函数需要 `--experimental-vm-modules`，默认启动没有这个参数。所以文件名保留第一次调用的目录。
+**堆栈里只显示 `.ptc-repl-<序号>.js`，不带目录。** 文件名去掉目录后，默认加载器按导入那一刻的 cwd 解析相对 `import()`，和有 import 处理器时不一致；用 `//# sourceURL` 只显示短名时，V8 不再应用 `lineOffset`，每个行号多 1；把 import 交给回调函数可以解决：子进程两种启动方式都带 `--experimental-vm-modules`，回调可以在第一次调用的目录下发起 `import()`；但这要求 scoped-repl 总是走回调形式的 import，默认路径现在没有走，所以文件名暂时保留第一次调用的目录。
 
 **提供 `require`、`module` 和内置模块全局（node:repl 做法）。** node:repl 的 `require` 解析规则不一致，跟随目录又要定义何时换基准；只保留 `import()`。
 
