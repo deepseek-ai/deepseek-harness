@@ -63,9 +63,10 @@ describe('top-level declarations', () => {
 
   it.each<[string, Record<string, string>]>([
     ['var dup = 1\nfunction dup() {}', { dup: 'function' }],
-    ['function dup() {}\nvar dup = 1', { dup: 'var' }],
+    ['function dup() {}\nvar dup = 1', { dup: 'function' }],
     ['function twice() { return 1 }\nfunction twice() { return 2 }', { twice: 'function' }],
-  ])('accepts names that a function body may declare more than once, keeping the last keyword: %j', (code, expected) => {
+    ['var both = 1\nif (x) { var both = 2 }', { both: 'var' }],
+  ])('accepts names that a function body may declare more than once, recording function over var: %j', (code, expected) => {
     expect(declarations(code)).toEqual(expected)
   })
 
@@ -304,13 +305,28 @@ describe('scope chain', () => {
     expect(await c.run('k = 7\nk')).toBe(7)
   })
 
-  it('cannot read the earlier value of a name in its own redeclaration', async () => {
+  it('cannot read the earlier value of a name in its own let, const, or class redeclaration', async () => {
     const c = chain()
     await c.run('let count = 1')
     expect(message(await c.failure('let count = count + 1'))).toBe("ReferenceError: Cannot access 'count' before initialization")
+    expect(message(await c.failure('const count = count + 1'))).toBe("ReferenceError: Cannot access 'count' before initialization")
+    expect(message(await c.failure('class count extends count {}'))).toBe("ReferenceError: Cannot access 'count' before initialization")
     expect(await c.run('count')).toBe(1)
-    expect(Number.isNaN(await c.run('var count = count + 1\ncount'))).toBe(true)
     expect(await c.run('count = 1\ncount = count + 1')).toBe(2)
+  })
+
+  it.each(['var', 'let', 'const', 'function', 'class'])('starts a var redeclaration from the earlier value of a %s binding', async (keyword) => {
+    const c = chain()
+    const declaration = { function: 'function count() {}', class: 'class count {}' }[keyword] ?? `${keyword} count = 1`
+    await c.run(`${declaration}\nglobalThis.earlier = count`)
+    expect(await c.run('var count = [count === globalThis.earlier, typeof count]\ncount')).toEqual([true, keyword === 'function' || keyword === 'class' ? 'function' : 'number'])
+  })
+
+  it('adds to the earlier value in a var redeclaration that reads its own name', async () => {
+    const c = chain()
+    await c.run('var count = 1\nglobalThis.readCount = () => count')
+    expect(await c.run('var count = count + 1\ncount')).toBe(2)
+    expect(await c.run('var count = count + 1;\n[count, readCount()]')).toEqual([3, 1])
   })
 
   it('shares objects by reference', async () => {
@@ -450,11 +466,29 @@ describe('scope chain', () => {
     expect(await c.run('[a, b]')).toEqual(['new a', 'old b'])
   })
 
-  it('carries an unreached var redeclaration as undefined', async () => {
+  it('keeps the earlier value when a failed program does not reach its var redeclaration', async () => {
     const c = chain()
     await c.run('var v = 5')
     await c.failure('throw new Error("early")\nvar v = 6')
-    expect(await c.run('v')).toBeUndefined()
+    expect(await c.run('v')).toBe(5)
+    await c.failure('var v = await Promise.reject(new Error("tool failed"))')
+    expect(await c.run('v')).toBe(5)
+    await c.failure('var v = 7\nthrow new Error("late")')
+    expect(await c.run('v')).toBe(7)
+  })
+
+  it('keeps the earlier value of a let binding through a failed var redeclaration in the next program', async () => {
+    const c = chain()
+    await c.run('let config = { retries: 1 }')
+    await c.failure('var config = await Promise.reject(new Error("config service unavailable"))\nconfig.retries')
+    expect(await c.run('config.retries')).toBe(1)
+  })
+
+  it('carries an assigned undefined from a var redeclaration that ran', async () => {
+    const c = chain()
+    await c.run('var found = 1')
+    await c.failure('var found = undefined\nthrow new Error("after")')
+    expect(await c.run('found')).toBeUndefined()
   })
 
   it('carries an unreached function redeclaration as the new function', async () => {
@@ -479,11 +513,22 @@ describe('scope chain', () => {
     expect(await c.run('[data, typeof readData()]')).toEqual([3, earlierType])
   })
 
-  it('replaces an earlier value with undefined when a block-level var redeclaration does not run', async () => {
+  it('keeps the earlier value through a var redeclaration that does not run or has no initializer', async () => {
     const c = chain()
     await c.run('let cache = 1')
     await c.run('if (false) { var cache = 2 }')
-    expect(await c.run('cache')).toBeUndefined()
+    expect(await c.run('cache')).toBe(1)
+    await c.run('var cache')
+    expect(await c.run('cache')).toBe(1)
+    await c.run('for (var cache of []) {}')
+    expect(await c.run('cache')).toBe(1)
+  })
+
+  it('does not replace a function declared with a var of the same name in one program by the earlier value', async () => {
+    const c = chain()
+    await c.run('var both = 1')
+    expect(await c.run('function both() { return "function" }\nvar both\nboth()')).toBe('function')
+    expect(await c.run('both()')).toBe('function')
   })
 
   it('does not carry var declarations from nested functions and classes', async () => {

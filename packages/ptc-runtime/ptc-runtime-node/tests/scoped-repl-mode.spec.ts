@@ -24,12 +24,11 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     + 'Each call starts with copies of the top-level bindings left by earlier calls and may declare any of those names again with any keyword. '
     + 'A new declaration applies to this and later calls; functions and still-running code from earlier calls keep the values they captured. '
     + 'Assigning to an earlier name without declaring it, even one declared with const, changes only the copy seen by this and later calls. '
-    + 'A declaration cannot read the earlier value of its own name: let total = total + 1 throws and var total = total + 1 gives NaN, '
-    + 'so assign to the name or use a new name instead. '
+    + 'A let, const, or class declaration cannot read the earlier value of its own name, so let total = total + 1 throws; '
+    + 'assign to the name or use a new name instead. A var declaration of an earlier name starts from the earlier value. '
     + 'var declarations become top-level names of the call even inside blocks; other declarations inside blocks stay in their block. '
     + 'Assignments that earlier code makes later, such as from timers, are not visible to later calls; keep shared mutable state in objects. '
-    + "If a call fails before a let, const, or class declaration of an existing name finishes, later calls keep that name's earlier value; "
-    + 'a var declaration that did not run leaves undefined. '
+    + "If a call fails before a let, const, class, or var declaration of an existing name finishes, later calls keep that name's earlier value. "
     + "Use await import(...) for modules; require is unavailable, and relative specifiers resolve from the working directory of this environment's first call. "
     + "Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. "
     + 'Timeout and cancellation results say whether retained variables were preserved or cleared. '
@@ -119,4 +118,15 @@ it('keeps a var declared inside a block of a later call, also when an earlier ca
   await run('const data = { retries: 1 }')
   expect(await run('try {\n  var data = await Promise.resolve({ retries: 3 })\n} catch (error) {}\ndata.retries')).toMatchObject({ value: 3 })
   expect(await run('data.retries')).toMatchObject({ value: 3 })
+})
+
+it('keeps an earlier value when a tool fails inside a later var redeclaration of that name', async () => {
+  const { runtime, stateOwner } = await scopedReplRuntime()
+  const run = (program: string) => runtime.run(runtime.resolve({
+    program, stateOwner,
+    bindings: [{ global: 'tools', functions: { loadConfig: async () => { throw new Error('config service unavailable') } } }],
+  }))
+  expect((await run('var config = { retries: 1 }')).error).toBeUndefined()
+  expect((await run('var config = await tools.loadConfig({})\nconfig.retries')).error?.message).toContain('config service unavailable')
+  expect(await run('config.retries')).toMatchObject({ value: 1 })
 })

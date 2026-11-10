@@ -56,15 +56,15 @@ The `scoped-repl` format connects the evaluator to the existing execution modes;
 #### Across calls
 
 - Each call starts by copying every top-level name left by earlier calls into a same-named declaration; objects are shared by reference, so changes inside an object are visible on both sides.
-- A call may declare an earlier name again with any keyword, including a `var`→`let`→`const`→`class`→`function` sequence. A name the call declares is not copied; the call's declaration wins.
+- A call may declare an earlier name again with any keyword, including a `var`→`let`→`const`→`class`→`function` sequence. A name the call declares with `let`, `const`, `class`, or `function` is not copied, and the call's declaration wins; a name it declares again only with `var` is still copied, so that `var` starts from the earlier value.
 - Assigning to an earlier name without declaring it changes this call's copy: later calls see the new value, and earlier functions keep the old one. This includes names declared with `const`, which are read-only only in the call that declares them.
 - After a function is redefined, earlier callers still call the old function.
 - Assignments that earlier code, such as timers and callbacks, makes to top-level variables after a call starts are not visible to later calls; keep shared mutable state in objects.
 - Earlier functions cannot see names declared later; referencing them reports `ReferenceError`.
-- When a call declares a name again, every reference in that call resolves to the new declaration, including references written before it, and the old value is unreachable: reading a `let`, `const`, or `class` name before its declaration runs reports the native `ReferenceError: Cannot access 'x' before initialization`; a `var` name reads `undefined`, so `var count = count + 1` yields `NaN`; a `function` name holds the new function from the start of the call. Such code is a program error and is not handled.
+- When a call declares a name again with `let`, `const`, or `class`, every reference in that call resolves to the new declaration, including references written before it, and the old value is unreachable: reading the name before its declaration runs reports the native `ReferenceError: Cannot access 'x' before initialization`. Such code is a program error and is not handled. A `var` redeclaration starts from the earlier value until it assigns a new one, so `var count = count + 1` adds to the earlier value; a `function` name holds the new function from the start of the call.
 - When a call fails partway: declarations completed before the throw are kept; an existing name redeclared but not yet initialized falls back to its earlier value in later calls; an uninitialized new name is dropped.
 - A `var` declared inside a block, including `try`/`catch`/`finally`, `if`/`else`, loop bodies, `switch`, and labeled statements, hoists to the top level of the call and counts as the call's declaration like a top-level `var`: it carries to later calls and may reuse a name that an earlier call declared with any keyword. A `var` inside a nested function or class does not count.
-- Known edge: a `var` redeclaration that does not run, after a throw or in a branch that is not taken, reads as `undefined` later instead of falling back, because the declaration hoists to the start of the call.
+- A `var` redeclaration that does not run, after a throw or in a branch that is not taken, keeps the earlier value, and so does `var x;` without an initializer.
 
 #### Environment
 
@@ -118,14 +118,14 @@ These are the defaults; one option controls each of the first two items, see Con
 | Redeclaration with any keyword | ✗ | ✓ | ✓ (matches the expected implementation) | — | ✗ | In node:repl and persistent vm-script, 21 of the 25 keyword pairs report `already declared`, and only `var` and `function` may replace each other; ours reserves a redeclaration notice that prints nothing; the expected implementation prints an extra warning when a `const` is declared again as `const` |
 | Earlier functions unaffected by a later assignment without declaration | ✗ | ✓ | ✓ (matches the expected implementation) | — | ✗ | |
 | Assigning to an earlier `const` without declaring it again | ✗ | ✓ | ✓ (matches the expected implementation) | — | ✗ | node:repl and persistent vm-script report `TypeError`; ours prints nothing; the expected implementation prints a warning first |
-| A `var` redeclaration reads the earlier value of its name (`var n = n + 1`) | ✓ | ✗ | ✗ (matches the expected implementation) | — | ✓ | node:repl and persistent vm-script only when the earlier declaration is also `var`, and report `already declared` after `let`; ours yields `NaN`; the expected implementation yields `NaN` as well |
+| A `var` redeclaration reads the earlier value of its name (`var n = n + 1`) | ✓ | ✗ | ✓ (matches node:repl, persistent vm-script) | — | ✓ | node:repl and persistent vm-script only when the earlier declaration is also `var`, and report `already declared` after `let`; ours also after `let` or `const`; the expected implementation yields `NaN` |
 | Earlier callers keep calling the old function after a redefinition | ✗ | ✓ | ✓ (matches the expected implementation) | — | ✗ | |
 | Later calls see values earlier code assigns afterwards | ✓ | ✗ | ✗ (matches the expected implementation) | — | ✓ | A timer-incremented variable read twice 30 ms apart: node:repl 23, 50; persistent vm-script 22, 44; ours 0, 0; the expected implementation 15, 15 |
 | Earlier functions see names declared later | ✓ | ✗ | ✗ (matches the expected implementation) | — | ✓ | Ours reports `ReferenceError` |
 | Changes inside an object visible on both sides | ✓ | ✓ | ✓ (matches node:repl, the expected implementation, persistent vm-script) | — | ✓ | |
 | A name stays usable after its initializer throws | ✗ | ✓ | ✓ (matches the expected implementation) | — | ✗ | In node:repl and persistent vm-script a new name stays unusable, and declaring it again reports `already declared`; ours falls back to the earlier value for existing names and drops new names |
 | Declarations completed before a throw are kept | ✓ | ✓ | ✓ (matches node:repl, the expected implementation, persistent vm-script) | — | ✓ | |
-| A `var` redeclaration not reached before a throw keeps the old value | ✓ | ✓ | ✗ (matches none of node:repl, the expected implementation, persistent vm-script) | — | ✓ | Ours hoists the `var` as `undefined` when the call starts; the expected implementation inserts marker code to achieve this |
+| A `var` redeclaration not reached before a throw keeps the old value | ✓ | ✓ | ✓ (matches node:repl, the expected implementation, persistent vm-script) | — | ✓ | Ours copies the earlier value into the call's `var`, which also keeps it through an untaken branch; the expected implementation inserts marker code to achieve this |
 | A new `var` declared in a block is carried to later calls | ✓ | ✗ | ✓ (matches node:repl, persistent vm-script) | — | ✓ | Ours collects block-level `var` declarations |
 | A block-level `var` with the same name as an earlier `let` is accepted | ✗ | ✗ | ✓ (matches none of node:repl, the expected implementation, persistent vm-script) | — | ✗ | node:repl and persistent vm-script report `already declared`; ours treats it as the call's new declaration; the expected implementation reports `already declared` as well |
 
@@ -228,20 +228,23 @@ return { value: (c * 2) }
 | `"use strict";` | With the `strict` option on, the whole Script is strict; when off, it is omitted, and a program that starts with `"use strict"` gets one at the start of the inner function body instead | On forces strict mode; off keeps the copy declarations from voiding the model's directive |
 | Outer `function (__$binding_vals, __$binding_getters)` | Receives the copied values and an empty array and returns the inner function; the evaluator calls it synchronously | The internal values reach the program through a closure and stay out of its `arguments`; the outer function returns before the program runs, so its frame never appears in program stacks |
 | Inner `async function ()` | The model's program is its body | Supports top-level `await`; top-level declarations are function locals, so calls never conflict; it is called without a receiver and without arguments, so `this` is `undefined` (`globalThis` when the program runs sloppy) and `arguments` is an empty arguments object |
-| Copy declarations | Generated only for names that earlier calls left and this call does not declare; values come from `__$binding_vals` by index | Index access is unaffected by names such as `__proto__` |
+| Copy declarations | Generated only for names that earlier calls left and this call does not declare or declares again only with `var`; values come from `__$binding_vals` by index | Index access is unaffected by names such as `__proto__` |
 | `__$binding_getters.push(...)` | Before the model's code, pushes one read function per name, copied or declared, in the order the evaluator generated | The evaluator maps the i-th read function to the i-th name, so the prefix needs no name strings; a read function can be created early and read later, and it throws while its declaration is uninitialized |
 | Final expression | Inserts `return ` before the statement, `{ value: (` before the expression, and `) }` after it | The same handling of the last statement as Node's `processTopLevelAwait`; the box keeps the async function from awaiting a returned Promise |
 | Prefix on line 0 | Compiled with `lineOffset: -1` | Line N of the model's code reports as line N |
 | Closing on its own line | `} })` | The model's last line can end with a `//` comment |
 
-A copy declaration exists if and only if the call does not declare the name; when the call declares it with any keyword, including `const`, there is no copy and the call's declaration wins. Copy keywords:
+A copy declaration exists when the call does not declare the name or declares it again only with `var`; when the call declares it with `let`, `const`, `class`, or `function`, there is no copy and the call's declaration wins. Copy keywords:
 
-| Earlier declaration | Generated copy |
+| Case | Generated copy |
 |---|---|
-| `let`, `const`, `function`, `class` | `let` |
-| `var` | `var` |
+| Not declared by this call; earlier `let`, `const`, `function`, or `class` | `let` |
+| Not declared by this call; earlier `var` | `var` |
+| Declared again by this call only with `var` | `var` |
 
 A copy only carries the earlier value in, and writing it as `const` would only forbid later calls from assigning to it, so an earlier `const` is copied as `let` too: later calls can assign to it, changing only the copy, while it stays `const` in the call that declares it. The kernel does not check whether a call assigns the name, so it needs no syntax-tree walk and prints no warning.
+
+A call that declares a name again only with `var` gets a copy too: repeated `var` declarations in one function are one variable, so that `var` starts from the earlier value and a declaration that does not run never replaces it with `undefined`, as a global `var` behaves in node:repl. A `function` of the same name in the same call initializes at the start of the function and takes precedence over the `var`, so it gets no copy.
 
 Compilation and execution:
 
@@ -309,7 +312,7 @@ Before parsing, the kernel checks two things: a program that starts with `#!`, o
    | Top-level statement | Collected names | Recorded keyword |
    |---|---|---|
    | `const`, `let`, and `var` declarations, including destructuring (objects, arrays, defaults, rest elements) | Every bound name | The original keyword |
-   | `function` declarations, including async and generator functions | The function name | `function` |
+   | `function` declarations, including async and generator functions | The function name | `function`; a `var` of the same name in the same call is recorded as `function` too |
    | `class` declarations | The class name | `class` |
    | `var` in the head of `for (var …; …; …)` and `for (var … in/of …)` | Every bound name | `var` |
    | `var` inside blocks, `try`/`catch`/`finally`, `if`/`else`, loop bodies, `switch`, labeled statements, and `with`, including `for` heads there; nested functions and classes are skipped | Every bound name | `var` |
@@ -347,7 +350,7 @@ Each `compile(code, options)`:
 1. Adopts `compiled`: when the read-function array holds at least one function per name, that program's prefix has run, so `bindings` maps the i-th name to the i-th read function and `replaced` takes its values. The child rejects overlapping evaluations (`overlapping PTC evaluation`), so the previous prefix always runs in a microtask before the next compilation; only two compilations in one synchronous run leave the first program unadopted.
 2. Scans the program for its declarations and final expression; a syntax error is thrown and the state stays unchanged.
 3. Calls every read function in `bindings` for its current value. When a read throws because its declaration never finished, the value from `replaced` is used; without either, the name is dropped.
-4. Copies names the call does not declare and collects their values in `values`; for existing names the call declares, records the value in the new `replaced` and a redeclaration `{ name, previous, current }`.
+4. Copies names the call does not declare or declares again only with `var`, and collects their values in `values`; for existing names the call declares, records the value in the new `replaced` and a redeclaration `{ name, previous, current }`.
 5. Generates and compiles the source. With the `strict` option off and `useStrict` true, the inner function body starts with `"use strict";`. A V8 compile failure throws the native `SyntaxError` without the compiler frames after the error heading (the same handling as `vm-script`, in a separate copy) and leaves the state unchanged.
 6. Calls `onRedeclaration(redeclarations)` when there are redeclarations.
 7. Calls the outer function for the program, records `compiled`, and returns the program.
@@ -371,7 +374,7 @@ Reads happen in kernel step 3, when a new program is compiled. Later assignments
 | 5 | `typeof fresh` | `"undefined"`: there is no earlier value, so the name is dropped |
 
 - Declarations completed before a throw are kept. For example, after `let y = 5` runs and the call then throws, `y` is still 5 in later calls.
-- `var` and `function` bindings hold a value from the start of the function (`undefined` or the function), so reading them never throws and never falls back. For example, when call 2 throws before `var v = 6`, later calls read `v` as `undefined`.
+- A `var` redeclaration starts from the copied earlier value, so reading it never throws and needs no fallback: an unreached `var` keeps the earlier value. For example, when call 2 throws before `var v = 6`, or the tool call in `var config = await tools.loadConfig({})` fails, later calls still read the earlier value. A `function` name holds the new function from the start of the call.
 
 ### Asynchronous failures: aligned with the REPL
 
@@ -403,9 +406,8 @@ The kernel calls `onRedeclaration` in step 6; the evaluator injects its `reportR
 ### Out of scope
 
 - Memory reclamation: not handled; every call copies every name. Earlier calls without surviving closures are collected; when a call leaves a surviving function, that function keeps every value copied into that call.
-- Marking whether a `var` was reached.
 - Resolving `import()` from the working directory as it changes: an explicit operation such as `js_switch_cwd` can be added when needed.
-- Reading the earlier value of a name in its own redeclaration, such as `var count = count + 1`: a program error.
+- Reading the earlier value of a name in its own `let`, `const`, or `class` redeclaration, such as `let count = count + 1`: a program error.
 - Problems from mixing strict and sloppy calls with the `strict` option off, listed under Risks: left to a future reset tool.
 - The column shift on the final expression's line.
 
@@ -424,7 +426,7 @@ The `scoped-repl` format connects the evaluator with only the changes the connec
 | `configuration.ts` in `ptc-runtime-node` (used by CUA to merge settings) | `resolvePersistentExecution` returns `executionMode`, `scriptPersistence`, and `replScoped` to merge together: `scoped-repl` yields `replScoped: true` and every other format `false`, replacing a stale profile value |
 | Documentation, snapshots, and tests | Package README configuration, behavior, and known limitations; the config catalog; the snapshot scenario `ptc-scoped-repl`; a built-artifact e2e case with `replScoped: true` |
 
-tool-executor-ptc is unchanged: for every format other than `function-body` it uses its printing guidance. The model guidance states the exact behavior above, especially: await a final Promise; top-level `return` is unsupported; copies happen when a call starts and earlier code is unaffected; shared mutable state belongs in objects; an assignment without declaration changes only the copy, including for earlier `const` names; a redeclaration cannot read the earlier value of its name, so assign to the name or use a new one to compute from it; when a call fails, an unfinished `let`, `const`, or `class` redeclaration falls back to the earlier value and an unreached `var` is `undefined`; a `var` inside a block is also a top-level name of the call, while other block declarations stay in their block; modules load only with `import()`, whose relative specifiers resolve from the directory of the environment's first call. Tests pin the model guidance verbatim.
+tool-executor-ptc is unchanged: for every format other than `function-body` it uses its printing guidance. The model guidance states the exact behavior above, especially: await a final Promise; top-level `return` is unsupported; copies happen when a call starts and earlier code is unaffected; shared mutable state belongs in objects; an assignment without declaration changes only the copy, including for earlier `const` names; a `let`, `const`, or `class` redeclaration cannot read the earlier value of its name, so assign to the name or use a new one to compute from it; a `var` redeclaration starts from the earlier value; when a call fails, an unfinished `let`, `const`, `class`, or `var` redeclaration keeps the earlier value; a `var` inside a block is also a top-level name of the call, while other block declarations stay in their block; modules load only with `import()`, whose relative specifiers resolve from the directory of the environment's first call. Tests pin the model guidance verbatim.
 
 ## Alternatives considered
 
@@ -458,7 +460,11 @@ tool-executor-ptc is unchanged: for every format other than `function-body` it u
 
 **Copying only assigned `const` names as `let`, with a warning.** This walks the new call's syntax tree and tracks shadowing, which is scope analysis and violates requirement 5. Ours copies every `const` as `let` without a notice.
 
-**Copying the earlier value into a `var` redeclaration.** It would let `var count = count + 1` read the earlier value and keep the earlier value of a `var` not reached before a throw, but it corrects a program error on the model's behalf; not done.
+**Starting a `var` redeclaration from `undefined` without a copy.** `var count = count + 1` then yields `NaN`, but a `var` not reached before a throw or in a branch that is not taken replaces the earlier value with `undefined`; for example, a failed tool call in `var config = await tools.loadConfig({})` leaves later calls without the earlier `config`. With the copy, `var count = count + 1` adds to the earlier value, as in node:repl, which is accepted for now.
+
+**Falling back only when a call failed and the value reads `undefined`.** It needs no copy, but cannot tell an unreached declaration from one that ran and assigned `undefined`: a call that assigns `undefined` and then fails falls back by mistake, and an untaken branch or `var x;` without an initializer in a successful call is not covered.
+
+**Marking in the code whether each `var` ran.** It distinguishes the cases exactly but rewrites model code at declarations, earlier assignments, and loop heads, which violates requirement 5.
 
 **Skipping copies of strict-mode reserved words in strict calls.** It would keep names such as `package`, declared in a sloppy call, from breaking later strict calls; the problem comes from the model mixing both modes, so it is left to a future reset tool.
 
@@ -495,8 +501,8 @@ Costs:
 - Programs that start with `#!` are rejected.
 - Any occurrence of `__$binding_`, including in strings and comments, is rejected; internal names written with escapes such as `\u005f` are not checked.
 - acorn must keep pace with V8's syntax, or newer syntax is rejected before it runs.
-- A `var` redeclaration that does not run, after a throw or in a branch that is not taken, including a `var` inside a block, reads as `undefined` in later calls instead of falling back.
-- A redeclaration cannot read the earlier value of its name: `let`, `const`, and `class` throw, and `var` reads `undefined`, so `var count = count + 1` yields `NaN`. This is a program error and is not handled.
+- A `var` redeclaration starts from the earlier value: `var count = count + 1` adds to it, as in node:repl, also when the earlier declaration was `let` or `const`, where node:repl reports `already declared`.
+- A `let`, `const`, or `class` redeclaration cannot read the earlier value of its name and throws, as in `let count = count + 1`. This is a program error and is not handled.
 - Every earlier `const` is copied as `let` into later calls, which can assign to it without any notice.
 - With the `strict` option off, strict and sloppy calls can mix: a sloppy call that assigns an undeclared name creates a global shared by every call and earlier function, and a name declared in a sloppy call with a strict-mode reserved word (`package`, `public`, `private`, `protected`, `interface`, `implements`, `static`, `let`, `yield`, `eval`, `arguments`) makes later strict calls fail to compile. This is not handled and is left to a future reset tool.
 - When a callback throws a frozen or non-extensible object, Node's domain handling fails and the process ends, losing retained variables, as with node:repl.

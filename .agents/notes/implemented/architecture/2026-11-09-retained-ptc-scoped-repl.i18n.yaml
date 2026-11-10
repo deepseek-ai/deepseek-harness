@@ -18,8 +18,8 @@
   en: 4aea7c443fb4ab0f
   zh: 248eb4ac38726537
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/across-calls:
-  en: fdaaa2b14a2571fd
-  zh: d04a35307ba18421
+  en: d389222669ca94d7
+  zh: cf19a71bce644ee4
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/environment:
   en: b1d35c4055c7f381
   zh: 404b3843b2348fec
@@ -30,23 +30,23 @@
   en: 70c47aba7a23fc4f
   zh: 1d7d5f0809e748aa
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/comparison-with-node-repl-and-vm-script:
-  en: 624b9eebdf778496
-  zh: d0fb8bb6f9990194
+  en: 013bfbf3d3944637
+  zh: eba400efadf6229b
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/context-and-options:
   en: 426e163a68186643
   zh: 495ea7dc908be1cc
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/wrapper:
-  en: a25ee2a6aa39eeda
-  zh: cb11bd07d66cf428
+  en: d886821f764b6804
+  zh: a073534825d639a2
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/kernel-scope-chain-acorn-scan-and-compilation:
-  en: c1e9367d218c826b
-  zh: 691d4c7fe83c4dda
+  en: 10d0459a356cd33d
+  zh: 07e7cd70119c4d4d
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/scope-chain-state-and-the-steps-of-a-call:
-  en: 0f9980859d53f238
-  zh: 6db27b95fe1d0d44
+  en: c6f5eba57e70ab04
+  zh: 70b0dfc418a7cf91
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/failed-calls:
-  en: 936c809bd1d23eb9
-  zh: 42a047ede12256cb
+  en: 64937f1d5acd7147
+  zh: f262dff89139086f
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/asynchronous-failures-aligned-with-the-repl:
   en: 7f867b69623f3652
   zh: 551a456448700171
@@ -57,17 +57,17 @@
   en: c3eef0f99686acfe
   zh: 9093c1e84abff335
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/out-of-scope:
-  en: 4d9a6825d098ed8f
-  zh: 6cd6f44cd6698517
+  en: 725a4139f28961c3
+  zh: b32da1bf86095e65
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/integration:
-  en: 2cedcac798ba9b26
-  zh: d34ac3cd6b005788
+  en: c5e79195a4606777
+  zh: 357d55e54569a90a
 /agent-note-scoped-repl-evaluator-for-retained-ptc/alternatives-considered:
-  en: 2ba5f708f50b2e08
-  zh: 24a839f63ba1a491
+  en: e366e120e5becb52
+  zh: 2878d4253e139758
 /agent-note-scoped-repl-evaluator-for-retained-ptc/consequences:
-  en: 9a0838ca5252cc33
-  zh: e775c396c94c94b6
+  en: f3ec8ebd4a1b6c72
+  zh: cc43ad1471fd3af0
 /agent-note-scoped-repl-evaluator-for-retained-ptc/testing:
   en: ac3b7db56e6fa832
   zh: 1d2d33262e3822ba

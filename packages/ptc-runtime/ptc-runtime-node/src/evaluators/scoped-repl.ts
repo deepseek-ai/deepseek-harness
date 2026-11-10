@@ -64,7 +64,11 @@ export function scanProgram(code: string, options: { filename: string }): Scoped
     throw parseFailure(code, options.filename, error)
   }
   const declarations = new Map<string, ScopedReplBindingKind>()
-  const declare = (identifier: Identifier, kind: ScopedReplBindingKind): void => { declarations.set(identifier.name, kind) }
+  const declare = (identifier: Identifier, kind: ScopedReplBindingKind): void => {
+    // A function declaration initializes the name before any statement runs, so a var of the same name never replaces it.
+    if (kind === 'var' && declarations.get(identifier.name) === 'function') return
+    declarations.set(identifier.name, kind)
+  }
   const collectVar = (statement: Statement | ModuleDeclaration): void => {
     switch (statement.type) {
       case 'VariableDeclaration':
@@ -123,20 +127,26 @@ export function scanProgram(code: string, options: { filename: string }): Scoped
 /**
  * Build the Script source that copies earlier bindings, exposes read functions, and runs the program.
  * The generated prefix occupies line 0, so compiling with `lineOffset: -1` reports program line N as line N.
- * A copy exists exactly for each carried binding; `var` bindings are copied as `var` and all others as `let`.
+ * A copy exists exactly for each carried binding. A name the program declares again starts from its earlier value through a `var` copy,
+ * other `var` bindings are copied as `var`, and all others as `let`.
  * With `strict` off, a program whose directives include "use strict" gets that directive at the start of its function body.
  * @param code - Program text that produced `scan`.
  * @param scan - Result of {@link scanProgram} for `code`.
- * @param carried - Earlier bindings the program does not declare, in the order of the copied values.
+ * @param carried - Earlier bindings to copy, in the order of the copied values: names the program does not declare,
+ * and names it declares again only with `var`.
  * @param options - Whether the whole Script is strict, and whether the final expression becomes the completion value.
  * @returns Source evaluating to a factory, and every binding in the order of the read functions it pushes.
  */
 export function buildProgramSource(
   code: string, scan: ScopedReplScan, carried: readonly ScopedReplBinding[], options: { strict: boolean; finalExpression: boolean },
 ): { source: string; bindings: ScopedReplBinding[] } {
-  const bindings = [...carried, ...Array.from(scan.declarations, ([name, kind]) => ({ name, kind }))]
+  const copiedOnly = carried.filter(({ name }) => !scan.declarations.has(name))
+  const bindings = [...copiedOnly, ...Array.from(scan.declarations, ([name, kind]) => ({ name, kind }))]
   // A copy only carries the earlier value in; declaring it const would only forbid later assignments.
-  const copies = carried.map(({ name, kind }, index) => ` ${kind === 'var' ? 'var' : 'let'} ${name} = ${BINDING_VALUES}[${index}];`).join('')
+  const copies = carried.map(({ name, kind }, index) => {
+    const keyword = kind === 'var' || scan.declarations.has(name) ? 'var' : 'let'
+    return ` ${keyword} ${name} = ${BINDING_VALUES}[${index}];`
+  }).join('')
   const getters = bindings.length === 0 ? '' : ` ${BINDING_GETTERS}.push(${bindings.map(({ name }) => `() => ${name}`).join(', ')});`
   const final = options.finalExpression ? scan.finalExpression : undefined
   const body = final === undefined ? code : `${code.slice(0, final.statementStart)}return ${code.slice(final.statementStart, final.expressionStart)}{ value: (${code.slice(final.expressionStart, final.expressionEnd)}) }${code.slice(final.expressionEnd)}`
@@ -194,7 +204,8 @@ interface CompiledProgram {
 /**
  * Compile programs that each run in their own scope and start with copies of the top-level bindings earlier programs left.
  * A program reads earlier bindings when it is compiled: values earlier code assigns afterwards stay with that code.
- * An earlier name whose redeclaration never finished initializing keeps the value it had before; an uninitialized new name is dropped.
+ * A var redeclaration starts from the earlier value. An earlier name whose let, const, or class redeclaration never finished initializing
+ * keeps the value it had before; an uninitialized new name is dropped.
  */
 export class ScopedReplScopes {
   private readonly options: ScopedReplScopesOptions
@@ -231,10 +242,12 @@ export class ScopedReplScopes {
       const current = this.currentValue(name, binding)
       if (current === undefined) continue
       const kind = scan.declarations.get(name)
-      if (kind === undefined) {
+      // A var redeclaration starts from the earlier value, as a global var does in Node's REPL, so an unreached one keeps it.
+      if (kind === undefined || kind === 'var') {
         carried.push({ name, kind: current.kind })
         values.push(current.value)
-      } else {
+      }
+      if (kind !== undefined) {
         replaced.set(name, current)
         redeclarations.push({ name, previous: current.kind, current: kind })
       }
