@@ -2745,6 +2745,18 @@ describe('PTC standing file policy and sandbox outcomes', () => {
     } finally { await ctx.fiber.dispose() }
   })
 
+  it.each(['line', 'line\n', 'line\n\n'])('keeps written line breaks before sandbox diagnostics: %j', async (log) => {
+    const { ctx, runtime } = await setup()
+    try {
+      runtime.behavior = async () => ({ output: [{ type: 'text', text: log }],
+        error: { kind: 'exception', message: 'failed' }, sandbox: { mode: 'read-only', denied: false } })
+      const result = await runCode(ctx, 'inspect("line"); throw new Error("failed")')
+      const text = result.content.filter(block => block.type === 'text').map(block => block.text).join('')
+      const written = log === 'line' ? 'line\n' : log
+      expect(text).toBe(`Error: code run failed (exception): failed\nCaptured output:\n${written}File sandbox: read-only.`)
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it.each([
     { mode: 'danger-full-access' as const, denied: false },
     { mode: 'read-only' as const, denied: true, enforcement: 'full' as const },

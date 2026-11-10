@@ -82,7 +82,7 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   expect(events.filter(event => event.type === 'tool/ptc-dispatch' && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)
   expect(events.filter(event => event.type === 'tool/result'
     && event.data.message.content.some(block => block.type === 'image'))).toHaveLength(1)
-  expect(await calls.first().textContent()).toContain('(1×1, 90 B)')
+  expect(await calls.first().textContent()).toContain('(1x1px, 90 bytes)')
   expect(await calls.first().textContent()).not.toContain('"type": "image"')
   await compareOrRefreshGolden(join(snapshotDirectory, 'ui.expected.md'),
     await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), mode)
