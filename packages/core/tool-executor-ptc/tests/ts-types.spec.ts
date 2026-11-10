@@ -236,6 +236,7 @@ describe('renderToolsSdk', () => {
   it('uses explicit inspection in function-body mode', () => {
     const text = renderToolsSdk([bash])
     expect(text).toContain('inspect(await tools.bash(')
+    expect(text).toContain('- Show selected values and images with `inspect(...values)`; every other intermediate result stays out of the conversation, so extract just what you need.')
     expect(text).toContain('body of an async TypeScript function')
     expect(text).not.toContain('TypeScript REPL statements')
   })
