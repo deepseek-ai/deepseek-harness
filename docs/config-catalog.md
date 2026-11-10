@@ -892,7 +892,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-cua-mcp`
 
 - `inject`: `cmdlineArgs` · `appReady` · `appExit` · `profileContext` · `agents` · `agentPresets` · `tools` · `systemPrompt` · `attachments`
-- `source`: [`packages/experimental/cua-mcp/src/index.ts:25`](../packages/experimental/cua-mcp/src/index.ts)
+- `source`: [`packages/experimental/cua-mcp/src/index.ts:22`](../packages/experimental/cua-mcp/src/index.ts)
 
 ```ts config-catalog
 /** Connection policy configurable from the profile patch. */

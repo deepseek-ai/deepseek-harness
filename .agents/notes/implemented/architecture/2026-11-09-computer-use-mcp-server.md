@@ -18,7 +18,7 @@ Two tools form the surface. `cua_run_code` is the Agent's DSH registration serve
 
 Consent has two modes. `DSH_CUA_CONSENT=allow` answers every approval question of the connection's Agent with its approving label for the session. The default `elicit` forwards each question to the client as a form elicitation whose enum is the question's labels. No Session event is added: the training side consumes MCP tool results, and the connected harness's transcript records calls; DSH retains nested `tool/ptc-dispatch` events for diagnosis.
 
-The composition lists its dependency closure, twenty-five rows, instead of layering on `dsh-base`: no model adapter, prompt-side tool, telemetry, or session-management row loads, and a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row. Initialization needs no `dsh plugin` step, so the Python runtime wheel and offline training Hosts need no registry access. `--print-client-config codex|claude-code|json` renders the client entry for the exact installation.
+The composition lists its dependency closure, twenty-five rows, instead of layering on `dsh-base`: no model adapter, prompt-side tool, telemetry, or session-management row loads, and a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row. Initialization needs no `dsh plugin` step, so the Python runtime wheel and offline training Hosts need no registry access. Client entries are documented in the README instead of generated.
 
 ## Alternatives considered
 
@@ -39,6 +39,8 @@ The composition lists its dependency closure, twenty-five rows, instead of layer
 **A hand-written MCP schema and description for `cua_run_code`.** The second copy drifted within days: 663 against 2,164 characters of description and an optional against a required `description`. Projecting the registration removes the copy; the SDK's `registerTool` accepts only Standard Schema values and refuses to share `tools/list` and `tools/call` with custom handlers, so both tools use the low-level handlers.
 
 **The `cua` API reference inside the tool description.** Claude Code 2.1.309 forwards the first 4,096 characters of an MCP tool description and appends `… [truncated]`, measured on 2026-11-10 with a 20,000-character probe description; `dsh-mcp-client` forwards the same description intact. The reference is about 13,000 characters, so it travels in the first result of each environment, and the registration's 2,200-character description stays within the budget.
+
+**A `--print-client-config codex|claude-code|json` option.** Rendering the exact command of an installation needs `node:sea` to tell a single-file executable from a script launch, and the browser worker image, which packs every optional bundle, registers no `node:sea`; the documented entries carry the same timeouts and output budget without that dependency.
 
 ## Consequences
 

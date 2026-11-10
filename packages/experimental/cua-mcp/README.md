@@ -38,14 +38,31 @@ command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP st
 
 ### Connect a client
 
-`dsh --profile cua-mcp` is the stdio command. It prints its own help with `--help`, and `--print-client-config codex|claude-code|json` prints a ready configuration for this installation and Harness home: a `~/.codex/config.toml` fragment, a `claude mcp add-json dsh_cua` command, or a generic `mcpServers` document. Each embeds the absolute executable, `DSH_HOME`, and the current `DSH_CUA_CONSENT`. The Codex fragment sets `startup_timeout_sec = 120` for first-run helper preparation, `tool_timeout_sec = 600` to match the default program maximum, exposes both tools directly instead of through tool search, and raises the `cua_run_code` output budget to 25,000 tokens. Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
+`dsh --profile cua-mcp` is the stdio command, and `--help` prints its own help. A client entry names the installation's `dsh` executable by absolute path, passes `--profile cua-mcp`, sets `DSH_HOME` when the server should use a Harness home other than the default, and sets `DSH_CUA_CONSENT` for the consent mode; from a source checkout the command is `node` with `<checkout>/apps/cli/lib/bin.js` as its first argument, after `pnpm run build`. For Codex, add to `~/.codex/config.toml`:
 
-```sh
-dsh --profile cua-mcp --print-client-config codex >> ~/.codex/config.toml
-dsh --profile cua-mcp --print-client-config claude-code | sh
+```toml
+[mcp_servers.dsh_cua]
+command = "/absolute/path/to/dsh"
+args = ["--profile", "cua-mcp"]
+env = { DSH_HOME = "/absolute/path/to/dsh-home", DSH_CUA_CONSENT = "elicit" }
+startup_timeout_sec = 120
+tool_timeout_sec = 600
+enabled_tools = ["cua_run_code", "cua_reset"]
+omit_tools_from = ["code_mode", "deferred"]
+
+[mcp_servers.dsh_cua.tools.cua_run_code]
+output_token_limit = 25000
 ```
 
-On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. This profile has no permission page, so grant both in System Settings → Privacy & Security by adding the helper application: a source checkout prepares `DSH Computer Use Dev.app` under `packages/experimental/cua-macos/native/.build/prepared/<arch>/<build>/`, where `current.json` names the selected build; an installed package ships `DSH Computer Use.app`. Until both are granted, `await cua.getCapabilities()` reports the missing flags and application operations fail; a locked desktop fails them with `SESSION_LOCKED`. On other Hosts the profile starts without a provider, and both tools return an error naming the missing provider.
+`startup_timeout_sec = 120` covers first-run helper preparation, `tool_timeout_sec = 600` matches the default program maximum, `enabled_tools` with `omit_tools_from` exposes both tools directly instead of through tool search, and `output_token_limit` raises the `cua_run_code` output budget to 25,000 tokens. For Claude Code, register the same entry with a ten-minute tool timeout:
+
+```sh
+claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
+```
+
+Other clients take the same `command`, `args`, and `env` under `mcpServers`. Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
+
+On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. This profile has no permission page, so grant both in System Settings → Privacy & Security by adding the helper application: a source checkout prepares `DSH Computer Use Dev.app` under the macOS provider package's `native/.build/prepared/<arch>/<build>/` directory, where `current.json` names the selected build; an installed package ships `DSH Computer Use.app`. Until both are granted, `await cua.getCapabilities()` reports the missing flags and application operations fail; a locked desktop fails them with `SESSION_LOCKED`. On other Hosts the profile starts without a provider, and both tools return an error naming the missing provider.
 
 ### What you get
 
@@ -78,7 +95,7 @@ The patch also mounts the provider with `screenshotTarget: { longEdge: 2048, max
 
 The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, the macOS provider row disabled off Darwin, and this frontend. `dsh.bundle.profile` names the `cua-mcp` profile, which app-boot initializes from this single bundle on first start. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and connects the official MCP server to a stdio transport after the launcher commits readiness. `cua-mcp` is a required startup entry, so a frontend that cannot activate stops the profile.
 
-[`server.ts`](src/server.ts) serves both tools through the protocol server's low-level `tools/list` and `tools/call` handlers: the listing projects the Agent's `cua_run_code` registration, checked against the protocol's tool type, beside the hand-written `cua_reset`. The connection's Agent mounts the registry's default preset and records the launch directory. A `cua_run_code` call runs through `ctx.tools.execute` inside `ctx.agents.withInitiator` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent; [`client-config.ts`](src/client-config.ts) renders the client snippets.
+[`server.ts`](src/server.ts) serves both tools through the protocol server's low-level `tools/list` and `tools/call` handlers: the listing projects the Agent's `cua_run_code` registration, checked against the protocol's tool type, beside the hand-written `cua_reset`. The connection's Agent mounts the registry's default preset and records the launch directory. A `cua_run_code` call runs through `ctx.tools.execute` inside `ctx.agents.withInitiator` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent.
 
 </details>
 

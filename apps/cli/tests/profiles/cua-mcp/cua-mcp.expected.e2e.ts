@@ -26,7 +26,7 @@ function textOf(block: CallResult['content'][number] | undefined): string {
 }
 
 describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
-  it('initializes the declared profile on first start, prints client configuration, serves programs over stdio, and exits on EOF', async () => {
+  it('initializes the declared profile on first start, serves programs over stdio, and exits on EOF', async () => {
     const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-mcp-profile-'))
     const home = join(temporary, 'home')
     const workspace = join(temporary, 'workspace')
@@ -39,23 +39,15 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     }
     clearAmbientProxyEnv(env)
     await execFileAsync(process.execPath, ['-e', 'require("node:fs").mkdirSync(process.argv[1], { recursive: true })', workspace])
-    const options = { cwd: workspace, env, timeout: 120_000, maxBuffer: 4_000_000 }
-
-    // The first start initializes the profile the shipped bundle declares, without pnpm or network access.
-    const printed = await execFileAsync(process.execPath, [bin, '--profile', 'cua-mcp', '--print-client-config', 'codex'], options)
-    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
-    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-cua-mcp'])
-    const normalized = printed.stdout
-      .split(JSON.stringify(process.execPath).slice(1, -1)).join('{{node}}')
-      .split(JSON.stringify(bin).slice(1, -1)).join('{{bin}}')
-      .split(JSON.stringify(home).slice(1, -1)).join('{{home}}')
-    await expect(normalized).toMatchFileSnapshot('./expected/codex.toml')
 
     const probe = owned.probe = startProbe({ args: [bin, '--profile', 'cua-mcp', '--patch', fixturePatch], cwd: workspace, env })
     const initialized = await probe.request('initialize', {
       protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'cua-mcp-e2e', version: '1' },
     }) as { serverInfo: { name: string; version: string }; instructions: string; capabilities: object }
     probe.notify('notifications/initialized')
+    // The first start initialized the profile the shipped bundle declares, without pnpm or network access.
+    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
+    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-cua-mcp'])
     expect(initialized.serverInfo.name).toBe('dsh_cua')
     expect(initialized.capabilities).toMatchObject({ tools: { listChanged: false } })
     await expect(`${initialized.instructions}\n`).toMatchFileSnapshot('./expected/instructions.txt')

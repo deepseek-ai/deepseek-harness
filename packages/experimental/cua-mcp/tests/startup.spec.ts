@@ -1,4 +1,4 @@
-/** The frontend parses its invocation, prints client configuration, and serves MCP only after readiness. */
+/** The frontend parses its invocation and serves MCP only after readiness. */
 import { EventEmitter } from 'node:events'
 import { Context } from '@deepseek-ai/cordis'
 import { internals, provideCmdline } from '@deepseek-ai/dsh-cmdline'
@@ -12,7 +12,6 @@ vi.mock('../src/server.ts', async original => ({
   ...await original<typeof import('../src/server.ts')>(), createCuaMcpServer: vi.fn(),
 }))
 vi.mock('@modelcontextprotocol/server/stdio', () => ({ StdioServerTransport: vi.fn() }))
-vi.mock('node:sea', () => ({ isSea: () => false }))
 
 /** Controllable stdin for one invocation. */
 class TestStdin extends EventEmitter {
@@ -99,27 +98,13 @@ describe('Computer Use MCP startup', () => {
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it('prints client configuration and exits without claiming stdin or constructing a server', async () => {
-    const { exit, stdout, ready, stdin } = await boot(['--print-client-config', 'json'])
-    const document = JSON.parse(stdout.join('')) as { mcpServers: Record<string, { command: string; args: string[]; env: Record<string, string> }> }
-    expect(document.mcpServers.dsh_cua).toEqual({
-      type: 'stdio', command: process.execPath, args: [...process.execArgv, process.argv[1], '--profile', 'cua-mcp'],
-      env: { DSH_HOME: '/home/me/.dsh', DSH_CUA_CONSENT: 'elicit' },
-    })
-    expect(exit).toHaveBeenCalledWith(0)
-    expect(createCuaMcpServer).not.toHaveBeenCalled()
-    ready()
-    stdin.end()
-    expect(exit).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects an unknown client and documents help without starting anything', async () => {
-    const unknown = await boot(['--print-client-config', 'cursor'])
+  it('rejects an unknown option and documents help without starting anything', async () => {
+    const unknown = await boot(['--print-client-config', 'json'])
     expect(unknown.exit).toHaveBeenCalledWith(1)
-    expect(unknown.stderr.join('')).toContain('Allowed choices are codex, claude-code, json')
+    expect(unknown.stderr.join('')).toContain("unknown option '--print-client-config'")
+    expect(unknown.stdout.join('')).toBe('')
     const help = await boot(['--help'])
     expect(help.stdout.join('')).toContain('Usage: dsh --profile cua-mcp [options]')
-    expect(help.stdout.join('')).toContain('--print-client-config codex')
     expect(help.stdout.join('')).toContain('DSH_CUA_CONSENT=allow')
     expect(help.exit).toHaveBeenCalledWith(0)
     expect(createCuaMcpServer).not.toHaveBeenCalled()

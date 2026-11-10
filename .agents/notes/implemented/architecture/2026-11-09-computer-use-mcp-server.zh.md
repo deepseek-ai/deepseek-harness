@@ -18,7 +18,7 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 授权有两种模式。`DSH_CUA_CONSENT=allow` 以批准标签为本会话回答连接 Agent 的每个审批问题。默认的 `elicit` 把每个问题作为表单 elicitation 转发给客户端，枚举即问题的选项标签。不新增任何 Session 事件：训练侧只消费 MCP 工具结果，接入 harness 的 transcript 记录调用；DSH 保留嵌套的 `tool/ptc-dispatch` 事件以供诊断。
 
-组合列出自己的依赖闭包（25 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行；CUA 或 PTC 包新增服务注入时，必需启动条目会大声失败，直到 patch 补上该行。初始化不需要 `dsh plugin` 步骤，因此 Python runtime wheel 和离线训练 Host 都不需要访问 registry。`--print-client-config codex|claude-code|json` 为当前安装渲染客户端配置项。
+组合列出自己的依赖闭包（25 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行；CUA 或 PTC 包新增服务注入时，必需启动条目会大声失败，直到 patch 补上该行。初始化不需要 `dsh plugin` 步骤，因此 Python runtime wheel 和离线训练 Host 都不需要访问 registry。客户端配置项由 README 给出，而不是由程序生成。
 
 ## 考虑过的替代方案
 
@@ -39,6 +39,8 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 **为 `cua_run_code` 手写 MCP schema 与描述。** 第二份定义几天内就漂移了：描述 663 对 2,164 个字符，`description` 可选对必填。投影注册项去掉了这份副本；SDK 的 `registerTool` 只接受 Standard Schema 值，且不允许 `tools/list`、`tools/call` 与自定义 handler 混用，所以两个工具都走低层 handler。
 
 **把 `cua` API 参考放进工具描述。** Claude Code 2.1.309 只转发 MCP 工具描述的前 4,096 个字符并追加 `… [truncated]`，2026-11-10 用 20,000 个字符的探针描述测得；`dsh-mcp-client` 原样转发同一描述。参考约 13,000 个字符，因此随每个环境的首个结果传递，注册项 2,200 个字符的描述留在预算之内。
+
+**`--print-client-config codex|claude-code|json` 选项。** 为当前安装渲染准确命令需要 `node:sea` 来区分单文件可执行程序与脚本启动，而打包全部可选组合包的浏览器 worker 镜像没有注册 `node:sea`；文档给出的配置项带有同样的超时与输出预算，不需要这项依赖。
 
 ## 后果
 

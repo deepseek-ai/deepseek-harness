@@ -38,14 +38,31 @@ command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP st
 
 ### 接入客户端
 
-`dsh --profile cua-mcp` 就是 stdio 命令。`--help` 打印它自己的帮助；`--print-client-config codex|claude-code|json` 为当前安装和 Harness home 打印可直接使用的配置：一段 `~/.codex/config.toml` 片段、一条 `claude mcp add-json dsh_cua` 命令，或一份通用 `mcpServers` 文档。三者都嵌入绝对可执行路径、`DSH_HOME` 与当前 `DSH_CUA_CONSENT`。Codex 片段把 `startup_timeout_sec = 120` 留给首次 helper 准备，用 `tool_timeout_sec = 600` 对齐默认程序上限，让两个工具直接暴露而不进入工具搜索，并把 `cua_run_code` 的输出预算提高到 25,000 token。Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
+`dsh --profile cua-mcp` 就是 stdio 命令，`--help` 打印它自己的帮助。客户端配置项以绝对路径指向安装的 `dsh` 可执行程序，传入 `--profile cua-mcp`，在服务器应使用非默认 Harness home 时设置 `DSH_HOME`，并用 `DSH_CUA_CONSENT` 设置授权模式；源码检出在 `pnpm run build` 之后以 `node` 为命令、`<checkout>/apps/cli/lib/bin.js` 为首个参数。Codex 在 `~/.codex/config.toml` 中加入：
 
-```sh
-dsh --profile cua-mcp --print-client-config codex >> ~/.codex/config.toml
-dsh --profile cua-mcp --print-client-config claude-code | sh
+```toml
+[mcp_servers.dsh_cua]
+command = "/absolute/path/to/dsh"
+args = ["--profile", "cua-mcp"]
+env = { DSH_HOME = "/absolute/path/to/dsh-home", DSH_CUA_CONSENT = "elicit" }
+startup_timeout_sec = 120
+tool_timeout_sec = 600
+enabled_tools = ["cua_run_code", "cua_reset"]
+omit_tools_from = ["code_mode", "deferred"]
+
+[mcp_servers.dsh_cua.tools.cua_run_code]
+output_token_limit = 25000
 ```
 
-在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。本 profile 没有权限页面，因此要在「系统设置 → 隐私与安全性」中添加 helper 应用来授予这两项权限：源码检出在 `packages/experimental/cua-macos/native/.build/prepared/<arch>/<build>/` 下准备 `DSH Computer Use Dev.app`，其中 `current.json` 记录当前选中的构建；已安装的包附带 `DSH Computer Use.app`。两项权限都授予之前，`await cua.getCapabilities()` 会报告缺失的标志，应用操作会失败；桌面处于锁定状态时这些操作以 `SESSION_LOCKED` 失败。在其他 Host 上 profile 没有提供方也能启动，两个工具都返回指出缺少提供方的错误。
+`startup_timeout_sec = 120` 留给首次 helper 准备，`tool_timeout_sec = 600` 对齐默认程序上限，`enabled_tools` 配合 `omit_tools_from` 让两个工具直接暴露而不进入工具搜索，`output_token_limit` 把 `cua_run_code` 的输出预算提高到 25,000 token。Claude Code 以十分钟工具超时注册同一配置项：
+
+```sh
+claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
+```
+
+其他客户端在 `mcpServers` 下使用同样的 `command`、`args` 与 `env`。Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
+
+在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。本 profile 没有权限页面，因此要在「系统设置 → 隐私与安全性」中添加 helper 应用来授予这两项权限：源码检出在 macOS 提供方包的 `native/.build/prepared/<arch>/<build>/` 目录下准备 `DSH Computer Use Dev.app`，其中 `current.json` 记录当前选中的构建；已安装的包附带 `DSH Computer Use.app`。两项权限都授予之前，`await cua.getCapabilities()` 会报告缺失的标志，应用操作会失败；桌面处于锁定状态时这些操作以 `SESSION_LOCKED` 失败。在其他 Host 上 profile 没有提供方也能启动，两个工具都返回指出缺少提供方的错误。
 
 ### 你会得到什么
 
@@ -78,7 +95,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 [patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。`dsh.bundle.profile` 声明 `cua-mcp` profile，app-boot 在首次启动时用这一个组合包初始化它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 是启动必需条目，前端无法激活时 profile 停止启动。
 
-[`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供两个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，与手写的 `cua_reset` 并列。连接的 Agent 挂载注册表的默认 preset 并记录启动目录。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 调用 `ctx.cuaPrograms.reset`。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者；[`client-config.ts`](src/client-config.ts) 渲染客户端片段。
+[`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供两个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，与手写的 `cua_reset` 并列。连接的 Agent 挂载注册表的默认 preset 并记录启动目录。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 调用 `ctx.cuaPrograms.reset`。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者。
 
 </details>
 

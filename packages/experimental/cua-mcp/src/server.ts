@@ -12,7 +12,6 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { Server, specTypeSchemas, type CallToolResult, type Tool } from '@modelcontextprotocol/server'
-import { MCP_SERVER_NAME } from './client-config.ts'
 import { createConsentAnswerer, type ConsentMode, type ElicitationClient } from './consent.ts'
 import { projectToolResult } from './projection.ts'
 
@@ -40,6 +39,9 @@ export interface CuaMcpServer {
    */
   dispose(): Promise<void>
 }
+
+/** MCP server name clients address; external tool names become `mcp__dsh_cua__cua_run_code` in Claude Code. */
+const MCP_SERVER_NAME = 'dsh_cua'
 
 /** The DSH tool whose registration for the connection's Agent is served as the MCP tool of the same name. */
 const PROGRAM_TOOL = 'cua_run_code'

@@ -1,18 +1,15 @@
 /**
  * The Computer Use MCP stdio application: the standalone cua-mcp profile's frontend, serving the Agent's
- * `cua_run_code` registration and `cua_reset` to an external MCP client. Help and `--print-client-config` exit
- * without claiming stdio; a served connection owns one Agent, created before the transport opens, until the client
- * closes stdin.
+ * `cua_run_code` registration and `cua_reset` to an external MCP client. Help exits without claiming stdio; a
+ * served connection owns one Agent, created before the transport opens, until the client closes stdin.
  * @module @deepseek-ai/dsh-cua-mcp
  */
-import { isSea } from 'node:sea'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-app-boot'
-import { exitOnStdinEnd, internals, parseCmdline } from '@deepseek-ai/dsh-cmdline'
+import { exitOnStdinEnd, parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
-import { Command, Option } from 'commander'
-import { CLIENT_CONFIG_TARGETS, clientLaunch, renderClientConfig, type ClientConfigTarget, type LaunchFacts } from './client-config.ts'
+import { Command } from 'commander'
 import type { ConsentMode } from './consent.ts'
 import { createCuaMcpServer, type CuaMcpServer } from './server.ts'
 
@@ -36,8 +33,8 @@ export const Config: Schema<Partial<Config>, Config> = Schema.object({
 })
 
 /**
- * Accept the profile invocation, print a client configuration on request, or serve MCP over stdio once the
- * launcher commits readiness. Stdin EOF ends the process through the launcher's bounded shutdown.
+ * Accept the profile invocation and serve MCP over stdio once the launcher commits readiness; help exits before
+ * anything starts. Stdin EOF ends the process through the launcher's bounded shutdown.
  * @param ctx - Profile context carrying the command line, readiness, exit request, and profile identity.
  * @param config - Validated consent mode.
  * @throws Error when the plugin runs outside the dsh profile launcher.
@@ -50,26 +47,15 @@ export function apply(ctx: Context, config: Config): void {
   const commandName = `dsh --profile ${profile.name}`
   const program = new Command(commandName)
     .description('Serve DeepSeek Harness Computer Use to an MCP client over stdio.')
-    .addOption(new Option('--print-client-config <client>', 'print the MCP client configuration for this installation and exit')
-      .choices([...CLIENT_CONFIG_TARGETS]))
     .addHelpText('after', `
 Examples:
-  ${commandName}                                serve one MCP client until it closes stdin
-  ${commandName} --print-client-config codex    print a ~/.codex/config.toml fragment
-  DSH_CUA_CONSENT=allow ${commandName}          grant application access without a human
+  ${commandName}                        serve one MCP client until it closes stdin
+  DSH_CUA_CONSENT=allow ${commandName}  grant application access without a human
 `)
-  let accepted: { print: ClientConfigTarget | undefined } | undefined
-  program.action(() => {
-    accepted = { print: program.opts<{ printClientConfig?: ClientConfigTarget }>().printClientConfig }
-  })
+  let accepted: true | undefined
+  program.action(() => { accepted = true })
   parseCmdline(ctx, program)
   if (accepted === undefined) return
-  if (accepted.print !== undefined) {
-    const facts: LaunchFacts = { execPath: process.execPath, execArgv: process.execArgv, argv: process.argv, sea: isSea() }
-    internals.stdout.write(renderClientConfig(accepted.print, clientLaunch(facts, profile, config.consent)))
-    exit(0)
-    return
-  }
   exitOnStdinEnd(ctx, 'cua-mcp: stdin')
   ctx.effect(() => {
     const lifetime = new AbortController()
