@@ -267,7 +267,7 @@ describe('Computer Use MCP composition', () => {
   it('serves only cua_reset on a Host without a CUA provider and releases the connection Agent on disposal', async () => {
     const { ctx, run, client, adapter } = await setup({ provider: false })
     expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_reset'])
-    // No registration exists for the Agent, so the executor, not cua-mcp, refuses the program tool.
+    // No registration exists for the Agent, so the call is refused as an unknown tool before it reaches the executor.
     const result = await run('1')
     expect(result.isError).toBe(true)
     expect(texts(result)[0]).toContain('unknown tool "cua_run_code"')

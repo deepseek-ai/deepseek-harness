@@ -73,8 +73,7 @@
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@modelcontextprotocol/server": "2.2.0",
-    "commander": "^15.0.0",
-    "zod": "4.6.6"
+    "commander": "^15.0.0"
   },
   "optionalDependencies": {
     "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*"

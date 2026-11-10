@@ -51,7 +51,7 @@ import { captureStableAria, compareOrRefreshGolden, webSnapshotMode } from './sc
 import { expandOwningTurnProcess, newEnglishPage, REPO_ROOT, saveFailureShot } from './support.ts'
 
 const DIST_ROOT = fileURLToPath(new URL('../dist', import.meta.url))
-/** Optional bundles that compose a profile of their own; the Web plugin page lists them without a switch. */
+/** Optional bundles that compose a profile of their own; the Web plugin page hides them, the Host inventory still reports them. */
 const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
 
 /** Where the client looks for the image: the runtime's own name, beside the page. */
@@ -685,7 +685,8 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
     // The packed worker composition cannot mount the Liveshare declaration row and its share host in
     // the same patch batch without racing the declaration service; the ordinary Web scaffold covers
     // that bundle's enable/disable path (plugin-manager.e2e.ts), so the packed toggle list skips it. A bundle that
-    // composes a profile of its own is listed but never layered over the Web profile, so the toggle list skips it too.
+    // composes a profile of its own is reported by the Host inventory but never layered over the Web profile, so the
+    // toggle list skips it too.
     for (const entry of bundles.filter(candidate => candidate.optional
       && candidate.name !== '@deepseek-ai/dsh-experimental-liveshare' && !standalone.includes(candidate.name))) {
       const enable = await remote<{ application: string; error?: unknown }>('pluginManager/setBundleEnabled', { name: entry.name, enabled: true })
@@ -715,7 +716,7 @@ async function toggleOptionalBundles(page: Page): Promise<void> {
     }
   }, { standalone })
   expect(result.optional.map(entry => entry.name).sort()).toEqual([...OPTIONAL_BUNDLES].sort())
-  // The standalone bundle is listed with its metadata and stays switched off; no toggle targets it.
+  // The Host inventory reports the standalone bundle with its metadata, switched off; no toggle targets it.
   expect(result.toggles.map(toggle => toggle.name).filter(name => standalone.includes(name))).toEqual([])
   expect(result.optional.filter(entry => entry.enabled || entry.availability !== 'installation')).toEqual([])
   expect(result.optional.filter(entry => entry.error !== null)).toEqual([

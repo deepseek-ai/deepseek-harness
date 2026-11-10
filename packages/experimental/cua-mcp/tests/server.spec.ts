@@ -166,8 +166,8 @@ describe('Computer Use MCP server', () => {
     expect(dispose).not.toHaveBeenCalled()
   })
 
-  it('lists only cua_reset without a registration and lets the executor answer unknown tools', async () => {
-    const { client, run } = await setup({ registered: false, programs: false, reference: false })
+  it('lists only cua_reset without a registration and refuses every unlisted name before the executor', async () => {
+    const { client, run, execute } = await setup({ registered: false, programs: false, reference: false })
     expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_reset'])
     const unknown = await run({ code: '1', description: 'Probe' })
     expect(unknown.isError).toBe(true)
@@ -175,9 +175,25 @@ describe('Computer Use MCP server', () => {
     const other = await client.callTool({ name: 'cua_other', arguments: {} })
     expect(other.isError).toBe(true)
     expect(texts(other)).toEqual(['unknown tool "cua_other"'])
+    expect(execute).not.toHaveBeenCalled()
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).toBe(true)
     expect(texts(reset).join('')).toContain('no active CUA provider')
+  })
+
+  it('serves program results without a preface when the provider registers no guidance', async () => {
+    const { run, execute } = await setup({ reference: false })
+    expect(texts(await run({ code: '1', description: 'First' }))).toEqual(['program output'])
+    expect(texts(await run({ code: '2', description: 'Second' }))).toEqual(['program output'])
+    expect(execute).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses a registered tool the listing does not carry', async () => {
+    const { client, execute } = await setup()
+    const other = await client.callTool({ name: 'cua_other', arguments: { sandbox_permissions: 'danger-full-access' } })
+    expect(other.isError).toBe(true)
+    expect(texts(other)).toEqual(['unknown tool "cua_other"'])
+    expect(execute).not.toHaveBeenCalled()
   })
 
   it('fails the call as a protocol error when the executor settles without a result, reports reset failures, and repeats the reference after a reset', async () => {
@@ -212,5 +228,13 @@ describe('Computer Use MCP server', () => {
     await served.client.close()
     await served.adapter.dispose()
     expect(served.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('disposes the Agent when closing the protocol server fails', async () => {
+    const served = await setup()
+    vi.spyOn(served.adapter.server, 'close').mockRejectedValueOnce(new Error('transport is broken'))
+    await expect(served.adapter.dispose()).rejects.toThrow('transport is broken')
+    expect(served.dispose).toHaveBeenCalledOnce()
+    await served.client.close()
   })
 })

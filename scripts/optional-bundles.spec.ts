@@ -32,7 +32,7 @@ function bundle(name: string): { dir: string; patches: ReturnType<typeof loadOve
   return { dir: entry.dir, patches: bundlePatchPaths(entry.dir, entry.manifest.dsh.bundle).flatMap(path => loadOverlayPatches('test', path)) }
 }
 
-/** Optional bundles that compose a profile of their own; the plugin page lists them without a switch. */
+/** Optional bundles that compose a profile of their own; the plugin page hides them, the Host inventory still reports them. */
 const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
 
 const lightweight = [
@@ -109,7 +109,7 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
-  // A bundle that composes a profile of its own is never layered over a GUI profile; the plugin page lists it without a switch.
+  // A bundle that composes a profile of its own is never layered over a GUI profile; HIDDEN_BUNDLES keeps it off the plugin page.
   const standalone = OPTIONAL_BUNDLES.filter(name => STANDALONE_PROFILE_BUNDLES.includes(name))
   const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))
 

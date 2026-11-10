@@ -52,6 +52,10 @@ const PROGRAM_TOOL = 'cua_run_code'
  */
 const ESCALATION_FIELDS = ['sandbox_permissions', 'justification'] as const
 
+function isEscalationField(field: string): field is typeof ESCALATION_FIELDS[number] {
+  return (ESCALATION_FIELDS as readonly string[]).includes(field)
+}
+
 /** MCP presentation of the program tool; its name, description, and schema come from the registration. */
 const PROGRAM_TOOL_PRESENTATION = {
   title: 'Computer use program',
@@ -63,9 +67,10 @@ const RESET_TOOL: Tool = {
   name: 'cua_reset',
   title: 'Reset computer use program state',
   description: 'Discard the program environment of this connection: every variable, import, and application or '
-    + 'window object held by earlier cua_run_code calls. Application access grants and the desktop applications themselves '
-    + 'are unaffected; the next cua_run_code call starts a fresh environment and its result repeats the `cua` API reference. '
-    + 'Use it when a declaration conflicts with an earlier call or the environment has become unusable.',
+    + 'window object held by earlier cua_run_code calls. A running cua_run_code program is cancelled. Application access '
+    + 'grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment '
+    + 'and its result repeats the `cua` API reference. Use it when a declaration conflicts with an earlier call or the '
+    + 'environment has become unusable.',
   inputSchema: { type: 'object', properties: {} },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }
@@ -96,12 +101,9 @@ function projectProgramTool(definition: ToolDefinition): Tool {
   const inputSchema = {
     ...rest,
     ...properties === undefined ? {} : {
-      properties: Object.fromEntries(Object.entries(properties as Record<string, unknown>)
-        .filter(([field]) => !ESCALATION_FIELDS.includes(field as typeof ESCALATION_FIELDS[number]))),
+      properties: Object.fromEntries(Object.entries(properties as Record<string, unknown>).filter(([field]) => !isEscalationField(field))),
     },
-    ...Array.isArray(required)
-      ? { required: required.filter(field => !ESCALATION_FIELDS.includes(field as typeof ESCALATION_FIELDS[number])) }
-      : {},
+    ...Array.isArray(required) ? { required: (required as string[]).filter(field => !isEscalationField(field)) } : {},
   }
   const result = specTypeSchemas.Tool['~standard'].validate({
     name: definition.name, description: definition.description, inputSchema, ...PROGRAM_TOOL_PRESENTATION,
@@ -115,10 +117,12 @@ function projectProgramTool(definition: ToolDefinition): Tool {
 /**
  * Create the MCP server for one stdio connection. The connection's Agent is created first, mounts the profile's
  * default preset, and lives until disposal; the provider registers `cua_run_code` for it, and each `tools/list`
- * re-reads that registration. `cua_run_code` calls pass their arguments to the ordinary tool executor unchanged,
- * one at a time in arrival order, so argument validation and unknown names are answered by DSH; `cua_reset`
- * bypasses the queue and cancels the running program. Consent questions of that Agent are answered by the
- * configured mode. A call the executor cannot settle, including a cancelled one, fails as a protocol error.
+ * re-reads that registration. A call names one of the two listed tools or fails as an unknown tool before it
+ * reaches the executor, so a tool another row registers for the Agent is never callable without being listed.
+ * `cua_run_code` calls pass their arguments to the ordinary tool executor unchanged, one at a time in arrival
+ * order, so argument validation is answered by DSH; `cua_reset` bypasses the queue and cancels the running program.
+ * Consent questions of that Agent are answered by the configured mode. A call the executor cannot settle,
+ * including a cancelled one, fails as a protocol error.
  * @param ctx - Profile context with Agents, presets, tools, the system prompt, and the attachment store.
  * @param options - Consent mode, working directory, and lifetime.
  * @returns The protocol server, not yet connected to a transport, its Agent, and its disposer.
@@ -167,9 +171,10 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     const guidance = assembly.sections.find(section => section.name === CUA_PROMPT_SECTION_NAME)?.text
     return guidance === undefined ? undefined : `## cua API reference\n\n${guidance}`
   }
-  const runTool = async (name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<CallToolResult> => {
+  const runTool = async (args: Record<string, unknown>, signal: AbortSignal): Promise<CallToolResult> => {
+    const name = PROGRAM_TOOL
     const escalation = ESCALATION_FIELDS.filter(field => field in args)
-    if (name === PROGRAM_TOOL && escalation.length > 0) {
+    if (escalation.length > 0) {
       return failure(`Program sandbox escalation is not available through cua-mcp: remove ${escalation.join(' and ')}. `
         + 'The launch-time DSH_PERMISSION_MODE selects the file sandbox of program processes.')
     }
@@ -180,7 +185,7 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     const outcome = batch.results[0]
     if (outcome === undefined) throw new Error(`The tool executor settled without a ${name} result`)
     const preface: string[] = []
-    if (name === PROGRAM_TOOL && !referenceSent) {
+    if (!referenceSent) {
       const reference = await apiReference()
       if (reference !== undefined) {
         preface.push(reference)
@@ -212,7 +217,9 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
   server.setRequestHandler('tools/call', (request, extra) => {
     const { name, arguments: args = {} } = request.params
     if (name === RESET_TOOL.name) return resetEnvironment()
-    return serialize(() => runTool(name, args, AbortSignal.any([options.signal, extra.mcpReq.signal])))
+    // The same judgement as tools/list: only the listed registration reaches the executor.
+    if (name !== PROGRAM_TOOL || ctx.tools.get(PROGRAM_TOOL, agent) === undefined) return failure(`unknown tool ${JSON.stringify(name)}`)
+    return serialize(() => runTool(args, AbortSignal.any([options.signal, extra.mcpReq.signal])))
   })
 
   return {
@@ -220,9 +227,12 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     agent,
     async dispose() {
       unregisterAnswerer()
-      await server.close()
-      await queue
-      await handle.dispose()
+      try {
+        await server.close()
+      } finally {
+        await queue
+        await handle.dispose()
+      }
     },
   }
 }

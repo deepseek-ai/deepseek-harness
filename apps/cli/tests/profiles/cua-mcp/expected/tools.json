@@ -34,7 +34,7 @@
   {
     "name": "cua_reset",
     "title": "Reset computer use program state",
-    "description": "Discard the program environment of this connection: every variable, import, and application or window object held by earlier cua_run_code calls. Application access grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment and its result repeats the `cua` API reference. Use it when a declaration conflicts with an earlier call or the environment has become unusable.",
+    "description": "Discard the program environment of this connection: every variable, import, and application or window object held by earlier cua_run_code calls. A running cua_run_code program is cancelled. Application access grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment and its result repeats the `cua` API reference. Use it when a declaration conflicts with an earlier call or the environment has become unusable.",
     "inputSchema": {
       "type": "object",
       "properties": {}

@@ -46,4 +46,4 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 ## 后果
 
-每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。把组合包叠在 `dsh-base` 之上的 profile 会出现重复的行 id，不受支持；Web 插件页列出该组合包但不提供开关。没有提供方的 Host 只列出 `cua_reset`，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述与首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。
+每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。把组合包叠在 `dsh-base` 之上的 profile 会出现重复的行 id，不受支持；Web 插件页通过 `HIDDEN_BUNDLES` 隐藏该组合包，而 Host 清单仍把它报告为可选组合包。没有提供方的 Host 只列出 `cua_reset`，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述与首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。
