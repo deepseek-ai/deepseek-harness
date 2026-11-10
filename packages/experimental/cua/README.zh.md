@@ -35,7 +35,7 @@ kind: "package-reference"
 
 通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
 
-当 `agentPreset` 指定 preset 名称时，两种工具形态的注册都等待专用 Node 运行时及其所需服务，包括匹配 preset 的原始 `cua` 工具。无效的 `standaloneRunCode.runtime` 设置或缺少服务可能阻止 Agent 创建。修正配置或补齐服务后重载提供方；也可以先关闭 Computer Use，再重试创建 Agent。`agentPreset: false` 注册原始 `cua`，不创建该运行时。
+原始 `cua` 的注册使用基础 CUA 服务和 preset 选择，不依赖私有 Node 运行时，也不依赖仅供程序工具使用的 `workingDirectory`。其他 preset 仅在程序工具所需服务可用时获得 `cua_run_code`。只有创建使用程序形态的 Agent 时，才会等待私有运行时启动并报告其失败。修正无效设置后，显式重载已失败的插件；补齐缺失依赖会使等待中的插件继续启动。`agentPreset: false` 全局注册原始 `cua`，不创建私有运行时。
 
 `cua` 在创建环境时安装一次。不要覆盖这个全局对象。需要重建损坏的环境时，在 `cua_run_code` 中执行 `process.exit(0)`；该次工具调用会因进程退出而返回失败。下一次调用启动新环境并恢复 `cua`。请重新创建其他变量，并重新选择应用和窗口。
 
@@ -99,7 +99,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 正常关闭连接会等待已注册的清理结束。原生清理被拒绝或超时会使连接及其句柄失效；连接释放仍会继续，清理失败也会被报告。普通原生请求超时仍然请求取消，并在 `graceMs` 内等待确认。提供方卸载会等待自己持有的 CUA 程序结束；使用原始 `cua` 的 PTC 程序可在释放其持有的输入后继续其他工作。
 
-`agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。注册使用 `agent/created`、`agent-preset/selected` 事件和 Agent 拥有的作用域，也处理提供方加载前已存在的 Agent。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
+`agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
 `cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`reset(agent)` 取消该 Agent 正在运行的程序，在不执行程序代码的情况下释放其保留环境，并保留应用授权和本机连接，下一次程序在新进程中由初始化程序重新创建 `cua`；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
 

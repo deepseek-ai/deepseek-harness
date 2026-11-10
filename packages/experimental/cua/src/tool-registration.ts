@@ -1,4 +1,4 @@
-/** Agent-scoped CUA transports sharing a provider-owned persistent program runtime. */
+/** Agent-scoped raw CUA and persistent program tool registrations. */
 import { extname } from 'node:path'
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -77,76 +77,113 @@ var cua = connectCua(() => tools.cua, text => console.log(text));
   } }
   const register = (scope: Context, definition: ToolDefinition, instructions: PromptSection): (() => void) => {
     const removeTool = scope.tools.register(definition)
-    const removePrompt = scope.systemPrompt.section(instructions)
-    return () => { removePrompt(); removeTool() }
+    let removePrompt: () => void
+    try { removePrompt = scope.systemPrompt.section(instructions) }
+    catch (error) { removeTool(); throw error }
+    return () => { try { removePrompt() } finally { removeTool() } }
   }
   if (config.agentPreset === false) return register(ctx, tool, rawPrompt)
-  return ctx.effect(function* () {
-    const runtimeCtx = ctx.isolate('ptcRuntime')
-    const runtime = runtimeCtx.plugin(NodePtcRuntime, {
-      ...config.standaloneRunCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
-    })
-    yield runtime.dispose
-    const programTools = {
-      name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory', 'agentPresets', 'agents', 'systemPrompt'],
-      apply(consumer: Context) {
-        const program = createRunCodeToolHandle(consumer, {
-          name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
-          tools: [tool], limits: config.standaloneRunCode.executor,
-        })
-        // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
-        consumer.provide('cuaPrograms', {
-          reset: (agent: Agent) => program.reset(agent),
-          screenshotRequestTarget: image => config.screenshotTarget === undefined
-            ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
-        } satisfies CuaPrograms)
-        const scopes = new Map<Agent, { scope: Scope; current?: { kind: 'raw' | 'program'; remove: () => void } }>()
-        consumer.effect(() => async () => {
-          await Promise.all([...scopes.values()].map(({ scope }) => scope.dispose()))
-        }, 'cua.agent-tools')
-        const sync = (agent: Agent): void => {
-          const preset = consumer.agentPresets.composedPreset(agent.ctx)
-          if (preset === undefined) return
-          const kind = preset === config.agentPreset ? 'raw' : 'program'
-          let entry = scopes.get(agent)
-          if (entry?.current?.kind === kind) return
-          if (entry?.current !== undefined) { entry.current.remove(); delete entry.current }
-          if (entry === undefined) {
-            const scope = createScope(agent.ctx, agent)
-            entry = { scope }
-            scopes.set(agent, entry)
-            scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
-          }
-          const remove = register(entry.scope.ctx, kind === 'raw' ? tool : program.definition,
-            kind === 'raw' ? rawPrompt : { ...prompt, text: programGuidance })
-          entry.current = { kind, remove }
-        }
-        consumer.on('agent/created', ({ agent }) => { sync(agent) })
-        consumer.on('agent-preset/selected', (id) => {
-          const agent = consumer.agents.get(id)
-          if (agent === undefined) return
-          try { sync(agent) } catch (error) { consumer.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
-        })
-        for (const agent of consumer.agents.list()) sync(agent)
-      },
+  return ctx.inject(['agentPresets', 'tools', 'agents', 'systemPrompt'], (base) => {
+    const scopes = new Map<Agent, { scope: Scope; current?: { definition: ToolDefinition; remove: () => void } }>()
+    let program: ToolDefinition | undefined
+    let programs: Fiber | undefined
+    let closing = false
+    const modeOf = (agent: Agent): 'raw' | 'program' | undefined => {
+      const preset = base.agentPresets.composedPreset(agent.ctx)
+      return preset === undefined ? undefined : preset === config.agentPreset ? 'raw' : 'program'
     }
-    const initializer = runtimeCtx.plugin({
-      name: 'cua-program-initializer', inject: ['ptcRuntime'],
-      async apply(owner: Context) {
-        let programs!: Fiber
-        owner.effect(function* () {
-          yield owner.ptcRuntime.registerEnvironmentInitializer(
-            `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
-          )
-          programs = owner.plugin(programTools)
-          yield programs.dispose
-          yield owner.on('agent/created', async () => { await programs.await() })
-        }, 'cua.environment-initializer')
-        await programs.await()
-      },
-    })
-    yield initializer.dispose
-    // Creation can overlap the first provider activation; await its registered tools before the first turn.
-    yield ctx.on('agent/created', async () => { await initializer.await() })
-  }, 'cua.program-runtime')
+    const sync = (agent: Agent): void => {
+      const mode = modeOf(agent)
+      const definition = mode === 'raw' ? tool : mode === 'program' ? program : undefined
+      let entry = scopes.get(agent)
+      if (entry?.current?.definition === definition) return
+      if (entry?.current !== undefined) { entry.current.remove(); delete entry.current }
+      if (definition === undefined) return
+      if (entry === undefined) {
+        const scope = createScope(agent.ctx, agent)
+        entry = { scope }
+        scopes.set(agent, entry)
+        scope.ctx.effect(() => () => { scopes.delete(agent) }, 'cua.agent-tools')
+      }
+      const remove = register(entry.scope.ctx, definition,
+        mode === 'raw' ? rawPrompt : { ...prompt, text: programGuidance })
+      entry.current = { definition, remove }
+    }
+    const syncAll = (): void => { for (const agent of base.agents.list()) sync(agent) }
+    base.effect(function* () {
+      yield async () => { await Promise.all([...scopes.values()].map(({ scope }) => scope.dispose())) }
+      const runtimeCtx = base.isolate('ptcRuntime')
+      const runtime = runtimeCtx.plugin(NodePtcRuntime, {
+        ...config.standaloneRunCode.runtime, executionMode: 'persistent-in-memory', scriptPersistence: false,
+      })
+      yield runtime.dispose
+      const initializer = runtimeCtx.plugin({
+        name: 'cua-program-initializer', inject: ['ptcRuntime'],
+        apply(owner: Context) {
+          owner.effect(function* () {
+            yield owner.ptcRuntime.registerEnvironmentInitializer(
+              `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => console.log(text));`,
+            )
+            const child = owner.plugin({
+              name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory'],
+              apply(consumer: Context) {
+                const handle = createRunCodeToolHandle(consumer, {
+                  name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
+                  tools: [tool], limits: config.standaloneRunCode.executor,
+                })
+                const definition = handle.definition
+                // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
+                consumer.provide('cuaPrograms', {
+                  reset: (agent: Agent) => handle.reset(agent),
+                  screenshotRequestTarget: image => config.screenshotTarget === undefined
+                    ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
+                } satisfies CuaPrograms)
+                consumer.effect(function* () {
+                  yield () => {
+                    if (program !== definition) return
+                    program = undefined
+                    syncAll()
+                  }
+                  program = definition
+                  syncAll()
+                }, 'cua.program-publication')
+              },
+            })
+            programs = child
+            yield () => { programs = undefined }
+            yield child.dispose
+          }, 'cua.environment-initializer')
+        },
+      })
+      yield initializer.dispose
+      yield base.on('agent/created', async ({ agent }) => {
+        if (closing) return
+        if (modeOf(agent) === 'program') {
+          if (runtime.uid !== null) await runtime.await()
+          await initializer.await()
+          await programs?.await()
+          // oxlint-disable-next-line typescript/no-unnecessary-condition -- Provider teardown can run while readiness awaits.
+          if (closing) return
+          if (modeOf(agent) === 'program' && program === undefined) {
+            throw new Error('CUA program tool is unavailable; restore its private runtime and workingDirectory services, or reload the provider')
+          }
+        }
+        sync(agent)
+      })
+      yield base.on('agent-preset/selected', (id) => {
+        const agent = base.agents.get(id)
+        if (agent === undefined) return
+        try { sync(agent) } catch (error) { base.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
+      })
+      yield () => {
+        closing = true
+        program = undefined
+        for (const entry of scopes.values()) {
+          entry.current?.remove()
+          delete entry.current
+        }
+      }
+      syncAll()
+    }, 'cua.program-runtime')
+  }).dispose
 }

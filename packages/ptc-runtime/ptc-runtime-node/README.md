@@ -125,7 +125,7 @@ Program parse errors and thrown exceptions are `exception`; deadline expiry is `
 
 The host owns policy, deadlines, binding lookup and process cleanup. The child owns program evaluation and binding proxies; model-written code is an untrusted peer even when its messages use the expected control descriptor.
 
-`createExecution()` resolves the configured syntax, type erasure, model guidance and process lifetime once when the provider loads. The provider handles admission and cancellation. One execution owner creates temporary processes or reuses an enabled state owner's process; both use `ProgramWorker` for launch, deadlines, binding dispatch and cleanup. The shared child loop selects `createProgramEvaluator()` from the evaluation data; async-function, REPL and Script implementations expose globals, evaluation and cleanup operations independently of process lifetime.
+`createExecution()` resolves the configured syntax, type erasure, model guidance and process lifetime once when the provider loads. The provider handles admission and cancellation. One execution owner creates temporary processes or reuses an enabled state owner's process; both use `ProgramWorker` for launch, deadlines, binding dispatch and cleanup. The shared child loop selects `createProgramEvaluator()` from the evaluation data; async-function, REPL and Script implementations expose globals, evaluation and cleanup independently of process lifetime. Initialization is awaited without adopting its completion value, followed by Host acknowledgement and the user program. The evaluator's completion callback settles the user program immediately; subsequent microtasks cannot log or invoke bindings. REPL diagnostics can also settle the active run.
 
 ### Launch and control
 
