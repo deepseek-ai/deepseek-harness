@@ -21,6 +21,14 @@ Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getSta
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");
 Refuses(() => WireJson.Parse("""{"params":{"x":1,"x":2}}"""), "INVALID_REQUEST");
+foreach (var path in new[] { @"C:\Tools\Editor.exe", @"D:\Portable Apps\编辑器.exe", @"\\server\tools\Editor.exe" })
+{
+    var selection = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        id = "select", method = "getApp", @params = new { selector = path },
+    })));
+    Check(selection.Params.GetProperty("selector").GetString() == path, "Executable selection preserves the exact path on the wire");
+}
 var launch = NativeRequest.Parse(WireJson.Parse("""{"id":"launch","method":"launchApp","params":{"appHandle":"pending"}}"""));
 Check(launch.Method == "launchApp" && launch.Params.GetProperty("appHandle").GetString() == "pending",
     "Host launch continuation retains the selected application handle");

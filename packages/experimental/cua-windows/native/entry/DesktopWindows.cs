@@ -42,6 +42,16 @@ internal static class DesktopWindows
 
     internal static async Task<AppState> Select(string selector, RequestContext context)
     {
+        context.Check();
+        if (Path.IsPathFullyQualified(selector))
+        {
+            var path = Applications.ResolveExecutable(selector);
+            var windows = Observe(context).Windows;
+            context.Check();
+            // An unlisted executable discloses its full path in the consent question.
+            return new AppState(Guid.NewGuid().ToString("N"), path, Path.GetFileName(path),
+                ApplicationAuthorization.Create(path, path, path), windows.Any(window => string.Equals(window.AppId, path, StringComparison.Ordinal)));
+        }
         var applications = await Discover(context);
         var application = SelectApplication(applications, selector);
         context.Check();
@@ -107,10 +117,10 @@ internal static class DesktopWindows
     private static CatalogApplication SelectApplication(IReadOnlyList<CatalogApplication> applications, string selector)
     {
         if (string.IsNullOrEmpty(selector))
-            throw new NativeFailure("INVALID_ARGUMENT", "An exact application id from listApps is required");
+            throw new NativeFailure("INVALID_ARGUMENT", "An exact application id from listApps or an absolute .exe file path is required");
         foreach (var application in applications)
             if (string.Equals(application.AppId, selector, StringComparison.Ordinal)) return application;
-        throw new NativeFailure("APP_NOT_FOUND", "Use an exact application id from listApps");
+        throw new NativeFailure("APP_NOT_FOUND", "Use an exact application id from listApps or an existing absolute .exe file path");
     }
 
     private static CatalogApplication[] Merge(ShellApplication[] shellApplications, ResolvedWindow[] windows)

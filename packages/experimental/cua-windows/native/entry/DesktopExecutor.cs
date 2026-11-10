@@ -101,7 +101,8 @@ internal sealed class DesktopExecutor(MtaDispatcher mta, StaDispatcher sta) : IA
                 {
                     var before = Windows.Refresh(app, context)
                         .Select(window => (window.Handle, window.ProcessId, window.ProcessStarted)).ToHashSet();
-                    await sta.Invoke(() => ShellBroker.Launch(@"shell:AppsFolder\" + app.AppId), cancellation);
+                    await sta.Invoke(() => ShellBroker.Launch(Path.IsPathFullyQualified(app.AppId)
+                        ? app.AppId : @"shell:AppsFolder\" + app.AppId), cancellation);
                     var elapsed = Stopwatch.StartNew();
                     WindowState[] windows;
                     while (true)
