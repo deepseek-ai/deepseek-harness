@@ -56,7 +56,7 @@ it('propagates a denied action without retrying it', async () => {
 })
 
 it('supports callers that retain observations without a text callback', async () => {
-  const cua = connectCua(() => async () => [{ id: 'editor-selector', name: 'Editor' }])
+  const cua = connectCua(() => async () => [{ id: 'editor-selector', name: 'Editor', isRunning: true }])
   await expect(cua.listApps()).resolves.toEqual([{ id: 'editor-selector', displayName: 'Editor', isRunning: true }])
 })
 

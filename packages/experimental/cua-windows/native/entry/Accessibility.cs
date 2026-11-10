@@ -29,8 +29,9 @@ internal static class Accessibility
         bool includeMenus, bool details, RequestContext context)
     {
         var all = Windows.Refresh(app, context);
-        var targets = new[] { all.SingleOrDefault(window => window.Id == selected)
-            ?? throw new NativeFailure("WINDOW_CHANGED", "Select a current window") };
+        var target = Windows.Resolve(app, selected, context);
+        if (!all.Any(window => window.Id == target.Id)) all = [.. all, target];
+        var targets = new[] { target };
         var rows = new List<string> { "AX scope=window offsets=UTF-16" };
         var elements = new Dictionary<int, ElementReference>();
         var observations = new List<(WindowState Window, WindowGeometry Geometry)>();
@@ -64,16 +65,18 @@ internal static class Accessibility
         }
         if (truncated) Add($"[truncated: maxElements={maximumElements}, maxDepth={maximumDepth}]");
         DesktopSession.RequireInteractive();
-        var scope = selected;
-        var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), scope, targets, elements);
+        var descriptions = Windows.DescribeAll(app, all, context);
+        if (!descriptions.Windows.Any(window => window.Id == selected))
+            throw new NativeFailure("WINDOW_CHANGED", "The selected window disappeared during observation; read fresh application state");
+        var snapshot = new Snapshot(Guid.NewGuid().ToString("N"), selected, targets, elements);
         var result = new
         {
             appHandle = app.Handle, pid = 4, windowId = selected.ToString(CultureInfo.InvariantCulture),
-            focusedWindowId = Windows.Focused(app, all)?.Id.ToString(CultureInfo.InvariantCulture),
-            snapshotId = snapshot.Id, tree = string.Join('\n', rows), windows = all.Select(window => window.Describe(app, context)).ToArray(), truncated,
+            focusedWindowId = Windows.Focused(app, descriptions.Windows)?.Id.ToString(CultureInfo.InvariantCulture),
+            snapshotId = snapshot.Id, tree = string.Join('\n', rows), windows = descriptions.Values, truncated,
         };
         context.Check();
-        app.Snapshots[scope] = snapshot;
+        app.Snapshots[selected] = snapshot;
         foreach (var observation in observations) observation.Window.Observe(observation.Geometry);
         return result;
 
@@ -218,28 +221,26 @@ internal static class Accessibility
         return "AXGroup";
     }
 
-    internal static ElementReference Element(AppState app, string snapshotId, string elementId, RequestContext context)
+    internal static ElementReference Element(AppState app, WindowState window, string snapshotId, string elementId,
+        RequestContext context)
     {
         if (!int.TryParse(elementId, NumberStyles.None, CultureInfo.InvariantCulture, out var index))
             throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
-        Windows.Refresh(app, context);
-        var selected = app.SelectedWindow ?? throw new NativeFailure("APP_ACCESS_REQUIRED", "Select a window with getApp before using element identifiers");
-        var snapshot = app.Snapshots.Values.SingleOrDefault(value => value.Id == snapshotId)
-            ?? throw new NativeFailure("STALE_SNAPSHOT", "Read fresh AX state before using element identifiers");
-        if (snapshot.Windows.Length != 1 || snapshot.Windows[0].Id != selected.Id)
-            throw new NativeFailure("STALE_SNAPSHOT", "Use an observation from the selected window");
+        window.Geometry(app, context);
+        if (!app.Snapshots.TryGetValue(window.Id, out var snapshot) || snapshot.Id != snapshotId
+            || snapshot.Windows.Length != 1 || snapshot.Windows[0].Id != window.Id)
+            throw new NativeFailure("STALE_SNAPSHOT", "Read fresh AX state before using element identifiers");
         if (!snapshot.Elements.TryGetValue(index, out var element)) throw new NativeFailure("INVALID_ELEMENT", "Use an elementId from this snapshot");
-        element.Window.Geometry(app, context);
+        if (element.Window.Id != window.Id)
+            throw new NativeFailure("STALE_SNAPSHOT", "The element belongs to another window; read fresh AX state");
         if (!context.Ax(() => element.Element.Current.IsEnabled)) throw new NativeFailure("ELEMENT_DISABLED", "The element is disabled");
         return element;
     }
 
     internal static void RequireSnapshot(AppState app, string snapshotId, nint windowId)
     {
-        var selected = app.SelectedWindow;
-        var snapshot = app.Snapshots.Values.SingleOrDefault(value => value.Id == snapshotId);
-        if (snapshot is null || selected is null || selected.Id != windowId
+        if (!app.Snapshots.TryGetValue(windowId, out var snapshot) || snapshot.Id != snapshotId
             || snapshot.Windows.Length != 1 || snapshot.Windows[0].Id != windowId)
-            throw new NativeFailure("STALE_SNAPSHOT", "Use a fresh observation from the selected window");
+            throw new NativeFailure("STALE_SNAPSHOT", "Use a fresh observation from this window");
     }
 }

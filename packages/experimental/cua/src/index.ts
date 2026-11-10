@@ -273,6 +273,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }).parse(result)
         await access.select(agent, client, prepared.appHandle, authorization, signal, applicationIcon)
         signal.throwIfAborted()
+        // TODO: launchApp on Windows
         const selected = prepared.running
           ? prepared
           : AppResult.parse(await access.run(client, prepared.appHandle, signal,

@@ -50,8 +50,8 @@ export type CuaStartupCapabilities = Pick<
   CuaCapabilities,
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
 > & { systemPointer?: boolean }
-/** App discovery result accepted by getApp. */
-export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName'> & { isRunning: true }
+/** App discovery result accepted by getApp, including the provider-reported running state. */
+export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'>
 /** An installed application match with its current running state. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
@@ -256,9 +256,9 @@ export interface CuaApi {
    */
   getCapabilities(options?: CuaObservationOptions): Promise<CuaCapabilities>
   /**
-   * Enumerate running applications.
+   * List applications with their current running state. Providers may enumerate only running applications.
    * @param options - output options.
-   * @returns identifiers accepted by getApp.
+   * @returns identifiers accepted by getApp and each application's running state.
    */
   listApps(options?: CuaObservationOptions): Promise<CuaAppInfo[]>
   /**
@@ -269,14 +269,14 @@ export interface CuaApi {
    */
   findApps(query: string, options?: CuaObservationOptions): Promise<CuaFoundAppInfo[]>
   /**
-   * Discover apps.
+   * Summarize provider application discovery.
    * @param options - output options.
-   * @returns native apps and an empty browser list.
+   * @returns native apps with their running state and an empty browser list.
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and silently retain initial AX state.
-   * @param selector - Provider-issued identifier, exact name, bundle ID or absolute application path; ambiguous selectors reject.
+   * Select an app, obtain consent, and launch it only where the provider supports launch; selection never activates it.
+   * @param selector - Provider-issued ID, or a supported exact name, bundle ID or absolute path; ambiguous selectors reject.
    * @returns An application handle tied to this process lifetime; its initial tree read becomes the current snapshot.
    */
   getApp(selector: string): Promise<CuaApp>

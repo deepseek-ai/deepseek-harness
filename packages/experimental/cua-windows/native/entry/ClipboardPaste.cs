@@ -154,15 +154,16 @@ internal sealed class ClipboardPaste
         finally { Win32.CloseClipboard(); }
     }
 
-    internal async Task Paste(AppState app, string text, string format, int maximumBytes, int readTimeoutMs, RequestContext context)
+    internal async Task Paste(AppState app, WindowState window, string text, string format, int maximumBytes, int readTimeoutMs, RequestContext context)
     {
-        Windows.RequireForeground(app, null, context);
-        var targetPid = app.RequireProcess().Pid;
+        Windows.RequireForeground(app, window, context);
+        // Clipboard readers are matched against this window's real process, not a removal-only app identity.
+        var targetPid = window.ProcessId;
         var transaction = await context.Sta.Invoke(control => Prepare(control, targetPid, text, format, maximumBytes), context.Cancellation);
         try
         {
             await context.Sta.Invoke(() => transaction.Begin(), context.Cancellation);
-            Input.Press(app, "v", ["control"], context);
+            Input.Press(app, window, "v", ["control"], context);
             try { await transaction.Consumed.Task.WaitAsync(TimeSpan.FromMilliseconds(readTimeoutMs), context.Cancellation); }
             catch (TimeoutException)
             {

@@ -92,42 +92,42 @@ internal static class Win32
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] internal static extern uint GetFinalPathNameByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, StringBuilder path, uint length, uint flags);
     [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetProcessTimes(Microsoft.Win32.SafeHandles.SafeProcessHandle process, out long created, out long exited, out long kernel, out long user);
-    [DllImport("wintrust.dll", CharSet = CharSet.Unicode, ExactSpelling = true)] internal static extern int WinVerifyTrust(nint window, ref Guid action, ref TrustData data);
-    [DllImport("wintrust.dll")] internal static extern nint WTHelperProvDataFromStateData(nint state);
-    [DllImport("wintrust.dll")] internal static extern nint WTHelperGetProvSignerFromChain(nint provider, uint signer, [MarshalAs(UnmanagedType.Bool)] bool counterSigner, uint counter);
 
-    [StructLayout(LayoutKind.Sequential)] internal struct ProviderSigner
+    [DllImport("shell32.dll", PreserveSig = true)]
+    internal static extern int SHGetPropertyStoreForWindow(nint window, ref Guid id,
+        [MarshalAs(UnmanagedType.Interface)] out IPropertyStore? store);
+    [DllImport("ole32.dll")] internal static extern int PropVariantClear(ref PropVariant value);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    internal static extern int GetApplicationUserModelId(nint process, ref uint length, StringBuilder? value);
+    [DllImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", CharSet = CharSet.Unicode, ExactSpelling = true, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool QueryFullProcessImageName(nint process, uint flags, StringBuilder name, ref uint length);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    internal static extern nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(nint handle);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ProcessIdToSessionId(uint processId, out uint sessionId);
+
+    [StructLayout(LayoutKind.Sequential)] internal struct PropertyKey { internal Guid FormatId; internal uint PropertyId; }
+    // PROPVARIANT is 24 bytes on supported x64/arm64 targets; the trailing field reserves its union.
+    [StructLayout(LayoutKind.Sequential)] internal struct PropVariant
     {
-        internal uint Size, VerifyTimeLow, VerifyTimeHigh, CertificateCount;
-        internal nint Certificates;
-    }
-    [StructLayout(LayoutKind.Sequential)] internal struct ProviderCertificate
-    {
-        internal uint Size;
-        internal nint Certificate;
-    }
-    [StructLayout(LayoutKind.Sequential)] internal struct CertificateContext
-    {
-        internal uint Encoding;
-        internal nint Encoded;
-        internal uint EncodedSize;
+        internal ushort ValueType;
+        internal ushort Reserved1, Reserved2, Reserved3;
+        internal nint Pointer;
+        internal nint Pointer2;
     }
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] internal struct TrustFile
+    [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IPropertyStore
     {
-        internal uint Size;
-        [MarshalAs(UnmanagedType.LPWStr)] internal string Path;
-        internal nint Handle, Subject;
-    }
-    [StructLayout(LayoutKind.Sequential)] internal struct TrustData
-    {
-        internal uint Size;
-        internal nint PolicyCallback, SipClient;
-        internal uint UiChoice, RevocationChecks, UnionChoice;
-        internal nint File;
-        internal uint StateAction;
-        internal nint StateData, UrlReference;
-        internal uint ProviderFlags, UiContext;
-        internal nint SignatureSettings;
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, out PropertyKey key);
+        [PreserveSig] int GetValue(ref PropertyKey key, out PropVariant value);
+        [PreserveSig] int SetValue(ref PropertyKey key, ref PropVariant value);
+        [PreserveSig] int Commit();
     }
 }

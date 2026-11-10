@@ -113,8 +113,10 @@ export const AppResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
   name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
-/** Running application metadata used for selection; other native fields are ignored. */
-export const AppsResult = z.array(z.object({ id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional() }))
+/** Application discovery entries with the provider-reported running state. */
+export const AppsResult = z.array(z.object({
+  id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional(), isRunning: z.boolean(),
+}))
 /** Installed application matches and their current running state. */
 export const FoundAppsResult = z.array(z.object({
   id: z.string().min(1), displayName: z.string(), path: z.string().min(1), isRunning: z.boolean(),

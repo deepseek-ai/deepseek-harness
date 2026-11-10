@@ -1,8 +1,6 @@
 // Explorer owns user-launched applications, independently of the helper's managed process Job.
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-using System.Text;
 using DeepSeek.Cua.Protocol;
 
 namespace DeepSeek.Cua.Windows;
@@ -42,21 +40,6 @@ internal static class ShellBroker
             foreach (var value in owned.AsEnumerable().Reverse())
                 if (released.Add(value) && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value);
         }
-    }
-
-    internal static string? ShortcutTarget(string path)
-    {
-        object? instance = null;
-        try
-        {
-            instance = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("00021401-0000-0000-C000-000000000046"), true)!);
-            ((IPersistFile)instance!).Load(path, 0);
-            var target = new StringBuilder(32768);
-            ((IShellLink)instance).GetPath(target, target.Capacity, 0, 4);
-            return target.Length == 0 ? null : Environment.ExpandEnvironmentVariables(target.ToString());
-        }
-        catch (COMException) { return null; }
-        finally { if (instance is not null) Marshal.FinalReleaseComObject(instance); }
     }
 
     [ComImport, Guid("6D5140C1-7436-11CE-8034-00AA006009FA"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -103,9 +86,4 @@ internal static class ShellBroker
         [PreserveSig] int GetItemObject(uint item, ref Guid id, [MarshalAs(UnmanagedType.Interface)] out object value);
     }
 
-    [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IShellLink
-    {
-        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int capacity, nint findData, uint flags);
-    }
 }

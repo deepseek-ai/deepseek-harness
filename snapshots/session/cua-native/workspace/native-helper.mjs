@@ -131,7 +131,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
+    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
         const denied = params.selector === 'Denied Fixture'

@@ -11,7 +11,7 @@ const element = (id: string): CuaElementId => brandString<CuaElementId>(id)
 
 const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const bounds = { x: -640, y: 100, width: 640, height: 480 }
-const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', running: true }
+const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', bundleId: 'test.editor', isRunning: true, running: true }
 const delivered = { dispatched: true }
 const capabilities: CuaCapabilities = { platform: 'macos', systemPointer: true, sessionLocked: false, permissions: { accessibility: true, screenRecording: false }, appLevelAccessibility: true, keyboard: ['app'], methods: ['getState', 'click'], coordinateSpace: 'screenshot-pixels', browser: false }
 
@@ -27,7 +27,7 @@ function fixture(withSink = true) {
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return currentCapabilities
-      case 'listApps': return [selected, { id: 'utility-selector', pid: 4, name: 'Utility' }]
+      case 'listApps': return [selected, { id: 'utility-selector', pid: 4, name: 'Utility', isRunning: true }]
       case 'getApp': return selected
       case 'listWindows': return windows
       case 'mouseMove': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
@@ -81,8 +81,8 @@ describe('application discovery', () => {
 
   it('uses the application name when discovery has no identifier', async () => {
     const f = fixture()
-    f.dispatch.mockResolvedValueOnce([{ pid: 18, name: 'Utility' }])
-    expect(await f.api.listApps({ emit: false })).toEqual([{ id: 'Utility', displayName: 'Utility', isRunning: true }])
+    f.dispatch.mockResolvedValueOnce([{ pid: 18, name: 'Utility', isRunning: false }])
+    expect(await f.api.listApps({ emit: false })).toEqual([{ id: 'Utility', displayName: 'Utility', isRunning: false }])
   })
 
   it('returns observations without requiring an output sink', async () => {

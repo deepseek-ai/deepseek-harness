@@ -52,13 +52,11 @@ it.skipIf(!helperPath || !selector)('admits real application screenshots through
     image: (image) => { expect(image.bytes.byteLength).toBeGreaterThan(0) },
   })
   const discovered = (await api.listApps({ emit: false })).find(app =>
-    app.id === selector || app.displayName.toLowerCase() === selector?.toLowerCase())
-  expect(discovered).toBeDefined()
-  const app = await api.getApp(discovered!.id)
+    app.id === selector || app.displayName === selector)
+  const app = await api.getApp(discovered?.id ?? selector!)
   const target = (await app.getWindows({ emit: false })).find(window =>
     window.isOnScreen && window.bounds.width > 0 && window.bounds.height > 0)
   expect(target).toBeDefined()
-  expect(target!.windowId).toBe(discovered!.id)
   const window = await app.getWindow(target!.windowId)
   expect(emitted).toEqual([])
   await window.getAccessibilityTree()

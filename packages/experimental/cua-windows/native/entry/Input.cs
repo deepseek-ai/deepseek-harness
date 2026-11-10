@@ -46,7 +46,7 @@ internal static class Input
         finally { foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == 0x5B ? 1u : 0))); }
     }
 
-    private static (ushort Key, bool Extended, string[] Modifiers) ResolveKey(string name, AppState app)
+    private static (ushort Key, bool Extended, string[] Modifiers) ResolveKey(string name)
     {
         var key = name.ToLowerInvariant();
         if (key.StartsWith("kp_", StringComparison.Ordinal))
@@ -85,38 +85,38 @@ internal static class Input
         return ((ushort)(mapped & 0xFF), false, modifiers.ToArray());
     }
 
-    internal static void Press(AppState app, string key, string[] modifiers, RequestContext context)
+    internal static void Press(AppState app, WindowState window, string key, string[] modifiers, RequestContext context)
     {
-        Windows.RequireForeground(app, null, context);
+        Windows.RequireForeground(app, window, context);
         var chord = new KeyChord(key, modifiers.Select(KeyChord.NormalizeModifier).Distinct().ToArray());
         var name = chord.Key.ToLowerInvariant();
         if (name == "printscreen" || chord.Modifiers.Contains("option") && name is "tab" or "escape" or "esc"
             || chord.Modifiers.Contains("control") && name is "escape" or "esc"
             || chord.Modifiers.Contains("control") && chord.Modifiers.Contains("option") && name == "delete")
             throw new NativeFailure("UNSUPPORTED", "This shortcut acts on the system rather than the selected application");
-        var resolved = ResolveKey(chord.Key, app);
+        var resolved = ResolveKey(chord.Key);
         WithModifiers(chord.Modifiers.Concat(resolved.Modifiers), () =>
         {
-            Windows.RequireForeground(app, null, context);
+            Windows.RequireForeground(app, window, context);
             var flags = resolved.Extended ? 1u : 0;
             try { Send(Keyboard(resolved.Key, flags: flags), Keyboard(resolved.Key, flags: flags | 2)); }
             catch { Release(Keyboard(resolved.Key, flags: flags | 2)); throw; }
         });
     }
 
-    internal static async Task Type(AppState app, string text, RequestContext context)
+    internal static async Task Type(AppState app, WindowState window, string text, RequestContext context)
     {
         if (text.Contains('\0')) throw new NativeFailure("INVALID_ARGUMENT", "Text input cannot contain NUL");
         RequireIdleModifiers();
         for (var index = 0; index < text.Length; index++)
         {
-            Windows.RequireForeground(app, null, context);
+            Windows.RequireForeground(app, window, context);
             RequireIdleModifiers();
             var character = text[index];
             if (character is '\r' or '\n' or '\t')
             {
                 if (character == '\r' && index + 1 < text.Length && text[index + 1] == '\n') index++;
-                Press(app, character == '\t' ? "Tab" : "Enter", [], context);
+                Press(app, window, character == '\t' ? "Tab" : "Enter", [], context);
             }
             else
             {

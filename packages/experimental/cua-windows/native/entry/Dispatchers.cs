@@ -95,6 +95,7 @@ internal sealed class StaDispatcher : IAsyncDisposable
     private readonly TaskCompletionSource<ServiceControl> ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource<object?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Thread thread;
+    private ServiceControl? service;
 
     internal StaDispatcher()
     {
@@ -105,6 +106,7 @@ internal sealed class StaDispatcher : IAsyncDisposable
                 Win32.SetThreadDpiAwarenessContext(-4);
                 using var control = new ServiceControl();
                 _ = control.Handle;
+                service = control;
                 ready.SetResult(control);
                 Forms.Application.Run();
             }
@@ -118,14 +120,35 @@ internal sealed class StaDispatcher : IAsyncDisposable
     internal async Task<T> Invoke<T>(Func<ServiceControl, T> work, CancellationToken cancellation)
     {
         var control = await ready.Task.WaitAsync(cancellation);
+        cancellation.ThrowIfCancellationRequested();
+        // A caller already on the STA must not enqueue work for the message loop it is blocking.
+        if (Environment.CurrentManagedThreadId == thread.ManagedThreadId)
+        {
+            var inline = work(control);
+            cancellation.ThrowIfCancellationRequested();
+            return inline;
+        }
         var result = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         control.BeginInvoke(() =>
         {
-            try { cancellation.ThrowIfCancellationRequested(); var value = work(control); result.TrySetResult(value); }
+            try { cancellation.ThrowIfCancellationRequested(); var value = work(control); cancellation.ThrowIfCancellationRequested(); result.TrySetResult(value); }
             catch (OperationCanceledException) { result.TrySetCanceled(cancellation); }
             catch (Exception error) { result.TrySetException(error); }
         });
         return await result.Task;
+    }
+
+    internal T InvokeSync<T>(Func<ServiceControl, T> work, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        if (Environment.CurrentManagedThreadId == thread.ManagedThreadId)
+        {
+            var control = service ?? throw new InvalidOperationException("The STA dispatcher has not started");
+            var inline = work(control);
+            cancellation.ThrowIfCancellationRequested();
+            return inline;
+        }
+        return Invoke(work, cancellation).GetAwaiter().GetResult();
     }
 
     internal Task Invoke(Action work, CancellationToken cancellation) => Invoke(_ => { work(); return true; }, cancellation);

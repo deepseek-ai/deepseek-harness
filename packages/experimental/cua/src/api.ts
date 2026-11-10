@@ -65,7 +65,7 @@ export function createCuaApi(dispatch: CuaDispatch, sink?: CuaObservationSink): 
     },
     async listApps(options) {
       const result = AppsResult.parse(await call('listApps', {})).map(app => ({
-        id: app.id ?? (app.bundleId || app.name), displayName: app.name, isRunning: true as const,
+        id: app.id ?? (app.bundleId || app.name), displayName: app.name, isRunning: app.isRunning,
       }))
       await emit(sink, result, options)
       return result
