@@ -32,7 +32,7 @@ kind: "package-library"
 
 ### 可选与已退役组合包
 
-`OPTIONAL_BUNDLES` 列出安装随附、供用户开启的组合包。每一项都必须是 `dsh` 应用的运行时依赖，并声明 `dsh.bundle.patch`、图标和 `./locale/*.json` 显示元信息，且不能被任何模板选中；[`verify-default-product-isolation`](../../../scripts/verify-default-product-isolation.ts) 检查这些规则。随附的可选组合包可以改为通过 `dsh.bundle.profile` 声明自己的独立 profile；app-boot 用这一个组合包初始化缺失的同名 profile，因此该 profile 只按名称打开。[插件管理器](../../boot/plugin-manager/README.zh.md#use-this-package)把这些组合包报告为 `optional`。`RETIRED_BUNDLES` 列出安装不再携带的组合包；app-boot 在加载 profile 时将它们从该 profile 的组合包列表中移除。
+`OPTIONAL_BUNDLES` 列出安装随附、供用户开启的组合包。每一项都必须是 `dsh` 应用的运行时依赖，并声明 `dsh.bundle.patch`、图标和 `./locale/*.json` 显示元信息，且不能被任何模板选中；[`verify-default-product-isolation`](../../../scripts/verify-default-product-isolation.ts) 检查这些规则。[插件管理器](../../boot/plugin-manager/README.zh.md#use-this-package)把这些组合包报告为 `optional`。`RETIRED_BUNDLES` 列出安装不再携带的组合包；app-boot 在加载 profile 时将它们从该 profile 的组合包列表中移除。
 
 <a id="plugin-manager-lists"></a>
 ### 插件管理器列表

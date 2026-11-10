@@ -8,10 +8,10 @@ import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
 import {
   assertBundlePlatform, UnsupportedBundlePlatformError, bundlePatchPaths, initProfile, readProfileManifest,
-  resolveBundleDir, resolveProfileDir, loadOverlayPatches, composeEntries, readProfileVersionExemptions, shippedProfileTemplate,
+  resolveBundleDir, resolveProfileDir, loadOverlayPatches, composeEntries, readProfileVersionExemptions,
   evaluatePluginCompatibility, pluginCompatibilityWarning, type ProfileManifest,
 } from '@deepseek-ai/dsh-app-boot'
-import { DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { PROFILE_TEMPLATES, DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
 import { parseInstallSpec } from './install-spec.ts'
 import { awaitTreeGone, leadsOwnGroup, treeAlive, type RunTree } from './run-tree.ts'
@@ -601,7 +601,8 @@ export async function runPluginCommand(
   await mkdir(dir, { recursive: true })
   return withFileLock(join(dir, 'package.json'), async () => {
     if (!existsSync(join(dir, 'package.json'))) {
-      initProfile(dir, shippedProfileTemplate('dsh', context.profile, context.installAnchor, dir) ?? DEFAULT_PROFILE_BUNDLES)
+      const template = PROFILE_TEMPLATES[context.profile]
+      initProfile(dir, template?.bundles ?? DEFAULT_PROFILE_BUNDLES)
       options.onOutput?.(`dsh: initialized profile ${context.profile} at ${dir}\n`, 'stderr')
     }
     return runProfilePnpm(context, args, options)

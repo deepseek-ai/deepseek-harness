@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-这个实验性组合包独立组成 `cua-mcp` profile，即 Computer Use 的 MCP stdio 服务器。每个 DSH 安装都自带它；首次 `dsh --profile cua-mcp` 初始化组合包声明的 profile，并向一个 MCP 客户端提供 `cua_run_code` 与 `cua_reset`。该 profile 只由本组合包构成：不加载任何模型适配器、提示侧工具或遥测行。一个连接拥有一个 Agent，其程序在多次调用之间于内存中保留应用与窗口对象。应用与指针访问的授权可无人值守放行，或作为 elicitation 转发给客户端；模型归接入的 harness 所有。
+这个实验性组合包独立组成 `cua-mcp` profile，即 Computer Use 的 MCP stdio 服务器。每个 DSH 安装都自带它；只选本组合包的 profile manifest 就能让 `dsh --profile cua-mcp` 向一个 MCP 客户端提供 `cua_run_code` 与 `cua_reset`。该 profile 只由本组合包构成：不加载任何模型适配器、提示侧工具或遥测行。一个连接拥有一个 Agent，其程序在多次调用之间于内存中保留应用与窗口对象。应用与指针访问的授权可无人值守放行，或作为 elicitation 转发给客户端；模型归接入的 harness 所有。
 
 ## 目录
 
@@ -28,12 +28,19 @@ kind: "package-bundle"
 
 ### 启动服务器
 
-组合包是 `dsh` 安装的运行时依赖，并通过 `dsh.bundle.profile` 声明 `cua-mcp` profile，因此首次 `dsh --profile cua-mcp` 就用这一个组合包层初始化 `$DSH_HOME/profiles/cua-mcp`；不涉及 pnpm、网络或任何 `dsh plugin` 步骤。源码 checkout 在 `pnpm run build` 之后通过 `pnpm dsh` 运行同样的命令。Python runtime wheel 自带同一份安装，训练 harness 直接把它的可执行程序用作 stdio 命令：
+组合包是 `dsh` 安装的运行时依赖，因此只选它这一层的 profile 直接从安装中加载它；不涉及 pnpm、registry 或网络。在 Harness home（`$DSH_HOME`，默认 `~/.dsh`）下创建一次 profile，之后 `dsh --profile cua-mcp` 就是 stdio 命令，源码检出在 `pnpm run build` 之后通过 `pnpm dsh` 运行它。不要把组合包加进已经组合了 `dsh-base` 的 profile（例如 `dsh plugin --profile cua-mcp add` 创建的那种）：两套组合声明同样的行 id，Web 插件页也因此只列出本组合包而不提供开关。
+
+```sh
+mkdir -p "${DSH_HOME:-$HOME/.dsh}/profiles/cua-mcp"
+printf '%s\n' '{ "name": "dsh-profile-cua-mcp", "private": true, "dependencies": {}, "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-cua-mcp"] } } }' > "${DSH_HOME:-$HOME/.dsh}/profiles/cua-mcp/package.json"
+```
+
+Python runtime wheel 自带同一份安装：在 harness 以 `DSH_HOME` 传入的 home 下写入同样的 manifest，然后把它的可执行程序用作 stdio 命令：
 
 ```python
 from deepseek_harness_runtime import resolve_bundled_launch_args
 
-command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command; the first start initializes the profile
+command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command
 ```
 
 ### 接入客户端
@@ -93,7 +100,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。`dsh.bundle.profile` 声明 `cua-mcp` profile，app-boot 在首次启动时用这一个组合包初始化它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 是启动必需条目，前端无法激活时 profile 停止启动。
+[patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。只列出本组合包的 profile manifest 选中这套组合；启动器不经模板直接从安装中加载它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 不是启动必需条目：行无法激活时启动器在 stderr 上报告，而不是停止 profile。
 
 [`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供两个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，与手写的 `cua_reset` 并列。连接的 Agent 挂载注册表的默认 preset 并记录启动目录。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 调用 `ctx.cuaPrograms.reset`。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者。
 
@@ -138,7 +145,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 - 不暴露程序沙箱提权和原始 `cua` 工具；`DSH_PERMISSION_MODE` 选择程序进程启动时的文件沙箱。
 - 提供方描述超过 4,096 个字符时，Claude Code 2.1.309 的模型只看到被截断的部分；投影不会缩短它。
 - 根工具调用不是 Session 事件；接入 harness 的 transcript 才是调用与结果的记录。
-- patch 显式列出该 profile 的依赖闭包；CUA 或 PTC 包新增服务注入时，必需启动条目会大声失败，直到 patch 补上该行。
+- patch 显式列出该 profile 的依赖闭包；CUA 或 PTC 包新增服务注入时，提供方行无法激活并在 stderr 上报告，列表里没有 `cua_run_code`，直到 patch 补上该行。
 
 <a id="dev-note"></a>
 ### 开发备注

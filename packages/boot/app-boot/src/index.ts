@@ -63,7 +63,6 @@ export {
   ProfileRuntimeResolution,
   bundlePatchFiles,
   bundlePatchPaths,
-  bundleProfileName,
   initProfile,
   removeLinkProjections,
   loadProfile,
@@ -74,7 +73,6 @@ export {
   reportSkippedBundles,
   resolveBundleDir,
   resolveProfileDir,
-  shippedProfileTemplate,
   writeProfileManifest,
   type Profile,
   type ProfileLayer,
@@ -976,7 +974,6 @@ const requiredStartupEntryIds = new Set<string>([
   'headless-runner',
   'acp',
   'sdk-jsonrpc-server',
-  'cua-mcp',
 ])
 
 /** Render plugin stacks, nested causes, and aggregate member failures once per error. */

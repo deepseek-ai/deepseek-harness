@@ -10,7 +10,7 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 ## 决策
 
-`@deepseek-ai/dsh-cua-mcp` 是 `OPTIONAL_BUNDLES` 中的实验性组合包：它在空 profile 根上用一次 insert 组成独立的 `cua-mcp` profile，并通过 `dsh.bundle.profile` 声明该 profile，因此首次 `dsh --profile cua-mcp` 就从这一个组合包初始化 profile。这是唯一的 MCP 应用路径；没有包 bin 或 SDK 逃逸，该组合包不进入 `PROFILE_TEMPLATES`，因为模板不能引用实验包。
+`@deepseek-ai/dsh-cua-mcp` 是 `OPTIONAL_BUNDLES` 中的实验性组合包：它在空 profile 根上用一次 insert 组成独立的 `cua-mcp` profile。只选它这一个组合包的 profile manifest 就是全部安装步骤：启动器加载已存在的 manifest 时不查 `PROFILE_TEMPLATES`，而安装本身已自带该组合包，因此不涉及 pnpm 或 registry。这是唯一的 MCP 应用路径；没有包 bin 或 SDK 逃逸，该组合包不进入 `PROFILE_TEMPLATES`，因为模板不能引用实验包。
 
 服务器运行在 profile 进程内，带着连接的 Agent、不经模型步骤地调用 `ctx.tools.execute`。一个 stdio 连接拥有一个 Agent：在 stdio 传输打开之前创建，stdin EOF 时销毁。Agent 归属已经决定了保留的程序进程、本机连接和会话级授权，因此连接生命周期与状态生命周期重合。空的默认 preset `cua-mcp` 让该 Agent 只获得 `cua_run_code`，因为提供方只为已组合 preset 注册程序工具。
 
@@ -18,7 +18,7 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 授权有两种模式。`DSH_CUA_CONSENT=allow` 以批准标签为本会话回答连接 Agent 的每个审批问题。默认的 `elicit` 把每个问题作为表单 elicitation 转发给客户端，枚举即问题的选项标签。不新增任何 Session 事件：训练侧只消费 MCP 工具结果，接入 harness 的 transcript 记录调用；DSH 保留嵌套的 `tool/ptc-dispatch` 事件以供诊断。
 
-组合列出自己的依赖闭包（25 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行；CUA 或 PTC 包新增服务注入时，必需启动条目会大声失败，直到 patch 补上该行。初始化不需要 `dsh plugin` 步骤，因此 Python runtime wheel 和离线训练 Host 都不需要访问 registry。客户端配置项由 README 给出，而不是由程序生成。
+组合列出自己的依赖闭包（25 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行。`cua-mcp` 不是启动必需条目，无法激活的行由启动器在 stderr 上报告：提供方行未激活时列表里没有 `cua_run_code`，前端未激活时不提供任何服务。客户端配置项由 README 给出，而不是由程序生成。
 
 ## 考虑过的替代方案
 
@@ -34,7 +34,9 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 **叠在 `dsh-base` 之上、禁用模型行的 profile 前端。** 组合出的 profile 带着约一百行没有消费者的插件：模型适配器、web 工具、子代理、压缩、遥测和会话管理。显式闭包只有四分之一，且在漂移时大声失败。
 
-**用 `dsh plugin enable|disable` 子命令选中随附组合包。** 它在启动器里重复了插件管理器的仅改 manifest 选择，而且仍然产生以 base 为底的 profile；组合包声明的 profile 不需要任何步骤。
+**用 `dsh plugin enable|disable` 子命令选中随附组合包。** 它在启动器里重复了插件管理器的仅改 manifest 选择，而且仍然产生以 base 为底的 profile；文档给出的 manifest 只有三行，不需要改启动器。
+
+**由 app-boot 在首次 `dsh --profile cua-mcp` 时初始化的 `dsh.bundle.profile` 声明。** 它让首次启动零步可用，代价是为一个实验组合包在 manifest 新增字段，并在 app-boot、CLI `dsh plugin` 命令和插件管理器里加入 `shippedProfileTemplate` 查找；普通 manifest 只多一个有文档的步骤，且不触碰这些包。CUA 从实验状态毕业后，一条 `PROFILE_TEMPLATES` 条目就能得到同样的零步启动。
 
 **为 `cua_run_code` 手写 MCP schema 与描述。** 第二份定义几天内就漂移了：描述 663 对 2,164 个字符，`description` 可选对必填。投影注册项去掉了这份副本；SDK 的 `registerTool` 只接受 Standard Schema 值，且不允许 `tools/list`、`tools/call` 与自定义 handler 混用，所以两个工具都走低层 handler。
 
@@ -44,4 +46,4 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 ## 后果
 
-每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。必需启动条目 `cua-mcp` 在前端无法激活时让 profile 大声失败。没有提供方的 Host 只列出 `cua_reset`，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述与首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。
+每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。把组合包叠在 `dsh-base` 之上的 profile 会出现重复的行 id，不受支持；Web 插件页列出该组合包但不提供开关。没有提供方的 Host 只列出 `cua_reset`，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述与首个结果中的参考文本由 profile 的期望输出测试固定，并随已安装的 CUA 包变化。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。

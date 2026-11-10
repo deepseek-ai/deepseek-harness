@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This experimental bundle composes the standalone `cua-mcp` profile, an MCP stdio server for Computer Use. Every DSH installation ships it; the first `dsh --profile cua-mcp` initializes the profile the bundle declares and serves `cua_run_code` and `cua_reset` to one MCP client. The profile is this bundle alone: no model adapter, prompt-side tool, or telemetry row loads. One connection owns one Agent whose programs keep application and window objects in memory between calls. Consent for application and pointer access is granted without a human or forwarded to the client as an elicitation; the connected harness owns the model.
+This experimental bundle composes the standalone `cua-mcp` profile, an MCP stdio server for Computer Use. Every DSH installation ships it; a profile manifest that selects this bundle alone lets `dsh --profile cua-mcp` serve `cua_run_code` and `cua_reset` to one MCP client. The profile is this bundle alone: no model adapter, prompt-side tool, or telemetry row loads. One connection owns one Agent whose programs keep application and window objects in memory between calls. Consent for application and pointer access is granted without a human or forwarded to the client as an elicitation; the connected harness owns the model.
 
 ## Table of Contents
 
@@ -28,12 +28,19 @@ This experimental bundle composes the standalone `cua-mcp` profile, an MCP stdio
 
 ### Start the server
 
-The bundle is a runtime dependency of the `dsh` installation and declares the `cua-mcp` profile through `dsh.bundle.profile`, so the first `dsh --profile cua-mcp` initializes `$DSH_HOME/profiles/cua-mcp` with this single bundle layer; neither pnpm nor network access nor a `dsh plugin` step is involved. A source checkout runs the same command through `pnpm dsh` after `pnpm run build`. The Python runtime wheel ships the same installation, so a training harness uses its executable as the stdio command:
+The bundle is a runtime dependency of the `dsh` installation, so a profile that selects it as its only layer loads it from the installation; no pnpm, registry, or network access is involved. Create the profile once under the Harness home (`$DSH_HOME`, by default `~/.dsh`); `dsh --profile cua-mcp` is then the stdio command, and a source checkout runs it through `pnpm dsh` after `pnpm run build`. Do not add the bundle to a profile that already composes `dsh-base`, such as the one `dsh plugin --profile cua-mcp add` creates: both compositions declare the same row ids, which is also why the Web plugin page lists this bundle without a switch.
+
+```sh
+mkdir -p "${DSH_HOME:-$HOME/.dsh}/profiles/cua-mcp"
+printf '%s\n' '{ "name": "dsh-profile-cua-mcp", "private": true, "dependencies": {}, "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-cua-mcp"] } } }' > "${DSH_HOME:-$HOME/.dsh}/profiles/cua-mcp/package.json"
+```
+
+The Python runtime wheel ships the same installation: write the same manifest under the home the harness passes as `DSH_HOME`, then use its executable as the stdio command:
 
 ```python
 from deepseek_harness_runtime import resolve_bundled_launch_args
 
-command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command; the first start initializes the profile
+command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP stdio command
 ```
 
 ### Connect a client
@@ -93,7 +100,7 @@ The patch also mounts the provider with `screenshotTarget: { longEdge: 2048, max
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, the macOS provider row disabled off Darwin, and this frontend. `dsh.bundle.profile` names the `cua-mcp` profile, which app-boot initializes from this single bundle on first start. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and connects the official MCP server to a stdio transport after the launcher commits readiness. `cua-mcp` is a required startup entry, so a frontend that cannot activate stops the profile.
+The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, the macOS provider row disabled off Darwin, and this frontend. A profile manifest that lists this bundle alone selects the composition; the launcher loads it from the installation without a template. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and connects the official MCP server to a stdio transport after the launcher commits readiness. `cua-mcp` is not a required startup entry: the launcher reports an inactive row on stderr instead of stopping the profile.
 
 [`server.ts`](src/server.ts) serves both tools through the protocol server's low-level `tools/list` and `tools/call` handlers: the listing projects the Agent's `cua_run_code` registration, checked against the protocol's tool type, beside the hand-written `cua_reset`. The connection's Agent mounts the registry's default preset and records the launch directory. A `cua_run_code` call runs through `ctx.tools.execute` inside `ctx.agents.withInitiator` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent.
 
@@ -138,7 +145,7 @@ The tool catalog and instructions are stable for one installation. The first res
 - Program sandbox escalation and the raw `cua` tool are not exposed; `DSH_PERMISSION_MODE` selects the launch-time file sandbox of program processes.
 - A provider description longer than 4,096 characters reaches Claude Code 2.1.309 models cut; the projection does not shorten it.
 - Root tool calls are not Session events; the connected harness's transcript is the record of calls and results.
-- The patch lists the profile's dependency closure explicitly; a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row.
+- The patch lists the profile's dependency closure explicitly; a new service injection in the CUA or PTC packages leaves the provider row inactive, reported on stderr, and `cua_run_code` out of the listing until the patch adds the row.
 
 <a id="dev-note"></a>
 ### Dev Note

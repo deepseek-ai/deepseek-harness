@@ -1,8 +1,8 @@
 /** Profile package management and explicit, exact-version compatibility approvals. */
 import { runPluginCommand, runProfilePnpm, setProfileVersionExemption, type PackageOperationOptions } from '@deepseek-ai/dsh-plugin-manager/operations'
 import { INSTALL_ANCHOR } from './profile-boot.ts'
-import { initProfile, readProfileCompatibility, resolveProfileDir, shippedProfileTemplate, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
-import { DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
+import { initProfile, readProfileCompatibility, resolveProfileDir, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
+import { PROFILE_TEMPLATES, DEFAULT_PROFILE_BUNDLES } from '@deepseek-ai/dsh-official-bundles'
 import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
@@ -45,7 +45,7 @@ async function versionCommand(profile: string, args: readonly string[]): Promise
     if (profile !== 'desktop') await mkdir(dir, { recursive: true })
     await withFileLock(join(dir, 'package.json'), async () => {
       if (profile === 'desktop') requireDesktopProfile(dir)
-      else if (!existsSync(join(dir, 'package.json'))) initProfile(dir, shippedProfileTemplate('dsh', profile, INSTALL_ANCHOR, dir) ?? DEFAULT_PROFILE_BUNDLES)
+      else if (!existsSync(join(dir, 'package.json'))) initProfile(dir, PROFILE_TEMPLATES[profile]?.bundles ?? DEFAULT_PROFILE_BUNDLES)
       if (request === undefined) {
         const { exemptions, warnings } = readProfileCompatibility(dir)
         for (const warning of warnings) process.stderr.write(`dsh: warning: ${warning}\n`)

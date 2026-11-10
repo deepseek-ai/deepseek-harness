@@ -37,8 +37,7 @@
   "license": "MIT",
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml",
-      "profile": "cua-mcp"
+      "patch": "./cordis.patch.yml"
     }
   },
   "peerDependencies": {

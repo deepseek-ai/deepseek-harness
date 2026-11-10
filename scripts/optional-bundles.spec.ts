@@ -32,6 +32,9 @@ function bundle(name: string): { dir: string; patches: ReturnType<typeof loadOve
   return { dir: entry.dir, patches: bundlePatchPaths(entry.dir, entry.manifest.dsh.bundle).flatMap(path => loadOverlayPatches('test', path)) }
 }
 
+/** Optional bundles that compose a profile of their own; the plugin page lists them without a switch. */
+const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
+
 const lightweight = [
   '@deepseek-ai/dsh-experimental-session-search',
   '@deepseek-ai/dsh-experimental-ralph-bundle',
@@ -106,11 +109,11 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
-  // A bundle that declares its own profile composes alone; the plugin page never layers it over a GUI profile.
-  const standalone = OPTIONAL_BUNDLES.filter(name => bundles.get(name)?.manifest.dsh?.bundle?.profile !== undefined)
+  // A bundle that composes a profile of its own is never layered over a GUI profile; the plugin page lists it without a switch.
+  const standalone = OPTIONAL_BUNDLES.filter(name => STANDALONE_PROFILE_BUNDLES.includes(name))
   const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))
 
-  it.each(standalone)('%s composes its declared profile alone over the empty root and stays off the plugin page', (name) => {
+  it.each(standalone)('%s composes its own profile alone over the empty root and stays off the plugin page', (name) => {
     const { patches } = bundle(name)
     const warnings: string[] = []
     const composed = composeEntries([patches], message => warnings.push(message))

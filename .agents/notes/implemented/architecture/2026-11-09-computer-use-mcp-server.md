@@ -10,7 +10,7 @@ Computer Use training data should come from several agent harnesses, not only fr
 
 ## Decision
 
-`@deepseek-ai/dsh-cua-mcp` is an experimental bundle in `OPTIONAL_BUNDLES` that composes the standalone `cua-mcp` profile from one insert over the empty root and declares that profile through `dsh.bundle.profile`, so the first `dsh --profile cua-mcp` initializes the profile from this single bundle. It is the only MCP application path; no package bin or SDK escape exists, and the bundle stays out of `PROFILE_TEMPLATES` because templates cannot name experimental packages.
+`@deepseek-ai/dsh-cua-mcp` is an experimental bundle in `OPTIONAL_BUNDLES` that composes the standalone `cua-mcp` profile from one insert over the empty root. A profile manifest that selects it as the only bundle is the whole installation step: the launcher loads an existing manifest without consulting `PROFILE_TEMPLATES`, and the installation already ships the bundle, so no pnpm or registry access is involved. It is the only MCP application path; no package bin or SDK escape exists, and the bundle stays out of `PROFILE_TEMPLATES` because templates cannot name experimental packages.
 
 The server runs inside the profile process and calls `ctx.tools.execute` with the connection's Agent and no model step. One stdio connection owns one Agent: creation before the stdio transport opens, disposal at stdin EOF. Agent ownership already selects the retained program process, native connection, and session-scoped grants, so connection lifetime and state lifetime coincide. The empty default preset `cua-mcp` gives that Agent `cua_run_code` and nothing else, because the provider registers program tools only for composed presets.
 
@@ -18,7 +18,7 @@ Two tools form the surface. `cua_run_code` is the Agent's DSH registration serve
 
 Consent has two modes. `DSH_CUA_CONSENT=allow` answers every approval question of the connection's Agent with its approving label for the session. The default `elicit` forwards each question to the client as a form elicitation whose enum is the question's labels. No Session event is added: the training side consumes MCP tool results, and the connected harness's transcript records calls; DSH retains nested `tool/ptc-dispatch` events for diagnosis.
 
-The composition lists its dependency closure, twenty-five rows, instead of layering on `dsh-base`: no model adapter, prompt-side tool, telemetry, or session-management row loads, and a new service injection in the CUA or PTC packages fails the required startup entry loudly until the patch adds the row. Initialization needs no `dsh plugin` step, so the Python runtime wheel and offline training Hosts need no registry access. Client entries are documented in the README instead of generated.
+The composition lists its dependency closure, twenty-five rows, instead of layering on `dsh-base`: no model adapter, prompt-side tool, telemetry, or session-management row loads. `cua-mcp` is not a required startup entry, so a row that cannot activate is reported by the launcher on stderr: an inactive provider leaves `cua_run_code` out of the listing, and an inactive frontend serves nothing. Client entries are documented in the README instead of generated.
 
 ## Alternatives considered
 
@@ -34,7 +34,9 @@ The composition lists its dependency closure, twenty-five rows, instead of layer
 
 **A profile frontend layered on `dsh-base` with model rows disabled.** The composed profile carried about a hundred rows without a consumer: model adapters, web tools, subagents, compaction, telemetry, and session management. The explicit closure is a quarter of that and fails loud on drift.
 
-**A `dsh plugin enable|disable` subcommand that selects the shipped bundle.** It duplicated the plugin manager's manifest-only selection inside the launcher and still produced a base-backed profile; a bundle-declared profile needs no step.
+**A `dsh plugin enable|disable` subcommand that selects the shipped bundle.** It duplicated the plugin manager's manifest-only selection inside the launcher and still produced a base-backed profile; the documented manifest is three lines and needs no launcher change.
+
+**A `dsh.bundle.profile` declaration that app-boot initializes on the first `dsh --profile cua-mcp`.** It made the first start zero-step, at the price of a new manifest field and a `shippedProfileTemplate` lookup in app-boot, the CLI `dsh plugin` command, and the plugin manager for one experimental bundle; the plain manifest costs one documented step and leaves those packages untouched. Once CUA graduates from experimental, a `PROFILE_TEMPLATES` entry gives the same zero-step start.
 
 **A hand-written MCP schema and description for `cua_run_code`.** The second copy drifted within days: 663 against 2,164 characters of description and an optional against a required `description`. Projecting the registration removes the copy; the SDK's `registerTool` accepts only Standard Schema values and refuses to share `tools/list` and `tools/call` with custom handlers, so both tools use the low-level handlers.
 
@@ -44,4 +46,4 @@ The composition lists its dependency closure, twenty-five rows, instead of layer
 
 ## Consequences
 
-Every installation carries the bundle and its optional macOS provider dependency; `verify-default-product-isolation` keeps it out of default templates. The required startup entry `cua-mcp` fails the profile loudly when the frontend cannot activate. Hosts without a provider list only `cua_reset`, and a `cua_run_code` call fails as `unknown tool`. Clients see state loss on process exit, `cua_reset`, or Agent disposal and recreate objects. Consent elicitation depends on the 2025 MCP request model; clients on the 2026-07-28 revision use `allow`. The tool description and the reference text in the first result are pinned by the profile's expected-output test and change with the installed CUA packages. A provider description longer than 4,096 characters reaches Claude Code models cut.
+Every installation carries the bundle and its optional macOS provider dependency; `verify-default-product-isolation` keeps it out of default templates. A profile that layers the bundle over `dsh-base` duplicates row ids and is unsupported; the Web plugin page lists the bundle without a switch. Hosts without a provider list only `cua_reset`, and a `cua_run_code` call fails as `unknown tool`. Clients see state loss on process exit, `cua_reset`, or Agent disposal and recreate objects. Consent elicitation depends on the 2025 MCP request model; clients on the 2026-07-28 revision use `allow`. The tool description and the reference text in the first result are pinned by the profile's expected-output test and change with the installed CUA packages. A provider description longer than 4,096 characters reaches Claude Code models cut.

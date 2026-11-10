@@ -15,7 +15,7 @@ interface Manifest {
   publishConfig: { access: string }
   icon: string
   exports: Record<string, unknown>
-  dsh: { bundle: { patch: string; profile: string; platforms?: string[] } }
+  dsh: { bundle: { patch: string; platforms?: string[] } }
   dependencies: Record<string, string>
   optionalDependencies: Record<string, string>
 }
@@ -28,12 +28,12 @@ const inserted = patches.flatMap(patch => patch.insert ?? [])
 const row = (id: string) => inserted.find(entry => entry.id === id)
 
 describe('cua-mcp bundle', () => {
-  it('publishes an unprefixed experimental bundle that declares its own profile and only macOS serves', () => {
+  it('publishes an unprefixed experimental bundle whose patch is its only declaration and only macOS serves', () => {
     expect(manifest.name).toBe('@deepseek-ai/dsh-cua-mcp')
     expect(manifest.publishConfig.access).toBe('public')
     expect(manifest.icon).toBe('./icon.svg')
     expect(manifest.exports).toHaveProperty('./locale/*.json')
-    expect(manifest.dsh.bundle).toEqual({ patch: './cordis.patch.yml', profile: 'cua-mcp' })
+    expect(manifest.dsh.bundle).toEqual({ patch: './cordis.patch.yml' })
     expect(Object.keys(manifest.optionalDependencies)).toEqual(['@deepseek-ai/dsh-experimental-cua-macos'])
     expect(readdirSync(resolve(root, 'locale')).sort()).toEqual(['de.json', 'en.json', 'es.json', 'fr.json', 'ja.json', 'pt.json', 'ru.json', 'zh.json'])
   })

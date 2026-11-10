@@ -1,7 +1,7 @@
-/** The shipped cua-mcp bundle: the real CLI initializes its declared profile and serves Computer Use programs over stdio. */
+/** The shipped cua-mcp bundle: the real CLI loads a profile that selects only this bundle and serves Computer Use programs over stdio. */
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,7 +26,7 @@ function textOf(block: CallResult['content'][number] | undefined): string {
 }
 
 describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
-  it('initializes the declared profile on first start, serves programs over stdio, and exits on EOF', async () => {
+  it('serves programs over stdio from a profile that selects only this bundle, and exits on EOF', async () => {
     const temporary = await mkdtemp(join(tmpdir(), 'dsh-cua-mcp-profile-'))
     const home = join(temporary, 'home')
     const workspace = join(temporary, 'workspace')
@@ -39,15 +39,18 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     }
     clearAmbientProxyEnv(env)
     await execFileAsync(process.execPath, ['-e', 'require("node:fs").mkdirSync(process.argv[1], { recursive: true })', workspace])
+    // The profile manifest the README documents: the installation's shipped bundle as the only layer, no pnpm step.
+    const profileDir = join(home, 'profiles', 'cua-mcp')
+    await mkdir(profileDir, { recursive: true })
+    await writeFile(join(profileDir, 'package.json'), `${JSON.stringify({
+      name: 'dsh-profile-cua-mcp', private: true, dependencies: {}, dsh: { profile: { bundles: ['@deepseek-ai/dsh-cua-mcp'] } },
+    }, null, 2)}\n`)
 
     const probe = owned.probe = startProbe({ args: [bin, '--profile', 'cua-mcp', '--patch', fixturePatch], cwd: workspace, env })
     const initialized = await probe.request('initialize', {
       protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'cua-mcp-e2e', version: '1' },
     }) as { serverInfo: { name: string; version: string }; instructions: string; capabilities: object }
     probe.notify('notifications/initialized')
-    // The first start initialized the profile the shipped bundle declares, without pnpm or network access.
-    const manifest = JSON.parse(await readFile(join(home, 'profiles', 'cua-mcp', 'package.json'), 'utf8')) as { dsh: { profile: { bundles: string[] } } }
-    expect(manifest.dsh.profile.bundles).toEqual(['@deepseek-ai/dsh-cua-mcp'])
     expect(initialized.serverInfo.name).toBe('dsh_cua')
     expect(initialized.capabilities).toMatchObject({ tools: { listChanged: false } })
     await expect(`${initialized.instructions}\n`).toMatchFileSnapshot('./expected/instructions.txt')
