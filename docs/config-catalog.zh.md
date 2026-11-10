@@ -4484,6 +4484,23 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-ralph -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-session-list -->
+<a id="deepseek-aidsh-tool-session-list"></a>
+
+## `@deepseek-ai/dsh-tool-session-list`
+
+- `inject`: `tools` · `sessions` · `sessionQuery` · `workspaceRegistry` · `sessionProjections`
+- `source`: [`packages/session-query/tool-session-list/src/index.ts:18`](../packages/session-query/tool-session-list/src/index.ts)
+
+```ts config-catalog
+/** Deployment-owned responsiveness for large Session lists. */
+export interface Config {
+  /** Positive integral work slice in milliseconds; defaults to 16. Checked between complete rows. */
+  readonly listWorkSliceMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-session-list -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-session-query -->
 <a id="deepseek-aidsh-tool-session-query"></a>
 

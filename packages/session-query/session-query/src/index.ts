@@ -60,6 +60,7 @@ import {
 import * as tracing from './tracing.ts'
 
 export type * from './types.ts'
+export { registerSessionListMetadata } from './list-metadata.ts'
 export { SessionSearchCursor } from './cursor.ts'
 export type { Config, SessionQueryErrorCode } from './config.ts'
 export {

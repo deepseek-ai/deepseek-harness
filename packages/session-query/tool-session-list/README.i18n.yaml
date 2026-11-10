@@ -1,0 +1,55 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/session-query/tool-session-list/README.md
+/:
+  en: 3475319e48226347
+  zh: 68361c3ff00d966f
+/deepseek-ai-dsh-tool-session-list:
+  en: 963f03d1ba483ea9
+  zh: 4809b66477752fe9
+/deepseek-ai-dsh-tool-session-list/summary:
+  en: c643c299cff0602e
+  zh: a4e0d8d3cb039859
+/deepseek-ai-dsh-tool-session-list/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 5acc0d3807846b6e
+/deepseek-ai-dsh-tool-session-list/use-this-package:
+  en: 653ca12bb7c76f9d
+  zh: 4dc851c44aa30eb1
+/deepseek-ai-dsh-tool-session-list/use-this-package/access-and-composition:
+  en: efa812b2b38914ae
+  zh: 4d44617966d00378
+/deepseek-ai-dsh-tool-session-list/use-this-package/listing-behavior:
+  en: 9170312b97f617fb
+  zh: 0e7a397ea03d6695
+/deepseek-ai-dsh-tool-session-list/use-this-package/failures:
+  en: be4dd03d3877e2ed
+  zh: 27c38df3c449dde9
+/deepseek-ai-dsh-tool-session-list/understand-the-implementation:
+  en: a9a0e5d116579be4
+  zh: 1b78e7f73b639f85
+/deepseek-ai-dsh-tool-session-list/further-exploration:
+  en: 2a147ada18753beb
+  zh: d9aa75491c8fc0b7
+/deepseek-ai-dsh-tool-session-list/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-session-list/model-experience/tool-schemas-and-results:
+  en: cadc497841430a21
+  zh: af4cc374d7d16917
+/deepseek-ai-dsh-tool-session-list/model-experience/tool-schemas-and-results/what-the-model-sees:
+  en: 6ffb21f59acadc4e
+  zh: 258cded3677be923
+/deepseek-ai-dsh-tool-session-list/model-experience/tool-schemas-and-results/token-effect:
+  en: e699317cafee83d9
+  zh: 912c0ce1a9f3957f
+/deepseek-ai-dsh-tool-session-list/model-experience/tool-schemas-and-results/kv-cache-effect:
+  en: 0e201fbbe37798d8
+  zh: fd4bd41e7393c234
+/deepseek-ai-dsh-tool-session-list/known-limitations-and-deferred-work:
+  en: 103c746911f87efd
+  zh: 58f101c6b129c9e8
+/deepseek-ai-dsh-tool-session-list/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

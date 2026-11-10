@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Use `ctx.sessionQuery` from application code when you need to read or search session history without touching the session service or a storage backend directly. The service is provided by a concrete backend plugin — the shipped composition mounts `@deepseek-ai/dsh-session-query-sqlite` ([README](../session-query-sqlite/README.md)) — so this package is never mounted alone. Everything below is available on `ctx.sessionQuery` once a backend is composed.
+Use `ctx.sessionQuery` from application code when you need to read or search session history without touching the session service or a storage backend directly. The service is provided by a concrete backend plugin — the shipped composition mounts `@deepseek-ai/dsh-session-query-sqlite` ([README](../session-query-sqlite/README.md)) — so this package is never mounted alone. The query operations below are available on `ctx.sessionQuery` once a backend is composed.
 
 ### What you can do
 
@@ -92,6 +92,7 @@ The decision history lives in the [unified service decision](../../../.agents/no
 | [`src/index.ts`](src/index.ts) | Service definition: the abstract `SessionQueryEngine`, concrete reads, config validation |
 | [`src/corpus.ts`](src/corpus.ts) | Live-preferred corpus resolution, optional persistence binding, batch projections |
 | [`src/observation.ts`](src/observation.ts) | Live-preferred point observations with a bounded revision-keyed prepared-Session cache |
+| [`src/list-metadata.ts`](src/list-metadata.ts) | Shared blankness and human-prompt recency projection registration |
 | [`src/cold-read.ts`](src/cold-read.ts) | Handle-based cold log read with in-memory interrupted-turn closers |
 | [`src/types.ts`](src/types.ts) | Public records, filters, requests, and page types |
 | [`src/config.ts`](src/config.ts) | Inherited config and the closed `SessionQueryError` taxonomy |
@@ -104,6 +105,11 @@ The decision history lives in the [unified service decision](../../../.agents/no
 ### Corpus resolution
 
 `SessionCorpus` binds optional `ctx.sessionPersistence` through a fiber and resolves each read live-first: a known live target is snapshotted without consulting persistence; otherwise the session is listed, read completely through a short-lived read handle, and re-checked for a live attachment before cloning. A cold log whose writer crashed mid-turn is balanced in memory with `interruptedTurnClosers` — persistence is never mutated by a read. Header compatibility is asserted between listed and loaded observations. Batch title reads run one metadata listing and bounded-concurrency reads, isolating per-session failures while cancellation rejects the whole batch.
+
+<a id="shared-list-metadata"></a>
+### Shared list metadata
+
+`registerSessionListMetadata(ctx)` acquires the shared projection for Session blankness and the latest human-authored prompt time, and returns a synchronous reader for prepared live Sessions. The Session API and optional [listing tools](../tool-session-list/README.md) share one projection unit; disposing a consumer releases only its own reference. Registration requires `sessionProjections`, independently of the query service's header-only `listSessions()` operation.
 
 ### Observation cache
 

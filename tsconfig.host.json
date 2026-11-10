@@ -424,6 +424,7 @@
     { "path": "./packages/experimental/forge-bundle" },
     { "path": "./packages/experimental/client-ui-forge/tsconfig.host.json" },
     { "path": "./packages/session/tool-working-directory" },
+    { "path": "./packages/session-query/tool-session-list" },
     { "path": "./packages/session/session-title-llm" },
     { "path": "./packages/session/session-title-first-prompt-llm" },
     { "path": "./packages/experimental/session-title-all-prompts-llm" },

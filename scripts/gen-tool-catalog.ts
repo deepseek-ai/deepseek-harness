@@ -8,7 +8,7 @@
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -71,6 +71,8 @@ import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
+import * as ToolSessionList from '@deepseek-ai/dsh-tool-session-list'
+import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
 import * as StagehandBrowserTools from '@deepseek-ai/dsh-experimental-browser-use-stagehand-native'
@@ -134,6 +136,13 @@ class CatalogSessionPersistence extends SessionPersistence {
   flush = unavailableCatalogPersistence
   stat = unavailableCatalogPersistence
   list = unavailableCatalogPersistence
+}
+
+/** Schema collection does not read Workspace records or open their durable domain. */
+class CatalogWorkspaceRegistry extends WorkspaceRegistry {
+  static override inject = []
+
+  protected override async [Service.init](): Promise<void> {}
 }
 
 /** Storage operations are unreachable during schema collection. */
@@ -569,6 +578,20 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
       await ctx.plugin(ToolSkill)
     },
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-session-list',
+    dir: 'tool-session-list',
+    source: 'packages/session-query/tool-session-list/src/index.ts',
+    requires: ['ctx.tools', 'ctx.sessions', 'ctx.sessionQuery', 'ctx.workspaceRegistry', 'ctx.sessionProjections'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(SessionStore)
+      await ctx.plugin(SqliteSessionQueryEngine, { path: ':memory:' })
+      await ctx.plugin(CatalogWorkspaceRegistry)
+      await ctx.plugin(ToolSessionList)
+    },
+    note: 'Opt-in access to all Workspace and Session list metadata in the mounted runtime. Cold titles and activity use the optional projection cache; absent values become null titles and creation-time recency. No Agent is activated.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-session-query',

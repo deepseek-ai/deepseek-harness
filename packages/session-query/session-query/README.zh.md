@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当你需要读取或搜索会话历史、而不直接触碰会话服务或存储后端时，从应用代码使用 `ctx.sessionQuery`。该服务由具体后端插件提供——已发布组合挂载 `@deepseek-ai/dsh-session-query-sqlite`（[README](../session-query-sqlite/README.zh.md)）——因此本包从不单独挂载。一旦组合了后端，以下全部能力都可在 `ctx.sessionQuery` 上使用。
+当你需要读取或搜索会话历史、而不直接触碰会话服务或存储后端时，从应用代码使用 `ctx.sessionQuery`。该服务由具体后端插件提供——已发布组合挂载 `@deepseek-ai/dsh-session-query-sqlite`（[README](../session-query-sqlite/README.zh.md)）——因此本包从不单独挂载。一旦组合了后端，以下查询操作都可在 `ctx.sessionQuery` 上使用。
 
 ### 你可以做什么
 
@@ -92,6 +92,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 服务定义：抽象 `SessionQueryEngine`、具体读取、配置校验 |
 | [`src/corpus.ts`](src/corpus.ts) | 实时优先的语料库解析、可选持久化绑定、批量投影 |
 | [`src/observation.ts`](src/observation.ts) | 实时优先的定点观察，带按修订键控的有界 prepared-Session 缓存 |
+| [`src/list-metadata.ts`](src/list-metadata.ts) | 共享的空白状态与人工提示词活动时间投影注册 |
 | [`src/cold-read.ts`](src/cold-read.ts) | 基于句柄的冷日志读取，附内存中的中断轮次闭合事件 |
 | [`src/types.ts`](src/types.ts) | 公共记录、过滤器、请求与分页类型 |
 | [`src/config.ts`](src/config.ts) | 继承配置与封闭的 `SessionQueryError` 分类体系 |
@@ -104,6 +105,11 @@ kind: "package-reference"
 ### 语料库解析
 
 `SessionCorpus` 通过 fiber 绑定可选的 `ctx.sessionPersistence`，并实时优先解析每次读取：已知实时目标直接快照，不查询持久化；否则先列出会话，再通过短生命周期的读取句柄完整读出日志，并在克隆前重新检查是否出现实时挂载。写入者在轮次中途崩溃的冷日志用 `interruptedTurnClosers` 在内存中补齐——读取从不修改持久化。列表与加载观察之间会断言 header 兼容性。批量标题读取执行一次元数据列表与有界并发读取，把逐会话失败隔离，而取消会拒绝整个批次。
+
+<a id="shared-list-metadata"></a>
+### 共享列表元数据
+
+`registerSessionListMetadata(ctx)` 获取 Session 空白状态与最近人工提示词时间的共享投影，并返回准备就绪的实时 Session 的同步读取函数。Session API 与可选的[列表工具](../tool-session-list/README.zh.md)共享同一个投影单元；释放消费方时只移除它自己的引用。注册需要 `sessionProjections`，独立于查询服务仅读取 header 的 `listSessions()` 操作。
 
 ### 观察缓存
 
