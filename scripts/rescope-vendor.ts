@@ -88,6 +88,7 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'vendor/element/package.json', upstream: ['cordis'] },
   { file: 'vendor/http/package.json', upstream: ['cordis'] },
   { file: 'vendor/plugin-im-core/package.json', upstream: ['cordis'] },
+  { file: 'vendor/plugin-im-markdown/package.json', upstream: ['cordis'] },
   // `Symbol.for('schemastery')` and the `vendor:` metadata field are upstream identifiers.
   { file: 'vendor/schemastery/src/index.ts', upstream: ['schemastery'] },
   // Narrows a Standard Schema by the same upstream `vendor:` identifier.
@@ -112,6 +113,12 @@ const GENERIC_SKIPS: readonly GenericSkip[] = [
   { file: 'apps/cli/tests/profiles/web/tests/fixtures/creator-plugin-manager.mjs', upstream: ['cordis'] },
   { file: 'apps/web/tests/agent-preset-authoring.e2e.ts', upstream: ['cordis'] },
   { file: 'packages/preset/agent-preset-registry/tests/session.spec.ts', upstream: ['cordis'] },
+  // The same preset id reaches the generated tool-catalog note and the upgrade guides that quote it.
+  { file: 'scripts/gen-tool-catalog.ts', upstream: ['cordis'] },
+  { file: 'docs/tool-catalog.md', upstream: ['cordis'] },
+  { file: 'docs/tool-catalog.zh.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.2-alpha.2/fs-observation-policy-default-off/guide.md', upstream: ['cordis'] },
+  { file: 'docs/upgrade-guide/v0.2.2-alpha.2/fs-observation-policy-default-off/guide.zh.md', upstream: ['cordis'] },
   { file: 'packages/experimental/creation-recommendations/src/index.ts', upstream: ['cordis'] },
   { file: 'packages/experimental/creation-recommendations/tests/creation.spec.ts', upstream: ['cordis'] },
   { file: 'packages/experimental/creation-recommendations/tests/loader-composition.spec.ts', upstream: ['cordis'] },
