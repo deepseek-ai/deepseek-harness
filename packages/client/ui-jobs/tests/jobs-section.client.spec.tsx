@@ -84,9 +84,6 @@ function props(
   } as Pick<JobsSectionProps, 'sessionId' | 'useJobs' | 'watchRows' | 'observe' | 'killJob' | 'useStore' | 'actions' | 't'> as JobsSectionProps
 }
 
-/** The section renders its rows inline; there is no trigger to open. */
-function openList(): void {}
-
 describe('JobsRunningIndicator', () => {
   function indicator(jobs: readonly JobView[], panelShown: boolean, watchRows: JobsSectionProps['watchRows'] = () => () => {}) {
     const section = props(jobs, undefined, {}, undefined, watchRows)
@@ -153,13 +150,11 @@ describe('JobsSection rows', () => {
 
   it('offers a panel on a live row before any output arrived', () => {
     render(<JobsSection {...props([job({ label: 'warming up' })])} />)
-    openList()
     expect(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'warming up') })).toBeDefined()
   })
 
   it('shows the live progress line in place of the status word', () => {
     render(<JobsSection {...props([job({ status: 'stopping', progress: 'winding down' })])} />)
-    openList()
     const list = screen.getByRole('list')
     expect(within(list).getByText('pnpm run build')).toBeDefined()
     expect(within(list).getByText('bash · winding down')).toBeDefined()
@@ -168,7 +163,6 @@ describe('JobsSection rows', () => {
   it('folds the settled tail behind its count while live work exists, and clears on demand', () => {
     const settled = [job({ id: 'bash-2' as JobView['id'], label: 'settled work', status: 'completed', finishedAt: 1_700_000_012_000 })]
     render(<JobsSection {...props([job(), ...settled])} />)
-    openList()
     const toggle = screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') })
     // Folded by default while something runs; the toggle expands it.
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
@@ -208,7 +202,6 @@ describe('JobsSection rows', () => {
     render(<JobsSection {...props([
       job({ status: 'completed', finishedAt: 1_700_000_012_000 }),
     ])} />)
-    openList()
     expect(screen.getByText('pnpm run build')).toBeDefined()
     expect(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') }).getAttribute('aria-expanded')).toBe('true')
   })
@@ -219,7 +212,6 @@ describe('JobsSection rows', () => {
       [outputJob({ id: 'bash-2' as JobView['id'], label: 'settled work', status: 'completed', finishedAt: 1_700_000_012_000 })],
       observe,
     )} />)
-    openList()
     // Nothing live: the tail is open; expand the settled row's output panel.
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'settled work') }))
     expect(observe).toHaveBeenCalledWith(SESSION, 'bash-2')
@@ -236,7 +228,6 @@ describe('JobsSection rows', () => {
       job({ id: 'bash-3' as JobView['id'], status: 'completed', startedAt: 1_699_996_200_000, finishedAt: 1_700_000_000_000 }),
       job({ id: 'bash-4' as JobView['id'], status: 'completed', startedAt: 1_699_999_900_000, finishedAt: 1_699_999_972_000 }),
     ])} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '3') }))
     expect(screen.getByText('5秒')).toBeDefined()
     expect(screen.getByText('12秒')).toBeDefined()
@@ -251,7 +242,6 @@ describe('JobsSection rows', () => {
       outputJob(),
       outputJob({ id: 'bash-2' as JobView['id'], status: 'failed', detail: 'exit code: 3', finishedAt: 1_700_000_002_000 }),
     ])} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '1') }))
     const list = screen.getByRole('list')
     const items = within(list).getAllByRole('listitem')
@@ -282,7 +272,6 @@ describe('JobsSection rows', () => {
       job({ id: 'bash-l1' as JobView['id'], label: 'live-1', startedAt: 5 }),
       job({ id: 'bash-l2' as JobView['id'], label: 'live-2', startedAt: 3 }),
     ])} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '5') }))
     const labels = within(screen.getByRole('list'))
       .getAllByRole('listitem')
@@ -299,7 +288,6 @@ describe('JobsSection rows', () => {
       job({ id: 'bash-2' as JobView['id'], label: 'second', status: 'completed', startedAt: 1_700_000_000_000 + 10, finishedAt: 1_700_000_000_000 + 100 }),
       job({ id: 'bash-1' as JobView['id'], label: 'first', status: 'completed', startedAt: 1_700_000_000_000, finishedAt: 1_700_000_000_000 + 100 }),
     ])} />)
-    openList()
     expect(within(screen.getByRole('list')).getAllByRole('listitem').map(row => row.querySelector('[data-job-label]')?.textContent).filter(label => label !== undefined))
       .toEqual(['first', 'second'])
   })
@@ -308,7 +296,6 @@ describe('JobsSection rows', () => {
     render(<JobsSection {...props([
       job({ status: 'killed', detail: 'signal: SIGTERM', finishedAt: 1_700_000_000_000 + 2_000 }),
     ])} />)
-    openList()
     expect(within(screen.getByRole('list')).getByText('bash · signal: SIGTERM')).toBeDefined()
   })
 
@@ -320,7 +307,6 @@ describe('JobsSection rows', () => {
       job({ id: 'bash-4' as JobView['id'], label: 'd', status: 'killed', finishedAt: 1_700_000_000_000 }),
       job({ id: 'bash-5' as JobView['id'], label: 'e', status: 'failed', finishedAt: 1_700_000_000_000 }),
     ])} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['section.settledCount'].replace('{count}', '3') }))
     for (const word of ['已完成', '已取消', '已失败']) {
       expect(within(screen.getByRole('list')).getByText(`bash · ${word}`)).toBeDefined()
@@ -372,7 +358,6 @@ describe('JobsSection observation', () => {
       undefined,
       { 'bash-1': view },
     )} />)
-    openList()
     expect(screen.getByText(`bash · ${zh['status.killed']}`)).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     // The panel scrolls instead of folding: every line renders, no fold control.
@@ -396,7 +381,6 @@ describe('JobsSection observation', () => {
       streaming: true,
     }
     render(<JobsSection {...props([outputJob()], observe, { 'bash-1': view })} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     expect(observe).toHaveBeenCalledWith(SESSION, 'bash-1')
     expect(screen.getByText('compiling…')).toBeDefined()
@@ -413,7 +397,6 @@ describe('JobsSection observation', () => {
       streaming: true,
     }
     render(<JobsSection {...props([job()], undefined, { 'bash-1': view })} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     expect(screen.getByRole('list').querySelector('[data-running]')).not.toBeNull()
     expect(screen.queryByText(zh['terminal.noOutput'])).toBeNull()
@@ -428,7 +411,6 @@ describe('JobsSection observation', () => {
       error: 'connection lost',
     }
     render(<JobsSection {...props([outputJob()], undefined, { 'bash-1': view })} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     expect(screen.getByText(zh['output.gap'])).toBeDefined()
     expect(screen.getByText('实时输出流中断：connection lost')).toBeDefined()
@@ -439,7 +421,6 @@ describe('JobsSection observation', () => {
     // One stable observe identity across renders, as the inject face provides.
     const observe = () => stop
     const { rerender } = render(<JobsSection {...props([outputJob()], observe)} />)
-    openList()
     fireEvent.click(screen.getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') }))
     rerender(<JobsSection {...props([outputJob({ id: 'bash-2' as JobView['id'], label: 'other' })], observe)} />)
     expect(stop).toHaveBeenCalledTimes(1)
@@ -455,7 +436,6 @@ describe('JobsSection human kill', () => {
       job(),
       job({ id: 'bash-2' as JobView['id'], label: 'done', status: 'completed', finishedAt: 1_700_000_100_000 }),
     ])} />)
-    openList()
     expect(screen.getByRole('button', { name: stopTitle('pnpm run build') })).toBeDefined()
     expect(screen.queryByRole('button', { name: stopTitle('done') })).toBeNull()
   })
@@ -463,7 +443,6 @@ describe('JobsSection human kill', () => {
   it('arms on the first press and kills on the confirming press', async () => {
     const killJob = vi.fn(async () => true)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
-    openList()
     const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(killJob).not.toHaveBeenCalled()
@@ -484,7 +463,6 @@ describe('JobsSection human kill', () => {
     vi.useFakeTimers()
     const killJob = vi.fn(async () => true)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
-    openList()
     const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(stop.getAttribute('data-kill-state')).toBe('armed')
@@ -498,7 +476,6 @@ describe('JobsSection human kill', () => {
     vi.useFakeTimers()
     const killJob = vi.fn(async () => false)
     render(<JobsSection {...props([job()], undefined, {}, killJob)} />)
-    openList()
     const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     await act(async () => { fireEvent.click(stop) })
@@ -513,7 +490,6 @@ describe('JobsSection human kill', () => {
       job(),
       job({ id: 'bash-2' as JobView['id'], label: 'pnpm run watch' }),
     ])} />)
-    openList()
     const first = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(first)
     expect(first.getAttribute('data-kill-state')).toBe('armed')
@@ -530,7 +506,6 @@ describe('JobsSection human kill', () => {
       job(),
       job({ id: 'bash-2' as JobView['id'], label: 'pnpm run watch' }),
     ], undefined, {}, killJob)} />)
-    openList()
     const first = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(first)
     fireEvent.click(first)
@@ -547,7 +522,6 @@ describe('JobsSection human kill', () => {
 
   it('clears an armed phase whose row stopped being killable', () => {
     const { rerender } = render(<JobsSection {...props([job()])} />)
-    openList()
     const stop = screen.getByRole('button', { name: stopTitle('pnpm run build') })
     fireEvent.click(stop)
     expect(stop.getAttribute('data-kill-state')).toBe('armed')
@@ -569,7 +543,6 @@ describe('JobsSection hover', () => {
     vi.useFakeTimers()
     try {
       const view = render(<JobsSection {...props([job()])} />)
-      openList()
       expect(view.container.querySelector('[title]')).toBeNull()
       const label = view.container.querySelector<HTMLElement>('[data-job-label]')!
       Object.defineProperty(label, 'scrollWidth', { value: 300, configurable: true })

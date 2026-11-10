@@ -12,7 +12,7 @@ import {
   Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
   IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, Menu,
   MenuItemButton, StateDot, Tooltip,
-  type MenuEntry,
+  type MenuEntry, type MenuItem,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -325,25 +325,29 @@ function CardMenu({ entry, snapshot, name, url, actions, t }: {
       void markReady(entry).finally(() => { setBusy(false) })
     }
     : undefined
-  const items: MenuEntry[] = [
-    { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> },
-    { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> },
-    ...viewChanges !== undefined && snapshot !== null && entry.ref !== null
-      ? [{ id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> }]
-      : [],
-    ...ready === undefined ? [] : [{ id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy }],
-    ...remove === undefined ? [] : [
-      { type: 'separator' as const, id: 'remove-separator' },
-      { id: 'remove', label: t('change.remove'), icon: <IconCloseOutlineRegular size={14} />, danger: true },
-    ],
+  // Each item carries the action it runs, so a selection never reaches another item's action.
+  const choices: { readonly item: MenuItem; readonly run: () => void }[] = [
+    { item: { id: 'open', label: t('change.view'), icon: <IconRightUpOutlineRegular size={14} /> }, run: () => { actions.openLink(url) } },
+    { item: { id: 'copy', label: t('change.copy'), icon: <IconCopyOutlineRegular size={14} /> }, run: () => { actions.copyLink(url) } },
+    ...viewChanges !== undefined && snapshot !== null && entry.ref !== null ? [{
+      item: { id: 'changes', label: t('change.viewChanges'), icon: <IconFilesDiffOutlineRegular size={14} /> },
+      run: () => { viewChanges(entry) },
+    }] : [],
+    ...ready === undefined ? [] : [{
+      item: { id: 'ready', label: t('change.markReady'), icon: <IconCheckCircleOutlineRegular size={14} />, disabled: busy },
+      run: ready,
+    }],
+    ...remove === undefined ? [] : [{
+      item: { id: 'remove', label: t('change.remove'), icon: <IconCloseOutlineRegular size={14} />, danger: true },
+      run: () => { remove(entry) },
+    }],
   ]
+  // Removing sits apart from the other actions.
+  const items: MenuEntry[] = choices.flatMap(({ item }) => item.id === 'remove'
+    ? [{ type: 'separator' as const, id: 'remove-separator' }, item] : [item])
   const select = (id: string): void => {
     setOpen(false)
-    if (id === 'open') actions.openLink(url)
-    else if (id === 'copy') actions.copyLink(url)
-    else if (id === 'changes') viewChanges?.(entry)
-    else if (id === 'remove') remove?.(entry)
-    else ready?.()
+    for (const choice of choices) if (choice.item.id === id) choice.run()
   }
   return (
     <Menu

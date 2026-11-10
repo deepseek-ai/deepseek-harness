@@ -1,6 +1,6 @@
 /**
  * Host stream sources (per-Session panel states and the change request states
- * of the Session list), the store behind action notices, and the tab visibility store.
+ * of the Session list) and the store behind action notices.
  */
 
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
