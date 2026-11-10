@@ -303,209 +303,34 @@
       "source": "packages/goal/goal/src/domain.ts"
     },
     {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "AfterScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "AtScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "EveryScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "DailyInput",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "DailyScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "RecurringScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "LegacyScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeleteInactiveResult",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "LocalAtInput",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "AtInput",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "OneShotScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeliveryReceipt",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeliveryRecord",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleTimingChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleUpdateRequest",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleUpdateResult",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeliveryHistoryRequest",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "DeliveryRetentionBounds",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeliveryHistoryResult",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleCatalogEntry",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleCreateChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeleteChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "OneShotScheduleDispatchChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "EveryScheduleDispatchChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDispatchChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleChange",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleState",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeliveryMode",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleView",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleCreateRequest",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleListRequest",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeleteRequest",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/schedule.md",
-      "symbol": "ScheduleDeleteResult",
-      "source": "packages/schedule/schedule/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/agent-team.md",
-      "symbol": "TeamMemberProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
-    },
-    {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskView",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMemberSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSource",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/commands.md",
@@ -1028,6 +853,11 @@
     },
     {
       "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolGuardDenial",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
       "symbol": "ToolErrorInfo",
       "source": "packages/core/tools/src/contracts.ts"
     },
@@ -1448,6 +1278,17 @@
     },
     {
       "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcImage",
+      "source": "packages/ptc-runtime/ptc-runtime/src/image.ts",
+      "projection": "public-api"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
+      "symbol": "PtcOutput",
+      "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ptc-runtime.md",
       "symbol": "PtcBindingNamespace",
       "source": "packages/ptc-runtime/ptc-runtime/src/types.ts"
     },
@@ -1535,6 +1376,41 @@
       "doc": "docs/subsystems/filesystem.md",
       "symbol": "FileReadOutcome",
       "source": "packages/fs/tool-fs/src/read-render.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsDeleteOutcome",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsMoveSourceFailure",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "FsMoveOutcome",
+      "source": "packages/fs/fs/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "HunkApplyFailure",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "ApplyHunksResult",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "PatchHunk",
+      "source": "packages/fs/fs-patch/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/filesystem.md",
+      "symbol": "PatchOperation",
+      "source": "packages/fs/fs-patch/src/types.ts"
     },
     {
       "doc": "docs/subsystems/skills.md",
@@ -2272,6 +2148,11 @@
       "source": "packages/session/session-projection/src/index.ts"
     },
     {
+      "doc": "docs/subsystems/session-projection.md",
+      "symbol": "ProjectionEventChangeListener",
+      "source": "packages/session/session-projection/src/index.ts"
+    },
+    {
       "doc": "docs/subsystems/core.md",
       "symbol": "AgentHandle",
       "source": "packages/core/agent/src/index.ts"
@@ -2518,6 +2399,11 @@
       "source": "packages/subagent/subagent/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/subagent.md",
+      "symbol": "SubagentMemberNames",
+      "source": "packages/subagent/subagent/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/product-telemetry.md",
       "symbol": "ProductTelemetryScalar",
       "source": "packages/host/product-telemetry-otel/src/index.ts"
@@ -2560,6 +2446,16 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeProvider",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommit",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitList",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {
@@ -2739,6 +2635,16 @@
     },
     {
       "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCleanup",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCreation",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
       "symbol": "RestoredWorktree",
       "source": "packages/experimental/worktree/src/types.ts"
     },
@@ -2834,12 +2740,32 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranch",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAutomaticBase",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranches",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeChangeRequestListState",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeChangeRequestStatesFrame",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitRange",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
@@ -2859,12 +2785,22 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeFileLayer",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeDiffFile",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalDiff",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLocalCommits",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
@@ -2895,6 +2831,131 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeReviewResult",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeThreadId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgePendingReview",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewEvent",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewWrite",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewWriteResult",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommentId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAnchor",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommentAuthor",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewComment",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewThread",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewData",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session.md",
+      "symbol": "SessionEventInput",
+      "source": "packages/core/session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCheckId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BranchUpdateMethod",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ReviewVerdict",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestReviewer",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestIssue",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRerunRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewersRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewerCandidate",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BranchUpdateRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedState",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedFiles",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedRequest",
       "source": "packages/experimental/forge/src/types.ts"
     }
   ]

@@ -1,3 +1,4 @@
+import { listChildren } from '../src/list-children.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External execution ownership, result delivery, and process cleanup. */
 
@@ -26,9 +27,10 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   const controller = new AbortController()
   return {
     ctx, parent, controller,
-    start: (delivery: 'parent' | 'caller' = 'caller') => ctx.subagents.startActivation({
+    start: (delivery: 'parent' | 'caller' = 'caller', name?: string) => ctx.subagents.startActivation({
       provider: 'external', label: 'External work', signal: controller.signal, delivery,
-      request: { parent, prompt: [{ type: 'text', text: 'Work independently' }] },
+      ...name === undefined ? {} : { name },
+      parent, prompt: [{ type: 'text', text: 'Work independently' }],
     }),
     records: () => ctx.sessionProjections.snapshot(parent.session, ['subagentCatalog']).values.subagentCatalog,
   }
@@ -88,7 +90,7 @@ describe('external subagent activations', () => {
       })
       const session = fixture.ctx.sessions.create(SessionId('publication-parent'))
       const parent = { ...fixture.parent, id: session.id, session }
-      const detachParent = fixture.ctx.agents.enter(parent, undefined)
+      const detachParent = fixture.ctx.agents.enter(parent)
       let detachReplacement: (() => void) | undefined
       let drain = Promise.resolve()
       fixture.ctx.on('subagent/start', () => {
@@ -97,14 +99,14 @@ describe('external subagent activations', () => {
         } else {
           detachParent()
           if (change === 'parent-replace') {
-            detachReplacement = fixture.ctx.agents.enter({ ...parent }, undefined)
+            detachReplacement = fixture.ctx.agents.enter({ ...parent })
           }
         }
       })
       try {
         await expect(fixture.ctx.subagents.startActivation({
           provider: 'external', label: 'Unpublished work', signal: fixture.controller.signal, delivery: 'parent',
-          request: { parent, prompt: [{ type: 'text', text: 'Must not publish' }] },
+          parent, prompt: [{ type: 'text', text: 'Must not publish' }],
         })).rejects.toMatchObject({ code: change === 'drain' ? 'DRAINING' : 'UNAUTHORIZED' })
         await drain
         expect(backend.dispose).toHaveBeenCalledTimes(1)
@@ -130,7 +132,7 @@ describe('external subagent activations', () => {
     await backend.cleaning.promise
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     const disposal = activation.dispose()
@@ -159,7 +161,7 @@ describe('external subagent activations', () => {
     const error = new Error('backend execution failed')
     const observed = vi.fn()
     void activation.result.then(observed, observed)
-    const waiting = fixture.ctx.subagents.waitForChildren(fixture.parent)
+    const waiting = fixture.ctx.subagents.waitForTreeWork(fixture.parent)
     const waited = vi.fn()
     void waiting.then(waited)
     backend.result.reject(error)
@@ -175,7 +177,7 @@ describe('external subagent activations', () => {
     }
     await expect(activation.result).rejects.toBe(error)
     await expect(waiting).resolves.toBe(true)
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it('cancels the external process once when the receipt is repeatedly disposed', async () => {
@@ -273,7 +275,7 @@ describe('external subagent activations', () => {
       backend.cleanup.resolve(undefined)
       await rejected
     }
-    await expect(fixture.ctx.subagents.waitForChildren(fixture.parent)).resolves.toBe(false)
+    await expect(fixture.ctx.subagents.waitForTreeWork(fixture.parent)).resolves.toBe(false)
   })
 
   it.each(['parent', 'caller'] as const)('delivers the full failed result with %s delivery', async (delivery) => {
@@ -291,7 +293,10 @@ describe('external subagent activations', () => {
     } else {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
       const notice = fixture.parent.inbox.nextTurn[0]!
-      expect(notice.source).toMatchObject({ kind: 'subagent-settled', senderSessionId: activation.childId })
+      expect(notice.source).toMatchObject({
+        kind: 'subagent-settled', senderSessionId: activation.childId,
+        stopReason: 'error',
+      })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('Reviewed three files.')
       expect(text).toContain('Structured result: {"files":3}')
@@ -324,7 +329,10 @@ describe('external subagent activations', () => {
     if (delivery === 'parent') {
       expect(fixture.parent.inbox.nextTurn).toHaveLength(1)
       const notice = fixture.parent.inbox.nextTurn[0]!
-      expect(notice.source).toMatchObject({ kind: 'subagent-settled', senderSessionId: activation.childId })
+      expect(notice.source).toMatchObject({
+        kind: 'subagent-settled', senderSessionId: activation.childId,
+        stopReason: 'completed',
+      })
       const text = notice.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
       expect(text).toContain('finished')
       expect(text).toContain('Reviewed three files.')
@@ -347,14 +355,14 @@ it('records external membership at creation without publishing settlement update
   try {
     const activation = await fixture.start('parent')
     const expected = { id: activation.childId, mode: 'external', label: 'External work' }
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(fixture.ctx.sessions.get(activation.childId)).toBeUndefined()
     const result: SubagentResult = { output: [{ type: 'text', text: 'x'.repeat(100_000) }], stopReason: 'completed' }
     backend.result.resolve(result)
     backend.cleanup.resolve(undefined)
     await expect(activation.result).resolves.toEqual(result)
     await activation.dispose()
-    expect(await fixture.ctx.subagents.listChildren(fixture.parent.id)).toMatchObject([expected])
+    expect(await listChildren(fixture.ctx, fixture.parent.id)).toMatchObject([expected])
     expect(snapshots).toHaveLength(1)
     expect(JSON.stringify(snapshots).length).toBeLessThan(1_000)
   } finally {
@@ -367,7 +375,7 @@ it('refuses a reserved Session id for an external provider before dispatch', asy
   const fixture = await setup(start)
   await expect(fixture.ctx.subagents.startActivation({
     provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
-    signal: fixture.controller.signal, request: { parent: fixture.parent, prompt: [] },
+    signal: fixture.controller.signal, parent: fixture.parent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
   expect(start).not.toHaveBeenCalled()
 })
@@ -381,4 +389,43 @@ it.each(['completed', 'aborted'] as const)('reports external %s without offering
   await activation.dispose()
   expect(JSON.stringify(fixture.parent.inbox.nextTurn)).toContain(stopReason === 'completed' ? 'cannot receive follow-up messages' : 'was stopped before it finished')
   expect(JSON.stringify(fixture.parent.inbox.nextTurn)).not.toContain('send it more')
+})
+
+it('records a parent-delivered external run under its requested name', async () => {
+  const backend = execution()
+  const fixture = await setup(async () => backend.run)
+  const activation = await fixture.start('parent', 'auditor')
+  expect(activation.name).toBe('auditor')
+  expect(fixture.records()).toMatchObject([{ id: activation.childId, mode: 'external', name: 'auditor' }])
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await activation.dispose()
+})
+
+it('resolves a named external run but not a path below it', async () => {
+  const backend = execution()
+  const fixture = await setup(async () => backend.run)
+  const activation = await fixture.start('parent', 'auditor')
+  const signal = new AbortController().signal
+  expect(await fixture.ctx.subagents.resolveName(fixture.parent, 'auditor', signal)).toBe(activation.childId)
+  // The external run owns no local Session, so a further segment cannot name a descendant.
+  await expect(fixture.ctx.subagents.resolveName(fixture.parent, 'auditor/deeper', signal))
+    .rejects.toMatchObject({ code: 'AGENT_NAME_NOT_FOUND' })
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await activation.dispose()
+})
+
+it('rejects a name for a caller-delivered external run that never enters the catalog', async () => {
+  const start = vi.fn<(request: SubagentStartRequest) => Promise<SubagentRun>>()
+  const fixture = await setup(start)
+  await expect(fixture.start('caller', 'auditor')).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
+  expect(start).not.toHaveBeenCalled()
+  const backend = execution()
+  start.mockResolvedValue(backend.run)
+  const unnamed = await fixture.start('caller')
+  expect(unnamed.name).toBe(unnamed.childId)
+  backend.result.resolve(completed)
+  backend.cleanup.resolve(undefined)
+  await unnamed.dispose()
 })

@@ -57,15 +57,15 @@ describe('ui-chat Host settings', () => {
   it('validates folded replies and restores the saved choice', async () => {
     const ctx = new Context()
     const configuration = await liveConfig(ctx, { Config, apply })
-    expect(plainConfig(configuration.fiber.config)).toMatchObject({ foldedReplies: 'all' })
+    expect(plainConfig(configuration.fiber.effectiveConfig)).toMatchObject({ foldedReplies: 'all' })
     await configuration.update({ foldedReplies: 'final' })
-    const saved = plainConfig(configuration.fiber.config)
+    const saved = plainConfig(configuration.fiber.effectiveConfig)
     if (typeof saved !== 'object' || saved === null) throw new Error('expected saved configuration object')
     expect(saved).toMatchObject({ foldedReplies: 'final' })
     await expect(configuration.update({ foldedReplies: 'none' })).rejects.toThrow()
     await configuration.fiber.dispose()
     const restored = await liveConfig(ctx, { Config, apply }, saved)
-    expect(plainConfig(restored.fiber.config)).toMatchObject({ foldedReplies: 'final' })
+    expect(plainConfig(restored.fiber.effectiveConfig)).toMatchObject({ foldedReplies: 'final' })
     await restored.fiber.dispose()
   })
 

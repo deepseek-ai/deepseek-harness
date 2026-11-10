@@ -12,20 +12,22 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest'
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcImage, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, Message, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import type { PostToolDecision } from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import { AttachmentError, AttachmentId, AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import {
@@ -79,7 +81,7 @@ class FakeRuntime extends PtcRuntime {
 
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
 
   run(request: PtcRunRequest): Promise<PtcRunResult> {
     return this.behavior(request)
@@ -296,31 +298,100 @@ describe('read_image happy path', () => {
     expect(result.isError).toBe(false)
   })
 
-  it('forwards a nested PTC mode image through the outer run_code context', async () => {
+  it('displays the selected program image among captured text', async () => {
     await writeFile(join(dir, 'red.png'), PNG_1X1)
     const ctx = await setup({ toolMode: 'ptc' })
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
       const value = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
-      return { logs: [], value }
+      expect(value).toBeInstanceOf(PtcImage)
+      if (!(value instanceof PtcImage)) throw new Error('read_image must return an Image')
+      expect(await readFile(value.path)).toEqual(PNG_1X1)
+      expect([value.attachment.width, value.attachment.height]).toEqual([1, 1])
+      return { output: [{ type: 'text', text: 'before' }, { type: 'image', attachment: value.attachment }, { type: 'text', text: 'after' }] }
     }
 
     const result = await call(ctx, RUN_CODE_NAME, {
-      code: 'return await tools.read_image({ file_path: "red.png" })',
+      code: 'inspect("before", await tools.read_image({ file_path: "red.png" }), "after")',
       description: 'Read the image through PTC mode',
     }, { ...agentOn('vision-model'), ctx })
 
     expect(result.isError).toBe(false)
-    expect(result.content.every(block => block.type === 'text')).toBe(true)
-    expect(result.additionalContexts).toHaveLength(1)
-    const forwarded = result.additionalContexts?.[0]?.content
-    expect(forwarded).toHaveLength(2)
-    expect(forwarded?.[0]?.type).toBe('text')
-    expect(forwarded?.[0]?.type === 'text' ? forwarded[0].text : '').toContain('<type>image</type>')
-    expect(forwarded?.[1]).toMatchObject({
-      type: 'image',
-      attachment: { mediaType: 'image/png', width: 1, height: 1 },
+    expect(result.additionalContexts).toBeUndefined()
+    expect(result.content).toMatchObject([
+      { type: 'text', text: 'before' },
+      { type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } },
+      { type: 'text', text: 'after' },
+    ])
+  })
+
+  it.each([
+    ['around', 'block', 'success'], ['around', 'block', 'failure'],
+    ['around', 'redact', 'failure'], ['around', 'replace', 'success'], ['around', 'recover', 'failure'],
+    ['post', 'block', 'success'], ['post', 'block', 'failure'], ['post', 'replace', 'success'],
+  ] as const)('honors an outer %s %s decision after program %s with inspected images', async (stage, decision, outcome) => {
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+    const ctx = await setup({ toolMode: 'ptc' })
+    const runtime = ctx.ptcRuntime as FakeRuntime
+    runtime.behavior = async (request) => {
+      const image = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
+      if (!(image instanceof PtcImage)) throw new Error('read_image must return an Image')
+      return {
+        output: [{ type: 'image', attachment: image.attachment }],
+        ...outcome === 'failure' ? { error: { kind: 'exception' as const, message: 'program stopped' } } : {},
+      }
+    }
+    if (stage === 'around') {
+      ctx.on('tools/execute', async (exec, next) => {
+        const result = await next()
+        if (exec.name !== RUN_CODE_NAME) return result
+        if (decision === 'redact') return { ...result, content: [{ type: 'text', text: 'image blocked' }] }
+        return decision === 'block'
+          ? { isError: true, error: { message: 'image blocked' }, content: [{ type: 'text', text: 'image blocked' }] }
+          : { isError: false, value: { logs: ['image replaced'] }, content: [{ type: 'text', text: 'image replaced' }] }
+      })
+    } else {
+      ctx.on('tools/post-execute', (exec, _result, next): Promise<PostToolDecision> => {
+        if (exec.name !== RUN_CODE_NAME) return next()
+        return Promise.resolve(decision === 'block'
+          ? { kind: 'block', feedback: [{ type: 'text', text: 'image blocked' }] }
+          : { kind: 'accept', value: { logs: ['image replaced'] } })
+      })
+    }
+
+    const result = await call(ctx, RUN_CODE_NAME, {
+      code: 'inspect(await tools.read_image({ file_path: "red.png" }))', description: 'Inspect an image',
+    }, { ...agentOn('vision-model'), ctx })
+
+    const blocked = decision === 'block' || decision === 'redact'
+    expect(result.isError).toBe(blocked)
+    expect(result.content).toEqual([{ type: 'text', text: blocked ? 'image blocked' : 'image replaced' }])
+  })
+
+  it.each(['exception', 'timeout'] as const)('preserves inspected text and image order after an %s', async (kind) => {
+    await writeFile(join(dir, 'red.png'), PNG_1X1)
+    const ctx = await setup({ toolMode: 'ptc' })
+    const runtime = ctx.ptcRuntime as FakeRuntime
+    runtime.behavior = async (request) => {
+      const image = await request.bindings[0]!.functions.read_image!({ file_path: 'red.png' })
+      if (!(image instanceof PtcImage)) throw new Error('read_image must return an Image')
+      return {
+        output: [{ type: 'text', text: 'before' }, { type: 'image', attachment: image.attachment }, { type: 'text', text: 'after' }],
+        error: { kind, message: 'program stopped' },
+      }
+    }
+    const result = await call(ctx, RUN_CODE_NAME, { code: 'program', description: 'Inspect before stopping' }, {
+      ...agentOn('vision-model'), ctx,
     })
+    expect(result.isError).toBe(true)
+    const diagnostic = result.content[0]
+    if (diagnostic?.type !== 'text') throw new Error('Expected a separate failure diagnostic')
+    expect(diagnostic.text).toContain(`code run failed (${kind}): program stopped`)
+    expect(result.content.slice(1)).toMatchObject([
+      { type: 'text', text: 'before' },
+      { type: 'image', attachment: { mediaType: 'image/png', width: 1, height: 1 } },
+      { type: 'text', text: 'after' },
+    ])
   })
 })
 
@@ -372,6 +443,7 @@ describe('extension-less paths', () => {
     const trailingDot = await readImage(ctx, { file_path: 'foo.' }, agentOn('vision-model'))
     expect(trailingDot.isError).toBe(true)
     expect(text(trailingDot)).toContain('cannot read "foo.": the . extension does not declare a supported image format')
+    expect(trailingDot.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_FORMAT' })
 
     const dotfile = await readImage(ctx, { file_path: '.hidden' }, agentOn('vision-model'))
     expect(dotfile.isError).toBe(false)
@@ -386,6 +458,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'notes' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(`cannot read "${join(dir, 'notes')}": the file content is not a supported image format`)
+    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_FORMAT' })
   })
 
   it('explains extension-less bytes that sniff as an image but do not decode', async () => {
@@ -394,6 +467,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'broken' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('do not decode as a supported PNG/JPEG/WebP/GIF image')
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'INVALID_IMAGE' })
   })
 
   it('applies the deployment media-type policy to the sniffed format', async () => {
@@ -426,6 +500,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'avatar' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('image/png images are not accepted by this deployment')
+    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_FORMAT' })
   })
 
   it('names a signature/decoded-format disagreement on an extension-less path', async () => {
@@ -458,6 +533,7 @@ describe('extension-less paths', () => {
     const result = await readImage(ctx, { file_path: 'sniffed' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('the file signature claims image/png, but the bytes decode as a different image format')
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TYPE_MISMATCH' })
   })
 })
 
@@ -484,6 +560,7 @@ describe('strict image-modality gate', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn(model))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('does not declare image input')
+    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_MODEL' })
   })
 
   it('refuses when the route cannot be resolved (no agent, or no header and no options)', async () => {
@@ -492,10 +569,12 @@ describe('strict image-modality gate', () => {
     const noAgent = await readImage(ctx, { file_path: 'red.png' })
     expect(noAgent.isError).toBe(true)
     expect(text(noAgent)).toContain('route could not be resolved')
+    expect(noAgent.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
 
     const noRoute = await readImage(ctx, { file_path: 'red.png' }, agentOn(undefined))
     expect(noRoute.isError).toBe(true)
     expect(text(noRoute)).toContain('route could not be resolved')
+    expect(noRoute.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('refuses when no llm service is mounted', async () => {
@@ -504,6 +583,7 @@ describe('strict image-modality gate', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('route could not be resolved')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 })
 
@@ -512,11 +592,13 @@ describe('argument and service preconditions', () => {
     const ctx = await setup()
     const empty = await readImage(ctx, { file_path: '   ' }, agentOn('vision-model'))
     expect(empty.isError).toBe(true)
-    expect(text(empty)).toContain('non-empty')
+    expect(text(empty)).toContain('file_path must be a non-empty string')
+    expect(empty.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
 
     const nonImage = await readImage(ctx, { file_path: 'notes.txt' }, agentOn('vision-model'))
     expect(nonImage.isError).toBe(true)
     expect(text(nonImage)).toContain('the .txt extension does not declare a supported image format')
+    expect(nonImage.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_FORMAT' })
   })
 
   it.each([{}, { toolFs: { read: false, write: false, edit: false } }] satisfies SetupOptions[])
@@ -537,6 +619,7 @@ describe('argument and service preconditions', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('no attachment service is mounted')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('refuses a media type the deployment does not accept', async () => {
@@ -568,6 +651,7 @@ describe('argument and service preconditions', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('image/png images are not accepted by this deployment')
+    expect(result.error?.info).toEqual({ name: 'ImageInputError', code: 'IMAGE_UNSUPPORTED_FORMAT' })
   })
 })
 
@@ -579,6 +663,7 @@ describe('image admission failures', () => {
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('the .jpg extension declares image/jpeg')
     expect(text(result)).toContain('rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats')
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TYPE_MISMATCH' })
   })
 
   it('caps an extension-less read at maxImageBytes before format detection', async () => {
@@ -587,6 +672,7 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'red' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('exceeds')
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_TOO_LARGE' })
   })
 
   it('honors the tighter per-message aggregate byte bound', async () => {
@@ -595,6 +681,7 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('exceeds')
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_TOO_LARGE' })
   })
 
   it('surfaces the pixel limit from the attachment admission', async () => {
@@ -603,6 +690,7 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'big.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('exceeds the 4-pixel decoded-size limit')
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_TOO_MANY_PIXELS' })
     expect(text(result)).toContain('downscale the image and read the smaller copy')
   })
 
@@ -612,61 +700,113 @@ describe('image admission failures', () => {
     const result = await readImage(ctx, { file_path: 'wide.png' }, agentOn('vision-model'))
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('at least one image side exceeds the 2px limit')
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'IMAGE_DIMENSION_TOO_LARGE' })
     expect(text(result)).toContain('downscale the image and read the smaller copy')
   })
 
-  it('passes storage faults and non-attachment failures through unchanged', async () => {
-    /** Store whose commit fails with a configurable error; admission itself passes. */
-    class FailingStore extends AttachmentStore {
-      static failure: unknown
-      readonly imageLimits: ImageAttachmentLimits = Object.freeze({
-        maxImageBytes: 1024,
-        maxImagesPerMessage: 1,
-        maxMessageImageBytes: 1024,
-        maxImagePixels: 100,
-        maxImageDimension: 2000,
-        mediaTypes: Object.freeze(['image/png'] as const),
-      })
+  /** Store whose commit runs a configurable failure; admission itself passes. */
+  class FailingStore extends AttachmentStore {
+    static failure: () => unknown = () => new Error('unset')
+    readonly imageLimits: ImageAttachmentLimits = Object.freeze({
+      maxImageBytes: 1024,
+      maxImagesPerMessage: 1,
+      maxMessageImageBytes: 1024,
+      maxImagePixels: 100,
+      maxImageDimension: 2000,
+      mediaTypes: Object.freeze(['image/png'] as const),
+    })
 
-      validateImage(_input: SaveImageAttachment): Promise<void> {
-        return Promise.resolve()
-      }
-
-      async saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> {
-        throw FailingStore.failure
-      }
-
-      readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
-        throw new Error('unreachable in this test')
-      }
+    validateImage(_input: SaveImageAttachment): Promise<void> {
+      return Promise.resolve()
     }
-    await writeFile(join(dir, 'red.png'), PNG_1X1)
+
+    async saveImage(_input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+      throw FailingStore.failure()
+    }
+
+    readImage(_ref: ImageAttachmentRef): Promise<StoredImageAttachment> {
+      throw new Error('unreachable in this test')
+    }
+  }
+
+  async function failingSave(failure: () => unknown, file = 'red.png', signal = testToolSignal) {
+    await writeFile(join(dir, file), PNG_1X1)
     const ctx = await setup({ attachments: false })
     await ctx.plugin(FailingStore)
+    FailingStore.failure = failure
+    return executeToolFixture(ctx, {
+      signal,
+      callId: ToolCallId(`img-call-${++callCounter}`),
+      name: 'read_image',
+      arguments: { file_path: file },
+      agent: agentOn('vision-model') as never,
+    })
+  }
 
-    FailingStore.failure = new AttachmentError('Unable to persist image attachment.', 'ATTACHMENT_WRITE_FAILED')
-    const storageFault = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
-    expect(storageFault.isError).toBe(true)
-    expect(text(storageFault)).toContain('Unable to persist image attachment.')
+  it.each([
+    ['IMAGE_TOO_LARGE', 'Image cannot be encoded within the configured normalized-image byte cap.',
+      'the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy'],
+    ['IMAGES_TOO_LARGE', 'Image batch exceeds the configured aggregate image-byte limit.',
+      'the image cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy'],
+    ['UNSUPPORTED_IMAGE_TYPE', 'Image type image/png is not accepted by this deployment.',
+      'image/png images are not accepted by this deployment'],
+    ['INVALID_IMAGE', 'Unsupported or malformed image data.',
+      'the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt'],
+    ['ATTACHMENT_WRITE_FAILED', 'The 16-bit PNG could not be converted to the normalized 8-bit sRGB form.',
+      'the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry'],
+  ] as const)('keeps AttachmentError %s and adds the read path and remedy', async (code, message, detail) => {
+    const cause = new AttachmentError(message, code)
+    const result = await failingSave(() => cause)
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code })
+    expect(text(result)).toBe(`Error: cannot read "${join(dir, 'red.png')}": ${detail}`)
+  })
 
-    FailingStore.failure = new AttachmentError(
-      'The 16-bit PNG could not be converted to the normalized 8-bit sRGB form.',
-      'ATTACHMENT_WRITE_FAILED',
-    )
-    const sixteenBit = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
-    expect(text(sixteenBit)).toContain(
-      `cannot read "${join(dir, 'red.png')}": the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry`,
-    )
+  it.each([
+    'ATTACHMENT_WRITE_FAILED', 'TOO_MANY_IMAGES', 'INVALID_IMAGE_BASE64', 'INVALID_FILE_BASE64', 'INVALID_ATTACHMENT_REF',
+    'ATTACHMENT_CORRUPT', 'ATTACHMENT_NOT_FOUND', 'ATTACHMENT_READ_FAILED', 'ATTACHMENT_PROJECTION_UNSUPPORTED',
+    'ATTACHMENT_FILES_UNSUPPORTED',
+  ] as const)('passes AttachmentError %s without a read remedy through unchanged', async (code) => {
+    const result = await failingSave(() => new AttachmentError('Stored attachment failed.', code))
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code })
+    expect(text(result)).toBe('Error: Stored attachment failed.')
+  })
 
-    FailingStore.failure = new AttachmentError('Image cannot be encoded within the configured normalized-image byte cap.', 'IMAGE_TOO_LARGE')
-    const overBudget = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
-    expect(overBudget.isError).toBe(true)
-    expect(text(overBudget)).toContain('cannot be stored within the deployment\'s byte limits; downscale the image and read the smaller copy')
+  it('passes a store defect, a classified HarnessError, and an AbortError through unchanged', async () => {
+    const defect = await failingSave(() => new Error('unrelated infrastructure failure'))
+    expect(defect.isError).toBe(true)
+    expect(defect.error?.info).toBeUndefined()
+    expect(text(defect)).toBe('Error: unrelated infrastructure failure')
 
-    FailingStore.failure = new Error('unrelated infrastructure failure')
-    const unrelated = await readImage(ctx, { file_path: 'red.png' }, agentOn('vision-model'))
-    expect(unrelated.isError).toBe(true)
-    expect(text(unrelated)).toContain('unrelated infrastructure failure')
+
+    const fsFailure = await failingSave(() => new FsError('cannot read "x": permission denied', 'FS_PERMISSION_DENIED'))
+    expect(fsFailure.error?.info).toEqual({ name: 'FsError', code: 'FS_PERMISSION_DENIED' })
+    expect(text(fsFailure)).toBe('Error: cannot read "x": permission denied')
+
+    const abort = await failingSave(() => new DOMException('store stopped', 'AbortError'))
+    expect(text(abort)).toContain('store stopped')
+    expect(text(abort)).not.toContain('cannot read')
+  })
+
+  it('lets the registry classify an AbortError thrown after caller cancellation', async () => {
+    const controller = new AbortController()
+    const result = await failingSave(() => {
+      controller.abort()
+      return new DOMException('save cancelled', 'AbortError')
+    }, 'red.png', controller.signal)
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+    expect(text(result)).not.toContain('cannot read')
+  })
+
+  it('keeps a save failure that is not cancellation even after the caller aborts', async () => {
+    const controller = new AbortController()
+    const result = await failingSave(() => {
+      controller.abort()
+      return new AttachmentError('Unable to persist attachment.', 'ATTACHMENT_WRITE_FAILED')
+    }, 'red.png', controller.signal)
+    expect(result.error?.info).toEqual({ name: 'AttachmentError', code: 'ATTACHMENT_WRITE_FAILED' })
   })
 
   it('reports a missing image file and a directory target through the fs vocabulary', async () => {
@@ -677,11 +817,13 @@ describe('image admission failures', () => {
     const missing = await readImage(ctx, { file_path: 'absent.png' }, agentOn('vision-model'))
     expect(missing.isError).toBe(true)
     expect(text(missing)).toContain('not found')
+    expect(missing.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_FOUND' })
     expect(observed).toEqual([{ path: join(dir, 'absent.png'), kind: 'absent' }])
 
     const directory = await readImage(ctx, { file_path: 'folder.png' }, agentOn('vision-model'))
     expect(directory.isError).toBe(true)
     expect(text(directory)).toContain('not a regular file')
+    expect(directory.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_REGULAR_FILE' })
   })
 
   it('omits the display name when the store returns a reference without one', async () => {

@@ -33,7 +33,7 @@
     {
       "local": "Sources/CuaNative/NativePlatform.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
-      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor."
+      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor. App discovery also includes visible auxiliary windows; foreground diagnostics use normal windows."
     }
   ],
   "localFiles": [
@@ -44,6 +44,7 @@
     "Sources/CuaNative/ClipboardPaste.swift",
     "Sources/CuaNative/Main.swift",
     "Sources/CuaNative/NativeProtocol.generated.swift",
+    "Sources/CuaNative/PermissionGuide.swift",
     "Sources/CuaNative/Protocol.swift",
     "Sources/CuaNative/RequestAdmission.swift",
     "Sources/CuaNative/RequestCoordinator.swift",

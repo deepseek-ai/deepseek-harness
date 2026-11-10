@@ -371,6 +371,11 @@ describe('web e2e: seeded history renders through cold resume', () => {
       payload: { args: { request: { maxMessages: 500, turnWindow: { minMessages: 50, minTurns: 2 } } } },
     })
     await expect.poll(() => page.getByText(PROMPT, { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+    const history = page.locator('[data-chat-history]')
+    await expect.poll(() => history.getAttribute('data-chat-history'), { timeout: 10_000 }).toBe('idle')
+    await expect.poll(() => history.getByRole('button', { name: 'Start of conversation', exact: true }).isDisabled(), {
+      timeout: 10_000,
+    }).toBe(true)
     await expect.poll(() => page.getByText('compact', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
     await expect.poll(() => page.getByText(/^Compacted \d+ history items \(~\d+ tokens\)$/).count(), {
       timeout: 10_000,
@@ -423,7 +428,10 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await scaffold.ctx.sessions.flush(agent.session)
     expect(agent.session.snapshotEvents()).toContainEqual(injected)
     await waitForContextInClient(page, injected.seq)
-    expect(await page.locator('[data-chat-flow-kind="context"]').count()).toBe(0)
+    const contextRows = page.locator('[data-chat-flow-kind="context"]')
+    await expect.poll(() => contextRows.count()).toBe(1)
+    expect(await contextRows.getByRole('button', { name: /^Context injection/ }).getAttribute('aria-expanded')).toBe('false')
+    expect(await contextRows.locator('[data-context-injection-body]').count()).toBe(0)
   }, 60_000)
 
   it.skipIf(MODE === 'record')('matches the historical conversation aria golden', async () => {
@@ -479,7 +487,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     }
   })
 
-  it.skipIf(MODE === 'record')('omits ordinary instructions from Chat while retaining their logged content', async () => {
+  it.skipIf(MODE === 'record')('shows ordinary instructions as one collapsed Context row that expands to their logged content', async () => {
     const session = scaffold.ctx.sessions.get(SessionId(SEED_ID))
     if (session === undefined) throw new Error('seeded session is unavailable')
     const instructions = session.snapshotEvents().filter(event => event.type === 'user/message'
@@ -487,7 +495,18 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(instructions).toHaveLength(1)
     expect(instructions[0]?.data).toMatchObject({ source: { form: 'instructions', changes: [{ path: 'AGENTS.md' }] } })
     expect(JSON.stringify(instructions[0]?.data)).toContain('Instruction 24: preserve the logged context contract.')
-    expect(await page.locator('[data-chat-flow-kind="context"], [data-context-injection-body]').count()).toBe(0)
+    const row = page.locator('[data-chat-flow-kind="context"]')
+    expect(await row.count()).toBe(1)
+    const disclosure = row.getByRole('button', { name: /^Context injection/ })
+    expect(await disclosure.getAttribute('aria-expanded')).toBe('false')
+    await disclosure.click()
+    try {
+      await expect.poll(() => row.locator('[data-context-injection-body]').textContent())
+        .toContain('Instruction 24: preserve the logged context contract.')
+    } finally {
+      await disclosure.click()
+    }
+    await expect.poll(() => row.locator('[data-context-injection-body]').count()).toBe(0)
   })
 
   it.skipIf(MODE === 'record')('restores the active turn rail mark across Chat and Trajectory', async () => {
@@ -797,9 +816,11 @@ describe('web e2e: seeded history renders through cold resume', () => {
     }
   }, 60_000)
 
-  it.skipIf(MODE === 'record')('keeps short injected context out of Chat without dropping the event', async () => {
+  it.skipIf(MODE === 'record')('shows short injected context as a collapsed Context row without dropping the event', async () => {
     const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))
     if (agent === undefined) throw new Error('seeded session did not attach an agent')
+    const contextRows = page.locator('[data-chat-flow-kind="context"]')
+    const before = await contextRows.count()
     const injected = agent.session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'Short injected context.' }],
       source: { kind: 'fixture' },
@@ -808,8 +829,16 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await scaffold.ctx.sessions.flush(agent.session)
     expect(agent.session.snapshotEvents()).toContainEqual(injected)
     await waitForContextInClient(page, injected.seq)
-    expect(await page.locator('[data-chat-flow-kind="context"]').count()).toBe(0)
-    expect(await page.getByText('Short injected context.', { exact: true }).count()).toBe(0)
+    await expect.poll(() => contextRows.count()).toBe(before + 1)
+    const row = contextRows.last()
+    const disclosure = row.getByRole('button', { name: /^Context injection/ })
+    expect(await disclosure.getAttribute('aria-expanded')).toBe('false')
+    await disclosure.click()
+    try {
+      await expect.poll(() => row.locator('[data-context-injection-body]').getByText('Short injected context.', { exact: true }).count()).toBe(1)
+    } finally {
+      await disclosure.click()
+    }
   })
 
   it.skipIf(MODE === 'record')('restores the recorded file preview in its original tab after page reload', async () => {

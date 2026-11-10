@@ -33,13 +33,15 @@ Mount alongside `fs`, `sessionProjections`, and `systemPrompt`. `defaultDirector
 
 -----
 
+Directory validation and publication delegate through `working-directory/access`, so the owner of a directory being removed can hold `ensure` and `set` into that directory until its operation settles. A listener waits only for an operation on the requested or current path, honours the request's `signal` while waiting, and otherwise calls `next()` at once; a rejection fails that access and leaves the recorded directory unchanged, with no fallback. Existing subprocesses keep their own directories.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API.
+The Session projection owns the effective directory and exposes it in Session observations, so cold readers can use it without activating an Agent; the header continues to identify the original project. Changes serialize per Session, validate through the filesystem provider, check cancellation and Agent lifetime, commit an event, and queue a user-context notice. If notice queuing fails after commit, the operation returns the committed directory and logs a warning; the next request or resume still receives the required directory context. Prompt assembly validates the current directory before publishing its required context contribution. Existing processes and sandbox grants keep their independent ownership. The [service implementation](src/index.ts) defines the API. Failures are `WorkingDirectoryError` instances: `WORKING_DIRECTORY_INVALID` for an empty or malformed path, `WORKING_DIRECTORY_NOT_FOUND` when a requested change names no existing directory, and `WORKING_DIRECTORY_UNAVAILABLE` when neither the current directory nor the original project exists or the service has been disposed.
 
 No runtime invariant companion is published because the service reads its only directory state from the Session projection and checks filesystem validity at use.
 

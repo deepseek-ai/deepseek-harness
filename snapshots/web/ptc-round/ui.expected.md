@@ -7,11 +7,14 @@
     - tab "Chat" [selected]
     - tab "Trajectory"
   - button "More conversation views"
-- text: "Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt catching its error in the program. Return an object with both outcomes. Then reply DONE and stop. {{clock}}"
+- text: "Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop. {{clock}}"
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}" [expanded]
 - button "Ran code, ran commands, read files" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - 'button "Think The user wants me to write a single `run_code` program that:"'
 - button "Code Run bash echo and catch missing file read"
 - button "Bash Echo CODE_ROUND_OK" [expanded]

@@ -18,7 +18,7 @@ class BindingProbe extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'in-process-test'
   behavior: (spec: PtcRunSpec) => Promise<PtcRunResult> = async spec => ({
-    logs: [], value: Object.keys(spec.bindings[0]!.functions).sort(),
+    output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions).sort()) }],
   })
 
   resolve(request: PtcRunRequest): PtcRunSpec {
@@ -81,7 +81,7 @@ describe('MCP resource tools', () => {
     }
     if (mode !== 'native') {
       expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
-        .toMatchObject({ isError: false, value: { result: [] } })
+        .toMatchObject({ isError: false, value: { logs: ['[]'] } })
     }
   })
 
@@ -95,6 +95,8 @@ describe('MCP resource tools', () => {
       inner.mcpResources.register('second', { request })
     } })
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
+    expect(resourceToolNames.map(name => ctx.tools.get(name)?.isConcurrencySafe?.({ server: 'first', uri: 'docs://text' })))
+      .toEqual(resourceToolNames.map(() => true))
     await first.dispose()
     expect(visibleResourceTools(ctx)).toEqual([...resourceToolNames].sort())
     expect((await call(ctx, 'list_mcp_resources', { server: 'second' })).isError).toBe(false)
@@ -211,15 +213,15 @@ describe('MCP resource tools', () => {
       expect(await binding({ server: 'docs' })).toEqual({ resources: [] })
       remove()
       await expect(binding({ server: 'docs' })).rejects.toThrow('unknown tool')
-      return { logs: [] }
+      return { output: [] }
     }
     const result = await call(ctx, 'run_code', { code: 'invoke and remove provider', description: 'Use resource binding' })
     expect(result.isError).toBe(false)
     expect(request).toHaveBeenCalledOnce()
     expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('mcp')
-    runtime.behavior = async spec => ({ logs: [], value: Object.keys(spec.bindings[0]!.functions) })
+    runtime.behavior = async spec => ({ output: [{ type: 'text', text: JSON.stringify(Object.keys(spec.bindings[0]!.functions)) }] })
     expect(await call(ctx, 'run_code', { code: 'inspect bindings', description: 'Inspect bindings' }))
-      .toMatchObject({ isError: false, value: { result: [] } })
+      .toMatchObject({ isError: false, value: { logs: ['[]'] } })
   })
 
   it('retains tools for a configured provider while its requests fail', async () => {

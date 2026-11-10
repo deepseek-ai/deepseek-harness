@@ -9,7 +9,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { Session, SessionId, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService, {
@@ -51,7 +51,9 @@ async function agentWithSession(
 ): Promise<Agent & { session: Session }> {
   // A live store session when a store is mounted (the command executor logs
   // lifecycle events through it); bare otherwise (fold/tool-only benches).
-  const session = Session.create(SessionId(id))
+  const session = Session.create(SessionId(id), undefined, owner === undefined ? undefined : {
+    version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 0, isSeeded: false, origin: 'subagent', parentSession: owner.id,
+  })
   const agent = {
     id: SessionId(id),
     session,
@@ -73,7 +75,7 @@ async function agentWithSession(
   if (agents === undefined) {
     await ctx.serial('agent/created', { agent, source: 'startup' })
   } else {
-    agents.enter(agent, owner)
+    agents.enter(agent)
     await agents.announce(agent, 'startup')
   }
   return agent
@@ -501,7 +503,7 @@ describe('the soft layer', () => {
 
       readonly language = 'typescript'
       readonly isolation = 'fake'
-      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ logs: [] }) }
+      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ output: [] }) }
     }
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -526,7 +528,7 @@ describe('the soft layer', () => {
 
       readonly language = 'typescript'
       readonly isolation = 'fake'
-      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ logs: [] }) }
+      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ output: [] }) }
     }
     const withPlanMode = new Context()
     await withPlanMode.plugin(SystemPrompt)
@@ -894,7 +896,7 @@ describe('exit_plan_mode', () => {
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
-  it('rejects review from a runtime-owned agent with consumer-neutral guidance', async () => {
+  it('rejects review from a subagent with consumer-neutral guidance', async () => {
     const ctx = await setup()
     await ctx.plugin(UserQuestionService)
     const ask = vi.fn(async () => ({ answers: [{ id: 'plan-review', selected: ['Approve'] }] }))
@@ -942,7 +944,7 @@ describe('exit_plan_mode', () => {
       async run(request: PtcRunRequest): Promise<PtcRunResult> {
         const exit = request.bindings[0]?.functions[EXIT_PLAN_MODE]
         if (exit === undefined) throw new Error('missing exit_plan_mode binding')
-        return { logs: [], value: await exit({ plan }) }
+        return { output: [], value: await exit({ plan }) }
       }
     }
     const ctx = new Context()

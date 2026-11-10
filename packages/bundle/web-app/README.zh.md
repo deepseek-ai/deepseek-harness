@@ -31,6 +31,8 @@ kind: "package-bundle"
 
 启动 GUI、打开浏览器，然后开始与 agent（智能体）对话。flag 用于微调本次调用。
 
+[Agent Teams UI](../../client/ui-agent-team/README.zh.md) 随本 bundle 加载。在模型与推理等级菜单中按 Session 开启；通过 Subagent 控件打开成员树，下方显示共享任务。
+
 ### 启动 Web GUI
 
 ```sh
@@ -58,6 +60,8 @@ dsh --profile web --no-open --port 8080
 | `publicUrl` | 未设置 | 对外公告的 HTTP(S) 应用根；否则公告绑定地址 URL |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-web-app)列出了本运行时插件接受的字段及其 JSDoc。随发行版交付的组合插入 `schedule` 服务行与 `ui-schedule` 任务页面行，时钟读数与四个提醒工具则属于 `standard`、`cordis` 与 `ptc` 三个 preset。这三个 preset 的 `tool-subagent` 与 `tool-subagent-fork` 两行都 deny 这四个工具，因此被委派子 agent 的作用域不会列出它们。
+
+`standard`、`cordis` 和 `ptc` 三个 preset 在各自的 `tool-subagent-control` 行中设置 `config.interrupt: false`。如需提供 `interrupt_agent`（也适用于 Team 模式），按[迁移步骤](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.zh.md)覆盖相应 preset 声明；修改已禁用的 Host 行不会改变 preset 的工具。
 
 <a id="public-deployments"></a>
 ### 监听、信任与公开部署
@@ -90,6 +94,10 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 
 每个浏览器会话选择一个随发行版交付的 preset（默认 `standard`）。Agent 预设设置页可更改默认项并编辑预设的子插件；保存结果持久化到 `$DSH_HOME/profiles/web/cordis.patch.yml`。只有 Host 提供可编辑的 profile 时，标准模式和 Creator 才会启用插件管理工具。
 
+标准模式和创造模式包含 `dsh-doc` skill，用于 DSH 相关问题以及你要求的插件或预设工作。该 skill 引导 agent 查阅已安装版本的文档和源码。加载方式及其对上下文的影响参见[模型体验](#model-experience)。
+
+打包的 skill 使用自定义 skill 根目录：同名的项目 skill 会覆盖打包的 skill，打包的 skill 又会覆盖同名的用户 skill。skill 目录中只保留优先级最高的一个条目，不会报错；参见 [skill 根目录优先级](../../skill/skill-filesystem/README.zh.md)。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -98,7 +106,9 @@ dsh --profile web --no-open --host "$(hostname -i | awk '{print $1}')" --public-
 <details>
 <summary>实现细节——点击展开</summary>
 
-此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告、bash 变量和就绪通知。`office-to-pdf` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-to-pdf/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方。 转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
+此 bundle 由一层五个文件的补丁和一个运行时胶水插件组成：`cordis.patch.yml` 承载宿主行和 preset 注册表，每个 `presets/<id>.patch.yml` 插入一条随发行版交付的 preset 声明，按 `dsh.bundle.patch` 列出的顺序应用。存储栈与投影缓存来自 `dsh-base`；Web 叠加层的工作区和消息反馈条目消费共享的 `storageDomain` 服务。补丁重述 base 有意省略的界面专用值，插入 Web 专用宿主条目和浏览器插件列表，再将 Agent 层移到预设后面。胶水插件负责 dist 服务、公告应用 URL、明文 HTTP 暴露警告、bash 变量和就绪通知。`office-kit` 条目为宿主消费者挂载一个延迟创建引擎的 [Office 转换提供方](../../document/office-kit/README.zh.md)，使用此 bundle 的 Desktop 组合也共享该提供方，转换后的文件保存在 `$DSH_HOME/office-kit/outputs`。`standard` 和 `ptc` 预设在所有 profile 中挂载 [Office 工具](../../document/tool-office/README.zh.md)，无论是否安装 Kit，并在加载 Office 技能后声明它们；`minimal` 预设不挂载它们。转换服务的 Remote 方法负责预览读取授权，Document Preview 负责 Office 查看器和客户端缓存。
+
+`skill-office` 行在所有 profile 中从包内 assets 挂载 [Office 技能](../../skill/skill-office/README.zh.md)。`DSH_PRIMARY_RUNTIME` 非空的 Desktop 还挂载内置依赖查询行，并选择 `pythonEnvironment: 'workspace-dependencies'`；其他 profile 以及没有主运行时的 Desktop 选择 `pythonEnvironment: 'user'`，并禁用依赖查询行。资源打包由 [Desktop 应用](../../../apps/desktop/README.zh.md#bundled-workspace-dependencies)负责。
 
 ### patch 语义
 
@@ -146,6 +156,34 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 <a id="model-experience"></a>
 ## 模型体验
 
+### DSH 文档 skill
+
+#### 模型看到什么
+
+标准模式和创造模式的 skill 目录都列出 `dsh-doc`。`skill` 工具加载其指令，并引导 agent 查阅当前任务所需的参考资料。其他 preset 保留各自的 skill 来源。加载该 skill 不会修改工作区文件或 profile 设置。
+
+#### Token 影响
+
+preset 提供一条目录项。没有其他 skill 的会话还会收到目录的通用调用说明。skill 正文和参考文件仅在加载时进入上下文。
+
+#### KV Cache 影响
+
+目录在第一个步骤写入日志，在条目改变前保持不变。加载 skill 会追加工具输出，不改变工具 schema。
+
+### 创造模式角色设定
+
+#### 模型看到什么
+
+创造模式预设在共享的编码 Agent 描述句之后添加“You help the user customize DeepSeek Harness itself.”。插件实现和授权规则仍保留在按需加载的 `dsh-doc` skill 中。
+
+#### Token 影响
+
+创造模式请求增加一句固定文本。标准模式请求不变。
+
+#### KV Cache 影响
+
+该句在创造模式预设内保持稳定；切换到其他预设会改变角色设定前缀。
+
 ### Web 运行时变量
 
 #### 模型看到什么
@@ -159,6 +197,20 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 #### KV Cache 影响
 
 无；该插件不贡献系统提示词文本。
+
+### Office 技能
+
+#### 模型看到什么
+
+所有 profile 的技能目录都列出 Office 路由和三个 Office 创作技能。加载的 Python 技能末尾带一节 Python 环境说明：Desktop 上指引模型调用 `load_workspace_dependencies`；其他 profile 指引模型使用项目或用户已有的 Python。
+
+#### Token 影响
+
+每个初始目录包含四条目录摘要；仅在模型请求时加载技能正文。
+
+#### KV Cache 影响
+
+资源和配置不变时，内置 Office 摘要和各 Python 环境说明保持稳定；目录何时变化见 [Office 技能](../../skill/skill-office/README.zh.md#model-experience)。
 
 ## 已知限制与延期工作
 

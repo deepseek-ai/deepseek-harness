@@ -10,8 +10,7 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-/* Task rows inside the Session hover card (surface is #2C2C2E in both themes,
- * so these are the card's literal label colors, as in Rows.module.css). */
+/* Task rows inside the Session hover card use the card's own label tokens. */
 .tasks {
   display: flex;
   flex-direction: column;
@@ -30,7 +29,7 @@
   display: inline-flex;
   align-items: center;
   height: 16px;
-  color: #CFD3D6;
+  color: var(--dsw-alias-hovercard-label-secondary);
 }
 
 .taskBody {
@@ -43,29 +42,27 @@
 .taskName {
   font-size: 12px;
   line-height: 16px;
-  color: #FFFFFF;
+  color: var(--dsw-alias-hovercard-label-primary);
   overflow-wrap: break-word;
 }
 
 .taskTiming {
   font-size: 12px;
   line-height: 16px;
-  color: #CFD3D6;
+  color: var(--dsw-alias-hovercard-label-secondary);
 }
 
-/* The distance beside the absolute next run. The card's surface is the fixed
-   #2C2C2E in both themes, so its label steps are literal light grays rather than
-   the theme tokens (which flip with the surface); this one is a step below
+/* The distance beside the absolute next run, one label step below
    `.taskTiming`. The card is narrow, so a long stamp still wraps. */
 .taskRelative {
-  color: #ADB2B8;
+  color: var(--dsw-alias-hovercard-label-tertiary);
   overflow-wrap: anywhere;
 }
 
 .omitted {
   font-size: 12px;
   line-height: 16px;
-  color: #ADB2B8;
+  color: var(--dsw-alias-hovercard-label-tertiary);
 }
 
 /* Accessible name of the icon-only mark (same pattern as the row's status

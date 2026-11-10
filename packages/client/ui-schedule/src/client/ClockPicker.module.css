@@ -8,10 +8,12 @@
 .column {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   width: 52px;
-  max-height: 216px;
+  max-height: min(216px, calc(100dvh - 30px));
+  overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
 }
 
 /* One clock value. The right column's rows are 13px copy, so the columns set
@@ -40,6 +42,13 @@
 .option:focus-visible {
   outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: -2px;
+}
+
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The value the row shows, marked the way the card's active chips are. */

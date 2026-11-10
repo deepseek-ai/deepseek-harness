@@ -5,20 +5,50 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { Menu, MenuItemButton } from '../src/Menu.tsx'
 import { ReferenceChip } from '../src/user-text.tsx'
 
-afterEach(() => { vi.restoreAllMocks(); cleanup(); document.documentElement.style.removeProperty('--dsh-frame-top-clearance') })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); cleanup(); document.documentElement.style.removeProperty('--dsh-frame-top-clearance') })
 
 it('places pointer menus at the cursor above the frame inset and focuses after portal placement', async () => {
   document.documentElement.style.setProperty('--dsh-frame-top-clearance', '96px')
   const close = vi.fn()
   const view = render(<Menu open portal autoFocus contextual anchor={null} onClose={close}
-    getAnchorRect={() => new DOMRect(200, 20, 0, 0)} items={[{ id: 'copy', label: 'Copy' }]} />)
+    anchorPoint={{ x: 200, y: 20 }} items={[{ id: 'copy', label: 'Copy' }]} />)
   const menu = view.getByRole('menu')
-  expect(menu.style.top).toBe('24px')
+  const point = view.container.firstElementChild as HTMLElement
+  expect(point.style.left).toBe('200px')
+  expect(point.style.top).toBe('20px')
+  expect(menu.style.positionAnchor).toBe(point.style.anchorName)
+  expect(menu.style.top).toBe('')
   await waitFor(() => { expect(document.activeElement).toBe(view.getByRole('menuitem')) })
   fireEvent.pointerDown(document.body, { button: 2 })
   expect(close).not.toHaveBeenCalled()
   fireEvent.pointerDown(document.body, { button: 0 })
   expect(close).toHaveBeenCalledOnce()
+})
+
+it.each([false, true])('captures the point in layout coordinates once with visual-origin client coordinates=%s', (visualOrigin) => {
+  const viewport = Object.assign(new EventTarget(), { offsetLeft: 40, offsetTop: 60 })
+  const subscribe = vi.spyOn(viewport, 'addEventListener')
+  vi.stubGlobal('visualViewport', viewport)
+  vi.stubGlobal('CSS', { supports: (property: string) => visualOrigin && property === '-webkit-backdrop-filter' })
+  const props = { portal: true, contextual: true, anchor: null, onClose: vi.fn(),
+    items: [{ id: 'copy', label: 'Copy' }] }
+  const view = render(<Menu {...props} open anchorPoint={{ x: 200, y: 100 }} />)
+  const point = (): HTMLElement => view.container.firstElementChild as HTMLElement
+  expect(point().style.left).toBe(visualOrigin ? '240px' : '200px')
+  expect(point().style.top).toBe(visualOrigin ? '160px' : '100px')
+  viewport.offsetLeft = 80
+  viewport.offsetTop = 120
+  view.rerender(<Menu {...props} open anchorPoint={{ x: 200, y: 100 }} />)
+  expect(point().style.left).toBe(visualOrigin ? '240px' : '200px')
+  expect(point().style.top).toBe(visualOrigin ? '160px' : '100px')
+  view.rerender(<Menu {...props} open={false} anchorPoint={{ x: 200, y: 100 }} />)
+  view.rerender(<Menu {...props} open anchorPoint={{ x: 200, y: 100 }} />)
+  expect(point().style.left).toBe(visualOrigin ? '280px' : '200px')
+  expect(point().style.top).toBe(visualOrigin ? '220px' : '100px')
+  view.rerender(<Menu {...props} open anchorPoint={{ x: 220, y: 130 }} />)
+  expect(point().style.left).toBe(visualOrigin ? '300px' : '220px')
+  expect(point().style.top).toBe(visualOrigin ? '250px' : '130px')
+  expect(subscribe).not.toHaveBeenCalled()
 })
 
 it('groups data icons per divider, preserves component rows, and makes exit frames inert', () => {

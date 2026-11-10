@@ -16,13 +16,17 @@ export type * from './access-types.ts'
 interface ControlOptions extends AccessOptions {
   native: NativeClientConfig
   createChannel: NativeChannelFactory
+  permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
 const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
-const systemPermissions = z.object({
-  accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+const systemPermissions = z.discriminatedUnion('platform', [z.object({
+  platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
-})
+}), z.object({
+  platform: z.literal('win32'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
+  elevated: z.boolean(), helper: permissionProcess,
+})])
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -37,9 +41,12 @@ export class CuaAccess extends TypertRemoteService {
    * @param ctx Provider context.
    * @param policy Application decision owner.
    * @param control Serialized native permission dispatch.
+   * @param permissionParameters Provider-owned native parameters for the selected action and Client language.
    */
   constructor(ctx: Context, private readonly policy: ApplicationAccess,
-    private readonly control: Control) { super(ctx, 'cuaAccess') }
+    private readonly control: Control, private readonly permissionParameters: ControlOptions['permissionParameters']) {
+    super(ctx, 'cuaAccess')
+  }
 
   /** Read PTC execution state separately from native permission checks.
    * @returns Whether the shared runtime retains memory and has an editable profile entry.
@@ -74,7 +81,7 @@ export class CuaAccess extends TypertRemoteService {
 
   /**
    * Inspect system privileges independently of application decisions and icons.
-   * @returns Fresh native preflight and launch metadata.
+   * @returns Platform-tagged access observations and native process metadata.
    */
   @Remote
   async systemStatus(): Promise<CuaSystemPermissionState> {
@@ -94,23 +101,27 @@ export class CuaAccess extends TypertRemoteService {
   }
 
   /**
-   * Request a system privilege explicitly selected by the user.
+   * Request the selected system privilege through the native provider.
    * @param permission macOS privilege to request.
-   * @returns Preflight state after requesting; a false value never implies consent.
+   * @param locale Current Client language for provider-owned permission UI.
+   * @returns Current permission observations; requesting does not establish consent.
    */
   @Remote
-  async requestPermission(permission: CuaSystemPermission): Promise<CuaSystemPermissionState> {
-    return systemPermissions.parse(await this.control('requestPermission', { permission }))
+  async requestPermission(permission: CuaSystemPermission, locale: string): Promise<CuaSystemPermissionState> {
+    return systemPermissions.parse(await this.control('requestPermission',
+      this.permissionParameters('requestPermission', permission, locale)))
   }
 
   /**
    * Open the macOS privacy pane selected by the user.
    * @param permission Corresponding system privilege.
+   * @param locale Current Client language for provider-owned recovery instructions.
    * @returns Completion after macOS accepted the open request.
    */
   @Remote
-  async openSettings(permission: CuaSystemPermission): Promise<void> {
-    z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings', { permission }))
+  async openSettings(permission: CuaSystemPermission, locale: string): Promise<void> {
+    z.object({ opened: z.literal(true) }).parse(await this.control('openPermissionSettings',
+      this.permissionParameters('openPermissionSettings', permission, locale)))
   }
 
   /**
@@ -145,7 +156,10 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     lifetime.signal.throwIfAborted()
     const perform = async () => {
       lifetime.signal.throwIfAborted()
-      if (client?.disposed) await client.dispose()
+      if (client?.disposed) {
+        const previous = client
+        try { await previous.dispose() } finally { client = undefined }
+      }
       lifetime.signal.throwIfAborted()
       if (!client || client.disposed) client = new NativeClient(ctx, options.native, options.createChannel)
       return client.request(method, params, lifetime.signal)
@@ -159,6 +173,6 @@ export function installCuaAccess(ctx: Context, options: ControlOptions): Pick<Ap
     await Promise.allSettled([policy.dispose(), tail])
     await client?.dispose()
   }, 'cua-access.dispose')
-  new CuaAccess(ctx, policy, control)
+  new CuaAccess(ctx, policy, control, options.permissionParameters)
   return { select: policy.select.bind(policy), run: policy.run.bind(policy), forget: policy.forget.bind(policy), dispose }
 }

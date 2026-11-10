@@ -3,7 +3,7 @@
 .root {
   container: forge-changes / inline-size;
   --forge-changes-bg: var(--dsw-alias-bg-base);
-  --forge-fill: var(--dsw-static-neutral-50);
+  --forge-fill: var(--dsw-alias-card-fill);
   --forge-diff-empty: color-mix(in srgb, var(--dsw-alias-interactive-bg-hover) 50%, transparent);
   display: flex;
   flex-direction: column;
@@ -15,9 +15,6 @@
   line-height: 18px;
 }
 
-:global(body[data-ds-dark-theme]) .root {
-  --forge-fill: var(--dsw-static-neutral-850);
-}
 
 .header {
   display: flex;
@@ -60,20 +57,110 @@
   white-space: nowrap;
 }
 
-.headerEnd {
+/* The checked-out branch gives way first, so the base branch stays readable. */
+.headerHead {
+  flex: 0 100 auto;
+  min-width: 2.5em;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerArrow {
   flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headerSuffix {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+@container forge-changes (max-width: 520px) {
+  .headerSuffix {
+    display: none;
+  }
+}
+
+@container forge-changes (max-width: 380px) {
+  .headerHead,
+  .headerArrow {
+    display: none;
+  }
+}
+
+.headerEnd {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
   margin-left: auto;
 }
+
 
 .toolbar {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
   box-sizing: border-box;
-  min-height: 38px;
-  padding: 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* Spans the file tree's width with the tree's search inset, and its divider continues the tree's border. */
+.lensCell {
+  display: none;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  width: var(--forge-tree-width);
+  padding: 0 8px;
+  border-inline-end: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.toolbar[data-tree='right'] .lensCell {
+  order: 1;
+  border-inline-start: 0.5px solid var(--dsw-alias-border-l3);
+  border-inline-end: 0;
+}
+
+/* One line of controls, never wrapped; the fold rules after `.tool` move controls into the More menu as it narrows. */
+.toolbarMain {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 8px;
+}
+
+.lensMenu {
+  display: inline-flex;
+}
+
+@container forge-changes (min-width: 760px) {
+  .toolbar:not([data-tree='hidden']) .lensCell {
+    display: flex;
+  }
+
+  .toolbar:not([data-tree='hidden']) .lensMenu {
+    display: none;
+  }
+}
+
+.spacer {
+  flex: 1;
+}
+
+.progressSlot,
+.foldTests,
+.filesSlot {
+  display: inline-flex;
+  flex: none;
+  min-width: 0;
 }
 
 .select {
@@ -143,7 +230,6 @@
   flex: none;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
 }
 
 .tool {
@@ -189,6 +275,36 @@
   transform: rotate(90deg);
 }
 
+/* `observeToolbarFold` sets `data-fold` on the toolbar row to the shallowest level whose items fit on one line: level 1
+   folds the line totals, expansion, side by side, and wrapping into the More menu; level 2 the test switch, with the
+   progress label shortened to the bare count beside its ring; level 3 refresh. */
+.more {
+  display: none;
+}
+
+.toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .foldViews,
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .foldTests,
+.toolbarMain[data-fold='3'] .foldRefresh {
+  display: none;
+}
+
+/* With every control folded, the file list entry shortens its label before the row overflows. */
+.toolbarMain[data-fold='3'] .filesSlot {
+  flex-shrink: 1;
+}
+
+.toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .more {
+  display: inline-flex;
+}
+
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .progressSlot [data-forge-progress='full'] {
+  display: none;
+}
+
+.toolbarMain:is([data-fold='2'], [data-fold='3']) .progressSlot [data-forge-progress='compact'] {
+  display: inline-flex;
+}
+
 /* A menu row with a path that shortens and its counts. */
 .menuRow {
   display: flex;
@@ -229,6 +345,7 @@
 }
 
 .body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -242,9 +359,12 @@
 }
 
 .files {
+  --forge-files-inset: 10px;
   flex: 1;
+  box-sizing: border-box;
   min-width: 0;
   min-height: 0;
+  padding: var(--forge-files-inset);
   overflow: auto;
 }
 
@@ -273,14 +393,35 @@
   text-align: center;
 }
 
+/* Each file is one card, so a file's last collapsed-context strip and the next file's header no longer read as adjacent
+   rows. Diffs share R16; clip, unlike hidden, keeps the card from becoming the sticky header's scroll container. */
 .file {
-  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+  overflow: clip;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-lg);
+  background: var(--forge-changes-bg);
 }
 
+.file + .file {
+  margin-top: 12px;
+}
+
+@container forge-changes (max-width: 380px) {
+  .files {
+    --forge-files-inset: 6px;
+  }
+
+  .file + .file {
+    margin-top: 8px;
+  }
+}
+
+/* Above the comment plus (z-index 1) of rows scrolled beneath it. Sticky offsets start inside the list's padding,
+   so the negative inset keeps a stuck header flush with the scroll area's top edge. */
 .fileHeader {
   position: sticky;
-  top: 0;
-  z-index: 1;
+  top: calc(-1 * var(--forge-files-inset, 0px));
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -288,7 +429,8 @@
   min-height: 36px;
   padding: 0 4px 0 8px;
   border-bottom: 0.5px solid var(--dsw-alias-border-l3);
-  background: var(--forge-changes-bg);
+  /* The hover tint over the view background stays opaque while code scrolls beneath the sticky header. */
+  background: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover)), var(--forge-changes-bg);
 }
 
 /* A bare chevron: its rotation shows whether the file is expanded, so it takes no fill in any state. */
@@ -317,10 +459,23 @@
   border-bottom: 0;
 }
 
+/* The file's own information gives way inside this box, so the counts, the viewed mark, and the menu after it stay
+   whole at any width. */
+.fileTitle {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .fileIcon {
   flex: none;
 }
 
+/* The path shares the shortage with the badge in proportion to their widths, so the longer path keeps the larger part
+   and stays under the pointer for its full-path tooltip. */
 .filePath {
   display: flex;
   flex: 0 1 auto;
@@ -340,8 +495,80 @@
   transform: rotate(-90deg);
 }
 
-.badge {
+/* Capped rather than shrunk, so a long path never truncates the tag; a longer translation ends in an ellipsis. */
+.changedTag {
   flex: none;
+  max-width: 30%;
+}
+
+.changedText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The viewed mark: a native checkbox with its label as one bordered chip, peer to the file menu button. */
+.viewed {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: var(--dsw-radius-sm);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.viewed input {
+  margin: 0;
+  accent-color: var(--dsw-alias-state-business-primary);
+  cursor: pointer;
+}
+
+.viewed:has(input:checked) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .viewed:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+/* While its write is in flight or the host's marks could not be read, the mark keeps its place and shows it cannot change. */
+.viewed[data-disabled],
+.viewed[data-disabled] input {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.viewed:has(input:focus-visible) {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.viewed input:focus-visible {
+  outline: none;
+}
+
+@container forge-changes (max-width: 520px) {
+  .viewed {
+    padding: 0 6px;
+  }
+
+  .viewedLabel {
+    display: none;
+  }
+}
+
+.badge {
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 50%;
   overflow: hidden;
   padding: 0 6px;
@@ -358,6 +585,12 @@
 .code {
   overflow-x: auto;
   font: var(--dsw-font-markdown-code-block);
+}
+
+/* An expanded file the reader has not scrolled near yet: one 22px row (`.line`) per drawn line, so the scroll
+   range and the positions of the files below stay close to their drawn values. */
+.unreached {
+  height: calc(var(--forge-rows) * 22px);
 }
 
 /* One intrinsic-width track paints every unwrapped unified row across the scrolled width. */
@@ -429,6 +662,11 @@
   padding: 0 16px 0 6px;
 }
 
+/* Side-by-side cells have no sign column, so commentable code keeps one as an empty lane for the comment plus. */
+.code[data-split][data-review] .text {
+  padding-left: calc(1.4em + 6px);
+}
+
 .add {
   --forge-diff-gutter: var(--dsw-alias-file-diff-added-gutter);
   --forge-diff-marker: var(--dsw-alias-file-diff-added-marker);
@@ -458,6 +696,36 @@
 
 .empty {
   background: var(--forge-diff-empty);
+}
+
+/* Comments under a side-by-side row: one cell per column, each continuing its line's gutter and background, with the
+   comments aligned to the code text. Either side holds its own comments, so both sides can show one at once. */
+.notes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  white-space: normal;
+}
+
+.noteCell {
+  display: grid;
+  grid-template-columns: var(--forge-number-width, 3.5em) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.noteCell + .noteCell {
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.noteStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 12px 10px calc(1.4em + 6px);
+}
+
+.noteStack:empty {
+  padding: 0;
 }
 
 /* Collapsed unchanged lines; the row expands them. */
@@ -641,9 +909,76 @@
 .code[data-split][data-native-side="L"] [data-diff-side="R"] *,
 .code[data-split][data-native-side="R"] [data-diff-side="L"],
 .code[data-split][data-native-side="R"] [data-diff-side="L"] * { user-select: none; }
-.reviewSubmit { flex: none; white-space: nowrap; }
+/* A header button keeps its label on one line; the menus and the title before it shorten instead. */
+.headerAction { flex: none; white-space: nowrap; }
 
 .code[data-single-side] .line { grid-template-columns: var(--forge-number-width) 1.4em minmax(0, 1fr); }
 .code[data-single-side]:not([data-wrap]) .line { grid-template-columns: var(--forge-number-width) 1.4em max-content; }
 .reviewFile { padding: 12px 0; }
 .reviewFile > h3 { margin: 0 10px; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+
+/* The unresolved thread count of a file opens the thread list at the file. */
+.threadCount {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-xs);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent);
+  color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Drawn inside the button, since the file title clips what overflows it. */
+.threadCount:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+@media (hover: hover) {
+  .threadCount:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent); }
+}
+
+/* A view narrower than 480px shows the count alone. */
+.threadCountNumber { display: none; }
+
+@container forge-changes (max-width: 479px) {
+  .threadCountText { display: none; }
+  .threadCountNumber { display: inline; }
+}
+
+/* Opens the thread list; pressed while the list shows. */
+.threadsToggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.threadsToggle[aria-pressed='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+
+@media (hover: hover) {
+  .threadsToggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+.threadsTotal {
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--forge-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}

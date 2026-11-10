@@ -1,6 +1,7 @@
 /** Context gestures against built plugins, seeded Sessions, and original files. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
@@ -38,7 +39,10 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
   let scaffold: WebScaffold, browser: Browser, page: Page
   let tripwire: ReturnType<typeof watchConsole>
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({ openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]) })
+    scaffold = await launchWebScaffold({
+      openInAppEnvironment: createLaunchEnvironmentSnapshot([{ source: 'process', values: { SSH_CONNECTION: '10.0.0.2 55000 10.0.0.9 22' } }]),
+      extraOverlayPath: fileURLToPath(new URL('./context-menus.overlay.yml', import.meta.url)),
+    })
     await mkdir(join(scaffold.workspaceCwd, 'folder'))
     await scaffold.ctx.workspaceRegistry.create(join(scaffold.workspaceCwd, 'folder'), 'Menu workspace')
     await writeFile(join(scaffold.workspaceCwd, 'first.txt'), 'FIRST\nSECOND\nTHIRD\n')
@@ -70,7 +74,8 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     const menu = page.getByRole('menu')
     await menu.getByRole('menuitem', { name: /Copy.*[Ii][Dd]/ }).waitFor()
     const names = await menuLabels(menu)
-    expect(names.slice(0, 5)).toEqual(['Pin session', 'Rename', 'Fork session', 'Copy Session ID', 'Show in folder'])
+    expect(names.slice(0, 4)).toEqual(['Pin session', 'Rename', 'Fork session', 'Copy Session ID'])
+    expect(names).not.toContain('Open in')
     expect(names.at(-1)).toBe('Archive session')
     expect(await menu.getByRole('menuitem').evaluateAll(rows => rows.every(row => row.querySelector('svg[data-icon]')))).toBe(true)
     expect(await menu.getByRole('separator').count()).toBe(2)
@@ -268,6 +273,26 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     await file.click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Open in sidebar', exact: true }).click()
     await page.locator('[data-document-preview]').getByText('SECOND', { exact: true }).waitFor()
+    // The same link moves that tab into a floating panel and back, delivering its line each time.
+    const floating = page.locator('[data-sidebar-right-session]:not([hidden]) [data-dockkit-float]')
+    const dockedFirst = page.locator('[data-rightbar-col] [data-dockkit-pane] [data-dockkit-tab]', { hasText: 'first.txt' })
+    await file.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Open in floating panel', exact: true }).click()
+    await expect.poll(() => floating.count()).toBe(1)
+    await floating.locator('[data-textpreview-target="2"]', { hasText: 'SECOND' }).waitFor()
+    await expect.poll(() => dockedFirst.count()).toBe(0)
+    // The new panel covers the link, so the keyboard raises its menu.
+    await file.focus()
+    await page.keyboard.press('Shift+F10')
+    await page.getByRole('menuitem', { name: 'Open in floating panel', exact: true }).click()
+    await floating.locator('[data-textpreview-target="2"]').waitFor()
+    expect(await floating.count()).toBe(1)
+    await file.focus()
+    await page.keyboard.press('Shift+F10')
+    await page.getByRole('menuitem', { name: 'Open in sidebar', exact: true }).click()
+    await expect.poll(() => floating.count()).toBe(0)
+    await expect.poll(() => dockedFirst.count()).toBe(1)
+    await page.locator('[data-rightbar-col] [data-textpreview-target="2"]').waitFor()
     await page.getByRole('link', { name: 'Website', exact: true }).click({ button: 'right' })
     await page.getByRole('menuitem', { name: 'Copy link address', exact: true }).click()
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('https://example.com/path?q=1#fragment')
@@ -310,6 +335,54 @@ describe.each(['MacIntel', 'Win32', 'Linux x86_64'])('web context menus on %s', 
     expect(await page.locator('[data-document-preview]').getByText('SECOND FILE', { exact: true }).count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   })
+  it('keeps context-menu layout size during browser zoom and scrolls overflowing rows', async () => {
+    const cdp = await page.context().newCDPSession(page)
+    try {
+      await page.setViewportSize({ width: 1291, height: 480 })
+      await page.locator('[data-row-key="session:context-menu-first"]').click({ button: 'right' })
+      const menu = page.getByRole('menu')
+      await menu.waitFor()
+      const unzoomed = await menu.evaluate((node) => {
+        const rect = node.getBoundingClientRect()
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      })
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 3 })
+      await expect.poll(() => page.evaluate(() => window.visualViewport!.scale)).toBe(3)
+      await expect.poll(() => menu.evaluate((node, before) => {
+        const rect = node.getBoundingClientRect()
+        return Math.max(Math.abs(rect.x - before.x), Math.abs(rect.y - before.y),
+          Math.abs(rect.width - before.width), Math.abs(rect.height - before.height))
+      }, unzoomed)).toBeLessThan(1)
+      expect(await menu.evaluate((node) => {
+        const view = window.visualViewport!
+        const rect = node.getBoundingClientRect()
+        return rect.width > view.width || rect.height > view.height
+      })).toBe(true)
+
+      // A smaller layout viewport, rather than page zoom alone, makes this list overflow.
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await page.setViewportSize({ width: 1291, height: 180 })
+      const rows = menu.locator('[role="presentation"]').first()
+      await expect.poll(() => rows.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true)
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 3 })
+      expect(await rows.evaluate((node) => {
+        node.scrollTop = node.scrollHeight
+        return node.scrollTop > 0
+      })).toBe(true)
+      await expect.poll(() => rows.evaluate((node) => {
+        const last = [...node.querySelectorAll('[role="menuitem"]')].at(-1)!
+        const row = last.getBoundingClientRect()
+        const viewport = node.getBoundingClientRect()
+        return row.top >= viewport.top - 1 && row.bottom <= viewport.bottom + 1
+      })).toBe(true)
+    } finally {
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 })
+      await cdp.detach()
+      await page.keyboard.press('Escape')
+      await page.setViewportSize({ width: 1291, height: 768 })
+    }
+  })
+
   it('keeps original preview open when dismissing its menu and fits both themes at the viewport edge', async () => {
     onTestFailed(() => saveFailureShot(page, 'context-menus-preview'))
     await page.getByRole('button', { name: 'View full image: Original', exact: true }).click()

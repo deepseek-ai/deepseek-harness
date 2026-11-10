@@ -48,10 +48,10 @@ describe('Node program process', () => {
 
   it('runs erasable TypeScript in the resolved directory with an empty environment', async () => {
     const { run, cwd } = await setup()
-    const result = await run({ program: 'const n: number = 6; console.log("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })
+    const result = await run({ program: 'const n: number = 6; inspect("ready"); return { n: n * 7, cwd: process.cwd(), env: { ...process.env } };', bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toEqual({ n: 42, cwd, env: {} })
-    expect(result.logs).toEqual(['ready'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['ready\n'])
     expect(result.sandbox).toEqual({ mode: 'danger-full-access', denied: false })
   })
 
@@ -115,7 +115,7 @@ describe('Node program process', () => {
     const release = Promise.withResolvers<null>()
     onTestFinished(() => { release.resolve(null) })
     const result = await run({ program: 'void tools.slow({}); return 1', bindings: bindings({ slow: () => release.promise }) })
-    expect(result).toMatchObject({ logs: [], value: 1 })
+    expect(result).toMatchObject({ output: [], value: 1 })
     expect(result.error).toBeUndefined()
   })
 
@@ -124,8 +124,8 @@ describe('Node program process', () => {
     const result = await run({ program: 'const fs = await import("node:fs"); fs.writeSync(1,"native-out你好"); fs.writeSync(2,"native-err🙂"); return 42;', bindings: [] })
     expect(result.error).toBeUndefined()
     expect(result.value).toBe(42)
-    expect(result.logs.join('')).toContain('native-out你好')
-    expect(result.logs.join('')).toContain('native-err🙂')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-out你好')
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('native-err🙂')
   })
 
   it.each(['throw new Error("broken")', 'enum E { A }'])('reports program failure for %s', async (program) => {
@@ -140,16 +140,16 @@ describe('Node program process', () => {
 
   it('enforces the combined output cap', async () => {
     const { run } = await setup({ maxOutputBytes: 80 })
-    const result = await run({ program: 'console.log("x".repeat(500)); return 42;', bindings: [] })
+    const result = await run({ program: 'inspect("x".repeat(500)); return 42;', bindings: [] })
     expect(result.error?.kind).toBe('output-limit')
-    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const bytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(bytes).toBeLessThanOrEqual(80)
   })
 
   it('uses the default deadline and caps explicit requests', async () => {
     const { runtime } = await setup()
     expect(runtime.timeout).toEqual({ defaultMs: 120_000, maxMs: 600_000 })
-    expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Emit output with console.log(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
+    expect(runtime.executionInstructions).toBe('The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Use inspect(...values) to display output. Do not use console. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.')
     expect(runtime.resolve({ program: '', bindings: [] }).timeoutMs).toBe(120_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: 900_000 }).timeoutMs).toBe(600_000)
     expect(runtime.resolve({ program: '', bindings: [], timeoutMs: null }).timeoutMs).toBeNull()
@@ -168,11 +168,21 @@ describe('Node program process', () => {
     expect((await run({ program, bindings: [] })).error?.kind).toBe('timeout')
   })
 
-  it('retains console output emitted immediately before a non-yielding program', async () => {
-    const { run } = await setup({ timeoutMs: 1000, graceMs: 50 })
-    const result = await run({ program: 'console.log("before hot loop"); for (;;) {}', bindings: [] })
-    expect(result.error?.kind).toBe('timeout')
-    expect(result.logs).toEqual(['before hot loop'])
+  it('retains inspected output when a non-yielding program is canceled', async () => {
+    const { run, cwd } = await setup()
+    const controller = new AbortController()
+    const pending = run({
+      program: 'const fs = await import("node:fs"); inspect("before hot loop"); await tools.enter({}); fs.writeFileSync("entered-loop", "ready"); for (;;) {}',
+      signal: controller.signal, timeoutMs: null,
+      bindings: bindings({ enter: async () => null }),
+    })
+    try {
+      await expect.poll(async () => readFile(join(cwd, 'entered-loop'), 'utf8')).toBe('ready')
+      controller.abort('stop')
+      const result = await pending
+      expect(result.error?.kind).toBe('abort')
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['before hot loop\n'])
+    } finally { controller.abort(); await pending }
   })
 
   it('does not pause the deadline while a binding is pending', async () => {
@@ -310,13 +320,13 @@ describe('Node program process', () => {
   })
 })
 
-it('preserves empty console entries and bounds native output overflow', async () => {
+it('preserves empty inspected entries and bounds native output overflow', async () => {
   const { run } = await setup({ maxOutputBytes: 100 })
-  const lines = await run({ program: 'console.log("a"); console.log(""); console.log("b")', bindings: [] })
-  expect(lines.logs).toEqual(['a', '', 'b'])
+  const lines = await run({ program: 'inspect("a"); inspect(""); inspect("b")', bindings: [] })
+  expect(lines.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['a\n', '\n', 'b\n'])
   const overflow = await run({ program: 'const fs=await import("node:fs"); fs.writeSync(1,"HEAD-"+"x".repeat(100000));', bindings: [] })
   expect(overflow.error?.kind).toBe('output-limit')
-  expect(overflow.logs.join('')).toContain('HEAD-')
-  const bytes = Buffer.byteLength(JSON.stringify(overflow.logs)) + Buffer.byteLength(JSON.stringify(overflow.error?.message))
+  expect(overflow.output.filter(block => block.type === 'text').map(block => block.text).join('')).toContain('HEAD-')
+  const bytes = Buffer.byteLength(JSON.stringify(overflow.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(overflow.error?.message))
   expect(bytes).toBeLessThanOrEqual(100)
 })

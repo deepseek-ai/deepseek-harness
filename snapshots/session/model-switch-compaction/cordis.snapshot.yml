@@ -33,9 +33,14 @@
                 contextWindow: 100000
                 defaultMaxTokens: 1000
               - id: deepseek-v4-pro
-                contextWindow: 8622
+                contextWindow: 8980
                 defaultMaxTokens: 1000
     - id: compaction-working-directory
       name: '../../../packages/test-support/session-snapshot/tests/fixtures/compaction-working-directory.ts'
     - id: model-switch-compaction-driver
       name: './driver.mjs'
+
+# Fixed-budget compaction scenario: keep the recorded tool set, whose token counts the thresholds were tuned to.
+- id: tool-fs
+  config:
+    applyPatch: false

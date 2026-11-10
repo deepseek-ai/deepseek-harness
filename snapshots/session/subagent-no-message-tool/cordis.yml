@@ -22,6 +22,8 @@
         id: parent
         plugins:
           - name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: true
           - name: '@deepseek-ai/dsh-tool-fs-search'
             config:
               sampleOverCapGlobResults: false
@@ -30,6 +32,8 @@
               fetch: true
               searchTimeoutMs: 60000
           - name: '@deepseek-ai/dsh-tool-subagent-control'
+            config:
+              interrupt: false
     - id: preset-child
       name: '@deepseek-ai/dsh-agent-preset'
       config:

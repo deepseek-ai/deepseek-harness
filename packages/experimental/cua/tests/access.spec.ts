@@ -8,7 +8,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, installCuaAccess } from '../src/access.ts'
 import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
-import { NativeClient } from '../src/native-client.ts'
+import { NativeClient, NativeError } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
@@ -22,7 +22,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : method === 'applicationIcons' ? {} : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : method === 'applicationIcons' ? {} : { platform: 'darwin' as const, accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -49,7 +49,8 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
-  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store })
+  const access = installCuaAccess(ctx, { native: nativeConfig, createChannel: unusedConnector, store: permissions.store,
+    permissionParameters: (method, permission, locale) => ({ method, permission, locale }) })
   const client = new NativeClient(ctx, nativeConfig, unusedConnector)
   return { ctx, owner, agent: owner.agent, answer, access, client, ...permissions }
 }
@@ -159,15 +160,17 @@ it('checks native permissions without converting an OS request into a grant', as
   await f.access.select(f.agent, f.client, handle, identity, signal)
   const before = (await f.ctx.cuaAccess.applications())
   expect(before).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ accessibility: false, screenRecording: false })
-  expect(await f.ctx.cuaAccess.requestPermission('accessibility')).toMatchObject({ accessibility: false })
-  await f.ctx.cuaAccess.openSettings('screenRecording')
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin' as const, accessibility: false, screenRecording: false })
+  expect(await f.ctx.cuaAccess.requestPermission('accessibility', 'en')).toMatchObject({ platform: 'darwin' as const, accessibility: false })
+  await f.ctx.cuaAccess.openSettings('screenRecording', 'en')
   const transport = native.instances[1]!
-  expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { permission: 'screenRecording' }, expect.any(AbortSignal))
+  expect(transport.request).toHaveBeenCalledWith('requestPermission',
+    { method: 'requestPermission', permission: 'accessibility', locale: 'en' }, expect.any(AbortSignal))
+  expect(transport.request).toHaveBeenCalledWith('openPermissionSettings', { method: 'openPermissionSettings', permission: 'screenRecording', locale: 'en' }, expect.any(AbortSignal))
   transport.request.mockRejectedValueOnce(new Error('transport ended'))
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('transport ended')
   transport.disposed = true
-  expect((await f.ctx.cuaAccess.systemStatus()).screenRecording).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', screenRecording: false })
   expect(transport.dispose).toHaveBeenCalledOnce()
   await f.access.dispose()
   await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow()
@@ -374,7 +377,7 @@ it('skips native icon work for an empty application list and propagates icon fai
   native.instances.at(-1)!.request.mockRejectedValueOnce(new Error('icons unavailable'))
   await expect(f.ctx.cuaAccess.applicationIcons()).rejects.toThrow('icons unavailable')
   expect((await f.ctx.cuaAccess.applications()).allowedApps).toHaveLength(1)
-  expect((await f.ctx.cuaAccess.systemStatus()).accessibility).toBe(false)
+  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ platform: 'darwin', accessibility: false })
 })
 
 it('keeps pathless grants manageable without requesting their icons', async () => {
@@ -393,7 +396,7 @@ it('preserves captured launch metadata separately from the current helper parent
   await f.ctx.cuaAccess.systemStatus()
   const control = native.instances.at(-1)!
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
-  control.request.mockResolvedValueOnce({ accessibility: false, screenRecording: false,
+  control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
   expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
 })
@@ -415,7 +418,7 @@ it('omits session-only grants from the permission page and retains their access 
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
+it.each(['function-body', 'repl', 'script', 'scoped-repl'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
   const f = await setup()
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
   await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
@@ -423,10 +426,10 @@ it.each(['function-body', 'repl', 'script'] as const)('enables retention for eff
   const runtime = { programFormat, retainsState: false }
   const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
     expect(received).toBe(entry)
-    // Effective mode can come from a lower profile; a stale local flag must be replaced.
-    expect(change({ timeoutMs: 4200, scriptPersistence: true })).toEqual({
+    // Effective mode can come from a lower profile; stale local flags must be replaced.
+    expect(change({ timeoutMs: 4200, scriptPersistence: true, replScoped: programFormat !== 'scoped-repl' })).toEqual({
       timeoutMs: 4200, executionMode: programFormat === 'script' ? 'vm-script' : 'persistent-in-memory',
-      scriptPersistence: programFormat === 'script',
+      scriptPersistence: programFormat === 'script', replScoped: programFormat === 'scoped-repl',
     })
     runtime.retainsState = true
   })
@@ -460,3 +463,23 @@ it('does not reactivate old handles when stored permission was revoked and later
   await f.access.select(f.agent, replacement, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledOnce()
 })
+
+it('retires a control connection after reporting failed cleanup so later status can recover', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const previous = native.instances.at(-1)!
+  previous.disposed = true
+  previous.dispose.mockRejectedValue(new Error('cleanup was not acknowledged'))
+  await expect(f.ctx.cuaAccess.systemStatus()).rejects.toThrow('cleanup was not acknowledged')
+  await expect(f.ctx.cuaAccess.systemStatus()).resolves.toMatchObject({ platform: 'darwin' })
+  expect(native.instances.at(-1)).not.toBe(previous)
+  expect(previous.dispose).toHaveBeenCalledOnce()
+})
+it.each([new NativeError('SETTINGS_UNAVAILABLE', '请手动打开系统设置'), new Error('transport ended'), new NativeError('NATIVE_EXIT', 'helper exited')])(
+  'preserves provider and transport settings failures: %s', async (failure) => {
+    const f = await setup()
+    await f.ctx.cuaAccess.systemStatus()
+    native.instances.at(-1)!.request.mockRejectedValueOnce(failure)
+    await expect(f.ctx.cuaAccess.openSettings('accessibility', 'en')).rejects.toBe(failure)
+  },
+)

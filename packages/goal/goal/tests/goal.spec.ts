@@ -287,11 +287,15 @@ describe('GoalService creation and replay', () => {
     const stub = stubAgent('goal-hmr')
     await ctx.agents.register(stub.agent)
     const goal = ctx.goals.create(stub.agent, { objective: 'survive service reload' })
+    const row = ctx.sessionProjections.checkpoint(stub.session).goal
 
     await fiber.dispose()
     expect(ctx.get('goals')).toBeUndefined()
-    expect(ctx.sessionProjections.checkpoint(stub.session).goal?.val).toBeUndefined()
-    expect(first.get(stub.agent)).toMatchObject({ id: goal.id })
+    stub.session.append('turn/start', { turn: 1 })
+    // The released unit keeps its last row and folds no event after the unload.
+    expect(ctx.sessionProjections.checkpoint(stub.session)).toHaveProperty('goal', row)
+    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('goal-after-unload')))).not.toHaveProperty('goal')
+    expect(() => first.get(stub.agent)).toThrow('cannot get required service "agents" in inactive context')
 
     await ctx.plugin(GoalService)
     expect(ctx.goals).not.toBe(first)

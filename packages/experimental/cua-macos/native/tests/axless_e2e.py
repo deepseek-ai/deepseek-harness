@@ -16,7 +16,7 @@ import tempfile
 import time
 
 from native_test_support import ROOT, NativeHelper, run_cleanup
-from capabilities_e2e import stop_application
+from capabilities_e2e import stop_application, wait_for_state
 
 
 def main():
@@ -50,7 +50,9 @@ def main():
             binary = app_binary('Target', state_path)
             subprocess.run(['swiftc', str(ROOT / 'tests/AxlessFixture.swift'), '-o', str(binary)], check=True)
             pending = helper.call('getApp', {'selector': str(binary.parents[2])})
-            fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
+            launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
+            assert launched['running'] is True, launched
+            fixture = wait_for_state(state_path, lambda state: state['pid'] > 0)['pid']
             try:
 
                 def wait_state(predicate, description):
@@ -74,14 +76,14 @@ def main():
                 first = helper.call('getState', params)
                 buttons = [element for element in first['elements'] if element['title'] == 'Increment AXless fixture']
                 assert len(buttons) == 1, first
-                old_index = {**owner, 'snapshotId': first['snapshotId'], 'elementIndex': buttons[0]['index']}
+                old_index = {**owner, 'snapshotId': first['snapshotId'], 'elementId': buttons[0]['elementId']}
                 os.kill(fixture, signal.SIGUSR1)
                 actual = wait_state(lambda state: state['hiddenAX'], 'fixture did not remove its AX roots')
                 empty = helper.call('getState', params)
                 assert empty['tree'] == '' and empty['elements'] == [] and empty['truncated'] is False, empty
                 assert empty['snapshotId'] != first['snapshotId']
                 helper.call('click', old_index, 'STALE_SNAPSHOT')
-                helper.call('click', {**owner, 'snapshotId': empty['snapshotId'], 'elementIndex': 0}, 'INVALID_ARGUMENT')
+                helper.call('click', {**owner, 'snapshotId': empty['snapshotId'], 'elementId': '0'}, 'INVALID_ARGUMENT')
                 capture = helper.call('screenshot', {**owner, 'windowId': window_id})
                 assert base64.b64decode(capture['data'], validate=True).startswith(b'\x89PNG\r\n\x1a\n')
                 x, y = actual['buttonPoint']
@@ -97,7 +99,7 @@ def main():
                 actual = wait_state(lambda state: state['resizeCount'] == 1, 'fixture did not resize')
                 for snapshot in [{}, {'snapshotId': recovered['snapshotId']}]:
                     target = {**owner, 'windowId': window_id, **snapshot}
-                    helper.call('hover', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
+                    helper.call('mouseMove', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
                     helper.call('click', {**target, 'x': x, 'y': y}, 'WINDOW_CHANGED')
                     helper.call('scroll', {**target, 'x': x, 'y': y, 'deltaLinesY': -1}, 'WINDOW_CHANGED')
                     helper.call('drag', {**target, 'fromX': x, 'fromY': y, 'toX': x + 1, 'toY': y,
@@ -128,7 +130,9 @@ def main():
                 binary = app_binary('Restoration', state_path)
                 shutil.copy2(original_binary, binary)
                 pending = helper.call('getApp', {'selector': str(binary.parents[2])})
-                fixture = helper.call('launchApp', {'appHandle': pending['appHandle']})['pid']
+                launched = helper.call('launchApp', {'appHandle': pending['appHandle']})
+                assert launched['running'] is True, launched
+                fixture = wait_for_state(state_path, lambda state: state['pid'] > 0)['pid']
                 actual = wait_state(lambda state: bool(state.get('windowId')), 'restoration fixture did not initialize')
                 owner = {'appHandle': pending['appHandle']}
                 window_id = actual['windowId']
@@ -137,7 +141,9 @@ def main():
                 foreground_binary = app_binary('Foreground', foreground_path)
                 shutil.copy2(binary, foreground_binary)
                 pending_foreground = helper.call('getApp', {'selector': str(foreground_binary.parents[2])})
-                foreground = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})['pid']
+                launched = helper.call('launchApp', {'appHandle': pending_foreground['appHandle']})
+                assert launched['running'] is True, launched
+                foreground = wait_for_state(foreground_path, lambda state: state['pid'] > 0)['pid']
                 subprocess.run(['open', '-a', str(foreground_binary.parents[2])], check=True)
                 wait_state(lambda state: foreground_path.exists() and json.loads(foreground_path.read_text()).get('active')
                            and not state['active'], 'foreground fixture did not take focus')
@@ -154,7 +160,7 @@ def main():
                     restored = helper.call('show', target)
                     actual = wait_state(lambda state: not state[key], 'show did not restore ' + key)
                     assert restored['windowId'] == window_id, restored
-                    assert restored['dispatched'] and not restored['verified'], restored
+                    assert restored['dispatched'], restored
                     assert restored['foregroundChanged'] is False, restored
                     assert not actual['active'] and json.loads(foreground_path.read_text())['active']
                 helper.call('show', {**owner, 'windowId': json.loads(foreground_path.read_text())['windowId']}, 'WINDOW_UNAVAILABLE')

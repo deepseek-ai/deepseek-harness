@@ -16,7 +16,7 @@ import type { SandboxExecutionPolicy, SandboxPolicy } from '@deepseek-ai/dsh-san
 import { z } from 'zod'
 import { SshRpcPeer, RemoteOperationError, SSH_MAX_PROCESS_HANDLES, SSH_MAX_TEXT_STREAMS, SSH_PROTOCOL_VERSION } from './protocol.ts'
 import { RemoteProcesses } from './helper-processes.ts'
-import { editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
+import { hunkSchema, moveOptionsSchema, versionGuardSchema, editSchema, environmentSchema, intentSchema, policySchema, processIdSchema, remotePath, targetSchema, textStreamIdSchema } from './schemas.ts'
 import type { SshTextStreamId } from './schemas.ts'
 
 const MAX_FRAME_BYTES = 64 * 1024 * 1024
@@ -249,6 +249,28 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
           ? undefined : z.object({ version: z.string() }).strict().parse(input.expected) as { version: FsVersion },
         signal, resolved,
       )
+    }
+    if (method === 'fs.patch' || method === 'fs.delete') {
+      const schema = z.object({ target: targetSchema, expected: versionGuardSchema.optional(), policy: policySchema }).strict()
+      if (method === 'fs.patch') {
+        const input = schema.extend({ hunks: z.array(hunkSchema) }).parse(raw)
+        return ctx.fs.patchText(asTarget(input.target), input.hunks,
+          input.expected as { version: FsVersion } | undefined, signal, await policy(input.policy, signal))
+      }
+      const input = schema.parse(raw)
+      return ctx.fs.deleteFile(asTarget(input.target), input.expected as { version: FsVersion } | undefined,
+        signal, await policy(input.policy, signal))
+    }
+    if (method === 'fs.move') {
+      const input = z.object({
+        source: targetSchema, destination: targetSchema, options: moveOptionsSchema, policy: policySchema,
+      }).strict().parse(raw)
+      const { hunks, expectedSource, expectedDestination } = input.options
+      return ctx.fs.moveFile(asTarget(input.source), asTarget(input.destination), {
+        ...(hunks === undefined ? {} : { hunks }),
+        ...(expectedSource === undefined ? {} : { expectedSource: { version: expectedSource.version as FsVersion } }),
+        ...(expectedDestination === undefined ? {} : { expectedDestination: expectedDestination as FsWriteIntent }),
+      }, signal, await policy(input.policy, signal))
     }
     throw new Error(`Unknown SSH helper operation: ${method}`)
   })

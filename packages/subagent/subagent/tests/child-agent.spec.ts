@@ -19,7 +19,7 @@ function parentAgent(): Agent {
 }
 
 describe('child Agent options', () => {
-  it('inherits the parent effort while the exact route is unchanged', () => {
+  it('inherits the parent effort when no route is supplied', () => {
     expect(resolveChildAgentOptions(parentAgent(), undefined, 1)).toEqual({
       provider: 'parent-provider',
       model: 'parent-model',
@@ -27,6 +27,19 @@ describe('child Agent options', () => {
       maxTokens: 512,
       subagentDepth: 1,
     })
+  })
+
+  it('clears parent effort through an explicit undefined override', () => {
+    const parent = parentAgent()
+    const child = resolveChildAgentOptions(parent, {
+      provider: 'parent-provider', model: 'parent-model', reasoningEffort: undefined,
+    }, 1)
+    expect(child.reasoningEffort).toBeUndefined()
+    expect(parent.options.reasoningEffort).toBe('high')
+  })
+
+  it('inherits compatible effort when only one route field is overridden', () => {
+    expect(resolveChildAgentOptions(parentAgent(), { model: 'parent-model' }, 1).reasoningEffort).toBe('high')
   })
 
   it('clears an inherited effort when the child route changes', () => {

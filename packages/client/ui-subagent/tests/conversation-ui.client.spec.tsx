@@ -7,6 +7,7 @@ import type {
   SessionListState, SessionSummary, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress, SubagentCatalogEntry } from '@deepseek-ai/dsh-subagent/client'
+import type { TeamProjection, TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import {
@@ -20,6 +21,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const PARENT = 'parent' as SessionId
@@ -27,11 +29,25 @@ const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
 const t: SubagentHeaderLineageProps['t'] = makeTranslate(zh)
 
+type HeaderCatalogProps = SubagentHeaderLineageProps
+  & Pick<SubagentCatalogActionProps, 'useFooterAvailable' | 'renderSlot'>
+
 type CatalogFixtureEntry<Entry = SubagentCatalogEntry> = Entry extends SubagentCatalogEntry
   ? Omit<Entry, 'createdAt'> & { activity: 'running' | 'inactive' }
   : never
 
-type CatalogFixture = { entries: readonly CatalogFixtureEntry[]; parentAvailable: boolean; state: SessionListState['projectionsBySession'][SessionId]['state']; error: SessionListState['projectionsBySession'][SessionId]['error'] }
+type CatalogFixture = {
+  team?: TeamProjection
+  entries: readonly CatalogFixtureEntry[]
+  state: SessionListState['projectionsBySession'][SessionId]['state']
+  error: SessionListState['projectionsBySession'][SessionId]['error']
+}
+
+const sharedTask: TeamTaskView = {
+  id: 'shared-task' as TeamTaskId, revision: 1, subject: 'Plan shared work', description: 'Prepare the implementation',
+  status: 'pending', blockedBy: [], writeScopes: [], ready: true, writeScopeWarnings: [],
+}
+const sharedTeam: TeamProjection = { enabled: true, tasks: [sharedTask] }
 
 function catalog(over: Partial<CatalogFixture> = {}): CatalogFixture {
   return {
@@ -45,7 +61,6 @@ function catalog(over: Partial<CatalogFixture> = {}): CatalogFixture {
         label: 'reviewer', activity: 'inactive',
       },
     ],
-    parentAvailable: true,
     state: 'ready',
     error: null,
     ...over,
@@ -60,28 +75,44 @@ function props(
 ) {
   const catalogs = value === undefined ? nested : { [PARENT]: value, ...nested }
   const statuses: SessionStatusSnapshot = new Map()
+  const byId: Record<SessionId, SessionSummary> = {
+    ...Object.fromEntries(Object.values(catalogs).flatMap(catalog => catalog.entries.map(entry => [entry.id, {
+      id: entry.id, displayTitle: entry.label ?? entry.id, running: entry.activity === 'running', blank: false, updatedAt: 1, retainedBy: {}, projectionValues: { subagentCatalog: [] },
+    }]))),
+    [CHILD]: {
+      id: CHILD,
+      title: '正在扫描项目文件',
+      displayTitle: 'worker',
+      running: Object.values(catalogs).some(catalog => catalog.entries.some(entry => entry.id === CHILD && entry.activity === 'running')),
+      retainedBy: {},
+      blank: false,
+      updatedAt: Date.now(),
+      projectionValues: { subagentCatalog: [] },
+    },
+    ...summaries,
+  }
   const state = {
     ids: [CHILD],
-    byId: summaries ?? {
-      ...Object.fromEntries(Object.values(catalogs).flatMap(catalog => catalog.entries.map(entry => [entry.id, {
-        id: entry.id, displayTitle: entry.label ?? entry.id, running: entry.activity === 'running', blank: false, updatedAt: 1, retainedBy: {},
-      }]))),
-      [CHILD]: {
-        id: CHILD,
-        title: '正在扫描项目文件',
-        displayTitle: 'worker',
-        running: Object.values(catalogs).some(catalog => catalog.entries.some(entry => entry.id === CHILD && entry.activity === 'running')),
-        retainedBy: {},
-        blank: false,
-        updatedAt: Date.now(),
-      },
-    },
+    byId,
     phase: 'ready',
-    projectionsBySession: Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, {
-      state: catalog.state, error: catalog.error,
-      values: { subagentCatalog: catalog.entries.map(({ activity: _activity, ...entry }) => ({ ...entry, createdAt: 1 })) },
-    }])) ,
+    projectionsBySession: {
+      ...Object.fromEntries(Object.entries(byId).flatMap(([id, entry]) => entry.projectionValues === undefined ? [] : [[id, {
+        state: 'idle' as const, error: null, values: entry.projectionValues,
+      }]])),
+      ...Object.fromEntries(Object.entries(catalogs).map(([id, catalog]) => [id, {
+        state: catalog.state, error: catalog.error,
+        values: {
+          ...byId[id as SessionId]?.projectionValues,
+          ...catalog.team === undefined ? {} : { agentTeam: catalog.team },
+          subagentCatalog: catalog.entries.map(({ activity: _activity, ...entry }) => ({ ...entry, createdAt: 1 })),
+        },
+      }])),
+    },
   } satisfies SessionListState
+  for (const [id, entry] of Object.entries(byId)) {
+    const projection = state.projectionsBySession[id]
+    if (projection !== undefined) byId[id as SessionId] = { ...entry, projectionValues: projection.values }
+  }
   function useSessions<T>(select: (snapshot: SessionListState) => T): T {
     return select(state)
   }
@@ -118,15 +149,18 @@ function props(
     ...standard,
     sessionId: PARENT,
     useSessions,
+    useFooterAvailable: <T,>(select: (available: boolean) => T): T => select(true),
     useSessionStatus: <T,>(select: (snapshot: SessionStatusSnapshot) => T): T => select(statuses),
     useSession: <T,>(select: (snapshot: SessionSnapshot) => T): T => select(snapshot),
     openChild: vi.fn(),
     openChildAside: vi.fn(),
     refreshProjection: vi.fn(),
+    prepareCatalog: vi.fn<(id: SessionId) => Promise<void>>().mockResolvedValue(),
+    renderSlot: vi.fn(() => null),
     lineageSessionId: PARENT,
     displayTitle: 'Parent title',
     t,
-  } satisfies SubagentHeaderLineageProps
+  } satisfies HeaderCatalogProps
 }
 
 function summary(id: SessionId, updatedAt: number): SessionSummary {
@@ -146,14 +180,34 @@ function hoverCatalog(trigger: HTMLElement): void {
   act(() => { vi.advanceTimersByTime(150) })
 }
 
+function enableTooltips(): void {
+  class TooltipObserver implements ResizeObserver {
+    constructor(private readonly callback: ResizeObserverCallback) {}
+    observe(target: Element): void {
+      const size = { inlineSize: 160, blockSize: 30 }
+      this.callback([{
+        target, borderBoxSize: [size], contentBoxSize: [size], devicePixelContentBoxSize: [size], contentRect: new DOMRect(),
+      }], this)
+    }
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', TooltipObserver)
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+}
+
 /**
  * Both header seats as the real header composes them: the breadcrumb switcher
  * (child sessions, lineage slot) and the actions-band catalog entry (root
  * sessions) — exactly one renders per form. The actions seat sees the same
  * session the lineage renders.
  */
-function HeaderCatalog(props: SubagentHeaderLineageProps) {
-  const actionProps: SubagentCatalogActionProps = { ...props, sessionId: props.lineageSessionId }
+function HeaderCatalog(props: HeaderCatalogProps) {
+  const actionProps: SubagentCatalogActionProps = {
+    ...props, sessionId: props.lineageSessionId,
+    useProjection: ((_key: 'agentTeam', selector: (value: TeamProjection | undefined) => boolean) =>
+      props.useSessions(state => selector(state.projectionsBySession[props.lineageSessionId]?.values.agentTeam))) as SubagentCatalogActionProps['useProjection'],
+  }
   return (
     <>
       <SubagentHeaderLineage {...props} />
@@ -163,6 +217,234 @@ function HeaderCatalog(props: SubagentHeaderLineageProps) {
 }
 
 describe('SubagentHeaderLineage', () => {
+  it.each([
+    { dictionary: zh, total: '2 个子智能体', running: '1 个子智能体，正在运行' },
+    { dictionary: en, total: '2 subagents', running: '1 subagent running' },
+  ])('keeps the total accessible name separate from the running description: $total', ({ dictionary, total, running }) => {
+    const input = props(catalog())
+    const view = render(<HeaderCatalog {...input} t={makeTranslate(dictionary)} />)
+    const trigger = screen.getByRole('button', { name: total })
+    expect(trigger.textContent).toBe(total)
+    expect(document.getElementById(trigger.getAttribute('aria-describedby')!)?.textContent).toBe(running)
+    view.rerender(<HeaderCatalog {...props(catalog({ entries: [
+      { id: CHILD, mode: 'continuable', label: 'worker', activity: 'inactive' },
+      { id: 'child-2' as SessionId, mode: 'one-shot', label: 'reviewer', activity: 'inactive' },
+    ] }))} t={makeTranslate(dictionary)} />)
+    expect(screen.getByRole('button', { name: total }).getAttribute('aria-describedby')).toBeNull()
+  })
+
+  it('shows a non-collapsible heading with direct-member progress beside shared tasks', () => {
+    const finished = 'finished' as SessionId
+    const paused = 'paused' as SessionId
+    const external = 'external' as SessionId
+    const entries: CatalogFixture['entries'] = [
+      { id: CHILD, mode: 'continuable', label: 'worker', activity: 'running' },
+      { id: finished, mode: 'continuable', label: 'finished', activity: 'inactive' },
+      { id: paused, mode: 'continuable', label: 'paused', activity: 'inactive' },
+      { id: external, mode: 'external', label: 'external', activity: 'running' },
+    ]
+    const summaries: Record<SessionId, SessionSummary> = {
+      [CHILD]: { ...summary(CHILD, 1), running: true, projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: true } } },
+      [finished]: { ...summary(finished, 1), projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: true } } },
+      [paused]: { ...summary(paused, 1), projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: false } } },
+      [external]: {
+        ...summary(external, 1), running: true, projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: true } },
+      },
+    }
+    const input = props(catalog({ entries, team: sharedTeam }), {
+      [CHILD]: catalog({ entries: [{ id: GRANDCHILD, mode: 'continuable', label: 'nested', activity: 'running' }] }),
+    }, summaries)
+    const view = render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: '4 个子智能体' }))
+    const header = view.container.ownerDocument.querySelector<HTMLElement>('[data-subagent-section-header]')!
+    expect(within(header).getByRole('heading', { name: '子智能体' })).toBeTruthy()
+    expect(within(header).queryByRole('button')).toBeNull()
+    expect(header.textContent).toBe('子智能体1 已完成\u2002·\u20021 进行中\u2002·\u20021 未运行\u2002·\u20021 外部任务')
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    expect(header.textContent).toContain('1 进行中')
+    expect(header.textContent).not.toContain('2 进行中')
+    view.rerender(<HeaderCatalog {...input} t={makeTranslate(en)} />)
+    expect(header.textContent).toBe('Subagents1 completed\u2002·\u20021 in progress\u2002·\u20021 not running\u2002·\u20021 external')
+  })
+
+  it('omits zero progress counts from a completed-only catalog header', () => {
+    const input = props(catalog({
+      team: sharedTeam, entries: [{ id: CHILD, mode: 'continuable', label: 'finished', activity: 'inactive' }],
+    }), {}, {
+      [CHILD]: { ...summary(CHILD, 1), projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: true } } },
+    })
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个子智能体' }))
+    const header = document.querySelector('[data-subagent-section-header]')!
+    expect(header.textContent).toBe('子智能体1 已完成')
+  })
+
+  it.each([
+    { name: 'absent Team projection', team: undefined, footer: true },
+    { name: 'disabled Team mode', team: { ...sharedTeam, enabled: false }, footer: true },
+    { name: 'empty tasks', team: { enabled: true, tasks: [] }, footer: true },
+    { name: 'deleted-only tasks', team: { enabled: true, tasks: [{ ...sharedTask, status: 'deleted' }] }, footer: true },
+    { name: 'failure without tasks', team: { enabled: true, tasks: [], failure: 'Invalid task record' }, footer: true },
+    { name: 'unavailable task footer', team: sharedTeam, footer: false },
+  ] satisfies { name: string; team: TeamProjection | undefined; footer: boolean }[])(
+    'omits section headings from a members-only catalog with $name', ({ team, footer }) => {
+      const input = props(catalog({ ...team === undefined ? {} : { team } }))
+      render(<HeaderCatalog {...input} useFooterAvailable={select => select(footer)} />)
+      fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+      expect(screen.getByRole('tree')).toBeTruthy()
+      expect(screen.queryByRole('heading')).toBeNull()
+      expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
+      expect(screen.queryByText(zh['section.empty'])).toBeNull()
+    },
+  )
+
+  it('shows the description above the Session id and opens the row without a description toggle', () => {
+    const description = 'Check the construction and all bounds. '.repeat(20).trim()
+    const input = props(catalog({
+      entries: [{ id: CHILD, mode: 'continuable', label: description, activity: 'running' }],
+    }))
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
+    const primary = within(row).getByText(description)
+    const id = within(row).getByText(CHILD)
+    expect(primary.compareDocumentPosition(id) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(row.getAttribute('aria-label')).toMatch(/^Check the construction/)
+    expect(primary.tagName).toBe('SPAN')
+    expect(primary.getAttribute('aria-expanded')).toBeNull()
+    expect(primary.querySelector('svg')).toBeNull()
+    expect(within(row).queryByRole('button', { name: /描述/ })).toBeNull()
+    fireEvent.click(primary)
+    expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+    expect(screen.queryByRole('treeitem')).toBeNull()
+  })
+
+  it.each([undefined, ''])('keeps a single ID line when the creation description is %s', (label) => {
+    const input = props(catalog({
+      entries: [{ id: CHILD, mode: 'one-shot', ...label === undefined ? {} : { label }, activity: 'running' }],
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
+    expect(within(row).getAllByText(CHILD)).toHaveLength(1)
+    expect(row.getAttribute('aria-label')).toMatch(new RegExp(`^${CHILD}`))
+  })
+
+  it('shows agent names in place of Session ids while navigation keeps the Session id', () => {
+    const external = 'external-id' as SessionId
+    const input = props(catalog({
+      entries: [
+        { id: CHILD, mode: 'continuable', label: 'Review the diff', name: 'reviewer', activity: 'running' },
+        { id: GRANDCHILD, mode: 'continuable', label: '', name: 'checker', activity: 'inactive' },
+        { id: external, mode: 'external', name: 'outside', activity: 'inactive' },
+      ],
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
+    render(<HeaderCatalog {...input} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const named = screen.getByRole('treeitem', { name: /^Review the diff reviewer/ })
+    expect(within(named).getByText('Review the diff').compareDocumentPosition(within(named).getByText('reviewer'))
+      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(named).queryByText(CHILD)).toBeNull()
+    const undescribed = screen.getByRole('treeitem', { name: /^checker/ })
+    expect(within(undescribed).getAllByText('checker')).toHaveLength(1)
+    expect(within(undescribed).queryByText(GRANDCHILD)).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /^outside/ }).getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(named)
+    expect(input.openChild).toHaveBeenCalledExactlyOnceWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+  })
+
+  it('hides an empty Team entry but keeps shared tasks and errors reachable without children', () => {
+    const input = props(catalog({ entries: [] }))
+    const initial = input.useSessions(state => state)
+    const mode: { enabled: boolean; tasks: TeamTaskView[]; failure?: string } = { enabled: true, tasks: [] }
+    const values = { ...initial.projectionsBySession[PARENT]!.values, agentTeam: mode }
+    const current = {
+      ...input,
+      useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select({
+        ...initial, projectionsBySession: { [PARENT]: { state: 'ready', error: null, values } },
+      }),
+      renderSlot: () => mode.tasks.some(task => task.status !== 'deleted')
+        ? <section aria-label="Shared tasks">Tasks</section>
+        : mode.failure === undefined ? null : <div role="alert">{mode.failure}</div>,
+    }
+    const view = render(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    mode.tasks = [{
+      id: 'task-1' as TeamTaskId, revision: 1, subject: 'Plan work', description: 'Prepare tasks before spawning workers',
+      status: 'pending', blockedBy: [], writeScopes: [], ready: true, writeScopeWarnings: [],
+    }]
+    view.rerender(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '0 个子智能体' }))
+    const tree = screen.getByRole('tree')
+    const board = screen.getByRole('region', { name: 'Shared tasks' })
+    expect(tree.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('heading', { name: zh['section.title'] })).toBeTruthy()
+    expect(screen.getByText(zh['section.empty'])).toBeTruthy()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    mode.tasks = []
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+    mode.tasks = [{ ...sharedTask, status: 'deleted' }]
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByText(zh['section.empty'])).toBeNull()
+    mode.tasks = []
+    mode.failure = 'Invalid task record'
+    view.rerender(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '0 个子智能体' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.queryByText(zh['section.empty'])).toBeNull()
+    expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
+    view.rerender(<HeaderCatalog {...current} useFooterAvailable={select => select(false)} />)
+    expect(screen.queryByRole('button')).toBeNull()
+    mode.enabled = false
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it.each([false, true])('keeps child navigation without reading or rendering a task board (listed: %s)', (listed) => {
+    const input = props(catalog({ team: sharedTeam }), {}, listed ? {
+      [CHILD]: { ...summary(CHILD, 1), origin: 'subagent', parentId: PARENT },
+    } : {}, { parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' })
+    const readProjection = vi.fn((): never => { throw new Error('child task-board projection read') })
+    const readFooter = vi.fn((): never => { throw new Error('child footer subscription') })
+    const renderFooter = vi.fn(() => <section aria-label="Shared tasks">Tasks</section>)
+    render(<>
+      <SubagentHeaderLineage {...input} lineageSessionId={CHILD} />
+      <SubagentCatalogAction {...input} sessionId={CHILD}
+        useProjection={readProjection} useFooterAvailable={readFooter} renderSlot={renderFooter} />
+    </>)
+    fireEvent.click(screen.getByRole('button', { name: /切换子智能体/u }))
+    expect(screen.getByRole('tree')).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Shared tasks' })).toBeNull()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.queryByText(zh['section.empty'])).toBeNull()
+    expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
+    expect(readProjection).not.toHaveBeenCalled()
+    expect(readFooter).not.toHaveBeenCalled()
+    expect(renderFooter).not.toHaveBeenCalled()
+  })
+
+  it('leaves task-board keys alone and dismisses the shared panel from outside focus', () => {
+    const input = props(catalog())
+    render(<><textarea aria-label="Composer" /><HeaderCatalog {...input}
+      renderSlot={() => <button type="button">Expand task</button>}
+    /></>)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    const expand = screen.getByRole('button', { name: 'Expand task' })
+    expand.focus()
+    fireEvent.keyDown(expand, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(expand)
+    const composer = screen.getByRole('textbox')
+    composer.focus()
+    fireEvent.keyDown(composer, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(composer)
+  })
+
   it('shows current catalog-only child status before Host list discovery', () => {
     const input = props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: 'worker', activity: 'inactive' }] }))
     const initial = input.useSessions(state => state)
@@ -173,7 +455,7 @@ describe('SubagentHeaderLineage', () => {
       useSessions={select => select({ ...initial, ids: [] })}
       useSessionStatus={select => select(statuses)}
     />)
-    expect(screen.getByRole('button', { name: '1 个子智能体，正在运行' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /\d+ 个子智能体$/ })).toBeTruthy()
   })
 
   it('shows retained children while an idle projection awaits refresh', () => {
@@ -182,7 +464,7 @@ describe('SubagentHeaderLineage', () => {
     let projections: SessionListState['projectionsBySession'] = {
       [PARENT]: { state: 'idle', error: null, values: {} },
     }
-    const current: SubagentHeaderLineageProps = {
+    const current: HeaderCatalogProps = {
       ...injected,
       useSessions: select => select({ ...initial, projectionsBySession: projections }),
     }
@@ -219,7 +501,7 @@ describe('SubagentHeaderLineage', () => {
     }
     const view = render(<HeaderCatalog {...props(catalog(), {}, summaries)} />)
 
-    const trigger = screen.getByRole('button', { name: '1 个子智能体，正在运行' })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     expect(trigger.querySelector('[data-state="ongoing"]')).not.toBeNull()
 
     view.rerender(<HeaderCatalog {...props(catalog(), {}, {
@@ -252,15 +534,16 @@ describe('SubagentHeaderLineage', () => {
   it('renders stable rows and catalog-addressed navigation', () => {
     const input = props(catalog())
     render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     hoverCatalog(trigger)
 
     expect(input.refreshProjection).not.toHaveBeenCalled()
     expect(screen.getAllByRole('treeitem')).toHaveLength(2)
-    expect(screen.getByText('正在扫描项目文件 · 可继续 · 正在运行')).toBeTruthy()
-    expect(screen.getByText('一次性 · 当前未运行')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '展开 worker 的下级子智能体' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '展开 reviewer 的下级子智能体' })).toBeTruthy()
+    expect(screen.getByText('worker')).toBeTruthy()
+    expect(screen.queryByText('正在扫描项目文件')).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /reviewer child-2 · 一次性 · 当前未运行/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '展开 reviewer 的下级子智能体' })).toBeNull()
 
     const sidebarButton = within(screen.getByRole('treeitem', { name: /worker/ }))
       .getByRole('button', { name: '在侧边栏打开 worker' })
@@ -296,6 +579,164 @@ describe('SubagentHeaderLineage', () => {
     expect(translate).toHaveBeenCalledWith('count.total.one', { count: 1 })
   })
 
+  it.each(['running', 'inactive'] as const)('shows the %s root activity glyph and retains its count without a down arrow', (activity) => {
+    render(<HeaderCatalog {...props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: 'worker', activity }] }))} />)
+    const trigger = screen.getByRole('button', { name: '1 个子智能体' })
+    const count = trigger.querySelector<HTMLElement>('[data-subagent-count]')!
+    expect(count.textContent).toBe('1 个子智能体')
+    expect(trigger.querySelector('[data-icon="dsw-icon-chevron-down-outline-regular"]')).toBeNull()
+    expect(trigger.querySelector('[data-state="ongoing"]') !== null).toBe(activity === 'running')
+    expect(trigger.querySelector('[data-icon="dsw-icon-users-outline-regular"]')).not.toBeNull()
+    count.style.display = 'none'
+    expect(trigger.querySelector('[data-subagent-count]')).toBe(count)
+    expect(screen.getByRole('button', { name: trigger.getAttribute('aria-label')! })).toBe(trigger)
+  })
+
+  it('toggles the compact catalog by click and restores focus on the second click', async () => {
+    vi.useFakeTimers()
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    const count = trigger.querySelector<HTMLElement>('[data-subagent-count]')!
+    count.style.display = 'none'
+    fireEvent.click(trigger)
+    await Promise.resolve()
+    const menu = screen.getByRole('dialog')
+    expect(document.activeElement).toBe(menu)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.pointerLeave(trigger.parentElement!)
+    fireEvent.pointerLeave(menu)
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.getByRole('dialog')).toBe(menu)
+    fireEvent.click(trigger)
+    await Promise.resolve()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(document.activeElement).toBe(trigger)
+    expect(trigger.querySelector('[data-subagent-count]')).toBe(count)
+  })
+
+  it('opens and pins the compact catalog with ArrowDown and focuses its first row', async () => {
+    vi.useFakeTimers()
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    trigger.querySelector<HTMLElement>('[data-subagent-count]')!.style.display = 'none'
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    await Promise.resolve()
+    const firstRow = screen.getByRole('treeitem', { name: /worker/u })
+    expect(document.activeElement).toBe(firstRow)
+    fireEvent.pointerLeave(trigger.parentElement!)
+    fireEvent.pointerLeave(screen.getByRole('dialog'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(document.activeElement).toBe(firstRow)
+    expect(screen.getByRole('treeitem', { name: /worker/u })).toBe(firstRow)
+    fireEvent.keyDown(firstRow, { key: 'Escape' })
+    await Promise.resolve()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it('does not open the compact catalog on hover', async () => {
+    vi.useFakeTimers()
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    trigger.querySelector<HTMLElement>('[data-subagent-count]')!.style.display = 'none'
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('rechecks count visibility before completing a pending wide hover', async () => {
+    vi.useFakeTimers()
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    const count = trigger.querySelector<HTMLElement>('[data-subagent-count]')!
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(149) })
+    count.style.display = 'none'
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.pointerLeave(trigger)
+    count.style.display = ''
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(150) })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(trigger.querySelector('[data-subagent-count]')).toBe(count)
+  })
+
+  it('shows the compact total-count tooltip after its delay and suppresses it while the menu is open', async () => {
+    vi.useFakeTimers()
+    enableTooltips()
+    const view = render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    trigger.querySelector<HTMLElement>('[data-subagent-count]')!.style.display = 'none'
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(499) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+    expect(screen.getByRole('tooltip').textContent).toBe('2 个子智能体')
+    expect(view.container.contains(screen.getByRole('tooltip'))).toBe(false)
+    fireEvent.click(trigger)
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.pointerLeave(trigger)
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  it('keeps switcher chevrons and suppresses the total-count tooltip for switchers', async () => {
+    vi.useFakeTimers()
+    enableTooltips()
+    const input = props(catalog(), {}, { [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' } })
+    render(<HeaderCatalog {...input} sessionId={CHILD} lineageSessionId={CHILD} />)
+    const trigger = screen.getByRole('button', { name: '切换子智能体：worker' })
+    expect(trigger.querySelector('[data-subagent-count]')).toBeNull()
+    expect(trigger.querySelector('svg')).toBeTruthy()
+    fireEvent.keyDown(document.body, { key: 'Tab' })
+    fireEvent.focus(trigger)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
+  describe.each(['root', 'child'] as const)('%s catalog tooltip timing', (surface) => {
+    it('delays the sidebar action tooltip by 500ms', () => {
+      vi.useFakeTimers()
+      enableTooltips()
+      const sibling = 'child-2' as SessionId
+      const description = 'Review all implementation details and report remaining issues'
+      const input = props(catalog({
+        entries: [
+          { id: CHILD, mode: 'continuable', label: 'worker', activity: 'running' },
+          { id: sibling, mode: 'one-shot', label: description, activity: 'inactive' },
+        ],
+      }), {}, {
+        [CHILD]: { ...summary(CHILD, 1), origin: 'subagent', parentId: PARENT },
+        [sibling]: { ...summary(sibling, 1), origin: 'subagent', parentId: PARENT },
+      })
+      const sessionId = surface === 'root' ? PARENT : CHILD
+      render(<HeaderCatalog {...input} sessionId={sessionId} lineageSessionId={sessionId} />)
+      fireEvent.click(screen.getByRole('button'))
+      const entry = screen.getByRole('treeitem', { name: new RegExp(sibling) })
+      const anchor = within(entry).getByRole('button', { name: /在侧边栏打开/u })
+      const label = zh['open.sidebar']
+      fireEvent.pointerEnter(anchor)
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe(label)
+      fireEvent.pointerLeave(anchor)
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      fireEvent.keyDown(document.body, { key: 'Tab' })
+      fireEvent.focus(anchor)
+      expect(screen.getByRole('tooltip').textContent).toBe(label)
+    })
+  })
+
   it('removes the disclosure column from branchless catalog levels', () => {
     render(<HeaderCatalog {...props(catalog({
       entries: catalog().entries.slice(0, 1),
@@ -305,18 +746,32 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByRole('treeitem', { name: /worker/ }).children).toHaveLength(1)
   })
 
-  it('aligns a known leaf with siblings whose child catalog is still unknown', () => {
-    render(<HeaderCatalog {...props(catalog(), { [CHILD]: catalog({ entries: [] }) })} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+  it('aligns a known leaf with siblings whose child catalog contains descendants', () => {
+    render(<HeaderCatalog {...props(catalog(), {
+      [CHILD]: catalog({ entries: [] }),
+      ['child-2' as SessionId]: catalog({ entries: [{ id: GRANDCHILD, mode: 'continuable', label: 'nested', activity: 'inactive' }] }),
+    })} />)
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
 
     expect(screen.getByRole('treeitem', { name: /worker/ }).children).toHaveLength(2)
     expect(screen.getByRole('button', { name: /展开 reviewer/ })).toBeTruthy()
   })
 
+  it.each([
+    ['ArrowDown', /worker/], ['Home', /worker/], ['ArrowUp', /reviewer/], ['End', /reviewer/],
+  ] as const)('enters the tree with %s after clicking the trigger', async (key, name) => {
+    render(<HeaderCatalog {...props(catalog())} />)
+    fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    await Promise.resolve()
+    expect(document.activeElement).toBe(screen.getByRole('dialog'))
+    fireEvent.keyDown(document.activeElement as Element, { key })
+    expect(document.activeElement).toBe(screen.getByRole('treeitem', { name }))
+  })
+
   it('supports trigger/menu keyboard traversal, Escape focus restore, and outside close', async () => {
     const input = props(catalog())
     render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     await Promise.resolve()
     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /worker/ }))
@@ -342,7 +797,7 @@ describe('SubagentHeaderLineage', () => {
   it('keeps touch entry closed and opens the catalog when tapped', async () => {
     vi.useFakeTimers()
     render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     const touch = new Event('pointerover', { bubbles: true })
     Object.defineProperty(touch, 'pointerType', { value: 'touch' })
     fireEvent(trigger, touch)
@@ -358,7 +813,7 @@ describe('SubagentHeaderLineage', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(duration) })
     }
     const view = render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     const triggerRect = vi.spyOn(trigger, 'getBoundingClientRect')
       .mockReturnValue({ bottom: 40, left: 50 } as DOMRect)
 
@@ -366,13 +821,13 @@ describe('SubagentHeaderLineage', () => {
     await advance(149)
     expect(screen.queryByRole('tree')).toBeNull()
     await advance(1)
-    const menu = screen.getByRole('tree').parentElement!
-    expect(menu.style.top).toBe('45px')
-    expect(menu.style.left).toBe('50px')
+    const menu = screen.getByRole('dialog')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(trigger.style.anchorName).not.toBe('')
     triggerRect.mockReturnValue({ bottom: 60, left: 70 } as DOMRect)
     fireEvent.resize(window)
-    expect(menu.style.top).toBe('65px')
-    expect(menu.style.left).toBe('70px')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(triggerRect).not.toHaveBeenCalled()
     fireEvent.pointerLeave(trigger.parentElement!)
     fireEvent.pointerEnter(menu)
     await advance(120)
@@ -396,7 +851,7 @@ describe('SubagentHeaderLineage', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(duration) })
     }
     render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     const root = trigger.parentElement!
 
     fireEvent.click(trigger)
@@ -431,22 +886,22 @@ describe('SubagentHeaderLineage', () => {
   it('keeps the hover catalog open when the pointer returns directly to its trigger', async () => {
     vi.useFakeTimers()
     render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     fireEvent.pointerOver(trigger, { relatedTarget: document.body })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
-    const menu = screen.getByRole('tree').parentElement!
+    const menu = screen.getByRole('dialog')
     fireEvent.pointerOut(trigger, { relatedTarget: menu })
     fireEvent.pointerOver(menu, { relatedTarget: trigger })
     fireEvent.pointerOut(menu, { relatedTarget: trigger })
     fireEvent.pointerOver(trigger, { relatedTarget: menu })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
-    expect(screen.getByRole('tree').parentElement).toBe(menu)
+    expect(screen.getByRole('dialog')).toBe(menu)
   })
 
   it('cancels pending hover dismissal when the catalog trigger is activated from the keyboard', async () => {
     vi.useFakeTimers()
     render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     fireEvent.pointerOver(trigger, { relatedTarget: document.body })
     await act(async () => { await vi.advanceTimersByTimeAsync(150) })
     fireEvent.pointerOut(trigger, { relatedTarget: document.body })
@@ -455,32 +910,48 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByRole('tree')).toBeTruthy()
   })
 
-  it('repositions an open catalog after viewport resize and document scroll', () => {
+  it('keeps the open catalog linked to its CSS anchor without layout reads', () => {
     const view = render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     const bounds = vi.spyOn(trigger, 'getBoundingClientRect')
-    bounds.mockReturnValue({ bottom: 20, left: 30 } as DOMRect)
     hoverCatalog(trigger)
-    const menu = screen.getByRole('tree').parentElement!
-    expect(menu.style.top).toBe('25px')
-    expect(menu.style.left).toBe('30px')
-
-    bounds.mockReturnValue({ bottom: 70, left: 80 } as DOMRect)
-    act(() => { window.dispatchEvent(new Event('resize')) })
-    expect(menu.style.top).toBe('75px')
-    expect(menu.style.left).toBe('80px')
-
-    bounds.mockReturnValue({ bottom: 90, left: 100 } as DOMRect)
-    act(() => { document.dispatchEvent(new Event('scroll')) })
-    expect(menu.style.top).toBe('95px')
-    expect(menu.style.left).toBe('100px')
+    const menu = screen.getByRole('dialog')
+    expect(trigger.style.anchorName).not.toBe('')
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    act(() => { window.dispatchEvent(new Event('resize')); document.dispatchEvent(new Event('scroll')) })
+    expect(menu.style.positionAnchor).toBe(trigger.style.anchorName)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(bounds).not.toHaveBeenCalled()
     view.unmount()
+  })
+
+  it('does not shrink the catalog through visual viewport inline overrides', () => {
+    const viewport = Object.assign(new EventTarget(), { width: 500, height: 400, offsetLeft: 0, offsetTop: 0 })
+    vi.stubGlobal('visualViewport', viewport)
+    const listen = vi.spyOn(viewport, 'addEventListener')
+    render(<HeaderCatalog {...props(catalog())} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    fireEvent.click(trigger)
+    const menu = screen.getByRole('dialog')
+    const placement = menu.style.positionAnchor
+    act(() => {
+      viewport.width = 400
+      viewport.height = 300
+      viewport.dispatchEvent(new Event('resize'))
+    })
+    expect(menu.style.positionAnchor).toBe(placement)
+    expect(menu.style.left).toBe('')
+    expect(menu.style.top).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-width')).toBe('')
+    expect(menu.style.getPropertyValue('--dsh-anchored-max-height')).toBe('')
+    expect(listen).not.toHaveBeenCalled()
   })
 
   it('cancels a pending hover when the trigger becomes hidden', async () => {
     vi.useFakeTimers()
     const view = render(<HeaderCatalog {...props(catalog())} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
 
     fireEvent.pointerEnter(trigger)
     await vi.advanceTimersByTimeAsync(149)
@@ -507,7 +978,7 @@ describe('SubagentHeaderLineage', () => {
       ],
     }))
     render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     fireEvent.keyDown(trigger, { key: 'Tab' })
     expect(screen.queryByRole('tree')).toBeNull()
     hoverCatalog(trigger)
@@ -530,7 +1001,7 @@ describe('SubagentHeaderLineage', () => {
     render(<HeaderCatalog {...input} />)
     hoverCatalog(screen.getByRole('button', { name: /子智能体/ }))
     const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
-    expect(row.textContent).toContain('模式未知')
+    expect(row.getAttribute('aria-label')).toContain('模式未知')
     fireEvent.keyDown(row, { key: 'Enter' })
     expect(input.openChild).toHaveBeenCalledWith({ parentSessionId: PARENT, childSessionId: CHILD, mode: 'unknown' })
   })
@@ -589,6 +1060,7 @@ describe('SubagentHeaderLineage', () => {
         origin: 'subagent' as const,
         running: activity === 'running',
         projectionValues: {
+          subagentCatalog: [],
           subagentTiming: {
             settledMs,
             ...(id === 'finished'
@@ -608,7 +1080,7 @@ describe('SubagentHeaderLineage', () => {
     })) as Record<SessionId, SessionSummary>
     const input = props(catalog({ entries }), {}, summaries)
     render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: '1 个子智能体，正在运行' })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     expect(within(trigger).getByText('9 个子智能体')).toBeTruthy()
     hoverCatalog(trigger)
 
@@ -657,6 +1129,7 @@ describe('SubagentHeaderLineage', () => {
         origin: 'subagent',
         running: true,
         projectionValues: {
+          subagentCatalog: [],
           subagentTiming: { settledMs: 0, active: { since: now - 5_000, through: now } },
         },
       },
@@ -690,10 +1163,10 @@ describe('SubagentHeaderLineage', () => {
       [GRANDCHILD]: grandchildCatalog,
     })
     render(<HeaderCatalog {...input} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
 
     fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
-    expect(input.refreshProjection).toHaveBeenCalledWith(CHILD)
+    expect(input.refreshProjection).not.toHaveBeenCalled()
     const nested = screen.getByRole('treeitem', { name: /indexer/ })
     expect(nested.getAttribute('aria-level')).toBe('2')
 
@@ -704,15 +1177,15 @@ describe('SubagentHeaderLineage', () => {
     })
   })
 
-  it('keeps ordinary cold descendants loading until their real catalog arrives', () => {
+  it('reveals cold descendants only when shared catalog data arrives', () => {
     const secondGrandchild = 'grandchild-2' as SessionId
     const summaries = {
       [CHILD]: { ...summary(CHILD, 1), running: true },
       [GRANDCHILD]: {
-        ...summary(GRANDCHILD, 1), parentId: CHILD, origin: 'subagent' as const,
+        ...summary(GRANDCHILD, 1), projectionValues: { subagentCatalog: [] }, parentId: CHILD, origin: 'subagent' as const,
       },
       [secondGrandchild]: {
-        ...summary(secondGrandchild, 1), parentId: CHILD, origin: 'subagent' as const,
+        ...summary(secondGrandchild, 1), projectionValues: { subagentCatalog: [] }, parentId: CHILD, origin: 'subagent' as const,
         running: true,
       },
     }
@@ -721,12 +1194,12 @@ describe('SubagentHeaderLineage', () => {
     let state: SessionListState = { ...initial, ids: [CHILD, GRANDCHILD, secondGrandchild] }
     const current = { ...deferred, useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select(state) }
     const view = render(<HeaderCatalog {...current} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
-    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
 
-    expect(deferred.refreshProjection).toHaveBeenCalledWith(CHILD)
-    expect(screen.getByRole('group').getAttribute('aria-busy')).toBe('true')
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(deferred.refreshProjection).not.toHaveBeenCalled()
+    expect(screen.getByRole('treeitem', { name: /worker/ }).getAttribute('aria-busy')).toBeNull()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryByRole('treeitem', { name: '正在加载子智能体' })).toBeNull()
     expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
     expect(screen.queryByText(/模式未知/)).toBeNull()
@@ -739,7 +1212,7 @@ describe('SubagentHeaderLineage', () => {
       },
     }
     view.rerender(<HeaderCatalog {...current} />)
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
     expect(screen.queryByText(/模式未知/)).toBeNull()
 
@@ -759,16 +1232,162 @@ describe('SubagentHeaderLineage', () => {
     }, summaries)
     state = { ...state, projectionsBySession: ready.useSessions(value => value.projectionsBySession) }
     view.rerender(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
     expect(screen.getByRole('group').getAttribute('aria-busy')).toBeNull()
     expect(screen.getByRole('treeitem', { name: /indexer/ }).querySelector('[data-state="idle"]')).not.toBeNull()
     expect(screen.getByRole('treeitem', { name: /critic/ }).querySelector('[data-state="ongoing"]')).not.toBeNull()
     expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryByText(/模式未知/)).toBeNull()
-    expect(deferred.refreshProjection).toHaveBeenCalledExactlyOnceWith(CHILD)
+    expect(deferred.refreshProjection).not.toHaveBeenCalled()
     expect(deferred.openChild).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])('shows list migration status before expanding, with cached descendants=%s', (cached) => {
+  it.each([
+    { running: true, completed: false, dot: 'ongoing' },
+    { running: false, completed: true, dot: 'done' },
+    { running: false, completed: false, dot: 'idle' },
+  ])('preserves the $dot activity marker while an unknown directory loads', ({ running, completed, dot }) => {
+    const input = props(catalog({ entries: [{
+      id: CHILD, mode: 'continuable', label: 'worker', activity: running ? 'running' : 'inactive',
+    }] }), {}, { [CHILD]: {
+      ...summary(CHILD, 1), running,
+      projectionValues: { subagentTiming: { settledMs: 0, lastTurnCompleted: completed } },
+    } })
+    let state = input.useSessions(value => value)
+    const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
+    const view = render(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 个子智能体' }))
+    const row = screen.getByRole('treeitem', { name: /worker/ })
+    const marker = row.querySelector(`[data-state="${dot}"]`)
+    expect(marker).not.toBeNull()
+    expect(row.children).toHaveLength(1)
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+
+    state = { ...state, projectionsBySession: { ...state.projectionsBySession, [CHILD]: {
+      ...state.projectionsBySession[CHILD]!, state: 'loading',
+    } } }
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.getByRole('treeitem', { name: /worker/ })).toBe(row)
+    expect(row.querySelector(`[data-state="${dot}"]`)).toBe(marker)
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
+    expect(row.hasAttribute('aria-busy')).toBe(false)
+    expect(row.hasAttribute('aria-expanded')).toBe(false)
+    expect(within(row).getByRole('button', { name: '在侧边栏打开 worker' }).hasAttribute('disabled')).toBe(false)
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+  })
+
+  it('leaves missing catalogs unread and retries only an explicitly selected failure', () => {
+    const input = props(catalog(), {}, { [CHILD]: summary(CHILD, 1) })
+    let state = input.useSessions(value => value)
+    const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
+    const view = render(<HeaderCatalog {...current} />)
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '2 个子智能体' }))
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
+
+    state = { ...state, projectionsBySession: {
+      ...state.projectionsBySession,
+      [CHILD]: { state: 'error', values: {}, error: new RemoteError('gateway/internal', 'private diagnostic', {}) },
+    } }
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.getByRole('alert').textContent).toContain('无法加载子智能体')
+    expect(screen.queryByText('private diagnostic')).toBeNull()
+    expect(screen.queryByRole('status')).toBeNull()
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    expect(input.prepareCatalog.mock.calls).toEqual([[PARENT], [CHILD]])
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    expect(input.openChild).not.toHaveBeenCalled()
+    state = { ...state, projectionsBySession: {
+      ...state.projectionsBySession, [CHILD]: { state: 'ready', values: { subagentCatalog: [] }, error: null },
+    } }
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /worker/ }).getAttribute('aria-busy')).toBeNull()
+  })
+
+  it('expands cached shared projections without reading the next level', () => {
+    const childSummary = { ...summary(CHILD, 1), projectionValues: { subagentCatalog: [
+      { id: GRANDCHILD, createdAt: 1, mode: 'continuable' as const, label: 'indexer' },
+    ] } }
+    const input = props(catalog(), {}, { [CHILD]: childSummary, [GRANDCHILD]: summary(GRANDCHILD, 1) })
+    let state = input.useSessions(value => value)
+    const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
+    const view = render(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '2 个子智能体' }))
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    expect(screen.queryByRole('treeitem', { name: /indexer/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    expect(screen.getByRole('treeitem', { name: /indexer/ })).toBeTruthy()
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: '展开 indexer 的下级子智能体' })).toBeNull()
+
+    state = { ...state, projectionsBySession: {
+      ...state.projectionsBySession, [CHILD]: { state: 'ready', error: null, values: { subagentCatalog: [] } },
+    } }
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.queryByRole('button', { name: '收起 worker 的下级子智能体' })).toBeNull()
+    expect(screen.queryByRole('treeitem', { name: /indexer/ })).toBeNull()
+  })
+
+  it('updates disclosure when a visible leaf gains children without fetching any level', () => {
+    const input = props(catalog())
+    let state = input.useSessions(value => value)
+    const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
+    const view = render(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '2 个子智能体' }))
+    const worker = screen.getByRole('treeitem', { name: /worker/ })
+    expect(worker.hasAttribute('aria-expanded')).toBe(false)
+    state = { ...state, projectionsBySession: { ...state.projectionsBySession, [CHILD]: {
+      state: 'idle', error: null, values: {
+        subagentCatalog: [{ id: GRANDCHILD, createdAt: 1, mode: 'continuable', label: 'indexer' }],
+      },
+    } } }
+    view.rerender(<HeaderCatalog {...current} />)
+    expect(screen.getByRole('treeitem', { name: /worker/ })).toBe(worker)
+    expect(worker.getAttribute('aria-expanded')).toBe('false')
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    expect(input.refreshProjection).not.toHaveBeenCalled()
+    expect(screen.getByRole('treeitem', { name: /indexer/ })).toBeTruthy()
+  })
+
+  it('prepares only explicitly opened levels', () => {
+    const input = props(catalog(), {
+      [CHILD]: catalog({ entries: [{ id: GRANDCHILD, mode: 'continuable', label: 'indexer', activity: 'inactive' }] }),
+    })
+    render(<HeaderCatalog {...input} />)
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+    hoverCatalog(trigger)
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    expect(input.prepareCatalog.mock.calls).toEqual([[PARENT], [CHILD]])
+    fireEvent.click(screen.getByRole('button', { name: '收起 worker 的下级子智能体' }))
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    expect(input.prepareCatalog).toHaveBeenCalledTimes(2)
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    expect(input.prepareCatalog.mock.calls.at(-1)).toEqual([PARENT])
+  })
+
+  it('reports an unexpected explicit catalog failure', async () => {
+    const input = props(catalog())
+    const failure = new Error('projection reader failed')
+    input.prepareCatalog.mockRejectedValueOnce(failure)
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      render(<HeaderCatalog {...input} />)
+      fireEvent.click(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+      await vi.waitFor(() => { expect(report).toHaveBeenCalledWith('[ui-subagent] catalog discovery failed:', failure) })
+    } finally {
+      report.mockRestore()
+    }
+  })
+
+  it.each([false, true])('keeps legacy rows navigable without a migration notice, with cached descendants=%s', (cached) => {
     const input = props(catalog(), cached ? {
       [CHILD]: catalog({ entries: [{ id: GRANDCHILD, mode: 'continuable', label: 'indexer', activity: 'inactive' }] }),
     } : {}, {
@@ -777,11 +1396,12 @@ describe('SubagentHeaderLineage', () => {
     let state = input.useSessions(value => value)
     const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
     const view = render(<HeaderCatalog {...current} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     hoverCatalog(trigger)
 
     const child = screen.getByRole('treeitem', { name: /worker/ })
-    expect(within(child).getByText(/需要迁移/)).toBeTruthy()
+    expect(within(child).queryByText(/需要迁移/)).toBeNull()
+    expect(child.getAttribute('aria-label')).not.toContain('需要迁移')
     expect(within(child).queryByRole('button', { name: /下级子智能体/ })).toBeNull()
     fireEvent.keyDown(child, { key: 'ArrowRight' })
     expect(input.refreshProjection).not.toHaveBeenCalled()
@@ -794,8 +1414,13 @@ describe('SubagentHeaderLineage', () => {
     view.rerender(<HeaderCatalog {...current} />)
     hoverCatalog(trigger)
     expect(screen.queryByText(/需要迁移/)).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
-    expect(input.refreshProjection).toHaveBeenCalledExactlyOnceWith(CHILD)
+    if (cached) {
+      fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+      expect(input.refreshProjection).not.toHaveBeenCalled()
+    } else {
+      expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
+      expect(input.refreshProjection).not.toHaveBeenCalled()
+    }
   })
 
   it.each(['ready', 'migration-required'] as const)('stops at a migration-required child until its real catalog arrives with %s read state', (readState) => {
@@ -817,8 +1442,8 @@ describe('SubagentHeaderLineage', () => {
     }
     const current = { ...input, useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select(state) }
     const view = render(<HeaderCatalog {...current} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
-    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
+    expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
     expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
 
     state = {
@@ -833,15 +1458,15 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
     expect(screen.queryByRole('treeitem', { name: /ordinary-fork/ })).toBeNull()
     const child = screen.getByRole('treeitem', { name: /worker/ })
-    expect(within(child).getByText(/需要迁移/)).toBeTruthy()
+    expect(within(child).queryByText(/需要迁移/)).toBeNull()
+    expect(child.getAttribute('aria-label')).not.toContain('需要迁移')
     expect(within(child).queryByText(/模式未知/)).toBeNull()
-    expect(en['catalog.migrationRequired']).toBe('Migration required')
     expect(child.hasAttribute('aria-expanded')).toBe(false)
     expect(within(child).queryByRole('button', { name: /下级子智能体/ })).toBeNull()
     expect(screen.queryByRole('group')).toBeNull()
     expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     fireEvent.keyDown(child, { key: 'ArrowRight' })
-    expect(input.refreshProjection).toHaveBeenCalledExactlyOnceWith(CHILD)
+    expect(input.refreshProjection).not.toHaveBeenCalled()
     expect(input.openChild).not.toHaveBeenCalled()
     fireEvent.click(child)
     expect(input.openChild).toHaveBeenCalledExactlyOnceWith({
@@ -857,11 +1482,11 @@ describe('SubagentHeaderLineage', () => {
     }, summaries)
     state = { ...state, projectionsBySession: projected.useSessions(value => value.projectionsBySession) }
     view.rerender(<HeaderCatalog {...current} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
     fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
     expect(screen.queryByText(/需要迁移/)).toBeNull()
     expect(screen.queryByText(/模式未知/)).toBeNull()
-    expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /indexer grandchild/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('treeitem', { name: /indexer/ }))
     expect(input.openChild).toHaveBeenLastCalledWith({
       parentSessionId: CHILD, childSessionId: GRANDCHILD, mode: 'continuable',
@@ -886,14 +1511,15 @@ describe('SubagentHeaderLineage', () => {
     }
     const current = { ...input, useSessions: <T,>(select: (snapshot: SessionListState) => T): T => select(state) }
     render(<HeaderCatalog {...current} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     hoverCatalog(trigger)
 
     const child = screen.getByRole('treeitem', { name: /worker/ })
     fireEvent.keyDown(child, { key: 'ArrowRight' })
     fireEvent.keyDown(child, { key: 'ArrowRight' })
     expect(input.refreshProjection).not.toHaveBeenCalled()
-    expect(within(child).getByText(/需要迁移/)).toBeTruthy()
+    expect(within(child).queryByText(/需要迁移/)).toBeNull()
+    expect(child.getAttribute('aria-label')).not.toContain('需要迁移')
     expect(within(child).queryByText(/模式未知/)).toBeNull()
     expect(child.hasAttribute('aria-expanded')).toBe(false)
     expect(within(child).queryByRole('button', { name: /下级子智能体/ })).toBeNull()
@@ -926,7 +1552,7 @@ describe('SubagentHeaderLineage', () => {
     })
     const initial = input.useSessions(state => state)
     render(<HeaderCatalog {...input} useSessions={select => select({ ...initial, ids: [CHILD, GRANDCHILD] })} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
 
     expect(screen.queryByRole('button', { name: '展开 worker 的下级子智能体' })).toBeNull()
     expect(screen.queryByRole('treeitem', { name: /grandchild/ })).toBeNull()
@@ -942,7 +1568,7 @@ describe('SubagentHeaderLineage', () => {
       }),
     })
     render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     fireEvent.keyDown(trigger, { key: 'ArrowDown' })
     await Promise.resolve()
     const worker = screen.getByRole('treeitem', { name: /worker/ })
@@ -952,7 +1578,30 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.queryByRole('treeitem', { name: /indexer/ })).toBeNull()
   })
 
-  it('closes expanded descendants even when their own catalogs have not arrived', () => {
+  it('collapses expanded descendants whose catalog is removed before their parent closes', () => {
+    const input = props(catalog(), {
+      [CHILD]: catalog({ entries: [{ id: GRANDCHILD, mode: 'continuable', label: 'indexer', activity: 'inactive' }] }),
+      [GRANDCHILD]: catalog({ entries: [{ id: 'great-grandchild' as SessionId, mode: 'continuable', label: 'deep', activity: 'inactive' }] }),
+    })
+    let state = input.useSessions(value => value)
+    const current = { ...input, useSessions: <T,>(select: (value: SessionListState) => T): T => select(state) }
+    const view = render(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '2 个子智能体' }))
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    fireEvent.click(screen.getByRole('button', { name: '展开 indexer 的下级子智能体' }))
+    const { [GRANDCHILD]: _projection, ...projectionsBySession } = state.projectionsBySession
+    const { [GRANDCHILD]: _summary, ...byId } = state.byId
+    state = { ...state, projectionsBySession, byId }
+    view.rerender(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '收起 worker 的下级子智能体' }))
+    expect(screen.queryByRole('treeitem', { name: /indexer/ })).toBeNull()
+    state = input.useSessions(value => value)
+    view.rerender(<HeaderCatalog {...current} />)
+    fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
+    expect(screen.getByRole('treeitem', { name: /indexer/ }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('closes a branch while the visible descendants are loading', () => {
     const input = props(catalog(), {
       [CHILD]: catalog({
         entries: [{
@@ -960,11 +1609,12 @@ describe('SubagentHeaderLineage', () => {
           label: 'indexer', activity: 'running',
         }],
       }),
-    })
+    }, { [GRANDCHILD]: summary(GRANDCHILD, 1) })
     render(<HeaderCatalog {...input} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
     fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
-    fireEvent.click(screen.getByRole('button', { name: '展开 indexer 的下级子智能体' }))
+    expect(screen.queryByRole('button', { name: '展开 indexer 的下级子智能体' })).toBeNull()
+    expect(screen.getByRole('treeitem', { name: /indexer/ }).getAttribute('aria-busy')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '收起 worker 的下级子智能体' }))
 
     expect(screen.queryByRole('treeitem', { name: /indexer/ })).toBeNull()
@@ -989,7 +1639,8 @@ describe('SubagentHeaderLineage', () => {
     hoverCatalog(screen.getByRole('button', { name: /0 个子智能体/ }))
     expect(screen.getByText('index down')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /重试/ }))
-    expect(failed.refreshProjection).toHaveBeenCalledWith(PARENT)
+    expect(failed.prepareCatalog).toHaveBeenCalledExactlyOnceWith(PARENT)
+    expect(failed.refreshProjection).not.toHaveBeenCalled()
   })
 
   it.each(['absent', 'idle', 'loading', 'ready'] as const)('does not expose header-only descendants when the projection read is %s', (state) => {
@@ -1033,7 +1684,7 @@ describe('SubagentHeaderLineage', () => {
   it('navigates from outside the tree and tolerates a deferred focus after unmount', async () => {
     const input = props(catalog())
     const view = render(<HeaderCatalog {...input} />)
-    const trigger = screen.getByRole('button', { name: /1 个子智能体，正在运行/ })
+    const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
     hoverCatalog(trigger)
     fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowUp' })
     expect(document.activeElement).toBe(screen.getByRole('treeitem', { name: /reviewer/ }))
@@ -1052,7 +1703,7 @@ describe('SubagentHeaderLineage', () => {
       }),
     })
     const view = render(<HeaderCatalog {...populated} />)
-    hoverCatalog(screen.getByRole('button', { name: /1 个子智能体，正在运行/ }))
+    hoverCatalog(screen.getByRole('button', { name: /\d+ 个子智能体$/ }))
     fireEvent.click(screen.getByRole('button', { name: '展开 worker 的下级子智能体' }))
 
     const empty = props(catalog({ entries: [] }))
@@ -1064,16 +1715,17 @@ describe('SubagentHeaderLineage', () => {
     const view = render(<HeaderCatalog {...props(catalog())} />)
 
     expect(screen.queryByText('/')).toBeNull()
-    expect(screen.getByRole('button', { name: /1 个子智能体，正在运行/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /\d+ 个子智能体$/ })).toBeTruthy()
 
     view.rerender(<HeaderCatalog {...props(catalog({ entries: [] }))} />)
     expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it('combines the current subagent title and chevron into the parent-catalog trigger', () => {
+  it('prefers the creation description in the breadcrumb while keeping the row ID and navigation actions', () => {
     const sibling = 'child-2' as SessionId
+    const entries = catalog().entries
     const input = {
-      ...props(catalog(), {}, {
+      ...props(catalog({ entries }), {}, {
         [CHILD]: {
           ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const,
         },
@@ -1098,12 +1750,17 @@ describe('SubagentHeaderLineage', () => {
 
     hoverCatalog(switcher)
     expect(input.refreshProjection).not.toHaveBeenCalled()
-    const current = screen.getByRole('treeitem', { name: /worker/ })
+    const current = screen.getByRole('treeitem', { name: /^worker child / })
     expect(current.getAttribute('aria-current')).toBe('true')
     expect(within(current).getByText('worker').className).toContain('currentLabel')
     expect(within(current).queryByRole('button', { name: '在侧边栏打开 worker' })).toBeNull()
-    expect(within(screen.getByRole('treeitem', { name: /reviewer/ })).getByRole('button', { name: '在侧边栏打开 reviewer' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('treeitem', { name: /reviewer/ }))
+    const selectedMark = current.querySelector('[data-subagent-current]')
+    expect(selectedMark?.getAttribute('aria-hidden')).toBe('true')
+    expect(selectedMark?.querySelector('[data-icon="dsw-icon-check-outline-regular"]')).toBeTruthy()
+    const other = screen.getByRole('treeitem', { name: /reviewer/ })
+    expect(other.querySelector('[data-subagent-current]')).toBeNull()
+    expect(within(other).getByRole('button', { name: '在侧边栏打开 reviewer' })).toBeTruthy()
+    fireEvent.click(other)
     expect(input.openChild).toHaveBeenCalledWith({
       parentSessionId: PARENT,
       childSessionId: sibling, mode: 'one-shot',
@@ -1124,9 +1781,24 @@ describe('SubagentHeaderLineage', () => {
 
     const switcher = screen.getByRole('button', { name: '切换子智能体：worker' })
     hoverCatalog(switcher)
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
+    expect(screen.getByText('尚未加载子智能体')).toBeTruthy()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryAllByRole('treeitem')).toEqual([])
     expect(input.refreshProjection).not.toHaveBeenCalled()
+  })
+
+  it.each([undefined, ''])('uses the Session id in the breadcrumb when the creation description is %s', (label) => {
+    const input = props(catalog({
+      team: sharedTeam,
+      entries: [{ id: CHILD, mode: 'one-shot', activity: 'inactive', ...label === undefined ? {} : { label } }],
+    }), {}, { [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' } })
+    render(<HeaderCatalog {...input} sessionId={CHILD} lineageSessionId={CHILD} />)
+    const switcher = screen.getByRole('button', { name: `切换子智能体：${CHILD}` })
+    fireEvent.click(switcher)
+    expect(screen.getByRole('treeitem', { name: new RegExp(CHILD) })).toBeTruthy()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.queryByText(zh['section.empty'])).toBeNull()
   })
 
   it('falls back to the catalog session id when the selected row has no label', () => {
@@ -1148,9 +1820,22 @@ describe('SubagentHeaderLineage', () => {
     expect(screen.getByRole('button', { name: `切换子智能体：${CHILD}` })).toBeTruthy()
   })
 
-  it('keeps an ancestor switcher muted and omits its descendant count', () => {
+  it('names the breadcrumb by the agent name when the selected row has an empty description', () => {
     const input = {
-      ...props(catalog(), {
+      ...props(catalog({ entries: [{ id: CHILD, mode: 'continuable', label: '', name: 'reviewer', activity: 'inactive' }] }), {}, {
+        [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const },
+      }),
+      sessionId: CHILD,
+      lineageSessionId: CHILD,
+      displayTitle: 'summary title',
+    }
+    render(<HeaderCatalog {...input} />)
+    expect(screen.getByRole('button', { name: '切换子智能体：reviewer' }).textContent).toBe('reviewer')
+  })
+
+  it('keeps an ancestor switcher muted and omits its descendant count and section heading', () => {
+    const input = {
+      ...props(catalog({ team: sharedTeam }), {
         [CHILD]: catalog({ entries: [{
           id: GRANDCHILD, mode: 'continuable',
           label: 'indexer', activity: 'inactive',
@@ -1181,6 +1866,9 @@ describe('SubagentHeaderLineage', () => {
 
     hoverCatalog(switcher)
     expect(screen.getByRole('tree')).toBeTruthy()
+    expect(screen.queryByRole('heading')).toBeNull()
+    expect(screen.queryByText(zh['section.empty'])).toBeNull()
+    expect(document.querySelector('[data-subagent-section-header]')).toBeNull()
     fireEvent.click(switcher)
     expect(input.openTitle).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('tree')).toBeNull()
@@ -1201,9 +1889,28 @@ describe('SubagentHeaderLineage', () => {
     const switcher = screen.getByRole('button', { name: '切换子智能体：正在扫描项目文件' })
     expect(input.refreshProjection).not.toHaveBeenCalled()
     hoverCatalog(switcher)
-    expect(screen.getByText('正在加载子智能体…')).toBeTruthy()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
+    expect(screen.getByText('尚未加载子智能体')).toBeTruthy()
+    expect(screen.queryByText('正在加载子智能体…')).toBeNull()
     expect(screen.queryAllByRole('treeitem')).toEqual([])
     expect(input.refreshProjection).not.toHaveBeenCalled()
+  })
+
+  it.each(['idle', 'loading'] as const)('shows the actual %s state of an empty title menu', (state) => {
+    const input = {
+      ...props(undefined, {}, {}, { parentSessionId: PARENT, childSessionId: CHILD, mode: 'continuable' }),
+      lineageSessionId: CHILD,
+      displayTitle: 'worker',
+    }
+    const initial = input.useSessions(value => value)
+    render(<HeaderCatalog {...input} useSessions={select => select({
+      ...initial,
+      projectionsBySession: { [PARENT]: { state, error: null, values: {} } },
+    })} />)
+    hoverCatalog(screen.getByRole('button', { name: '切换子智能体：worker' }))
+    expect(screen.getByText(state === 'idle' ? zh['load.idle'] : zh['loading.label'])).toBeTruthy()
+    expect(screen.queryByText(state === 'idle' ? zh['loading.label'] : zh['load.idle'])).toBeNull()
+    expect(input.prepareCatalog).not.toHaveBeenCalled()
   })
 
   it('keeps a nested title switcher scoped to its direct-parent catalog', () => {
@@ -1238,11 +1945,6 @@ describe('SubagentHeaderLineage', () => {
 })
 
 describe('SubagentReadOnlyComposer', () => {
-  it('explains the exact missing-parent recovery path', () => {
-    render(<SubagentReadOnlyComposer matched={{ reason: 'parent-unavailable' }} t={t} />)
-    expect(screen.getByRole('status').textContent).toContain('父会话当前不在线')
-  })
-
   it('keeps an unknown child read-only until its descriptor is available', () => {
     render(<SubagentReadOnlyComposer matched={{ reason: 'unknown' }} t={t} />)
     expect(screen.getByRole('status').textContent).toContain('读取子会话后才能确定是否可继续')
@@ -1268,4 +1970,24 @@ it('shows external membership without an execution status or child Session navig
   fireEvent.click(row)
   expect(input.openChild).not.toHaveBeenCalled()
   expect(input.openChildAside).not.toHaveBeenCalled()
+})
+
+
+it.each([false, true])('closes a pinned wide catalog on its next click (hover first: %s)', async (hoverFirst) => {
+  vi.useFakeTimers()
+  render(<HeaderCatalog {...props(catalog())} />)
+  const trigger = screen.getByRole('button', { name: /\d+ 个子智能体$/ })
+  if (hoverFirst) {
+    fireEvent.pointerEnter(trigger)
+    await act(async () => { await vi.advanceTimersByTimeAsync(150) })
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  }
+  fireEvent.click(trigger)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(trigger.getAttribute('aria-expanded')).toBe('true')
+  fireEvent.click(trigger)
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(trigger.getAttribute('aria-expanded')).toBe('false')
+  expect(document.activeElement).toBe(trigger)
 })

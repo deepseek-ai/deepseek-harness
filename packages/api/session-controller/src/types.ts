@@ -8,7 +8,7 @@ import type {
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { LlmModelBadge, TextBlock } from '@deepseek-ai/dsh-llm'
-import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap, SessionProjectionSummaryExcluded, SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import type { Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -16,6 +16,8 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
+    /** Eligible latest failed turn/end for an empty prompt, or null. */
+    conversationContinuation: SessionSeq | null
     /** Persisted facts used to summarize a Session without activating it. */
     sessionListMetadata: SessionListMetadata
     /**
@@ -36,9 +38,10 @@ export interface SessionListMetadata {
 }
 
 /**
- * Every available summary wire value a Session-list row carries as partial,
- * possibly stale hints. The block omits the keys whose unit declares
- * `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
+ * Summary wire values a Session-list row carries. A `sequenced` block carries
+ * every summary key computed at its `asOfSeq`; a `cached` block carries the
+ * values the persisted cache holds and may omit keys or trail the Session.
+ * The block omits the keys whose unit declares `summary: false`. `kind` and `asOfSeq` are independent facts: `kind` says
  * which sequence space `asOfSeq` belongs to, and therefore how a client may
  * merge the block; `asOfSeq` is the producer's watermark in that space.
  */
@@ -319,11 +322,11 @@ export interface SessionForkValue {
 
 /** Session prompt request. */
 export interface SessionPromptRequest {
-  /** Client-minted identity persisted on the exact accepted user message. */
+  /** Client-minted identity persisted on the accepted inbox input, including empty continuation. */
   readonly requestId: SessionRequestId
   readonly sessionId: SessionId
   readonly mode: 'queue' | 'steer'
-  /** At least one non-whitespace text part or attachment. */
+  /** Non-whitespace text or attachments; an empty array continues an eligible failed idle Session. */
   readonly content: readonly PromptContentPart[]
   readonly clientTimeZone?: string
 }
@@ -395,6 +398,8 @@ declare module '@deepseek-ai/dsh-llm' {
      * caller other than the owner, so an absent `principal` means the owner.
      */
     'user-rpc': { kind: 'user'; rpcId: SessionRequestId; clientTimeZone?: string; principal?: Principal }
+    /** Empty retry user message with browser prompt correlation and caller metadata. */
+    'retry-rpc': { kind: 'retry'; rpcId: SessionRequestId; clientTimeZone?: string; principal?: Principal }
   }
 }
 
@@ -569,12 +574,21 @@ export interface SessionControlBaseline {
   readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>
 }
 
-/** One finished projection value and its durable watermark. */
+/**
+ * Projection changes caused by one committed Session event; the Host emits one
+ * update per event that changed at least one client-visible projection view.
+ */
 export interface SessionProjectionUpdate {
   readonly sessionId: SessionId
-  readonly key: string
-  readonly value: JsonValue
+  /** Seq of the committed event that caused every listed change. */
   readonly seq: number
+  /**
+   * One entry per client-visible key whose view the event changed, in
+   * registration order without duplicate keys, with the key's new value as
+   * `val`. A key absent from `changes` is unchanged; unlike a baseline, absence
+   * does not mean an absent capability.
+   */
+  readonly changes: readonly { readonly key: string; readonly val: SessionProjectionValue }[]
 }
 
 /** Host-wide live state stream. Each generation starts with exactly one baseline. */
@@ -652,10 +666,10 @@ export type SessionEventFrame =
   | { readonly type: 'ready' }
   | SessionEventEntry
 
-/** One sparse per-key replacement; different keys can share a seq. */
+/** Projection changes caused by one committed event of the observed Session. */
 export type SessionProjectionChange = { readonly type: 'projection' } & Omit<SessionProjectionUpdate, 'sessionId'>
 
-/** Subscription readiness without a baseline, followed by per-key changes. */
+/** Subscription readiness without a baseline, followed by one change frame per committed event. */
 export type SessionProjectionFrame =
   | { readonly type: 'ready' }
   | SessionProjectionChange

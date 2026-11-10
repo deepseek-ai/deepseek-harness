@@ -1,36 +1,50 @@
 // @vitest-environment jsdom
-/** Portal menus reserve their anchor width before measuring end alignment. */
+/** Portal menus delegate minimum width and viewport limits to CSS. */
+import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { Menu } from '../src/Menu.tsx'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-function measureAnchor() {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(120, 40, 280, 22))
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
-    return this.getAttribute('role') === 'menu' ? Math.max(120, Number.parseFloat(this.style.minWidth) || 0) : 280
-  })
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(40)
-}
-
 describe('Menu anchor minimum width', () => {
-  it('matches the anchor and clears its minimum when the option is removed', () => {
-    measureAnchor()
+  it('registers only the external trigger as its anchor', () => {
+    function Fixture() {
+      const trigger = useRef<HTMLButtonElement>(null)
+      return <><button ref={trigger}>Tools</button>
+        <Menu open portal anchor={null} anchorRef={trigger}
+          items={[{ id: 'one', label: 'One' }]} onClose={vi.fn()} /></>
+    }
+    const view = render(<Fixture />)
+    const trigger = view.getByRole('button', { name: 'Tools' })
+    const name = view.getByRole('menu').style.positionAnchor
+    expect(name).not.toBe('')
+    expect([...document.querySelectorAll<HTMLElement>('[style]')]
+      .filter(node => node.style.anchorName === name)).toEqual([trigger])
+  })
+
+  it('enables anchor-width matching and clears it when the option is removed', () => {
     const props = { open: true, portal: true, align: 'end' as const, anchor: <button>Tools</button>, onClose: vi.fn() }
     const view = render(<Menu {...props} minWidthFromAnchor items={[{ id: 'one', label: 'One' }]} />)
-    expect(view.getByRole('menu').style.minWidth).toBe('280px')
-    expect(view.getByRole('menu').style.left).toBe('120px')
+    const menu = view.getByRole('menu')
+    expect(menu.hasAttribute('data-match-anchor-width')).toBe(true)
+    expect(menu.style.minWidth).toBe('')
+    expect(menu.style.positionAnchor).not.toBe('')
     view.rerender(<Menu {...props} items={[{ id: 'one', label: 'One' }]} />)
-    expect(view.getByRole('menu').style.minWidth).toBe('')
+    expect(view.getByRole('menu').hasAttribute('data-match-anchor-width')).toBe(false)
   })
 
-  it('keeps the minimum inside the viewport margins when the anchor is wider', () => {
-    measureAnchor()
-    vi.stubGlobal('innerWidth', 200)
-    const view = render(<Menu open portal minWidthFromAnchor align="end" anchor={<button>Tools</button>}
+  it('keeps matching declarative when the visual viewport is narrower than its anchor', () => {
+    const readRect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    vi.stubGlobal('visualViewport', Object.assign(new EventTarget(), {
+      width: 200, height: 400, offsetLeft: 40, offsetTop: 60,
+    }))
+    const view = render(<Menu open portal minWidthFromAnchor align="end" anchor={<button style={{ width: 280 }}>Tools</button>}
       items={[{ id: 'one', label: 'One' }]} onClose={vi.fn()} />)
-    expect(view.getByRole('menu').style.minWidth).toBe('176px')
-    expect(view.getByRole('menu').style.left).toBe('12px')
+    const menu = view.getByRole('menu')
+    expect(menu.hasAttribute('data-match-anchor-width')).toBe(true)
+    expect(menu.style.minWidth).toBe('')
+    expect(menu.style.left).toBe('')
+    expect(readRect).not.toHaveBeenCalled()
   })
 })

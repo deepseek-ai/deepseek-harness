@@ -91,7 +91,7 @@ python python/sdk/examples/minimal.py `
 
 :::
 
-The script prints the final assistant response. The selected home receives the generated `sdk-minimal` profile, installed plugins, and uncompressed JSONL session logs under `sessions/`. The example and SDK never silently read `~/.dsh`.
+The script prints the final assistant response or the command result supplied by the selected profile. The selected home receives the generated `sdk-minimal` profile, installed plugins, and uncompressed JSONL session logs under `sessions/`. The example and SDK never silently read `~/.dsh`.
 
 ## Use the SDK in your program
 
@@ -162,6 +162,21 @@ The bundled runtime includes `str_replace_editor`, but `sdk-minimal` omits it fr
 
 Pass `patches=("/absolute/path/to/editor.patch.yml",)` when constructing `DeepSeekHarness(profile="sdk-minimal", ...)`, or put the patch in `$DSH_HOME/profiles/sdk-minimal/cordis.patch.yml` for persistent configuration. On the next runtime launch, model requests include `str_replace_editor` beside the default tools. The local filesystem provider uses the runtime working directory for relative paths; like the minimal shell, it does not confine access to that directory. The same patch works with the standard `sdk` profile.
 
+<a id="enable-team-mode"></a>
+### Enable Team mode
+
+Use the standard `sdk` profile for Agent Teams; `sdk-minimal` does not include subagents or Team services. Save the [Team patch](../../../apps/cli/config/examples/team-mode.yml) as `team-mode.yml`:
+
+```yaml
+- id: agent-team
+  config:
+    defaultEnabled: true
+```
+
+Pass its absolute path in the SDK's `patches` option with `profile="sdk"`. Python uses `patches=("/absolute/path/to/team-mode.yml",)`; TypeScript uses `patches: ["/absolute/path/to/team-mode.yml"]`. The patch replaces the `agent-team` row's whole configuration, so include any custom `maxTasks` limit in the same mapping.
+
+Create a new root Session and ask it to create and list a shared task. Its first model request includes the Team tools and collaboration guidance. The root saves its mode, and subagents share it. Resuming an existing Session preserves its mode, even if it was explicitly turned off or never enabled; changing or removing this patch does not override saved selections. See the [Team service reference](../../../packages/team/agent-team/README.md#use-this-package) for mode and task semantics.
+
 ## Understand the minimal profile
 
 | Property | Value |
@@ -176,7 +191,7 @@ Pass `patches=("/absolute/path/to/editor.patch.yml",)` when constructing `DeepSe
 
 The profile's sole bundle inserts the complete tree over an empty root and does not include `dsh-base`; later base-profile tools therefore cannot appear implicitly. It contains the SDK protocol, one environment-configured DeepSeek adapter, local execution, and persistence, while text file tools, settings, managed credentials, OTel telemetry, Web tools, subagents, and local instruction discovery are absent. The [DeepSeek session-log contributor](../../../packages/session/session-log-deepseek/README.md) uploads unaccepted log events with DeepSeek requests by default, at most `maxBytes` (8 MiB) per request; set `session-log-deepseek.enabled: false` in a profile patch to disable it. It pins `danger-full-access`, so the platform-selected persistent shell can modify any path visible to the runtime; use a disposable checkout or container.
 
-Image reading requires an image-capable route. Automatic compaction preserves the complete Session log; see the [bundle reference](../../../packages/bundle/sdk-minimal/README.md) for model and storage effects. SDK prompt text does not execute `/compact` or other slash commands.
+Image reading requires an image-capable route. Automatic compaction preserves the complete Session log; see the [bundle reference](../../../packages/bundle/sdk-minimal/README.md) for model and storage effects. In this `sdk-minimal` composition, unsupported slash input remains ordinary prompt text.
 
 The installed wheel still packages the full `web` profile and frontend assets. Run `dsh web` against an explicit `DSH_HOME` when a Python SDK deployment also needs the browser application; `web` is a separate CLI application and cannot serve a Python SDK client.
 

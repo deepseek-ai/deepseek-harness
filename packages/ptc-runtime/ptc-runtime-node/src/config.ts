@@ -11,6 +11,8 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
+  /** Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings. */
+  replScoped?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */
@@ -23,6 +25,8 @@ export interface Config {
   maxMessageBytes?: number
   /** Maximum simultaneous host binding calls accepted from a program. */
   maxPendingCalls?: number
+  /** Time to wait for cooperative stop acknowledgment before terminating the process. */
+  stopGraceMs?: number
   /** Managed process termination and output-drain grace in milliseconds. */
   graceMs?: number
 }
@@ -33,12 +37,14 @@ export type ResolvedConfig = Required<Config>
 export const NodeConfig: z<Config> = z.object({
   executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
   scriptPersistence: z.boolean().default(false),
+  replScoped: z.boolean().default(false),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),
   maxOldGenerationSizeMb: z.number().default(512),
   maxMessageBytes: z.number().default(134_217_728),
   maxPendingCalls: z.number().default(128),
+  stopGraceMs: z.number().default(3_000),
   graceMs: z.number().default(3_000),
   launch: z.union([
     z.object({ kind: z.const('node-script').required(), executable: z.string().required(), bootstrapPath: z.string() }),
@@ -52,10 +58,11 @@ export const NodeConfig: z<Config> = z.object({
  */
 export function validateConfig(config: ResolvedConfig): void {
   if (config.scriptPersistence && config.executionMode !== 'vm-script') throw new Error('ptc-runtime-node: scriptPersistence requires executionMode: vm-script')
+  if (config.replScoped && config.executionMode !== 'persistent-in-memory') throw new Error('ptc-runtime-node: replScoped requires executionMode: persistent-in-memory')
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'number' && (!Number.isFinite(value) || value <= 0)) throw new Error(`ptc-runtime-node: ${key} must be positive and finite`)
   }
-  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs'] as const) {
+  for (const key of ['timeoutMs', 'maxTimeoutMs', 'graceMs', 'stopGraceMs'] as const) {
     if (config[key] > MAX_TIMER_DELAY_MS) throw new Error(`ptc-runtime-node: ${key} exceeds the supported timer range`)
   }
   if (!Number.isSafeInteger(config.maxOutputBytes) || config.maxOutputBytes < 4) throw new Error('ptc-runtime-node: maxOutputBytes must be an integer of at least 4')

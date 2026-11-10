@@ -94,7 +94,7 @@ describe('minimal agent preset', () => {
       ? [event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')]
       : [])
     expect(runtimeContexts).toEqual([
-      `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: ${JSON.stringify(agentHandle.agent.session.header.cwd)}.`,
+      `<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: ${JSON.stringify(agentHandle.agent.session.header.cwd)}.\n</system-reminder>`,
     ])
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'fs')).toBeUndefined()
     expect(scaffold.ctx.agentPresets.serviceFor(agentHandle.agent, 'compaction')).toBeDefined()
@@ -142,8 +142,11 @@ describe('minimal agent preset', () => {
         ],
       }
     `)
+    const requestedTools = new Set(requestHeader.tools?.map(tool => tool.name))
     expect(requestHeader.tools?.toSorted((left, right) => left.name.localeCompare(right.name)))
-      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent).toSorted((left, right) => left.name.localeCompare(right.name)))
+      .toEqual(scaffold.ctx.tools.schemas(agentHandle.agent)
+        .filter(tool => requestedTools.has(tool.name))
+        .toSorted((left, right) => left.name.localeCompare(right.name)))
   })
 
   it.skipIf(MODE === 'record')('expands the completed persistent Bash call in the Web conversation', async () => {

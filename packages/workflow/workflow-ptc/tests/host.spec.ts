@@ -13,7 +13,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent } from './setup.ts'
 
-const completed: PtcRunResult = { logs: [], value: { value: null, stopReason: 'completed', agentsStarted: 0 } }
+const completed: PtcRunResult = { output: [], value: { value: null, stopReason: 'completed', agentsStarted: 0 } }
 type HostBindings = Record<string, PtcBindingFunction>
 
 class ControlledRuntime extends PtcRuntime {
@@ -118,7 +118,7 @@ describe('workflow host callback validation', () => {
       expect(childStart).toHaveBeenCalledOnce()
       const selected = childStart.mock.calls[0]![0]
       expect(selected.provider).toBe('stub')
-      expect(selected.request.cwd).toBe(initial)
+      expect(selected.cwd).toBe(initial)
       expect(ensureDirectory).toHaveBeenCalledOnce()
     } finally {
       release.resolve(undefined)
@@ -196,7 +196,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     const activation = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('ready-child'),
+      childId: SessionId('ready-child'), name: 'ready-child',
       result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
       dispose: () => { disposing.resolve(undefined); return released.promise },
     })
@@ -207,16 +207,13 @@ describe('workflow runtime outcomes', () => {
       await disposing.promise
       expect(settled).toBe(false)
       expect(activation).toHaveBeenCalledOnce()
-      const { signal, ...delegation } = activation.mock.calls[0]![0]
+      const { signal, parent: delegatedParent, ...delegation } = activation.mock.calls[0]![0]
       expect(signal).toBeInstanceOf(AbortSignal)
-      const { parent: delegatedParent, ...request } = delegation.request
       expect(delegatedParent).toBe(parent)
-      expect({ ...delegation, request }).toEqual({
+      expect(delegation).toEqual({
         provider: 'stub', label: 'host-test child 1', delivery: 'caller',
-        request: {
-          cwd: ctx.workingDirectory.get(parent.session),
-          prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
-        },
+        cwd: ctx.workingDirectory.get(parent.session),
+        prompt: [{ type: 'text', text: 'answer' }], outputSchema: schema, agentOptions: { model: 'selected' },
       })
       released.resolve(undefined)
       await expect(run.result).resolves.toMatchObject({ stopReason: 'completed' })
@@ -233,7 +230,7 @@ describe('workflow runtime outcomes', () => {
     [{ stopReason: 'completed', agentsStarted: 0 }, 'missing its value'],
     [{ value: null, stopReason: 'error', agentsStarted: 0, error: 5 }, 'error must be a string'],
   ] as const)('maps an invalid terminal result %j to a workflow error', async (value, message) => {
-    const { start } = await setup(() => Promise.resolve({ logs: [], value }))
+    const { start } = await setup(() => Promise.resolve({ output: [], value }))
     const handle = start()
     try {
       const result = await handle.result
@@ -277,7 +274,7 @@ describe('workflow runtime outcomes', () => {
       return publication.promise
     })
     const child: SubagentActivation = {
-      childId: SessionId('late-child'),
+      childId: SessionId('late-child'), name: 'late-child',
       result: Promise.resolve({ output: [], stopReason: 'aborted' }),
       dispose: disposed,
     }
@@ -305,7 +302,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('output-pending'), result: childResult.promise, dispose: disposed,
+      childId: SessionId('output-pending'), name: 'output-pending', result: childResult.promise, dispose: disposed,
     })
     const handle = start()
     let settled = false

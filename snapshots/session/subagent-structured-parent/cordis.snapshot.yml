@@ -1,3 +1,7 @@
+- id: tool-subagent-control
+  config:
+    interrupt: false
+
 # Replay patch shared by the ordinary headless snapshot composition. The model
 # script comes from the scenario's committed session JSONL.
 

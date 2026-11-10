@@ -32,6 +32,17 @@ export const LOCAL_FETCH_PROVIDER_ID = 'http'
 /** The anonymous HTTP(S) fetch provider. */
 export class HttpFetchProvider implements WebFetchProvider {
   readonly id = LOCAL_FETCH_PROVIDER_ID
+  /** Picker description: what this provider suits and what it costs or cannot do. */
+  readonly description: NonNullable<WebFetchProvider['description']> = {
+    en: 'Free, and can reach intranet and local addresses. Does not support pages that need JavaScript or sign-in, or PDFs.',
+    zh: '免费，可访问内网和本机。不支持需要 JavaScript 或登录的页面，也不支持 PDF。',
+    ja: '無料で、イントラネットやローカルのアドレスにもアクセスできます。JavaScript やログインが必要なページ、PDF には対応しません。',
+    es: 'Gratis y puede acceder a direcciones de la intranet y locales. No admite páginas que requieran JavaScript o inicio de sesión, ni PDF.',
+    fr: 'Gratuit, et accède aux adresses intranet et locales. Ne prend pas en charge les pages nécessitant JavaScript ou une connexion, ni les PDF.',
+    de: 'Kostenlos und erreicht auch Intranet- und lokale Adressen. Keine Seiten, die JavaScript oder eine Anmeldung erfordern, und keine PDFs.',
+    ru: 'Бесплатно, доступны адреса интрасети и локальные адреса. Не поддерживает страницы, требующие JavaScript или входа, а также PDF.',
+    pt: 'Gratuito e acessa endereços da intranet e locais. Não oferece suporte a páginas que exigem JavaScript ou login, nem a PDFs.',
+  }
 
   /** @param limits - resolved transport and response limits. */
   constructor(private readonly limits: HttpFetchLimits) {}

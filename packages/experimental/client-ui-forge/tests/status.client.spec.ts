@@ -27,8 +27,8 @@ describe('toneOf', () => {
 })
 
 describe('checkCounts', () => {
-  it('groups neutral, skipped, and cancelled checks as other', () => {
-    expect(checkCounts([])).toEqual({ failed: 0, running: 0, passed: 0, other: 0 })
+  it('counts cancellations separately from neutral and skipped checks', () => {
+    expect(checkCounts([])).toEqual({ failed: 0, running: 0, passed: 0, cancelled: 0, other: 0 })
     expect(checkCounts([
       check('lint', { state: 'failure' }),
       check('test', { state: 'pending' }),
@@ -37,7 +37,7 @@ describe('checkCounts', () => {
       check('e2e', { state: 'skipped' }),
       check('perf', { state: 'cancelled' }),
       check('types', { state: 'failure' }),
-    ])).toEqual({ failed: 2, running: 1, passed: 1, other: 3 })
+    ])).toEqual({ failed: 2, running: 1, passed: 1, cancelled: 1, other: 2 })
   })
 })
 
@@ -48,6 +48,13 @@ describe('ciSummary', () => {
     ['passed checks', 'success', { kind: 'passed' }],
   ] as const)('reports %s from the rollup alone', (_label, checksRollup, summary) => {
     expect(ciSummary(snapshot(1, { checksRollup, checks: [check('lint', { state: 'failure' })] }))).toEqual(summary)
+  })
+
+  it('names cancellations when no listed check failed, and gives failures precedence', () => {
+    const cancelled = check('build', { state: 'cancelled' })
+    expect(ciSummary(snapshot(1, { checksRollup: 'failure', checks: [cancelled] }))).toEqual({ kind: 'cancelled', count: 1 })
+    expect(ciSummary(snapshot(1, { checksRollup: 'failure', checks: [cancelled, check('lint', { state: 'failure' })] })))
+      .toEqual({ kind: 'failed', count: 1 })
   })
 
   it('counts the listed failures of a failed rollup, which can be none when the list is truncated', () => {

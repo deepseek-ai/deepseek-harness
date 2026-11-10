@@ -180,6 +180,14 @@
   overflow-wrap: anywhere;
 }
 
+.root[data-compact] > .list > .item {
+  padding: 6px 10px;
+}
+
+.root[data-compact] .caption {
+  padding: 6px 10px 4px;
+}
+
 .description {
   margin: 6px 0;
   color: var(--dsw-alias-label-caption);

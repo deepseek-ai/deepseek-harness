@@ -33,7 +33,7 @@ Choose this backend when a deployment wants DeepSeek's native server-side web se
 
 ### Minimal configuration
 
-Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL`.
+Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL`; the `dsh` launcher accepts both variables from the launching environment or `$DSH_HOME/.env`, never from a project `.env` ([app-boot](../../boot/app-boot/README.md)).
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
@@ -58,9 +58,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 <a id="authentication"></a>
 ### Authentication
 
-A search authenticates with the DeepSeek account when the latest `request/context` event of the initiating Session names the `deepseek-account` provider route and `ctx.deepseekAccount` resolves a token for the search endpoint. The account service resolves one only while signed in and only for its deployment-configured inference origin, `https://api.deepseek.com` by default. That search sends only `x-dsh-auth-token`, even when an API key is configured. Every other search, including a call without an initiating Session and a search whose endpoint has another origin, sends the API key as both `x-api-key` and `Authorization: Bearer`. An HTTP 401 response to an account-authenticated search fails as `WEB_PROVIDER_ERROR` with sign-in guidance instead of endpoint guidance, and leaves the account signed in.
+A search authenticates with the DeepSeek account when the latest `request/context` event of the initiating Session names the `deepseek-account` provider route and `ctx.deepseekAccount` resolves a token for the search endpoint. The account service resolves one only while signed in and only for its deployment-configured inference origin, `https://api.deepseek.com` by default. That search sends only `x-dsh-auth-token`, even when an API key is configured. Every other search, including a call without an initiating Session and a search whose endpoint has another origin, sends the API key as both `x-api-key` and `Authorization: Bearer`. An HTTP 401 response to an account-authenticated search fails as `WEB_PROVIDER_ERROR` with sign-in guidance instead of endpoint guidance, and invalidates only the token that search sent: a newer sign-in is preserved, and a credential-removal failure or a cancelled error-body read does not skip invalidation or replace the reported failure. An API-key 401 and every HTTP 403 leave the account signed in.
 
 The provider's `ready()` answers whether the search a model request would make has a credential, on any model route: the request's route is `deepseek-account` and `ctx.deepseekAccount` resolves a token for the configured search endpoint, or a literal `apiKey` is set or `ctx.credentials.describe` reports the `apiKeyEnv` reference configured (without that service, the process environment must carry it). It checks them in the order a search resolves them, and a failed account-token or credential-store read answers false, because the search fails on that read instead of trying the next credential. While this provider is the selected search provider, [`dsh-tool-web`](../tool-web/README.md#search-readiness) withholds `web_search` and its prompt guidance from each request for which it answers false. Only presence is checked: a wrong key, or an endpoint that does not serve the native `web_search_20250305` server tool, counts as ready and fails each call. A call that still arrives resolves credentials when it runs.
+
+Referenced keys use the [shared DeepSeek credential helpers](../../llm/llm-deepseek/README.md#account-credentials), including the same whitespace normalization and format validation as model requests. A malformed referenced key fails before dispatch; readiness remains a presence-only check.
 
 ### What a search returns
 
@@ -72,7 +74,7 @@ A search running under an initiating agent appends the log-only `web/deepseek-se
 
 ### Failures and recovery
 
-Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model to guide the user to the Messages API base URL field under Plugins > Built-in plugin settings > Web search and save the change. When that page is unavailable, it names `web-search-deepseek.baseURL` as the deployment configuration alternative. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
+Failures throw `WebError` with a machine-routable code: a missing credential is `WEB_PROVIDER_CREDENTIAL_MISSING`, caller cancellation is `WEB_ABORTED`, and provider or transport failures — including a response with no `web_search_tool_result` block — are `WEB_PROVIDER_ERROR`. HTTP redirects are rejected before the `Location` target is contacted. Every failure after dispatch names the resolved search endpoint and explains that search endpoint configuration is separate from chat. If the endpoint is unintended, the message tells the conversation model to guide the user to Plugins > Built-in plugin settings > Web search and fetch, select DeepSeek (legacy) under Search, and save its Base URL. When that page is unavailable, it names `web-search-deepseek.baseURL` as the deployment configuration alternative. The model must not choose or change the endpoint. The model-facing `web_search` tool surfaces this text under its own error wrapper.
 
 -----
 
@@ -115,7 +117,7 @@ Readiness captures the same options but reads no API key value: on the account r
 Read these pages when the package-level contract is not enough. They move from the shared vocabulary to the service, the model-facing tools, and the design rationale.
 
 - [Web subsystem](../../../docs/subsystems/web.md) — the exhaustive search request/result vocabulary and error codes.
-- [Web package map](../README.md) — the seven-package family and each role.
+- [Web package map](../README.md) — the web package family and each role.
 - [dsh-web](../web/README.md) — the web service this provider registers into.
 - [dsh-tool-web](../tool-web/README.md) — the model-facing `web_search` tool that renders this provider's sources.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-search-deepseek) — every accepted config field and its source declaration.
@@ -193,6 +195,6 @@ This Dev Note is working context for maintainers: open questions and undecided d
 
 #### Dedicated retrieval endpoint
 
-DeepSeek's Search and Fetch APIs, which avoid the full model turn, live in [dsh-web-deepseek-api](../web-deepseek-api/README.md) and are selected by the Web search settings switch; this provider stays the default until the Search API launch is announced.
+DeepSeek's Search and Fetch APIs, which avoid the full model turn, live in [dsh-web-deepseek-api](../web-deepseek-api/README.md) and are selected with the Search and Fetch menus on the Web search and fetch settings page. Shipped profiles select the Search API, so this provider runs only when `searchProvider: deepseek-official` is selected (for example, on gateways without Search API routes).
 
 </details>

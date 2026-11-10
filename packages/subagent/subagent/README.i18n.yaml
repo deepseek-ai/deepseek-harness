@@ -18,47 +18,50 @@
   en: 924b8c15f9529028
   zh: 9fb0c399b5a79e3e
 /deepseek-ai-dsh-subagent/use-this-package/enabling-delegation:
-  en: 025605eddae02478
-  zh: 5659cba4340735d8
+  en: c0718955687ff245
+  zh: eb2d3cdbe92e0fe2
 /deepseek-ai-dsh-subagent/use-this-package/delegation-settings:
   en: 86c982223fab1a3a
   zh: 3d220d8ed84eab9a
 /deepseek-ai-dsh-subagent/use-this-package/activation-capacity:
-  en: 7c9548b9d02efe1f
-  zh: e23bd30b4c9cdabd
+  en: 4b40bd380bea81ce
+  zh: 896a584190981168
 /deepseek-ai-dsh-subagent/use-this-package/local-and-external-children:
-  en: 013644290e74493e
-  zh: 05014c3c3773edeb
+  en: d6eef66bc1d293fe
+  zh: e4754d38212c0b2e
+/deepseek-ai-dsh-subagent/use-this-package/agent-names:
+  en: e46a141f9126c45f
+  zh: 15f6011c36baa20c
 /deepseek-ai-dsh-subagent/use-this-package/child-presets:
   en: a740e5e9bdd661d9
   zh: 712a5458fc8b3615
 /deepseek-ai-dsh-subagent/use-this-package/messaging-interrupting-and-discovering:
-  en: 050177fbbaade432
-  zh: 99f2b9f98088314d
+  en: bf3175c2218a16dd
+  zh: 4be9271efe71ddb7
 /deepseek-ai-dsh-subagent/use-this-package/failure-and-recovery:
-  en: 245fb0d5c3df5ccf
-  zh: e69eed9e5070ce25
+  en: 0dc416ded19e304e
+  zh: 4726e5fe5f188709
 /deepseek-ai-dsh-subagent/understand-the-implementation:
   en: 74d91b364b23f88d
   zh: 19cc558105efe8df
 /deepseek-ai-dsh-subagent/understand-the-implementation/design-concept:
-  en: ed526b6f34a3d6bf
-  zh: 47a90717b89d4c79
+  en: e6f77fc75a73b0ab
+  zh: 7133698a3923e192
 /deepseek-ai-dsh-subagent/understand-the-implementation/source-map:
-  en: 410b6215e3a29221
-  zh: d17d6ea102fe8f87
+  en: 5923a61c09d9ae04
+  zh: 15202a92872a11e9
 /deepseek-ai-dsh-subagent/understand-the-implementation/provider-preparation-and-structured-output:
-  en: f78c5e931f3a3676
-  zh: 3c63f637dbaa8101
+  en: 61cddba23f4e7d1c
+  zh: 052c8331a747403f
 /deepseek-ai-dsh-subagent/understand-the-implementation/activation-settlement:
-  en: 3cac7a3d58cda7ea
-  zh: 74e3234e5101bd1d
+  en: ba22f6dd5f15f405
+  zh: a469c6a4e49adea9
 /deepseek-ai-dsh-subagent/understand-the-implementation/restoring-child-composition:
-  en: d338e68edd438f57
-  zh: 0496090cc567b19d
+  en: 843f9f4319ca2ae3
+  zh: 218bf355816d4ff6
 /deepseek-ai-dsh-subagent/understand-the-implementation/ownership-and-invariants:
-  en: b74886a091a327d4
-  zh: 2124546878ba1aa2
+  en: ab5d2c41f06b8fea
+  zh: 13a9ca3685fa799b
 /deepseek-ai-dsh-subagent/further-exploration:
   en: 5b0f408dd901d90a
   zh: e11866d5fd878327
@@ -69,14 +72,29 @@
   en: f7cec22ba9d3fb4f
   zh: 67b1d40f9b136f71
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/what-the-model-sees:
-  en: 8e28e4542cd6bcb6
-  zh: c840f65ffb8fcfbd
+  en: 45d8a22bad10fba2
+  zh: 0ebd7f4570150713
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/token-effect:
-  en: f98ad834e8ce8950
-  zh: cf509805dd934094
+  en: 435e801179ee02c8
+  zh: 72551f95c5ee7bca
 /deepseek-ai-dsh-subagent/model-experience/settlement-notice/kv-cache-effect:
   en: d6b1d618083da79b
   zh: 9a28942b7d53c382
+/deepseek-ai-dsh-subagent/model-experience/continuable-child-return-guidance:
+  en: 710ebcdce8e283e2
+  zh: cc07cf31e572b0cf
+/deepseek-ai-dsh-subagent/model-experience/continuable-child-return-guidance/what-the-model-sees:
+  en: c4fd0220e51f1f20
+  zh: 0dc2a3ab3aced3eb
+/deepseek-ai-dsh-subagent/model-experience/continuable-child-return-guidance/what-the-model-sees/return-guidance:
+  en: 24538ab91a15b0e4
+  zh: 86f96219c94ee1b1
+/deepseek-ai-dsh-subagent/model-experience/continuable-child-return-guidance/token-effect:
+  en: 889c86126ff12689
+  zh: 67162193846cf83f
+/deepseek-ai-dsh-subagent/model-experience/continuable-child-return-guidance/kv-cache-effect:
+  en: 7078382a73f743f7
+  zh: 1431825f5568a96b
 /deepseek-ai-dsh-subagent/model-experience/child-delegation-scope-statement:
   en: dc8544657916e194
   zh: b0feff0764b5d903
@@ -93,8 +111,8 @@
   en: 59e848fca82a46fb
   zh: fcd6a8a2bb58609f
 /deepseek-ai-dsh-subagent/known-limitations-and-deferred-work:
-  en: b663a2e94185901c
-  zh: 8d2937aa203bda59
+  en: fb3ae9c914da17ff
+  zh: 18d2fe7caadc9c70
 /deepseek-ai-dsh-subagent/known-limitations-and-deferred-work/dev-note:
   en: 25cc0909348666bb
   zh: 95517f12de100049

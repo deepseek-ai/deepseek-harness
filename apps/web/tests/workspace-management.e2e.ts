@@ -587,6 +587,7 @@ describe('web e2e: workspace management (create / rename / grouping / hover affo
       await observe('details')
       await row.getByRole('button', { name: /^Session actions for / }).hover()
       await hoverPage.clock.runFor(1000)
+      expect(await tooltip.count()).toBe(0)
       expect(await card.count()).toBe(1)
       await observe('more-hover')
 

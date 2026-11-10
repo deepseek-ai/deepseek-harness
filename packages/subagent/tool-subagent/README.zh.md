@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务 id；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例可选择子级 preset 和深度限制。
+使用本包可为 agent 提供具名工具，把工作委派给配置的后端。每次调用都会启动受管理的 activation 并返回子任务的名称；运行时负责完成通知与清理。本地子任务支持消息和恢复，外部后端执行一次任务，并通过完成通知返回最终回答。受支持的后端可以公开获准的子级 LLM 路由。每个实例可选择子级 preset 和深度限制。
 
 ## 目录
 
@@ -57,9 +57,9 @@ kind: "package-reference"
 
 ### 受管理的委派
 
-运行时接受子任务后，每次调用都会返回 `started subagent <childId>`，不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
+可选的 `name` 参数为子任务命名，在调用方的子级之间唯一，且不能为 `lead`；省略时依次选择 `agent-1`、`agent-2` 等。[subagent 运行时](../subagent/README.zh.md#agent-names)定义名称规则及其错误。运行时接受子任务后，每次调用都会返回 `started subagent <name>`，其中 `<name>` 是子任务从根开始的完整名称，例如 `reviewer/checker`。顶层调用在结果展示 metadata 中持久化 `{ kind: 'activation', name: <name> }`；嵌套 Code 派发将其保存在对应 `tool/ptc-dispatch` 事件的 `meta` 字段中。调用不等待子任务结果。activation 独立于已完成的工具调用拥有这项工作；运行时发送完成通知并释放执行资源。
 
-所有后端的完成通知都会附带最终回答。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
+所有后端都由运行时自动递送完成通知，前提是子任务结束时调用方 Agent 仍在线。通知包含最终回答，除非子任务在结束前刚向该 Agent 发过消息。本地 Spawn 和 Fork 子任务还可以发送消息，在活跃期间通过 `send_message` 接受更多工作，或在结束后恢复。Codex、Claude Code、ACP 与 DSH SDK 后端不接受后续消息。
 
 `maxDepth` 限制递归深度（`0` 禁止委派）；省略时，每次委派读取 Host 当前的 `subagent.maxDepth` 设置，初始值为 `1`。数值深度要求提供方具备 `depthLimit` 能力；`'provider-managed'` 把预算留给进程外提供方。工具在达到上限时仍然可见；每次尝试启动都会检查调用 agent 的当前深度，被拒绝时返回出错的工具结果。
 
@@ -76,7 +76,7 @@ kind: "package-reference"
 
 设置 `modelSelection: true` 后，该实例公开可选的 `provider`、`model` 和 `reasoning_effort` 字段；未设置的实例拒绝选择字段。在每个工具作用域的一个实例上设置 `modelDiscovery: true`，以注册 `list_subagent_models`；该选项独立于 `modelSelection`，默认关闭。同一作用域的第二个发现工具所有者会注册失败。发现工具随其所属插件实例存续，在委派提供方缺席时仍然可用，并在该实例卸载时移除。Web 与 Desktop preset 为 spawn 启用发现和路由字段，为 fork 保持两者关闭。Host 的 `/model-selection-settings` 服务在 Agent 创建时读取用户偏好，与工具安装无关。创建监听器在投影注册完成前订阅并等待句柄；注册失败或所属插件卸载会使 Agent 发布失败。启用时，精确路由列表记录在每个新顶层 Session 中，由子 Session 继承，并在恢复时保留；之后的设置编辑只影响新 Session。没有已记录 Session 策略时，发现和显式选择只允许父 Agent 当前生效的 provider/model 及其支持的强度。路由字段要求后端公布 `agentOptions`；进程内 Spawn、Fork 和 DSH SDK 满足条件，ACP、Codex 和 Claude Code 会使挂载失败。
 
-一次调用需同时提供 `provider` 与 `model`；当配置值、父 agent 值或提供方持有的默认值能提供路由时，也可只提供推理等级。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。更改路由但未显式提供推理等级时，会清除继承的路由自有等级，使所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
+一次调用需同时提供 `provider` 与 `model`；`reasoning_effort` 要求同一次调用包含这两个字段。仅指定强度的调用会在查询路由或创建子级之前被拒绝。省略全部三个字段时，保留配置的子级默认值与现有回退行为。静态的 `provider.agentRouteDefaults` 在存在时构成提供方／模型基线；工具配置与模型字段会在路由相关强度合并和确切路由预检前覆盖它。没有这些默认值的提供方会使用父 agent 最新已记录请求中的兼容值，再使用父级首次请求前的创建选项，并保留配置的 `maxTokens`。显式提供提供方／模型组合但省略强度时，会清除配置及继承的强度，即使路由未变，也由所选模型解析自己的默认值。实时 LLM 适配器在创建子 agent 前校验有效路由。目录成员资格只提供建议，因此适配器接受时，模型可以使用未列出的 id。
 
 -----
 
@@ -98,7 +98,7 @@ kind: "package-reference"
 
 ### 结果确认
 
-规范工具结果为 `{ kind: 'activation', subagentId }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
+规范工具结果为 `{ kind: 'activation', name }`。其中没有执行 Promise 或最终输出；需要等待结果的程序调用方直接使用 subagent 服务。
 
 ### 随上下文变化的措辞
 
@@ -143,7 +143,7 @@ kind: "package-reference"
 
 #### Token 影响
 
-每次父级请求承担固定 schema 成本；`modelSelection` 会增加三个可选路由字段，preset 选择则增加一个枚举参数及默认值引导。每个工具实例增加一份 schema；可见委派工具共享一个简短系统提示词段。
+每次父级请求承担固定 schema 成本，其中包括可选的 `name` 字段；`modelSelection` 会增加三个可选路由字段，preset 选择则增加一个枚举参数及默认值引导。每个工具实例增加一份 schema；可见委派工具共享一个简短系统提示词段。
 
 #### KV Cache 影响
 
@@ -153,7 +153,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具自身的描述要求模型在选择子级路由前查询选项；未挂载或过滤掉发现工具时，这段指导也不会出现。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
+可选的 `list_subagent_models` 定义读取调用 Session 的路由策略，没有已记录策略时使用当前父级路由。可选的 `ctx.llm` 服务不可用时，调用会被拒绝。有已记录策略时，提供方模型列表取公布目录与 Session 授权路由的交集。没有策略时，只解析当前父级模型，即使目录未列出它。发现工具的描述说明何时查询子级路由或强度，并要求省略可选查询字段而不是传空字符串。委派工具各自说明选择字段及其默认行为。精确模型查询允许已授权但目录未列出的 ID；未授权的提供方／模型查询会在访问适配器前失败。目录或精确模型查询失败以及取消都会使调用被拒绝。执行过程独立强制同一策略。
 
 #### Token 影响
 
@@ -167,17 +167,19 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-可见的委派工具共享一段指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作；当只剩等待它们的结果时，结束本轮，而不是休眠或轮询。结束本轮之所以可行，是因为子代理结束后会通知父级，而通知到达空闲父级会起一次独立的模型请求；在子代理继续推进期间，宿主交替等待 `agent.whenIdle()` 与 `waitForChildren(agent)`（[`dsh-subagent`](../subagent/README.zh.md)、[`session.ts`](../../acp/acp/src/session.ts)）。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
+可见的委派工具共享委派与协作指导，列出按名称排序的工具，指示模型一起启动相互独立的委派，并在它们运行时继续工作；当只剩等待它们的结果时，结束本轮，而不是休眠或轮询。结束本轮之所以可行，是因为子代理结束后会通知父级，而通知到达空闲父级会起一次独立的模型请求；在子代理继续推进期间，宿主交替等待 `agent.whenIdle()` 与 `waitForChildren(agent)`（[`dsh-subagent`](../subagent/README.zh.md)、[`session.ts`](../../acp/acp/src/session.ts)）。隐藏或不可用的工具不列入其中；没有可见工具时，不输出指导。`subagent` 和 `subagent_fork` 都可见时，文本为：
 
 ##### 工具指导 section
 
 ```markdown
-Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn.
+Start independent delegations with `subagent` or `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.
+
+Bash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.
 ```
 
 #### Token 影响
 
-每个父级请求最多包含一段简短的委派指导，列出该请求可见的工具名。
+有可见委派工具时，每个父级请求包含两段指导，列出可见工具名和共享文件协作规则。
 
 #### KV Cache 影响
 
@@ -207,7 +209,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-调用保留任务描述与提示词。成功返回 `started subagent <childId>`；启动被拒绝则返回错误。子任务执行详情独立于这条确认交付。
+`description` 提示要求使用用户当前请求的语言，用 3–5 个词描述任务。调用保留任务描述与提示词。成功返回 `started subagent <name>`；启动被拒绝（包括 `name` 重复或无效）则返回错误。子任务执行详情独立于这条确认交付。
 
 #### Token 影响
 
@@ -221,7 +223,7 @@ Delegation depth for `subagent`: current 1, maximum 1, remaining levels 0. Do no
 
 #### 模型看到什么
 
-回答投递遵循上文的受管理委派规则。返回的子任务 id 用于后续控制与目录操作；只有支持继续执行的后端才接受后续消息。
+回答投递遵循上文的受管理委派规则。返回的名称用于在 `send_message`、`interrupt_agent` 和 Team 任务所有者中指定该子任务；只有支持继续执行的后端才接受后续消息。
 
 #### Token 影响
 

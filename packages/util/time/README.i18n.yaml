@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/time/README.md
 /:
-  en: 6daf8db648646a31
-  zh: 156a7d47413a6a55
+  en: e9fc634b58a500a1
+  zh: a0b98be02976e0cb
 /dsh-util-time:
   en: bc299a9b8fe7717f
   zh: 896661ee0c4edf25
 /dsh-util-time/summary:
-  en: cdc849b4f44094b1
-  zh: b03edaa6a020d39d
+  en: ba3133430a3f11b7
+  zh: 8e3c6c74d1a9b064
 /dsh-util-time/table-of-contents:
   en: d152484eb41ac6b4
   zh: f14f34fce35a8d90
@@ -18,14 +18,14 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /dsh-util-time/use-this-package/when-to-use-it:
-  en: 0c2d116d246fb368
-  zh: 3d0db24ecdf33f7f
+  en: 094e97351a65e8ea
+  zh: 519ff7be1121d9f4
 /dsh-util-time/use-this-package/entry-point:
   en: 7ca7ddebcb6af6be
   zh: 4702a29079d6b8a7
 /dsh-util-time/understand-the-implementation:
-  en: 14595019b72aa45f
-  zh: cfea261931019621
+  en: 402cdc78fc0f0dda
+  zh: 3ddbee420e1a70a6
 /dsh-util-time/further-exploration:
   en: 8aa95ebdfd1f323e
   zh: c6879eac9fa6e087
@@ -36,8 +36,8 @@
   en: daf6e45a18c087b0
   zh: e6714f1e65ed55ce
 /dsh-util-time/known-limitations-and-deferred-work:
-  en: 854d5bf170c91bba
-  zh: b5544e6bd1319d90
+  en: 42d708c4ec711514
+  zh: cfa6ecca096baf82
 /dsh-util-time/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

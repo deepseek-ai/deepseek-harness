@@ -36,7 +36,7 @@ export interface IncompatiblePlugin {
 
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'unsupported-platform' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'already-installed' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'unsupported-platform' | 'unexpected-package' | 'operation-error'
   diagnostic?: string
   /** Present with `incompatible-version`: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
@@ -85,7 +85,10 @@ export interface BundleInfo {
   description?: string
   /** Default GUI visibility after package and Host checks; selected or profile-installed bundles remain manageable. */
   listedByDefault?: boolean
-  /** Selected in the profile manifest; a load error means its layer was skipped. */
+  /**
+   * Selected in the profile manifest; a selected bundle whose layer was skipped carries the load `error`, and none of
+   * its `rows` has an `entryId`.
+   */
   enabled: boolean
   /** Whether the profile declares this dependency; availability separately reports whether its files can be read. */
   installed: boolean
@@ -101,10 +104,12 @@ export interface BundleInfo {
   optional: boolean
   removable: boolean
   /**
-   * Whether `listVersions` and `updateBundle` accept the bundle: a third-party profile dependency saved as a registry
-   * spec under its own name, whose installed manifest declares a semver version, and that carries no plugin management.
+   * How `updateBundle` replaces the bundle, absent when it cannot: `registry` for a third-party profile dependency saved
+   * as a registry spec under its own name, whose newer versions `listVersions` reads; `git` for one saved as a Git spec
+   * pinned to a full commit, which updates to another commit of the same repository directory. Either needs a semver
+   * manifest version and no plugin management.
    */
-  updatable: boolean
+  update?: 'registry' | 'git'
   readOnlyReason?: ReadOnlyReason
   error?: ManagementError
   /** The rows the bundle's patch inserts, in declaration order; empty when the patch cannot be read. */
@@ -139,16 +144,27 @@ export type PluginInstallFailureKind =
 
 /** Package operation completion, including Git checks and a retrieval path for unabridged diagnostics. */
 export interface PackageResult {
+  /** The status the run is read as having ended with; a run the manager terminated records the coerced status 1. */
   exitCode: number
   output: string
   truncated: boolean
   logPath: string
   /** Present when the run failed: what kind of failure its exit and output describe. */
   kind?: PluginInstallFailureKind
-  /** The manager terminated the run after it printed nothing for its silence bound; `exitCode` still reports how it ended. */
+  /**
+   * The run outlived its bound: the manager terminated it after it printed nothing for its silence bound, or the GitHub
+   * connection check hit its deadline. Such a run reports no exit status of its own, so `exitCode` records the status
+   * its failure is read as rather than a status the process returned.
+   */
   timedOut?: boolean
   /** Present when a compatibility check refused the run: the packages the running DSH version rejects. */
   incompatible?: IncompatiblePlugin[]
+  /**
+   * Present when an `expected` check refused the run: `unexpected-package` when the run left the expected package
+   * missing or at another version, or added or changed another direct dependency; otherwise `not-bundle` when the
+   * expected package declares no bundle. The output names what the run installed.
+   */
+  unmet?: 'unexpected-package' | 'not-bundle'
 }
 
 /** Persisted change and independently observed application outcome. */
@@ -196,6 +212,13 @@ export interface InstallBundleOptions {
   approvedBuilds?: string[]
   /** The registry asked first; absent, the configured one. The configured fallbacks follow while a registry is unreachable or stale. */
   registry?: Registry
+  /**
+   * The package and manifest version the spec must install. An installation that leaves this package missing or at
+   * another version, or that adds or changes another direct dependency, is undone with its profile files and modules
+   * before its bundle loads, and fails with `unexpected-package`; one whose package declares no bundle is undone the
+   * same way and fails with `not-bundle`, and one whose bundle patches cannot load fails as an operation error.
+   */
+  expected?: { readonly name: string; readonly version: string }
 }
 
 /** Where an inspection asks. */
@@ -305,6 +328,11 @@ export interface ListVersionsOptions {
 export interface UpdateBundleOptions {
   /** The registry asked first, normally the one that answered `listVersions`; absent, as for `listVersions`. */
   readonly registry?: Registry
+  /**
+   * The Git spec of the target version: required for a bundle listed with `update: 'git'`, where it must pin a full
+   * commit of the installed copy's repository directory, and refused for any other.
+   */
+  readonly spec?: string
   /** Names the update's progress and the target installation's logs; `cancelInstall` stops only that installation. */
   readonly requestId?: PluginInstallRequestId
 }
@@ -344,19 +372,19 @@ export interface PluginInstallCancellation {
   readonly status: 'cancelled' | 'too-late' | 'not-running'
 }
 
-/** One chunk of a pnpm run's output, as the run produces it. */
+/** One chunk of an installation run's output: a pnpm run, or the GitHub connection check that stopped it. */
 export interface PluginInstallLogChunk {
   /** The installation the run belongs to, when its caller supplied a request id. */
   readonly requestId?: PluginInstallRequestId
   /** The run the chunk belongs to. */
   readonly jobId: string
-  /** The command line the run executes: pnpm's command name, then its arguments. */
+  /** The command line the run executes: its command name, then its arguments. */
   readonly argv: readonly string[]
   /** The directory the run executes in: the profile directory. */
   readonly cwd: string
   readonly stream: 'stdout' | 'stderr'
   readonly text: string
-  /** Present on the run's last chunk: pnpm's exit code, null when it ended without one. */
+  /** Present on the chunk that ends a run: its exit code, null when the run ended without one. */
   readonly exitCode?: number | null
 }
 
@@ -426,7 +454,7 @@ declare module '@deepseek-ai/cordis' {
      */
     'plugin-manager/changed'(change: PluginChange): void
     /**
-     * One chunk of a pnpm run's output, streamed as the run produces it.
+     * One chunk of an installation run's output, streamed as the run produces it.
      * @mode emit
      * @param chunk - the chunk and the run it belongs to.
      */

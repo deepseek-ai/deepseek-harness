@@ -8,13 +8,13 @@
 
 ## 模式与强制执行
 
-`SandboxMode` 仅管控文件系统效果。`read-only` 要求后端拒绝写入——POSIX runner 还会授予其 shell 所需的 `/dev/null` 接收器，而 Windows ACL runner 不授予任何显式可写根目录，并因环境 ACL 缺口报告部分强制执行；`workspace-write` 允许在工作区根目录、显式额外目录及后端承诺的临时区域下写入；`danger-full-access` 绕过隔离。网络与进程可见性不在此处的定义范围内。
+`SandboxMode` 仅管控文件系统效果。`read-only` 要求后端拒绝写入——POSIX runner 还会授予其 shell 所需的 `/dev/null` 接收器，而 Windows ACL runner 不授予任何显式可写根目录，并因环境 ACL 缺口报告部分强制执行；`workspace-write` 允许在工作区根目录、受支持的额外目录及后端承诺的临时区域下写入；`danger-full-access` 绕过隔离。Windows 子进程忽略额外目录授权；Harness 文件工具独立执行这些授权。网络与进程可见性不在此处的定义范围内。
 
 ```ts type-equiv
 /**
  * File-effect policy for confined processes. `read-only` permits only required
  * sinks such as `/dev/null`; `workspace-write` also permits the workspace,
- * explicit extra roots, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
+ * explicit extra roots where supported, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
  * and process visibility are outside this vocabulary.
  */
 type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -40,7 +40,7 @@ type SandboxEnforcement = 'full' | 'partial'
 
 ## 逐调用策略
 
-完整执行策略会按每次能力调用解析并携带。它包括 `danger-full-access`，因此消费方可以只解析一次策略，再决定是否绕过约束。普通工具调用从调用会话的不可变 cwd 派生 `workspaceRoot`；部署配置提供无 agent 调用的回退值和显式额外写入授权。解析器保留执行环境中的绝对路径写法。执行限制的提供方在文件实际存在的位置规范化根目录，因此包含 `symlink/..` 的 cwd 会标识配套子进程提供方实际运行的目录。
+完整执行策略会按每次能力调用解析并携带。它包括 `danger-full-access`，因此消费方可以只解析一次策略，再决定是否绕过约束。普通工具调用从调用会话的不可变 cwd 派生 `workspaceRoot`；部署配置提供无 agent 调用的回退值和共享的额外写入授权。存活 Session 的注册为后续解析添加 effect 生命周期内的目录授权。解析器保留执行环境中的绝对路径写法。执行限制的提供方在文件实际存在的位置规范化根目录，因此包含 `symlink/..` 的 cwd 会标识配套子进程提供方实际运行的目录。
 
 ```ts type-equiv
 /**
@@ -57,6 +57,7 @@ interface SandboxExecutionPolicy {
    * Extra physical absolute directories `workspace-write` may also write under.
    * Absence means none. The enforcing host rejects missing, non-directory, and
    * symlinked entries on each call. Remote paths are checked on the remote host.
+   * Windows process confinement ignores these; harness filesystem operations honor them.
    * These grant nothing under `read-only` or `danger-full-access`.
    */
   additionalWritableRoots?: readonly string[]
@@ -160,7 +161,7 @@ interface ConfinedArgv {
 
 ## 提供方与 fail-closed 错误
 
-`await ctx.sandbox.confine(argv, policy, signal)` 在执行环境中解析策略路径并返回 `ConfinedArgv`，没有可用后端时以 `SandboxUnavailableError`（错误码 `SANDBOX_UNAVAILABLE`）拒绝。可选信号可在启动前取消解析。消费方也可以在 spawn 或观察所返回的 argv 时对失败进行分类；该归因属于消费方约定。对于受限策略，静默的无隔离透传永远不合法。
+`await ctx.sandbox.confine(argv, policy, signal)` 在执行环境中解析策略路径并返回 `ConfinedArgv`，没有可用后端时以 `SandboxUnavailableError`（错误码 `SANDBOX_UNAVAILABLE`）拒绝，提供方无法为该模式准备主机状态时以 `SandboxPreparationError`（`SANDBOX_PREPARATION_FAILED`、`SANDBOX_INVALID_TEMP_ROOT`）拒绝。可选信号可在启动前取消解析。消费方也可以在 spawn 或观察所返回的 argv 时对失败进行分类；该归因属于消费方约定。对于受限策略，静默的无隔离透传永远不合法。
 
 提供方选择、探测、缓存和后端特定的强制执行报告归[本地提供方](../../packages/sandbox/sandbox-local/README.zh.md)所有。
 
@@ -200,7 +201,7 @@ Source: [`packages/sandbox/sandbox/src/index.ts`](../../packages/sandbox/sandbox
 
 ### `ctx.sandboxPolicy` — `SandboxPolicyService`
 
-The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, and current request-time policy section. Tool layers call resolve for each execution so a session's mode log and immutable cwd travel together to every enforcing capability.
+The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mode, fallback workspace root, session-scoped directory grants, and request-time policy section. Tool layers call resolve for each execution so a session's mode log and immutable cwd travel together to every enforcing capability.
 
 ```ts cordis-catalog
 /**
@@ -208,11 +209,28 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
  * mode outranks the session's last `sandbox/mode` event, which outranks the
  * deployment default. A session cwd is its workspace-write boundary; the
  * configured root is the fallback for agentless calls and sessions without a
- * cwd.
+ * cwd. Configured extra roots and this Session's active registrations are
+ * snapshotted together; existing operations and processes keep their policy.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's recorded cwd is
+ *   relative or contains a NUL byte.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
+
+/**
+ * Permit writes under one directory in this Session's future workspace-write
+ * operations. The calling context owns the effect; disposal removes only this
+ * registration. Other grants to the directory remain effective. Existing
+ * operations and persistent processes retain their resolved permissions.
+ * Grants are runtime-only and must be registered again after resume or fork.
+ * On Windows, only harness file tools honor extra grants; process permissions stay unchanged.
+ * @param session - exact live Session receiving the grant; other Sessions and agentless calls are unaffected.
+ * @param directory - absolute execution-world path; execution rejects missing, non-directory, or symlinked paths.
+ * @returns the exact Cordis effect disposer for this registration.
+ * @throws when the directory is relative or contains a NUL byte.
+ */
+registerWritableRoot(session: Session, directory: string): () => void
 
 /**
  * Read the session override without applying the deployment default.

@@ -61,7 +61,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       delivery: 'parent',
       provider: 'spawn',
       label: 'child task',
-      request: { parent, prompt: [{ type: 'text', text: 'child task' }] },
+      parent, prompt: [{ type: 'text', text: 'child task' }],
       signal: new AbortController().signal,
     })
     await settled.promise
@@ -79,17 +79,20 @@ it('continues the parent through default Messages after a reasoning-bearing cont
     expect(requests.map(request => request.path)).toEqual(['/anthropic/v1/messages', '/anthropic/v1/messages'])
     const notice = parent.session.deriveMessages().find(message => message.source.kind === 'subagent-settled')
     const closingContent = [
-      { type: 'text', text: `Background subagent ${started.childId} finished and will do no further work unless you send it more.` },
+      { type: 'text', text: 'Background subagent agent-1 finished and will do no further work unless you send it more.' },
       { type: 'text', text: 'Its closing message:' },
       { type: 'text', text: 'child answer' },
     ]
     expect(notice?.content).toEqual(closingContent)
+    expect(notice?.source).toMatchObject({
+      stopReason: 'completed', senderSessionId: started.childId,
+    })
     const noticeWithContext = [
       ...closingContent,
       {
         type: 'text',
-        text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
-          + `Current working directory: ${JSON.stringify(process.cwd())}.`,
+        text: '<system-reminder>\nThe following information describes your current session:\n\n'
+          + `Current working directory: ${JSON.stringify(process.cwd())}.\n</system-reminder>`,
       },
     ]
     expect(requests[1]?.body).toMatchObject({ messages: [{ role: 'user', content: noticeWithContext }] })

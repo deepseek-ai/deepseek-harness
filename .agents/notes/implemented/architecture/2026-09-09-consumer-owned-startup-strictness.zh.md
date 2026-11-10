@@ -20,6 +20,8 @@ Required id 为 `agent-loop`、`webserver`、`modules`、`connection`、`headles
 
 该策略适用于 [Web host 启动](../../../../packages/boot/app-boot/README.zh.md)，包括其 [client 插件名册](2026-07-23-client-plugin-loading-model.zh.md)。[按会话的 preset](2026-09-18-declarative-agent-presets.zh.md)持有独立的严格子树审计。
 
+浏览器启动审计以同一策略审计客户端插件树，使用 [`boot-client.ts`](../../../../packages/client/web/src/boot-client.ts) 中独立的全局名单：模块系统、Session 控制、渲染器、应用框架、Session 视图及其侧栏。浏览器 entry 以包名命名，因此名单写包名；启动图中不存在的名字不产生影响，两份名单互不推导。名单是最小致命集合：已列出 entry 所等待的 entry 同样会阻止启动。功能插件（包括凭据遮挡）保持可选。失败 entry 报告其激活错误。可选失败出现在一条控制台警告中；只有后续图同步调和之后，才会出现在「设置 → 插件 → 插件列表」。重命名名单中的包需要同步更新名单及其测试。
+
 ## 考虑过的替代方案
 
 - **给 vendored Loader 增加 transactional 与 best-effort mode。** 拒绝，因为严格语义属于应用或资源 owner，而一个 Loader group 包含互不相关的 plugin。Mode 还会扩大 vendor patch，并要求 caller 为每个 group 选择 policy。
@@ -35,6 +37,8 @@ Required id 为 `agent-loop`、`webserver`、`modules`、`connection`、`headles
 ## 测试
 
 App-boot 单元测试覆盖缺失和禁用的 required id、optional import failure、config evaluation failure、同步和异步 `apply()` failure、pending dependency，以及 required failure teardown。单元预期输出固定诊断分组、原始错误对象与导入日志的保留、exporter 清理、完整诊断值、私有文件创建、并发报告命名以及写入失败回退行为。构建后的 Web-profile acceptance 断言端口冲突堆栈只输出一次且不包含 Node 包装输出，验证已保存的诊断文件及其 stderr 回退，并会在 optional failure 存在时继续提供完整 UI，并在 required HTTP port 被占用或 `modules`、`connection` 无法激活时以非零码退出，且不报告就绪。
+
+浏览器审计单元测试（`boot-client.client.spec.ts`、`boot.client.spec.ts`）覆盖必需与可选 entry 的导入、创建、激活与 pending 失败、carrier 呈现，以及启动图中不存在的必需名称。测试载体比产品更严格：除非用例传入 `allowInactiveEntries`，`TestClient` 要求每个 roster entry 都激活；浏览器 e2e 把 `web boot: warning` 视为失败，且不提供放宽。
 
 [Web 进程矩阵](../../../../apps/cli/tests/profiles/web/tests/web-failure-matrix.expected.e2e.ts)分别验证启动时和原生补丁文件修改后的 optional 与 required 失败。经过认证的 HTTP 请求和插件生命周期文件区分可用应用与仅存活的进程。这些无需密钥的进程检查与[受控事件投递单元测试](../../../../packages/boot/app-boot/tests/user-patches.spec.ts)互补：单元测试隔离配置协调失败，进程测试还要求随附启动器、原生监听器和有界关闭流程协同工作。
 

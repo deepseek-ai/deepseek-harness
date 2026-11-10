@@ -5,6 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { MenuOverlayInjected } from '../src/client/View.tsx'
+import type { ContextMenuButtonInjected } from '../src/client/Button.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as hostApply } from '../src/index.ts'
 import type { createMenuStore } from '../src/client/store.ts'
@@ -20,7 +21,7 @@ it('lets an external contribution open another menu and withdraws its actions wh
   ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   let overlay!: MenuOverlayInjected
   let store!: ReturnType<ReturnType<typeof createMenuStore>['create']>
-  ctx.provide('slots', { provideRoot: () => () => {},
+  ctx.provide('slots', { provideRoot: () => () => {}, registerFactory: () => () => {},
     inject: (_name: string, register: Parameters<SlotRegistry['inject']>[1]) => ctx.effect(register),
     register: (entry: { inject: () => MenuOverlayInjected; store: ReturnType<typeof createMenuStore> }) => {
       overlay = entry.inject(); store = entry.store.create(); return () => {}
@@ -95,7 +96,7 @@ it('waits for metadata, toggles nearby repeated gestures, replaces occurrences, 
   const ctx = new Context()
   ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   let store!: ReturnType<ReturnType<typeof createMenuStore>['create']>
-  ctx.provide('slots', { provideRoot: () => () => {},
+  ctx.provide('slots', { provideRoot: () => () => {}, registerFactory: () => () => {},
     inject: (_name: string, register: Parameters<SlotRegistry['inject']>[1]) => ctx.effect(register),
     register: (entry: { store: ReturnType<typeof createMenuStore> }) => { store = entry.store.create(); return () => {} },
   } as never)
@@ -142,7 +143,7 @@ it('keeps trigger focus through replacement and ignores non-dismissal events and
   const ctx = new Context()
   ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
   let overlay!: MenuOverlayInjected
-  ctx.provide('slots', { provideRoot: () => () => {},
+  ctx.provide('slots', { provideRoot: () => () => {}, registerFactory: () => () => {},
     inject: (_name: string, register: Parameters<SlotRegistry['inject']>[1]) => ctx.effect(register),
     register: (entry: { inject: () => MenuOverlayInjected }) => { overlay = entry.inject(); return () => {} },
   } as never)
@@ -166,6 +167,8 @@ it('keeps trigger focus through replacement and ignores non-dismissal events and
     expect(overlay.returnFocus?.()).toBe(trigger)
     menu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 2 }))
     menu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }))
+    trigger.setAttribute('data-context-menu-trigger', '')
+    trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }))
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }))
     expect(ctx.contextMenus.active.getSnapshot()).not.toBeNull()
     document.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true }))
@@ -185,7 +188,11 @@ it('keeps trigger focus through replacement and ignores non-dismissal events and
 it('leaves unbound keyboard gestures native', async () => {
   const ctx = new Context()
   ctx.provide('shortcuts', { catalog: createSnapshotStore([]) } as never)
-  ctx.provide('slots', { provideRoot: () => () => {}, inject: () => () => {} } as never)
+  let button!: ContextMenuButtonInjected
+  ctx.provide('slots', { provideRoot: () => () => {},
+    registerFactory: (entry: { inject: () => ContextMenuButtonInjected }) => { button = entry.inject(); return () => {} },
+    inject: () => () => {},
+  } as never)
   ctx.provide('locale', { register: () => () => {}, bind: () => (key: string) => key } as never)
   const fiber = ctx.plugin({ inject, apply })
   await fiber.await()
@@ -194,4 +201,6 @@ it('leaves unbound keyboard gestures native', async () => {
     document.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
   } finally { await fiber.dispose() }
+  button.toggle('retired-button', { kind: 'pluginDocument', value: { id: 'retired' } }, { x: 1, y: 2 })
+  expect(button.hooks.opener.getSnapshot()).toBeNull()
 })

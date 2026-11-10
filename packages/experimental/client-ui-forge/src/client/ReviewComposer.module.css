@@ -2,7 +2,8 @@
 .root, .thread { box-sizing: border-box; width: calc(100% - 20px); max-width: 680px; margin: 10px; padding: 12px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: var(--dsw-font-xs-13); font-family: Inter, var(--dsw-font-family); white-space: normal; }
 .root { background: var(--dsw-alias-bg-layer-2); border-radius: var(--dsw-radius-lg); }
 .root:focus-within { border-color: var(--dsw-alias-border-l4); }
-.root[data-split][data-side="R"], .thread[data-split][data-side="R"] { margin-inline-start: clamp(10px, calc(100% - 700px), calc(50% + 10px)); }
+/* Side by side, a comment fills its side's cell under the code instead of the row's width. */
+[data-forge-comments] > .root, [data-forge-comments] > .thread { width: auto; max-width: none; margin: 0; }
 .title { margin-bottom: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 /* Fixed-size textarea layout stays local during typing; native resizing can still change its outer height. */
 .input { display: block; box-sizing: border-box; width: 100%; height: 88px; min-height: 88px; contain: strict; padding: 10px 12px; resize: vertical; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); outline: none; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary); font: inherit; }
@@ -26,4 +27,11 @@
 @media (hover: hover) { .line:hover { color: var(--dsw-alias-state-business-primary); } }
 @media (pointer: coarse) { .input { font-size: 16px; } .line { min-height: 28px; } }
 
-.add { position: absolute; inset-inline-start: 2px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); cursor: pointer; user-select: none; }
+/* The plus starts just inside the number's padding and covers the sign column, or the empty lane side-by-side cells keep instead, so the line number and the code stay clickable. */
+.add, .hoverAdd { position: absolute; z-index: 1; inset-inline-start: calc(100% - 4px); top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); font: inherit; cursor: pointer; user-select: none; }
+/* Unified rows that show both numbers move the left plus past the right number too; it paints over that number's padding. The plus inherits the code font because the number width is measured in `ch`. */
+[data-review]:not([data-split]):not([data-single-side]) [data-review-side="L"] .add,
+[data-review]:not([data-split]):not([data-single-side]) [data-review-side="L"] .hoverAdd { inset-inline-start: calc(100% + var(--forge-number-width, 3.5em) - 4px); }
+/* The mouse shortcut appears only for the hovered side of a row: a split cell or a unified line. */
+.hoverAdd { display: none; }
+@media (hover: hover) { [data-diff-side]:hover .hoverAdd, [data-diff-line]:hover .hoverAdd { display: inline-flex; } }

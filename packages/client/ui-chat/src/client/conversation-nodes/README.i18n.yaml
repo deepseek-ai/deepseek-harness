@@ -24,8 +24,8 @@
   en: 75564701ecd3d1bd
   zh: 9c042288a15d441d
 /chat-conversation-node-rules/whole-turn-folding:
-  en: 5e008ac2ab8de86a
-  zh: d782e34c7cfcb0f2
+  en: d5eac08a4bc94c10
+  zh: ee2167d1fc823f21
 /chat-conversation-node-rules/display-modes:
   en: ada5a60d2c46f6a8
   zh: f3eaeb5cb4d9b3de
@@ -39,11 +39,11 @@
   en: 8e775c43878ae31a
   zh: 4c1063c0071ebdbd
 /chat-conversation-node-rules/display-modes/group-title-rules:
-  en: f78fb52d4733e6ce
-  zh: 119e5319b23762ba
+  en: eefdd59673e8c0fb
+  zh: 309384c5c995b80a
 /chat-conversation-node-rules/process-grouping:
-  en: 3d28b3bb8757bf55
-  zh: 3b0f451b48db6048
+  en: 4c581ba07e633619
+  zh: d3ea678ba42a496a
 /chat-conversation-node-rules/process-grouping/examples:
   en: 2a550f7e04bce4b0
   zh: b8f95b687448cd77
@@ -54,11 +54,11 @@
   en: 131811a8a12c9d81
   zh: f8a8c1e02a5787f8
 /chat-conversation-node-rules/activity-summaries/tool-name-classification:
-  en: a962c232f916bfff
-  zh: 2e80754623c3f14d
+  en: 28760f1caab0763b
+  zh: 2d0eb175509096e7
 /chat-conversation-node-rules/activity-summaries/subagents-background-jobs-and-nested-calls:
-  en: e7796e7ba825c3d6
-  zh: c377d9eab0a8869f
+  en: da0c896564c0d78e
+  zh: 6ff7b8a3b2f2de8c
 /chat-conversation-node-rules/activity-summaries/live-activity-and-detail:
   en: e0ca09c305690be7
   zh: fb35d0238b1a827b

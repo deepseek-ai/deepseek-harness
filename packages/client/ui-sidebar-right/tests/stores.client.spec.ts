@@ -450,3 +450,45 @@ describe('createSidebarRightStore — page uniqueness', () => {
     expect(Object.values(layout().tabs).filter(tab => tab.kind === 'guide')).toHaveLength(1)
   })
 })
+
+describe('createSidebarRightStore — reveals of floating tabs', () => {
+  it('leaves a collapsed column collapsed when an open from one floating panel reveals another', () => {
+    const { actions, layout, expand } = harness()
+    expand()
+    const open = (name: string): TabId => {
+      let tabId: TabId | undefined
+      actions.openContent(SESSION, { kind: 'text', contentId: `dsh-resource://file/session/s-test/${name}`, title: name }, (id) => { tabId = id })
+      return tabId!
+    }
+    const a = open('a.txt')
+    const b = open('b.txt')
+    actions.floatTab(SESSION, a)
+    actions.floatTab(SESSION, b)
+    const panelB = findTabPane(layout(), b).id
+    actions.setExpanded(SESSION, false)
+    const tabs = Object.keys(layout().tabs).length
+    let settled: TabId | undefined
+    actions.openContent(SESSION, {
+      kind: 'text', contentId: 'dsh-resource://file/session/s-test/b.txt', title: 'b.txt', replaceTab: a,
+    }, (id) => { settled = id })
+    expect(settled).toBe(b)
+    expect(layout().expanded).toBe(false)
+    expect(layout().activePaneId).toBe(panelB)
+    expect(Object.keys(layout().tabs)).toHaveLength(tabs)
+    expect(layout().tabs[a]).toBeDefined()
+  })
+
+  it('finds a page a replaced floating tab would open only in that tab\'s panel', () => {
+    const { actions, layout, expand, guide } = harness()
+    expand()
+    actions.openContent(SESSION, { kind: 'files', contentId: pageAddress('files'), title: 'Files' }, () => {})
+    const seeded = guide()
+    actions.floatTab(SESSION, seeded)
+    const panel = findTabPane(layout(), seeded)
+    let settled: TabId | undefined
+    actions.openContent(SESSION, { kind: 'files', contentId: pageAddress('files'), title: 'Files', replaceTab: seeded }, (id) => { settled = id })
+    expect(layout().tabs[seeded]).toBeUndefined()
+    expect(findTabPane(layout(), settled!)).toMatchObject({ id: panel.id, host: 'float', rect: panel.rect })
+    expect(Object.values(layout().tabs).filter(tab => tab.kind === 'files')).toHaveLength(2)
+  })
+})

@@ -162,7 +162,31 @@ interface LspService {
 }
 ```
 
-`LspProviderId` is the seam's branded id (`Branded<'LspProviderId'>` from [dsh-brand](../../packages/util/brand)); `LspError` extends `HarnessError` with stable codes such as `LSP_INVALID_PROVIDER`, `LSP_CONFLICT`, `LSP_UNAVAILABLE`, `LSP_DISPOSED`, `LSP_UNSUPPORTED_OPERATION`, and `LSP_MALFORMED_RESPONSE`, which callers route on instead of parsing `message`.
+`LspProviderId` is the seam's branded id (`Branded<'LspProviderId'>` from [dsh-brand](../../packages/util/brand)); `LspError` extends `HarnessError` with the stable codes listed under [Failures](#failures), which callers route on instead of parsing `message`.
+
+<a id="failures"></a>
+## Failures
+
+Every expected failure of an `lsp` tool call is a `HarnessError` whose `name` and `code` the tool result keeps in `error.info`. `LspError` sets `name` to `LspError`; its `code` stays open because providers and consumers add codes, so consumers tolerate codes they do not know. Invalid tool arguments fail as `ToolArgsError` `INVALID_ARGS`, and caller cancellation as `AbortError`. Workspace and source reads keep the filesystem provider's `FsError` code, such as `FS_NOT_FOUND`, `FS_NOT_REGULAR_FILE`, or `FS_NOT_TEXT`, and prefix the LSP operand to its message; the stdio provider adds `FS_NOT_DIRECTORY` for a non-directory workspace and `FS_TOO_LARGE` for a source over `maxDocumentBytes`. A coded query failure whose server teardown also fails keeps the query failure's `name` and `code` and appends the teardown failure to its message; a query failure without a code, such as a cancellation, surfaces with the teardown failure as an `AggregateError` without `error.info`.
+
+| Code | Raised by | Meaning | Consumer action |
+|---|---|---|---|
+| `LSP_INVALID_PROVIDER` | Seam | A registration has an empty id or language id, no extensions, or an invalid extension | Fix the registration |
+| `LSP_CONFLICT` | Seam | The provider id or an extension is already registered | Remove the duplicate registration |
+| `LSP_UNAVAILABLE` | Seam | No provider handles the file's extension | Query a supported file or add a provider |
+| `LSP_WORKSPACE_REQUIRED` | `lsp` tool | The call has no Agent Session workspace | Call the tool from an Agent Session |
+| `LSP_DISPOSED` | Provider | The provider or its server instance was disposed | Retry after the provider is mounted again |
+| `LSP_UNSUPPORTED_OPERATION` | Provider | The server lacks the operation or transient open/close synchronization | Choose another operation or server |
+| `LSP_MALFORMED_RESPONSE` | Provider | The server's `initialize` or query result violates the protocol | Report the server defect |
+| `LSP_FILE_OUTSIDE_WORKSPACE` | Stdio provider | The source resolves outside the canonical workspace | Query a file inside the workspace |
+| `LSP_UNSUPPORTED_ENCODING` | Stdio provider | The server negotiated a position encoding other than UTF-16 | Use a server that supports UTF-16 |
+| `LSP_SPAWN_FAILED` | Stdio provider | The subprocess provider failed to launch or run the server; a provider `HarnessError` keeps its own `name` and `code` instead | Fix the server command or installation |
+| `LSP_SERVER_EXITED` | Stdio provider | The server exited or closed its stdin; after an exit, the message carries the retained stderr tail | Retry later; inspect the stderr tail when it repeats |
+| `LSP_PROTOCOL_ERROR` | Stdio provider | The server's output broke base-protocol framing or JSON | Report the server defect |
+| `LSP_MESSAGE_TOO_LARGE` | Stdio provider | A server message exceeded `maxMessageBytes` | Narrow the query or raise `maxMessageBytes` |
+| `LSP_SERVER_ERROR` | Stdio provider | The server answered with a JSON-RPC error; the message carries its numeric code and text | Act on the server's message |
+
+After a transport failure (`LSP_SPAWN_FAILED`, `LSP_SERVER_EXITED`, `LSP_PROTOCOL_ERROR`, or `LSP_MESSAGE_TOO_LARGE`), the stdio provider retries the read-only query once on a fresh process when the failed process tears down cleanly.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

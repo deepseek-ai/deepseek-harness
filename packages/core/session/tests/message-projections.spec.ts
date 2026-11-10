@@ -59,6 +59,24 @@ describe('plugin-owned message projections', () => {
     expect(source.data.content).toEqual([{ type: 'text', text: 'original' }])
   })
 
+  it.each(['projected', 'reject'])('admits message projections through array append (%s)', (text) => {
+    const session = Session.create(SessionId('array-projection'), undefined, undefined, undefined, [projection])
+    const original = createUserMessage({ content: [{ type: 'text', text: 'original' }], source: { kind: 'user' } })
+    const append = () => session.append([
+      ['user/message', original, { surfaceOp: 'append' }],
+      ['test/project', { seq: SessionSeq(0), text }],
+    ])
+    if (text === 'reject') {
+      expect(append).toThrow('rejected decision')
+      expect(session.seq).toBe(0)
+      expect(session.deriveMessages()).toEqual([])
+    } else {
+      append()
+      expect(session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text }])
+      expect(session.surface.contentGeneration).toBe(1)
+    }
+  })
+
   it('registers by fiber and refuses cached or pending decisions after disposal', async () => {
     const ctx = new Context()
     contexts.push(ctx)

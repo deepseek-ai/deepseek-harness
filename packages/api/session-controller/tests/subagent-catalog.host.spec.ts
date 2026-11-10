@@ -77,12 +77,15 @@ describe('SessionController subagent catalog', () => {
         version: 0, childId: CHILD, childCreatedAt: 8, mode: 'continuable', label: 'worker',
       })
       let frame = await stream.next()
-      while (!frame.done && !(frame.value.type === 'projection' && frame.value.key === 'subagentCatalog'
-        && Array.isArray(frame.value.value) && frame.value.value.length === 1)) {
+      let catalog = frame.done || frame.value.type !== 'projection'
+        ? undefined : frame.value.changes.find(change => change.key === 'subagentCatalog')?.val
+      while (!frame.done && !(Array.isArray(catalog) && catalog.length === 1)) {
         frame = await stream.next()
+        catalog = frame.done || frame.value.type !== 'projection'
+          ? undefined : frame.value.changes.find(change => change.key === 'subagentCatalog')?.val
       }
-      expect(frame.value).toMatchObject({ type: 'projection', sessionId: PARENT, key: 'subagentCatalog',
-        value: [{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }] })
+      expect(frame.value).toMatchObject({ type: 'projection', sessionId: PARENT })
+      expect(catalog).toMatchObject([{ id: CHILD, createdAt: 8, mode: 'continuable', label: 'worker' }])
     } finally {
       signal.abort()
       await stream.return?.()

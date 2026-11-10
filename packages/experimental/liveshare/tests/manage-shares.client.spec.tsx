@@ -20,11 +20,11 @@ const translate: LiveshareManageSharesDialogProps['t'] = (key, params) => {
 
 const ROWS = [
   {
-    shareId: 'one', sessionId: 'session-one', sessionTitle: 'First session', link: 'https://relay.test/?shareId=one',
+    shareId: 'one', sessionIds: ['session-one'], sessionTitle: 'First session', link: 'https://relay.test/?shareId=one',
     createdAt: '2026-09-05T00:00:00Z', online: true,
   },
   {
-    shareId: 'two', sessionId: 'session-two', sessionTitle: 'Second session', link: 'https://relay.test/?shareId=two',
+    shareId: 'two', sessionIds: ['session-two'], sessionTitle: 'Second session', link: 'https://relay.test/?shareId=two',
     createdAt: '2026-09-05T00:00:00Z', online: false,
   },
 ]
@@ -62,6 +62,33 @@ describe('Liveshare global share manager', () => {
     expect(opens).toHaveLength(2)
     await act(async () => { fireEvent.click(opens[0]!) })
     expect(opened).toEqual(['session-one:First session'])
+  })
+
+  it('opens a share from a Host that reports only sessionId', async () => {
+    const opened: string[] = []
+    await showManager(
+      async () => accepted({
+        shares: [{ ...ROWS[0], sessionIds: undefined, sessionId: 'session-one' }] as never,
+      }),
+      (sessionId, title) => { opened.push(`${sessionId}:${title}`) },
+    )
+    const opens = screen.getAllByRole('button', { name: 'Manage' })
+    await act(async () => { fireEvent.click(opens[0]!) })
+    expect(opened).toEqual(['session-one:First session'])
+  })
+
+  it('disables opening a share neither session field names', async () => {
+    const opened: string[] = []
+    await showManager(
+      async () => accepted({
+        shares: [{ ...ROWS[0], sessionIds: undefined, sessionId: undefined }] as never,
+      }),
+      (sessionId) => { opened.push(sessionId) },
+    )
+    const [open] = screen.getAllByRole('button', { name: 'Manage' })
+    expect(open).toHaveProperty('disabled', true)
+    await act(async () => { fireEvent.click(open!) })
+    expect(opened).toEqual([])
   })
 
   it('stops one share from its own row after the owner acknowledges the link loss', async () => {

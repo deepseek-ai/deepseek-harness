@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Terminales persistentes",
-    "description": "Proporciona al agente terminales cuyos procesos siguen ejecutándose en segundo plano entre llamadas a herramientas, de modo que puede iniciar un servidor de desarrollo o un REPL y volver más tarde para leer la salida o escribir entradas.",
+    "description": "Proporciona al agente terminales que se abren como pestañas de la barra lateral, que puede observar y controlar escribiendo en ellas. Los procesos siguen ejecutándose entre llamadas a herramientas, de modo que puede iniciar un servidor de desarrollo o un REPL y volver más tarde para leer la salida; también puede leer los terminales que usted abra.",
     "detail": "docs/DETAIL.md"
   }
 }

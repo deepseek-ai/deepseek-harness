@@ -1,7 +1,8 @@
 /** Account route cancellation uses the real loop, registry, and tool lifecycle. */
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, expect, it, vi } from 'vitest'
-import { installAccountTaskCancellation, type DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
+import { installAccountTaskCancellation } from '@deepseek-ai/dsh-deepseek-account/src/account-tasks.ts'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { createUserMessage, LlmAdapter, type GenerateOptions, type StreamChunk, ToolCallId } from '@deepseek-ai/dsh-llm'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
@@ -234,7 +235,7 @@ it('cancels an account child without stopping its API-key parent', async () => {
     signal.throwIfAborted()
   })
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
-  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'), parentAgent: parent,
+  const childHandle = await ctx.agents.create({ sessionId: SessionId('child'),
     agentOptions: { provider: 'deepseek-account', model: 'deepseek-v4-flash' } })
   send(parent)
   send(childHandle.agent)

@@ -31,6 +31,8 @@ Run `dsh --profile web` for browser chat, model and settings management, and ses
 
 Start the GUI, open your browser, and start talking to the agent. The flags fine-tune the invocation.
 
+[Agent Teams UI](../../client/ui-agent-team/README.md) loads with this bundle. Enable it per Session in the model and reasoning menu; shared tasks open below the member tree from the Subagent control.
+
 ### Starting the Web GUI
 
 ```sh
@@ -58,6 +60,8 @@ The `minimal` agent preset uses a persistent shell, the `read_image` tool, and a
 | `publicUrl` | Unset | Advertised HTTP(S) application root; otherwise announce the bind-address URL |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) lists this runtime plugin's accepted fields and their JSDoc. The shipped composition inserts the `schedule` service row and the `ui-schedule` task page row, while the clock reading and the four reminder tools belong to the `standard`, `cordis`, and `ptc` presets. The `tool-subagent` and `tool-subagent-fork` rows in those presets deny the four tools, so a delegated child's scope never lists them.
+
+The `standard`, `cordis`, and `ptc` presets set `config.interrupt: false` on their `tool-subagent-control` rows. To expose `interrupt_agent`, including in Team mode, override the relevant preset declaration as described in the [migration steps](../../../docs/upgrade-guide/v0.2.2-rc.1/subagent-interrupt-default/guide.md); changing the disabled Host row does not change preset tools.
 
 <a id="public-deployments"></a>
 ### Listening, trust, and public deployments
@@ -90,6 +94,10 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session selects a shipped preset (`standard` by default). The Agent presets settings page changes the default and edits preset child plugins; saves persist in `$DSH_HOME/profiles/web/cordis.patch.yml`. Standard and Creator enable the plugin-management tool only when the Host provides an editable profile.
 
+Standard and Creator include the `dsh-doc` skill for questions about DSH and requested plugin or preset work. It guides the agent to the installed version's documentation and source. See [Model Experience](#model-experience) for loading and context effects.
+
+The packaged skill uses the custom skill root: a same-named project skill overrides it, and it overrides same-named user skills. One catalog entry wins without an error; see [skill-root priority](../../skill/skill-filesystem/README.md).
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -98,7 +106,9 @@ Each browser session selects a shipped preset (`standard` by default). The Agent
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The bundle is one patch layer of five files plus one runtime glue plugin: `cordis.patch.yml` carries the host rows and the preset registry, and each `presets/<id>.patch.yml` inserts one shipped preset declaration, applied in the order `dsh.bundle.patch` lists them. The storage stack and projection cache come from `dsh-base`; the web overlay's workspace and message-feedback rows consume that shared `storageDomain` service. The patch restates the surface-specific values the base deliberately omits, inserts the web-only host rows and browser roster, then moves the agent plane behind presets. The glue plugin owns dist serving, the advertised application URL, the plain-HTTP exposure warning, the bash variable, and the readiness announcements. The `office-to-pdf` row mounts one lazy [Office conversion provider](../../document/office-to-pdf/README.md) for Host consumers, including Desktop compositions using this bundle. The conversion service's Remote methods authorize preview reads, while Document Preview owns the Office viewer and Client cache.
+The bundle is one patch layer of five files plus one runtime glue plugin: `cordis.patch.yml` carries the host rows and the preset registry, and each `presets/<id>.patch.yml` inserts one shipped preset declaration, applied in the order `dsh.bundle.patch` lists them. The storage stack and projection cache come from `dsh-base`; the web overlay's workspace and message-feedback rows consume that shared `storageDomain` service. The patch restates the surface-specific values the base deliberately omits, inserts the web-only host rows and browser roster, then moves the agent plane behind presets. The glue plugin owns dist serving, the advertised application URL, the plain-HTTP exposure warning, the bash variable, and the readiness announcements. The `office-kit` row mounts one lazy [Office conversion provider](../../document/office-kit/README.md) for Host consumers, including Desktop compositions using this bundle, and keeps converted files under `$DSH_HOME/office-kit/outputs`. The `standard` and `ptc` presets mount the [Office tools](../../document/tool-office/README.md) in every profile, whether or not Kit is installed, and declare them after an Office skill loads; the `minimal` preset omits them. The conversion service's Remote methods authorize preview reads, while Document Preview owns the Office viewer and Client cache.
+
+The `skill-office` row mounts the [Office skills](../../skill/skill-office/README.md) from their packaged assets in every profile. Desktop with a nonempty `DSH_PRIMARY_RUNTIME` also mounts the bundled dependency-query row and selects `pythonEnvironment: 'workspace-dependencies'`; other profiles, and Desktop without a primary runtime, select `pythonEnvironment: 'user'` and leave the dependency-query row disabled. The [Desktop application](../../../apps/desktop/README.md#bundled-workspace-dependencies) owns resource packaging.
 
 ### Patch semantics
 
@@ -146,6 +156,34 @@ Read these pages when you want to go deeper into the shared core, the browser re
 <a id="model-experience"></a>
 ## Model Experience
 
+### DSH documentation skill
+
+#### What the model sees
+
+Standard and Creator list `dsh-doc` in the skill catalog. The `skill` tool loads its instructions and directs the agent to references for the current task. Other presets retain their own skill sources. Loading the skill does not modify workspace files or profile settings.
+
+#### Token effect
+
+The preset contributes one catalog entry. A session with no other skills also receives the catalog's shared invocation instructions. Skill bodies and reference files enter context only when loaded.
+
+#### KV Cache effect
+
+The catalog is logged at the first step and remains stable until its entries change. Loading the skill appends tool output without changing the tool schemas.
+
+### Creator persona
+
+#### What the model sees
+
+The Creator preset adds “You help the user customize DeepSeek Harness itself.” after the shared coding-agent sentence. Plugin implementation and authorization rules remain in the on-demand `dsh-doc` skill.
+
+#### Token effect
+
+One fixed sentence is added to Creator requests. Standard requests are unchanged.
+
+#### KV Cache effect
+
+The sentence is stable within the Creator preset; switching to a different preset changes the persona prefix.
+
 ### Web runtime variable
 
 #### What the model sees
@@ -159,6 +197,20 @@ Two managed-environment variable lines; constant per process.
 #### KV Cache effect
 
 None; the plugin contributes no system-prompt text.
+
+### Office skills
+
+#### What the model sees
+
+The skill catalog lists the Office router and three Office authoring skills in every profile. The loaded Python skills end with a Python environment section: on Desktop it directs the model to `load_workspace_dependencies`; elsewhere it directs the model to the project's or user's existing Python.
+
+#### Token effect
+
+The four catalog summaries in each initial catalog; loaded skill bodies only when the model requests them.
+
+#### KV Cache effect
+
+While resources and configuration stay unchanged, the built-in Office summaries and Python environment sections stay stable; the [Office skills](../../skill/skill-office/README.md#model-experience) describe when the catalog changes.
 
 ## Known Limitations and Deferred Work
 

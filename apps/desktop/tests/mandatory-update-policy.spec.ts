@@ -77,6 +77,24 @@ describe('mandatory update policy', () => {
     expect(headers[1]).toMatchObject({ 'x-client-locale': 'zh_CN', 'x-client-timezone-offset': '28800' })
   })
 
+  it('checks the selected channel after an old-channel request finishes', async () => {
+    let channel: 'nightly' | 'stable' = 'nightly'
+    const old = Promise.withResolvers<Response>()
+    const request = vi.fn<typeof fetch>().mockReturnValueOnce(old.promise).mockResolvedValue(Response.json(clear))
+    const policy = new DesktopMandatoryUpdatePolicy(resolveDesktopPolicyConfig(deployment)!,
+      { ...identity, get channel() { return channel } }, () => {}, request, () => client)
+    instances.push(policy)
+    const first = policy.check('launch')
+    channel = 'stable'
+    const second = policy.check('channel-change', true)
+    old.resolve(Response.json(force))
+    await first
+    expect(await second).toMatchObject({ blocking: false })
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(request.mock.calls.map(([, options]) => new Headers(options?.headers).get('x-client-update-channel')))
+      .toEqual(['nightly', 'stable'])
+  })
+
   it('coalesces manual checks and honors the interval on foreground/resume', async () => {
     const { policy, request } = fixture()
     const pending = Promise.withResolvers<Response>()

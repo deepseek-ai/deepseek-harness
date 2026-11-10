@@ -11,6 +11,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { ESCALATION_TARGETS, approveEscalation, escalationHintMarker, sandboxDenialMarker, sandboxPermissionsDescription, validateEscalationArgs } from '@deepseek-ai/dsh-sandbox'
@@ -96,7 +97,7 @@ export class FsSandboxController {
       return standingPolicy
     }
     if (this.escalationModes.length === 0) {
-      throw new Error('sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)')
+      throw new ToolArgsError(['sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)'])
     }
     const policy = standingPolicy as SandboxExecutionPolicy
     const approvedMode = await approveEscalation(
@@ -126,6 +127,14 @@ export class FsSandboxController {
    * @param policy - the policy stamped onto the call (names the mode in the marker).
    * @returns the error to throw — the marker `FsError` for a sandbox denial, else the original.
    */
+  mapError(error: FsError, policy: SandboxExecutionPolicy | undefined): FsError
+  /**
+   * Map a caught value, preserving failures other than sandbox denials.
+   * @param error - value thrown by a mutation.
+   * @param policy - policy stamped onto the call, when applicable.
+   * @returns the denial marker error, or the unchanged caught value.
+   */
+  mapError(error: unknown, policy: SandboxExecutionPolicy | undefined): unknown
   mapError(error: unknown, policy: SandboxExecutionPolicy | undefined): unknown {
     if (!(error instanceof FsError) || error.code !== 'FS_SANDBOX_DENIED') return error
     // A FS_SANDBOX_DENIED only arises under a confining backend, whose tool

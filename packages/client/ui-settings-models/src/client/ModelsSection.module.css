@@ -446,8 +446,15 @@
   transition: transform 120ms ease;
 }
 
-.customized[open] > .customizedSummary::before {
+.customized[open] > .customizedSummary::before,
+.retryFold[open] > .customizedSummary::before {
   transform: rotate(45deg) translate(-1px, -1px);
+}
+
+/* The nested fold labels a part of the retry policy, so it reads at field-label weight. */
+.retryFold > .customizedSummary {
+  font-weight: 400;
+  color: var(--dsw-alias-label-tertiary);
 }
 
 @media (hover: hover) {
@@ -507,6 +514,7 @@
 }
 
 .modelEntry {
+  container: model-row / inline-size;
   position: relative;
   border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-lg);
@@ -520,12 +528,46 @@
   gap: 6px;
 }
 
+.modelName {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.modelNameLabel {
+  display: none;
+}
+
+@container model-row (max-width: 440px) {
+  .modelRow {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .modelRow .modelName {
+    display: none;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 2px 4px 0;
+  }
+
+  .modelRow[data-expanded] .modelName {
+    display: flex;
+  }
+
+  .modelNameLabel {
+    display: block;
+  }
+}
+
 .modelDragHandle:not(:disabled) {
   cursor: grab;
 }
 
 .modelEntry[data-dragging] {
   opacity: 0.5;
+}
+
+.modelEntry[data-drop-target] {
+  z-index: 1;
 }
 
 .modelDragPreview {
@@ -618,9 +660,46 @@
 
 .modelAdvanced {
   display: grid;
+  grid-column: 1 / -1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding: 8px 4px 2px;
+  padding: 2px 4px;
+}
+
+/* Retry-policy fields under the mode select: codes and count, then the folded backoff values. */
+.retryBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Code checkboxes in as many even columns as fit. */
+.retryCodeChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 16px;
+}
+
+/* Custom error-code input beside its Add action. */
+.retryCodeAdd {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* One backoff column wide, so the count lines up with the delay fields below. */
+.retryCount {
+  width: max(112px, calc((100% - 16px) / 3));
+  max-width: 100%;
+}
+
+.retryBackoff {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  align-items: end;
+  gap: 12px 8px;
+  padding-top: 8px;
 }
 
 .modelField {
@@ -763,6 +842,11 @@ select.input {
 
 .keyInput {
   position: relative;
+}
+
+.savedKeyInput .input::placeholder {
+  color: var(--dsw-alias-label-primary);
+  opacity: 1;
 }
 
 .keyInputFilled {

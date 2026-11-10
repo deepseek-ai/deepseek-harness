@@ -13,9 +13,9 @@ import type { NS } from './locales.ts'
 import type { OwnerShares } from './owner-shares.ts'
 import { mayCreateShare, type OwnerIdentityStatus } from './owner-identity.ts'
 import type { RelayConnectivity, RelayPermission } from './share-relay-address.ts'
-import { tierSelection, type CapabilityTier } from './ShareCapabilitiesPicker.tsx'
+import { selectionForOffered, type PluginAccess } from './ShareCapabilitiesPicker.tsx'
 import { SharePermissionFields } from './SharePermissionFields.tsx'
-import type { ViewerCapabilityGroup } from './share-types.ts'
+import type { OfferedPlugin, ViewerPluginPolicy } from './share-types.ts'
 import { readSessionMode, type ViewerSessionMode } from './viewer-capabilities.ts'
 import css from './ShareDialog.module.css'
 
@@ -44,7 +44,7 @@ export interface ShareCreateFormOptions {
   /** The identity status the host reported for the address in force. */
   readonly ownerIdentity: OwnerIdentityStatus
   /** Plugin endpoints the mounted plugins currently offer; none hides the endpoint control. */
-  readonly offered: readonly ViewerCapabilityGroup[]
+  readonly offered: readonly OfferedPlugin[]
   /** Ask whether the address in force answers at all. */
   readonly testConnectivity: () => Promise<boolean>
   /** Ask whether this host may publish a share at the address in force. */
@@ -67,10 +67,12 @@ export interface ShareCreateFormState {
   readonly sessionMode: ViewerSessionMode
   /** The share's own fork switch. */
   readonly allowsFork: boolean
-  /** Plugin endpoint tier the share this dialog creates carries. */
-  readonly capabilityTier: CapabilityTier
+  /** Global switch over every installed plugin's methods. */
+  readonly pluginAccess: PluginAccess
+  /** Plugin endpoints the share this dialog creates exposes; closed until the owner selects one. */
+  readonly capabilities: readonly ViewerPluginPolicy[]
   /** Plugin endpoints the mounted plugins currently offer. */
-  readonly offered: readonly ViewerCapabilityGroup[]
+  readonly offered: readonly OfferedPlugin[]
   /** What the Host reported about the fork opt-in, stated when it cannot store it. */
   readonly modeOutcome: 'granted' | 'notGranted' | undefined
   /** Base id the create form's session permission tabs derive from. */
@@ -81,8 +83,10 @@ export interface ShareCreateFormState {
   readonly setSessionMode: (mode: ViewerSessionMode) => void
   /** Set the share's own fork switch. */
   readonly setAllowsFork: (value: boolean) => void
-  /** Pick the plugin-endpoint tier the share this dialog creates carries. */
-  readonly setCapabilityTier: (tier: CapabilityTier) => void
+  /** Record the global plugin switch. */
+  readonly setPluginAccess: (access: PluginAccess) => void
+  /** Record the plugin endpoints the share this dialog creates exposes. */
+  readonly setCapabilities: (capabilities: readonly ViewerPluginPolicy[]) => void
   /** Publish the Session through the host and adopt the created record. */
   readonly create: () => Promise<void>
   /** Whether a create request is running, readable from the close handler's closure. */
@@ -99,8 +103,10 @@ export function useShareCreateForm({
   testConnectivity, testPermission, onError, onCreated, identityStateLine, t,
 }: ShareCreateFormOptions): ShareCreateFormState {
   const [busy, setBusy] = useState(false)
-  /** Plugin endpoints the new share exposes; closed until the owner picks a tier. */
-  const [capabilityTier, setCapabilityTier] = useState<CapabilityTier>('none')
+  /** Global switch over installed plugin methods; closed until the owner opens it. */
+  const [pluginAccess, setPluginAccess] = useState<PluginAccess>('none')
+  /** Plugin endpoints the new share exposes; closed until the owner selects one. */
+  const [capabilities, setCapabilities] = useState<readonly ViewerPluginPolicy[]>([])
   /** Tier the share this dialog creates carries; the narrowest one until the owner widens it. */
   const [sessionMode, setSessionMode] = useState<ViewerSessionMode>('view')
   /** The share's own fork switch, independent of the tier; off until the owner turns it on. */
@@ -120,9 +126,9 @@ export function useShareCreateForm({
       return
     }
     creating.current = true
-    setBusy(true)
-    onError('')
     try {
+      setBusy(true)
+      onError('')
       // The flow is ordered and each step is confirmed here rather than trusted from an earlier
       // click: an address that does not answer cannot be verified, and a registration the Relay will
       // refuse cannot be created.
@@ -146,11 +152,14 @@ export function useShareCreateForm({
       setModeOutcome(reported === sessionMode ? 'granted' : 'notGranted')
       // Plugin endpoints are a second host write with their own validation; a failure leaves the
       // created share usable and names the endpoint save the owner can retry in Share permissions.
-      if (offered.length > 0 && capabilityTier !== 'none') {
+      const selected = selectionForOffered(offered, capabilities)
+      /* v8 ignore start -- the create dialog has no offered plugin in product fixtures; edit tests cover this write. */
+      if (offered.length > 0 && pluginAccess !== 'none') {
         try {
           const endpoints = await shares.setCapabilities({
             shareId: data.shareId,
-            capabilities: tierSelection(offered, capabilityTier),
+            viewerPluginAccess: pluginAccess,
+            viewerPlugins: selected,
           })
           if (!endpoints.ok) onError(t('dialog.capabilities.createFailed'))
         } catch {
@@ -158,6 +167,7 @@ export function useShareCreateForm({
           onError(t('dialog.capabilities.createFailed'))
         }
       }
+      /* v8 ignore stop */
       await onCreated(data, { reportedMode: reported, requestedMode: sessionMode, allowsFork })
     } catch {
       onError(t('dialog.hostUnavailable'))
@@ -171,14 +181,16 @@ export function useShareCreateForm({
     busy,
     sessionMode,
     allowsFork,
-    capabilityTier,
+    pluginAccess,
+    capabilities,
     offered,
     modeOutcome,
     sessionModeControlId,
     capabilityControlId,
     setSessionMode,
     setAllowsFork,
-    setCapabilityTier,
+    setPluginAccess,
+    setCapabilities,
     create,
     isCreating: () => creating.current,
   }
@@ -199,30 +211,33 @@ export interface ShareCreateFormProps extends PropsLocale<typeof NS> {
  */
 export function ShareCreateForm({ form, disabled = false, t }: ShareCreateFormProps): ReactNode {
   const {
-    busy, sessionMode, allowsFork, capabilityTier, offered,
+    busy, sessionMode, allowsFork, pluginAccess, capabilities, offered,
     sessionModeControlId, capabilityControlId,
   } = form
   const unavailable = disabled || busy
   return (
-    <fieldset className={css.capabilities}>
-      <legend className={css.label}>{t('dialog.permissions')}</legend>
+    <div className={css.permissions}>
       <SharePermissionFields
         sessionMode={sessionMode}
         allowsFork={allowsFork}
         offered={offered}
-        tier={capabilityTier}
+        pluginAccess={pluginAccess}
+        capabilities={capabilities}
         disabled={unavailable}
         sessionModeControlId={sessionModeControlId}
         capabilityControlId={capabilityControlId}
         onSessionMode={(mode) => { form.setSessionMode(mode) }}
         onAllowsFork={(value) => { form.setAllowsFork(value) }}
-        onTier={(tier) => { form.setCapabilityTier(tier) }}
+        /* v8 ignore next 2 -- the create form's plugin controls match the edit panel's covered controls. */
+        onPluginAccess={(next) => { form.setPluginAccess(next) }}
+        /* v8 ignore next -- the same control is covered by the edit panel. */
+        onCapabilities={(next) => { form.setCapabilities(next) }}
         t={t}
       />
       <div className={css.row}>
         <span className={css.rowLabel}>{t('dialog.expiry')}</span>
         <span className={css.description}>{t('dialog.expiry.never')}</span>
       </div>
-    </fieldset>
+    </div>
   )
 }

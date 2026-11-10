@@ -39,9 +39,12 @@ kind: "package-reference"
 
 编辑另一个插件所拥有命名空间的页面通过 `ctx.configForms.whileServed(namespaces, register)` 注册：只要所列命名空间中的任一个进入共享镜像，`register` 就运行一次，收到 Host 当前服务的命名空间集合，并返回该注册的 disposer；当它们全都不再被服务，或 `whileServed` 返回的 disposer 被调用时，这个 disposer 就运行。调用方持有返回的 disposer 并把它包进 `ctx.effect`；与 `get` 不同，服务不会在调用方的 context 上注册任何东西。因此从未组合过所有者的部署看不到该页面的任何痕迹，Host 停止服务的命名空间会撤下它。插件页上的四个官方页面各自通过一个伴生包走这条路径。
 
+<a id="filling-the-settings-slots"></a>
 ### 填充设置 slot
 
 设置界面会注册进本包声明的 slot 类型。外壳（`sidebar.settings` 占位方、导航、界面框架）位于 ui-settings-general；功能页面注册 `settings.section` 贡献；「插件」分区承载 `settings.plugins.tab` 页面；首次使用引导步骤注册 `settings.onboarding`。跨命名空间的表面（schema 内省、已服务命名空间目录、`hasDocument`）通过 `ctx.configForms.describe()` 读同一面镜像。
+
+要自定义页面的导航图标，使用 `ctx.slots.inject('settings.section.icon', ...)`，并以与其 `settings.section` 贡献相同的 `id` 注册图标组件。不匹配的 id 不会渲染，图标的 `label` 选项不会显示。组件接收以像素为单位的 `size` 和 `active`；外壳负责按钮、标签和装饰性图标容器。没有匹配的图标注册时，外壳渲染默认图标。释放图标贡献后恢复该默认图标。
 
 ### 可观察的成功与失败
 
@@ -52,7 +55,7 @@ kind: "package-reference"
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-可选的 `settings.launcher` 贡献接收侧栏布局、设置面板是否覆盖侧栏、设置导航回调，以及有效的设置键位标签和无障碍组合。命令未绑定时，外壳不传快捷键展示信息；未注册入口时，外壳保留普通设置按钮。
+可选的 `settings.launcher` 贡献接收侧栏布局、设置面板是否覆盖侧栏、设置导航回调，以及有效的设置键位标签和无障碍组合。命令未绑定时，外壳不传快捷键展示信息；未注册入口时，外壳保留普通设置按钮。 入口可以向 openSettings 传入分区 ID，直接打开对应分区；未传 ID 时使用默认分区。
 
 <details>
 <summary>实现细节——点击展开</summary>

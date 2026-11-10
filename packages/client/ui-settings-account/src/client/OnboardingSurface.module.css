@@ -36,8 +36,6 @@
 }
 
 .onboardingStage {
-  /* Clear the body portal's inherited no-drag before interactive descendants opt out. */
-  -webkit-app-region: initial;
   display: flex;
   flex: 1;
   min-height: 0;

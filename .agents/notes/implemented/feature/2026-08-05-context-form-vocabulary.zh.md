@@ -29,7 +29,7 @@ Status: implemented
 
 这次迁移同时挪动了目录的**身份**：重新发布用的 digest 现在覆盖持久条目而非渲染文本，于是面向模型的包装再也无法左右是否需要重新发布，那段从已记录消息里切出条目的文本切分逻辑也随之删除。v0-to-v1 迁移边会保留可接纳的旧目录 payload，因此恢复的 Session 若以本变更前的目录为最新目录，就会重新发布一次。有一种情形不会自愈：当那份旧结构目录是唯一的一份、且当前视图没有任何 skill 时，插件看不到已发布目录，也就不会发出 tombstone，模型手里会留着一份无人替换的陈旧目录。这是 context 功能的显式降级，不是 Session 格式拒绝。
 
-**`snapshot`**——会被同一生产方后续快照取代的当前状态。运行时快照、`time-context`、`tmux-context` 声明它。`renderContextSections()` 暴露出装配时的具名贡献——`renderContextSnapshot()` 本来就是把它们拼给模型的——因此内容区能把每一段归属到产生它的子系统，而不必去切分已经拼好的散文。两个单贡献生产方各记录一段。运行时快照的「已清空」标记没有任何贡献可归属，因此不声明形态。
+**`snapshot`**——会被同一生产方后续快照取代的当前状态。运行时快照、`time-context`、`tmux-context` 声明它。`renderContextSections()` 暴露出装配时的具名贡献；agent-loop 将它们包装给模型，并记录原始文本，因此内容区能直接归属每一段，而不必切分已经拼好的散文。公开的 `renderContextSnapshot()` 辅助方法保留独立渲染行为。两个单贡献生产方各记录一段。运行时快照的「已清空」标记声明 `form: 'snapshot'` 并携带空 `sections`，内容区回退为面向模型的文本。这一形态本身不表示已有更早的快照。
 
 **`notice`**——刚刚发生了什么的一次性说明。`tool-jobs`、`tool-goal` 收尾、`plan-mode` 切换与 `repeat-tool-reminder` 提醒都带 `summary` 声明它，而该摘要出现在**折叠态**行上：notice 的全部意义就是不展开也能读完。摘要在其输入是调用方文本时自行封顶（任务的 label 与状态 detail 本身没有长度约束）。Goal 状态变更仍是由领域层持有的 `goal/change` 事件，而非模型上下文，因此不声明 form。
 

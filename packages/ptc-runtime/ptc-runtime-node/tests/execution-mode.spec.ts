@@ -7,10 +7,10 @@ import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 import { resolvePersistentExecution } from '../src/configuration.ts'
 
-it.each([undefined, 'function-body', 'repl', 'script'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
+it.each([undefined, 'function-body', 'repl', 'script', 'scoped-repl'] as const)('loads retained execution selected from %s syntax', async (programFormat) => {
   const { runtime } = await mountRuntime(new Context(), resolvePersistentExecution(programFormat))
   expect(runtime.retainsState).toBe(true)
-  expect(runtime.programFormat).toBe(programFormat === 'script' ? 'script' : 'repl')
+  expect(runtime.programFormat).toBe(programFormat === 'script' || programFormat === 'scoped-repl' ? programFormat : 'repl')
 })
 
 it.each<Config>([{}, { executionMode: 'per-call' }])('starts fresh state for each call with configuration %j', async (config) => {
@@ -69,7 +69,7 @@ it.each([false, true])('advertises Script syntax and its selected retention %s',
   expect(runtime.executionInstructions.includes('Each call runs in a fresh Node process')).toBe(!scriptPersistence)
   const stateOwner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
-  expect(await run('let retained: number = 17; retained')).toMatchObject({ logs: [], value: 17 })
+  expect(await run('let retained: number = 17; retained')).toMatchObject({ output: [], value: 17 })
   expect(await run('typeof retained')).toMatchObject({ value: scriptPersistence ? 'number' : 'undefined' })
   await runtime.release(stateOwner)
   expect(await run('typeof retained')).toMatchObject({ value: 'undefined' })

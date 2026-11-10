@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-web-app/use-this-package:
-  en: 3bd37b85139d2fa7
-  zh: ba86c807eb83866e
+  en: 1f69a4c52a27e7e5
+  zh: e4431a252fb86f7c
 /deepseek-ai-dsh-web-app/use-this-package/starting-the-web-gui:
   en: e3cac911f080d8ef
   zh: 60749e9f5c39c1bc
 /deepseek-ai-dsh-web-app/use-this-package/configuration:
-  en: b1787804544f2587
-  zh: ce09d2c248ffd999
+  en: f876c60a37e3cb0e
+  zh: 42a535554fe4bc40
 /deepseek-ai-dsh-web-app/use-this-package/listening-trust-and-public-deployments:
   en: e6ddea1d2fc40501
   zh: ff08b6fa3fc24136
@@ -30,11 +30,11 @@
   en: df205a26b6d49168
   zh: e46ed7cf9e06248a
 /deepseek-ai-dsh-web-app/use-this-package/per-session-agent-setup:
-  en: fdf38cb6e1b24464
-  zh: c14a8bcac9d4e5cd
+  en: 1f16cd1737256729
+  zh: 1d24cd133933ad9e
 /deepseek-ai-dsh-web-app/understand-the-implementation:
-  en: 323742a00cfe67b2
-  zh: eff5245a82fc16e7
+  en: cc4f6d02a4d11d58
+  zh: 276e0929502b4fca
 /deepseek-ai-dsh-web-app/understand-the-implementation/patch-semantics:
   en: a6d126f30b1594d7
   zh: 7f0ccc8a55d6f743
@@ -53,6 +53,30 @@
 /deepseek-ai-dsh-web-app/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill:
+  en: 276322084b9659d1
+  zh: 759aae367669520a
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/what-the-model-sees:
+  en: 120d7eb063f9d498
+  zh: 4960aab0c5e89535
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/token-effect:
+  en: a639f2167f49dd3d
+  zh: 7b627d16829f1c75
+/deepseek-ai-dsh-web-app/model-experience/dsh-documentation-skill/kv-cache-effect:
+  en: f4c47481baa2ab03
+  zh: 31360e2558fca7f5
+/deepseek-ai-dsh-web-app/model-experience/creator-persona:
+  en: da4ec024b0def1bd
+  zh: 79dc1eae53f87aa5
+/deepseek-ai-dsh-web-app/model-experience/creator-persona/what-the-model-sees:
+  en: e0605965a933e81f
+  zh: 75473753ced8658b
+/deepseek-ai-dsh-web-app/model-experience/creator-persona/token-effect:
+  en: ba18342fd9e04f77
+  zh: 8d7a8af6f07becb0
+/deepseek-ai-dsh-web-app/model-experience/creator-persona/kv-cache-effect:
+  en: d0825b48e8703dcd
+  zh: 4afb139ba7da5bbe
 /deepseek-ai-dsh-web-app/model-experience/web-runtime-variable:
   en: 623bf8a0bf05599d
   zh: 398ded2e7b20c1ea
@@ -65,6 +89,18 @@
 /deepseek-ai-dsh-web-app/model-experience/web-runtime-variable/kv-cache-effect:
   en: 37542a8b81a744f5
   zh: c0048aaadecae296
+/deepseek-ai-dsh-web-app/model-experience/office-skills:
+  en: 8732b94114bef9e0
+  zh: ab5f53bf541fae12
+/deepseek-ai-dsh-web-app/model-experience/office-skills/what-the-model-sees:
+  en: b6dc92ddf435f514
+  zh: b907228a20afbd96
+/deepseek-ai-dsh-web-app/model-experience/office-skills/token-effect:
+  en: 9d9154d07ac52174
+  zh: fcc6938b68025409
+/deepseek-ai-dsh-web-app/model-experience/office-skills/kv-cache-effect:
+  en: 43f28f4e120df7bb
+  zh: 3b4e0d384986b293
 /deepseek-ai-dsh-web-app/known-limitations-and-deferred-work:
   en: 635c1336e2f4e821
   zh: caabdecb02e2df14

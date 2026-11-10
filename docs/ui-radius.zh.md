@@ -18,7 +18,7 @@
 <a id="scope"></a>
 ## 范围与依据
 
-本参考文档规定 DSH Web 和 Desktop 的圆角尺度及组件应用规则。局部视觉调整限定在指定组件或组件族内，不自动改变全局尺度。
+本参考文档规定 DSH Web 和 Desktop 的圆角尺度、曲线规则及组件例外。应用时按 [UI 设计 skill 的几何判断](../.agents/skills/dsh-client-ui-ux/SKILL.md#component-geometry)选择并审查。局部视觉调整限定在指定组件或组件族内，不自动改变全局尺度。
 
 通用样式职责见 [Web UI 样式参考](web-styling.zh.md)。共享数值位于 [`base.css`](../packages/client/ui-theme/src/styles/base.css)，曲线行为位于 [`corner-shape.css`](../packages/client/ui-theme/src/styles/corner-shape.css)。修改规则时同步更新主题实现及本规范的中英文版本。
 
@@ -106,6 +106,8 @@ H 表示以 CSS 像素计、包含边框的设计外部高度。R 表示浏览�
 主题在色板别名所在的 `body` 上，将卡片底色解析为 `--dsw-alias-bg-layer-2`，描边解析为 `--dsw-alias-border-l4`。功能样式在明暗主题中均使用这些别名。嵌套编辑器使用 R16 和既有模块底色。账号的查询用量、充值链接遵循 H36/R12 的 Button 几何；授权按钮使用公共 Button。
 
 平面中性边框使用共享的 0.5px 发丝线。具有层级阴影的菜单、浮层、对话框和面板使用 `border: 0` 与既有 `--dsw-elevation-*` 材质，其阴影已包含发丝描边。不要在该描边上再叠一层中性边框，也不要仅为区分设置 tab 就给普通设置卡片加阴影。保留语义状态色边框与既有的半透明菜单背景效果。
+
+整页圆角审查要同时比较角色与轮廓，包含原生的小型选择控件。符合 token 只能证明数值属于尺度，不能证明相邻角色或嵌套轮廓协调。比较方法见[几何案例](ui-design-review-cases.zh.md#geometry)，本规范继续拥有数值与曲线规则。
 
 <a id="verification"></a>
 ## 应用与验证

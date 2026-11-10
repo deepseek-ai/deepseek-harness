@@ -223,7 +223,7 @@ const CLOSE_REAP_MARGIN_MS = 2_000
  * of astral characters is ~4x the budget in each string that holds it. The
  * heaviest path holds THREE such copies at once: a single
  * `sys.stdout.write(line + "\n")` keeps the caller's `text` argument (alive for
- * the whole `write` call, ~4x), the line slice `text[pos:newline]` handed to
+ * the whole `write` call, ~4x), the line slice `text[pos:newline + 1]` handed to
  * `LogBuffer.push` (~4x), and the `text.encode("utf-8")` copy `_push_locked`
  * takes to charge and ship it (~4x). The settlement `flush_line` path holds only
  * two (its `"".join(...)` and that encode copy — it drops the pending chunks
@@ -972,13 +972,14 @@ export class PythonPtcRuntime extends PtcRuntime {
 
   /**
    * Resolve authority, directory, and the configured wall deadline.
-   * @param request - Program inputs and optional resolved sandbox authority; timeout overrides are unsupported.
+   * @param request - Program inputs and optional resolved sandbox authority.
    * @returns Complete inputs for the provider's run method.
-   * @throws When a requested timeout is unsupported, cwd is relative, or the provider is disposed.
+   * @throws When a requested timeout or completion-discard option is unsupported, cwd is relative, or the provider is disposed.
    */
   resolve(request: PtcRunRequest): PtcRunSpec {
     if (this.disposed) throw new Error('dsh-ptc-runtime-python: resolve() after disposal')
     if (request.timeoutMs !== undefined) throw new Error('dsh-ptc-runtime-python: per-call timeout is unsupported')
+    if (request.discardCompletion === true) throw new Error('dsh-ptc-runtime-python: discardCompletion is unsupported')
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
     if (!isAbsolute(cwd)) throw new Error('dsh-ptc-runtime-python: cwd must be absolute')
@@ -1021,7 +1022,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       try {
         input = bootstrapInput()
       } catch (error: unknown) {
-        return { logs: [], sandbox, error: { kind: 'worker-exit', message: `failed to read the python bootstrap: ${messageOf(error)}` } }
+        return { output: [], sandbox, error: { kind: 'worker-exit', message: `failed to read the python bootstrap: ${messageOf(error)}` } }
       }
       let confined: ConfinedArgv | undefined
       // Unbuffered native output stays observable before process-group teardown.
@@ -1044,7 +1045,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       return await pending
     } catch (error: unknown) {
       return {
-        logs: [], sandbox,
+        output: [], sandbox,
         error: controller.signal.aborted ? controller.signal.reason as PtcRunFailure
           : { kind: error instanceof SandboxUnavailableError ? 'sandbox-unavailable' : 'worker-exit', message: messageOf(error) },
       }
@@ -1175,7 +1176,7 @@ export class PythonPtcRuntime extends PtcRuntime {
       }
     } catch (error: unknown) {
       complete()
-      return Promise.resolve({ logs: [], sandbox, error: {
+      return Promise.resolve({ output: [], sandbox, error: {
         kind: confined !== undefined && isRunnerSpawnFailure(error, argv[0], request.cwd) ? 'sandbox-unavailable' : 'worker-exit',
         message: `python spawn error: ${messageOf(error)}`,
       } })
@@ -1289,13 +1290,8 @@ export class PythonPtcRuntime extends PtcRuntime {
       // Stray-byte capture: anything the child writes to its stdout/stderr
       // (native prints, C-extension writes) still counts against the ledger.
       //
-      // Output is admitted per LINE, not per transport chunk. `logs` entries
-      // are joined with `\n` downstream (PTC mode), so each entry must be one
-      // line: pushing a raw `data` chunk would turn every arbitrary pipe-read
-      // boundary into a model-visible newline, so a single 200 KiB native write
-      // split across pipe reads would read back with spurious line breaks. The
-      // child's own `log` frames are already line-granular; stray capture
-      // matches them by splitting on `\n`.
+      // Complete lines retain their newline; final residuals retain their
+      // unterminated text. Transport chunk boundaries do not add separators.
       //
       // Buffered as raw `Buffer` chunks with a running SERIALIZED-cost counter,
       // exactly like the fd-3 reader below and for the same reasons: a string
@@ -1339,7 +1335,7 @@ export class PythonPtcRuntime extends PtcRuntime {
           stray.blocks = []
           let newline: number
           while ((newline = buffered.indexOf(0x0a)) >= 0) {
-            admit(buffered.subarray(0, newline).toString('utf8'))
+            admit(buffered.subarray(0, newline + 1).toString('utf8'))
             buffered = buffered.subarray(newline + 1)
           }
           // Carry the residual as a fresh right-sized copy, not the subarray view
@@ -1445,8 +1441,8 @@ export class PythonPtcRuntime extends PtcRuntime {
           stray.blocks = []
           // Do not admit an EMPTY entry: when the whole residual is a single
           // unfinished multibyte sequence, `full` was drained into `keep` and no
-          // complete byte stream remains to admit. `admit('')` would push a
-          // model-visible bogus empty line (logs are joined with '\n' downstream).
+          // complete byte stream remains to admit. `admit('')` would push an
+          // empty output entry whose wrapper would consume the ledger.
           if (full.length > 0) admit(full.toString('utf8'))
         } else {
           stray.chunks = []
@@ -2146,16 +2142,16 @@ export class PythonPtcRuntime extends PtcRuntime {
       let resolved = false
       // The decided terminal result for a live child, recorded by finish() and
       // read by the `close` handler that settles it once the pipes have drained.
-      let decided: Omit<PtcRunResult, 'logs'>
+      let decided: Omit<PtcRunResult, 'output'>
 
       // The single settlement point: resolve run() with the decided result and
       // mark the fiber quiescent. Idempotent — the first call wins, so a later
       // `close` after done/timeout/abort is absorbed as a no-op.
-      const settle = (result: Omit<PtcRunResult, 'logs'>): void => {
+      const settle = (result: Omit<PtcRunResult, 'output'>): void => {
         if (resolved) return
         resolved = true
         if (closeDeadline !== undefined) clearTimeout(closeDeadline)
-        resolve({ ...result, logs, sandbox: { ...sandbox } })
+        resolve({ ...result, output: logs.map(text => ({ type: 'text', text })), sandbox: { ...sandbox } })
         // Mark the fiber quiescent for THIS run: drop it from `live` and resolve
         // `finished` (what teardown awaits). Deferred until the process group is
         // actually empty — dropping from `live` before then would let a
@@ -2239,7 +2235,7 @@ export class PythonPtcRuntime extends PtcRuntime {
         pollGroup()
       }
 
-      const finish = (result: Omit<PtcRunResult, 'logs'>): void => {
+      const finish = (result: Omit<PtcRunResult, 'output'>): void => {
         if (settled) return
         settled = true
         decided = result

@@ -34,6 +34,8 @@
   gap: 4px;
   min-width: 0;
   max-width: 244px;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--dsw-alias-label-primary);
   font-weight: 500;
 }
@@ -94,13 +96,57 @@
   }
 }
 
-.trigger svg,
 .switcherTrigger svg {
   transition: transform 120ms ease;
 }
 
-.triggerOpen {
-  transform: rotate(180deg);
+.trigger .compactIcon {
+  display: none;
+}
+
+/* The title-row container drops passive preset text at 540px; this action yields later. */
+@container (max-width: 460px) {
+  .trigger .compactIcon {
+    display: block;
+  }
+
+  .trigger .textModeActivity {
+    display: none;
+  }
+
+  .trigger .count {
+    display: none;
+  }
+
+  .trigger {
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    justify-content: center;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .trigger .activitySlot,
+  .trigger .activitySlot > svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .trigger:focus-visible {
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .trigger:active {
+    background: var(--dsw-alias-interactive-bg-active);
+  }
+
+  @media (hover: hover) {
+    .trigger:hover {
+      color: var(--dsw-alias-label-secondary);
+      background: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
 }
 
 .menu {
@@ -109,30 +155,25 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  width: 336px;
-  max-width: min(400px, calc(100vw - 32px));
-  max-height: min(560px, calc(100vh - 140px));
-  padding: 4px;
+
+  max-width: calc(100vw - 32px);
+  max-height: min(560px, calc(100dvh - 140px));
+  padding: 6px;
   overflow: hidden;
-  border-radius: var(--dsw-radius-lg);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
-}
-
-/* The menu skin lives on a pseudo-element: backdrop-filter on the menu itself
-   would turn it into the containing block for fixed descendants, so the
-   sidebar-button Tooltip bubbles would be re-anchored into the menu and
-   clipped by its hidden overflow. */
-.menu::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border-radius: inherit;
-  background: var(--dsw-specific-menu);
-  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  /* The fixed card width lets CSS retain both the trigger edge and the window inset. */
+  --dsh-subagent-menu-width: min(360px, calc(100vw - 32px));
+  position-area: none;
+  top: calc(anchor(bottom) + 5px);
+  left: clamp(16px, anchor(left), calc(100vw - var(--dsh-subagent-menu-width) - 16px));
+  width: var(--dsh-subagent-menu-width);
+  position-try-fallbacks: --dsh-subagents-above, --dsh-subagents-window;
+  height: fit-content;
+  min-height: 0;
+  margin: 0;
 }
 
 .menuBody {
@@ -141,13 +182,65 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  --dsh-scrollbar-track-margin: 6px;
+}
+
+/* Keep the shared WebKit scrollbar in the menu's right inset, not its content column. */
+@supports selector(::-webkit-scrollbar) {
+  .menuBody {
+    margin-right: calc(-1 * var(--dsh-scrollbar-width));
+  }
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 4px 7px 8px;
+}
+
+.sectionIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 24px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.sectionTitle {
+  flex: none;
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 24px;
+}
+
+.sectionProgress {
+  margin-inline-start: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.sectionEmpty {
+  margin: 0;
+  padding: 0 7px 8px 28px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
 }
 
 .node {
   position: relative;
   min-width: 0;
 }
-.menuBody > .node {
+.menuBody > [role="tree"] > .node {
   margin-left: -2px;
 }
 
@@ -155,11 +248,11 @@
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
+  gap: 7px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 44px;
-  padding: 6px 7px 6px 9px;
+  min-height: 40px;
+  padding: 4px 6px 4px 9px;
   border: 0;
   border-radius: var(--dsw-radius-md);
   background: transparent;
@@ -176,7 +269,7 @@
 }
 
 @media (hover: hover) {
-  .row:hover > .clickarea {
+  .clickarea:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
 }
@@ -187,10 +280,10 @@
   flex: 1;
   align-self: stretch;
   align-items: flex-start;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  margin: -6px -7px -6px;
-  padding: 6px 7px;
+  margin: -4px -6px -4px;
+  padding: 4px 6px;
   border-radius: var(--dsw-radius-md);
 }
 
@@ -211,6 +304,7 @@
 }
 
 .disclosure {
+  position: static;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -219,12 +313,23 @@
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
-  transition: transform 120ms ease;
+}
+
+/* The row owns this hit area; it ends before the status glyph and never rotates. */
+.disclosure::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 28px;
+  z-index: 1;
 }
 
 .disclosure svg {
   width: 12px;
   height: 12px;
+  transition: transform 120ms ease;
 }
 
 @media (hover: hover) {
@@ -233,7 +338,7 @@
   }
 }
 
-.disclosureOpen {
+.disclosureOpen svg {
   transform: rotate(90deg);
 }
 
@@ -245,29 +350,29 @@
 }
 
 .label,
-.summary {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.secondaryLabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .label {
   color: inherit;
+  font-size: 13px;
   font-weight: 400;
 }
 
 .currentLabel {
-  font-weight: 600;
+  font-weight: 500;
 }
 
-.summary,
+.secondaryLabel {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .metrics {
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   line-height: 15px;
-}
-
-.metrics {
   display: grid;
   grid-template-rows: 17px 15px;
   flex: none;
@@ -292,6 +397,12 @@
   width: 28px;
   height: 28px;
   margin: 4px 0;
+}
+
+.currentCheck {
+  display: grid;
+  place-items: center;
+  color: var(--dsw-alias-label-primary);
 }
 
 .sidebarButton {
@@ -319,6 +430,8 @@
 }
 
 .children {
+  /* First-line marker center: row inset 4px + half of the 17px status column. */
+  --branch-anchor-y: 12.5px;
   position: relative;
   margin-left: 16px;
   padding-left: 3px;
@@ -329,16 +442,12 @@
   content: '';
   position: absolute;
   left: 0;
-  border-left: 0.5px solid var(--dsw-alias-border-l2);
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 .children::before {
   top: -23px;
   height: 23px;
-}
-
-.children[aria-busy='true']::before {
-  content: none;
 }
 
 .children > .node::before {
@@ -349,16 +458,21 @@
 
 .children > .node:last-child::before {
   bottom: auto;
-  height: 15px;
+  height: var(--branch-anchor-y);
 }
 
 .children > .node > .row::before {
   content: '';
   position: absolute;
-  top: 14px;
+  top: calc(var(--branch-anchor-y) - 0.25px);
   left: -3px;
   width: 12px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* A leaf beside expandable siblings keeps their disclosure column before its status marker. */
+.children > .node > .row:has(> .disclosureSpace)::before {
+  width: 33px;
 }
 
 .notice,
@@ -399,4 +513,16 @@
   .refresh:hover {
     background: var(--dsw-alias-interactive-bg-hover);
   }
+}
+
+@position-try --dsh-subagents-above {
+  top: auto;
+  bottom: calc(anchor(top) + 5px);
+}
+
+@position-try --dsh-subagents-window {
+  top: max(16px, var(--dsh-frame-overlay-top, 16px));
+  bottom: 16px;
+  align-self: safe start;
+  justify-self: safe start;
 }

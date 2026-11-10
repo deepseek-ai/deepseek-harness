@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi, type MockInstance } from 'vitest'
 import {
   cliGateOptions,
@@ -9,6 +11,7 @@ import {
   gatesForMode,
   parsePidPpidLines,
   runGate,
+  runGateWithRetry,
   runGates,
   taskkillArgs,
   type Gate,
@@ -23,6 +26,7 @@ beforeEach(() => {
   vi.stubEnv('DSH_WEB_SNAPSHOT_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_MAX_WORKERS', undefined)
   vi.stubEnv('DSH_COVERAGE_PARTITIONS', undefined)
+  vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', undefined)
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -305,11 +309,19 @@ describe('gate graph validation', () => {
     expect(ids).toContain('public-repository-links')
   })
 
-  it('checks the complete CLI reference locally and in the static CI lane', () => {
-    for (const mode of ['doc-sync', 'ci-static'] as const) {
+  it.each([undefined, ''])('allocates one CLI help child inside each aggregate when its allowance is %j', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    for (const mode of ['doc-sync', 'ci-static', 'ci-windows-observational-ready'] as const) {
       const gates = withPnpmEntrypoint(() => gatesForMode(mode))
-      expect(gates.find(gate => gate.id === 'cli-help')).toBeDefined()
+      expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: '1' } })
+      expect(gates.filter(gate => gate.id !== 'cli-help').every(gate => gate.env?.DSH_CLI_HELP_CONCURRENCY === undefined)).toBe(true)
     }
+  })
+
+  it.each(['3', 'invalid'])('passes an explicit CLI help allowance %j to its owner', (raw) => {
+    vi.stubEnv('DSH_CLI_HELP_CONCURRENCY', raw)
+    const gates = withPnpmEntrypoint(() => gatesForMode('ci-windows-observational-ready'))
+    expect(gates.find(gate => gate.id === 'cli-help')).toMatchObject({ env: { DSH_CLI_HELP_CONCURRENCY: raw } })
   })
 
   it('keeps the concrete terminology policy in the documentation gate', () => {
@@ -371,7 +383,7 @@ describe('gate graph validation', () => {
       'rescope-vendor', 'publint', 'constraints', 'default-product-isolation', 'product-use', 'official-bundle-catalog', 'provider-data', 'package-dependencies', 'application-entrypoints',
       'dsh-package-licenses', 'node-next-types',
       'optional-dependency-imports', 'client-packages', 'installer-locales', 'locale-metadata', 'client-ui-i18n', 'client-route-resolution', 'no-bare-dispatcher',
-      'plugin-record-callers', 'no-unknown-casts', 'no-top-level-await',
+      'plugin-record-callers', 'no-unknown-casts', 'no-top-level-await', 'plugin-entry-exports',
       'cordis-config', 'runtime-closure',
     ])
   })
@@ -608,6 +620,8 @@ describe('gate graph validation', () => {
         command: process.execPath,
         args: ['/private/pnpm.cjs', '--filter', '@deepseek-ai/dsh-desktop', 'exec', 'install-electron'],
         env: { ELECTRON_GET_USE_PROXY: '1' },
+        retries: 2,
+        retryDelayMs: 15000,
       })
       expect(gates.find(gate => gate.id === 'built-bin-smoke')?.needs).toContain('electron-install')
       expect(gates.filter(gate => gate.id !== 'electron-install').every(gate => gate.env?.ELECTRON_GET_USE_PROXY === undefined)).toBe(true)
@@ -995,10 +1009,11 @@ describe('Node 24 lane ownership', () => {
       expect.arrayContaining([
         'apps/cli/tests/profiles/headless/tests/source-tool.built.e2e.ts',
         'apps/desktop/tests/acl-skill.built.e2e.ts',
+        'apps/desktop/tests/installed-docs-asar.built.e2e.ts',
         'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
-        'packages/experimental/agent-team/tests/built-lib.e2e.ts',
+        'packages/team/agent-team/tests/built-lib.e2e.ts',
       ]),
     )
     expect(subject.find(item => item.id === 'web-snapshot')).toMatchObject({
@@ -1055,6 +1070,62 @@ describe('gate process outcomes', () => {
     expect(result.exitCode).toBeNull()
     expect(result.signalCode).toBe('SIGTERM')
     expect(formatGateResultReason(result)).toBe('signal SIGTERM')
+  })
+})
+
+describe('gate retries', () => {
+  it('runs a gate that declares no retries exactly once', async () => {
+    const subject = gate('single')
+    const execute = vi.fn(async () => resultFor(subject, 'passed'))
+
+    const result = await runGateWithRetry(subject, undefined, execute)
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ status: 'passed', exitCode: 0 })
+  })
+
+  it('repeats a failed gate until a later attempt passes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'run-gates-retry-'))
+    onTestFinished(() => { rmSync(directory, { recursive: true, force: true }) })
+    const marker = join(directory, 'attempts')
+    const result = await runGateWithRetry(gate('fetch', {
+      args: ['-e', [
+        "const fs = require('node:fs')",
+        `const marker = ${JSON.stringify(marker)}`,
+        "const attempts = fs.existsSync(marker) ? Number(fs.readFileSync(marker, 'utf8')) + 1 : 1",
+        'fs.writeFileSync(marker, String(attempts))',
+        'if (attempts === 1) process.exit(1)',
+      ].join(';')],
+      // One attempt remains unused after the second attempt passes, so the
+      // loop also exercises its status check rather than only its attempt cap.
+      retries: 2,
+      retryDelayMs: 0,
+    }))
+
+    expect(result).toMatchObject({ status: 'passed', exitCode: 0 })
+    expect(readFileSync(marker, 'utf8')).toBe('2')
+  })
+
+  it('stops at the declared attempt count and keeps the last failure', async () => {
+    const subject = gate('fetch', { retries: 2 })
+    const execute = vi.fn(async () => resultFor(subject, 'failed'))
+
+    const result = await runGateWithRetry(subject, undefined, execute)
+
+    expect(execute).toHaveBeenCalledTimes(3)
+    expect(result).toMatchObject({ status: 'failed', exitCode: 1 })
+  })
+
+  it('does not repeat a gate that the fail-fast signal terminated', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const subject = gate('fetch', { retries: 2, retryDelayMs: 0 })
+    const execute = vi.fn(async () => ({ ...resultFor(subject, 'failed'), aborted: true }))
+
+    const result = await runGateWithRetry(subject, controller.signal, execute)
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ status: 'failed', aborted: true })
   })
 })
 

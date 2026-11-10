@@ -1,18 +1,19 @@
 import {
-  useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent,
+  useEffect, useId, useMemo, useRef, useState, type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
   IconClockOutlineRegular,
   IconTrashOutlineRegular,
-  useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
+import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import type { CatalogInjected } from './catalog-source.ts'
 import { NS } from './locales.ts'
+import { taskNextRunAt } from './task-record.ts'
+import { selectSessionScheduleFacts } from './session-schedule-state.ts'
 import {
   formatScheduleFrequency, nextRunParts, orderScheduleRecords, taskName,
 } from './schedule-format.ts'
@@ -20,7 +21,7 @@ import css from './ScheduleCatalogAction.module.css'
 
 /** Full props for the Session-header Schedule catalog action. */
 export type ScheduleCatalogActionProps =
-  PropsRuntime<'conversation.session.header.utilities'> & PropsLocale<typeof NS> & InjectFace<CatalogInjected & {
+  PropsRuntime<'conversation.session.header.utilities'> & PropsLocale<typeof NS> & InjectFace<CatalogInjected<ScheduleCatalogEntry> & {
     /**
      * Show one task's detail in the right Sidebar for this entry's Session.
      * @param id - Task chosen by the Session entry.
@@ -29,7 +30,6 @@ export type ScheduleCatalogActionProps =
   }>
 
 const SECOND_MS = 1_000
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 
 /**
  * Current-Session reminder catalog with durable deletion, rendered only while
@@ -42,25 +42,19 @@ export function ScheduleCatalogAction(props: ScheduleCatalogActionProps) {
 }
 
 function SessionScheduleCatalog({
-  useSession, useCatalog, onDelete, onRetry, openTaskDetail, t,
+  sessionId, useSession, useCatalog, onDelete, onRetry, openTaskDetail, t,
 }: ScheduleCatalogActionProps) {
   const openState = useSession(snapshot => snapshot.openState)
   const catalogState = useCatalog(value => value)
-  const { records, status, deleting } = catalogState
+  const { status, deleting } = catalogState
+  const { records } = useMemo(() => selectSessionScheduleFacts(catalogState, sessionId), [catalogState, sessionId])
   const visible = openState === 'open'
   const [open, setOpen] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const catalogRef = useRef<HTMLUListElement>(null)
-  const catalogPosition = useAnchoredPosition({
-    open,
-    anchorRef: triggerRef,
-    panelRef: catalogRef,
-    side: 'bottom',
-    gap: 5,
-    margin: 16,
-  })
+  const anchorName = `--dsh-schedule-catalog-${useId().replaceAll(':', '')}`
 
   useDismissOnOutsidePointer(rootRef, open, setOpen, catalogRef)
 
@@ -116,6 +110,7 @@ function SessionScheduleCatalog({
   const trigger = (
     <button
       ref={triggerRef}
+      style={{ anchorName }}
       type="button"
       className={css.trigger}
       data-schedule-reminder-entry=""
@@ -138,7 +133,7 @@ function SessionScheduleCatalog({
       <ul
         ref={catalogRef}
         className={css.menu}
-        style={catalogPosition ?? MEASURE_STYLE}
+        style={{ positionAnchor: anchorName }}
         aria-label={t('list.aria')}
         onKeyDown={onKeyDown}
       >
@@ -148,9 +143,10 @@ function SessionScheduleCatalog({
           <button type="button" onClick={() => { void onRetry() }}>{t('list.retry')}</button>
         </li>}
         {rows.map((record) => {
-          const overdue = Date.parse(record.scheduledAt) <= now
+          const nextRunAt = taskNextRunAt(record)
+          const overdue = Date.parse(nextRunAt) <= now
           // One pair per row: both halves come from this one call.
-          const nextRun = nextRunParts(record.scheduledAt, t('time.locale'), now, t)
+          const nextRun = nextRunParts(nextRunAt, t('time.locale'), now, t)
           return (
             <li
               key={record.id}
@@ -179,7 +175,7 @@ function SessionScheduleCatalog({
                       first; the popover's clock only refreshes the parenthesized
                       distance, which ticks while it is open instead of freezing
                       at the moment the list opened. */}
-                  <time dateTime={record.scheduledAt}>{nextRun.absolute}</time>
+                  <time dateTime={nextRunAt}>{nextRun.absolute}</time>
                   <span className={css.nextRunRelative}>{nextRun.relative}</span>
                 </span>
               </span>

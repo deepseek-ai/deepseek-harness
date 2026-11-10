@@ -13,9 +13,10 @@
  * metadata the surface offers for adoption. `cordis.patch.yml` remains the only
  * thing that decides what a route serves.
  *
- * OpenAI-compatible and Anthropic Messages protocols are interrogated through
- * their native model-listing endpoints. The parser accepts the standard
- * `data` array and the enriched `models` map some compatible gateways expose.
+ * OpenAI-compatible, Anthropic Messages, and Gemini protocols are interrogated
+ * through their native model-listing endpoints. The OpenAI and Anthropic parser
+ * accepts the standard `data` array and the enriched `models` map some
+ * compatible gateways expose; Gemini replies with its own `models` array.
  * Every other protocol reports that it cannot be interrogated so the surface
  * falls back to hand-entry rather than guessing its response fields.
  *
@@ -30,14 +31,18 @@ import { catalogModels } from './catalog.ts'
 /**
  * Protocols whose model listing this module can read. OpenAI protocols use
  * bearer auth at `GET {baseURL}/models`; Anthropic Messages uses `x-api-key`
- * and `anthropic-version` at its native `GET /v1/models`. Azure is absent
+ * and `anthropic-version` at its native `GET /v1/models`; Gemini uses
+ * `x-goog-api-key` at `GET {baseURL}/models`. Azure is absent
  * despite its OpenAI lineage — it authenticates with an `api-key` header and
  * requires an `api-version` query — and Codex authenticates through OAuth;
  * guessing at either would report an authentication failure as a provider
  * with no models. pi-ai's remaining protocols are absent for the same reason.
+ * The route protocol table in `provider.ts` may name a protocol absent here;
+ * discovery reports it as unsupported.
  */
 const LISTABLE_PROTOCOLS: ReadonlySet<string> = new Set([
   'anthropic-messages',
+  'google-generative-ai',
   'openai-completions',
   'openai-responses',
 ])
@@ -47,6 +52,9 @@ const ANTHROPIC_VERSION = '2023-06-01'
 
 /** Largest model-list page accepted by Anthropic's public endpoint; discovery reads one page and does not follow `has_more`. */
 const ANTHROPIC_MODEL_LIMIT = 1000
+
+/** Largest model-list page accepted by the Gemini API; discovery reads one page and does not follow `nextPageToken`. */
+const GEMINI_MODEL_LIMIT = 1000
 
 /**
  * Endpoint replies larger than this are refused. The endpoint is whatever URL
@@ -108,14 +116,16 @@ function label(...candidates: readonly unknown[]): string | undefined {
  * treated as a prefix rather than a URL to resolve against, so a deployment
  * path such as `https://gateway.example/openai/v1` keeps its segments instead
  * of losing them to `URL` resolution. OpenAI protocols list at
- * `{baseURL}/models`. Anthropic lists at `{root}/v1/models`, where the root is
- * the base without trailing slashes and without one trailing `/v1` segment:
- * gateway documentation publishes both spellings of the same root. Only this
- * listing URL normalizes that segment; model requests receive the configured
- * `baseURL` unchanged.
+ * `{baseURL}/models`, and Gemini at `{baseURL}/models` with a page size,
+ * because its `baseURL` already carries the API version. Anthropic lists at
+ * `{root}/v1/models`, where the root is the base without trailing slashes and
+ * without one trailing `/v1` segment: gateway documentation publishes both
+ * spellings of the same root. Only this listing URL normalizes that segment;
+ * model requests receive the configured `baseURL` unchanged.
  */
 function listingUrl(baseURL: string, api: string): string {
   const base = baseURL.replace(/\/+$/, '')
+  if (api === 'google-generative-ai') return `${base}/models?pageSize=${String(GEMINI_MODEL_LIMIT)}`
   if (api !== 'anthropic-messages') return `${base}/models`
   const root = base.endsWith('/v1') ? base.slice(0, -3) : base
   return `${root}/v1/models?limit=${String(ANTHROPIC_MODEL_LIMIT)}`
@@ -229,6 +239,49 @@ function readListing(body: unknown): LlmDiscoveredModel[] {
   return models
 }
 
+/** One entry of a Gemini `GET /models` reply. */
+interface GeminiListingEntry {
+  name?: unknown
+  displayName?: unknown
+  inputTokenLimit?: unknown
+  outputTokenLimit?: unknown
+  supportedGenerationMethods?: unknown
+}
+
+/**
+ * Read a Gemini model-listing reply. Each entry's `name` is a resource name
+ * such as `models/gemini-2.5-pro`; the request id is that name without the
+ * `models/` prefix, because pi-ai's Gemini protocol sends the bare id. Entries
+ * that declare generation methods without `generateContent`, such as embedding
+ * models, cannot serve a conversation and are skipped.
+ */
+function readGeminiListing(body: unknown): LlmDiscoveredModel[] {
+  const listed = (body as { models?: unknown } | null)?.models
+  if (!Array.isArray(listed)) {
+    throw new LlmError(
+      'the endpoint\'s model listing has no "models" array; enter this provider\'s models by hand',
+      'DISCOVERY_FAILED',
+    )
+  }
+  const models: LlmDiscoveredModel[] = []
+  for (const raw of listed as readonly unknown[]) {
+    const entry = raw as GeminiListingEntry | null
+    const methods = entry?.supportedGenerationMethods
+    if (Array.isArray(methods) && !methods.includes('generateContent')) continue
+    const id = label(entry?.name)?.replace(/^models\//, '')
+    if (id === undefined || id.length === 0) continue
+    const contextWindow = capacity(entry?.inputTokenLimit)
+    const maxTokens = capacity(entry?.outputTokenLimit)
+    models.push({
+      id,
+      name: label(entry?.displayName) ?? id,
+      ...contextWindow === undefined ? {} : { contextWindow },
+      ...maxTokens === undefined ? {} : { maxTokens },
+    })
+  }
+  return models
+}
+
 /**
  * Accept one probe key, or refuse it before the header is built. Without this
  * the `fetch` below would throw a ByteString `TypeError` that this function's
@@ -320,6 +373,8 @@ export async function discoverModels(
     if (api === 'anthropic-messages') {
       headers.set('anthropic-version', ANTHROPIC_VERSION)
       if (apiKey !== undefined) headers.set('x-api-key', apiKey)
+    } else if (api === 'google-generative-ai') {
+      if (apiKey !== undefined) headers.set('x-goog-api-key', apiKey)
     } else if (apiKey !== undefined) {
       headers.set('authorization', `Bearer ${apiKey}`)
     }
@@ -359,5 +414,5 @@ export async function discoverModels(
   } catch (error: unknown) {
     throw new LlmError(`${url} did not answer with JSON`, 'DISCOVERY_FAILED', { cause: error })
   }
-  return readListing(body)
+  return api === 'google-generative-ai' ? readGeminiListing(body) : readListing(body)
 }

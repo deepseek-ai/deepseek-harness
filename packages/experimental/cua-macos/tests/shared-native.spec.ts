@@ -186,10 +186,12 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     expect(f.spawn).toHaveBeenCalledTimes(2)
     // oxlint-disable-next-line typescript/unbound-method -- Fixture termination methods are spies inspected without invocation.
     for (const handle of f.handles) expect(handle.terminate).not.toHaveBeenCalled()
-    expect(f.hellos).toEqual([expect.objectContaining({ type: 'hello', protocol: 1, config: {
+    const limits = {
       axTimeoutMs: 3000, timeoutMs: 30000, screenshotTimeoutMs: 5000, graceMs: 1000,
       maxRequestBytes: 65536, maxResponseBytes: 1048576, textEventIntervalMs: 0.5, maxClickHoldMs: 7000,
-    } }), expect.anything()])
+    }
+    expect(f.hellos).toHaveLength(2)
+    for (const hello of f.hellos) expect(hello).toMatchObject({ type: 'hello', protocol: 1, config: limits })
   })
 
   it('waits for both launcher outcome and managed range release before sending any bytes', async () => {

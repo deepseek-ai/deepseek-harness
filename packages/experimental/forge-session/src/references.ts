@@ -19,6 +19,8 @@ const VALUE_OPTIONS = new Set([
 const BOOLEAN_OPTIONS = new Set(['--comments', '-c', '--web', '-w', '--detach', '-d', '--force', '-f', '--recurse-submodules', '--remove-milestone'])
 const SEPARATORS = new Set(['&&', '||', ';', '|', '|&', '&'])
 const REPOSITORY = /^(?:([a-z\d.-]+(?::\d+)?)\/)?([a-z\d_-]+)\/([a-z\d_.-]+)$/i
+/** A literal `gh` word; a command that names `gh` only after shell quoting is not recognized. */
+const GH_WORD = /\bgh\b/
 
 /**
  * Read explicit URL selectors or numeric selectors with `--repo`/`-R`.
@@ -30,6 +32,8 @@ const REPOSITORY = /^(?:([a-z\d.-]+(?::\d+)?)\/)?([a-z\d_-]+)\/([a-z\d_.-]+)$/i
  * @returns references in command order; no process or environment is read.
  */
 export function ghReferences(command: string): GhReference[] {
+  // A reference needs a `gh` word; skip tokenizing commands that never name it.
+  if (!GH_WORD.test(command)) return []
   if (/[\r\n`]|\$\(/.test(command) || !/^(?:[^'"\\]|\\.|'(?:[^']*)'|"(?:[^"\\]|\\.)*")*$/.test(command)) return []
   let tokens: parse.ParseEntry[]
   try {

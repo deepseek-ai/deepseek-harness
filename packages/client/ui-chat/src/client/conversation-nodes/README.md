@@ -80,7 +80,7 @@ The Turn control follows all its opening inputs, including human steering and no
 | Human message claimed from `next-step` | Steering message, outside process folding. When Chat orders the claim's first human message after the Turn control, that message keeps the Turn tail slot above it; the claim's later messages follow at the ordinary input gap. |
 | Non-human message in the current `next-turn` claim | Independent, initially collapsed Turn-trigger notice. |
 | Non-human message in an idle `next-step` claim | Turn-trigger notice only in Step 1, with a loaded Turn start, a claim after that start, no `next-turn` claim in this Turn, and no human in the same `next-step` batch. |
-| Other non-human input | Ordinary Context, retained in the Node Store but omitted from Chat. Unclaimed, canceled, or requeued messages do not establish a waking claim. |
+| Other non-human input | Ordinary Context, shown as a collapsed row that joins the process group like a tool call. Unclaimed, canceled, or requeued messages do not establish a waking claim. |
 
 Trigger titles and icons use the recorded `source.kind`: `schedule`, `tool-jobs`, and `cordis-host-runner` identify scheduled work, background work, and plugin updates. Schedule notices are labeled Automation task and use the same plain clock icon as the Automation tasks entry. Goal, agent, team, subagent, and webhook sources have their own titles; a webhook with `provider: github` uses the GitHub title. Unknown sources use the generic execution-request title. Expanding the notice shows its recorded body; it does not imply successful execution.
 
@@ -174,6 +174,7 @@ The labels below describe recorded activity, not successful outcomes. For exampl
 | `plan` | Updating the plan | Updated the plan |
 | `questions` | Waiting for your action | Asked questions |
 | `tools` | Calling tools | Called tools |
+| `context` (every member is Context) | Analyzing the request | Injected context |
 
 | Group state | Title composition |
 |---|---|
@@ -213,7 +214,7 @@ Grouping reads each Node's [group-tree position](../contract/group-tree.ts), whi
 | Node at `process` or an outer position: `model-retry`, Turn inputs, `turn-error`, `turn-max-tokens`, `turn-tail`, and the `turn-process` control | End the preceding group and retain the Node as an independent root. |
 | Other visible Nodes owned by a Turn without a position, including tools | Append the whole Node to the current group, creating a group if necessary. |
 | Node from another Turn or without a Turn | Break the same-Turn sequence. A Node without a Turn remains independent, including an unsplit Assistant. |
-| Hidden Nodes, system prompts, ordinary Context injection, and `permission` commands | Excluded from the grouping input; they neither join nor split a group. |
+| Hidden Nodes, system prompts, and `permission` commands | Excluded from the grouping input; they neither join nor split a group. |
 
 A reply contains non-blank text, an image, or another visible block; reasoning and tool-call protocol blocks do not count as a reply. An Assistant with neither non-blank reasoning nor reply content contributes no reference. Group creation requires a member, so metadata-only Turns create no empty group.
 
@@ -268,7 +269,7 @@ Classification uses the recorded tool name exactly: no case folding, namespace s
 | `write` | `write` |
 | `edit` | `edit`, `apply_patch` |
 | `commands` | `bash`, `pwsh`, `exec_command`, `write_stdin`, or prefix `terminal_` |
-| `code` | `run_code` |
+| `code` | `run_code`, `cua_run_code` |
 | `webSearch` | `web_search` |
 | `webFetch` | `web_fetch` |
 | `subagents` | `subagent` or prefix `subagent_` |
@@ -289,7 +290,7 @@ A subagent tool follows ordinary group boundaries: it does not create a group me
 | Background subagent startup has returned its tool result, while the child is still running | Keep its category count, but remove that call from running-activity candidates. The child does not keep the parent's group in the subagent activity state. |
 | Tool calls recorded only in a child Session | Do not include them in the parent group's counts or live detail. Only calls actually attached to a member's `subCalls` participate recursively. |
 
-A `run_code` root counts once as `code`; its recorded PTC subcalls each count in their own categories. The wrapper is not replaced by leaf-call counts, and children are not all classified as `code`. With distinct call ids, `run_code → [read, bash, subagent_codex]` produces `code=1, read=1, commands=1, subagents=1`, in that tie order. A subcall can supply the live category while the outer `run_code` remains running.
+A `run_code` or `cua_run_code` root counts once as `code`; its recorded PTC subcalls each count in their own categories. The wrapper is not replaced by leaf-call counts, and children are not all classified as `code`. With distinct call ids, `run_code → [read, bash, subagent_codex]` produces `code=1, read=1, commands=1, subagents=1`, in that tie order. A subcall can supply the live category while the outer `run_code` remains running.
 
 Exact-name rules also mean that a recorded name such as `functions.read`, `mcp.read`, or `Read` falls into `tools`, while `browser_inspect` falls into `search`. A `terminal_*` name follows the command rule even when its operation only inspects or closes a terminal, unless the earlier `_inspect` rule matches.
 

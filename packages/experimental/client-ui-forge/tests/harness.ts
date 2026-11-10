@@ -12,8 +12,8 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createInboxStub, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import ForgeService, { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
-  ForgeRepository, MergeRequest,
+  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
+  ForgeReadiness, ForgeRepository, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
@@ -32,6 +32,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import ForgePanelController from '../src/index.ts'
 import type { Config, ForgePanelState, ForgeWorktreeState } from '../src/index.ts'
+import { CREATED_RECORD } from '@deepseek-ai/dsh-experimental-worktree'
 import { forgeWorktreeProjection, WORKTREE_RECORD } from '../src/worktree.ts'
 
 const execute = promisify(execFile)
@@ -256,11 +257,19 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
     mergeability: 'mergeable',
     mergeReady: true,
     mergeMethods: ['squash', 'merge', 'rebase'],
+    branchUpdates: [],
     reviewDecision: 'none',
+    reviewers: [],
+    reviewersTruncated: false,
+    canRequestReviews: false,
     checks: [],
     checksRollup: 'success',
     checksTruncated: false,
+    canRerunChecks: false,
     unresolvedThreads: 0,
+    threadsTruncated: false,
+    closingIssues: [],
+    closingIssuesTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
   }
@@ -284,12 +293,25 @@ export class FakeProvider implements ForgeProvider {
   readonly patches = new Map<number, string | ForgeFailure>()
   /** Change request numbers in the order their diffs were read. */
   readonly diffs: number[] = []
+  /** Head commits the diff reads named, in the same order. */
+  readonly diffHeads: string[] = []
   /** File texts or failures by `<commit>:<path>`; others return a not-found failure. */
   readonly texts = new Map<string, string | ForgeFailure>()
   /** Open change request numbers that a head lookup returns, by head branch. */
   readonly heads = new Map<string, readonly number[]>()
   /** Head lookups in call order, as `<owner>/<name> <branch>`. */
   readonly lookups: string[] = []
+  /** Commit lists or failures by change request number; others return a not-found failure. */
+  readonly commitLists = new Map<number, ForgeCommitList | ForgeFailure>()
+  /** Patches or failures between two commits by `<base>..<head>`; others return a not-found failure. */
+  readonly comparisons = new Map<string, string | ForgeFailure>()
+  /** Commit listing; a test deletes it to stand for a provider that does not read commits. */
+  commits?: (ref: ChangeRequestRef, signal: AbortSignal) => Promise<ForgeCommitList | ForgeFailure> = (ref: ChangeRequestRef) =>
+    Promise.resolve(this.commitLists.get(ref.number) ?? { code: 'not-found', message: `no commits of #${ref.number}` })
+  /** Comparison of two commits. */
+  compare?: (ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal) => Promise<string | ForgeFailure> =
+    (_ref: ChangeRequestRef, base: string, head: string) =>
+      Promise.resolve(this.comparisons.get(`${base}..${head}`) ?? { code: 'not-found', message: `no comparison ${base}..${head}` })
 
   repositoryFromRemote(url: string): ForgeRepository | undefined {
     const [, host = '', owner = '', name = ''] = /^https:\/\/([a-z.]+\.test)\/([^/]+)\/([^/]+?)\.git$/.exec(url) ?? []
@@ -332,12 +354,13 @@ export class FakeProvider implements ForgeProvider {
     return Promise.resolve(this.actionResult)
   }
 
-  diff(ref: ChangeRequestRef): Promise<string | ForgeFailure> {
+  diff(ref: ChangeRequestRef, headSha: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     this.diffs.push(ref.number)
+    this.diffHeads.push(headSha)
     return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
   }
 
-  fileText(_ref: ChangeRequestRef, commit: string, path: string): Promise<string | ForgeFailure> {
+  fileText(_ref: ChangeRequestRef, commit: string, path: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     return Promise.resolve(this.texts.get(`${commit}:${path}`) ?? { code: 'not-found', message: `no ${path} at ${commit}` })
   }
 
@@ -498,6 +521,8 @@ export interface Runtime {
   readonly agent: TestAgent
   /** Data of the Session's worktree records in log order. */
   readonly records: unknown[]
+  /** Data of the worktree service's creation records for the Session, in log order. */
+  readonly created: unknown[]
   /** Fiber of the worktree service, or undefined when it is not mounted. */
   readonly worktrees: ReturnType<Context['plugin']> | undefined
 }
@@ -543,13 +568,16 @@ export async function runtime(cwd: string, options: BenchOptions = {}): Promise<
     if (worktrees !== undefined) await worktrees
     const session = ctx.sessions.create(SessionId(`forge-panel-${Math.random().toString(36).slice(2)}`), { meta: { cwd } })
     const records: unknown[] = []
+    const created: unknown[] = []
     ctx.on('session/event', (target: Session, event: SessionEvent) => {
       const record = pluginRecordOf(event)
-      if (target === session && record?.type === WORKTREE_RECORD) records.push(record.data)
+      if (target !== session) return
+      if (record?.type === WORKTREE_RECORD) records.push(record.data)
+      if (record?.type === CREATED_RECORD) created.push(record.data)
     })
     const agent = testAgent(ctx, session)
     await ctx.agents.register(agent)
-    return { ctx, provider, sandbox, session, agent, records, worktrees }
+    return { ctx, provider, sandbox, session, agent, records, created, worktrees }
   } catch (error) {
     await ctx.fiber.dispose()
     throw error

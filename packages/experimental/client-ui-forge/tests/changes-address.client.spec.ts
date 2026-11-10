@@ -59,15 +59,45 @@ describe('createChangesStore', () => {
   it('seeds a tab on its first navigation, keeps its choices, and forgets it', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
-    expect(store.getSnapshot().byTab['tab-1']).toEqual({ scope: 'branch', split: true, wrap: true, navigated: 1 })
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({
+      scope: 'branch', base: null, commits: null, lens: 'all', hideTests: false, split: true, wrap: true, navigated: 1,
+    })
     store.actions.scoped('tab-1', 'staged')
+    store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
     store.actions.toggledSplit('tab-1')
     store.actions.toggledWrap('tab-1')
+    store.actions.lensed('tab-1', 'interface')
+    store.actions.toggledTests('tab-1')
     store.actions.navigated('tab-1', 2)
-    expect(store.getSnapshot().byTab['tab-1']).toEqual({ scope: 'staged', split: false, wrap: false, navigated: 2 })
+    expect(store.getSnapshot().byTab['tab-1']).toEqual({
+      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', hideTests: true,
+      split: false, wrap: false, navigated: 2,
+    })
     store.actions.navigated('tab-2', 1)
     store.actions.forget('tab-1')
     expect(Object.keys(store.getSnapshot().byTab)).toEqual(['tab-2'])
     expect(() => { store.actions.toggledWrap('tab-1') }).toThrow('no changes state for tab "tab-1"')
+  })
+
+  it('shows all commits again after another scope or base, and leaves the test lens when test files hide', () => {
+    const store = createChangesStore().create()
+    const commits = { from: 'a'.repeat(40), to: 'b'.repeat(40) }
+    const tab = () => store.getSnapshot().byTab['tab-1']
+    store.actions.navigated('tab-1', 1)
+    store.actions.committed('tab-1', commits)
+    expect(tab()?.commits).toEqual(commits)
+    store.actions.based('tab-1', null)
+    expect(tab()?.commits).toBeNull()
+    store.actions.committed('tab-1', commits)
+    store.actions.scoped('tab-1', 'branch')
+    expect(tab()?.commits).toBeNull()
+
+    store.actions.lensed('tab-1', 'test')
+    store.actions.toggledTests('tab-1')
+    expect(tab()).toMatchObject({ lens: 'all', hideTests: true })
+    store.actions.lensed('tab-1', 'implementation')
+    store.actions.toggledTests('tab-1')
+    store.actions.toggledTests('tab-1')
+    expect(tab()).toMatchObject({ lens: 'implementation', hideTests: true })
   })
 })

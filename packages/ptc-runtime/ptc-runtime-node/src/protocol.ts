@@ -2,14 +2,21 @@
 import type { PtcProgramFormat, PtcJsonValue, PtcRunFailure } from '@deepseek-ai/dsh-ptc-runtime'
 import { decodePtcJsonWire, type PtcJsonWire } from './json-wire.ts'
 
+/** Wire revision required before the host dispatches program code. */
+export const PROGRAM_PROTOCOL_VERSION = 3
+
 /** Inputs for one program; host functions remain in the parent process. */
 export interface ProgramBootData {
   /** Type-stripped JavaScript source. */
   code: string
+  /** Environment initialization, supplied only until the Host accepts initialized(). */
+  initialization?: string
   /** Evaluation syntax; omitted uses the installed bootstrap's default. */
   programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
   retainsState: boolean
+  /** Await successful completion without serializing its value. */
+  discardCompletion?: boolean
   /** Globals and callable names injected into the program. */
   namespaces: {
     global: string
@@ -28,14 +35,23 @@ export interface ProgramResult {
 
 /** Host operations for the current evaluation; one pipe delivers its messages before its result. */
 export interface HostMethods {
-  /** Announce that the process can accept its first evaluation. */
-  ready(): void
+  /**
+   * Announce readiness before accepting an evaluation.
+   * @param version - Bootstrap wire revision, checked against the host.
+   */
+  ready(version: number): void
+  /**
+   * Accept successful environment initialization while the first run remains active.
+   * The child awaits the RPC reply before starting user code; cancellation rejects.
+   * @returns Host acceptance before user code may start.
+   */
+  initialized(): Promise<void>
   /**
    * Invoke a binding under its originating host execution context.
    * @param global - Namespace global.
    * @param name - Function name within the namespace.
    * @param args - Flat lossless JSON arguments.
-   * @returns Flat lossless JSON result; binding failures reject the call.
+   * @returns Flat lossless JSON result; binding failures and cancellation reject.
    */
   invoke(global: string, name: string, args: PtcJsonWire): Promise<PtcJsonWire>
   /**
@@ -43,6 +59,11 @@ export interface HostMethods {
    * @param text - Captured text.
    */
   log(text: string): void
+  /**
+   * Emit one registered image at the current output position.
+   * @param id - Image identity issued by this process’s host.
+   */
+  image(id: string): void
   /** Report exhausted program-side output accounting. */
   outputLimit(): void
 }
@@ -56,6 +77,8 @@ export interface ProgramMethods {
    * @returns Completion or a bounded program failure, after captured output is sent.
    */
   run(cwd: string, data: ProgramBootData): Promise<ProgramResult>
+  /** Notify the program thread to revoke bindings and output; run() still owns completion. */
+  revoke(): void
 }
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)

@@ -119,6 +119,8 @@ Blast Radius 的 DSH 包装使用当前运行的可执行文件提供 Node 计�
 
 [`chain.ts`](src/chain.ts) 让一个事件穿过选中的钩子，最外层在前，引擎行为在底部。每个钩子的 `next` 只向下委托一次：第二次调用返回第一次的运行结果，钩子已启动的下层运行会在其自身答案落定前被等待。抛出、超时或没有结果就结束的钩子会被跳过并按失败类型报告一次，若它已调用 `next` 则下层结果生效，`.catch` 处理器可代为作答。预算时钟只计钩子自身的运行时间：在 `next` 内与除 `$.clock.sleep` 外的每个 `$` 调用内暂停。[`engine.ts`](src/engine.ts) 拥有注册表、按会话的 `$.state`、按会话与模组键控的定时器，以及两个分发方向：引擎事件到达所有选中的钩子，而一个模组发起的 `$` 调用只到达在它之前加载的模组。
 
+桥接服务在其 fiber 开始卸载时取消后台调用，随后依赖它的模组才等待各自的定时器回调结束。服务清理再移除注册并等待其余工作完成。
+
 ### 映射到 harness
 
 [`index.ts`](src/index.ts) 注册监听器。`tool.call` 包裹 `tools/execute`，因此 harness 的权限决定先于链；`{ deny }` 成为带原因的错误结果，`{ result }` 在工具为模组注册或值满足工具输出 schema 时成为成功结果，否则为错误形态的结果。钩子在 `next` 之后改写的结果经 `tools/post-execute` 作为替换内容安装。向 `next` 传入改写参数的钩子会被跳过并报告，因为调用参数已经写入日志。[`host-ops.ts`](src/host-ops.ts) 持有每个 `$` 调用基于 `ctx.get(...)` 服务的引擎行为；目录所有者为必需服务，其他服务按需读取。[`surfaces.ts`](src/surfaces.ts) 为每个会话保留一条横幅：触发 `ui.render`，用 [`elements.ts`](src/elements.ts) 校验并序列化树，把每个 `Button` 的 `onPress` 保存在按绘制分配的动作 id 之后，让横幅订阅该次绘制读取的 `$.state` 槽位，并通过 `claudeCodeMods` Remote（`watchBand`、`pressBand`）把各代推流给 Client。
@@ -203,7 +205,7 @@ Message from the "<plugin>" mod:
 - **未服务的事件** — `tool.check`、`tool.describe`、`turn.step`、其他 `prompt.*` 事件、`command.describe`、`config.*`、`session.compact`、`session.receive`、`session.send`、`session.append`、`session.attach`、`session.detach`、`session.measure`、`agent.*`、`plugin.register`、`engine.create`、`telemetry.*` 可注册、永不触发，并在加载时以警告点名；`classic.*` 名字与任何未知事件一样在 `register` 时被拒绝。
 - **未服务的 `$` 命名空间** — `$.model`、`$.agent`、`$.config`、`$.settings`、`$.mcp`、`$.audio`、`$.telemetry`、`$.turn`、`$.ui.notice`、`$.ui.blit`、`$.ui.copy`、`$.fs.ancestors`、`$.process.spawn` 以及 `$.session.repo`、`send`、`append`、`authorize`、`compact`、`surfaces` 以 `no implementation` 拒绝。`$.model.complete` 等待一个写入日志的副请求事件，以便模组的模型调用仍可从 Session 日志重建。
 - **`tool.call` 在权限决定之后运行** — Claude Code 在其权限检查之前运行模组的 `tool.call` 钩子；此处 harness 的 `tools/pre-execute` 瀑布流（含审批）先行结束。改写传给 `next` 的参数或改名工具的钩子会被跳过并报告（参数情形指向[工具前输入改写提案](../../../.agents/notes/proposed/feature/2026-06-30-pre-tool-input-rewrite.zh.md)），因为已写入日志的调用按原样运行。
-- **一个进程，多个会话** — 模组的模块级变量与 `$.env.set` 写入由进程内所有会话与插件共享，而 Claude Code 每进程一个会话；按会话的值请放在 `$.state`。`session.start` 与 `session.end` 只为根智能体触发。
+- **一个进程，多个会话** — 模组的模块级变量与 `$.env.set` 写入由进程内所有会话与插件共享，而 Claude Code 每进程一个会话；按会话的值请放在 `$.state`。`session.start` 与 `session.end` 只为根 Agent 触发。根身份判定排除 Session `origin: 'subagent'`，挂载 Agent 注册表时还要求精确的在线实例。
 - **无沙箱、无静态分析、无热重载** — 钩子模块以 Node 全局对象在进程内运行，拥有本进程的全部权限（环境变量、网络、文件系统与工具）；仅 `$` 访问规则、`claude plugin validate`、类型生成、`--plugin-dir` 监视与会话内模组编写流程均未实现。只挂载你愿意作为插件运行的模组。再次挂载模组会在同一已求值模块上重新运行 `register`，模块级变量保留其值。
 - **`turn.complete` 文本** — 钩子返回的 `{ text }` 到达宿主日志，而非答案下方的一行；`durationMs` 从该轮的 `turn/start` 起算。
 - **`$.session.usage`** — 在 token 计量器得知路由的上下文窗口与提供商用量报告之前，`window` 为 `0` 且无 `percent`；未挂载 token-meter 服务时，token 数缺席且 `window` 为 `0`。`rateLimits` 始终为空。`$.fs.stat` 报告 `mtimeMs: 0`。

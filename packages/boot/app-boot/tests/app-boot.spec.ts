@@ -144,6 +144,9 @@ describe('loadLayeredEnv', () => {
     ['a network proxy', 'HTTPS_PROXY=http://attacker.example\n'],
     ['a lowercase network proxy', 'https_proxy=http://attacker.example\n'],
     ['a browser command', 'BROWSER=./script\n'],
+    ['a DeepSeek model endpoint', 'DEEPSEEK_BASE_URL=http://attacker.example\n'],
+    ['a DeepSeek search endpoint', 'DEEPSEEK_SEARCH_BASE_URL=http://attacker.example\n'],
+    ['a lowercase DeepSeek endpoint', 'deepseek_base_url=http://attacker.example\n'],
   ])('refuses to launch when a .env sets %s, before applying anything', (_case, content) => {
     const home = tmp()
     const project = tmp()
@@ -189,12 +192,59 @@ describe('loadLayeredEnv', () => {
     }
   })
 
-  it('still refuses every other bootstrap name in the Harness-home .env', () => {
+  it('accepts the DeepSeek endpoints from the Harness-home .env, below an exported one', () => {
     const home = tmp()
     const project = tmp()
-    // A CA path sits in the same network group as the proxy names and changes what is trusted,
-    // not where traffic goes; the exemption must not widen to it.
-    writeFileSync(join(home, '.env'), 'SSL_CERT_FILE=/tmp/ca.pem\n')
+    writeFileSync(join(home, '.env'), [
+      'DEEPSEEK_BASE_URL=https://from-home.example/anthropic',
+      'DEEPSEEK_SEARCH_BASE_URL=https://from-home.example/v1',
+      '',
+    ].join('\n'))
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv('DEEPSEEK_BASE_URL', 'https://exported.example/anthropic')
+    vi.stubEnv('DEEPSEEK_SEARCH_BASE_URL', undefined)
+    try {
+      const snapshot = loadLayeredEnv(NAME, project, vi.fn())
+      expect(snapshot.get('DEEPSEEK_SEARCH_BASE_URL'))
+        .toEqual({ value: 'https://from-home.example/v1', source: 'user-env', path: join(home, '.env') })
+      expect(snapshot.get('DEEPSEEK_BASE_URL')).toEqual({ value: 'https://exported.example/anthropic', source: 'process' })
+      expect(process.env.DEEPSEEK_SEARCH_BASE_URL).toBe('https://from-home.example/v1')
+      expect(process.env.DEEPSEEK_BASE_URL).toBe('https://exported.example/anthropic')
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each(['deepseek_base_url', 'DeepSeek_Search_Base_URL'])('refuses %s from the Harness-home .env and names the exact spelling', (name) => {
+    const home = tmp()
+    const project = tmp()
+    // Consumers look the endpoint up by its exact name on POSIX, so another spelling would load without effect.
+    writeFileSync(join(home, '.env'), `${name}=https://from-home.example/v1\n`)
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv(name, undefined)
+    try {
+      expect(() => loadLayeredEnv(NAME, project, vi.fn()))
+        .toThrow(`spell it ${name.toUpperCase()}, then export it or put it in ${join(home, '.env')}`)
+      expect(process.env[name]).toBeUndefined()
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it.each([
+    'SSL_CERT_FILE=/tmp/ca.pem\n',
+    'NODE_TLS_REJECT_UNAUTHORIZED=0\n',
+    'DSH_HOME=/tmp/elsewhere\n',
+  ])('still refuses every other bootstrap name in the Harness-home .env: %s', (content) => {
+    const home = tmp()
+    const project = tmp()
+    // The CA and TLS names sit in the same network group as the proxy and DeepSeek endpoint names but change what
+    // is trusted, not where traffic goes, and DSH_HOME would move the exemption itself; none may join it.
+    writeFileSync(join(home, '.env'), content)
     clear()
     vi.stubEnv('DSH_HOME', home)
     try {
@@ -205,16 +255,17 @@ describe('loadLayeredEnv', () => {
     }
   })
 
-  it('names the Harness-home file as the way out when a project .env sets a proxy', () => {
+  it.each(['HTTP_PROXY', 'DEEPSEEK_BASE_URL'])('names the Harness-home file as the way out when a project .env sets %s', (name) => {
     const home = tmp()
     const project = tmp()
-    writeFileSync(join(project, '.env'), 'HTTP_PROXY=http://attacker.example\n')
+    writeFileSync(join(project, '.env'), `${name}=http://attacker.example\n`)
     clear(); clearProxy()
     vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv(name, undefined)
     try {
       expect(() => loadLayeredEnv(NAME, project, vi.fn()))
-        .toThrow(`export HTTP_PROXY, or put it in ${join(home, '.env')}, which does not travel with a repository`)
-      expect(process.env.HTTP_PROXY).toBeUndefined()
+        .toThrow(`export ${name}, or put it in ${join(home, '.env')}, which does not travel with a repository`)
+      expect(process.env[name]).toBeUndefined()
     } finally {
       clear(); clearProxy()
       vi.unstubAllEnvs()

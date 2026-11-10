@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-alpha.2/subagent-explicit-reasoning/guide.md
+/:
+  en: 74a51bb421eb125c
+  zh: 2fccbfa5bcafb2af
+/subagent-reasoning-overrides-require-an-explicit-route:
+  en: f6bc10b254fe4420
+  zh: 9ac48f0264d1bd69
+/subagent-reasoning-overrides-require-an-explicit-route/change:
+  en: e31a906fc29dd5a6
+  zh: 2fa39b8bcbdfdb38
+/subagent-reasoning-overrides-require-an-explicit-route/migration:
+  en: 9ebfdab054389c89
+  zh: 7c50e28db91781e4

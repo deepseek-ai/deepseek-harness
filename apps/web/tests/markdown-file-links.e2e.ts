@@ -2,7 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium, type Browser, type Page } from 'playwright'
+import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -16,6 +16,13 @@ import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './supp
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links', import.meta.url))
 const MODE = webSnapshotMode()
+
+/** A restored preview resolves its Host path after the document's load event. */
+async function reloadPreview(page: Page, column: Locator, absolutePath: string): Promise<void> {
+  await page.reload({ waitUntil: 'load' })
+  await column.getByText(absolutePath, { exact: true }).waitFor()
+  expect(await column.locator('[data-textpreview-path]').textContent()).toBe(absolutePath)
+}
 
 /** Build live test input with a parent-path link and a read result naming the same Host file. */
 function parentPathFixture(path: string): string {
@@ -196,9 +203,7 @@ describe('web e2e: Markdown file links', () => {
         .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
       expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
     }
-    await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent())
-      .toBe(join(scaffold.workspaceCwd, 'src/example.txt'))
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'src/example.txt'))
     await relative.click()
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('source line 24\n')
     expect(await column.locator('[data-dockkit-tab-title]').allTextContents()).toEqual(['example.txt'])
@@ -236,8 +241,7 @@ describe('web e2e: Markdown file links', () => {
     await expect.poll(() => column.locator('[data-textpreview-target="30"]').textContent()).toBe('parent line 30\n')
     expect(await tabs.allTextContents()).toEqual(['parent.txt'])
 
-    await page.reload({ waitUntil: 'load' })
-    await expect.poll(() => column.locator('[data-textpreview-path]').textContent()).toBe(join(scaffold.workspaceCwd, 'parent.txt'))
+    await reloadPreview(page, column, join(scaffold.workspaceCwd, 'parent.txt'))
     await expect.poll(stored).toContain(address)
     await source.click()
     await expect.poll(() => column.locator('[data-textpreview-target="24"]').textContent()).toBe('parent line 24\n')

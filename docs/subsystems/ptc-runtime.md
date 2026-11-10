@@ -19,13 +19,15 @@ interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
    * follows the provider's programFormat: an async function body supports
-   * top-level `await` and `return`; REPL and Script programs support top-level
+   * top-level `await` and `return`; REPL (`repl`, `scoped-repl`) and Script programs support top-level
    * declarations, `await`, and a final expression, but not top-level `return`.
    * The Script provider lowers top-level await; its executionInstructions and
    * documentation define retained-binding semantics. The completion value
    * becomes {@link PtcRunResult.value}.
    */
   program: string
+  /** Discard the completion without JSON validation when true; omission preserves the completion value. */
+  discardCompletion?: boolean
   /**
    * Object-identity owner for optional in-memory state. Omission requests a fresh
    * environment. Consumers must await runtime.release(owner) when the owner ends.
@@ -93,11 +95,12 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -105,10 +108,10 @@ interface PtcRunResult {
 
 ```ts type-equiv
 /** Source evaluation form, independent of retained program state. */
-type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 ```
 
-`programFormat` distinguishes async function bodies, REPL statements, and scripts. REPL and Script programs accept top-level `await`, declarations, and a final expression; top-level `return` is not supported. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../../packages/ptc-runtime/ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. `retainsState` reports memory retention independently of source syntax. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends; cleanup failures reject that call. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
+`programFormat` distinguishes async function bodies, REPL statements, scoped REPL statements, and scripts. REPL, scoped REPL, and Script programs accept top-level `await`, declarations, and a final expression; top-level `return` is not supported. Retained REPL calls share one scope, while each scoped REPL call starts with copies of the top-level bindings that earlier calls left, so it can declare those names again without changing earlier code. The Node Script provider lowers top-level await and awaits the completion value; its [declaration limitations](../../packages/ptc-runtime/ptc-runtime-node/README.md#known-limitations-and-deferred-work) apply to transformed programs. `retainsState` reports memory retention independently of source syntax. `stateOwner` is an in-process object identity for optional retained memory; distinct objects remain isolated. Consumers await `release(owner)` when that owner ends; cleanup failures reject that call. Omitted owners are one-shot, and stateless providers ignore ownership. The [persistent Node provider](../../packages/ptc-runtime/ptc-runtime-node/README.md#persistent-repl) defines reset and recovery behavior; no retained object enters the durable Session format.
 
 ## Bindings: host functions as program globals
 
@@ -150,7 +153,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -171,7 +174,7 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` and the resolution value MUST be lossless JSON. A runtime rejects a
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
  * lossy or non-cloneable value with a descriptive error rather than corrupting
  * the run. No seam-level byte cap applies to a binding resolution. A rejection
  * of this function surfaces inside the program as a rejection of the
@@ -182,7 +185,29 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## Captured output and the failure taxonomy
 
-Logs are plain strings. Each source channel preserves emission order, while interleaving across independent channels is backend-dependent because channel metadata is not part of the seam. The runtime captures the program's console and stream output, and consumers render only the text. Implementations cap the serialized outer log-array plus completion-value or failure-message payload; fixed result-envelope syntax and consumer presentation whitespace are not part of that variable-payload ledger. Overflow is an explicit failure rather than in-band value substitution.
+`output` contains text and image entries in emission order: `{ type: 'text', text }` or `{ type: 'image', attachment }`. Text entries retain emitted newline characters; concatenate adjacent text without separators. Each source channel preserves emission order; interleaving across independent channels is backend-dependent. Host bindings return `PtcImage` descriptors containing the attachment reference and a readable execution-world `path`; the program receives an `Image` with that path and the stored pixel dimensions. The Node provider caps serialized text, image descriptors, and completion or diagnostic payloads together; overflow is an explicit failure.
+
+```ts public-api
+/** A stored image readable from the program's execution environment. */
+declare class PtcImage {
+  readonly [key: string]: PtcJsonValue;
+  /** Absolute attachment file path readable in the execution world. */
+  readonly path: string;
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>;
+  /**
+   * Describe one immutable image file in the execution world.
+   * @param path - Absolute path to the stored image.
+   * @param attachment - Reference to the immutable stored image.
+   */
+  constructor(path: string, attachment: ImageAttachmentRef);
+}
+```
+
+```ts type-equiv
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
+type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
+```
 
 Failure kinds are **orthogonal outcomes reported independently** (per [defensive-patterns](../defensive-patterns/general.md)): a budget expiry is not an exception, an abort is not a timeout, and a substrate death (e.g. OOM) is neither:
 
@@ -236,6 +261,21 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * @throws When managed resource cleanup fails.
  */
 release(owner: object): Promise<void>
+
+/**
+ * Register source evaluated once when each execution environment is created.
+ * Registration must precede the first run admission; only one initializer may
+ * be registered. Current bindings are installed before initialization. Its
+ * completion is discarded; logs, timeout, cancellation and output bounds share
+ * the first run. Initialization failure discards the environment without
+ * executing the user program or rolling back external effects.
+ * @param program - Initialization source in the provider's language and format.
+ * @returns An idempotent async disposer that stops admission, cancels and drains
+ * admitted runs, and releases environments. Failed cleanup blocks execution
+ * until the disposer succeeds on retry. The caller owns this disposer.
+ * @throws When unsupported, registered twice, registered after admission, or invalid.
+ */
+registerEnvironmentInitializer(program: string): () => Promise<void>
 
 /**
  * Resolve supported options and provider defaults before execution.

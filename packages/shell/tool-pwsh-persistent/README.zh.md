@@ -60,7 +60,7 @@ kind: "package-reference"
 
 ### 可能出什么问题
 
-没有拥有者 agent 会话的调用会以 `pwsh requires an owning agent session` 失败，没有 pwsh 方言 PTY 后端的组合会激活该工具，但首次调用以 `no PTY backend registered for "shell"` 失败。模型重定义 `prompt` 函数会移除就绪标记，shell 随后在静默层级而非标记快路径上结算。命令内的原始 ESC 字符会在执行前被 PSReadLine 消费，不受支持。超时关闭不确定的 shell，并报告受限的部分输出与重置。取消会重置 shell 并丢弃命令输出。清理完成后，ToolRuntime 发布 `Error: tool call aborted`，错误码为 `ABORTED`；取消原因不作为命令输出渲染。排队期间被取消的调用不发送命令。
+没有拥有者 agent 会话的调用会以 `pwsh requires an owning agent session`（`ToolContextUnavailableError`，`TOOL_CONTEXT_UNAVAILABLE`）失败，空白命令以 `ToolArgsError`（`INVALID_ARGS`）失败，没有 pwsh 方言 PTY 后端的组合会激活该工具，但首次调用以 `no PTY backend registered for "shell"` 失败。模型重定义 `prompt` 函数会移除就绪标记，shell 随后在静默层级而非标记快路径上结算。命令内的原始 ESC 字符会在执行前被 PSReadLine 消费，不受支持。超时关闭不确定的 shell，并报告受限的部分输出与重置。取消会重置 shell 并丢弃命令输出。清理完成后，ToolRuntime 发布 `Error: tool call aborted`，错误码为 `ABORTED`；取消原因不作为命令输出渲染。排队期间被取消的调用不发送命令。
 
 -----
 
