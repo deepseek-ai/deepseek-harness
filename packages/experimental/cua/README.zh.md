@@ -43,7 +43,7 @@ kind: "package-reference"
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
-观察方法输出并返回结果。通过 `connectCua(() => tools.cua, text => inspect(text))` 连接 PTC 文本输出。`window.getScreenshot()` 返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 和 `height` 对应保存图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 选择展示截图；窗口 ID 从 `window.windowId` 读取。`createCuaApi(dispatch, onText?)` 接收相同的程序分派器和文本回调。
+通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
 
 `tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。
 
@@ -142,7 +142,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 #### Token 影响
 
-选用的工具 schema 和 CUA 指引增加模型输入。程序输出、操作结果和接纳的图像增加历史；程序内只描述 CUA 绑定。保留的 JavaScript 对象不会序列化进提示词。调用方重复打印会重复观察文本。
+相应工具的参数定义和 CUA 使用说明会进入模型输入。直接调用原生 `cua` 工具时，结果文本和通过检查的截图会进入模型输入。在 TypeScript PTC 和 `cua_run_code` 中，程序用 `inspect` 选择要展示的文本和图片。在程序中保留应用或窗口对象不会增加提示词内容。
 
 #### KV Cache 影响
 

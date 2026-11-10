@@ -85,7 +85,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       const first = await run(`${initialization}
         var app = await cua.getApp("test.fixture");
         var win = await app.getWindow(7);
-        await win.getAccessibilityTree({ emit: false });
+        await win.getAccessibilityTree();
         await win.click("0");
         var shot = await win.getScreenshot();
         var { readFile } = await import("node:fs/promises");
@@ -93,6 +93,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
           windowId: win.windowId, byteLength: (await readFile(shot.path)).byteLength });
       `, 'first')
       expect(first.error).toBeUndefined()
+      expect(first.output).toEqual([])
       expect(first.value).toEqual({ isImage: true, width: 1, height: 1, windowId: 7, byteLength: 90 })
       expect(images).toBe(1)
       expect(JSON.stringify(first)).not.toContain('iVBORw0KGgo')
@@ -101,10 +102,15 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       expect(invalid.error?.message).not.toContain('ZodError')
       expect(invalid.error?.message).not.toContain('"origin"')
       expect(calls.filter(call => call.phase === 'invalid')).toEqual([])
-      const second = await run('await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getAccessibilityTree({emit:false});', 'second')
+      const second = await run(`
+        await win.getAccessibilityTree();
+        await win.click("0");
+        const tree = await win.getAccessibilityTree();
+        inspect(tree.includes("Count: 2"), (await cua.getCapabilities()).platform);
+      `, 'second')
       expect(second.error).toBeUndefined()
-      expect(second.value).toContain('Count: 2')
-      expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState'])
+      expect(second.output).toEqual([{ type: 'text', text: 'true macos\n' }])
+      expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState', 'getCapabilities'])
     } finally {
       try { await ctx.fiber.dispose() } finally {
         try { await closeFixture?.() } finally { await rm(cwd, { recursive: true, force: true }) }

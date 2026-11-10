@@ -42,7 +42,7 @@ Persistent PTC initialization:
 
 \`\`\`ts
 var { connectCua } = await import(${ptcBridgeUrl});
-var cua = connectCua(() => tools.cua, text => inspect(text));
+var cua = connectCua(() => tools.cua);
 \`\`\``
   } }
   const register = (scope: Context, definition: ToolDefinition, instructions: PromptSection): (() => void) => {
@@ -92,7 +92,7 @@ var cua = connectCua(() => tools.cua, text => inspect(text));
         apply(owner: Context) {
           owner.effect(function* () {
             yield owner.ptcRuntime.registerEnvironmentInitializer(
-              `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua, text => inspect(text));`,
+              `globalThis.cua = (await import(${programBridgeUrl})).connectCua(() => tools.cua);`,
             )
             const child = owner.plugin({
               name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory'],

@@ -16,7 +16,7 @@ The tool executor requests `discardCompletion: true`, so completion values are d
 
 The Node environment supplies `inspect` alongside the complete native console. Native console methods remain available to programs and imported libraries, and their stdout and stderr writes share the captured output sequence. Model instructions direct programs to select output through `inspect`.
 
-`read_image` and CUA screenshot bindings expose stored `Image` values. Readonly `attachmentId`, `path`, `width` and `height` identify the stored image and its readable execution-world file. The dimensions describe that file's pixels, including the image used for CUA coordinate mapping. The [CUA object API](2026-09-17-experimental-cua-object-api.md) returns the program Image directly and routes text observations through its caller's callback.
+`read_image` and CUA screenshot bindings expose stored `Image` values. Readonly `attachmentId`, `path`, `width` and `height` identify the stored image and its readable execution-world file. The dimensions describe that file's pixels, including the image used for CUA coordinate mapping. The [CUA object API](2026-09-17-experimental-cua-object-api.md) returns screenshot Images and text observations directly to the program. The program passes selected values to `inspect` for display.
 
 The host carries the attachment reference with the program-readable path. The runtime transports image metadata and keeps the attachment reference behind a process-owned image ID. Inspection resolves that ID directly to the registered reference. Image identity is established by the runtime; matching object properties alone do not grant access to an image output. Retained program Images follow their owning process's lifetime.
 

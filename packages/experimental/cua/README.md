@@ -43,7 +43,7 @@ Use `cua.getApp(selector)` to select an application; it obtains consent and opti
 
 Keyboard methods are available in the scopes a provider declares; the provider owns how input is delivered within each scope. A lost connection invalidates its handles and coordinates. Cleanup failures are reported and the connection is not reused; select the application again and inspect fresh state, because earlier input may have partially executed. Screenshot image errors retain the failing stage and attachment error code. Invalid request arguments reject before dispatch with a readable method, parameter and requirement.
 
-Observation methods emit and return their result. Connect PTC text output with `connectCua(() => tools.cua, text => inspect(text))`. `window.getScreenshot()` returns an ordinary `Image`: `path` is an attachment file readable by the program, and `width` and `height` describe its stored pixels. Use `inspect("before", before, "after", after)` to display selected screenshots; read the window ID from `window.windowId`. `createCuaApi(dispatch, onText?)` accepts the same program dispatcher and text callback.
+Connect PTC with `connectCua(() => tools.cua)` or supply a custom dispatcher to `createCuaApi(dispatch)`. Observation methods return their results to the program. Call `inspect(await app.getWindows())` to display a result, or pass a filtered value. `window.getScreenshot()` returns an `Image` whose `path` is readable by the program and whose `width` and `height` describe the stored pixels. Use `inspect("before", before, "after", after)` to display selected screenshots. Read the window ID from `window.windowId`.
 
 `tools.cua` screenshot operations return `Image` in TypeScript programs. Host-side canonical screenshot results carry encoded image data and a durable `attachment` reference; the native renderer projects coordinate metadata and the image into model content. Capture requires an attachment store and a resolved model route declaring image input. Admission and storage failures reject the call.
 
@@ -142,7 +142,7 @@ With the default preset selection, PTC receives `cua` through its existing `run_
 
 #### Token effect
 
-The selected tool schema and CUA guidance add model input. Program output, operation results, and admitted images add history; only the CUA binding is described inside the program. Retained JavaScript objects are not serialized into prompts. Duplicate caller printing can repeat observation text.
+The selected tool schema and CUA guidance add model input. Native `cua` calls send their result text and admitted screenshot images to the model. In TypeScript PTC and `cua_run_code`, programs select text and images with `inspect`. Retaining an app or window object in the program adds no prompt content.
 
 #### KV Cache effect
 

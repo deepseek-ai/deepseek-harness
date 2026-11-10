@@ -17,12 +17,8 @@ type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { m
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
 /** Stored screenshot returned to a program for explicit inspection. */
 export type CuaProgramImage = { readonly attachmentId: string; readonly path: string; readonly width: number; readonly height: number }
-/** Observations emit by default. Returned values are unaffected by this option. */
-export interface CuaObservationOptions { emit?: boolean }
 /** Full observations of the requested content; each read replaces the application's current snapshot. */
-export interface CuaAxOptions extends CuaObservationOptions {
-  /** Reserved compatibility option; observations are never diffs. */
-  disableDiffing?: boolean
+export interface CuaAxOptions {
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
   /** Include identifiers, global native bounds and complete action names. */
@@ -92,7 +88,7 @@ export interface CuaSurface {
   /**
    * Read the full accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
-   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @param options - Traversal limits, menu expansion and field detail options.
    * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
   getAccessibilityTree(options?: CuaAxOptions): Promise<string>
@@ -223,10 +219,9 @@ export interface CuaApp extends CuaSurface {
   activate(): Promise<CuaActionResult>
   /**
    * Enumerate current windows.
-   * @param options - output options.
    * @returns current window records.
    */
-  getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
+  getWindows(): Promise<CuaWindowInfo[]>
   /**
    * Select a specific window.
    * @param windowId - ID obtained from getWindows.
@@ -239,29 +234,25 @@ export interface CuaApp extends CuaSurface {
 export interface CuaApi {
   /**
    * Inspect permissions without requesting them.
-   * @param options - output options.
    * @returns reported native capabilities.
    */
-  getCapabilities(options?: CuaObservationOptions): Promise<CuaCapabilities>
+  getCapabilities(): Promise<CuaCapabilities>
   /**
    * Enumerate running applications.
-   * @param options - output options.
    * @returns identifiers accepted by getApp.
    */
-  listApps(options?: CuaObservationOptions): Promise<CuaAppInfo[]>
+  listApps(): Promise<CuaAppInfo[]>
   /**
    * Search the provider's installed application locations without launching an app.
    * @param query - Nonempty name, provider-specific application identifier or absolute application path.
-   * @param options - Output options.
    * @returns Matching installed applications; overly broad queries reject instead of silently truncating.
    */
-  findApps(query: string, options?: CuaObservationOptions): Promise<CuaFoundAppInfo[]>
+  findApps(query: string): Promise<CuaFoundAppInfo[]>
   /**
    * Discover apps.
-   * @param options - output options.
    * @returns native apps and an empty browser list.
    */
-  getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
+  getState(): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
    * Select an app, obtain consent, and launch it in the background if necessary, without reading AX.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.

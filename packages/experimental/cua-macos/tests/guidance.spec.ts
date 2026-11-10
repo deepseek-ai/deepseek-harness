@@ -72,7 +72,7 @@ it('enumerates every available method once in its catalog entry', () => {
 })
 
 it('documents option fields and return fields', () => {
-  for (const token of ['emit', 'includeMenus', 'details', 'maxElements', 'maxDepth', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
+  for (const token of ['includeMenus', 'details', 'maxElements', 'maxDepth', 'relative', 'mouseButton', 'clickCount', 'holdMs', 'modifiers', 'format', 'prefix', 'suffix', 'selectionType']) expect(COMMON_GUIDANCE).toContain(token)
   for (const token of ['dispatched', 'foregroundChanged', 'hoverRoute', 'systemPointerMoved', 'path', 'width', 'height', 'windowId']) expect(COMMON_GUIDANCE).toContain(token)
 })
 
@@ -120,11 +120,10 @@ it('states platform-dependent levels without qualifying grouped method names', (
   expect(COMMON_GUIDANCE).toContain('from: [number, number]')
 })
 
-it('keeps consent, lock, emission, observation, and no-replay rules', () => {
+it('keeps consent, lock, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('consent')
   expect(COMMON_GUIDANCE).toContain('SESSION_LOCKED')
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
-  expect(COMMON_GUIDANCE).toContain('emit: false suppresses automatic observation output')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
   expect(COMMON_GUIDANCE).toContain('snapshotId')
@@ -135,18 +134,12 @@ it('prioritizes reported API availability over instruction text in the prologue'
   expect(prologue).toContain('Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions.')
 })
 
-it('separates facade options from raw RPC parameters', () => {
-  expect(COMMON_GUIDANCE).toContain('facade-only')
-  expect(COMMON_GUIDANCE).toContain('emit is local output control')
-  expect(COMMON_GUIDANCE).toContain('raw operation schema')
-})
-
-it('documents emitted observations and key arguments without assuming a transport', () => {
-  expect(COMMON_GUIDANCE).toContain('Text observations emit through inspect')
+it('documents explicit inspection and separate key arguments', () => {
+  expect(COMMON_GUIDANCE).toContain('Call inspect(...values) to display selected observation results.')
   expect(COMMON_GUIDANCE).toContain('do not pack them into a chord string')
   expect(COMMON_GUIDANCE).toContain('perform a left-button double-click')
 })
 
 it('omits stale names and unavailable platform operations', () => {
-  for (const stale of ['getAXState', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
+  for (const stale of ['getAXState', 'emit', 'disableDiffing', 'performSecondaryAction', 'hover(', 'keyChord', 'window.typeText', 'window.pressKey', 'elementIndex', 'verified: false', 'browser tabs', 'not implemented']) expect(GUIDANCE).not.toContain(stale)
 })

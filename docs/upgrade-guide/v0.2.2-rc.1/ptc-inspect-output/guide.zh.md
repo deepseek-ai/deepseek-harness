@@ -11,6 +11,8 @@ description: "TypeScript PTC 程序通过 inspect 展示选定的值，并返回
 
 TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此前函数返回值和末尾表达式的值会进入结果，现在会被省略。各个 inspect 参数独立渲染：字符串直接展示，其他值使用 Node 的对象格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。
 
+此前，CUA 观察方法默认会输出结果。现在，`getCapabilities()`、`listApps()`、`findApps(query)`、`getState()`、`app.getWindows()` 以及应用或窗口的 `getAccessibilityTree()` 都将结果返回给程序。需要展示哪些值，就把它们传给 `inspect`。
+
 只有 CUA 截图与 `read_image` 在 TypeScript 程序中返回普通 `Image`，其 `path` 指向执行环境可读取的附件文件，`width` 与 `height` 为该文件的像素尺寸。使用 `inspect` 将选中的图片与说明一起展示；图片可嵌入数组、Map 条目、Set 的值以及可枚举的对象属性。嵌套图片的选择遵循 Node 的自定义格式化。CUA 窗口 ID 从窗口对象的 `windowId` 读取。
 
 其他图片工具保留其声明的程序返回值，并将图片自动附加到模型上下文。图片适配要求附件在程序文件系统中有可读路径。`fs-ssh` 未提供这项映射，因此该组合中的 `read_image` 与 CUA 截图绑定会失败。需要程序 Image 时，使用本地文件系统组合。
@@ -26,13 +28,13 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
    inspect(result)
    ```
 
-2. 将 CUA 桥接回调更新为 `text => inspect(text)`。直接调用 `createCuaApi(dispatch, onText?)` 时，提供截图返回程序 `Image` 的分派器，并将文本回调作为第二个参数。调用 `window.getScreenshot()`，再将返回的 `Image` 传给 `inspect`。
+2. 删除 `connectCua` 和 `createCuaApi` 的输出回调、观察选项 `emit` 和已无作用的 AX 选项 `disableDiffing`。将要展示的观察结果传给 `inspect`，例如 `inspect(await app.getWindows())`。自定义分派器须为截图操作直接返回程序可用的 `Image`。
 
    ```js
    const { connectCua } = await import("<host-provided bridge file URL>")
-   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const cua = connectCua(() => tools.cua)
    const app = await cua.getApp("TextEdit")
-   const windows = await app.getWindows({ emit: false })
+   const windows = await app.getWindows()
    const win = await app.getWindow(windows[0].windowId)
    const before = await win.getScreenshot()
    await app.pressKey("Tab")

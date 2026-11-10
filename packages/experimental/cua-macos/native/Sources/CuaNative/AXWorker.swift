@@ -141,12 +141,12 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
-    private func acquire(_ identity: ProcessIdentity) throws -> String {
+    private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }
             forget(old.key)
         }
-        let id = try identifier("app")
+        let id = try pendingHandle ?? identifier("app")
         targets[id] = .running(identity)
         return id
     }
@@ -230,11 +230,12 @@ actor AXWorker {
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null]))
         }
-        if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
+        if method == "listApps" { return .result(.array(catalog.selectableApplications.map(\.json))) }
         try NativePlatform.requireUnlocked(locked)
         if method == "getApp" {
             let selector = try params.string("selector")
-            let matches = catalog.applications.filter { $0.matches(selector) }
+            let candidates = catalog.selectableApplications
+            let matches = installed.map { candidates.filter($0.matchesProcess) } ?? candidates.filter { $0.matches(selector) }
             if matches.isEmpty, let installed {
                 let authorization = try ApplicationAuthorization.describeInstalled(installed)
                 let previous = targets.filter { if case .pending(let app, _) = $0.value { return app.path == installed.path }; return false }
@@ -247,7 +248,7 @@ actor AXWorker {
                 return .result(pendingApplication(installed, handle: handle, authorization: authorization))
             }
             guard !matches.isEmpty else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "No running or installed application matches selector") }
-            guard matches.count == 1, let app = matches.first else { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps") }
+            guard matches.count == 1, let app = matches.first else { throw Self.ambiguousApplication }
             let identity = try NativePlatform.identity(app.pid)
             let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
             let handle = try acquire(identity)
@@ -265,6 +266,10 @@ actor AXWorker {
             guard try ApplicationAuthorization.describeInstalled(app) == authorization else {
                 forget(handle)
                 throw NativeFailure(code: "STALE_APP", message: "Application executable changed before launch; select it again")
+            }
+            guard catalog.selectableApplications.filter(app.matchesProcess).count <= 1 else {
+                forget(handle)
+                throw Self.ambiguousApplication
             }
             return .launch(ApplicationLaunch(handle: handle, application: app, authorization: authorization))
         }
@@ -453,24 +458,31 @@ actor AXWorker {
         try ax().perform(command, "AXPress")
     }
 
+    private static let ambiguousApplication = NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps")
+
     private func pendingApplication(_ app: InstalledApplication, handle: String, authorization: JSONValue) -> JSONValue {
         var value: [String: JSONValue] = ["appHandle": .string(handle), "running": .bool(false), "name": .string(app.name), "authorization": authorization]
         if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
         return .object(value)
     }
-    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32) throws -> JSONValue {
+    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32, catalog: ApplicationCatalogSnapshot) throws -> JSONValue {
         do {
             try cancellation.check()
             guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
                   try ApplicationAuthorization.describeInstalled(app) == original else {
                 throw NativeFailure(code: "STALE_APP", message: "Application selection changed during launch")
             }
+            guard !catalog.selectableApplications.contains(where: { $0.pid != pid && app.matchesProcess($0) }) else {
+                throw Self.ambiguousApplication
+            }
             let identity = try NativePlatform.identity(pid)
             let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
             if original["persistable"] == .bool(true), actual["id"] != original["id"] {
                 throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
             }
-            targets[plan.handle] = .running(identity)
+            guard try acquire(identity, pendingHandle: plan.handle) == plan.handle else {
+                throw NativeFailure(code: "STALE_APP", message: "This connection already has a handle for this process. Use the existing handle or retrieve it with getApp")
+            }
             var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
             if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
             return .object(value)
