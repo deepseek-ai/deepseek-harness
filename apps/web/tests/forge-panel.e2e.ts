@@ -1992,7 +1992,10 @@ it.skipIf(MODE === 'record')('overlays the review threads of a change request an
   await view.locator('[data-forge-diff-file="docs/panel.md"] [data-forge-thread="whole-file"]').getByText('文件级讨论', { exact: true }).waitFor()
   const count = panel.getByRole('button', { name: 'panel.ts 有 3 条未解决的讨论，跳到下一条', exact: true })
   await count.waitFor()
-  await view.getByRole('navigation').getByTitle('3 条未解决的讨论', { exact: true }).waitFor()
+  // The tree names the count in a tooltip once the pointer rests on it.
+  await view.getByRole('navigation').getByRole('button', { name: 'src/panel.ts', exact: true }).getByText('3', { exact: true }).hover()
+  await page.getByRole('tooltip').getByText('3 条未解决的讨论', { exact: true }).waitFor()
+  await page.mouse.move(1, 1)
   await compareOrRefreshGolden(join(EXPECTED, 'review-threads.expected.md'),
     await captureStableAria(page, '[data-forge-diff-file="src/panel.ts"]', scaffold.workspaceCwd), MODE)
 
