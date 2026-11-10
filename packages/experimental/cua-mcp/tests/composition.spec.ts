@@ -144,7 +144,7 @@ describe('Computer Use MCP composition', () => {
     expect(listed.tools[0]?.description).toContain('complete `cua` API reference')
 
     const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
-      + 'await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })', { description: 'Open the fixture' })
+      + 'await win.getAccessibilityTree({ emit: false }); await win.click("0"); await win.getScreenshot(); ({ visits, window: win.windowId, pid: process.pid })', { description: 'Open the fixture' })
     expect(first.isError).not.toBe(true)
     const [reference, ...rest] = first.content
     expect(reference).toMatchObject({ type: 'text' })
@@ -166,7 +166,7 @@ describe('Computer Use MCP composition', () => {
     expect(rest).toHaveLength(3)
     expect(native.state).toMatchObject({ count: 1, openedChannels: 1, closedChannels: 0 })
 
-    const second = await run('globalThis.visits++; await win.click("0"); ({ visits, sameWindow: win.windowId === 7, pid: process.pid })')
+    const second = await run('globalThis.visits++; await win.getAccessibilityTree({ emit: false }); await win.click("0"); ({ visits, sameWindow: win.windowId === 7, pid: process.pid })')
     expect(second.isError).not.toBe(true)
     expect(second.content).toHaveLength(1)
     expect(lastJson(second)).toEqual({ visits: 2, sameWindow: true, pid: result.pid })
