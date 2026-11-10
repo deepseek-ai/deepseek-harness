@@ -174,9 +174,12 @@ button.row:focus-visible {
   line-height: 18px;
 }
 
-/* The trailing column; a row without output keeps it empty so the durations stay aligned. */
+/* The trailing column; a row without output keeps it empty so the durations
+   stay aligned. It takes no presses: the row button's overlay below takes
+   them, also once the open chevron's rotation would paint it above that overlay. */
 .chevron {
   display: grid;
+  pointer-events: none;
   flex: none;
   align-self: center;
   place-items: center;
