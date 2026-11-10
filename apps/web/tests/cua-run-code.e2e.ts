@@ -82,12 +82,18 @@ it.skipIf(mode === 'record')('shows standard CUA programs and their recorded sou
   expect(events.filter(event => event.type === 'tool/ptc-dispatch' && event.data.content.some(block => block.type === 'image'))).toHaveLength(1)
   expect(events.filter(event => event.type === 'tool/result'
     && event.data.message.content.some(block => block.type === 'image'))).toHaveLength(1)
+  expect(await calls.first().textContent()).toContain('(1×1, 90 B)')
+  expect(await calls.first().textContent()).not.toContain('"type": "image"')
   await compareOrRefreshGolden(join(snapshotDirectory, 'ui.expected.md'),
     await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd), mode)
   if (mode === 'refresh') {
     const evidence = fileURLToPath(new URL('../../../.playwright-mcp/cua-run-code-ui', import.meta.url))
     await mkdir(evidence, { recursive: true })
     await page.screenshot({ path: join(evidence, 'standard-code-cards.png'), animations: 'disabled' })
+    const viewport = page.viewportSize()
+    await page.setViewportSize({ width: 800, height: 900 })
+    await page.screenshot({ path: join(evidence, 'standard-code-cards-narrow.png'), animations: 'disabled' })
+    if (viewport !== null) await page.setViewportSize(viewport)
   }
   await page.getByRole('tab', { name: 'Trajectory', exact: true }).click()
   const row = page.getByRole('row', { name: new RegExp(`cua_run_code ${description}`) })
