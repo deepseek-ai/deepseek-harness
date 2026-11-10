@@ -73,7 +73,7 @@ describe.skipIf(!built)('persistent PTC published exports', () => {
     expect(result.timedOut).toBe(false)
     expect(result.exitCode, result.stderr).toBe(0)
     expect(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '')).toMatchObject({
-      format: 'scoped-repl', first: { logs: [] }, second: { value: [2, 1] }, assigned: { value: [3, 1] },
+      format: 'scoped-repl', first: { output: [] }, second: { value: [2, 1] }, assigned: { value: [3, 1] },
     })
   })
 })

@@ -46,12 +46,12 @@ scoped REPL 求值器分成内核和求值器两个文件：
 #### 写法与结果
 
 - 程序是一组语句，支持顶层 `await`。
-- 最后一条非空的顶层语句是表达式语句时，它的值就是结果。值是 Promise 时不等待，Promise 本身就是结果，宿主会报 `program completion must be lossless JSON`，和现有 REPL 一样。这一项由 `finalExpression` 开关控制，默认开；关闭后末尾表达式的值被丢弃，结果只能靠打印，模型说明要随之调整。
+- 最后一条非空的顶层语句是表达式语句时，它的值就是结果。值是 Promise 时不等待，Promise 本身就是结果，宿主会报 `program completion must be lossless JSON`，和现有 REPL 一样。这一项由 `finalExpression` 开关控制，默认开；关闭后末尾表达式的值被丢弃，结果只能靠打印，模型说明要随之调整。`run_code` 对 TypeScript 运行时传 `discardCompletion: true`，宿主丢弃完成值，模型用 `inspect(...)` 输出；不丢弃完成值的调用方（例如 workflow-ptc）仍以末尾表达式的值为结果。
 - 最后一条是声明、`if`、`for`、块等其他语句时，没有结果。
 - 顶层 `return`，包括写在顶层 `if`、循环和块里的，报 `SyntaxError: Illegal return statement`，这次一行都不执行。经 `run_code` 执行时，宿主的 TypeScript 擦除会先拒绝它，报 `Return statement is not allowed here`，和现有 REPL 相同。
 - 静态 `import`、`export` 报 acorn 的 `SyntaxError: 'import' and 'export' may appear only with 'sourceType: module'`；顶层 `using`、`await using` 同样被 acorn 拒绝，块里和函数里可以用。
 - 以 `#!` 开头的程序报 `SyntaxError: Hashbang lines are not supported`，这次不执行：`#!` 只能出现在 Script 的最开头，而生成的前缀排在程序前面。
-- 输出是 `console.log` 等打印的内容，加上末尾表达式的值。
+- 输出是 `inspect(...)` 等打印的内容；调用方不丢弃完成值时，再加上末尾表达式的值。
 
 #### 跨次调用
 
@@ -426,7 +426,7 @@ REPL 用 Node 的 `domain` 接住程序启动的异步工作里抛出的错误�
 | `ptc-runtime-node` 的 `configuration.ts`（CUA 用它合并配置） | `resolvePersistentExecution` 返回 `executionMode`、`scriptPersistence`、`replScoped` 三个字段，一起合并：`scoped-repl` 对应 `replScoped: true`，其余格式为 `false`，覆盖 profile 里残留的值 |
 | 文档、快照和测试 | 包 README 的配置项、行为说明和"已知限制"、config catalog、快照场景 `ptc-scoped-repl`；构建产物的 e2e 含 `replScoped: true` 用例 |
 
-tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使用"打印输出"那套说明。模型说明写明上面的精确行为，尤其是：末尾的 Promise 要自己 `await`；不支持顶层 `return`；每次调用开始时拷贝、旧代码不受影响；需要共享的可变状态放进对象；不声明直接赋值只改拷贝，前面的 `const` 也可以这样赋值；`let`、`const`、`class` 重新声明的初始化表达式读不到同名旧值，要在旧值上计算就直接赋值或换个名字；`var` 重新声明从旧值开始；调用中途失败时，没执行完的 `let`、`const`、`class`、`var` 重新声明保留旧值；块里的 `var` 也算这次调用的顶层名字，其他块里的声明只属于它的块；只能用 `import()`，相对路径按这个环境第一次调用的目录解析。测试整段逐字比对模型说明。
+tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使用"打印输出"那套说明。模型说明写明上面的精确行为，尤其是：输出用 `inspect(...)`，这句和其他模式共用；不支持顶层 `return`；每次调用开始时拷贝、旧代码不受影响；需要共享的可变状态放进对象；不声明直接赋值只改拷贝，前面的 `const` 也可以这样赋值；`let`、`const`、`class` 重新声明的初始化表达式读不到同名旧值，要在旧值上计算就直接赋值或换个名字；`var` 重新声明从旧值开始；调用中途失败时，没执行完的 `let`、`const`、`class`、`var` 重新声明保留旧值；块里的 `var` 也算这次调用的顶层名字，其他块里的声明只属于它的块；只能用 `import()`，相对路径按这个环境第一次调用的目录解析。测试整段逐字比对模型说明。
 
 ## 考虑过的替代方案
 
@@ -489,7 +489,7 @@ tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使
 - "开始时拷贝"和 REPL 不同：前面的代码（定时器、回调）之后再给顶层变量赋值，后面的调用看不到；模型说明写明了这一点。
 - 不声明直接赋值只影响之后的调用，前面定义的函数看不到；REPL 里两边会一起变。
 - strict 模式和 REPL 不同：REPL 里给未声明的名字赋值会创建全局变量，这里会报错。
-- 末尾是没写 `await` 的 Promise 时，宿主报"不是 JSON"，和现有 REPL 一样；模型说明提示自己 `await`。
+- 调用方不丢弃完成值时，末尾是没写 `await` 的 Promise，宿主报"不是 JSON"，和现有 REPL 一样；`run_code` 丢弃完成值，不受影响。
 - 以 `if`、`for`、块结尾的程序没有结果，node:repl 在代码不含 `await` 时有。
 - 最后一条表达式所在行，插入点之后的列号右移 17。
 - 语法错误消息是 acorn 的文字，和 V8 原文不同，例如 `Unexpected token` 而不是 `Unexpected token ';'`。

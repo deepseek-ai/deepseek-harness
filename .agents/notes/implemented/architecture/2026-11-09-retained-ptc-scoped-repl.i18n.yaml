@@ -15,8 +15,8 @@
   en: 14dff09dd91c1533
   zh: d199bef553f9439c
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/syntax-and-results:
-  en: 4aea7c443fb4ab0f
-  zh: 248eb4ac38726537
+  en: 4f0c54f87042943e
+  zh: 34b88dbb1d50a2c6
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/exact-behavior/across-calls:
   en: d389222669ca94d7
   zh: cf19a71bce644ee4
@@ -60,14 +60,14 @@
   en: 725a4139f28961c3
   zh: b32da1bf86095e65
 /agent-note-scoped-repl-evaluator-for-retained-ptc/decision/integration:
-  en: b2e6e7ba0c4dbaca
-  zh: bbdb96c29ac3f938
+  en: e77a6fd3f37c6049
+  zh: 7902fb0975d9a711
 /agent-note-scoped-repl-evaluator-for-retained-ptc/alternatives-considered:
   en: 80d6d13c0a87a521
   zh: 43e72b9b6c9fa49b
 /agent-note-scoped-repl-evaluator-for-retained-ptc/consequences:
-  en: f3ec8ebd4a1b6c72
-  zh: cc43ad1471fd3af0
+  en: d75ef0e16dcdcee2
+  zh: 22ae67a41c1461ca
 /agent-note-scoped-repl-evaluator-for-retained-ptc/testing:
   en: ac3b7db56e6fa832
   zh: 1d2d33262e3822ba

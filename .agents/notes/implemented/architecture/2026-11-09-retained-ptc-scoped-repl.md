@@ -46,12 +46,12 @@ The `scoped-repl` format connects the evaluator to the existing execution modes;
 #### Syntax and results
 
 - A program is a list of statements and supports top-level `await`.
-- When the last non-empty top-level statement is an expression statement, its value is the result. A Promise value is not awaited: the Promise itself is the result, so the host reports `program completion must be lossless JSON`, as with the existing REPL. The `finalExpression` option controls this and defaults to on; when off, the final value is discarded, results come only from printing, and model guidance must change accordingly.
+- When the last non-empty top-level statement is an expression statement, its value is the result. A Promise value is not awaited: the Promise itself is the result, so the host reports `program completion must be lossless JSON`, as with the existing REPL. The `finalExpression` option controls this and defaults to on; when off, the final value is discarded, results come only from printing, and model guidance must change accordingly. `run_code` passes `discardCompletion: true` for TypeScript runtimes, so the host discards completion values and the model displays output with `inspect(...)`; callers that keep completions, such as workflow-ptc, still take the final expression's value as the result.
 - When the last statement is a declaration, `if`, `for`, block, or another statement, there is no result.
 - Top-level `return`, including inside top-level `if`, loops, and blocks, reports `SyntaxError: Illegal return statement`, and no statement of that call runs. Through `run_code`, the host's TypeScript erasure rejects it first with `Return statement is not allowed here`, as with the existing REPL.
 - A static `import` or `export` reports acorn's `SyntaxError: 'import' and 'export' may appear only with 'sourceType: module'`; acorn also rejects top-level `using` and `await using`, which remain available inside blocks and functions.
 - A program that starts with `#!` reports `SyntaxError: Hashbang lines are not supported` and does not run: a hashbang is valid only at the very start of a Script, and the generated prefix precedes the program.
-- Output is the printed text, such as `console.log`, plus the final expression's value.
+- Output is the printed text, such as `inspect(...)`, plus the final expression's value when the caller keeps completions.
 
 #### Across calls
 
@@ -426,7 +426,7 @@ The `scoped-repl` format connects the evaluator with only the changes the connec
 | `configuration.ts` in `ptc-runtime-node` (used by CUA to merge settings) | `resolvePersistentExecution` returns `executionMode`, `scriptPersistence`, and `replScoped` to merge together: `scoped-repl` yields `replScoped: true` and every other format `false`, replacing a stale profile value |
 | Documentation, snapshots, and tests | Package README configuration, behavior, and known limitations; the config catalog; the snapshot scenario `ptc-scoped-repl`; a built-artifact e2e case with `replScoped: true` |
 
-tool-executor-ptc is unchanged: for every format other than `function-body` it uses its printing guidance. The model guidance states the exact behavior above, especially: await a final Promise; top-level `return` is unsupported; copies happen when a call starts and earlier code is unaffected; shared mutable state belongs in objects; an assignment without declaration changes only the copy, including for earlier `const` names; a `let`, `const`, or `class` redeclaration cannot read the earlier value of its name, so assign to the name or use a new one to compute from it; a `var` redeclaration starts from the earlier value; when a call fails, an unfinished `let`, `const`, `class`, or `var` redeclaration keeps the earlier value; a `var` inside a block is also a top-level name of the call, while other block declarations stay in their block; modules load only with `import()`, whose relative specifiers resolve from the directory of the environment's first call. Tests pin the model guidance verbatim.
+tool-executor-ptc is unchanged: for every format other than `function-body` it uses its printing guidance. The model guidance states the exact behavior above, especially: output uses `inspect(...)`, in a sentence shared with the other modes; top-level `return` is unsupported; copies happen when a call starts and earlier code is unaffected; shared mutable state belongs in objects; an assignment without declaration changes only the copy, including for earlier `const` names; a `let`, `const`, or `class` redeclaration cannot read the earlier value of its name, so assign to the name or use a new one to compute from it; a `var` redeclaration starts from the earlier value; when a call fails, an unfinished `let`, `const`, `class`, or `var` redeclaration keeps the earlier value; a `var` inside a block is also a top-level name of the call, while other block declarations stay in their block; modules load only with `import()`, whose relative specifiers resolve from the directory of the environment's first call. Tests pin the model guidance verbatim.
 
 ## Alternatives considered
 
@@ -489,7 +489,7 @@ Costs:
 - Copying at call start differs from the REPL: assignments that earlier code, such as timers and callbacks, makes to top-level variables afterwards are invisible to later calls; the model guidance states this.
 - An assignment without declaration affects only later calls and is invisible to earlier functions; in the REPL both sides change.
 - Strict mode differs from the REPL: assigning an undeclared name creates a global in the REPL and throws here.
-- A final Promise without `await` makes the host report a non-JSON completion, as in the existing REPL; the model guidance tells the model to await it.
+- For callers that keep completions, a final Promise without `await` makes the host report a non-JSON completion, as in the existing REPL; `run_code` discards completions and is unaffected.
 - Programs ending with `if`, `for`, or a block have no result, while node:repl has one when the code contains no `await`.
 - On the final expression's line, columns after the insertion point shift right by 17.
 - Syntax error messages use acorn's text, which differs from V8's, for example `Unexpected token` instead of `Unexpected token ';'`.

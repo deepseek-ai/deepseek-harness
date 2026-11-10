@@ -17,8 +17,7 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
   expect(runtime.executionInstructions).toBe(
     'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. '
     + 'Top-level declarations and await are supported; top-level return is not supported. '
-    + 'Emit output with console.log(...) or a final lossless JSON expression; a final Promise is not awaited, so await it. '
-    + 'Only printed values and that final expression become program output. '
+    + 'Use inspect(...values) to display output. Do not use console. '
     + 'The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. '
     + 'Variables, functions, and imported modules remain in memory for this Agent across calls. '
     + 'Each call starts with copies of the top-level bindings left by earlier calls and may declare any of those names again with any keyword. '
@@ -56,8 +55,8 @@ it('keeps scoped REPL when profile editors merge retained execution settings', a
 
 it('redeclares names across calls in one retained process while earlier closures keep their bindings', async () => {
   const { runtime, stateOwner, run } = await scopedReplRuntime()
-  expect(await run('const value: number = 1\nconst read = () => value\nvalue')).toMatchObject({ logs: [], value: 1 })
-  expect(await run('const value = 2\nlet counter = 0\nconsole.log("redeclared")\nvalue')).toMatchObject({ logs: ['redeclared'], value: 2 })
+  expect(await run('const value: number = 1\nconst read = () => value\nvalue')).toMatchObject({ output: [], value: 1 })
+  expect(await run('const value = 2\nlet counter = 0\ninspect("redeclared")\nvalue')).toMatchObject({ output: [{ type: 'text', text: 'redeclared\n' }], value: 2 })
   expect(await run('counter = counter + 1;\n[value, read(), counter]')).toMatchObject({ value: [2, 1, 1] })
   expect((await run('return 1')).error?.message).toContain('Return statement is not allowed here')
   await runtime.release(stateOwner)
@@ -108,7 +107,7 @@ it('rejects a hashbang line before running the program', async () => {
 it('does not charge an earlier call\'s asynchronous failure to a later call', async () => {
   const { run } = await scopedReplRuntime()
   // The earlier call's timer fires while the later call is running.
-  expect(await run('setTimeout(() => { throw new Error("stale") }, 30)\nlet kept = 1')).toMatchObject({ logs: [] })
+  expect(await run('setTimeout(() => { throw new Error("stale") }, 30)\nlet kept = 1')).toMatchObject({ output: [] })
   expect(await run('await new Promise(resolve => setTimeout(resolve, 100))\nkept')).toMatchObject({ value: 1 })
   expect((await run('kept')).error).toBeUndefined()
 })
@@ -129,4 +128,14 @@ it('keeps an earlier value when a tool fails inside a later var redeclaration of
   expect((await run('var config = { retries: 1 }')).error).toBeUndefined()
   expect((await run('var config = await tools.loadConfig({})\nconfig.retries')).error?.message).toContain('config service unavailable')
   expect(await run('config.retries')).toMatchObject({ value: 1 })
+})
+
+it('runs environment initialization once and carries its top-level bindings into later calls', async () => {
+  const { runtime, stateOwner, run } = await scopedReplRuntime()
+  runtime.registerEnvironmentInitializer('globalThis.fromInit = 1\nconst initConst = 2\ninspect("initialized")')
+  expect(await run('inspect(fromInit, initConst)\nconst derived = initConst + 1')).toMatchObject({
+    output: [{ type: 'text', text: 'initialized\n' }, { type: 'text', text: '1 2\n' }],
+  })
+  expect(await run('const initConst = 5\ninspect(initConst, derived)')).toMatchObject({ output: [{ type: 'text', text: '5 3\n' }] })
+  await runtime.release(stateOwner)
 })
