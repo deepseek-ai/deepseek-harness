@@ -41,6 +41,12 @@ The public [contracts](../../packages/experimental/im/src/api.ts) define platfor
 
 A `confirmed` result has a durable platform receipt. `failed` means the platform rejected the request before publishing anything. `partial` means only some parts of a multi-part message were published. A transport error, timeout, or cancellation after dispatch, or a stored operation with no recorded outcome, returns `uncertain`; callers must inspect the chat before sending the same content again. Replaying an `operationId` returns the recorded receipt without resending, while reusing an `operationId` with different content throws a `conflict` error. The service never resends an uncertain operation automatically.
 
+## Publication resources
+
+Published content names its media by URL, and prepare resolves every source through `ctx.http`: `data:`/`base64:` decode inline, `satori:` routes to the core's own internal handler, and `file:` or `http(s)` become a read of this host or a request from it. That service applies neither a scheme nor an address policy, so a publication may reference anything this process can reach. `im_send_file` publishes the file at the path the session names as an absolute `file:` URL — `cwd` only anchors a relative path and `~` expands — and inlines the bytes only when the working directory lives in another execution world (an SSH workspace), bounded by `send.maxMediaBytes`. The intake downloads the media of received messages through the same fetcher.
+
+Reads are governed by the deployment rather than by IM: the filesystem sandbox fences the five mutations and permits every read in every mode, and the shell profiles bind the whole filesystem read-only. A hosted session's own tools therefore reach the same files, so neither path adds authority the agent did not already have — what it adds is a way to put those bytes into a chat.
+
 ## Session attribution and durable state
 
 `MessageSourceMap.im` records `kind: 'im'` and `form: 'relay'`, so readers can tell external chat input apart from owner input (`kind: 'user'`). It grants no authority. Each hosted delivery has a stable id from which the session host derives the inserted message id.

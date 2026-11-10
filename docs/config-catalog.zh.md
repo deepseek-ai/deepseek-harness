@@ -1923,7 +1923,7 @@ export interface ImConfig {
   }
   /** Outbound publication limits. */
   send: {
-    /** Maximum bytes of one referenced media file (default 10 MiB). */
+    /** Maximum bytes inlined for a media file of another execution world (default 10 MiB). */
     maxMediaBytes: number
     /** Deadline of one publication operation in milliseconds (default 30 s). */
     operationTimeoutMs: number
