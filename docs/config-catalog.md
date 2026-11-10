@@ -3909,20 +3909,20 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-system-prompt -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting-cli -->
-<a id="deepseek-aidsh-tencent-meeting-cli"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting -->
+<a id="deepseek-aidsh-tencent-meeting"></a>
 
-## `@deepseek-ai/dsh-tencent-meeting-cli`
+## `@deepseek-ai/dsh-tencent-meeting`
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/tencent-meeting-cli/src/index.ts:33`](../packages/connector/tencent-meeting-cli/src/index.ts)
+- `source`: [`packages/connector/tencent-meeting/src/index.ts:33`](../packages/connector/tencent-meeting/src/index.ts)
 
 ```ts config-catalog
 /** Where tmeet and the upstream guide come from, a command's deadline, and a download's time limit. */
 export type Config = CliAccountConfig & UpstreamSkillsConfig
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting-cli -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tencent-meeting -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-terminal-bash -->
 <a id="deepseek-aidsh-terminal-bash"></a>
@@ -5236,7 +5236,6 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
-| `@deepseek-ai/dsh-tencent-meeting` | — | [`packages/connector/tencent-meeting/src/index.ts`](../packages/connector/tencent-meeting/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
 | `@deepseek-ai/dsh-tool-testkit` | — | [`packages/test-support/tool-testkit/src/index.ts`](../packages/test-support/tool-testkit/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |

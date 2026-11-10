@@ -114,9 +114,6 @@ importers:
       '@deepseek-ai/dsh-tencent-meeting':
         specifier: workspace:*
         version: link:packages/connector/tencent-meeting
-      '@deepseek-ai/dsh-tencent-meeting-cli':
-        specifier: workspace:*
-        version: link:packages/connector/tencent-meeting-cli
       '@deepseek-ai/dsh-terminal-panel':
         specifier: workspace:*
         version: link:packages/experimental/terminal-panel
@@ -7608,16 +7605,6 @@ importers:
         version: link:../../core/system-prompt
 
   packages/connector/tencent-meeting:
-    dependencies:
-      '@deepseek-ai/dsh-tencent-meeting-cli':
-        specifier: workspace:*
-        version: link:../tencent-meeting-cli
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
-  packages/connector/tencent-meeting-cli:
     dependencies:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*

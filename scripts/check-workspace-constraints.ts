@@ -215,7 +215,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The physical-key protocol is a public entry usable without the browser service.
   '@deepseek-ai/dsh-client-shortcuts': ['lib/protocol.js'],
   // The Tencent Meeting plugin ships its entry skill; the upstream guide it indexes is downloaded at load.
-  '@deepseek-ai/dsh-tencent-meeting-cli': ['skills'],
+  '@deepseek-ai/dsh-tencent-meeting': ['skills'],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-ptc-runtime-python': ['py/**/*.py'],
   '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice': ['runtime/assets.json'],

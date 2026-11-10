@@ -37,7 +37,6 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },
   'packages/fs/tool-str-replace-editor': { category: 'optional', reason: 'Explicit alternative to the default filesystem editing tools.' },
   'packages/connector/tencent-meeting': { category: 'optional', reason: 'Separately installed app plugin that requires tmeet and a user-authorized Tencent Meeting account.' },
-  'packages/connector/tencent-meeting-cli': { category: 'optional', reason: 'Tencent Meeting CLI, skill, and account operations mounted by the separately installed Tencent Meeting bundle.' },
   'packages/fs/fs-observation-policy': { category: 'optional', reason: 'Read-before-mutation guard that a deployment enables on the disabled dsh-base row.' },
   'packages/sdk/client': { category: 'sdk', reason: 'Published TypeScript embedding client runs in the consumer process.' },
   'packages/typert/generator': { category: 'build', reason: 'Build-time generation of type metadata.' },

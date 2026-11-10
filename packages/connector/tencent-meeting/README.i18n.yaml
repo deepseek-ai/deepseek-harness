@@ -9,8 +9,8 @@
   en: 8d9bc7c10be0189e
   zh: df97cf0f74495ad0
 /deepseek-ai-dsh-tencent-meeting/summary:
-  en: 913a1deb87bce135
-  zh: 3e3dabf6a0517a86
+  en: 80e6bcc0f9ec8cdb
+  zh: 961d98f659e9f054
 /deepseek-ai-dsh-tencent-meeting/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,26 +18,71 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /deepseek-ai-dsh-tencent-meeting/use-this-package/install-into-a-profile:
-  en: 4c67a9bd6e1c16ad
-  zh: 04d76ccb01dcb786
+  en: a33500f6c577f008
+  zh: cedbc1c5cdb8bfc6
 /deepseek-ai-dsh-tencent-meeting/use-this-package/what-you-get:
-  en: 46ae07d00ea12482
-  zh: b68d97f2252c68e4
+  en: 70a1d52b6c0f80af
+  zh: a3894b2233b5985d
+/deepseek-ai-dsh-tencent-meeting/use-this-package/account-operations:
+  en: ad18981ffd47798a
+  zh: 1f30d2349a2dd447
+/deepseek-ai-dsh-tencent-meeting/use-this-package/configure:
+  en: f21891ddc21f5ef1
+  zh: 31ea4ad69f35ae4c
 /deepseek-ai-dsh-tencent-meeting/understand-the-implementation:
-  en: 5b0ed84fa9a570d8
-  zh: 5723135804b8de78
+  en: d92352f149d7c82f
+  zh: b98cb9d9fd47292d
 /deepseek-ai-dsh-tencent-meeting/further-exploration:
-  en: 3ca1e7e7ea0e1b8b
-  zh: 3047e5ed07531f6b
+  en: 368a05dce9ee8bad
+  zh: 3120133183213943
 /deepseek-ai-dsh-tencent-meeting/model-experience:
-  en: ea1adf973f42a87b
-  zh: 3fdcd91af3bc8180
-/deepseek-ai-dsh-tencent-meeting/model-experience/kv-cache-effect:
-  en: 8158dbe07e60865e
-  zh: 9c39876b9b9f8480
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: e99e8d5639c268d9
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 0d7bcb60f6e1a5f8
+  zh: b3c39188054f6996
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/token-effect:
+  en: 3fac42fb005f9e2d
+  zh: 540493014daf3e28
+/deepseek-ai-dsh-tencent-meeting/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: ce9139edf3309f2b
+  zh: 23a4744d4d530172
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 698bcd0773a8f094
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/what-the-model-sees:
+  en: d1671b06d763895e
+  zh: c267463e85e4cfad
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/token-effect:
+  en: 374e05c93f33526c
+  zh: 3e36d6182358bb55
+/deepseek-ai-dsh-tencent-meeting/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: d32b51405eabddc4
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees:
+  en: 058b557e0ecb4822
+  zh: b10dcae5d40aaf41
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/token-effect:
+  en: 3fb1f01010d97c7d
+  zh: c0aa6fb57ceadf95
+/deepseek-ai-dsh-tencent-meeting/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
 /deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work:
-  en: e89652ff90f0cd19
-  zh: 6f6b3464ad5e71ff
+  en: ae40715bad4af72b
+  zh: fc099653415779c3
 /deepseek-ai-dsh-tencent-meeting/known-limitations-and-deferred-work/dev-note:
-  en: e67f633dc6fe7773
-  zh: 8ec3e73528ddb1a6
+  en: d67cf464f2df6693
+  zh: ff08f0d56a5ea79d

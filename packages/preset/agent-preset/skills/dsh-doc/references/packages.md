@@ -145,7 +145,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-tencent-meeting-cli` | yes | Tencent Meeting through the official tmeet: the CLI by its absolute path, its skill, and account operations over Remote |
+| `@deepseek-ai/dsh-tencent-meeting` | yes | Tencent Meeting plugin: the official tmeet with its skill, and account connection from the Plugins page |
 
 ## context
 

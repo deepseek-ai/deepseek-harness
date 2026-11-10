@@ -581,7 +581,6 @@
       "@deepseek-ai/dsh-subprocess-ssh": ["./packages/ssh/subprocess-ssh/src"],
       "@deepseek-ai/dsh-system-prompt": ["./packages/core/system-prompt/src"],
       "@deepseek-ai/dsh-tencent-meeting": ["./packages/connector/tencent-meeting/src"],
-      "@deepseek-ai/dsh-tencent-meeting-cli": ["./packages/connector/tencent-meeting-cli/src"],
       "@deepseek-ai/dsh-terminal": ["./packages/terminal/terminal/src"],
       "@deepseek-ai/dsh-terminal-bash": ["./packages/terminal/terminal-bash/src"],
       "@deepseek-ai/dsh-terminal-panel": ["./packages/experimental/terminal-panel/src"],
