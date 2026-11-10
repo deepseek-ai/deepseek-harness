@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { h, toText } from '@deepseek-ai/cordis-plugin-im-core'
-import type { Bot, ChatRef, Element, InboundMessage, SendResult, Session } from '@deepseek-ai/cordis-plugin-im-core'
+import type { Bot, ChatRef, Element, InboundMessage, SendResult, SentPart, Session } from '@deepseek-ai/cordis-plugin-im-core'
 import {
   ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImChat, type ImCommand, type ImConfig, type ImMessage,
   type ImMessageEvent, type ImOutcome, type ImSourceConfig,
@@ -77,6 +77,8 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
 export class ImIntake {
   /** The store chain: recording and storing one frame never interleave with another's; platform reads stay outside. */
   private chain: Promise<void> = Promise.resolve()
+  /** Own publications in flight, by message key, so a receipt can wait for the record one of them stores. */
+  private readonly announcing = new Map<string, Promise<ImMessage | undefined>>()
   /** The pass currently dispatching, if any. */
   private active: Promise<void> | undefined
   /** A pass was requested while one was running. */
@@ -129,11 +131,42 @@ export class ImIntake {
    * @param result - the publication the core reported, whose first part identifies the stored message.
    * @returns the stored own message, or undefined when the chat is unadmitted or the result carries no part.
    */
-  async outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined> {
+  outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined> {
     // One logical message per send: the parts of a multi-part message share the content tree, and `parts[0]` is the
     // id later messages quote.
     const part = result.handle.parts[0]
-    if (part === undefined) return undefined
+    if (part === undefined) return Promise.resolve(undefined)
+    const key = ImMessageKey(bot.id, part.id)
+    // Registered before the first await, so a caller that asks right after the platform answered still finds it.
+    const running = this.announce(bot, result, part)
+    this.announcing.set(key, running)
+    const settled = (): void => {
+      if (this.announcing.get(key) === running) this.announcing.delete(key)
+    }
+    void running.then(settled, settled)
+    return running
+  }
+
+  /**
+   * The own message of one publication, once the announcement that stores it has finished.
+   * @param key - message key of the platform message the publication produced.
+   * @returns the stored message, or undefined when no chat admits it or nothing announces that key.
+   */
+  async announced(key: ImMessageKey): Promise<ImMessage | undefined> {
+    const running = this.announcing.get(key)
+    return running === undefined ? undefined : await running
+  }
+
+  /**
+   * Store one own publication (`via: 'self'`) in the chat it went to. Own messages are stored even for a source with
+   * `store: 'addressed'` (that rule filters what the chat hears), so a session reading its own history sees what it
+   * already said.
+   * @param bot - the bot that published.
+   * @param result - the publication the core reported.
+   * @param part - the platform message that identifies it.
+   * @returns the stored own message, or undefined when the chat is unadmitted.
+   */
+  private async announce(bot: Bot, result: SendResult, part: SentPart): Promise<ImMessage | undefined> {
     const target = result.handle.target
     const source = this.config.sources.find(candidate => admitsChat(candidate, bot.id, target.chat))
     if (source === undefined) return undefined

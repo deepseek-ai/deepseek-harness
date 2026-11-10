@@ -92,7 +92,11 @@ export class ImService extends Service implements ImApi {
     this.formatter = new ImFormatter(ctx, config, this.store, this.media)
     this.agentHost = new ImAgentHost(ctx)
     this.sessions = new ImSessionHost(ctx, config, { agents: this.agentHost, formatter: this.formatter })
-    this.sender = new ImSender(ctx, config, { store: this.store, sessions: this.sessions })
+    // `announced` reads `this.intake`, which this constructor creates right after: the closure only runs once a
+    // publication completes, long after both exist.
+    this.sender = new ImSender(ctx, config, {
+      store: this.store, sessions: this.sessions, announced: key => this.intake.announced(key),
+    })
     const dispatcher = config.defaultDispatch === undefined ? undefined : new ImDispatcher(config.defaultDispatch, this.sessions)
     this.dispatcher = dispatcher
     this.intake = new ImIntake(ctx, config, this.store, {

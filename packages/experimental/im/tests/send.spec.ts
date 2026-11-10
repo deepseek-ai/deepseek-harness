@@ -14,7 +14,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import {
-  ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImBinding, type ImConfig, type ImSessionRecord,
+  ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImBinding, type ImConfig, type ImMessage, type ImSessionRecord,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
@@ -100,7 +100,14 @@ interface Harness {
 }
 
 /** A FakeAdapter plus a stub bot, a real store over an in-memory domain and a sender over both. */
-async function boot(options: { config?: Partial<ImConfig>; pool?: MemoryMediaPool } = {}): Promise<Harness> {
+async function boot(
+  options: {
+    config?: Partial<ImConfig>
+    pool?: MemoryMediaPool
+    /** The announcement the receipt waits for, standing in for the `send` listener that stores the own message. */
+    announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>
+  } = {},
+): Promise<Harness> {
   const pool = options.pool ?? new MemoryMediaPool()
   const { ctx, bot } = await mountFakeAdapter({ modes: { text: createTextMode() }, selfId: 'bot-user' })
   contexts.push(ctx)
@@ -121,7 +128,9 @@ async function boot(options: { config?: Partial<ImConfig>; pool?: MemoryMediaPoo
     key: STUB_CHAT, bot: 'stub:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team'),
   })
   const sessions = new FakeSessions()
-  const sender = new ImSender(ctx, config, { store, sessions })
+  const sender = new ImSender(ctx, config, {
+    store, sessions, ...options.announced === undefined ? {} : { announced: options.announced },
+  })
   await sender.start()
   return { ctx, bot, stub, store, sender, sessions, pool }
 }
@@ -300,6 +309,22 @@ describe('ImSender.send', () => {
     await store.put(ownDraft(ImMessageKey('stub:bot', 'known-1'), STUB_CHAT), 'none')
     const result = await sender.send(STUB_CHAT, h.text('hello'))
     expect(result.message?.key).toBe(ImMessageKey('stub:bot', 'known-1'))
+  })
+
+  it('waits for the announcement that stores the own message', async () => {
+    let announced: Promise<ImMessage | undefined> = Promise.resolve(undefined)
+    const { sender, stub, store } = await boot({ announced: () => announced })
+    stub.answer = async ({ target, content }) => stubResult(target, content, ['late-1'])
+    // The `send` listener writes the record after the platform has answered, which is exactly what the receipt races.
+    announced = (async () => {
+      await new Promise((resolve) => { setTimeout(resolve, 5) })
+      return await store.put(ownDraft(ImMessageKey('stub:bot', 'late-1'), STUB_CHAT), 'none')
+    })()
+
+    const result = await sender.send(STUB_CHAT, h.text('hello'))
+    expect(result.status).toBe('confirmed')
+    expect(result.message?.key).toBe(ImMessageKey('stub:bot', 'late-1'))
+    expect(result.message?.seq).toBe(1)
   })
 
   it('reports a rejection that is not an Error as its text', async () => {

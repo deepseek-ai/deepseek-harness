@@ -35,8 +35,8 @@ import {
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable, type Domain } from '@deepseek-ai/dsh-storage-domain'
 import {
-  ImChatKey, ImMessageKey, splitKey, type ImConfig, type ImSendOptions, type ImSendResult, type ImSessionRecord,
-  type ImSessions,
+  ImChatKey, ImMessageKey, splitKey, type ImConfig, type ImMessage, type ImSendOptions, type ImSendResult,
+  type ImSessionRecord, type ImSessions,
 } from './api.ts'
 import { ImError } from './error.ts'
 import { storedChatKey, storedMessageKey, storedSessionId } from './state.ts'
@@ -47,6 +47,11 @@ export interface ImSenderDeps {
   store: ImStore
   /** The two lookups of the grants check: the session record and its parent chain. */
   sessions: Pick<ImSessions, 'of' | 'get'>
+  /**
+   * The own message one publication is being stored as. The core announces a publication on its `send` event and does
+   * not await the listener that stores it, so without this the receipt raced the store and lost `message` and `seq`.
+   */
+  announced?: (key: ImMessageKey) => Promise<ImMessage | undefined>
 }
 
 /** One durable receipt, keyed by the operation id of one publication. */
@@ -196,7 +201,9 @@ export class ImSender {
       }
       await this.put(id, pending)
       void stream.done.then(
-        result => this.settle(id, pending, this.confirmed(result)),
+        async (result) => {
+          await this.settle(id, pending, await this.confirmed(result))
+        },
         (error: unknown) => this.settle(id, pending, this.failure(error)),
       ).catch((error: unknown) => {
         this.ctx.logger.error('IM stream receipt %s could not be saved; inspect the chat: %s', id, error)
@@ -320,7 +327,7 @@ export class ImSender {
         ...options, ...key === undefined ? {} : { idempotencyKey: key }, signal: deadline.signal,
       })
       this.attribute(result.handle, options.session)
-      return this.confirmed(result)
+      return await this.confirmed(result)
     } catch (error) {
       const result = this.failure(error)
       if (result.handle !== undefined) this.attribute(result.handle, options.session)
@@ -331,9 +338,13 @@ export class ImSender {
   }
 
   /** The core's send result as an `ImSendResult` (a stream's final state settles through it too). */
-  private confirmed(result: SendResult): ImSendResult {
+  private async confirmed(result: SendResult): Promise<ImSendResult> {
     const part = result.handle.parts[0]
-    const message = part === undefined ? undefined : this.deps.store.get(ImMessageKey(result.handle.bot, part.id))
+    const key = part === undefined ? undefined : ImMessageKey(result.handle.bot, part.id)
+    let message = key === undefined ? undefined : this.deps.store.get(key)
+    // The own message is stored by the `send` listener, which the core does not await: without waiting for that write
+    // the receipt raced it and carried no `message` and no `seq`.
+    if (message === undefined && key !== undefined) message = await this.deps.announced?.(key)
     return {
       status: 'confirmed', handle: result.handle, report: result.report,
       ...message === undefined ? {} : { message },
