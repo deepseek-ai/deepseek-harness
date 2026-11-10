@@ -2,22 +2,25 @@
 
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeProvider,
-  ForgeReadiness, ForgeRepository, ForgeReviewData, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
-  MergeRequest,
+  BranchUpdateRequest, ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure,
+  ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewersRequest,
+  ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge'
 import { listCommits } from './commits.ts'
 import type { GraphqlReader } from './commits.ts'
+import { sendMutation, type GraphqlWriter } from './mutation.ts'
 import { GhOutputLimitError, GhTimeoutError, GhUnavailableError } from './gh.ts'
 import type { GhOutput, GhRunner } from './gh.ts'
 import { readComparison } from './compare.ts'
 import {
-  CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
+  actionsRunOf, CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
   mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
 } from './graphql.ts'
 import type { PageResult, SnapshotPages } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
+import { readViewed, writeViewed } from './viewed.ts'
+import { gitHubReviewerCandidates, requestGitHubReviews, updateGitHubBranch } from './overview.ts'
 import { writeGitHubReview } from './review-writes.ts'
 import { readReviewThreads } from './threads.ts'
 
@@ -43,6 +46,8 @@ export interface GitHubLimits {
   readonly maxReviewThreads: number
   /** Most commits one commit listing returns. */
   readonly maxCommits: number
+  /** Most files whose viewed marks one read lists. */
+  readonly maxViewedFiles: number
 }
 
 /** Reads GitHub and GitHub Enterprise pull requests through a `gh` runner. */
@@ -81,7 +86,8 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check and review bytes, counted and read review threads, and listed commits.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, listed commits, and listed
+   * viewed files.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
@@ -251,6 +257,84 @@ export class GitHubProvider implements ForgeProvider {
     return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, base, head, signal)
   }
 
+  /** Read the viewer's viewed marks through GraphQL, at most `maxViewedFiles`, every page at `headSha`. */
+  async viewedFiles(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return failure
+    return await readViewed(this.graphql, ref, headSha, this.limits.maxViewedFiles, signal)
+  }
+
+  /** Set or clear the viewer's mark with `markFileAsViewed` or `unmarkFileAsViewed` after confirming the head. */
+  async setViewed(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    return await writeViewed(this.graphql, this.mutate, ref, request, signal)
+  }
+
+  /**
+   * Rerun every finished workflow run with a failed GitHub Actions job on the head commit through the REST API; GitHub
+   * reruns its failed jobs with the jobs that depend on them. A run with a check still pending waits, as GitHub offers
+   * no rerun of a run in progress. Every eligible run is tried, and a refusal of one is reported with the others' outcome.
+   * Other checks name no rerun.
+   */
+  async rerunChecks(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const { host, owner, name } = checkedRepository(ref)
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    if (!isCommit(request.headSha)) throw new Error(`forge-github: invalid head commit ${JSON.stringify(request.headSha)}`)
+    const snapshot = await this.fetchChecks(ref, signal)
+    if ('code' in snapshot) return { code: snapshot.code === 'unauthenticated' ? 'unauthenticated' : 'failed', message: snapshot.message }
+    if (snapshot.headSha.toLowerCase() !== request.headSha.toLowerCase()) {
+      return { code: 'stale', message: `the pull request head moved from ${request.headSha} to ${snapshot.headSha}` }
+    }
+    const endpoint = `repos/${owner}/${name}/actions`
+    const failed = new Set<number>()
+    const running = new Set<number>()
+    for (const check of snapshot.checks) {
+      const run = check.rerun === null ? undefined : actionsRunOf(check.rerun)
+      if (run === undefined) continue
+      if (check.state === 'failure') failed.add(run)
+      else if (check.state === 'pending') running.add(run)
+    }
+    const runs = [...failed].filter(run => !running.has(run))
+    if (runs.length === 0) {
+      return { code: 'failed', message: failed.size === 0 ? 'No failed GitHub Actions job of the head commit can be rerun'
+        : 'Every workflow run with a failed job is still running; rerun it once it finishes' }
+    }
+    const refusals: string[] = []
+    for (const run of runs) {
+      const refused = await this.act(['api', '--hostname', host, '--method', 'POST', `${endpoint}/runs/${run}/rerun-failed-jobs`], signal)
+      if (refused === undefined) continue
+      if (refused.code === 'unauthenticated') return refused
+      // The head was checked before the first request, so a conflict here names no new commit.
+      refusals.push(`run ${run}: ${refused.message}`)
+    }
+    return refusals.length === 0 ? undefined
+      : { code: 'failed', message: `GitHub refused to rerun ${refusals.length} of ${runs.length} workflow runs: ${refusals.join('; ')}` }
+  }
+
+  async requestReviews(
+    ref: ChangeRequestRef, request: ForgeReviewersRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    return await requestGitHubReviews(this.graphql, this.mutate, ref, request, signal)
+  }
+
+  async reviewerCandidates(
+    ref: ChangeRequestRef, query: string, signal: AbortSignal,
+  ): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return failure
+    return await gitHubReviewerCandidates(this.graphql, ref, query, signal)
+  }
+
+  async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = this.hostFailure(checkedRepository(ref).host)
+    if (failure !== undefined) return { code: 'failed', message: failure.message }
+    return await updateGitHubBranch(this.graphql, this.mutate, ref, request, signal)
+  }
+
   fileUrl(ref: ChangeRequestRef, commit: string, path: string): string {
     const { host, owner, name } = ref.repository
     return `https://${host}/${owner}/${name}/blob/${commit}/${encodedPath(path)}`
@@ -299,6 +383,15 @@ export class GitHubProvider implements ForgeProvider {
     const errors = typeof body === 'object' && body !== null && 'errors' in body && Array.isArray(body.errors) ? body.errors : []
     if (errors.length > 0) return { ok: false, failure: responseFailure({ exitCode: 0, stdout: output, stderr: '' }, errors[0]) }
     return { ok: true, body }
+  }
+
+  /**
+   * Run one GraphQL mutation through {@link sendMutation}, which never retries it: a refusal or a `gh` that cannot
+   * start is `failed`, and an answer that does not confirm the outcome is `unknown`.
+   */
+  private readonly mutate: GraphqlWriter = async (host, mutation, signal) => {
+    const sent = await sendMutation(this.gh, host, mutation, signal)
+    return sent.ok ? undefined : { code: sent.code, message: sent.message }
   }
 
   /** Run one changing `gh` command; a refusal or a `gh` that cannot start becomes a failure. */

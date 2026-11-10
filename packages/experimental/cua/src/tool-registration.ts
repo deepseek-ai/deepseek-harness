@@ -36,6 +36,8 @@ export function installCuaTools(
     const runtime = ctx.get('ptcRuntime')
     return !runtime?.retainsState ? guidance : `${guidance}
 
+In persistent PTC, use the host-provided bridge initialization once and retain the returned objects; cua comes from that bridge and is not a preinstalled global.
+
 Persistent PTC initialization:
 
 \`\`\`ts
