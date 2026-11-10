@@ -9,7 +9,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-TypeScript `run_code` programs display selected values through `inspect(...values)`. Function return values and final expressions previously appeared in the result; they are now omitted. Each inspected argument is rendered independently: strings appear directly, and other lossless JSON values use two-space JSON formatting. Undefined arguments are omitted. Values that cannot be represented as lossless JSON, such as binary views and cyclic objects, throw an exception.
+TypeScript `run_code` programs display selected values through `inspect(...values)`. Function return values and final expressions previously appeared in the result; they are now omitted. Each inspected argument is rendered independently: strings appear directly, and other values use Node's object formatting without depth, array-length or string-length preview limits. Undefined properties, Error objects and circular references remain visible.
 
 CUA observations previously produced output automatically. `getCapabilities()`, `listApps()`, `findApps(query)`, `getState()`, `app.getWindows()` and app or window `getAccessibilityTree()` now return their results to the program. Use `inspect` to display the values you need.
 
@@ -43,5 +43,4 @@ Other image-producing tools retain their declared program values and automatical
 3. Direct runtime consumers can set `discardCompletion: true` to select the same explicit-output behavior.
 4. Third-party `PtcRuntime` providers replace returned `logs` arrays with `output: PtcOutput[]`; direct runtime consumers read `result.output`. Text entries are `{ type: 'text', text }`, image entries are `{ type: 'image', attachment }`, and array order is display order.
 5. Upgrade preinstalled Node bootstraps selected by `launch.bootstrapPath` to protocol version 3 alongside the host. Readiness rejects incompatible revisions before program dispatch.
-6. Omit undefined properties from inspected containers. Convert non-JSON values to JSON values before inspection; for example, use `inspect(error.message)` to display an Error.
-7. Run an updated program and verify that inspected values appear once and its final expression adds no output.
+6. Run an updated program and verify that inspected values appear once and its final expression adds no output.

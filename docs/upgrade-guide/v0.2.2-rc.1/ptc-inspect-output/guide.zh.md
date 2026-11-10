@@ -9,7 +9,7 @@ description: "TypeScript PTC 程序通过 inspect 展示选定的值，并返回
 
 ## 变更
 
-TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此前函数返回值和末尾表达式的值会进入结果，现在会被省略。各个 inspect 参数独立渲染：字符串直接展示，其他无损 JSON 值按两空格缩进的 JSON 格式展示。undefined 参数被省略。二进制视图、循环对象等无法表示为无损 JSON 的值会抛出异常。
+TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此前函数返回值和末尾表达式的值会进入结果，现在会被省略。各个 inspect 参数独立渲染：字符串直接展示，其他值使用 Node 的对象格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。
 
 此前，CUA 观察方法默认会输出结果。现在，`getCapabilities()`、`listApps()`、`findApps(query)`、`getState()`、`app.getWindows()` 以及应用或窗口的 `getAccessibilityTree()` 都将结果返回给程序。需要展示哪些值，就把它们传给 `inspect`。
 
@@ -43,5 +43,4 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
 3. 直接调用运行时的消费方可设置 `discardCompletion: true`，选择相同的显式输出行为。
 4. 第三方 `PtcRuntime` 提供方将返回的 `logs` 数组替换为 `output: PtcOutput[]`；直接消费运行时结果的调用方改为读取 `result.output`。文本条目为 `{ type: 'text', text }`，图片条目为 `{ type: 'image', attachment }`，数组顺序就是展示顺序。
 5. 随宿主一起将 `launch.bootstrapPath` 选用的预装 Node bootstrap 升级至协议版本 3。启动就绪检查会在派发程序前拒绝不兼容版本。
-6. 从待 inspect 的容器中省略 undefined 属性。将非 JSON 值转换为 JSON 值后再 inspect；例如，使用 `inspect(error.message)` 展示 Error。
-7. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。
+6. 运行更新后的程序，确认 inspect 的值只出现一次，且末尾表达式不额外输出。

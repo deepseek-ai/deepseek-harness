@@ -7,10 +7,4 @@
 - heading "Output Copy output" [level=3]:
   - button "Output"
   - button "Copy output"
-- text: "{"
-- tree "Result JSON":
-  - treeitem "bash:\"CODE_ROUND_OK\","
-  - 'treeitem "Expand readError:{toolName: \"read\", message: \"cannot read \\\"{{cwd}}/workspace/missing.txt\\\": not found\"}"':
-    - button "Expand"
-    - text: "readError:{toolName: \"read\", message: \"cannot read \\\"{{cwd}}/workspace/missing.txt\\\": not found\"}"
-- text: "}"
+- text: "{ bash: 'CODE_ROUND_OK', readError: { toolName: 'read', message: 'cannot read \"{{cwd}}/workspace/missing.txt\": not found' } }"

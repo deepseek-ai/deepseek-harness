@@ -264,7 +264,7 @@ function renderSdkProgramInstructions(): string {
 - Call tools as \`await tools.name(args)\` — quoted access for exotic names: \`tools["my-tool"](args)\`. Every call resolves to its declared value, which may be an Image. Tool arguments must be lossless JSON.
 - A FAILED tool call rejects with \`ToolCallError\`, whose \`toolName\` identifies the failed tool and whose \`message\` is human-readable — \`try/catch\` it to handle and continue.
 - Independent read-only calls MAY overlap under \`Promise.all\` (safe calls run concurrently; mutating calls run alone, in submission order). Sequence dependent work with \`await\`.
-- Show selected results with \`inspect(...values)\`. Each call accepts JSON values and Images, including Images nested in arrays and objects. Images expose a readable file path and its pixel dimensions. Extract just what you need.
+- Show selected values and images with \`inspect(...values)\`; every other intermediate result stays out of the conversation, so extract just what you need.
 
 Program-only SDK bindings:`
 }
@@ -312,6 +312,7 @@ export function renderToolsSdk(schemas: readonly ToolSdkSchema[], programFormat:
   for (const schema of sorted) {
     argsMembers.push(...docLines(schema.description, 1))
     argsMembers.push(`${pad(1)}${renderKey(schema.name)}: ${jsonSchemaToTs(schema.parameters, 1)};`)
+    // FIXME: Derive program return types from tool-declared adaptations, together with the binding adapter in ptc.ts.
     const output = schema.name === 'read_image' ? 'Image'
       : `${schema.name === 'cua' ? 'Image | ' : ''}${jsonSchemaToTs(schema.output, 1)}`
     outputMembers.push(`${pad(1)}${renderKey(schema.name)}: ${output};`)
