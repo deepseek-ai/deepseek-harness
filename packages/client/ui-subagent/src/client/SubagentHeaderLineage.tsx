@@ -150,6 +150,12 @@ function Switcher({
         onKeyDown={(event) => {
           if (event.key !== 'ArrowDown') return
           event.preventDefault()
+          // The menu may have opened before its rows loaded, leaving focus here; the key then moves it into the menu.
+          const menu = menuRef.current
+          if (shown && menu !== null) {
+            (treeItems(menu)[0] ?? menu).focus()
+            return
+          }
           setOpen('keyboard')
           prepareLevel(rootSessionId)
         }}

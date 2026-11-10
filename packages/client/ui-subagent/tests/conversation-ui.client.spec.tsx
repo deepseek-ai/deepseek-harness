@@ -1443,6 +1443,27 @@ describe('breadcrumb switcher', () => {
     expect(document.activeElement).toBe(switcher)
   })
 
+  it('moves focus into an open menu with ArrowDown once its rows have loaded', () => {
+    const loading = { ...childInput(), ...props(catalog({ entries: [], state: 'loading' }), {}, {
+      [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' as const },
+    }), sessionId: CHILD, lineageSessionId: CHILD }
+    const view = render(<HeaderCatalog {...loading} />)
+    // Until the catalog loads, the switcher names the Session by its own title.
+    const switcher = screen.getByRole('button', { name: /^切换子智能体：/ })
+    switcher.focus()
+    fireEvent.keyDown(switcher, { key: 'ArrowDown' })
+    const menu = screen.getByRole('dialog')
+    expect(within(menu).queryAllByRole('treeitem')).toEqual([])
+    expect(document.activeElement).toBe(switcher)
+    // Before any row exists, the key moves focus to the menu, whose own keys then reach the rows.
+    fireEvent.keyDown(switcher, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(menu)
+    switcher.focus()
+    view.rerender(<HeaderCatalog {...childInput()} />)
+    fireEvent.keyDown(switcher, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(within(screen.getByRole('dialog')).getAllByRole('treeitem')[0])
+  })
+
   it('moves focus from a pinned menu into the tree with the arrow, Home, and End keys', async () => {
     render(<HeaderCatalog {...childInput()} />)
     fireEvent.click(screen.getByRole('button', { name: '切换子智能体：worker' }))
