@@ -79,7 +79,7 @@ scoped REPL 求值器分成内核和求值器两个文件：
 
 #### 报错
 
-- 运行时报错的行号、列号是模型代码里的原生位置，跨次调用定义的函数显示它自己那次的文件名，例如 `ptc-program-1.js:2:9`。最后一条表达式所在的那一行，插入点之后的列号右移 17，这次不处理。
+- 运行时报错的行号、列号是模型代码里的原生位置，跨次调用定义的函数显示它自己那次的文件名，例如 `<目录>/.ptc-repl-1.js:2:9`。最后一条表达式所在的那一行，插入点之后的列号右移 17，这次不处理。
 - acorn 发现的语法错误直接报 acorn 的消息和位置，按 V8 的样式排版：文件名加行号、源码行、箭头。有两处消息改用 V8 的说法：顶层 `return` 报 `Illegal return statement`；报错位置在代码末尾时报 `Unexpected end of input`。
 - acorn 放行、V8 编译时才发现的错误，报 V8 原生的消息；strict 开关打开时，严格模式的语法违规（例如 `with`）也在这一步报出。
 - 以上是求值器自己的行为。经 `run_code` 执行时，宿主的 TypeScript 擦除先解析整段代码，多数语法错误由它报告，和现有 REPL 相同；只有擦除接受、扫描拒绝的代码（例如保留名、静态 `import`、顶层 `using`）才会看到上面的版式。
@@ -181,7 +181,7 @@ const runtimeContext = vm.createContext(Object.create(null), { codeGeneration: {
 - `tools`、绑定错误类、`console`、`process` 仍由子进程在每次执行前写到 `evaluator.globals`，也就是 `runtimeContext`。
 - 沙箱对象没有原型，和 vm-script、AsyncFunction 两个求值器一样，全局查找因此不会经原型链走到主环境的 `Function`，例如 `constructor.constructor("…")()`。但复制进来的主环境值（`setTimeout`、`console`、`process`、工具命名空间等）的 `constructor` 仍是主环境的 `Function`，主环境没有 `codeGeneration` 限制，所以这个开关只限制执行环境自己的 `eval`、`Function` 和 WebAssembly，不构成隔离；隔离靠进程级沙箱。
 - 只提供动态 `import()`，没有开关：每个 Script 都配 `importModuleDynamically`。不提供 `require`、`module` 和内置模块全局；宿主以这些名字注入的绑定原样可用。静态 `import` 不支持。
-- 生成的文件名 `<目录>/ptc-program-<序号>.js` 里的目录，是求值器创建时的 working directory，也就是这个环境第一次调用时的目录，之后不再改变。它是 `import()` 的引用方，所以相对路径的 import 固定按这个目录解析。以后需要跟随目录变化时，另加显式操作（例如 `js_switch_cwd`）。
+- 生成的文件名是 `<目录>/.ptc-repl-<序号>.js`，这个路径上没有真实文件，文件名用点开头的隐藏名。目录是求值器创建时的 working directory，也就是这个环境第一次调用时的目录，之后不再改变；默认加载器把文件名当作 `import()` 的引用方，所以相对路径的 import 固定按这个目录解析，目录部分不能省。以后需要跟随目录变化时，另加显式操作（例如 `js_switch_cwd`）。
 - 绑定和 import 返回的值属于主环境，`instanceof Array` 这类跨环境判断可能为 false，和 REPL、`vm-script` 相同。
 
 三个开关是求值器的创建参数，不是 Config 字段：
@@ -257,7 +257,7 @@ this.compiled = { bindings, getters, replaced }
 return program
 
 // Evaluator: evaluate
-const filename = resolve(baseDirectory, `ptc-program-${++submissions}.js`) // baseDirectory: process.cwd() at creation
+const filename = resolve(baseDirectory, `.ptc-repl-${++submissions}.js`) // baseDirectory: process.cwd() at creation
 const program = scopes.compile(code, { filename, context, finalExpression, ...importOption })
 const start = Reflect.apply.bind(undefined, program, undefined, []) as ScopedReplProgram
 void programDomain.run(() => Promise.resolve().then(start)).then(
@@ -326,7 +326,7 @@ function buildProgramSource(
 **语法错误**：acorn 报错时直接抛 `SyntaxError`，不再交给 V8 编译。`stack` 按 V8 的样式排版：
 
 ```text
-/work/ptc-program-3.js:1
+/work/.ptc-repl-3.js:1
 const x = ;
           ^
 
@@ -357,7 +357,7 @@ SyntaxError: Unexpected token
 
 求值器每次 `evaluate(code, finish)`：
 
-1. 提交序号加 1（包括有语法错误的提交），文件名是 `<创建时的目录>/ptc-program-<序号>.js`。
+1. 提交序号加 1（包括有语法错误的提交），文件名是 `<创建时的目录>/.ptc-repl-<序号>.js`。
 2. 调用 `scopes.compile`；抛错就用这个错误结束本次执行。
 3. 在 domain 里由微任务启动程序；Promise 完成后调用 `finish`，结果取 `completion?.value`，不再等待。
 
@@ -471,6 +471,8 @@ tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使
 **在整个进程上监听未捕获的错误。** 会把子进程自身代码的错误一起吞掉；REPL 用 domain，只接程序启动的异步工作。
 
 **不收集块里的 `var`。** 块里的 `var` 会和拷贝语句撞名，整段程序报 `already declared`，这个名字也带不到之后的调用；收集它只需约 15 行语句遍历，不分析引用，所以采用收集。
+
+**堆栈里只显示 `.ptc-repl-<序号>.js`，不带目录。** 文件名去掉目录后，默认加载器按导入那一刻的 cwd 解析相对 `import()`，和有 import 处理器时不一致；用 `//# sourceURL` 只显示短名时，V8 不再应用 `lineOffset`，每个行号多 1；把 import 交给回调函数需要 `--experimental-vm-modules`，默认启动没有这个参数。所以文件名保留第一次调用的目录。
 
 **提供 `require`、`module` 和内置模块全局（node:repl 做法）。** node:repl 的 `require` 解析规则不一致，跟随目录又要定义何时换基准；只保留 `import()`。
 

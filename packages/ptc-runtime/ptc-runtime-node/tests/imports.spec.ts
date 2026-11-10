@@ -651,8 +651,8 @@ it('serves scoped REPL imports through the runner handler with program filenames
     expect(await value('[(await load()).answer, (await import("runner:again")).answer]')).toEqual([2, 3])
   } finally { process.chdir(cwd) }
   expect(requests).toEqual([
-    { specifier: 'runner:answer', referrer: join(first, 'ptc-program-1.js'), attributes: {} },
-    { specifier: 'runner:answer', referrer: join(first, 'ptc-program-1.js'), attributes: {} },
-    { specifier: 'runner:again', referrer: join(first, 'ptc-program-2.js'), attributes: {} },
+    { specifier: 'runner:answer', referrer: join(first, '.ptc-repl-1.js'), attributes: {} },
+    { specifier: 'runner:answer', referrer: join(first, '.ptc-repl-1.js'), attributes: {} },
+    { specifier: 'runner:again', referrer: join(first, '.ptc-repl-2.js'), attributes: {} },
   ])
 })

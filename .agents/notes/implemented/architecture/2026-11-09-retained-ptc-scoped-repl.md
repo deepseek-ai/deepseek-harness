@@ -79,7 +79,7 @@ These are the defaults; one option controls each of the first two items, see Con
 
 #### Errors
 
-- Runtime error lines and columns are native positions in the model's code, and functions defined in an earlier call show that call's filename, for example `ptc-program-1.js:2:9`. On the line of the final expression, columns after the insertion point shift right by 17, which is left as is.
+- Runtime error lines and columns are native positions in the model's code, and functions defined in an earlier call show that call's filename, for example `<directory>/.ptc-repl-1.js:2:9`. On the line of the final expression, columns after the insertion point shift right by 17, which is left as is.
 - Syntax errors that acorn finds are reported with acorn's message and position, laid out like V8's: filename and line, source line, and caret. Two messages use V8's wording: top-level `return` reports `Illegal return statement`, and an error positioned at the end of the code reports `Unexpected end of input`.
 - Errors that acorn accepts and V8 rejects during compilation report V8's native message; with the `strict` option on, strict-mode syntax violations such as `with` are reported this way.
 - These are the evaluator's own reports. Through `run_code`, the host's TypeScript erasure parses the whole program first and reports most syntax errors itself, as with the existing REPL; only code that the erasure accepts and the scan rejects, such as reserved names, static `import`, or top-level `using`, shows the layout above.
@@ -181,7 +181,7 @@ const runtimeContext = vm.createContext(Object.create(null), { codeGeneration: {
 - The child still writes `tools`, binding error classes, `console`, and `process` to `evaluator.globals`, which is `runtimeContext`, before each evaluation.
 - The sandbox object has no prototype, as in the vm-script and AsyncFunction evaluators, so global lookups do not reach the main realm's `Function` through a prototype chain, as `constructor.constructor("…")()` would. Main-realm values copied into the context, such as `setTimeout`, `console`, `process`, and tool namespaces, still have the main realm's `Function` as their `constructor`, and the main realm has no `codeGeneration` limits, so the option restricts only the context's own `eval`, `Function`, and WebAssembly and is no isolation; the process sandbox provides isolation.
 - Only dynamic `import()` loads modules, with no option: each Script gets `importModuleDynamically`. There is no `require`, `module`, or built-in module global; host bindings under those names stay available unchanged. Static `import` is unsupported.
-- The directory in the generated filename `<directory>/ptc-program-<number>.js` is the working directory when the evaluator is created, which is the directory of the environment's first call, and never changes. The filename is the `import()` referrer, so relative imports always resolve from that directory. Following later directory changes would need an explicit operation, such as `js_switch_cwd`.
+- The generated filename is `<directory>/.ptc-repl-<number>.js`; no file exists at that path, and the name starts with a dot as a hidden file. The directory is the working directory when the evaluator is created, which is the directory of the environment's first call, and never changes. Node's default loader uses the filename as the `import()` referrer, so relative imports always resolve from that directory, and the directory cannot be left out. Following later directory changes would need an explicit operation, such as `js_switch_cwd`.
 - Values from bindings and imports belong to the main realm, so cross-realm checks such as `instanceof Array` can be false, as with the REPL and `vm-script`.
 
 The three options are evaluator creation parameters, not Config fields:
@@ -257,7 +257,7 @@ this.compiled = { bindings, getters, replaced }
 return program
 
 // Evaluator: evaluate
-const filename = resolve(baseDirectory, `ptc-program-${++submissions}.js`) // baseDirectory: process.cwd() at creation
+const filename = resolve(baseDirectory, `.ptc-repl-${++submissions}.js`) // baseDirectory: process.cwd() at creation
 const program = scopes.compile(code, { filename, context, finalExpression, ...importOption })
 const start = Reflect.apply.bind(undefined, program, undefined, []) as ScopedReplProgram
 void programDomain.run(() => Promise.resolve().then(start)).then(
@@ -326,7 +326,7 @@ Out of scope: no search inside nested functions and classes; inside blocks only 
 **Syntax errors**: when acorn fails, the kernel throws a `SyntaxError` directly without a V8 compilation. Its `stack` follows V8's layout:
 
 ```text
-/work/ptc-program-3.js:1
+/work/.ptc-repl-3.js:1
 const x = ;
           ^
 
@@ -357,7 +357,7 @@ Each `compile(code, options)`:
 
 Each evaluator `evaluate(code, finish)`:
 
-1. Increments the submission number, including for submissions with syntax errors; the filename is `<directory at creation>/ptc-program-<number>.js`.
+1. Increments the submission number, including for submissions with syntax errors; the filename is `<directory at creation>/.ptc-repl-<number>.js`.
 2. Calls `scopes.compile`; a thrown error ends the evaluation.
 3. Starts the program from a microtask inside the domain and calls `finish` when its Promise settles, taking `completion?.value` without further awaiting.
 
@@ -471,6 +471,8 @@ tool-executor-ptc is unchanged: for every format other than `function-body` it u
 **A process-wide handler for uncaught errors.** It would also swallow errors from the child's own code; the REPL's domain covers only the asynchronous work programs start.
 
 **Not collecting `var` declarations inside blocks.** A block-level `var` then collides with the copy declarations, so the whole program reports `already declared`, and the name is not carried to later calls; collecting it takes about 15 lines of statement traversal without reference analysis, so the scanner collects it.
+
+**Showing only `.ptc-repl-<number>.js` in stacks, without the directory.** Without the directory, Node's default loader resolves relative `import()` specifiers from the current directory at import time, unlike calls with an import handler; a `//# sourceURL` comment that shows only the name makes V8 ignore `lineOffset`, so every line number grows by 1; handing imports to a callback requires `--experimental-vm-modules`, which the default launch lacks. The filename therefore keeps the directory of the first call.
 
 **Providing `require`, `module`, and built-in module globals, as node:repl does.** node:repl's `require` resolves inconsistently, and following directory changes needs a rule for when the base moves; only `import()` remains.
 

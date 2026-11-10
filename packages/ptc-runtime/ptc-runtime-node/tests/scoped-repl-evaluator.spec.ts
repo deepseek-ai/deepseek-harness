@@ -76,7 +76,7 @@ describe('results', () => {
     const e = evaluator({ strict })
     const error = await e.failure('globalThis.ran = true\nif (ran) {\n  return 1\n}')
     expect(message(error)).toBe('SyntaxError: Illegal return statement')
-    expect((error as Error).stack).toContain('ptc-program-1.js:3\n  return 1\n  ^\n')
+    expect((error as Error).stack).toContain('/.ptc-repl-1.js:3\n  return 1\n  ^\n')
     expect(await e.value('typeof ran')).toBe('undefined')
     expect(await e.value('const f = () => { return 2 }\nf()')).toBe(2)
   })
@@ -86,7 +86,7 @@ describe('results', () => {
     const error = await e.failure('globalThis.ran = true\nimport { join } from "node:path"')
     expect(message(error)).toBe("SyntaxError: 'import' and 'export' may appear only with 'sourceType: module'")
     const stack = String((error as Error).stack)
-    expect(stack).toMatch(/ptc-program-1\.js:2\nimport \{ join \} from "node:path"\n\^\n\nSyntaxError: /)
+    expect(stack).toMatch(/\/\.ptc-repl-1\.js:2\nimport \{ join \} from "node:path"\n\^\n\nSyntaxError: /)
     expect(stack).not.toContain('\n    at ')
     expect(await e.value('typeof ran')).toBe('undefined')
   })
@@ -105,8 +105,8 @@ describe('scope chain through the evaluator', () => {
   it('numbers every submission, including syntax errors, without changing bindings', async () => {
     const e = evaluator()
     await e.value('const a = 1')
-    expect((await e.failure('const = 2') as Error).stack).toContain('ptc-program-2.js:1')
-    expect(await e.value('[a, new Error("here").stack.includes("ptc-program-3.js:1")]')).toEqual([1, true])
+    expect((await e.failure('const = 2') as Error).stack).toContain('/.ptc-repl-2.js:1')
+    expect(await e.value('[a, new Error("here").stack.includes("/.ptc-repl-3.js:1")]')).toEqual([1, true])
   })
 
   it('keeps earlier bindings for a program evaluated before the previous program started', async () => {
@@ -233,19 +233,19 @@ describe('environment', () => {
 describe('errors', () => {
   it('keeps first-line columns exact in programs that await', async () => {
     const error = await evaluator().failure('await null; throw new Error("first")')
-    expect((error as Error).stack).toContain('ptc-program-1.js:1:19')
+    expect((error as Error).stack).toContain('/.ptc-repl-1.js:1:19')
   })
 
   it('reports synchronous throws without evaluator frames', async () => {
     const error = await evaluator().failure('throw new Error("sync")')
     const frames = String((error as Error).stack).split('\n').slice(1)
     expect(frames).toHaveLength(1)
-    expect(frames[0]).toContain('ptc-program-1.js:1:7')
+    expect(frames[0]).toContain('/.ptc-repl-1.js:1:7')
   })
 
   it('reports scan failures with the program filename and passes non-Error throws through', async () => {
     const e = evaluator()
-    expect((await e.failure('const x = ;') as Error).stack).toMatch(/ptc-program-1\.js:1\nconst x = ;\n {10}\^\n\nSyntaxError: Unexpected token$/)
+    expect((await e.failure('const x = ;') as Error).stack).toMatch(/\/\.ptc-repl-1\.js:1\nconst x = ;\n {10}\^\n\nSyntaxError: Unexpected token$/)
     expect(message(await e.failure('function unfinished() {'))).toBe('SyntaxError: Unexpected end of input')
     expect(message(await e.failure('const __$binding_vals = 1'))).toBe("SyntaxError: Names starting with '__$binding_' are reserved")
     expect(await e.failure('throw 42')).toBe(42)

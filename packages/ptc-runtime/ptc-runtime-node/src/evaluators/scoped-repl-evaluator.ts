@@ -50,7 +50,8 @@ export function createScopedReplEvaluator(options: ScopedReplEvaluatorOptions): 
     globals: sandbox,
     evaluate(code, finish) {
       if (closed) throw new Error('PTC evaluator is closed')
-      const filename = resolve(baseDirectory, `ptc-program-${++submissions}.js`)
+      // No file exists at this hidden path; its directory anchors relative imports.
+      const filename = resolve(baseDirectory, `.ptc-repl-${++submissions}.js`)
       let program: ScopedReplProgram
       try {
         program = scopes.compile(code, {
