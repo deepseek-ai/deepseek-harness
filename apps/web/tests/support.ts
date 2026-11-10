@@ -234,6 +234,17 @@ export async function scrollIntoView(target: Locator): Promise<void> {
 }
 
 /**
+ * Request one earlier page without scrolling the transcript to its automatic pagination threshold.
+ * @param page - Page showing the English Chat history control.
+ */
+export async function loadEarlierChatPage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Load earlier', exact: true }).evaluate((button) => {
+    button.focus({ preventScroll: true })
+  })
+  await page.keyboard.press('Enter')
+}
+
+/**
  * Expand every eligible Turn process and secondary group so a Tool-focused
  * scenario can exercise the original row contract beneath product-default
  * compact Chat presentation.
