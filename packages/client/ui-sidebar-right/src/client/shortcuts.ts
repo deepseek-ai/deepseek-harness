@@ -69,8 +69,10 @@ export function registerSidebarShortcuts(shortcuts: Pick<Shortcuts, 'register' |
       id: `page.${kind}` as ShortcutCommandId, label: () => t(`command.${kind}`), aliases: [kind, 'page'],
       defaults: { 'desktop:macos': desktop, 'desktop:windows': desktop, 'desktop:linux': desktop,
         'web:windows': web, ...(kind === 'close' ? { 'web:macos': web } : {}) },
-      regions: ['page', 'editable', 'terminal'], modals: kind === 'close' ? ['settings', 'shortcuts', 'other'] : [],
+      regions: ['page', 'editable', 'terminal'], modals: kind === 'close' ? ['settings', 'shortcuts', 'platform', 'other'] : [],
       resolve: ({ target: element, source, modal }) => {
+        // The Desktop Platform page offers only a back action, so Close page closes the window as on a page.
+        if (kind === 'close' && modal === 'platform') return { status: 'handled', run: closeWindow }
         if (kind === 'close' && modal !== null) {
           return { status: 'handled', run: () => { closeTopModal(document) } }
         }

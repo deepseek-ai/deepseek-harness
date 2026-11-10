@@ -608,6 +608,21 @@ describe('page close and refresh', () => {
     expect(h.layout().expanded).toBe(true)
   })
 
+  it.each(['macos', 'windows', 'linux'] as const)('closes the window from the Platform page above Settings on %s', (platform) => {
+    const h = harness()
+    const registry = new ShortcutRegistry('desktop', platform)
+    const closeWindow = vi.fn(), closeModal = vi.fn()
+    releases.push(registerSidebarShortcuts({ register: command => registry.register(command), runtime: 'desktop' }, h.controller, makeTranslate(en), closeWindow))
+    render(createElement(Modal, { open: true, title: 'Settings', shortcutModal: 'settings', closeLabel: 'Close', onClose: closeModal }))
+    const context = { target: document.activeElement, region: 'page' as const, modal: 'platform' }
+    const gesture = { code: 'KeyW', meta: platform === 'macos', control: platform !== 'macos', alt: false,
+      shift: false, repeat: false, composing: false, defaultPrevented: false }
+    registry.dispatch(gesture, context, vi.fn())
+    registry.invoke('page.close' as ShortcutCommandId, context)
+    expect(closeWindow).toHaveBeenCalledTimes(2)
+    expect(closeModal).not.toHaveBeenCalled()
+  })
+
   it('preserves a page when cleanup fails and never falls back to closing the window', () => {
     const h = harness()
     h.controller.openTab('terminal')
