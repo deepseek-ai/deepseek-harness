@@ -312,6 +312,21 @@ describe('expanded ChangeRequestCard', () => {
     expect(item.querySelector('[data-forge-threads]')?.getAttribute('aria-hidden')).toBe('true')
   })
 
+  it('names the unresolved threads in a tooltip after 500ms of hover', () => {
+    const { item } = card(entry(1, snapshot(1, { unresolvedThreads: 2 })), { expanded: true })
+    const threads = item.querySelector('[data-forge-threads]')!
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerEnter(threads)
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(screen.queryByRole('tooltip')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.getByRole('tooltip').textContent).toBe('2 unresolved threads')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each([
     ['merged', { state: 'merged', closedAt: '2026-10-09T09:00:00Z' }, 'Merged into main · 3 h ago'],
     ['closed', { state: 'closed' }, en['change.state.closed']],

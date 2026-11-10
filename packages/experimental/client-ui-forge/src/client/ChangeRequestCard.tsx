@@ -128,7 +128,7 @@ function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
   const threads = snapshot.unresolvedThreads > 0 || snapshot.threadsTruncated ? threadCount(snapshot, locale) : undefined
   const threadsText = threads === undefined ? undefined : t('change.threads', { count: threads })
   const trailing = threadsText === undefined ? undefined : (
-    <Tooltip label={threadsText} side="top">
+    <Tooltip label={threadsText} side="top" delayMs={500}>
       <span className={css.threads} data-forge-threads={threads} aria-hidden="true"><ThreadGlyph size={14} />{threads}</span>
     </Tooltip>
   )

@@ -598,7 +598,7 @@ export function IssuesRow({ snapshot, openLink, t }: {
     return (
       <span key={issue.url}>
         {index > 0 && t('issues.separator')}
-        <Tooltip label={issue.title} side="top">
+        <Tooltip label={issue.title} side="top" delayMs={500}>
           <a className={overview.issue} href={issue.url} target="_blank" rel="noreferrer" data-state={issue.state}
             aria-label={t('issues.aria', { label, title: issue.title })}
             onClick={(event) => {
