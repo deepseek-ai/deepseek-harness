@@ -132,7 +132,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         content.addSubview(scroll)
-        second = NSWindow(contentRect: NSRect(x: 560, y: 100, width: 320, height: 180), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        second = NSWindow(contentRect: NSRect(x: 560, y: 100, width: 320, height: 180), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         second.title = "DSH CUA secondary fixture"
         second.isReleasedWhenClosed = false
         second.animationBehavior = .none
