@@ -9,8 +9,8 @@
   en: 97ebb140059d2cd9
   zh: b9753254b9a084f3
 /deepseek-ai-dsh-wecom/summary:
-  en: e9dcad15ae59228c
-  zh: d8a455329476292f
+  en: 06358926dfdfecee
+  zh: 5ae37704e7983a03
 /deepseek-ai-dsh-wecom/table-of-contents:
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
@@ -18,26 +18,71 @@
   en: bbff250eba0f1b89
   zh: 0a618f05cc88ee2b
 /deepseek-ai-dsh-wecom/use-this-package/install-into-a-profile:
-  en: 8241a30e5141c500
-  zh: 97f8736d76cf596a
+  en: 6227d6e43ec8c108
+  zh: 48e0f252de253d14
 /deepseek-ai-dsh-wecom/use-this-package/what-you-get:
-  en: 528ed99baf41922a
-  zh: da4c72ebf58e2883
+  en: f8935d344d90672a
+  zh: 50cf55ec6b629ffe
+/deepseek-ai-dsh-wecom/use-this-package/authorization-operations:
+  en: baa222a771de2352
+  zh: 8fd47fe7d9d6bd5a
+/deepseek-ai-dsh-wecom/use-this-package/configure:
+  en: 21030038b561f1d1
+  zh: 74f0089d6796d701
 /deepseek-ai-dsh-wecom/understand-the-implementation:
-  en: edfc5fbed5409988
-  zh: 1d1e6c3d6b60fdc3
+  en: f2f15a101939fd87
+  zh: c388b04b6182d664
 /deepseek-ai-dsh-wecom/further-exploration:
-  en: 382e5bb97ff1e505
-  zh: f9b8a200eb829ef3
+  en: e739bdb935d81836
+  zh: d5f57307be1a78b0
 /deepseek-ai-dsh-wecom/model-experience:
-  en: 819fb75533454fd7
-  zh: 134befa5ade17a41
-/deepseek-ai-dsh-wecom/model-experience/kv-cache-effect:
-  en: ad2bc53ebf95b23c
-  zh: c7d9f05d11592153
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries:
+  en: 7265024b55daf9ef
+  zh: 3447e587c56a25d6
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/what-the-model-sees:
+  en: 92eb47194f3c8cc3
+  zh: b9cfda74948e4b1a
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/token-effect:
+  en: 5c0018a8ae3cd3d3
+  zh: 341e13c2f26125be
+/deepseek-ai-dsh-wecom/model-experience/skill-catalog-entries/kv-cache-effect:
+  en: ce9139edf3309f2b
+  zh: bca06594b3e557e5
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body:
+  en: 8955ac196848e69f
+  zh: 54aa7db097eafd3c
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/what-the-model-sees:
+  en: aa56f9a16fab3328
+  zh: 478afb312b62a06f
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/token-effect:
+  en: 1ed287a86abbc585
+  zh: 5d55a6fd61786866
+/deepseek-ai-dsh-wecom/model-experience/loaded-skill-body/kv-cache-effect:
+  en: 1f6b842a95e14ce4
+  zh: 0d57cdec5e828828
+/deepseek-ai-dsh-wecom/model-experience/cli-path:
+  en: b5fed52af6c0d771
+  zh: 25b7aa5297583030
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees:
+  en: dd87bf74d7e47802
+  zh: 287c05d2a56a0c95
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees/runtime-context-entry:
+  en: c91314832f78f460
+  zh: aac156ea0b5b816a
+/deepseek-ai-dsh-wecom/model-experience/cli-path/what-the-model-sees/runtime-context-entry-on-windows:
+  en: 54f899bbaf7ed198
+  zh: 31256473a192427b
+/deepseek-ai-dsh-wecom/model-experience/cli-path/token-effect:
+  en: 2caf581d193f3dba
+  zh: 3b5e94d4cc69ca3b
+/deepseek-ai-dsh-wecom/model-experience/cli-path/kv-cache-effect:
+  en: 67398dd4e4b02db9
+  zh: a873eacd006fa656
 /deepseek-ai-dsh-wecom/known-limitations-and-deferred-work:
-  en: b1feae479657ced7
-  zh: d7cf575bb2745489
+  en: 0a20579ae2c3c6e8
+  zh: 462c6b147628f9f9
 /deepseek-ai-dsh-wecom/known-limitations-and-deferred-work/dev-note:
-  en: e67f633dc6fe7773
-  zh: e88aeb617ffb74ea
+  en: 71cc23fc507e649e
+  zh: 3dbd0498845467cc

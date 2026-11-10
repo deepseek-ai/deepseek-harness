@@ -33,7 +33,6 @@ export const PRODUCT_PACKAGE_POLICY: Readonly<Record<string, ProductPackagePolic
   'packages/subagent/subagent-codex': { category: 'optional', reason: 'Separately installed native Codex agent integration.' },
   'packages/subagent/subagent-dsh-sdk': { category: 'optional', reason: 'Requires an explicitly configured external DSH home.' },
   'packages/connector/wecom': { category: 'optional', reason: 'Separately installed app plugin that requires wecom-cli and a user-authorized WeCom bot.' },
-  'packages/connector/wecom-cli': { category: 'optional', reason: 'WeCom CLI, skills, and authorization mounted by the separately installed WeCom bundle.' },
   'packages/connector/cli-account': { category: 'optional', reason: 'Host library imported by separately installed CLI app plugins.' },
   'packages/connector/upstream-skills': { category: 'optional', reason: 'Host library imported by separately installed CLI app plugins.' },
   'packages/context/tmux-context': { category: 'optional', reason: 'Context contribution requiring a tmux pane.' },

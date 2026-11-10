@@ -141,9 +141,6 @@ importers:
       '@deepseek-ai/dsh-wecom':
         specifier: workspace:*
         version: link:packages/connector/wecom
-      '@deepseek-ai/dsh-wecom-cli':
-        specifier: workspace:*
-        version: link:packages/connector/wecom-cli
       '@deepseek-ai/dsh-working-directory':
         specifier: workspace:*
         version: link:packages/session/working-directory
@@ -7633,16 +7630,6 @@ importers:
         version: link:../../skill/skill
 
   packages/connector/wecom:
-    dependencies:
-      '@deepseek-ai/dsh-wecom-cli':
-        specifier: workspace:*
-        version: link:../wecom-cli
-    devDependencies:
-      '@deepseek-ai/cordis':
-        specifier: workspace:~
-        version: link:../../../vendor/cordis
-
-  packages/connector/wecom-cli:
     dependencies:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*

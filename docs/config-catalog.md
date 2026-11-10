@@ -4927,20 +4927,20 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-webhook-github -->
 
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-wecom-cli -->
-<a id="deepseek-aidsh-wecom-cli"></a>
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
+<a id="deepseek-aidsh-wecom"></a>
 
-## `@deepseek-ai/dsh-wecom-cli`
+## `@deepseek-ai/dsh-wecom`
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts) · [`UpstreamSkillsConfig`](../packages/connector/upstream-skills/src/index.ts)
-- `source`: [`packages/connector/wecom-cli/src/index.ts:32`](../packages/connector/wecom-cli/src/index.ts)
+- `source`: [`packages/connector/wecom/src/index.ts:32`](../packages/connector/wecom/src/index.ts)
 
 ```ts config-catalog
 /** Where wecom-cli and the upstream guides come from, a command's deadline, and a download's time limit. */
 export type Config = CliAccountConfig & UpstreamSkillsConfig
 ```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom-cli -->
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-wecom -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-workflow-ptc -->
 <a id="deepseek-aidsh-workflow-ptc"></a>
@@ -5248,6 +5248,5 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-util-time` | — | [`packages/util/time/src/index.ts`](../packages/util/time/src/index.ts) |
 | `@deepseek-ai/dsh-util-values` | — | [`packages/util/values/src/index.ts`](../packages/util/values/src/index.ts) |
 | `@deepseek-ai/dsh-util-workspace-path` | — | [`packages/util/workspace-path/src/index.ts`](../packages/util/workspace-path/src/index.ts) |
-| `@deepseek-ai/dsh-wecom` | — | [`packages/connector/wecom/src/index.ts`](../packages/connector/wecom/src/index.ts) |
 | `@deepseek-ai/dsh-win32-process` | — | [`packages/subprocess/win32-process/src/index.ts`](../packages/subprocess/win32-process/src/index.ts) |
 <!-- END GENERATED config-catalog:library -->

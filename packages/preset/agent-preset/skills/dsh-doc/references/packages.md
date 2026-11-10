@@ -145,7 +145,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 
 | Package | Config | Description |
 |---|---|---|
-| `@deepseek-ai/dsh-wecom-cli` | yes | WeCom through the official wecom-cli: the CLI by its absolute path, its skills, and authorization over Remote |
+| `@deepseek-ai/dsh-wecom` | yes | WeCom plugin: the official wecom-cli with its skills, and authorization from the Plugins page |
 
 ## context
 
