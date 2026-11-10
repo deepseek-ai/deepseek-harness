@@ -34,6 +34,14 @@ export interface ChangeRequestsSectionInjected {
   readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
+  /** Rerun the failed checks or one check; settles once the outcome is reported. */
+  readonly rerunChecks: NonNullable<ChangeRequestActions['rerunChecks']>
+  /** Request reviews from more reviewers; settles once the outcome is reported. */
+  readonly requestReviews: NonNullable<ChangeRequestActions['requestReviews']>
+  /** List accounts a review can be requested from. */
+  readonly reviewerCandidates: NonNullable<ChangeRequestActions['reviewerCandidates']>
+  /** Bring the base branch's new commits into the head branch; settles once the outcome is reported. */
+  readonly updateBranch: NonNullable<ChangeRequestActions['updateBranch']>
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Copy text to the clipboard and report the outcome. */
@@ -102,7 +110,7 @@ function SignIn({ state, copyText, t }: {
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, reconnect, refresh, remove, markReady, merge, readChecks,
-  openLink, copyText, viewChanges, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
@@ -111,6 +119,7 @@ export function ChangeRequestsSection({
   if (state === null || state.changeRequests.length === 0) return null
   const actions: ChangeRequestActions = {
     openLink, copyLink: copyText, retry: () => { void refresh() }, remove, markReady, merge, readChecks,
+    rerunChecks, requestReviews, reviewerCandidates, updateBranch,
     viewChanges: (entry) => {
       viewChanges(entry)
       dismissOverlay()

@@ -158,6 +158,62 @@ describe('forge registry', () => {
     expect(writeReview).toHaveBeenCalledWith(ref(3), write, expect.any(AbortSignal))
   })
 
+  it('reads and saves viewed marks only through a provider that implements both', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const marks = { headSha: 'a'.repeat(40), files: { 'src/a.ts': 'viewed' as const }, truncated: false }
+    const request = { path: 'src/a.ts', viewed: true, headSha: 'a'.repeat(40) }
+
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.setViewed(ref(3), request, signal)).resolves.toEqual({ code: 'failed', message: 'This provider keeps no viewed marks' })
+    const viewedFiles = vi.fn(async () => marks)
+    Object.assign(provider, { viewedFiles })
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBeUndefined()
+    const setViewed = vi.fn(async () => undefined)
+    Object.assign(provider, { setViewed })
+    await expect(ctx.forge.viewedFiles(ref(3), 'a'.repeat(40), signal)).resolves.toBe(marks)
+    await expect(ctx.forge.setViewed(ref(3), request, signal)).resolves.toBeUndefined()
+    expect(viewedFiles).toHaveBeenCalledWith(ref(3), 'a'.repeat(40), expect.any(AbortSignal))
+    expect(setViewed).toHaveBeenCalledWith(ref(3), request, expect.any(AbortSignal))
+  })
+
+  it('fails the overview actions of a provider without them and forwards them to one with them', async () => {
+    ctx = await forgeContext()
+    const provider = new FakeProvider()
+    await provide(ctx, provider)
+    const signal = new AbortController().signal
+    const rerun = { headSha: 'a'.repeat(40) }
+    const reviewers = { reviewers: [{ kind: 'user' as const, login: 'mona' }] }
+    const update = { method: 'rebase' as const, headSha: 'a'.repeat(40) }
+
+    await expect(ctx.forge.rerunChecks(ref(3), rerun, signal)).resolves.toEqual({ code: 'failed', message: 'This provider reruns no checks' })
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toEqual({ code: 'failed', message: 'This provider requests no reviews' })
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal))
+      .resolves.toEqual({ code: 'unsupported', message: 'This provider requests no reviews' })
+    await expect(ctx.forge.updateBranch(ref(3), update, signal)).resolves.toEqual({ code: 'failed', message: 'This provider updates no branches' })
+    // Requests need both halves of the review request capability.
+    const requestReviews = vi.fn(async () => undefined)
+    Object.assign(provider, { requestReviews })
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toMatchObject({ code: 'failed' })
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal)).resolves.toMatchObject({ code: 'unsupported' })
+
+    const candidates = [{ login: 'mona', name: 'Mona', avatarUrl: null, suggested: true }]
+    const reviewerCandidates = vi.fn(async () => candidates)
+    const rerunChecks = vi.fn(async () => undefined)
+    const updateBranch = vi.fn(async () => ({ code: 'stale' as const, message: 'moved' }))
+    Object.assign(provider, { reviewerCandidates, rerunChecks, updateBranch })
+    await expect(ctx.forge.rerunChecks(ref(3), rerun, signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.requestReviews(ref(3), reviewers, signal)).resolves.toBeUndefined()
+    await expect(ctx.forge.reviewerCandidates(ref(3), 'mo', signal)).resolves.toBe(candidates)
+    await expect(ctx.forge.updateBranch(ref(3), update, signal)).resolves.toEqual({ code: 'stale', message: 'moved' })
+    expect(rerunChecks).toHaveBeenCalledWith(ref(3), rerun, expect.any(AbortSignal))
+    expect(requestReviews).toHaveBeenCalledWith(ref(3), reviewers, expect.any(AbortSignal))
+    expect(reviewerCandidates).toHaveBeenCalledWith(ref(3), 'mo', expect.any(AbortSignal))
+    expect(updateBranch).toHaveBeenCalledWith(ref(3), update, expect.any(AbortSignal))
+  })
+
   it('delegates change request actions to the provider of their forge and returns its outcome', async () => {
     ctx = await forgeContext()
     const provider = new FakeProvider()

@@ -109,6 +109,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--helper", type=Path, help="Existing native helper executable for this run")
     parser.add_argument("--artifacts", type=Path, help="Save fixture screenshots and private JSON protocol transcript")
+    parser.add_argument("--selection-only", action="store_true", help="Exercise observation and selected-window admission without pointer input")
     parser.add_argument("--panels-only", action="store_true", help="Exercise system file panels without unrelated pointer gestures")
     parser.add_argument("--hover-only", action="store_true", help="Exercise native hover without keyboard or file-panel scenarios")
     parser.add_argument("--alternate-hover", action="store_true", help="Use AX alternate UI and verify the system pointer stays unchanged")
@@ -129,6 +130,7 @@ def main():
             fixture_args += ["35", "--alternate-hover"]
         fixture = subprocess.Popen(fixture_args, stdout=subprocess.PIPE, text=True)
         helper = None
+        foreign_fixture = None
         try:
             assert line(fixture).strip() == "READY"
             helper = NativeHelper(transcript, args.helper)
@@ -167,6 +169,37 @@ def main():
                 time.sleep(0.025)
             primary_params = {**owner, "windowId": primary["windowId"], "maxElements": 300, "maxDepth": 20}
             secondary_params = {**owner, "windowId": secondary["windowId"], "maxElements": 300, "maxDepth": 20}
+            if args.selection_only:
+                call("click", {**owner, "windowId": primary["windowId"], "x": 20, "y": 20}, "STALE_SNAPSHOT")
+                observed = call("getState", {**owner, "maxElements": 300, "maxDepth": 20})
+                button = next(e for e in observed["elements"] if e["role"] == "AXButton" and e["title"] == "Increment primary")
+                field = next(e for e in observed["elements"] if e["role"] == "AXTextField")
+                target = {**owner, "snapshotId": observed["snapshotId"], "elementId": button["elementId"]}
+                call("invoke", {**target, "windowId": primary["windowId"]})
+                wait_state(lambda state: state["count"] == 1, "application snapshot did not invoke on selected window")
+                # A second fixture window is closed while the application snapshot stays live.
+                close_button = next(e for e in observed["elements"] if e["role"] == "AXButton" and e["title"] == "Close secondary")
+                call("invoke", {**target, "elementId": close_button["elementId"]})
+                deadline = time.monotonic() + 5
+                while any(w["windowId"] == secondary["windowId"] for w in call("listWindows", owner)):
+                    if time.monotonic() >= deadline:
+                        raise AssertionError("secondary window did not close")
+                    time.sleep(0.025)
+                foreign_fixture = subprocess.Popen([str(fixture_binary), str(Path(directory) / "foreign.json")], stdout=subprocess.PIPE, text=True)
+                assert line(foreign_fixture).strip() == "READY"
+                foreign_app = call("getApp", {"selector": str(foreign_fixture.pid)})
+                foreign_windows = call("listWindows", {"appHandle": foreign_app["appHandle"]})
+                assert foreign_windows, "Foreign fixture did not publish its windows"
+                invalid_ids = [secondary["windowId"], foreign_windows[0]["windowId"]]
+                for window_id in invalid_ids:
+                    for method, extra in [("invoke", {}), ("listActions", {}), ("performAction", {"action": "AXPress"}),
+                                          ("setValue", {"elementId": field["elementId"], "value": "must not be written"}),
+                                          ("selectText", {"elementId": field["elementId"], "text": "missing"})]:
+                        call(method, {**target, "windowId": window_id, **extra}, "WINDOW_UNAVAILABLE")
+                assert json.loads(state_path.read_text())["count"] == 1
+                helper.eof()
+                print("PASS: coordinate observation, application snapshot, and selected-window rejection")
+                return
             limited = call("getState", {**primary_params, "maxElements": 1})
             assert limited["truncated"] and "maxElements=1" in limited["tree"], limited
             first = call("getState", {**primary_params, "maxElements": 100000, "maxDepth": 512})
@@ -368,7 +401,7 @@ def main():
                     if state_path.exists():
                         (artifacts / "fixture-state.json").write_bytes(state_path.read_bytes())
 
-            run_cleanup(save_artifacts, *([helper.stop] if helper is not None else []), lambda: stop(fixture))
+            run_cleanup(save_artifacts, *([helper.stop] if helper is not None else []), lambda: stop(fixture), *([lambda: stop(foreign_fixture)] if foreign_fixture is not None else []))
 
 
 if __name__ == "__main__":

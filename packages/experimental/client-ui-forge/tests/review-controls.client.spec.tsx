@@ -114,12 +114,12 @@ describe('HideTestsSwitch and ViewedProgress', () => {
     const view = render(<ViewedProgress viewed={2} total={4} t={t} />)
     const bar = view.getByRole('progressbar', { name: en['viewed.progressAria'] })
     expect([bar.getAttribute('aria-valuenow'), bar.getAttribute('aria-valuemax'), bar.getAttribute('aria-valuetext')]).toEqual(['2', '4', '2 / 4 viewed'])
-    expect(bar.querySelector<HTMLElement>('[style]')?.style.width).toBe('50%')
-    // The compact form a narrow toolbar shows: a ring filled to the same share, and the bare count.
-    const compact = bar.querySelector<HTMLElement>('[data-forge-progress="compact"]')!
-    expect(compact.textContent).toBe('2/4')
-    const [length, gap] = compact.querySelectorAll('circle')[1]!.getAttribute('stroke-dasharray')!.split(' ').map(Number)
+    // One ring filled to the viewed share, then the label, or the bare count a narrow toolbar shows instead.
+    const [length, gap] = bar.querySelectorAll('circle')[1]!.getAttribute('stroke-dasharray')!.split(' ').map(Number)
     expect(length! / gap!).toBeCloseTo(0.5)
+    expect(bar.querySelectorAll('svg')).toHaveLength(1)
+    expect([...bar.querySelectorAll('[data-forge-progress]')].map(form => [form.getAttribute('data-forge-progress'), form.textContent]))
+      .toEqual([['full', '2 / 4 viewed'], ['compact', '2/4']])
     view.rerender(<ViewedProgress viewed={0} total={0} t={t} />)
     expect(view.queryByRole('progressbar')).toBeNull()
   })

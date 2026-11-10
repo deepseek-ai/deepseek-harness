@@ -31,6 +31,9 @@ export type ChangeRequestState = 'open' | 'closed' | 'merged'
 /** Normalized outcome of one status check. */
 export type CheckState = 'pending' | 'success' | 'failure' | 'neutral' | 'skipped' | 'cancelled'
 
+/** Opaque host identity of a status check that a rerun names. */
+export type ForgeCheckId = Branded<'ForgeCheckId'>
+
 /** One status check reported for the head commit of a change request. */
 export interface ChangeRequestCheck {
   /** Check name as the host displays it. */
@@ -45,6 +48,11 @@ export interface ChangeRequestCheck {
   readonly startedAt: string | null
   /** ISO 8601 time the check completed, or null while it runs and when the host reports none. */
   readonly completedAt: string | null
+  /**
+   * Identity a rerun of this check names, or null when the provider cannot rerun it, as for a commit status. Checks that
+   * name one identity rerun together, and their failed checks can be rerun once none of them is pending.
+   */
+  readonly rerun: ForgeCheckId | null
 }
 
 /** Combined outcome of all checks on the head commit. */
@@ -58,6 +66,44 @@ export type ReviewDecision = 'approved' | 'changes-requested' | 'review-required
 
 /** How a merge brings the commits of a change request into its base branch. */
 export type MergeMethod = 'merge' | 'squash' | 'rebase'
+
+/** How an update brings the base branch's new commits into the head branch: a merge commit, or a rebase of the head's commits. */
+export type BranchUpdateMethod = 'merge' | 'rebase'
+
+/** Outcome of a reviewer's latest submitted review. */
+export type ReviewVerdict = 'approved' | 'changes-requested' | 'commented' | 'dismissed'
+
+/** An account or team asked to review a change request, or an account that reviewed it. */
+export interface ChangeRequestReviewer {
+  /** Whether the reviewer is a person's account, an app or bot account, or a team. */
+  readonly kind: 'user' | 'bot' | 'team'
+  /** Login, or `organization/slug` for a team. */
+  readonly login: string
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether a review from the reviewer is requested now. */
+  readonly requested: boolean
+  /** Whether the host requested the review because the reviewer owns changed paths. */
+  readonly codeOwner: boolean
+  /** Outcome of the reviewer's latest submitted review, or null before the first. */
+  readonly verdict: ReviewVerdict | null
+  /** Commit the latest submitted review was on, or null before the first or when the host reports none. */
+  readonly reviewedSha: string | null
+}
+
+/** One issue linked to a change request, which the host closes once the change request merges. */
+export interface ChangeRequestIssue {
+  /** Repository that holds the issue. */
+  readonly repository: ForgeRepository
+  /** Host-assigned issue number. */
+  readonly number: number
+  /** Title as the author wrote it. */
+  readonly title: string
+  /** Whether the issue is still open. */
+  readonly state: 'open' | 'closed'
+  /** Web page of the issue. */
+  readonly url: string
+}
 
 /** Status of one change request at the time its provider read it. */
 export interface ChangeRequestSnapshot {
@@ -97,18 +143,36 @@ export interface ChangeRequestSnapshot {
   readonly mergeReady: boolean
   /** Merge methods the repository accepts, the signed-in user's usual one first. */
   readonly mergeMethods: readonly MergeMethod[]
+  /**
+   * Ways the signed-in user can bring the base branch's new commits into the head branch now; empty while the head is
+   * up to date, while the branches conflict, when the user cannot update the head branch, or when the provider cannot,
+   * so a head behind its base cannot be told apart from a current one for a user without the right to update it.
+   */
+  readonly branchUpdates: readonly BranchUpdateMethod[]
   /** Aggregate review outcome. */
   readonly reviewDecision: ReviewDecision
+  /** Reviewers whose review is requested, in host order, then other accounts that reviewed, each once; the author is never listed. */
+  readonly reviewers: readonly ChangeRequestReviewer[]
+  /** Whether the host reported more review requests or reviews than the provider read, so `reviewers` may be incomplete. */
+  readonly reviewersTruncated: boolean
+  /** Whether the signed-in user may request reviews of the change request through its provider. */
+  readonly canRequestReviews: boolean
   /** Checks on the head commit in host order. */
   readonly checks: readonly ChangeRequestCheck[]
   /** Combined check outcome. */
   readonly checksRollup: ChecksRollup
   /** Whether the host reported more checks than `checks` contains. */
   readonly checksTruncated: boolean
+  /** Whether the signed-in user may rerun the failed checks that name a `rerun`. */
+  readonly canRerunChecks: boolean
   /** Number of counted review threads that are not resolved. */
   readonly unresolvedThreads: number
   /** Whether the change request has more review threads than the provider counted, so `unresolvedThreads` is a lower bound. */
   readonly threadsTruncated: boolean
+  /** Issues linked to the change request, which the host closes once it merges, in host order. */
+  readonly closingIssues: readonly ChangeRequestIssue[]
+  /** Whether the host reported more closing issues than `closingIssues` holds. */
+  readonly closingIssuesTruncated: boolean
   /** ISO 8601 time of the host's last update to the change request. */
   readonly updatedAt: string
   /** ISO 8601 time the change request was merged or closed, or null while it is open. */
@@ -148,6 +212,38 @@ export interface MergeRequest {
   readonly method: MergeMethod
   /** Commit object name the head must still have; the merge is refused once the head moves. */
   readonly headSha: string
+}
+
+/** A branch update the user confirmed for the head commit they saw. */
+export interface BranchUpdateRequest {
+  /** How the base branch's new commits enter the head branch. */
+  readonly method: BranchUpdateMethod
+  /** Commit object name the head must still have; the update is refused once the head moves. */
+  readonly headSha: string
+}
+
+/** A rerun of the failed checks of the head commit whose checks the user saw. */
+export interface ForgeRerunRequest {
+  /** Head commit whose checks the user saw; the provider refuses with `stale` once the head is another commit. */
+  readonly headSha: string
+}
+
+/** Reviewers to ask in addition to those whose review is requested now; one who already reviewed is asked again. */
+export interface ForgeReviewersRequest {
+  /** The reviewers by kind and login, a team by `organization/slug`. */
+  readonly reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]
+}
+
+/** An account a review of the change request can be requested from. */
+export interface ForgeReviewerCandidate {
+  /** Login as the host spells it. */
+  readonly login: string
+  /** Display name, or null when the account shows none. */
+  readonly name: string | null
+  /** Avatar image URL, or null when the host reports none. */
+  readonly avatarUrl: string | null
+  /** Whether the host suggests the account for this change request, as from the history of its changed files. */
+  readonly suggested: boolean
 }
 
 /** One inline comment addressed to the old or new side of a pull request diff. */
@@ -314,13 +410,15 @@ export type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 
-/** Why a provider could not change a change request. */
+/** Why a provider could not change a change request, or could not confirm that it did. */
 export interface ForgeActionFailure {
   /**
    * `unauthenticated`: credentials are missing or rejected; `stale`: the head
-   * moved past the confirmed commit; `failed`: the host refused or could not be reached.
+   * moved past the confirmed commit; `failed`: the host refused or could not be reached, so nothing changed;
+   * `unknown`: the request reached the host but its answer did not confirm the outcome, so the change may have been
+   * applied and must be checked on the host before it is tried again.
    */
-  readonly code: 'unauthenticated' | 'stale' | 'failed'
+  readonly code: 'unauthenticated' | 'stale' | 'failed' | 'unknown'
   /** Human-readable cause, usually the host's own message. */
   readonly message: string
 }
@@ -347,6 +445,32 @@ export interface ForgeCommitList {
   readonly commits: readonly ForgeCommit[]
   /** Whether the change request has more commits than the provider lists; the listed ones are the oldest. */
   readonly truncated: boolean
+}
+
+/**
+ * The signed-in user's review progress on one changed file: `viewed`, `unviewed`, or `dismissed` once the file
+ * changed after the user marked it viewed.
+ */
+export type ForgeViewedState = 'viewed' | 'unviewed' | 'dismissed'
+
+/** The signed-in user's viewed marks on the files of a change request, read at one head commit. */
+export interface ForgeViewedFiles {
+  /** Head commit the marks were read at. */
+  readonly headSha: string
+  /** State of each changed file the host listed, by repository-relative path. */
+  readonly files: Readonly<Record<string, ForgeViewedState>>
+  /** Whether the change request has more files than `files` lists. */
+  readonly truncated: boolean
+}
+
+/** A viewed mark the user set or cleared on a file of the head commit they saw. */
+export interface ForgeViewedRequest {
+  /** Repository-relative path of the changed file. */
+  readonly path: string
+  /** Whether the file is viewed. */
+  readonly viewed: boolean
+  /** Head commit whose changes the user saw; the provider refuses with `stale` once the head is another commit. */
+  readonly headSha: string
 }
 
 /** Whether a provider can reach one host with the current credentials. */
@@ -420,6 +544,38 @@ export interface ForgeProvider {
    * with `a/` and `b/` path prefixes. Both are full object names; `head` descends from `base`.
    */
   compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Read the signed-in user's viewed marks on the change request's files at head commit `headSha`. The marks are
+   * returned only when the read names `headSha` as the head; once the head is another commit, the read resolves to a
+   * `stale` failure. A provider implements `viewedFiles` and `setViewed` together; omitting either declares that the
+   * host keeps no viewed marks.
+   */
+  viewedFiles?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure>
+  /**
+   * Set or clear the signed-in user's viewed mark on one file while the head is still `request.headSha`, resolving to
+   * undefined once the host saved it.
+   */
+  setViewed?(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Rerun the failed checks of the head commit that name a `rerun` none of whose checks is pending, while the head is
+   * still `request.headSha`, resolving to undefined once the host accepted every rerun. Omission declares that the
+   * provider reruns no checks, and its snapshots then name none.
+   */
+  rerunChecks?(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /**
+   * Request reviews from more reviewers, resolving to undefined once the host accepted the request. A provider implements
+   * `requestReviews` and `reviewerCandidates` together; omitting either declares that it requests no reviews, and its
+   * snapshots then deny `canRequestReviews`.
+   */
+  requestReviews?(ref: ChangeRequestRef, request: ForgeReviewersRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
+  /** List accounts whose login or name matches `query`, the host's suggestions first, for a review request. */
+  reviewerCandidates?(ref: ChangeRequestRef, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure>
+  /**
+   * Bring the base branch's new commits into the head branch while its head is still `request.headSha`, resolving to
+   * undefined once the host accepted the update. Omission declares that the provider updates no branches, and its
+   * snapshots then offer no `branchUpdates`.
+   */
+  updateBranch?(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>
 }
 
 /**

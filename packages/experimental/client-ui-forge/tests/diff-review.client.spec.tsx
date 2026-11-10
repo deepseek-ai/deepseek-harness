@@ -27,7 +27,7 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   }
   const props: DiffFileProps = { file, visible: true, expanded: true, large: false, revealed: false,
     text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
-    viewed: 'unviewed', handlers, review, t, ...overrides }
+    viewed: 'unviewed', viewedNote: '', viewedDisabled: false, handlers, review, t, ...overrides }
   const view = render(<DiffFile {...props} />)
   const line = (name: string) => view.getByRole('button', { name: `Select line ${name}` })
   const code = (side: 'L' | 'R', no: number): HTMLElement => {
