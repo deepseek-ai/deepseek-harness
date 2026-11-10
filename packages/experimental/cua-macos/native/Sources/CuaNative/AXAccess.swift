@@ -225,7 +225,8 @@ final class AXAccess {
         }
         let result: AXError
         if action == "AXZoomWindow" {
-            let window = try? string(element, "AXRole") == "AXWindow" ? element : self.element(element, "AXWindow")
+            let role = try? string(element, "AXRole")
+            let window = role == "AXWindow" ? element : try? self.element(element, "AXWindow")
             result = try Self.performZoom(readSize: {
                 guard let window else { return nil }
                 return Self.dimensions(try? self.attribute(window, "AXSize"))
@@ -235,7 +236,7 @@ final class AXAccess {
         }
         guard result == .success else { throw failure(result, "perform \(action)") }
     }
-    /// AppKit can resize a window and still report attributeUnsupported. Repeating the action could undo the zoom.
+    /// Dispatch once. Only an observed resize of the same window can override attributeUnsupported.
     static func performZoom(readSize: () -> CGSize?, dispatch: () throws -> AXError) rethrows -> AXError {
         let before = readSize()
         let result = try dispatch()

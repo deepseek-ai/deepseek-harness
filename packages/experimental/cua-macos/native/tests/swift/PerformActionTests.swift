@@ -108,19 +108,23 @@ import Testing
 @Test func zoomReconcilesOnlyAnObservedResizeAfterAttributeUnsupported() {
     let small = CGSize(width: 600, height: 400)
     let large = CGSize(width: 950, height: 400)
-    let cases: [(CGSize?, CGSize?, AXError, AXError)] = [
-        (small, large, .attributeUnsupported, .success),
-        (large, small, .attributeUnsupported, .success),
-        (small, small, .attributeUnsupported, .attributeUnsupported),
-        (nil, large, .attributeUnsupported, .attributeUnsupported),
-        (small, nil, .attributeUnsupported, .attributeUnsupported),
-        (.zero, large, .attributeUnsupported, .attributeUnsupported),
-        (small, .zero, .attributeUnsupported, .attributeUnsupported),
-        (small, large, .cannotComplete, .cannotComplete),
-        (small, large, .apiDisabled, .apiDisabled),
-        (nil, nil, .success, .success),
+    let zeroHeight = CGSize(width: 600, height: 0)
+    let zeroWidth = CGSize(width: 0, height: 400)
+    let cases: [(CGSize?, CGSize?, AXError, AXError, Int)] = [
+        (small, large, .attributeUnsupported, .success, 2),
+        (large, small, .attributeUnsupported, .success, 2),
+        (small, small, .attributeUnsupported, .attributeUnsupported, 2),
+        (nil, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (small, nil, .attributeUnsupported, .attributeUnsupported, 2),
+        (zeroHeight, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (zeroWidth, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (small, zeroHeight, .attributeUnsupported, .attributeUnsupported, 2),
+        (small, zeroWidth, .attributeUnsupported, .attributeUnsupported, 2),
+        (small, large, .cannotComplete, .cannotComplete, 1),
+        (small, large, .apiDisabled, .apiDisabled, 1),
+        (nil, nil, .success, .success, 1),
     ]
-    for (before, after, reply, expected) in cases {
+    for (before, after, reply, expected, expectedReads) in cases {
         var calls = 0
         var reads = 0
         let result = AXAccess.performZoom(readSize: {
@@ -132,6 +136,6 @@ import Testing
         })
         #expect(result == expected)
         #expect(calls == 1)
-        #expect(reads == (reply == .attributeUnsupported && (before?.width ?? 0) > 0 ? 2 : 1))
+        #expect(reads == expectedReads)
     }
 }
