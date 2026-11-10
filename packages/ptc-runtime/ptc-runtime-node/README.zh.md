@@ -69,7 +69,7 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 `per-call` 模式中的程序是异步函数体：支持顶层 `await` 与 `return`，且只接受可擦除 TypeScript。Node 全局变量仍然可用，函数体可声明局部 `process`，例如 `const process = await import("node:process")`。成功调用以 `result.value` 返回无损 JSON 值，以 `result.output` 按顺序返回捕获的文本和图片。`result.sandbox` 独立于程序结果报告所选模式、观察到的拒绝，以及后端完整或部分的强制能力。
 
-`inspect(...values)` 接受无损 JSON 值和已注册的 Image，包括数组和对象中嵌套的 Image。字符串直接展示；其他 JSON 值按两空格缩进的 JSON 格式展示。格式化遵循原生 `JSON.stringify` 的嵌套深度限制。数组和字符串在共享输出预算内完整展示。undefined 参数被省略。容器中应省略 undefined 属性，Error 对象应改为 inspect `error.message`。二进制视图、循环引用等无效值会抛出指明参数位置的异常；此前已 inspect 的参数仍然可见。文本与选中的图片按参数顺序输出。
+`inspect(...values)` 直接渲染字符串，其他值使用 Node 的 `util.inspect` 格式，不限制预览深度、数组项数或字符串长度。undefined 属性、Error 对象和循环引用均会展示。注册的 Image 可以直接传入，也可以嵌入数组或对象；图片扫描不会调用 getter 或 Proxy trap。文本和所选图片在共享输出预算内遵循参数顺序。如果对象格式化抛错，此前 inspect 的参数仍然可见。
 
 所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
 

@@ -36,47 +36,37 @@ describe('makeInspect', () => {
     const seen: string[] = []
     const inspect = makeInspect(new LogBuffer(1_000, text => seen.push(text)))
     inspect('plain', { a: 1 })
-    expect(seen).toEqual(['plain {\n  "a": 1\n}'])
+    expect(seen).toEqual(['plain { a: 1 }'])
   })
 
   it.each([
-    ['Buffer', Buffer.from([1, 2, 3])],
-    ['TypedArray', new Uint8Array([1, 2, 3])],
-    ['DataView', new DataView(new ArrayBuffer(3))],
-    ['ArrayBuffer', new ArrayBuffer(3)],
-    ['function', () => 1],
-    ['Error', new Error('inspection failure')],
-    ['bigint', 1n],
-    ['non-finite number', Infinity],
-    ['negative zero', -0],
-    ['undefined property', { value: undefined }],
-  ])('rejects a %s argument after preserving preceding text', (_name, value) => {
+    ['Buffer', Buffer.from([1, 2, 3]), '<Buffer 01 02 03>'],
+    ['TypedArray', new Uint8Array([1, 2, 3]), 'Uint8Array(3) [ 1, 2, 3 ]'],
+    ['function', () => 1, '[Function'],
+    ['Error', new Error('inspection failure'), 'Error: inspection failure'],
+    ['bigint', 1n, '1n'],
+    ['non-finite number', Infinity, 'Infinity'],
+    ['negative zero', -0, '-0'],
+    ['undefined property', { value: undefined }, '{ value: undefined }'],
+  ])('displays a %s argument and continues execution', (_name, value, expected) => {
     const text: string[] = []
     const inspect = makeInspect({ push: line => text.push(line) })
-    expect(() => { inspect('before', value, 'after') }).toThrow('must be lossless JSON or an Image')
-    expect(text).toEqual(['before'])
+    inspect('before', value, 'after')
+    expect(text).toHaveLength(1)
+    expect(text[0]).toContain(expected)
+    expect(text[0]).toMatch(/^before .* after$/s)
   })
 
-  it('reports revoked proxies and throwing accessors as invalid inspected values', () => {
+  it('displays revoked proxies and accessors without invoking them', () => {
     const revoked = Proxy.revocable({}, {})
     revoked.revoke()
-    const throwing = { get value() { throw new Error('getter') } }
-    for (const value of [revoked.proxy, throwing]) {
-      const inspect = makeInspect({ push() {} })
-      expect(() => { inspect(value) }).toThrow('must be lossless JSON or an Image')
-    }
-  })
-
-  it.each([{ code: undefined }, new Error('tool failed')])('identifies the invalid argument and explains JSON conversion', (value) => {
     const text: string[] = []
-    const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)))
-    expect(() => { inspect('before', value) }).toThrow(
-      'inspect argument 2 must be lossless JSON or an Image; omit undefined properties and pass error.message for Errors',
-    )
-    expect(text).toEqual(['before'])
+    const inspect = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    inspect(revoked.proxy, { get value() { throw new Error('getter') } })
+    expect(text).toEqual(['<Revoked Proxy> { value: [Getter] }'])
   })
 
-  it('renders complete arrays, long strings and nested JSON values', () => {
+  it('renders complete arrays, long strings and deeply nested objects', () => {
     const value = {
       lines: Array.from({ length: 330 }, (_, index) => ({ number: index + 1, text: `line ${index + 1}` })),
       text: 'x'.repeat(12_000),
@@ -85,15 +75,14 @@ describe('makeInspect', () => {
     const text: string[] = []
     makeInspect(new LogBuffer(100_000, line => text.push(line)))(value)
     expect(text).toHaveLength(1)
-    expect(JSON.parse(text[0]!)).toEqual(value)
+    expect(runInNewContext(`(${text[0]!})`)).toEqual(value)
   })
 
-  it('preserves preceding arguments when native JSON formatting fails', () => {
-    let value: unknown = 0
-    for (let depth = 0; depth < 10_000; depth++) value = { child: value }
+  it('preserves preceding arguments when a custom formatter throws', () => {
+    const value = { [Symbol.for('nodejs.util.inspect.custom')]() { throw new Error('formatter failed') } }
     const text: string[] = []
     const inspect = makeInspect(new LogBuffer(1_000, line => text.push(line)))
-    expect(() => { inspect('before', value, 'after') }).toThrow(RangeError)
+    expect(() => { inspect('before', value, 'after') }).toThrow('formatter failed')
     expect(text).toEqual(['before'])
   })
 
@@ -107,38 +96,49 @@ describe('makeInspect', () => {
     const inspect = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
     inspect('before', value, 'after', one)
     expect(selected).toEqual(['one', 'two', 'one'])
-    expect(JSON.parse(text[0]!.slice('before '.length))).toEqual(value)
+    expect(runInNewContext(`(${text[0]!.slice('before '.length)})`)).toEqual(value)
     expect(text[1]).toBe('after')
     inspect({ path: '/fake.png', width: 1, height: 1 }, null)
     inspect()
     expect(selected).toEqual(['one', 'two', 'one'])
-    expect(text.slice(2)).toEqual(['{\n  "path": "/fake.png",\n  "width": 1,\n  "height": 1\n} null', ''])
+    expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null", ''])
     makeInspect({ push: line => text.push(line) }, images)(one)
-    expect(JSON.parse(text.at(-1)!)).toEqual(one)
+    expect(runInNewContext(`(${text.at(-1)!})`)).toEqual(one)
   })
 
-  it('uses one JSON snapshot for text and image selection', () => {
+  it('does not select images behind getters', () => {
     const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
     const images = new WeakMap<object, string>([[image, 'image']])
     const read = vi.fn(() => image)
     const text: string[] = []
     const selected: string[] = []
     makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))({ get image() { return read() } })
-    expect(read).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(text[0]!)).toEqual({ image })
+    expect(read).not.toHaveBeenCalled()
+    expect(text).toEqual(['{ image: [Getter] }'])
+    expect(selected).toEqual([])
+  })
+
+  it('finds images in cyclic containers alongside binary views', () => {
+    const image = Object.freeze({ path: '/image.png', width: 8, height: 4 })
+    const images = new WeakMap<object, string>([[image, 'image']])
+    const value: Record<string, unknown> = { binary: new Uint8Array([1, 2, 3]), image }
+    value.self = value
+    const selected: string[] = []
+    makeInspect({ push() {} }, images, id => selected.push(id))(value)
     expect(selected).toEqual(['image'])
   })
 
-  it('omits undefined arguments and rejects cycles', () => {
+  it('displays undefined arguments and cycles', () => {
     const text: string[] = []
     const inspect = makeInspect({ push: line => text.push(line) })
     inspect(undefined)
-    expect(text).toEqual([])
+    expect(text).toEqual(['undefined'])
     inspect(null)
-    expect(text).toEqual(['null'])
+    expect(text).toEqual(['undefined', 'null'])
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
-    expect(() => { inspect(cyclic) }).toThrow('must be lossless JSON or an Image')
+    inspect(cyclic)
+    expect(text.at(-1)).toBe('<ref *1> { self: [Circular *1] }')
   })
 })
 

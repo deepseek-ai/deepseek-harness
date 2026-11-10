@@ -3,18 +3,20 @@
  * @module @deepseek-ai/dsh-ptc-runtime-node/src/bootstrap
  */
 
-import { types } from 'node:util'
+import { inspect, types } from 'node:util'
 import type { PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import type { HostMethods, ProgramResult, ProgramBootData } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
 import { decodePtcJsonWire, encodePtcJsonWire, snapshotPtcJsonValue, type PtcImageWire } from './json-wire.ts'
 
 const CapturedError = Error
-const isNativeError = types.isNativeError
-const capturedJsonStringify = JSON.stringify
-const capturedObjectCreate = Object.create
-const capturedObjectDefineProperty = Object.defineProperty
-const capturedObjectKeys = Object.keys
+const { isNativeError, isArrayBufferView, isProxy } = types
+const {
+  create: capturedObjectCreate,
+  defineProperty: capturedObjectDefineProperty,
+  keys: capturedObjectKeys,
+  getOwnPropertyDescriptor: capturedObjectGetOwnPropertyDescriptor,
+} = Object
 
 /** Define one public binding-error field without consulting mutable globals or descriptor prototypes. */
 function defineBindingErrorField(error: Error, key: string, value: string): void {
@@ -94,12 +96,12 @@ export class LogBuffer {
 }
 
 /**
- * Render lossless JSON arguments independently and emit registered images in order.
+ * Render arguments without depth, array-length or string-length previews and emit registered images in order.
  * @param logs - the buffer every rendered line is pushed into.
  * @param images - Image identities owned by the execution process.
  * @param emitImage - Emits a registered image in the current evaluation.
  * @returns The program's inspect function.
- * @throws If a defined argument is not lossless JSON with optional registered Images, or native JSON formatting fails.
+ * @throws If object formatting fails; preceding arguments remain visible.
  */
 export function makeInspect(
   logs: Pick<LogBuffer, 'push'>, images?: Pick<WeakMap<object, string>, 'get'>, emitImage?: (id: string) => void,
@@ -111,43 +113,42 @@ export function makeInspect(
       logs.push(pending.join(' '))
       pending.length = 0
     }
-    for (const [index, arg] of args.entries()) {
-      const direct = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
-      if (direct !== undefined && emitImage !== undefined) { flush(); emitImage(direct); continue }
-      if (arg === undefined) continue
-      let value: PtcJsonValue | undefined
-      try {
-        value = snapshotPtcJsonValue(arg, current => images?.get(current) !== undefined)
-      } catch (_error: unknown) {
-        // Accessors and proxy traps can prevent a lossless JSON snapshot.
-        value = undefined
-      }
-      if (value === undefined) {
+    for (const arg of args) {
+      const directImage = arg !== null && typeof arg === 'object' ? images?.get(arg) : undefined
+      if (directImage !== undefined && emitImage !== undefined) {
         flush()
-        throw new CapturedError(`inspect argument ${index + 1} must be lossless JSON or an Image; omit undefined properties and pass error.message for Errors`)
+        emitImage(directImage)
+        continue
       }
       try {
-        pending.push(typeof value === 'string' ? value : capturedJsonStringify(value, undefined, 2))
+        pending.push(typeof arg === 'string' ? arg : inspect(arg, { depth: null, maxArrayLength: null, maxStringLength: null }))
       } catch (error: unknown) {
         flush()
         throw error
       }
       if (images === undefined || emitImage === undefined) continue
       const nested: string[] = []
-      const visit: unknown[] = [value]
+      const seen = new Set<object>()
+      const visit: unknown[] = [arg]
       while (visit.length > 0) {
         const current = visit.pop()
         if (current === null || typeof current !== 'object') continue
         const id = images.get(current)
-        if (id !== undefined) { nested.push(id); continue }
+        if (id !== undefined) {
+          nested.push(id)
+          continue
+        }
+        // Binary contents contain no Images; proxy traps must not run during discovery.
+        if (seen.has(current) || isArrayBufferView(current) || isProxy(current)) continue
+        seen.add(current)
         for (const key of capturedObjectKeys(current).reverse()) {
-          visit.push((current as Record<string, unknown>)[key])
+          const property = capturedObjectGetOwnPropertyDescriptor(current, key)
+          if (property !== undefined && 'value' in property) visit.push(property.value)
         }
       }
-      if (nested.length > 0) {
-        flush()
-        for (const id of nested) emitImage(id)
-      }
+      if (nested.length === 0) continue
+      flush()
+      for (const id of nested) emitImage(id)
     }
     flush()
     if (args.length === 0) logs.push('')
