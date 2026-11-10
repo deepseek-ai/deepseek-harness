@@ -5,6 +5,8 @@
  * - `xml` (default): one `<im-message seq="12" from="张三" time="14:07">…</im-message>` per message, with
  *   `self="true"` for the bot's own messages and `quote="#10"` when the message answers a stored one. The body is
  *   the plain text of the content (block structure flattened by `toText`), so a model can read a code block inline.
+ * - Every body encodes `&` and `<`: the envelope is what tells a model which chat it answers in, and message text is
+ *   written by a chat participant, who could otherwise spell a second `<im-chat … />` header inside a body.
  * - `line`: compact one-liners, `#12 14:07 张三(u_1) ↩#10 李四: 原文: 正文`, collapsing every message to one
  *   line so a batch of history stays concise.
  *
@@ -60,6 +62,19 @@ export function escapeAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+/**
+ * Escape a value for use as the character data of the transcript (`im-message` bodies, quote previews).
+ *
+ * A message body is content a chat participant controls, and the transcript's envelope is what tells a model which chat
+ * it is answering in: a body that spells `</im-message><im-chat key="…" />` would otherwise read as a second chat
+ * header, and the shared session holds a write grant for every chat it heard.
+ * @param value - the raw body or preview text.
+ * @returns the value with `&` and `<` escaped, so nothing in it can open or close an element.
+ */
+export function escapeText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+}
+
 /** One-line preview of a merged forward: its id plus the first line of the preview it carries. */
 function forwardPreview(node: Element<'forward'>): string {
   // The id is required by the vocabulary, but an unnormalized inbound forward may arrive without one.
@@ -86,14 +101,14 @@ function xmlText(message: ImMessage, body: string, quote: ImQuoteRef | undefined
   const attributes = [`seq="${message.seq}"`, `from="${escapeAttribute(senderName(message.sender))}"`, `time="${clock(message.time)}"`]
   if (message.sender.self) attributes.push('self="true"')
   if (quote) attributes.push(`quote="${escapeAttribute(quote.id)}"`)
-  return `<im-message ${attributes.join(' ')}>${body}</im-message>`
+  return `<im-message ${attributes.join(' ')}>${escapeText(body)}</im-message>`
 }
 
 /** `↩#10 李四: 原文` — the reply marker of one line. */
 function quoteSegment(quote: ImQuoteRef): string {
   let segment = `↩${quote.id}`
   if (quote.sender) segment += ` ${senderName(quote.sender)}`
-  if (quote.text) segment += `: ${oneLine(quote.text, PREVIEW_LIMIT)}`
+  if (quote.text) segment += `: ${escapeText(oneLine(quote.text, PREVIEW_LIMIT))}`
   return segment
 }
 
@@ -102,7 +117,7 @@ function lineText(message: ImMessage, body: string, quote: ImQuoteRef | undefine
   const identity = `${senderName(message.sender)}${message.sender.self ? '(你)' : ''}(${message.sender.id})`
   const head = [`#${message.seq}`, clock(message.time), identity]
   if (quote) head.push(quoteSegment(quote))
-  const text = oneLine(body)
+  const text = escapeText(oneLine(body))
   return `${head.join(' ')}:${text ? ` ${text}` : ''}`
 }
 
