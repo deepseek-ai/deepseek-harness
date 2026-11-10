@@ -5,7 +5,7 @@
  */
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { toText } from '@deepseek-ai/cordis-plugin-im-core'
+import { h, toText } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Bot, ChatRef, Element, InboundMessage, SendResult, Session } from '@deepseek-ai/cordis-plugin-im-core'
 import {
   ImChatKey, ImMessageKey, ImSourceId, splitKey, type ImChat, type ImCommand, type ImConfig, type ImMessage,
@@ -24,6 +24,9 @@ export interface ImIntakeHost {
 }
 
 const noop = () => {}
+
+/** Bytes of one stored draft that are not its text: identity, sender, chat, timestamps and the JSON punctuation. */
+const OWN_ENVELOPE_BYTES = 1024
 
 /**
  * Whether the platform handed this message as a card. A card arrives as a projection of itself, which is only the part
@@ -130,8 +133,35 @@ export class ImIntake {
       time,
       via: 'self',
     }
-    await this.store.touchChat(draft.chat)
-    return this.store.put(draft, 'none')
+    const bounded = this.boundedOwn(draft)
+    await this.store.touchChat(bounded.chat)
+    return this.store.put(bounded, 'none')
+  }
+
+  /**
+   * One own publication, bounded by the budget the intake applies to inbound messages. A publication can carry an
+   * inline resource (`data:`) or a body the model wrote, and `im_messages` keeps it for the whole retention window
+   * while the platform already has it — a file sent this way used to leave a multi-megabyte record behind. Over the
+   * budget, only the head of its text is stored.
+   * @param draft - the draft of the message this host published.
+   * @returns the draft to store.
+   */
+  private boundedOwn(draft: ImMessageDraft): ImMessageDraft {
+    const budget = this.config.maxInputBytes
+    if (inputBytes(draft) <= budget) return draft
+    // The stored draft carries its text twice (`content` and `text`), so each copy gets half the budget less the
+    // envelope the rest of the record occupies.
+    const room = Math.max(1, Math.floor((budget - OWN_ENVELOPE_BYTES) / 2))
+    let used = 0
+    let end = 0
+    for (const character of draft.text) {
+      used += Buffer.byteLength(character)
+      if (used > room) break
+      end += character.length
+    }
+    this.ctx.logger.warn('IM own message %s is over maxInputBytes (%s); only its text is stored', draft.key, budget)
+    const text = draft.text.slice(0, end)
+    return { ...draft, content: h('message', h.text(text)), text }
   }
 
   /** Kick the pump (new message, startup re-dispatch, retry timer). Never throws. */

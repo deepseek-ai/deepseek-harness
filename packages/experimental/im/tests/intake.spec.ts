@@ -507,6 +507,21 @@ describe('ImIntake outbound', () => {
     expect(message!.time).toBeGreaterThanOrEqual(before)
   })
 
+  it('stores only the text of an own publication that is over the budget', async () => {
+    const { bot, intake } = await boot({ config: { maxInputBytes: 4096 } })
+
+    // An inline resource: the platform holds the bytes, and the record keeps neither them nor a copy of the URL.
+    const inline = await intake.outbound(bot, await bot.send(target, h('message', h.text('look '),
+      h('img', { src: `data:image/png;base64,${'A'.repeat(20000)}` }))))
+    expect(JSON.stringify(inline)).not.toContain('base64')
+    expect(Buffer.byteLength(JSON.stringify(inline))).toBeLessThanOrEqual(4096)
+
+    // A long body is cut to the budget rather than dropped.
+    const long = await intake.outbound(bot, await bot.send(target, h('message', h.text('x'.repeat(6000)))))
+    expect(long?.text.length).toBeGreaterThan(0)
+    expect(Buffer.byteLength(JSON.stringify(long))).toBeLessThanOrEqual(4096)
+  })
+
   it('ignores chats no source admits and empty handles', async () => {
     const { bot, intake, store } = await boot({
       config: { sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all', chats: ['chat'] }] },
