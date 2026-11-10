@@ -2358,7 +2358,7 @@ it.skipIf(MODE === 'record')('summarizes checks, reviewers, and the merge state 
   const session = scaffold.ctx.sessions.get(await settled)
   if (session === undefined) throw new Error('Session must stay loaded')
   scaffold.ctx.forgeSession.track(session, PULL)
-  await page.locator('[data-forge-header]').click()
+  await showSessionPanel(page)
   const card = page.locator(`[data-forge-change="${PULL}"]`)
   // The card chooses its default expansion once its first status arrives, which names the title.
   await card.getByRole('link', { name: 'Add the pull request panel', exact: true }).waitFor({ timeout: 20_000 })
