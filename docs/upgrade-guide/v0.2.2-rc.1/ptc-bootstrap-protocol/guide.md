@@ -13,6 +13,8 @@ The Node PTC Host requires bootstrap protocol version 3 instead of version 2. It
 
 Version 3 carries optional `ProgramBootData.initialization` source for each new environment. The bootstrap evaluates it separately after installing current bindings, then awaits the Host's `initialized()` RPC acceptance and rechecks cancellation before running the model program. Initialization failure discards the environment and prevents model execution. The Node provider supports initializer registration only in `persistent-in-memory` mode.
 
+Version 3 also carries `ProgramBootData.discardCompletion` to discard completion values before JSON validation and serialization. The bootstrap provides `inspect` and sends selected images through `HostMethods.image(id)` in output order. Custom bootstraps must support these fields and methods alongside environment initialization.
+
 ## Migration
 
 1. If your Node PTC configuration sets `launch.bootstrapPath`, deploy the matching version of `@deepseek-ai/dsh-ptc-runtime-node` in its execution environment. Use the package's built `lib/process.js` or REPL-default `lib/persistent-process.js` with its dependencies. Keep the Host and bootstrap versions aligned; changing only the advertised version is insufficient.
