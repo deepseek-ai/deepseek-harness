@@ -22,6 +22,7 @@ export function createNativeFixture() {
     let heldCallId
     function dispatch(method, params) {
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
+      if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: 4 }]
       if (method === 'getApp') {
         if (params.selector !== 'test.fixture') throw new Error('Select test.fixture')
         acquired = true

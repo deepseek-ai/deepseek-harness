@@ -120,14 +120,22 @@ export const AppResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
   name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
-/** Application discovery entries with the provider-reported running state. */
-export const AppsResult = z.array(z.object({
-  id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional(), isRunning: z.boolean(),
-}))
-/** Installed application matches and their current running state. */
-export const FoundAppsResult = z.array(z.object({
-  id: z.string().min(1), displayName: z.string(), path: z.string().min(1), isRunning: z.boolean(),
-}))
+const processId = z.number().int().positive().max(2 ** 31 - 1)
+const appProcess = z.discriminatedUnion('isRunning', [
+  z.object({ isRunning: z.literal(true), pid: processId.optional() }),
+  z.object({ isRunning: z.literal(false) }),
+])
+/** Application records exposed for selection. Running macOS records carry a process ID. */
+export const AppsResult = z.array(z.intersection(z.union([
+  appProcess,
+  z.object({ isRunning: z.literal(true).default(true), pid: processId }),
+]), z.object({
+  id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional(),
+})))
+/** Installed matches preserve their installation selector and the PID of a running macOS instance. */
+export const FoundAppsResult = z.array(z.intersection(appProcess, z.object({
+  id: z.string().min(1), displayName: z.string(), path: z.string().min(1),
+})))
 /** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
   windowId, appName: z.string(), title: z.string(), bounds,

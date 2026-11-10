@@ -250,6 +250,18 @@ it('settles an in-flight native call before releasing the provider connection an
   expect(ctx.tools.get('cua_run_code', agent)).toBeUndefined()
 })
 
+it('returns the Windows application ID without the native placeholder PID', async () => {
+  const { agent, run, native } = await setup([
+    'var apps = await cua.listApps(); inspect(JSON.stringify(apps)); await cua.getApp(apps[0].id)',
+  ], 'windows')
+  await run()
+  const result = agent.session.deriveMessages().find(message => message.role === 'tool')
+  expect(result?.isError).toBe(false)
+  expect(JSON.parse(result!.content.filter(block => block.type === 'text').map(block => block.text).join('')))
+    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', isRunning: true }])
+  expect(native.calls.filter(call => call.method === 'getApp').map(call => call.params.selector)).toEqual(['test.fixture'])
+})
+
 it('forwards per-read accessibility limits to the Windows backend', async () => {
   const { run, native } = await setup([
     'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree({ maxElements: 30, maxDepth: 3 })',

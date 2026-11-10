@@ -36,7 +36,10 @@ export type CuaStartupCapabilities = Pick<
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
 > & { systemPointer?: boolean }
 /** App discovery result accepted by getApp, including the provider-reported running state. */
-export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'>
+export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'> & {
+  /** Running process selector on macOS. */
+  pid?: number | undefined
+}
 /** An installed application match with its current running state. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */

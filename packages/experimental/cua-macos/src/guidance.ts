@@ -6,6 +6,8 @@ export const PLATFORM_GUIDANCE = 'macOS: accessibility tree operations are avail
 
 function operationGuidance(treeAdvice: string): string {
   const methodDetails = new Map<string, string>([
+    ['cua.listApps', 'Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.'],
+    ['cua.findApps', 'Running installation matches include their process ID. Stopped matches have no pid.'],
     ['getAccessibilityTree', `macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. ${treeAdvice} Use element ids from the file only while that observation is current.`],
     ['mouseMove', 'Default hover requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.'],
     ['click', 'click is a Window method: select a window with const win = await app.getWindow(windowId), then call win.click(target). For a background control’s default action, use app.invoke(id). For a mouse click on a background app, call app.activate() first and re-read the target. Both target forms send mouse-down and mouse-up events. click(id) uses the center of the full element bounds. If that center is outside the window, take a fresh win.getScreenshot() and use click([x, y]) on a visible part of the control in screenshot pixels. A background app can ignore the events even when dispatched is true. Verify the expected effect, such as a changed selection, before typing or retrying.'],

@@ -52,9 +52,10 @@ export function createCuaApi(dispatch: CuaDispatch): CuaApi {
       return capabilities
     },
     async listApps() {
-      return AppsResult.parse(await call('listApps', {})).map(app => ({
-        id: app.id ?? (app.bundleId || app.name), displayName: app.name, isRunning: app.isRunning,
-      }))
+      return AppsResult.parse(await call('listApps', {})).map(({ id, name, bundleId, ...state }) => {
+        const selector = id ?? (bundleId || (state.isRunning && state.pid !== undefined ? String(state.pid) : name))
+        return { id: selector, displayName: name, ...state }
+      })
     },
     async findApps(query) {
       return FoundAppsResult.parse(await call('findApps', { query }))

@@ -25,7 +25,7 @@ function fixture() {
   const dispatch = vi.fn(async ({ method, params }: CuaOperation): Promise<JsonValue> => {
     switch (method) {
       case 'getCapabilities': return currentCapabilities
-      case 'listApps': return [selected, { id: 'utility-selector', pid: 4, name: 'Utility', isRunning: true }]
+      case 'listApps': return [selected, { id: 'utility-selector', name: 'Utility', isRunning: true }]
       case 'getApp': return selected
       case 'listWindows': return windows
       case 'mouseMove': return { ...delivered, hoverRoute: 'accessibility', systemPointerMoved: false }
@@ -57,10 +57,22 @@ describe('application discovery', () => {
     const f = fixture()
     expect(await f.api.getCapabilities()).toEqual(capabilities)
     expect(await f.api.getState()).toEqual({ apps: [
-      { id: 'test.editor', displayName: 'Editor', isRunning: true },
+      { id: 'test.editor', displayName: 'Editor', isRunning: true, pid: 17 },
       { id: 'utility-selector', displayName: 'Utility', isRunning: true },
     ], browsers: [] })
     expect(f.dispatch.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'listApps'])
+  })
+
+  it.each([undefined, 'test.utility'])('selects either same-name macOS process with bundle ID %s', async (bundleId) => {
+    const f = fixture()
+    const pids = [101, 202]
+    f.dispatch.mockResolvedValueOnce(pids.map(pid => bundleId ? { name: 'Utility', isRunning: true, pid, bundleId } : { name: 'Utility', pid }))
+    const apps = await f.api.listApps()
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(apps).toEqual(pids.map(pid => ({ id: bundleId ?? String(pid), displayName: 'Utility', isRunning: true, pid })))
+    for (const app of apps) await f.api.getApp(String(app.pid))
+    expect(f.dispatch.mock.calls.flatMap(([call]) => call.method === 'getApp' ? [call.params.selector] : []))
+      .toEqual(['101', '202'])
   })
 
   it('passes a discovered selector unchanged to application selection', async () => {
@@ -96,9 +108,9 @@ describe('application discovery', () => {
     const f = fixture()
     const matches = [
       { id: 'test.stopped', displayName: 'Stopped', path: '/Applications/Stopped.app', isRunning: false },
-      { id: 'test.running', displayName: 'Running', path: '/Applications/Running.app', isRunning: true },
+      ...[101, 202].map(pid => ({ id: 'test.running', displayName: 'Running', path: `/fixture/${pid}/Running.app`, isRunning: true, pid })),
     ]
-    f.dispatch.mockResolvedValueOnce([matches[0]!, { ...matches[1]!, pid: 17 }])
+    f.dispatch.mockResolvedValueOnce(matches)
     expect(await f.api.findApps('Editor')).toEqual(matches)
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'findApps', params: { query: 'Editor' } })
     await expect(f.api.findApps('   ')).rejects.toThrow()

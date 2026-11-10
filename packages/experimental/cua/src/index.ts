@@ -100,6 +100,8 @@ interface CuaExecution extends ToolExecution {
 }
 
 
+const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
+
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
@@ -295,6 +297,10 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
+      // Only macOS exposes a native PID as an application selector.
+      if ((method === 'listApps' || method === 'findApps') && backend.capabilities.platform !== 'macos') {
+        return nativeDiscoveryRows.parse(result).map(({ pid: _pid, ...record }) => record)
+      }
       if (method === 'getCapabilities') {
         const runtime = z.record(z.string(), z.json()).parse(result)
         const capabilities = backend.capabilities
