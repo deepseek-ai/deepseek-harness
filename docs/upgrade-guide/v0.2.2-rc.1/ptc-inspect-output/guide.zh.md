@@ -24,13 +24,13 @@ TypeScript `run_code` 程序通过 `inspect(...values)` 展示选定的值。此
    inspect(result)
    ```
 
-2. 将 CUA 桥接回调更新为 `text => inspect(text)`。直接调用 `createCuaApi(dispatch, onText?)` 时，提供截图返回程序 `Image` 的分派器，并将文本回调作为第二个参数。调用 `window.getScreenshot()`，再将返回的 `Image` 传给 `inspect`。
+2. 删除 `connectCua` 和 `createCuaApi` 的输出回调、观察选项 `emit` 和已无作用的 AX 选项 `disableDiffing`。将要展示的观察结果传给 `inspect`，例如 `inspect(await app.getWindows())`。自定义分派器须为截图操作直接返回程序可用的 `Image`。
 
    ```js
    const { connectCua } = await import("<host-provided bridge file URL>")
-   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const cua = connectCua(() => tools.cua)
    const app = await cua.getApp("TextEdit")
-   const windows = await app.getWindows({ emit: false })
+   const windows = await app.getWindows()
    const win = await app.getWindow(windows[0].windowId)
    const before = await win.getScreenshot()
    await app.pressKey("Tab")

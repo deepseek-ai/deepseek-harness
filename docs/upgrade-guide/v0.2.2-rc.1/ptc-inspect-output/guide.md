@@ -24,13 +24,13 @@ Other image-producing tools retain their declared program values and automatical
    inspect(result)
    ```
 
-2. Update CUA bridge callbacks to `text => inspect(text)`. Direct `createCuaApi(dispatch, onText?)` callers supply a dispatcher that returns program Images for screenshots and pass the text callback as the second argument. Call `window.getScreenshot()` and pass its returned Image to `inspect`.
+2. Remove output callbacks from `connectCua` and `createCuaApi`, the `emit` observation option and the unused `disableDiffing` AX option. Pass observations you want to display to `inspect`, for example `inspect(await app.getWindows())`. A custom dispatcher must return a program Image for screenshot operations.
 
    ```js
    const { connectCua } = await import("<host-provided bridge file URL>")
-   const cua = connectCua(() => tools.cua, text => inspect(text))
+   const cua = connectCua(() => tools.cua)
    const app = await cua.getApp("TextEdit")
-   const windows = await app.getWindows({ emit: false })
+   const windows = await app.getWindows()
    const win = await app.getWindow(windows[0].windowId)
    const before = await win.getScreenshot()
    await app.pressKey("Tab")

@@ -375,7 +375,7 @@ Persistent PTC initialization:
 
 \`\`\`ts
 var { connectCua } = await import(${JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)});
-var cua = connectCua(() => tools.cua, text => inspect(text));
+var cua = connectCua(() => tools.cua);
 \`\`\``
       },
     }
