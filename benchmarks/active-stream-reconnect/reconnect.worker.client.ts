@@ -2,7 +2,7 @@
 import { performance } from 'node:perf_hooks'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionAssistantStreamBaseline } from '@deepseek-ai/dsh-api-session-controller/types'
 // The Client implementation has no plain-Node export; only this adapter is bundled.
 import { ClientAssistantStream } from '../../packages/api/session-controller/src/client/sessions/assistant-stream.ts'

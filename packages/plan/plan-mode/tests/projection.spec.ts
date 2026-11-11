@@ -12,7 +12,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 
 interface Bench {

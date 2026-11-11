@@ -7,7 +7,7 @@
  * without depending on dsh-llm; see that package's README for the
  * nominal-typing policy.
  *
- * @module @deepseek-ai/dsh-llm/brand
+ * @module @deepseek-ai/dsh-llm/src/brand.ts
  */
 
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'

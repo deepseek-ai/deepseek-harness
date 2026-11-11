@@ -4,7 +4,7 @@ import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-direc
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { type SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
 import { brandString } from '@deepseek-ai/dsh-brand'

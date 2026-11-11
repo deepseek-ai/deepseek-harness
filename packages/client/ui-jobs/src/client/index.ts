@@ -5,7 +5,7 @@
  * transport state of its own.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
+import type { JobId } from '@deepseek-ai/dsh-jobs/types'
 import { JobsRunningIndicator, JobsSection } from './JobsSection.tsx'
 import type { JobsRunningIndicatorInjected, JobsSectionInjected } from './JobsSection.tsx'
 import { createJobsSectionStore } from './jobs-store.ts'

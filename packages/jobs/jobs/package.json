@@ -18,9 +18,9 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./brand": {
-      "types": "./lib/types/brand.d.ts",
-      "default": "./lib/types/brand.js"
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
     },
     "./view": {
       "types": "./lib/types/view.d.ts",

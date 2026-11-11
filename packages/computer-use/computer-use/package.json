@@ -21,9 +21,9 @@
     "./src/*": "./src/*",
     "./locale/*.json": "./locale/*.json",
     "./package.json": "./package.json",
-    "./brand": {
-      "types": "./lib/types/brand.d.ts",
-      "default": "./lib/types/brand.js"
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
     }
   },
   "files": [

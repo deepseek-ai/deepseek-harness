@@ -11,7 +11,7 @@ import { SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages } from '@dee
 import { apply as applyConversation, inject as injectConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyChat, inject as injectChat } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
