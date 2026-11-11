@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`ptc-runtime/` 分组执行调用宿主异步函数的模型程序。Node 按配置的文件策略求值异步函数体、REPL 语句或 VM Script。异步函数体使用新进程；REPL 模式为每个显式状态所有者保留一个进程；Script 通过 `scriptPersistence` 可选保留状态。进程或所有者结束时内存消失。实验性 Python 后端使用新的 CPython 进程。失败作为结果返回，供调用方诊断或交给模型处理。
+`ptc-runtime/` 分组执行调用宿主异步函数的模型程序。Node 按配置的文件策略求值异步函数体、REPL 语句或 VM Script。异步函数体使用新进程；REPL 模式为每个显式状态所有者保留一个进程；Script 通过 `scriptPersistence` 可选保留状态。进程或所有者结束时内存消失。失败作为结果返回，供调用方诊断或交给模型处理。
 
 ## 目录
 

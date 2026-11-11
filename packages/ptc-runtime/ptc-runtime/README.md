@@ -134,7 +134,7 @@ These limits define what the seam cannot do; they are current package constraint
 
 - **`run()` is one-shot** — `output` arrives only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
 - **Retained memory is disposable**: providers may keep state for an explicit owner; restart, release, and provider-specific failures discard it. Programs, binding calls and results remain logged by consumers; live objects are neither serialized nor replayed.
-- **Providers have different confinement capabilities** — the shipped Node provider enforces a resolved file policy, while the private experimental Python provider rejects an explicit policy. No container provider is supplied.
+- **No container provider is supplied** — the shipped Node provider enforces the resolved file policy through the composed sandbox backend.
 - **No uniform binding byte cap applies across providers** — each provider owns its transport limits; a binding can still allocate memory before its result reaches those limits.
 
 <a id="dev-note"></a>
