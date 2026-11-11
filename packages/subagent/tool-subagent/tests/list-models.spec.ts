@@ -264,7 +264,7 @@ describe('list_subagent_models', () => {
     const denied = await call(ctx, { provider: 'alpha', model: 'plain' })
     expect(denied.isError).toBe(true)
     expect(text(denied)).toContain('is not allowed for this Session')
-    expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
   })
 
   it('rejects an unauthorized provider before calling its adapter catalog', async () => {
@@ -277,7 +277,7 @@ describe('list_subagent_models', () => {
 
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('provider "secret" is not allowed for this Session')
-    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
     expect(listModels).not.toHaveBeenCalled()
   })
 
@@ -385,7 +385,7 @@ describe('list_subagent_models', () => {
   it.each([
     { args: { model: 'fast' }, expected: '`model` requires `provider`', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
     { args: { provider: '' }, expected: '`provider` must be non-empty', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
-    { args: { provider: 'missing' }, expected: 'is not allowed for this Session', info: { name: 'SubagentError', code: 'UNAUTHORIZED' } },
+    { args: { provider: 'missing' }, expected: 'is not allowed for this Session', info: { name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' } },
   ])('rejects incomplete or unavailable provider requests', async ({ args, expected, info }) => {
     const ctx = await setupListTool()
     const result = await call(ctx, args)
@@ -412,7 +412,7 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'missing' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('available providers: alpha')
-    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'NO_PROVIDER' })
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'LLM_PROVIDER_NOT_FOUND' })
     expect(text(result)).not.toContain('secret')
   })
 
@@ -421,6 +421,6 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'missing' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('available providers: (none)')
-    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'NO_PROVIDER' })
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'LLM_PROVIDER_NOT_FOUND' })
   })
 })

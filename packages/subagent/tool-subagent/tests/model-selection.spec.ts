@@ -202,7 +202,7 @@ describe('dsh-tool-subagent model selection', () => {
     })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('is not allowed for this Session')
-    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
   })
 
   it('discovers only the parent route without a Session policy and permits its explicit route and effort', async () => {
@@ -578,7 +578,7 @@ describe('dsh-tool-subagent model selection', () => {
     })
     expect(denied.isError).toBe(true)
     expect(text(denied)).toContain('is not allowed for this Session')
-    expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
 
     const invalidEffort = await callSubagent(ctx, {
       description: 'unsupported effort', prompt: 'do it', provider: 'alpha', model: 'fast-model', reasoning_effort: 'invalid',

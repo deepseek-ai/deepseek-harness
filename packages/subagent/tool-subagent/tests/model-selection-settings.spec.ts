@@ -285,7 +285,7 @@ describe('SubagentModelSelectionConfig', () => {
 
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('is not allowed for this Session')
-    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'UNAUTHORIZED' })
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
     await ctx.fiber.dispose()
   })
 

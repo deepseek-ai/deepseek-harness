@@ -1033,7 +1033,7 @@ describe('dsh-tool-team', () => {
 
   it.each([
     new Error('root lookup failed'),
-    new SubagentError('root lookup failed', 'INTERNAL_FAILURE'),
+    new SubagentError('root lookup failed', 'CONTINUATION_UNAVAILABLE'),
   ])('propagates unexpected identity lookup failures: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })

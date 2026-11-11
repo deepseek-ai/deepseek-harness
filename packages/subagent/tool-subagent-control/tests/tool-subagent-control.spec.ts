@@ -258,7 +258,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it.each([
     new Error('root lookup failed'),
-    new SubagentError('root data is unreadable', 'CORRUPT'),
+    new SubagentError('root data is unreadable', 'PERSISTENCE_UNAVAILABLE'),
   ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
     const { ctx, parent } = await setup([])
     const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => { throw error })

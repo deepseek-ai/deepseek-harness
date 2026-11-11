@@ -28,7 +28,7 @@ function registeredProvider(
     .filter(candidate => policy.routes.some(route => route.provider === candidate.id))
     .map(candidate => candidate.id)
     .join(', ') || '(none)'
-  throw new SubagentError(`LLM provider "${providerId}" is not registered; available providers: ${available}`, 'NO_PROVIDER')
+  throw new SubagentError(`LLM provider "${providerId}" is not registered; available providers: ${available}`, 'LLM_PROVIDER_NOT_FOUND')
 }
 
 /** Render one advertised or resolved model. */
@@ -73,7 +73,7 @@ async function listSubagentModels(
   const allowedRoutes = policy.routes.filter(route => route.provider === request.provider)
   const [firstRoute] = allowedRoutes
   if (firstRoute === undefined) {
-    throw new SubagentError(`LLM provider "${request.provider}" is not allowed for this Session`, 'UNAUTHORIZED')
+    throw new SubagentError(`LLM provider "${request.provider}" is not allowed for this Session`, 'MODEL_ROUTE_NOT_ALLOWED')
   }
   const provider = registeredProvider(llm, policy, request.provider)
   if (request.model === undefined) {
@@ -87,7 +87,7 @@ async function listSubagentModels(
   }
   if (request.model.length === 0) throw new ToolArgsError(['`model` must be non-empty'])
   if (!allowedRoutes.some(route => route.model === request.model)) {
-    throw new SubagentError(`child LLM route "${provider.id}/${request.model}" is not allowed for this Session`, 'UNAUTHORIZED')
+    throw new SubagentError(`child LLM route "${provider.id}/${request.model}" is not allowed for this Session`, 'MODEL_ROUTE_NOT_ALLOWED')
   }
   const model = await llm.resolveModelInfo(provider.id, request.model, signal)
   const efforts = model.reasoning?.efforts.map(effort => (

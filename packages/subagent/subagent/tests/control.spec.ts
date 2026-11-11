@@ -10,6 +10,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, {
   SubagentError,
+  type SubagentErrorCode,
   type SubagentPromptRequestId,
 } from '@deepseek-ai/dsh-subagent'
 import { subagentManager } from './manager-internals.ts'
@@ -251,7 +252,7 @@ describe('subagent prompt Remote', () => {
   it('maps each admission failure onto its stable code and hides the rest', async () => {
     const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const delivery = promptDelivery(ctx)
-    const cases: readonly [string, string][] = [
+    const cases: readonly [SubagentErrorCode, string][] = [
       ['NOT_RESUMABLE', 'subagent/not-resumable'],
       ['UNAUTHORIZED', 'subagent/unauthorized'],
       ['DRAINING', 'subagent/delivery-unavailable'],

@@ -99,7 +99,7 @@ function assertNonEmpty(value: string | undefined, field: keyof DelegationModelR
  * @param parentOptions - Current parent route used when no policy is recorded.
  * @returns Child Agent options, preserving omission when no layer contributes one.
  * @throws {SubagentError} `MODEL_SELECTION_DISABLED` when this tool instance
- *   forbids selection, or `UNAUTHORIZED` when the Session does not allow the route.
+ *   forbids selection, or `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
  * @throws {ToolArgsError} when a field is empty or `provider` and `model` are not supplied together.
  */
 export function requestedAgentOptions(
@@ -137,7 +137,7 @@ export function requestedAgentOptions(
  * @param policy - Session allowlist; omission permits only the current parent route.
  * @param parentOptions - Current parent route used when no policy is recorded.
  * @param route - Validated provider/model pair from the tool call.
- * @throws {SubagentError} `UNAUTHORIZED` when the Session does not allow the route.
+ * @throws {SubagentError} `MODEL_ROUTE_NOT_ALLOWED` when the Session does not allow the route.
  */
 export function assertAllowedModelSelection(
   policy: ModelSelectionPolicy | undefined,
@@ -152,7 +152,7 @@ export function assertAllowedModelSelection(
   throw new SubagentError(`child LLM route "${provider}/${model}" is not allowed for this Session`
     + (policy === undefined
       ? '; without a recorded model-selection policy, explicit selection is limited to the parent route'
-      : ''), 'UNAUTHORIZED')
+      : ''), 'MODEL_ROUTE_NOT_ALLOWED')
 }
 
 /**
