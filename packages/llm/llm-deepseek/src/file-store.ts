@@ -133,7 +133,7 @@ export class DeepSeekFileStore {
   private readonly fetchImpl: typeof fetch | undefined
   private readonly inflight = new Map<string, SharedUpload>()
   /** Unclaimed slots from the preceding cleanup in each active Files namespace. */
-  private readonly quotaRecoveries = new Map<string, Promise<number>>()
+  private readonly quotaRecoveries = new Map<DeepSeekUploadRecord['scope'], Promise<number>>()
 
   /**
    * @param options - testable index, clock, and transport boundaries.
@@ -275,10 +275,13 @@ export class DeepSeekFileStore {
     try {
       available = previous === undefined ? 0 : await previous
       signal.throwIfAborted()
-      if (available === 0) available = await this.reclaimOldestOwned(connection, count, signal)
-      if (available === 0) return false
-      available--
-      return true
+      if (available > 0) {
+        available--
+        return true
+      }
+      const deleted = await this.reclaimOldestOwned(connection, count, signal)
+      available = Math.max(0, deleted - 1)
+      return deleted > 0
     } finally {
       next.resolve(available)
       if (this.quotaRecoveries.get(scope) === next.promise) this.quotaRecoveries.delete(scope)
