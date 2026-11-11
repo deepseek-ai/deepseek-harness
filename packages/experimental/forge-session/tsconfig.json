@@ -43,6 +43,9 @@
     },
     {
       "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }
