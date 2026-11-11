@@ -245,7 +245,8 @@ describe('goal projection unit', () => {
 
     await expect(agentEvents(bench.ctx, bench.agent).serial('agent/created', { source: 'resume' }))
       .resolves.toBeUndefined()
-    expect(() => bench.ctx.goals.get(bench.agent)).toThrow(failure)
+    expect(() => bench.ctx.goals.get(bench.agent))
+      .toThrow(expect.objectContaining({ name: 'GoalError', code: 'GOAL_STATE_CORRUPT', message: failure }))
     expect(bench.tailValues().goal).toMatchObject({ goal: { objective: 'poisoned replay' } })
   })
 

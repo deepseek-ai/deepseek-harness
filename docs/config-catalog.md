@@ -2762,7 +2762,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-plan-mode`
 
 - `inject`: `tools` · `systemPrompt` · `sessionProjections` · `agents`
-- `source`: [`packages/plan/plan-mode/src/index.ts:67`](../packages/plan/plan-mode/src/index.ts)
+- `source`: [`packages/plan/plan-mode/src/index.ts:69`](../packages/plan/plan-mode/src/index.ts)
 
 ```ts config-catalog
 /** Deployment-owned plan guidance. */
@@ -4577,7 +4577,7 @@ export interface Config {
 
 - `inject`: `tools` · `subagents` · `systemPrompt` · `sessionProjections`
 - `refs`: [`AgentOptions`](subsystems/core.md)
-- `source`: [`packages/subagent/tool-subagent/src/index.ts:45`](../packages/subagent/tool-subagent/src/index.ts)
+- `source`: [`packages/subagent/tool-subagent/src/index.ts:46`](../packages/subagent/tool-subagent/src/index.ts)
 
 ```ts config-catalog
 /** Config: which registered provider this tool delegates to, plus child defaults. */
@@ -4724,7 +4724,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-workflow`
 
 - `inject`: `tools` · `workflowEngine` · `systemPrompt`
-- `source`: [`packages/workflow/tool-workflow/src/index.ts:45`](../packages/workflow/tool-workflow/src/index.ts)
+- `source`: [`packages/workflow/tool-workflow/src/index.ts:46`](../packages/workflow/tool-workflow/src/index.ts)
 
 ```ts config-catalog
 /** Config: the model-facing tool name plus result rendering caps. */

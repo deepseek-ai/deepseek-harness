@@ -93,12 +93,16 @@ describe('delegation depth limits', () => {
   it.each([-1, -0, 0.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects an invalid runtime depth %s', (depth) => {
     const parent = parentAgent()
     parent.options.subagentDepth = depth
-    expect(() => resolveChildDepth(parent, undefined)).toThrow('agent subagentDepth must be a non-negative safe integer')
+    expect(() => resolveChildDepth(parent, undefined)).toThrow(expect.objectContaining({
+      name: 'SubagentError', code: 'INVALID_DEPTH', message: 'agent subagentDepth must be a non-negative safe integer',
+    }))
   })
 
   it('rejects a child depth beyond the exact integer range', () => {
     const parent = parentAgent()
     parent.options.subagentDepth = Number.MAX_SAFE_INTEGER
-    expect(() => resolveChildDepth(parent, undefined)).toThrow('subagent child depth exceeds the safe-integer range')
+    expect(() => resolveChildDepth(parent, undefined)).toThrow(expect.objectContaining({
+      name: 'SubagentError', code: 'INVALID_DEPTH', message: 'subagent child depth exceeds the safe-integer range',
+    }))
   })
 })

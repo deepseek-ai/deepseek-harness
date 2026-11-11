@@ -31,7 +31,7 @@ The `workflow` tool runs a model-authored orchestration script that fans work ou
 
 The model submits three parameters plus one flag: `meta` (required identity data: `name`, `description`, and optional `whenToUse` and `phases`), `script` (required plain JavaScript body — no `export const meta` statement; its parameter description carries the body rules and the tool description carries the hook contract), `args` (optional JSON object exposed to the script as the `args` global; wrap a bare list in a field so the wire schema stays honest), and `run_in_background` (optional; present only while `enableRunInBackground` holds).
 
-A foreground success returns the envelope `{ kind: 'foreground', runId, agentsStarted, result }`, rendered to the model as `workflow "<name>" completed (<count> agent<optional-s>).` followed by `Return value:` and the pretty-printed JSON. A workflow that cannot start — a script parse or meta validation failure — returns an error the model can correct from. Cancellation and execution failures return `Error: workflow run was cancelled` or `Error: workflow run failed: <error>`; partial output is never reported as success.
+A foreground success returns the envelope `{ kind: 'foreground', runId, agentsStarted, result }`, rendered to the model as `workflow "<name>" completed (<count> agent<optional-s>).` followed by `Return value:` and the pretty-printed JSON. A workflow that cannot start — a script parse or meta validation failure — returns an error the model can correct from. Cancelling the calling step returns the tool runtime's `AbortError` `ABORTED` result; any other cancellation and execution failures return `Error: workflow run was cancelled` (`WorkflowError` `CANCELLED`) or `Error: workflow run failed: <error>` (`WorkflowError` with the fatal code that ended the run, such as `AGENT_CAP`, or `RUN_FAILED` without one); partial output is never reported as success.
 
 ### What to expect during a run
 
@@ -67,7 +67,7 @@ The consumer owns the model-facing schema, the `tool:<toolName>` system-prompt g
 
 ### Run lifecycle
 
-`execute` starts the run and awaits `run.result` inside a `try/finally` that always disposes the run. `exec.signal` is bridged to `run.cancel()`, including the already-aborted-before-start case. A non-`completed` stop reason maps to an `isError` result reporting the reason; completion renders `{ kind, runId, agentsStarted, result }`, with the Native renderer truncating only that projection at `maxResultChars`.
+`execute` starts the run and awaits `run.result` inside a `try/finally` that always disposes the run. `exec.signal` is bridged to `run.cancel()`, including the already-aborted-before-start case. A non-`completed` stop reason maps to an `isError` result reporting the reason, rethrowing the caller's abort reason when `exec.signal` aborted and otherwise throwing a `WorkflowError`; completion renders `{ kind, runId, agentsStarted, result }`, with the Native renderer truncating only that projection at `maxResultChars`.
 
 ### Background lifecycle
 
@@ -150,7 +150,7 @@ Prefix-stable while `toolName`, definition, and visibility are unchanged. Renami
 
 #### What the model sees
 
-The full model-written script, metadata, and args remain in the assistant tool call. A foreground success is exactly `workflow "<name>" completed (<count> agent<optional-s>).`, newline, `Return value:`, newline, and pretty-printed data-dependent JSON; a cap adds `… [truncated: <omitted> more characters]` on a new line. A background acceptance is exactly `workflow "<name>" started in the background as job <jobId>. Its return value arrives with the completion notice; check on it with job_output, stop it with job_kill.`, and the same rendered value later reaches the model through the job's completion notice and `job_output`. Failures are exactly `Error: workflow run was cancelled`, optionally suffixed ` (<error>)`, `Error: workflow run failed: <error-or-unknown error>`, or defensively `Error: workflow run ended abnormally (<reason>)`; a call without an owning agent becomes `Error: workflow tool requires a calling agent (exec.agent was undefined)`. Intermediate child messages are omitted.
+The full model-written script, metadata, and args remain in the assistant tool call. A foreground success is exactly `workflow "<name>" completed (<count> agent<optional-s>).`, newline, `Return value:`, newline, and pretty-printed data-dependent JSON; a cap adds `… [truncated: <omitted> more characters]` on a new line. A background acceptance is exactly `workflow "<name>" started in the background as job <jobId>. Its return value arrives with the completion notice; check on it with job_output, stop it with job_kill.`, and the same rendered value later reaches the model through the job's completion notice and `job_output`. Failures after a caller abort render the abort reason; other failures are exactly `Error: workflow run was cancelled`, optionally suffixed ` (<error>)`, `Error: workflow run failed: <error-or-unknown error>`, or defensively `Error: workflow run ended abnormally (<reason>)`; a call without an owning agent becomes `Error: workflow tool requires a calling agent (exec.agent was undefined)` (`ToolContextUnavailableError`). Intermediate child messages are omitted.
 
 #### Token effect
 

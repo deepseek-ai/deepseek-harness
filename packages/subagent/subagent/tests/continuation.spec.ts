@@ -767,7 +767,7 @@ describe('SubagentRuntime.startActivation', () => {
       delivery: 'parent',
       ...startSpec(parent),
       prompt: message('deep'), parent, maxDepth: 0,
-    })).rejects.toThrow(/exceeds maxDepth 0/)
+    })).rejects.toMatchObject({ name: 'SubagentDepthError', code: 'DEPTH_EXCEEDED', message: expect.stringMatching(/exceeds maxDepth 0/) as string })
     expect(ctx.agents.list().map(agent => agent.id)).toEqual([brandString<SessionId>('parent')])
   })
 
@@ -1159,6 +1159,31 @@ describe('target-only Queue residency routing', () => {
     expect(String(rejection)).not.toContain('send_message')
     await expect(ctx.subagents.sendMessage(parent, childId, message('continue'), { signal: testSignal }))
       .rejects.toMatchObject({ code: 'NOT_RESUMABLE' })
+  })
+
+  it('rejects a cold target whose persisted descriptor is corrupt as not resumable', async () => {
+    const { ctx, parent } = await setup([])
+    const childId = brandString<SessionId>('child-with-corrupt-descriptor')
+    const child = await ctx.agents.create({
+      sessionId: childId,
+      meta: { origin: 'subagent', parentSession: parent.id },
+      agentOptions: { provider: 'mock', model: 'mock' },
+      setup: (_childCtx, agent) => {
+        agent.session.append('subagent/descriptor', {
+          version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 7,
+        } as never)
+      },
+    })
+    await ctx.sessions.flush(child.agent.session)
+    await child.dispose()
+
+    await expect(ctx.subagents.sendMessage(parent, childId, message('continue'), { signal: testSignal }))
+      .rejects.toMatchObject({
+        name: 'SubagentError',
+        code: 'NOT_RESUMABLE',
+        message: `subagent "${childId}" has a corrupt continuation descriptor and cannot be resumed; choose a different target`,
+        cause: expect.objectContaining({ message: 'persisted subagent descriptor label must be a string' }) as Error,
+      })
   })
 
   it('reports an unknown child id as unavailable', async () => {
