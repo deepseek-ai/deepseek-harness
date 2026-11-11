@@ -68,7 +68,7 @@ kind: "package-reference"
 | `inlineImageOffloadByteQuantum` | `10 MiB` | 内联模式最旧前缀移除量子 |
 | `imageOffloadCountQuantum` | `20` | 数量超限移除量子 |
 | `fileUploadConcurrency` | `3` | 每个模型请求同时上传 1 至 3 张不同图片，file ID 失效后的重传也遵守此限制 |
-| `fileUploadMaxRetries` | `2` | 每张图片最多额外上传 0 至 2 次，普通 429 重试和一次存储配额清理后的重试共用次数。次数用尽后，整个请求尝试改用内联图片。 |
+| `fileUploadMaxRetries` | `2` | 每张图片最多额外上传 0 至 2 次，普通 429 重试和一次存储配额清理后的重试共用次数。设为 0 时跳过配额清理和上传重试。 |
 | `fileUploadRetryDelayMs` | `500` | 遇到限流后至少等待的毫秒数。服务端要求的 Retry-After 更长时按其要求等待，所有尝试共用单张图片的超时期限。 |
 | `filesApiTimeoutMs` | `60,000` | 每张图片 Files 解析截止时间 |
 | `fileExpiresAfterSeconds` | `604,800` | 请求的上传图片生存期与本地复用期限 |
@@ -102,7 +102,7 @@ Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 B
 
 适配器通常通过 `/v1/files` 上传这些确切请求字节，并发送 file-id 引用。Files 请求与包含 file id 的模型请求均携带 `anthropic-beta: files-api-2025-04-14`。全部请求拒绝重定向，确保凭据仅发送到配置的源。文件解析失败或超时会按内联预算，用内联 base64 重建整份模型请求；一次请求绝不混用 file id 与内联图片。调用方取消会停止请求。
 
-缓存 id 按端点与凭据限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。上传通过 `expires_after[anchor]=created_at` 与 `expires_after[seconds]` 请求过期。Messages 文件元数据不含远端过期时间，因此本地复用期限使用原始上传时间加 `fileExpiresAfterSeconds`；这不保证远端文件删除。配额失败会先删除一批配置数量的最旧 harness 文件，再重试一次上传。
+缓存 id 按端点与凭据限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。上传通过 `expires_after[anchor]=created_at` 与 `expires_after[seconds]` 请求过期。Messages 文件元数据不含远端过期时间，因此本地复用期限使用原始上传时间加 `fileExpiresAfterSeconds`；这不保证远端文件删除。每个请求并发解析不同图片。上传收到 429 时可在单图期限内重试，等待时间达到或超过剩余期限时，立即改用内联图片。同一端点和凭据下的多个上传同时遇到存储配额错误时，每次重试使用一个已删除文件腾出的名额。名额用完后，才会再删除一批最旧的 harness 文件。
 
 Files 模式通过 `maxRequestFilesBytes` 与 `maxImagesPerRequest` 限制保留请求版本；内联回退有独立 base64 预算。两种模式都按配置的字节或数量量子移除最旧前缀。每张省略图片都有自己的模型可见占位符，包含显示名或附件 id，以及可用时的规范化尺寸、媒体类型与当前只读路径。分阶高水位策略避免每新增一张图片都改写旧请求前缀。
 

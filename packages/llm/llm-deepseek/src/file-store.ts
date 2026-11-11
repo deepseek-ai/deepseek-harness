@@ -1,8 +1,6 @@
 /** DeepSeek Files API upload reuse, invalidation, and quota recovery. @module dsh-llm-deepseek/file-store */
 
 import { setTimeout as delay } from 'node:timers/promises'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { MAX_FILE_UPLOAD_RETRIES, DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS } from './defaults.ts'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import { DeepSeekFilesClient, DeepSeekFilesError, isFilesQuotaError } from './files-api.ts'
@@ -20,10 +18,14 @@ export interface DeepSeekFilePolicy {
   expiresAfterSeconds: number
   refreshMarginSeconds: number
   quotaCleanupBatch: number
-  /** Additional attempts shared by rate-limit and quota recovery (default two). */
-  uploadMaxRetries?: number
+  /** Maximum simultaneous file resolutions in one model request. */
+  uploadConcurrency: number
+  /** Per-image resolution deadline, including retry delays. */
+  uploadTimeoutMs: number
+  /** Additional attempts shared by rate-limit and quota recovery. */
+  uploadMaxRetries: number
   /** Local delay after HTTP 429, in milliseconds. */
-  uploadRetryDelayMs?: number
+  uploadRetryDelayMs: number
 }
 
 /** Connection facts needed by file operations. */
@@ -130,6 +132,8 @@ export class DeepSeekFileStore {
   private readonly now: () => number
   private readonly fetchImpl: typeof fetch | undefined
   private readonly inflight = new Map<string, SharedUpload>()
+  /** Unclaimed slots from the preceding cleanup in each active Files namespace. */
+  private readonly quotaRecoveries = new Map<string, Promise<number>>()
 
   /**
    * @param options - testable index, clock, and transport boundaries.
@@ -203,6 +207,7 @@ export class DeepSeekFileStore {
     }
     const scope = fileScope(connection)
     const now = this.now()
+    const retryUntil = now + policy.uploadTimeoutMs
     const marginMs = policy.refreshMarginSeconds * 1_000
     const cached = await this.index.get(scope, version.variantId, now, marginMs)
     if (cached !== undefined) return { record: cached, uploaded: false }
@@ -231,7 +236,6 @@ export class DeepSeekFileStore {
     }
 
     let candidate: DeepSeekUploadRecord
-    const maxRetries = policy.uploadMaxRetries ?? MAX_FILE_UPLOAD_RETRIES
     let reclaimed = false
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted()
@@ -239,14 +243,14 @@ export class DeepSeekFileStore {
         candidate = await upload()
         break
       } catch (error) {
-        if (attempt >= maxRetries) throw error
+        if (attempt >= policy.uploadMaxRetries) throw error
         if (isFilesQuotaError(error)) {
-          if (reclaimed || await this.reclaimOldestOwned(connection, policy.quotaCleanupBatch, signal) === 0) throw error
+          if (reclaimed || !await this.reserveQuotaSlot(scope, connection, policy.quotaCleanupBatch, signal)) throw error
           reclaimed = true
         } else {
           if (!(error instanceof DeepSeekFilesError) || error.code !== 'RATE_LIMIT') throw error
-          const wait = Math.max(error.failure.providerRetryAfterMs ?? 0, policy.uploadRetryDelayMs ?? DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS)
-          if (wait > MAX_TIMER_DELAY_MS) throw error
+          const wait = Math.max(error.failure.providerRetryAfterMs ?? 0, policy.uploadRetryDelayMs)
+          if (wait >= retryUntil - this.now()) throw error
           await delay(wait, undefined, { signal })
         }
       }
@@ -260,6 +264,25 @@ export class DeepSeekFileStore {
       }
     }
     return { record: committed.record, uploaded: committed.accepted }
+  }
+
+  /** Overlapping quota failures claim distinct deleted slots, listing again only when the batch runs out. */
+  private async reserveQuotaSlot(scope: DeepSeekUploadRecord['scope'], connection: DeepSeekFileConnection, count: number, signal: AbortSignal) {
+    const previous = this.quotaRecoveries.get(scope)
+    const next = Promise.withResolvers<number>()
+    this.quotaRecoveries.set(scope, next.promise)
+    let available = 0
+    try {
+      available = previous === undefined ? 0 : await previous
+      signal.throwIfAborted()
+      if (available === 0) available = await this.reclaimOldestOwned(connection, count, signal)
+      if (available === 0) return false
+      available--
+      return true
+    } finally {
+      next.resolve(available)
+      if (this.quotaRecoveries.get(scope) === next.promise) this.quotaRecoveries.delete(scope)
+    }
   }
 
   /**

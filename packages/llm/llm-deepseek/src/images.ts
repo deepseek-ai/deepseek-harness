@@ -5,7 +5,6 @@ import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageT
 import type { ContentBlock, ImageAttachmentAccessResolver, RequestMessage } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekConnectionOptions as Connection } from './types.ts'
 import { resolveRequestImageTarget } from './request-pricing.ts'
-import { MAX_FILE_UPLOAD_CONCURRENCY } from './defaults.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 import type { RequestFiles } from './request-files.ts'
 
@@ -95,14 +94,12 @@ function assertImagesFit(
  * @param messages - history within the Files byte/count budget.
  * @param versions - normalized versions for every retained reference.
  * @param files - request-owned Files resolution and recovery.
- * @param concurrency - maximum simultaneous Files resolutions for this request.
  * @returns ids keyed by durable attachment identity.
  */
 export async function prepareFileIds(
   messages: readonly RequestMessage[], versions: ReadonlyMap<ImageAttachmentRef['attachmentId'], RequestImageAttachment>, files: RequestFiles,
-  concurrency = MAX_FILE_UPLOAD_CONCURRENCY,
 ): Promise<Map<ImageAttachmentRef['attachmentId'], DeepSeekFileId>> {
-  const ids = await files.resolveAll(versions, concurrency)
+  const ids = await files.resolveAll(versions)
   for (const [index, message] of messages.entries()) {
     let image = 0
     for (const ref of imageRefs(message.content)) {

@@ -351,8 +351,9 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
     inlineImageOffloadByteQuantum,
     imageOffloadCountQuantum,
     filesApiTimeoutMs,
-    fileUploadConcurrency,
     filePolicy: {
+      uploadConcurrency: fileUploadConcurrency,
+      uploadTimeoutMs: filesApiTimeoutMs,
       expiresAfterSeconds: fileExpiresAfterSeconds,
       refreshMarginSeconds: fileRefreshMarginSeconds,
       quotaCleanupBatch: fileQuotaCleanupBatch,

@@ -100,7 +100,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,
       },
-      connection.filePolicy, connection.filesApiTimeoutMs, signal, activity)
+      connection.filePolicy, signal, activity)
       let inline = false
       while (true) {
         signal.throwIfAborted()
@@ -108,7 +108,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
         let fileIds: Awaited<ReturnType<typeof prepareFileIds>> | undefined
         if (!inline) {
           try {
-            fileIds = await prepareFileIds(messages, versions, files, connection.fileUploadConcurrency)
+            fileIds = await prepareFileIds(messages, versions, files)
           } catch (error) {
             if (!(error instanceof FileResolutionFailure)) throw error
             inline = true

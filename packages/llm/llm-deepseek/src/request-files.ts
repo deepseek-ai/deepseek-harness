@@ -100,7 +100,6 @@ export class RequestFiles {
     private readonly files: DeepSeekFileStore,
     private readonly connection: DeepSeekFileConnection,
     private readonly policy: DeepSeekFilePolicy,
-    private readonly timeoutMs: number,
     private readonly signal: AbortSignal,
     private readonly activity: () => void,
   ) {}
@@ -110,11 +109,10 @@ export class RequestFiles {
 
   /** Resolve each distinct attachment once. A failed resolution cancels its sibling waits.
    * @param versions - retained request images keyed by attachment id.
-   * @param concurrency - maximum simultaneous resolutions in this request.
    * @returns provider ids for every retained attachment.
    */
   async resolveAll(
-    versions: ReadonlyMap<AttachmentId, RequestImageAttachment>, concurrency: number,
+    versions: ReadonlyMap<AttachmentId, RequestImageAttachment>,
   ): Promise<Map<AttachmentId, DeepSeekFileId>> {
     const ids = new Map<AttachmentId, DeepSeekFileId>()
     const pending = versions.entries()
@@ -123,7 +121,7 @@ export class RequestFiles {
     const worker = async () => {
       for (const [id, version] of pending) {
         if (signal.aborted) return
-        using limit = deadline(signal, this.timeoutMs, 'DEEPSEEK_FILES_API_TIMEOUT')
+        using limit = deadline(signal, this.policy.uploadTimeoutMs, 'DEEPSEEK_FILES_API_TIMEOUT')
         try {
           const result = await this.files.ensureUploaded(version, this.connection, this.policy, limit.signal)
           ids.set(id, result.record.fileId)
@@ -134,7 +132,7 @@ export class RequestFiles {
         this.activity()
       }
     }
-    await Promise.all(Array.from({ length: Math.min(versions.size, concurrency) }, worker))
+    await Promise.all(Array.from({ length: Math.min(versions.size, this.policy.uploadConcurrency) }, worker))
     this.signal.throwIfAborted()
     if (batch.signal.aborted) throw new FileResolutionFailure(batch.signal.reason)
     return ids

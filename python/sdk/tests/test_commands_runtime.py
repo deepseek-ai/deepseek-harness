@@ -90,12 +90,26 @@ class _ModelServer:
                 self.request.settimeout(_WAIT_SECONDS)
                 super().setup()
 
+            def handle_one_request(self) -> None:
+                self.raw_requestline = b""
+                try:
+                    super().handle_one_request()
+                except (ConnectionAbortedError, ConnectionResetError):
+                    if self.raw_requestline:
+                        raise
+                    # A cancelled upload can close a newly opened socket before sending a request.
+                    self.close_connection = True
+
             def do_POST(self) -> None:
-                payload = self.rfile.read(int(self.headers["Content-Length"]))
                 if self.path == "/v1/files":
-                    # The model fixture accepts inline images through the provider's Files fallback.
-                    self.send_error(404, "Images are accepted inline")
+                    # The first 404 selects inline images and cancels concurrent file uploads.
+                    try:
+                        self.rfile.read(int(self.headers["Content-Length"]))
+                        self.send_error(404, "Images are accepted inline")
+                    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                        self.close_connection = True
                     return
+                payload = self.rfile.read(int(self.headers["Content-Length"]))
                 assert self.path == "/v1/messages", f"unexpected model endpoint: {self.path}"
                 body = json.loads(payload)
                 assert isinstance(body, dict) and isinstance(body.get("model"), str)
@@ -197,6 +211,20 @@ def test_model_server_only_allows_expected_connection_aborts(
     assert model.captured() == [body]
     assert model.failures == ([] if accepted else [error])
     assert not model.thread.is_alive()
+
+
+def test_model_server_accepts_cancelled_file_upload(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = _ModelServer([])
+
+    def reset(_handler: BaseHTTPRequestHandler) -> None:
+        raise ConnectionResetError("sibling upload selected inline fallback")
+
+    monkeypatch.setattr(model.server.RequestHandlerClass, "end_headers", reset)
+    with model, closing(HTTPConnection(*model.server.server_address, timeout=_WAIT_SECONDS)) as connection:
+        connection.request("POST", "/v1/files", body=b"image")
+        with pytest.raises(RemoteDisconnected):
+            connection.getresponse()
+    assert model.captured() == []
 
 
 def _dsh_bin() -> str | None:
