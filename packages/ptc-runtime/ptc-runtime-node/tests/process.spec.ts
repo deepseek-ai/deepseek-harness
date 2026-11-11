@@ -51,11 +51,13 @@ it.each(['awaited', 'unawaited', 'unawaited script'] as const)('boots an unbuilt
         else completed.resolve(decodePtcJsonWire(result.value))
       }, (error: unknown) => { completed.reject(error) })
     },
+    async initialized() {},
     async invoke(_global, _name, args) {
       expect(decodePtcJsonWire(args)).toEqual({ n: 21 })
       return scenario === 'awaited' ? encodePtcJsonWire(42) : await new Promise<never>(() => {})
     },
     log(text) { logs.push(text) },
+    image() {},
     outputLimit() {},
   }, [], (error) => { completed.reject(error) })
   onTestFinished(async () => { channel.$close(); child.kill(); await finished })

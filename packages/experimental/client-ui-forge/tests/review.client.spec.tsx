@@ -311,7 +311,7 @@ describe('inline records', () => {
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const addToInput = vi.fn().mockReturnValue(false)
     const actions = { records, source: selection.source, addToInput }
-    const view = render(<ReviewThread thread={thread} actions={actions} locked={false} outdated={false} split t={t} />)
+    const view = render(<ReviewThread thread={thread} actions={actions} locked={false} outdated={false} t={t} />)
     fireEvent.click(view.getByRole('button', { name: 'Add to input' }))
     expect(view.getByRole('alert')).toHaveProperty('textContent', en['review.inputFailed'])
     fireEvent.click(view.getByRole('button', { name: 'Edit' }))
@@ -329,7 +329,7 @@ describe('inline records', () => {
     const records = drafted(selection)
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const view = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records }}
-      locked={false} outdated split={false} t={t} />)
+      locked={false} outdated t={t} />)
     fireEvent.click(view.getByRole('button', { name: 'Edit' }))
     records.close()
     fireEvent.change(view.getByRole('textbox'), { target: { value: 'Not saved' } })
@@ -344,7 +344,7 @@ describe('inline records', () => {
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const queue = vi.fn<NonNullable<ReviewActions['queue']>>().mockResolvedValueOnce('GitHub refused')
     const view = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records, queue }}
-      locked={false} outdated={false} split={false} t={t} />)
+      locked={false} outdated={false} t={t} />)
     expect(view.getByText(en['review.browserDraft'])).toBeTruthy()
     fireEvent.click(view.getByRole('button', { name: 'Add to review' }))
     expect(view.getByRole('button', { name: en['review.publishing'] })).toHaveProperty('disabled', true)
@@ -367,22 +367,22 @@ describe('inline records', () => {
     const thread = records.fileComments('a.ts', selection.source).threads[0]!
     const queue = vi.fn<NonNullable<ReviewActions['queue']>>()
     const outdated = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records, queue }}
-      locked={false} outdated split={false} t={t} />)
+      locked={false} outdated t={t} />)
     expect(outdated.queryByRole('button', { name: 'Add to review' })).toBeNull()
     outdated.unmount()
     const current = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records, queue }}
-      locked={false} outdated={false} split={false} t={t} />)
+      locked={false} outdated={false} t={t} />)
     fireEvent.click(current.getByRole('button', { name: 'Edit' }))
     expect(current.queryByRole('button', { name: 'Add to review' })).toBeNull()
     current.unmount()
     const without = render(<ReviewThread thread={thread} actions={{ source: selection.source, addToInput: () => true, records }}
-      locked={false} outdated={false} split={false} t={t} />)
+      locked={false} outdated={false} t={t} />)
     expect(without.queryByRole('button', { name: 'Add to review' })).toBeNull()
   })
   it('opens a published receipt and omits editing on immutable records', () => {
     const openLink = vi.fn()
     const view = render(<ReviewThread thread={{ key: 1, kind: 'published', selection, url: 'https://github.com/review' }}
-      actions={{ source: selection.source, addToInput: () => true, openLink }} locked={false} outdated={false} split={false} t={t} />)
+      actions={{ source: selection.source, addToInput: () => true, openLink }} locked={false} outdated={false} t={t} />)
     fireEvent.click(view.getByRole('button', { name: en['review.recheck'] }))
     expect(openLink).toHaveBeenCalledWith('https://github.com/review')
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull()

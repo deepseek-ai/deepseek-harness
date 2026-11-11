@@ -1,0 +1,9 @@
+version: 1
+scenario: cua-run-code
+profile: web
+composition: default
+recording: authored
+header:
+  class: cua-run-code
+session:
+  source: ../../session/cua-run-code/session.v4.jsonl

@@ -76,7 +76,7 @@ class CatalogAdapter extends LlmAdapter {
 class FakeRuntime extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
   resolve(request: PtcRunRequest): PtcRunSpec {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
@@ -648,12 +648,12 @@ describe('arguments and paths', () => {
 })
 
 describe('PTC dispatch', () => {
-  it('forwards nested render images and applies execution policy to the nested call', async () => {
+  it('records nested render images and applies execution policy to the nested call', async () => {
     const { ctx } = await setup({ ptc: true })
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
-      const value = await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
-      return { logs: [], value }
+      await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
+      return { output: [] }
     }
     const agent = { ...agentOn('vision'), ctx }
     await loadOffice(ctx, agent)
@@ -663,9 +663,15 @@ describe('PTC dispatch', () => {
       signal, callId: ToolCallId(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
       toolSet,
     })
-    const result = await run({ code: 'return await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
+    const result = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
     expect(result.isError).toBe(false)
-    expect(result.additionalContexts?.[0]?.content.some(block => block.type === 'image')).toBe(true)
+    const dispatch = agent.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
+    expect(dispatch?.data.content.some(block => block.type === 'image')).toBe(true)
+    expect(result.content.some(block => block.type === 'image')).toBe(false)
+    expect(result.additionalContexts).toHaveLength(1)
+    expect(result.additionalContexts?.[0]).toMatchObject({
+      source: { kind: 'ptc-mode' }, content: dispatch?.data.content,
+    })
 
     const denied: string[] = []
     ctx.on('tools/pre-execute', (exec, next) => {
@@ -673,7 +679,7 @@ describe('PTC dispatch', () => {
       denied.push(exec.name)
       return Promise.resolve({ kind: 'deny' as const, reason: 'office denied by policy' })
     }, { prepend: true })
-    const refused = await run({ code: 'return await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
+    const refused = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
     expect(denied).toEqual(['office_render'])
     expect(text(refused)).toContain('office denied by policy')
   })

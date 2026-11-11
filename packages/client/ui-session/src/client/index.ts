@@ -7,11 +7,9 @@ import type {
   SessionReference,
   SessionRetainInfo,
   SessionSnapshot,
-  SessionSummary,
   UseProjection,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { AccessEffect, RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import { WeakMapWithValues } from '@deepseek-ai/dsh-util-values'
@@ -55,21 +53,6 @@ export type SessionPendingInteraction =
   [keyof SessionPendingInteractionMap] extends [never]
     ? SessionPendingInteractionBase
     : SessionPendingInteractionMap[keyof SessionPendingInteractionMap]
-
-/** Independent UI status facts for one Session identity. */
-export interface SessionStatus {
-  /** Latest known running state; absent until a baseline or event establishes it. */
-  readonly running: boolean | undefined
-  /** Highest-precedence domain request currently awaiting user interaction. */
-  readonly pendingInteraction: SessionPendingInteraction | undefined
-  /** Whether an observed stop outside the main view still needs acknowledgement. */
-  readonly completionUnread: boolean
-}
-
-/** Current UI status indexed by Session identity. */
-export type SessionStatusSnapshot = ReadonlyMap<SessionId, SessionStatus>
-/** Selector hook over the unified Session UI status snapshot. */
-export type UseSessionStatus = SnapshotSelectorHook<SessionStatusSnapshot>
 
 /** Selector hook for explicit or surrounding-Provider Session reference counts. */
 export interface UseSessionRetainInfo {
@@ -157,7 +140,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface GlobalStandardProps {
     /** Session list and current selection. */
     useSessions: UseSessions
-    useSessionStatus: UseSessionStatus
     useSessionRetainInfo: UseSessionRetainInfo
     /** Whether the current Peer may call `action` on one Session resource. */
     useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean
@@ -195,9 +177,16 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     /** Session Controller adapter and session-scoped source registry. */
-    uiSession: UiSession
+    uiSession: UiSessionService
   }
 }
+
+/**
+ * Type of `ctx.uiSession`: the {@link UiSession} service plus the sub-services other Client packages provide beneath
+ * it. A package declares its sub-service `x`, provided as the Cordis service `uiSession.x` and read as
+ * `ctx.uiSession.x`, by merging a member into this interface; Typert analysis rejects members merged into the class.
+ */
+export interface UiSessionService extends UiSession {}
 
 type SessionSourceRoster = readonly string[] | undefined
 type StandardMemberKind = 'hook' | 'keyed hook' | 'prop'
@@ -288,19 +277,19 @@ export class UiSession extends Service {
   private readonly current: BindingSource
   private readonly pendingDomains: RuntimePendingDomain[] = []
   private pendingSnapshot: ReadonlyMap<SessionId, SessionPendingInteractionBase> = new Map()
-  private readonly running = new Map<SessionId, boolean>()
-  private readonly completionUnread = new Set<SessionId>()
-  private statusSnapshot: SessionStatusSnapshot = new Map()
-  private readonly statusListeners = new Set<() => void>()
+  private readonly pendingListeners = new Set<() => void>()
   private mainRetainId: SessionId | undefined
   private disposeMainRetain = (): void => {}
   private active = true
-  /** Root source combining running, pending-interaction, and completion-reminder facts. */
-  readonly sessionStatus: HostObservable<SessionStatusSnapshot> = {
-    getSnapshot: () => this.statusSnapshot,
+  /**
+   * Read-only view of every Session's highest-precedence pending interaction. The snapshot keeps its
+   * reference until an effective request changes; a throwing listener is reported without stopping later listeners.
+   */
+  readonly pendingInteractions: HostObservable<ReadonlyMap<SessionId, SessionPendingInteraction>> = {
+    getSnapshot: () => this.pendingSnapshot,
     subscribe: (listener) => {
-      this.statusListeners.add(listener)
-      return () => { this.statusListeners.delete(listener) }
+      this.pendingListeners.add(listener)
+      return () => { this.pendingListeners.delete(listener) }
     },
   }
   /** Renderer-facing adapter for `session` and `session-maybe` scopes. */
@@ -325,17 +314,10 @@ export class UiSession extends Service {
 
     ctx.effect(() => {
       const disposeList = sessions.list.subscribe(() => { this.publishMain() })
-      const disposeStatus = sessions.list.subscribe(() => { this.reconcileStatus() })
-      const disposeRemoteStatus = ctx.remote.$on('api-session/status', (sessionId, running) => {
-        this.observeRunning(sessionId, running)
-      })
       this.publishMain()
-      this.reconcileStatus()
       return () => {
         this.active = false
         disposeList()
-        disposeStatus()
-        disposeRemoteStatus()
         this.disposeMainRetain()
         const records = [...this.bindings.values]
         this.bindings.clear()
@@ -502,64 +484,7 @@ export class UiSession extends Service {
     )
     if (samePendingInteractions(this.pendingSnapshot, projected)) return
     this.pendingSnapshot = projected
-    this.publishStatus()
-  }
-
-  private observeRunning(sessionId: SessionId, running: boolean): void {
-    const previous = this.running.get(sessionId)
-    const beforeBaseline = this.sessions.list.getSnapshot().phase === 'pending'
-    this.running.set(sessionId, running)
-    if (running) this.completionUnread.delete(sessionId)
-    else if ((previous === true || (previous === undefined && beforeBaseline))
-      && !this.isMain(sessionId)) this.completionUnread.add(sessionId)
-    this.publishStatus()
-  }
-
-  private reconcileStatus(): void {
-    const list = this.sessions.list.getSnapshot()
-    const present = new Set(Object.keys(list.byId) as SessionId[])
-    // Subagent catalog rows and retained subagent fallback rows do not establish Host running state.
-    for (const id of list.ids) {
-      const row = list.byId[id] as SessionSummary
-      const previous = this.running.get(id)
-      if (previous === undefined) this.running.set(id, row.running)
-      else if (previous !== row.running) this.observeRunning(id, row.running)
-    }
-    for (const id of present) {
-      if (this.isMain(id)) this.completionUnread.delete(id)
-    }
-    if (list.phase === 'ready') {
-      for (const id of this.running.keys()) {
-        if (present.has(id)) continue
-        this.running.delete(id)
-        this.completionUnread.delete(id)
-      }
-    }
-    this.publishStatus()
-  }
-
-  private isMain(sessionId: SessionId): boolean {
-    return (this.sessions.list.getSnapshot().byId[sessionId]?.retainedBy.mainView ?? 0) > 0
-  }
-
-  private publishStatus(): void {
-    const ids = new Set<SessionId>([
-      ...(Object.keys(this.sessions.list.getSnapshot().byId) as SessionId[]),
-      ...this.running.keys(),
-      ...this.pendingSnapshot.keys(),
-      ...this.completionUnread,
-    ])
-    const next = new Map<SessionId, SessionStatus>()
-    for (const id of ids) {
-      next.set(id, {
-        running: this.running.get(id),
-        pendingInteraction: this.pendingSnapshot.get(id),
-        completionUnread: this.completionUnread.has(id),
-      })
-    }
-    if (sameSessionStatus(this.statusSnapshot, next)) return
-    this.statusSnapshot = next
-    notifySubscribers(this.statusListeners, '[ui-session] Session status')
+    notifySubscribers(this.pendingListeners, '[ui-session] pending interactions')
   }
 
   private createMaterializedBinding(owner: SessionBinding): MaterializedBinding {
@@ -685,8 +610,8 @@ function claimStandardProp(kind: StandardMemberKind, name: string, finalProps: S
   finalProps.add(propName)
 }
 
-/** Required Controller, renderer, Remote, and access services. */
-export const inject = ['sessions', 'slots', 'remote', 'remoteAccess']
+/** Required Controller, renderer, and access services. */
+export const inject = ['sessions', 'slots', 'remoteAccess']
 
 /**
  * Install the Session root source and scoped adapter.
@@ -697,7 +622,6 @@ export function apply(ctx: Context): void {
   ctx.slots.provideRoot({
     hooks: {
       sessions: ctx.sessions.list,
-      sessionStatus: service.sessionStatus,
     },
     keyedHooks: {
       sessionRetainInfo: key => ctx.sessions.retainInfo(key as SessionId),
@@ -713,18 +637,6 @@ export function apply(ctx: Context): void {
       keyedHooks: { access: action => ctx.remoteAccess.source('session', binding.sessionId, action) },
     }),
   })
-}
-
-function sameSessionStatus(left: SessionStatusSnapshot, right: SessionStatusSnapshot): boolean {
-  if (left.size !== right.size) return false
-  for (const [id, status] of left) {
-    const candidate = right.get(id)
-    if (candidate === undefined
-      || candidate.running !== status.running
-      || candidate.pendingInteraction !== status.pendingInteraction
-      || candidate.completionUnread !== status.completionUnread) return false
-  }
-  return true
 }
 
 function samePendingInteractions(

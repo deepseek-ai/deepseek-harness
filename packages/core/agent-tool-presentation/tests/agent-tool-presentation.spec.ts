@@ -25,7 +25,7 @@ class StubRuntime extends PtcRuntime {
   readonly isolation = 'stub'
 
   run(_request: PtcRunRequest): Promise<PtcRunResult> {
-    return Promise.resolve({ logs: [] })
+    return Promise.resolve({ output: [] })
   }
 }
 

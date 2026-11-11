@@ -17,7 +17,7 @@ async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', execut
   await mkdir(cwd)
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, { executionMode, scriptPersistence: executionMode === 'vm-script' }, { mode, workspaceRoot: cwd })
+  const { runtime } = await mountRuntime(ctx, { executionMode, scriptPersistence: executionMode === 'vm-script', replScoped: false }, { mode, workspaceRoot: cwd })
   const owner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner }))
   return { root, cwd, ctx, runtime, owner, run }

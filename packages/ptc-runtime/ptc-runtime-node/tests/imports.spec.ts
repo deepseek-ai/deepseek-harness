@@ -7,6 +7,7 @@ import { Duplex, PassThrough } from 'node:stream'
 import { registerHooks } from 'node:module'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createProgramEvaluator } from '../src/evaluators/index.ts'
+import { createScopedReplEvaluator } from '../src/evaluators/scoped-repl-evaluator.ts'
 import type { ProgramEvaluator, ProgramImportHandler, ProgramImportRequest, ProgramImportResult } from '../src/evaluators/types.ts'
 import { createProcessRpc } from '../src/rpc.ts'
 import { decodePtcJsonWire } from '../src/json-wire.ts'
@@ -493,8 +494,10 @@ async function runner(handler: ProgramImportHandler, retained = false, format: P
   const ready: PromiseWithResolvers<void> = Promise.withResolvers()
   const peer = createProcessRpc<ProgramMethods, HostMethods>(host, 100_000, {
     ready() { ready.resolve() },
+    async initialized() {},
     async invoke() { throw new Error('unexpected binding call') },
     log() {},
+    image() {},
     outputLimit() {},
   }, [], (error) => { ready.reject(error) })
   const main = retained ? runPersistentMain(child, 100_000, state, format, handler) : runNodeMain(child, 100_000, state, format, handler)
@@ -619,4 +622,37 @@ it('preserves an active handler rejection and classifies a retained late rejecti
 it.each(formats)('passes the runner handler through a temporary process evaluation for %s', async (programFormat) => {
   const r = await runner(() => ({ type: 'module', exports: { answer: () => 42 } }), false, programFormat, false)
   expect(await r.run(`${programFormat === 'function-body' ? 'return ' : ''}(await import('runner:answer')).answer()`)).toBe(42)
+})
+
+it('serves scoped REPL imports through the runner handler with program filenames in the initial directory as referrers', async () => {
+  const directory = await temporaryDirectory()
+  const first = join(directory, 'first')
+  const second = join(directory, 'second')
+  await Promise.all([mkdir(first), mkdir(second)])
+  const requests: ProgramImportRequest[] = []
+  const cwd = process.cwd()
+  process.chdir(first)
+  const instance = createScopedReplEvaluator({
+    reportError: () => {},
+    importHandler: (request) => {
+      requests.push(request)
+      return { type: 'module', exports: { answer: requests.length } }
+    },
+  })
+  onTestFinished(() => { instance.close() })
+  const value = async (code: string): Promise<unknown> => {
+    const result = await new Promise<EvaluationResult>((resolve) => { instance.evaluate(code, resolve) })
+    if (!result.ok) throw result.error
+    return result.value
+  }
+  try {
+    expect(await value('const load = () => import("runner:answer");\n(await load()).answer')).toBe(1)
+    process.chdir(second)
+    expect(await value('[(await load()).answer, (await import("runner:again")).answer]')).toEqual([2, 3])
+  } finally { process.chdir(cwd) }
+  expect(requests).toEqual([
+    { specifier: 'runner:answer', referrer: join(first, '.ptc-repl-1.js'), attributes: {} },
+    { specifier: 'runner:answer', referrer: join(first, '.ptc-repl-1.js'), attributes: {} },
+    { specifier: 'runner:again', referrer: join(first, '.ptc-repl-2.js'), attributes: {} },
+  ])
 })

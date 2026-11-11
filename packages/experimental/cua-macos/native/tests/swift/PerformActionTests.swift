@@ -1,4 +1,4 @@
-// Attribute-setting dispatch accepts only complete Role.Attribute.Set names and direct JSON values.
+// Native and attribute-setting AX action dispatch.
 import ApplicationServices
 import CoreGraphics
 import Foundation
@@ -102,5 +102,40 @@ import Testing
         } catch let error as NativeFailure {
             #expect(error.code == "INVALID_ARGUMENT" || error.code == "UNSUPPORTED")
         } catch { Issue.record("Unexpected error: \(error)") }
+    }
+}
+
+@Test func zoomReconcilesOnlyAnObservedResizeAfterAttributeUnsupported() {
+    let small = CGSize(width: 600, height: 400)
+    let large = CGSize(width: 950, height: 400)
+    let zeroHeight = CGSize(width: 600, height: 0)
+    let zeroWidth = CGSize(width: 0, height: 400)
+    let cases: [(CGSize?, CGSize?, AXError, AXError, Int)] = [
+        (small, large, .attributeUnsupported, .success, 2),
+        (large, small, .attributeUnsupported, .success, 2),
+        (small, small, .attributeUnsupported, .attributeUnsupported, 2),
+        (nil, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (small, nil, .attributeUnsupported, .attributeUnsupported, 2),
+        (zeroHeight, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (zeroWidth, large, .attributeUnsupported, .attributeUnsupported, 1),
+        (small, zeroHeight, .attributeUnsupported, .attributeUnsupported, 2),
+        (small, zeroWidth, .attributeUnsupported, .attributeUnsupported, 2),
+        (small, large, .cannotComplete, .cannotComplete, 1),
+        (small, large, .apiDisabled, .apiDisabled, 1),
+        (nil, nil, .success, .success, 1),
+    ]
+    for (before, after, reply, expected, expectedReads) in cases {
+        var calls = 0
+        var reads = 0
+        let result = AXAccess.performZoom(readSize: {
+            reads += 1
+            return calls == 0 ? before : after
+        }, dispatch: {
+            calls += 1
+            return reply
+        })
+        #expect(result == expected)
+        #expect(calls == 1)
+        #expect(reads == expectedReads)
     }
 }
