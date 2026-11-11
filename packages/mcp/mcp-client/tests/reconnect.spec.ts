@@ -8,11 +8,12 @@ import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { Transport } from '@modelcontextprotocol/client'
+import { ProtocolError, SdkError, SdkErrorCode, type Transport } from '@modelcontextprotocol/client'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { TestCredentials } from './credential-fixture.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -148,7 +149,7 @@ function listing(...names: string[]): { tools: { name: string; inputSchema: { ty
 
 let callSeq = 0
 function nextCallId(): ToolCallId {
-  return ToolCallId(`reconnect-${++callSeq}`)
+  return brandString<ToolCallId>(`reconnect-${++callSeq}`)
 }
 
 // ---- Tests ----
@@ -232,6 +233,7 @@ describe('reconnect supervisor', () => {
         if (!result.isError) throw new Error('expected transport failure')
         expect(result.error.message).toContain('transport rejected [redacted]')
         expect(result.error.message).not.toContain('private-token')
+        expect(result.error.info).toEqual({ name: 'McpToolError', code: 'MCP_REQUEST_FAILED' })
       }
     } finally {
       await handle.dispose()
@@ -251,6 +253,73 @@ describe('reconnect supervisor', () => {
       expect(result.isError).toBe(true)
       if (!result.isError) throw new Error('expected MCP failure')
       expect(result.error.message).toBe(expandTemplates ? 'upstream rejected Bearer [redacted]' : message)
+      expect(result.error.info).toEqual({ name: 'McpToolError', code: 'MCP_TOOL_ERROR' })
+    } finally {
+      await handle.dispose()
+    }
+  })
+
+  it.each([
+    [new ProtocolError(-32602, 'unknown window'), 'JSON-RPC error -32602: unknown window', 'MCP_REQUEST_FAILED'],
+    [new SdkError(SdkErrorCode.ConnectionClosed, 'Connection closed'), 'CONNECTION_CLOSED: Connection closed', 'MCP_CONNECTION_CLOSED'],
+    [new SdkError(SdkErrorCode.RequestTimeout, 'Request timed out'), 'REQUEST_TIMEOUT: Request timed out', 'MCP_TIMEOUT'],
+    [new SdkError(SdkErrorCode.NotConnected, 'Not connected'), 'NOT_CONNECTED: Not connected', 'MCP_SERVER_UNAVAILABLE'],
+    [new SdkError(SdkErrorCode.InvalidResult, 'bad result'), 'INVALID_RESULT: bad result', 'MCP_INVALID_RESULT'],
+    [new SdkError(SdkErrorCode.SendFailed, 'write failed'), 'SEND_FAILED: write failed', 'MCP_REQUEST_FAILED'],
+    [new TypeError('fetch failed'), 'TypeError: fetch failed', 'MCP_REQUEST_FAILED'],
+  ] as const)('classifies a rejected tool call (%s), keeping the code when redacting', async (failure, detail, code) => {
+    await ctx.plugin(TestCredentials)
+    ;(ctx.credentials as TestCredentials).values.set('MCP_TOKEN', 'test-secret')
+    for (const expandTemplates of [false, true]) {
+      const config = { ...stdioConfig({ enabled: false }), env: { TOKEN: '${credential:MCP_TOKEN}' }, expandTemplates }
+      const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), new McpStatusCell(() => {}))
+      try {
+        await handle.ready
+        mockCallTool.mockRejectedValue(failure)
+        const result = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+        expect(result.error).toEqual({
+          message: `MCP tool "remote" failed: ${detail}`,
+          info: { name: 'McpToolError', code },
+        })
+      } finally {
+        await handle.dispose()
+      }
+    }
+  })
+
+  it('reports generation closure and caller cancellation during a tool call as their own failures', async () => {
+    const handle = startConnection(ctx, stdioConfig({ enabled: false }), resolveReconnectPolicy({ enabled: false }, 'test'), new McpStatusCell(() => {}))
+    try {
+      await handle.ready
+      const started: PromiseWithResolvers<void> = Promise.withResolvers()
+      // The SDK rejects an aborted request as a timeout carrying the abort reason's text.
+      mockCallTool.mockImplementation((_params, options) => new Promise((_resolve, reject) => {
+        const { signal } = options as { signal: AbortSignal }
+        signal.addEventListener('abort', () => { reject(new SdkError(SdkErrorCode.RequestTimeout, String(signal.reason))) })
+        started.resolve()
+      }))
+      const caller = new AbortController()
+      const cancelled = executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: caller.signal })
+      await started.promise
+      caller.abort()
+      expect((await cancelled).error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+
+      const closed = executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      await vi.waitFor(() => { expect(mockCallTool).toHaveBeenCalledTimes(2) })
+      instances[0]!.transport?.onclose?.()
+      expect((await closed).error).toEqual({
+        message: 'MCP connection closed',
+        info: { name: 'McpLocalError', code: 'MCP_CONNECTION_CLOSED' },
+      })
+
+      // The closed generation's tools stay registered until re-sync; a new call is refused unsent.
+      const calls = mockCallTool.mock.calls.length
+      const unsent = await executeToolFixture(ctx, { name: 'mcp__srv__remote', arguments: {}, callId: nextCallId(), signal: testToolSignal })
+      expect(unsent.error).toEqual({
+        message: 'mcp-client(srv): server is disconnected',
+        info: { name: 'McpToolError', code: 'MCP_SERVER_UNAVAILABLE' },
+      })
+      expect(mockCallTool).toHaveBeenCalledTimes(calls)
     } finally {
       await handle.dispose()
     }
@@ -320,6 +389,7 @@ describe('reconnect supervisor', () => {
       })
       expect(result.isError).toBe(true)
       expect(JSON.stringify(result.content)).toContain('server is disconnected')
+      expect(result.error?.info).toEqual({ name: 'McpToolError', code: 'MCP_SERVER_UNAVAILABLE' })
     } finally {
       reconnectGate.resolve()
       await handle.dispose()

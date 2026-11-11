@@ -1,7 +1,8 @@
 /** Live panel state of one followed Session, shared by all of its followers. */
 
+import { isDeepStrictEqual } from 'node:util'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
+import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -74,6 +75,7 @@ export class SessionPanel {
    * @param worktreeStates - reads the `forgeWorktree` projection of the Session.
    * @param creations - reads the running creation and restoration, the last failed creation, and what a message of the
    * Session waits for.
+   * @param reviewRevision - reads how many review changes were announced for a change request.
    * @param onIdle - called when the last follower leaves.
    */
   constructor(
@@ -82,6 +84,7 @@ export class SessionPanel {
     readonly session: Session,
     private readonly worktreeStates: ProjectionHandle<ForgeWorktreeState>,
     private readonly creations: Pick<WorktreeCreations, 'of' | 'restorationOf' | 'failureOf' | 'waitingOf'>,
+    private readonly reviewRevision: (ref: ChangeRequestRef) => number,
     private readonly onIdle: () => void,
   ) {
     this.current = {
@@ -197,6 +200,11 @@ export class SessionPanel {
     await Promise.all([inspection, probe])
   }
 
+  /** Publish the review revisions of the bound change requests after a review change was announced. */
+  reviewChanged(): void {
+    this.publish({ ...this.current, changeRequests: this.entries(this.ctx.forgeSession.changeRequests(this.session)) })
+  }
+
   /**
    * Stop inspections, probes, and the change request watch, end every follower, and wait for pending work.
    * @returns settles once pending inspections and probes have ended.
@@ -210,7 +218,8 @@ export class SessionPanel {
   private entries(changeRequests: readonly SessionChangeRequest[]): ForgePanelChangeRequest[] {
     return changeRequests.map((entry) => {
       if (entry.update !== null && 'snapshot' in entry.update) this.snapshots.set(entry.url, entry.update.snapshot)
-      return { ...entry, snapshot: this.snapshots.get(entry.url) ?? null }
+      const reviewRevision = entry.ref === null ? 0 : this.reviewRevision(entry.ref)
+      return { ...entry, snapshot: this.snapshots.get(entry.url) ?? null, reviewRevision }
     })
   }
 
@@ -230,6 +239,8 @@ export class SessionPanel {
   }
 
   private publish(next: ForgePanelState): void {
+    // A reinspection after a tool result usually finds the same checkout; equal states reach no follower.
+    if (isDeepStrictEqual(next, this.current)) return
     this.current = next
     for (const notify of [...this.followers]) notify()
   }

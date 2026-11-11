@@ -627,7 +627,7 @@ ask_user_question 默认保持原有阻塞行为；设置 `mode: timed` 后才�
 
 ### `run_code`
 
-针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，异步函数的函数体（仅限可擦除语法，支持顶层 `await` 和 `return`）；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。只有打印或返回的内容构成程序输出，请筛选这些内容。含图片的子工具结果会在运行结束后附加。程序是异步 TypeScript 函数的函数体，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层 await 和 return。使用 console.log(...) 或返回无损 JSON 值来输出。只有打印值和返回值成为程序输出。每次调用在新的 Node 进程中运行，可通过 await import(...) 使用 Node API。相对路径以传入的工作目录为准；process.env 初始为空。直接文件系统访问遵循本次执行的沙箱策略。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
+针对可用工具执行 TypeScript 程序。接受两个必填参数：`code`，异步函数的函数体（仅限可擦除语法，支持顶层 `await` 和 `return`）；以及 `description`，简要说明程序做什么。请按系统提示词中的声明，以 `await tools.name(args)` 调用工具。使用 inspect(...values) 展示选定的文本和图片。程序是异步 TypeScript 函数的函数体，只接受可擦除语法，不支持 enum 或 namespace。类型标注只作提示。支持顶层 await 和 return。使用 inspect(...values) 展示输出。不要使用 console。每次调用在新的 Node 进程中运行，可通过 await import(...) 使用 Node API。相对路径以传入的工作目录为准；process.env 初始为空。直接文件系统访问遵循本次执行的沙箱策略。每个程序从 Session 的当前目录启动，运行中保留初始目录。沙箱提权只为本次完整程序执行授权。嵌套工具保留自身策略与审批。只有在获得拒绝证据后才请求更宽访问。先前效果可能已经发生，请在显式重试前检查。程序不会自动重放。
 
 ```json
 {

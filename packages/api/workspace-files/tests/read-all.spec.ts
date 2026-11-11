@@ -2,7 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { failureOf, openWorkspace, signal, type Harness } from './harness.ts'
 
 let harness: Harness
@@ -35,7 +36,7 @@ describe('workspaceFiles.readBytes — complete files', () => {
 
   it.each([undefined, 1])('checks the actual bytes when stat reports %s', async (size) => {
     await writeFile(join(harness.workspace, 'growing'), 'abcde')
-    vi.spyOn(harness.ctx.fs, 'stat').mockResolvedValue({ type: 'file', version: FsVersion('v'), ...size === undefined ? {} : { size } })
+    vi.spyOn(harness.ctx.fs, 'stat').mockResolvedValue({ type: 'file', version: brandString<FsVersion>('v'), ...size === undefined ? {} : { size } })
     expect((await failureOf(harness.endpoint({ maxFileBytes: 4 }).readBytes(harness.scope, 'growing', {}, signal()))).code)
       .toBe('workspace-file/too-large')
   })

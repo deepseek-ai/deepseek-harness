@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { aggregateTotals, aggregateTurn, buildTurns, turnContext } from '../src/client/stats-aggregate.ts'
 import type { StatsCall, StatsStepMetrics, StatsViewNode } from '../src/client/stats-contract.ts'
 import { CALL_LIMIT } from '../src/client/stats-fold.ts'
@@ -77,7 +78,7 @@ function stepNode(value: StatsStepMetrics): StatsViewNode {
 
 function imageRef(id: string): ImageAttachmentRef {
   return {
-    attachmentId: AttachmentId(id),
+    attachmentId: brandString<AttachmentId>(id),
     mediaType: 'image/png',
     bytes: 1,
     width: 1,

@@ -10,13 +10,14 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PresentedFile } from '../src/types.ts'
 import * as Present from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: Array<() => Promise<unknown>> = []
 let callNumber = 0
@@ -26,7 +27,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
-  const id = SessionId(`present-owner-${++callNumber}`)
+  const id = brandString<SessionId>(`present-owner-${++callNumber}`)
   let scope: Scope
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, ...cwd === undefined ? {} : { cwd }, isSeeded: false,
@@ -70,7 +71,7 @@ async function setup() {
   const owner = await agent(ctx, root)
   owner.session.append('turn/start', { turn: 1 })
   const execute = (files: unknown) => executeToolFixture(ctx, {
-    signal: new AbortController().signal, callId: ToolCallId(`call-${++callNumber}`),
+    signal: new AbortController().signal, callId: brandString<ToolCallId>(`call-${++callNumber}`),
     name: 'present', arguments: { files }, agent: owner,
   })
   return { ctx, owner, root, fiber, execute }
@@ -140,9 +141,19 @@ describe('present', () => {
     const { root, owner, execute } = await setup()
     await writeFile(join(root, 'large'), 'four')
     await symlink(tmpdir(), join(root, 'outside'))
-    for (const files of [[], [{ path: '' }], [{ path: 'missing' }], [{ path: '.' }], [{ path: 'outside' }], [{ path: 'large' }, { path: 'large' }, { path: 'large' }]]) {
+    const invalidArgs = { name: 'ToolArgsError', code: 'INVALID_ARGS' }
+    const notRegular = { name: 'FsError', code: 'FS_NOT_REGULAR_FILE' }
+    for (const [files, info] of [
+      [[], invalidArgs],
+      [[{ path: '' }], invalidArgs],
+      [[{ path: 'missing' }], { name: 'FsError', code: 'FS_NOT_FOUND' }],
+      [[{ path: '.' }], notRegular],
+      [[{ path: 'outside' }], notRegular],
+      [[{ path: 'large' }, { path: 'large' }, { path: 'large' }], invalidArgs],
+    ] as const) {
       const result = await execute(files)
       expect(result.isError, JSON.stringify(files)).toBe(true)
+      expect(result.error?.info, JSON.stringify(files)).toEqual(info)
     }
     expect(owner.session.snapshotEvents().some(event => event.type === 'deliverables/presented')).toBe(false)
   })
@@ -162,13 +173,17 @@ it('validates deployment limits before registering the tool', async () => {
 
 it('requires an agent, an open turn, and a workspace', async () => {
   const { ctx, owner, execute } = await setup()
-  const detached = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: ToolCallId('detached'), name: 'present', arguments: { files: [{ path: 'a' }] } })
+  const detached = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: brandString<ToolCallId>('detached'), name: 'present', arguments: { files: [{ path: 'a' }] } })
+  const contextUnavailable = { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
   expect(detached.isError).toBe(true)
+  expect(detached.error?.info).toEqual(contextUnavailable)
   owner.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-  expect((await execute([{ path: 'a' }])).isError).toBe(true)
+  const closed = await execute([{ path: 'a' }])
+  expect(closed.isError).toBe(true)
+  expect(closed.error?.info).toEqual(contextUnavailable)
   const noWorkspace = await agent(ctx, undefined)
   noWorkspace.session.append('turn/start', { turn: 1 })
-  const absent = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: ToolCallId('no-workspace'), name: 'present', arguments: { files: [{ path: 'a' }] }, agent: noWorkspace })
+  const absent = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: brandString<ToolCallId>('no-workspace'), name: 'present', arguments: { files: [{ path: 'a' }] }, agent: noWorkspace })
   expect(absent.isError).toBe(true)
 })
 
@@ -188,7 +203,9 @@ it('refuses a final symlink to an ordinary file', async () => {
   const { root, execute } = await setup()
   await writeFile(join(root, 'source'), 'source')
   await symlink(join(root, 'source'), join(root, 'link'))
-  expect((await execute([{ path: 'link' }])).isError).toBe(true)
+  const result = await execute([{ path: 'link' }])
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_REGULAR_FILE' })
 })
 
 
@@ -197,5 +214,7 @@ it('refuses a file replaced by a directory after inspecting its final component'
   await writeFile(join(root, 'source'), 'source')
   const directory = await ctx.fs.stat(await ctx.fs.resolve(root))
   vi.spyOn(ctx.fs, 'stat').mockResolvedValueOnce(directory)
-  expect((await execute([{ path: 'source' }])).isError).toBe(true)
+  const result = await execute([{ path: 'source' }])
+  expect(result.isError).toBe(true)
+  expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_REGULAR_FILE' })
 })

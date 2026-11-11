@@ -9,13 +9,14 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import BasicCompactionEngine from '@deepseek-ai/dsh-compaction-basic'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
-import { ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import type { ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { inlineImages } from '@deepseek-ai/dsh-llm-deepseek/src/images.ts'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createAssistantMessage, createToolResultMessage, createUserMessage, projectOffloadedImages, offloadedImageText, IMAGE_OFFLOAD_REQUIRED_CODE, LlmAdapter, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, createUserMessage, projectOffloadedImages, offloadedImageText, IMAGE_OFFLOAD_REQUIRED_CODE, LlmAdapter, LlmError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { isReplacementSurfaceEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { isReplacementSurfaceEvent, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import * as offload from '../src/index.ts'
 
@@ -36,7 +37,7 @@ class ScriptedAdapter extends LlmAdapter {
       inlineImages(
         projectOffloadedImages(options.messages, ref => offloadedImageText(ref)),
         new Map([image('first').attachment].map(ref => [ref.attachmentId, {
-          variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`), attachment: ref,
+          variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`), attachment: ref,
           data: new Uint8Array(ref.bytes), mediaType: ref.mediaType, bytes: ref.bytes,
           width: ref.width, height: ref.height, depth: 'uchar', space: 'srgb', hasAlpha: false,
         }])),
@@ -112,7 +113,7 @@ async function summaryHarness(script: ScriptEntry[]) {
   const ctx = await harness(adapter)
   await ctx.plugin(TokenMeter)
   const compact = new BasicCompactionEngine(ctx, { auto: false, summarizationProvider: 'mock', summarizationModel: 'summary' })
-  const agent = await ctx.agentLoop.create(SessionId('summary-offload'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('summary-offload'), { provider: 'mock', model: 'mock' })
   return { ctx, compact, agent, adapter }
 }
 
@@ -226,7 +227,7 @@ describe('compaction-image-offload', () => {
   it('cancelling at failed-attempt settlement preserves images for later turns', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('continued')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-cancel-before-record'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-cancel-before-record'), { provider: 'mock', model: 'mock' })
     ctx.on('session/event', (session, event) => {
       if (session === agent.session && event.type === 'assistant/attempt') agent.cancel({ kind: 'user' })
     })
@@ -247,7 +248,7 @@ describe('compaction-image-offload', () => {
   it('cancelling after an image omission stops retry and retains the committed selection', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('continued')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-cancel-after-record'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-cancel-after-record'), { provider: 'mock', model: 'mock' })
     ctx.on('session/event', (session, event) => {
       if (session === agent.session && event.type === 'image/offload') agent.cancel({ kind: 'user' })
     })
@@ -268,7 +269,7 @@ describe('compaction-image-offload', () => {
   it('logs one exact image selection and retries without replacing the message', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(2), textResponse('sent')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-required'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-required'), { provider: 'mock', model: 'mock' })
     const delegated: string[] = []
     ctx.on('agent/request-error', ({ failure }, next) => {
       delegated.push(failure.code)
@@ -306,7 +307,7 @@ describe('compaction-image-offload', () => {
   it('counts the adapter prefix in request order after a surface replacement', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(2), textResponse('sent')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-reordered'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-reordered'), { provider: 'mock', model: 'mock' })
     // An empty-content assistant node derives no message and carries no occurrence.
     agent.session.append('assistant/message', {
       turn: 0,
@@ -341,10 +342,10 @@ describe('compaction-image-offload', () => {
   it('offloads a tool-result image and leaves later images untouched', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1), textResponse('sent')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-tool-result'), { provider: 'mock', model: 'mock' })
-    const emptyCallId = ToolCallId('empty')
-    const callId = ToolCallId('shot')
-    const innerCallId = ToolCallId('inner')
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-tool-result'), { provider: 'mock', model: 'mock' })
+    const emptyCallId = brandString<ToolCallId>('empty')
+    const callId = brandString<ToolCallId>('shot')
+    const innerCallId = brandString<ToolCallId>('inner')
     agent.session.append('turn/start', { turn: 0 })
     agent.session.append('assistant/message', {
       turn: 0,
@@ -403,7 +404,7 @@ describe('compaction-image-offload', () => {
   it('advances across consecutive failures and preserves the first request snapshot', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1), offloadRequired(1), textResponse('sent')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-repeat'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-repeat'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({
       content: [image('first'), image('second'), image('third')], source: { kind: 'user' },
     }))
@@ -424,7 +425,7 @@ describe('compaction-image-offload', () => {
     const adapter = new ScriptedAdapter([offloadRequired(1)])
     ctx.llm.registerAdapter(['mock'], adapter)
     await ctx.plugin(AgentLoop, { agents: [] })
-    const agent = await ctx.agentLoop.create(SessionId('offload-unloaded'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-unloaded'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [image('a')], source: { kind: 'user' } }))
     await agent.whenIdle()
     expect(adapter.requests).toHaveLength(1)
@@ -442,7 +443,7 @@ describe('compaction-image-offload', () => {
       throw new LlmError('provider outage', 'SERVER')
     }])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-other-failure'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-other-failure'), { provider: 'mock', model: 'mock' })
     const delegated: string[] = []
     ctx.on('agent/request-error', ({ failure }, next) => {
       delegated.push(failure.code)
@@ -457,7 +458,7 @@ describe('compaction-image-offload', () => {
   it('delegates IMAGE_OFFLOAD_REQUIRED once nothing remains to offload', async () => {
     const adapter = new ScriptedAdapter([offloadRequired(1)])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('offload-exhausted'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('offload-exhausted'), { provider: 'mock', model: 'mock' })
     const delegated: string[] = []
     ctx.on('agent/request-error', ({ failure }, next) => {
       delegated.push(failure.code)

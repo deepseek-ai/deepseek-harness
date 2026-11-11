@@ -9,8 +9,9 @@
 
 import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
-import { createUserMessage, ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEventMap, SessionEventType, SurfaceIntent } from '@deepseek-ai/dsh-session'
 
 // Each arbitrary supplies its own surface intent; `build` must not synthesize
@@ -63,7 +64,7 @@ const messageEventArb: fc.Arbitrary<Appendable> = fc.oneof(
     .map((r): Appendable => ({ type: 'tool/result', data: {
       turn: 1, step: 1,
       message: createToolResultMessage({
-        callId: ToolCallId(r.id),
+        callId: brandString<ToolCallId>(r.id),
         content: r.content,
         isError: r.isError,
       }),
@@ -87,7 +88,7 @@ const logArb = fc.array(anyEventArb, { maxLength: 25 })
 
 let counter = 0
 function build(events: Appendable[]): Session {
-  const session = Session.create(SessionId(`prop-${counter++}`))
+  const session = Session.create(brandString<SessionId>(`prop-${counter++}`))
   for (const e of events) {
     // Forward the generated intent verbatim; non-surface events carry none.
     if (e.intent !== undefined) session.append(e.type, e.data, e.intent)
@@ -115,7 +116,7 @@ describe('Session properties', () => {
   it('replay-from-seed reproduces the derivation identically', () => {
     fc.assert(fc.property(logArb, (events) => {
       const original = build(events)
-      const replayed = Session.create(SessionId(`replay-${counter++}`), original.snapshotEvents())
+      const replayed = Session.create(brandString<SessionId>(`replay-${counter++}`), original.snapshotEvents())
       expect(replayed.deriveMessages()).toEqual(original.deriveMessages())
       // Every explicit replay grows by exactly one log-only boundary.
       expect(replayed.snapshotEvents().slice(0, original.seq)).toEqual(original.snapshotEvents())
@@ -126,8 +127,8 @@ describe('Session properties', () => {
   it('replaying a log that already ends in end-seed adds no further marker', () => {
     fc.assert(fc.property(logArb, (events) => {
       const original = build(events)
-      const once = Session.create(SessionId(`idem-a-${counter++}`), original.snapshotEvents())
-      const twice = Session.create(SessionId(`idem-b-${counter++}`), once.snapshotEvents())
+      const once = Session.create(brandString<SessionId>(`idem-a-${counter++}`), original.snapshotEvents())
+      const twice = Session.create(brandString<SessionId>(`idem-b-${counter++}`), once.snapshotEvents())
       // Lazy resume makes browsing a pickup, so this must not grow per open.
       expect(twice.snapshotEvents()).toEqual(once.snapshotEvents())
     }))

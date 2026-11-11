@@ -8,12 +8,13 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type MessageId } from '@deepseek-ai/dsh-llm'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createInboxStub, mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
@@ -21,7 +22,7 @@ import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import {
-  SessionPersistenceRevision,
+  type SessionPersistenceRevision,
   type SessionPersistenceSnapshot,
   type SessionHandle, SessionAccess,
 } from '@deepseek-ai/dsh-session-persistence'
@@ -62,7 +63,7 @@ function statSnapshot(
   meta: SessionHeader,
   metrics: Partial<Pick<SessionPersistenceSnapshot, 'eventCount' | 'sizeBytes'>> = {},
 ): SessionPersistenceSnapshot {
-  return { header: meta, revision: SessionPersistenceRevision(`test:${meta.id}:stat`), ...metrics }
+  return { header: meta, revision: brandString<SessionPersistenceRevision>(`test:${meta.id}:stat`), ...metrics }
 }
 
 /** A stored log with one human prompt at time 1200: proven non-blank. */
@@ -403,7 +404,7 @@ describe('Remote Agent and Session lookup policy', () => {
 
     const response = await remote.updateQueue(request({
       sessionId: sid('session-no-persistence'),
-      itemId: MessageId('queued-item'),
+      itemId: brandString<MessageId>('queued-item'),
       action: { kind: 'remove' },
     }))
 
@@ -686,7 +687,7 @@ describe('subagent ownership fence', () => {
 
     const queued = await remote.updateQueue(request({
       sessionId: originChild.id,
-      itemId: MessageId('queued-item'),
+      itemId: brandString<MessageId>('queued-item'),
       action: { kind: 'remove' },
     }))
     expect(queued.ok).toBe(false)

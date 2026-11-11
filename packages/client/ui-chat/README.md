@@ -19,6 +19,7 @@ File-mention providers receive the viewed Session ID with the closing-turn owner
 - [Reference previews](#reference-previews)
 - [Hidden Chat rows](#system-prompt-row)
 - [Command and failure rows](#command-and-failure-rows)
+- [Inherited history divider](#inherited-history-divider)
 - [Turn token usage](#turn-token-usage)
 - [Completed-turn footer](#completed-turn-footer)
 - [Turn Process Folding](#turn-process-folding)
@@ -75,6 +76,13 @@ Chat adapts Markdown targets at `MarkdownDelegateProvider.getTriggerProps`. The 
 
 -----
 
+<a id="inherited-history-divider"></a>
+## Inherited history divider
+
+A forked Session, such as a fork subagent or a branched conversation, shows a divider labelled “Inherited history above” at its latest inherited `session/end-seed` marker, between the copied history and the Session's own messages. A cut inside a Turn keeps the divider outside that Turn's process folding. The divider appears once the history page that holds the marker is loaded, so a long inherited history may show it only after scrolling up. Sessions without inherited history show no divider.
+
+-----
+
 <a id="turn-token-usage"></a>
 ## Turn token usage
 
@@ -127,7 +135,7 @@ Live tool deltas share reasoning's frame-batched publication; durable calls and 
 
 The process group uses a stable `div` layout box, a scroll body, and an uncapped content box that reports growth inside the body. Business styles must adapt spacing within and across groups, including hidden or empty members and the answer-spacing exception. The `conversation.chat.flow` slot adds a `display: contents` DOM anchor; row selectors match that anchor directly, without repeating its column ancestry. The running status shares the rows' parent, so its divider uses the same visible-sibling rules. The anchor contributes no spacing of its own. The earlier-history control directly precedes the flow anchor; their sibling relationship supplies the leading gap. CSS variables do not belong in the Group Definition.
 
-Running group titles, reasoning previews, tool and command rows, the active retry line, and the bottom running status use the shared [TextShimmer](../ui-primitives/README.md#component-catalog). Each row’s text shares one left-to-right highlight, including collapsed group titles; icons and hover chevrons retain their base appearance. Ordinary flow rows sit 4px apart. An expanded group title has 8px before its content, Assistant responses have 12px from adjacent process rows, and completed-Turn duration/status controls have 16px from their input and from a directly following visible row. A reply that follows the control after folded rows keeps the 12px reply gap, so folding never changes its spacing. Hidden and empty rows, including retained empty slot anchors, add no gap. The running “Deep diving” text retains its blue base while its theme-specific highlight sweeps across it.
+Running group titles, reasoning previews, tool and command rows, the active retry line, and the bottom running status use the shared [TextShimmer](../ui-primitives/README.md#component-catalog). Each row’s text shares one left-to-right highlight, including collapsed group titles; icons and hover chevrons retain their base appearance. Ordinary flow rows sit 4px apart, including adjacent reasoning rows of one Assistant message. An expanded group title has 8px before its content, Assistant responses have 12px from adjacent process rows, and completed-Turn duration/status controls have 16px from their input and from a directly following visible row. A reply that follows the control after folded rows keeps the 12px reply gap, so folding never changes its spacing. Hidden and empty rows, including retained empty slot anchors, add no gap. The running “Deep diving” text retains its blue base while its theme-specific highlight sweeps across it.
 
 The running status shows a whale whose APNG mask inherits the text color. CSS selects the static SVG when reduced motion or forced colors are active, or alpha masks are unsupported. The APNG is a [package asset](../AGENTS.md#dependency-declaration) referenced by the plugin stylesheet; React does not pass image data through DOM styles.
 
@@ -184,7 +192,9 @@ Within a process group, wheel, touchstart, and any pointerdown interrupt an acti
 
 `useChatViewport` owns turn-aware DOM reads, clamped writes, native events, and one retained paging anchor. For Load older, Node and Group seats mark eligible anchors from their existing disclosure state. The viewport selects the first nonempty, unhidden marker in transcript order without hit testing or geometry-based search, then measures that element and its scroll containers. It compensates the anchor's capped group first, then gives the remaining displacement to the transcript scrollport. An inner compensation write cancels that group's animation through its bound controller and pauses following; reader scrolling back to the bottom resumes it. Commits and later content resizes reuse that anchor; a remounted row is resolved by the same semantic key. Compensation stays within the actual scroll ranges without adding bottom space.
 
-`useChatReading` owns follow policy, sampled reader input, and semantic memory; `useChatNavigation` owns turn jumps and requests preservation from the viewport. Reading gestures release the paging anchor, but composer clicks, typing, and non-scrolling keys retain it; while a page is still loading, `scrollend` captures the reader's new position. `useChatScroll` coordinates their committed inputs. Explicit navigation carries its measured landing into reading policy, so it does not rediscover the known target with a hit test.
+`useChatReading` owns follow policy, sampled reader input, and semantic memory; `useChatNavigation` owns turn jumps and requests preservation from the viewport. Reading gestures release the paging anchor, but composer clicks, typing, and non-scrolling keys retain it. A deferred history request captures its anchor at consumption rather than at request time. `useChatScroll` coordinates their committed inputs. Explicit navigation carries its measured landing into reading policy, so it does not rediscover the known target with a hit test.
+
+History prefetch uses the existing 500ms reading sample and content/size notifications, with one distance check before requesting within two viewport heights. At most one page waits for consumption. Touch and actual inner scrolling retain automatic intent before motion blockers are evaluated, then recheck after release; other active motion, pointer holds, or an unavailable anchor return automatic loading to the button without retrying the cached page. Loading and processing buttons remain clickable, joining the current request without duplication. Explicit clicks retain intent until consumption, exhaustion, failure, or superseding navigation; once a page is available they bypass automatic blockers, use the first paging anchor at the top or the current reading anchor elsewhere with a paging fallback, and consume through existing preservation without waiting for animation completion. If no anchor is available, manual consumption still proceeds without a position guarantee. Automatic stationary consumption uses retained positioning; ordinary outer scrolling uses browser anchoring. For automatic consumption at scrollTop ≤ 0.5, the first paging anchor uses the same captured-screen-position restoration as persistent preservation, once, then releases immediately; it does not add scroll-position deltas that native anchoring may already have applied. The one-shot record is settled on history consumption completion even when the visible Node order stays unchanged; view closure or history failure discards it without application. The actual Chat scrollport disables vertical overscroll bounce, without adding a scrolling animation. The history row keeps its height through loading, processing, retry, and exhaustion; initially complete Sessions omit it.
 
 Active-Turn highlighting is approximate: `readVisibleTurn` binary-searches the flow slot's direct Node/Group boxes (or the column's in standalone rendering) and retains the preceding candidate in gaps. It neither hit-tests the document nor searches Group members or all Turn markers. Empty Seats retain zero-height in-flow boxes so outer positions remain ordered without extra spacing. This lookup does not change semantic position capture or paging compensation.
 
@@ -210,6 +220,8 @@ None; Chat presentation does not assemble or mutate provider requests.
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
+
+- **Manual paging during an active gesture** — manual consumption captures a persistent anchor when its page arrives, even if a touch gesture is already in progress. Subsequent movement can be restored to that anchor, constraining the gesture or its momentum until a new reading input releases it. The automatic touch deferral does not protect this explicit manual path.
 
 - **Running-icon resolution** — the animated whale uses a 28×28 image at a default 14×14 CSS size. Larger content fonts or device pixel ratios above 2 can soften the raster stroke; the static fallback remains vector-based. Browser image caching owns the animation clock, so remounting does not guarantee playback restarts at the first frame.
 

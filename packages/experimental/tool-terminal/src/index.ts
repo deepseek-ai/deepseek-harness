@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { TerminalSendOperation, TerminalSendResult, TerminalSessionId as TerminalSessionIdType, TerminalSignal } from '@deepseek-ai/dsh-terminal'
 import type {} from '@deepseek-ai/dsh-jobs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -126,7 +126,7 @@ function sessionId(args: SessionArgs): TerminalSessionIdType {
   if (args.sessionId.length === 0) {
     throw new Error('sessionId must be a non-empty string')
   }
-  return TerminalSessionId(args.sessionId)
+  return brandString<TerminalSessionIdType>(args.sessionId)
 }
 
 function textResult(text: string, maxBytes: number): ContentBlock[] {

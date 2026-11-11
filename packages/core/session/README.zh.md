@@ -29,6 +29,8 @@ kind: "package-reference"
 
 ### 创建与检查会话
 
+`SessionId` 是包根入口与 `/types` 导出的类型。使用 `dsh-brand` 的 `brandString<SessionId>(value)` 为已准入的字符串添加品牌；品牌转换不校验或生成 id。
+
 `ctx.sessions.create()` 构建绑定到调用方 fiber 的实时会话；`get(id)` 与 `list()` 查找会话，`fork()` 从实时会话的精确前缀创建独立会话。它复制历史、`cwd`、`isSeeded` 和继承事件数，不记录来源关系。`parentSession` 记录子代理的直接创建者；历史普通 fork 可能仍在此字段保留来源，因此分类使用 `origin`。
 
 独立的 `Session.create()` 和 `Session.fromRestore()` 实例接受事件和插件记录，但不发送 `session/event`。`SessionStore` 通过 `prepare()` 或 `enter()` 接管实例；此后只有实例仍在 Store 中且同步 `session/created` 宣告已完成时才能写入。创建监听器只能读取，并能看到全部已有历史；独立实例进入 Store 时不会把已有历史重放为 `session/event`。宣告失败或移除后仍禁止写入。只有开始过 `session/created` 宣告的实例在移除时发出 `session/disposed`，宣告失败也不例外；进入 Store 但从未宣告的实例不发出这两个通知。
@@ -82,6 +84,8 @@ session.deriveMessages()         // the derived model history
 `ctx.sessions.fork(source, boundary?, childSessionId?)` 从实时源会话复制包含切点的精确事件前缀（默认：最后一个事件）。`dsh-session/fork` 的 `buildForkSeed` 在复制事件之后放置继承标记，仅为开放步骤补缺失的错误工具结果，并以 `forked` 原因关闭步骤和轮次。已关闭的步骤与轮次保持原样，包括历史缺失结果。标记和结束事件属于子会话；`inheritedEventCount` 只统计复制的前缀。
 
 逻辑 `SessionHeader.isSeeded` 字段报告是否存在 fork 历史，而不公开位置整数。`Session.inheritedEventCount` 保留经过校验的精确 `SessionLogOffset`；`ownEvents()` 返回从该切点开始的事件，`isOwnSeq(seq)` 只接受已存在且由子会话拥有的位置。底层带 seed 构造必须显式提供 `seed` 与 `inheritedEventCount`，因为构造 seed 可以在继承前缀之后包含子会话自有的设置事件。
+
+`session.append(type, data, ...opts)` 追加一个事件并返回该事件。`session.append(inputs)` 接受位置参数元组 `[type, data, ...opts]`（`SessionEventInput`）的只读数组，并按输入顺序返回已提交事件；空数组不追加任何内容。数组准入会在改变日志或surface前验证所有候选和同步分发，因此观察者读取完整的已提交组。持久化监听器保留各自的持久性规则；仅数组准入不保证进程崩溃时整组存储的原子性。
 
 ### 刷新持久状态
 

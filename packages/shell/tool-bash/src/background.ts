@@ -11,6 +11,16 @@ import { escalationHintMarker, sandboxDenialMarker } from '@deepseek-ai/dsh-sand
 import type { ShellProcess, ShellSandboxInfo } from '@deepseek-ai/dsh-shell'
 import type { JobChunk, JobHooks, JobOutcome, JobOutputSource } from '@deepseek-ai/dsh-jobs'
 
+/** Job hooks plus the original error of a job that failed before its process produced an outcome. */
+export interface ProcessJobHooks extends JobHooks {
+  /**
+   * The error that ended a `failed` job, kept with its own class and code;
+   * undefined while the job runs and for a completed or killed job.
+   * @returns the original failure, boxed so any thrown value is preserved.
+   */
+  failure(): { error: unknown } | undefined
+}
+
 /**
  * Sandbox facts worth the terminal detail: a runner that never ran the
  * command, or a denial (with the escalation hint this composition offers).
@@ -94,14 +104,16 @@ export function ringDelta(chunks: readonly JobChunk[]): string {
  * Adapt asynchronous shell preparation after job admission without exposing a partial process.
  * @param start - starts the process with job-owned cancellation.
  * @param outcome - projects the settled process into the job outcome.
- * @returns synchronous job hooks whose completion includes preparation and process settlement.
+ * @returns synchronous job hooks whose completion includes preparation and process settlement,
+ *   and the original error of a failed preparation for a caller that reports it.
  */
 export function processJob(
   start: (signal: AbortSignal) => Promise<ShellProcess>,
   outcome: (process: ShellProcess) => JobOutcome,
-): JobHooks {
+): ProcessJobHooks {
   const controller = new AbortController()
   let process: ShellProcess | undefined
+  let failure: { error: unknown } | undefined
   const done: Promise<JobOutcome> = (async () => {
     try {
       process = await start(controller.signal)
@@ -112,8 +124,10 @@ export function processJob(
       }
       return outcome(process)
     } catch (error: unknown) {
+      const killed = controller.signal.aborted && process === undefined
+      if (!killed) failure = { error }
       return {
-        status: controller.signal.aborted && process === undefined ? 'killed' : 'failed',
+        status: killed ? 'killed' : 'failed',
         detail: error instanceof Error ? error.message : String(error),
       }
     }
@@ -125,5 +139,6 @@ export function processJob(
       process?.kill()
     },
     done,
+    failure: () => failure,
   }
 }

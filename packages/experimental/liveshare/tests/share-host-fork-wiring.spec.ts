@@ -13,7 +13,7 @@ import { Peer } from '@deepseek-ai/dsh-client-connection'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
 import { randomUUID } from 'node:crypto'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +27,7 @@ import type {} from '../src/index.ts'
 import { apply } from '../src/host/share-host.ts'
 import { SHARED_TOOL_PROFILES } from '../src/host/shared-tools.ts'
 import type { TunnelWorkerInput } from '../src/host/tunnel-worker.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const worker = vi.hoisted(() => ({
   event: undefined as ((event: TunnelWorkerEvent) => void) | undefined,
@@ -85,8 +86,8 @@ async function host(options: HostOptions = {}) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(RemoteAccessService)
-  const sessionOf = (id: string) => Session.create(SessionId(id), [], {
-    version: SESSION_FORMAT_VERSION, id: SessionId(id), cwd: root, createdAt: 0, isSeeded: false,
+  const sessionOf = (id: string) => Session.create(brandString<SessionId>(id), [], {
+    version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), cwd: root, createdAt: 0, isSeeded: false,
   })
   const sessions = new Map<string, Session>()
   const scopes = new Map<string, Context>()
@@ -107,7 +108,7 @@ async function host(options: HostOptions = {}) {
       scopeListeners.set(id, listeners)
       scopes.set(id, scope)
     }
-    return { id: SessionId(id), session, ctx: scope, cancel: () => {} }
+    return { id: brandString<SessionId>(id), session, ctx: scope, cancel: () => {} }
   }
   let registrations = 0
   // The deployment's own definitions are what a confined replacement wraps; keeping them apart from the
@@ -150,7 +151,7 @@ async function host(options: HostOptions = {}) {
     writeText: async () => ({ version: 1, operation: 'create' as const }),
   } as never)
   ctx.provide('sandboxPolicy', {
-    resolve: () => ({ mode: 'workspace-write', workspaceRoot: root, sessionId: SessionId('source') }),
+    resolve: () => ({ mode: 'workspace-write', workspaceRoot: root, sessionId: brandString<SessionId>('source') }),
   } as never)
   ctx.provide('typert', { lookups: { get: (key: string) => key === 'agent'
     ? { resolve: async (id: string) => live(id) }
