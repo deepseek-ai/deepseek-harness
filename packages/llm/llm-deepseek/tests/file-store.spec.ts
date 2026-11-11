@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { setTimeout as wait } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +8,8 @@ import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/ds
 import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
 import { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
+
+vi.mock('node:timers/promises', { spy: true })
 
 const REF: ImageAttachmentRef = {
   attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
@@ -144,6 +147,29 @@ describe('DeepSeekFileStore', () => {
     await expect(store.ensureUploaded(VERSION, CONNECTION, { ...POLICY, uploadRetryDelayMs: 1 })).rejects.toMatchObject({ code: 'RATE_LIMIT' })
     expect(fetchImpl).toHaveBeenCalledTimes(attempts)
     expect(reclaim).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels a server-requested retry delay without sending the upload again', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-retry-after-abort-'))
+    roots.push(dir)
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('busy', { status: 429, headers: { 'retry-after': '60' } }))
+    const store = new DeepSeekFileStore({ index: new DeepSeekUploadIndex(join(dir, 'index.json')), fetch: fetchImpl })
+    const scheduled = Promise.withResolvers<number | undefined>()
+    const timers = await vi.importActual<typeof import('node:timers/promises')>('node:timers/promises')
+    vi.mocked(wait).mockImplementationOnce((ms, value, options) => {
+      scheduled.resolve(ms)
+      return timers.setTimeout(ms, value, options)
+    })
+    const controller = new AbortController()
+    const pending = store.ensureUploaded(VERSION, CONNECTION, POLICY, controller.signal)
+    const result = expect(pending).rejects.toThrow('caller cancelled')
+    try {
+      expect(await scheduled.promise).toBe(60_000)
+    } finally {
+      controller.abort(new Error('caller cancelled'))
+      await result
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
   it('preserves a Retry-After beyond the supported timer range without posting again', async () => {

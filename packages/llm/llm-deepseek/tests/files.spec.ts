@@ -83,13 +83,16 @@ describe('Messages Files requests', () => {
     const h = harness()
     const images = ['a', 'b', 'c', 'd'].map(digit => ({ ...ref, attachmentId: AttachmentId(`sha256:${digit.repeat(64)}`) }))
     const cancelled: AbortSignal[] = []
-    h.ensureUploaded.mockRejectedValueOnce(new Error('offline')).mockImplementation(async (_version, _connection, _policy, signal) => {
-      cancelled.push(signal!)
-      return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }))
-    })
+    h.ensureUploaded
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(h.ensureUploaded.getMockImplementation()!)
+      .mockImplementation(async (_version, _connection, _policy, signal) => {
+        cancelled.push(signal!)
+        return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }))
+      })
     await chunks(h.adapter.stream(request(images)))
     expect(h.ensureUploaded).toHaveBeenCalledTimes(3)
-    expect(cancelled.map(signal => signal.aborted)).toEqual([true, true])
+    expect(cancelled.map(signal => signal.aborted)).toEqual([true])
     expect(body(fetchImpl.mock.calls[0]![1]).match(/"type":"base64"/gu)).toHaveLength(4)
   })
 
