@@ -9,6 +9,7 @@ import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/ds
 import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
 import type { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
+import { adapter, chunks, options, requestImageStore, server, user } from './helpers.ts'
 
 vi.mock('node:timers/promises', { spy: true })
 
@@ -227,13 +228,30 @@ describe('DeepSeekFileStore', () => {
       return Response.json({ data: [...stored.values()], has_more: false })
     }
     const store = new DeepSeekFileStore({ index, fetch: fetchImpl, now: () => NOW })
-    const results = await Promise.all(['c', 'd', 'e'].map(digit => store.ensureUploaded({
-      ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${digit.repeat(64)}`),
-    }, CONNECTION, { ...POLICY, quotaCleanupBatch: batch })))
-    expect(deleted.toSorted()).toEqual(['old-1', 'old-2', 'old-3'])
-    expect(lists).toBe(3 / batch)
-    expect(attempts).toBe(6)
-    expect(results.map(result => result.record.fileId).toSorted()).toEqual([...stored.keys()].toSorted())
+    const refs = ['c', 'd', 'e'].map(digit => ({ ...REF, attachmentId: brandString<AttachmentId>(`sha256:${digit.repeat(64)}`) }))
+    const attachments = requestImageStore(async ref => ({
+      ...VERSION, attachment: ref, variantId: brandString<ImageVariantId>(ref.attachmentId),
+    }))
+    const messages = await server()
+    try {
+      const route = adapter({ baseURL: messages.url, fileQuotaCleanupBatch: batch }, {
+        resolveAttachments: () => attachments, resolveFiles: () => store,
+      })
+      await chunks(route.stream(options({
+        model: 'deepseek-flash',
+        messages: [{ ...user(), content: refs.map(attachment => ({ type: 'image', attachment })) }],
+      })))
+      expect(deleted.toSorted()).toEqual(['old-1', 'old-2', 'old-3'])
+      expect(lists).toBe(3 / batch)
+      expect(attempts).toBe(6)
+      expect(messages.requests).toHaveLength(1)
+      const body = JSON.stringify(messages.requests[0]!.body)
+      const wireIds = [...body.matchAll(/"file_id":"([^"]+)"/gu)].map(match => match[1])
+      expect(wireIds.toSorted()).toEqual([...stored.keys()].toSorted())
+      expect(body).not.toContain('"base64"')
+    } finally {
+      await messages.close()
+    }
   })
 
   it('reclaims the oldest owned native file across descending pages before retrying an upload', async () => {
