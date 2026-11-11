@@ -4,7 +4,7 @@ import { createAssistantMessage, createToolResultMessage, type ToolCallId } from
 import { appendPluginRecord, Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { forgeChangeRequestsProjection } from '../src/projection.ts'
 import type { ForgeChangeRequestsState } from '../src/index.ts'
-import { pullUrl, pushOutput, shellTurn } from './fixtures.ts'
+import { programTurn, pullUrl, pushOutput, shellTurn } from './fixtures.ts'
 
 const { apply, init, stateSchema } = forgeChangeRequestsProjection
 
@@ -244,6 +244,76 @@ describe('forgeChangeRequests projection', () => {
       { url: pullUrl(2), origin: 'discovered', dismissed: false },
       { url: pullUrl(5), origin: 'tracked', dismissed: false },
     ])
+  })
+
+  it('binds shell calls inside a PTC program by the rules of direct calls, from both shells and despite a failed program', () => {
+    const session = Session.create(brandString<SessionId>('program'))
+    programTurn(session, 'program', [
+      { command: 'gh pr create --fill', output: created(1) },
+      { command: 'gh pr view 7', output: ['title:\tAdd it', `url:\t${pullUrl(7)}`, '--', `Stacked on ${pullUrl(8)}`].join('\n') },
+      { command: 'gh pr edit 4 --add-label bug', output: `${pullUrl(4)}\n`, tool: 'pwsh' },
+      { command: `gh pr checkout ${pullUrl(5)}`, output: "Switched to branch 'feat'" },
+      { command: 'gh pr view 6 --repo fake.test/octo/demo --json number', output: '{"number":6}' },
+      { command: 'gh pr view 3 --repo octo/demo --json number,url', output: JSON.stringify({ number: 3, url: pullUrl(3) }) },
+    ], true)
+
+    expect(fold(session)).toEqual({
+      pending: [],
+      bindings: [
+        { url: pullUrl(1), origin: 'created', dismissed: false },
+        { url: pullUrl(7), origin: 'referenced', dismissed: false },
+        { url: pullUrl(4), origin: 'referenced', dismissed: false },
+        { url: pullUrl(5), origin: 'referenced', dismissed: false },
+        { url: pullUrl(6), origin: 'referenced', dismissed: false },
+        { url: pullUrl(3), origin: 'referenced', dismissed: false },
+      ],
+      pushes: [],
+    })
+  })
+
+  it('records branches a program pushes with the dispatch sequence number', () => {
+    const session = Session.create(brandString<SessionId>('program-push'))
+    programTurn(session, 'program', [
+      { command: 'git push -u origin feat', output: pushOutput('feat') },
+      { command: 'git push -u origin other', output: pushOutput('other') },
+    ])
+    const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.seq)
+
+    expect(fold(session).pushes).toEqual([
+      { remote: 'fake.test:octo/demo.git', branch: 'feat', seq: dispatches[0] },
+      { remote: 'fake.test:octo/demo.git', branch: 'other', seq: dispatches[1] },
+    ])
+  })
+
+  it('keeps the state reference for program dispatches that fail, carry no evidence, or run other tools', () => {
+    const session = Session.create(brandString<SessionId>('program-unrelated'))
+    programTurn(session, 'program', [
+      { command: 'gh pr create --fill', output: created(1), isError: true },
+      { command: `gh pr checkout ${pullUrl(9)}`, output: 'boom', isError: true },
+      { command: 'git push', output: pushOutput('feat'), isError: true },
+      { command: 'gh pr create --fill', output: created(2), tool: 'read' },
+      { command: 'ls', output: pullUrl(3) },
+      { command: 'gh pr list --json url', output: pullUrl(3) },
+      { command: 'gh pr view 9 --repo octo/demo --json number', output: '{"number":9}' },
+      { command: '', output: created(4), arguments: { cmd: 'gh pr create' } },
+      { command: '', output: created(4), arguments: 'gh pr create' },
+      { command: '', output: created(4), arguments: null },
+    ])
+    const state = fold(session)
+
+    expect(state).toEqual({ pending: [], bindings: [], pushes: [] })
+    for (const event of session.snapshotEvents()) expect(apply(state, event)).toBe(state)
+  })
+
+  it('keeps a dismissed binding hidden when a program references it again', () => {
+    const session = Session.create(brandString<SessionId>('program-dismissed'))
+    programTurn(session, 'first', [{ command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(1) })
+    const dismissed = fold(session)
+    programTurn(session, 'second', [{ command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
+
+    expect(fold(session)).toEqual(dismissed)
+    expect(dismissed.bindings).toEqual([{ url: pullUrl(1), origin: 'referenced', dismissed: true }])
   })
 
   it('round-trips state through JSON and rejects malformed state', () => {

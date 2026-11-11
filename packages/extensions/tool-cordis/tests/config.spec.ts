@@ -89,6 +89,9 @@ describe('the Config inspect provider', () => {
     await expect(queryLiveConfig(ctx, { limit: 0 })).rejects.toThrow('limit must be an integer from 1 to 100')
     await expect(queryLiveConfig(ctx, { offset: -1 })).rejects.toThrow('offset must be a non-negative integer')
     await expect(queryLiveConfig(ctx, { name: '' })).rejects.toThrow('name must be a non-empty string')
+    for (const input of [{ limit: 0 }, { offset: -1 }, { name: '' }]) {
+      await expect(queryLiveConfig(ctx, input)).rejects.toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    }
     await ctx.fiber.dispose()
   })
 
@@ -119,10 +122,14 @@ describe('the Config inspect provider', () => {
     expect(await queryLiveConfig(ctx, { entry: ids.noConfig })).not.toHaveProperty('packageDir')
     expect(await queryLiveConfig(ctx, { entry: ids.group })).toEqual({ id: ids.group, patchId: ids.group, name: 'cordis:group', status: 'tree' })
     await expect(queryLiveConfig(ctx, { entry: 'missing' })).rejects.toThrow('unknown entry id "missing"')
+    await expect(queryLiveConfig(ctx, { entry: 'missing' })).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_TARGET_NOT_FOUND' })
     await ctx.fiber.dispose()
   })
 
   it('rejects a Host composed without a Loader', async () => {
     await expect(queryLiveConfig(new Context(), undefined)).rejects.toThrow('requires the Loader')
+    await expect(queryLiveConfig(new Context(), undefined)).rejects.toMatchObject({
+      name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE',
+    })
   })
 })

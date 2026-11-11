@@ -14,7 +14,7 @@ import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntime, PtcRuntimeError } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunFailure, PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH, defineTool } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -1945,6 +1945,7 @@ describe('the run_code dispatch bridge', () => {
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('requires a PTC runtime')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('refuses an agent-owned program before dispatch when its directory owner is missing', async () => {
@@ -1968,6 +1969,7 @@ describe('the run_code dispatch bridge', () => {
       expect(result.content).toEqual([{
         type: 'text', text: 'Error: dsh-tools: run_code with an Agent requires workingDirectory',
       }])
+      expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
       expect(runtime.lastRequest).toBeUndefined()
       expect(calls).toEqual([])
       expect(events).toEqual([])
@@ -1989,11 +1991,44 @@ describe('the run_code dispatch bridge', () => {
     })
   })
 
+  it('classifies runtime rejections, keeping a runtime error code', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    const misuse = new TypeError('runtime contract violated')
+    runtime.behavior = () => Promise.reject(misuse)
+    const failed = await runCode(ctx, 'return 1')
+    expect(failed.error).toEqual({
+      message: 'code run failed: runtime contract violated',
+      info: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' },
+    })
+    runtime.behavior = () => Promise.reject(new PtcRuntimeError('ptc-runtime-node: run after disposal', 'PTC_RUNTIME_UNAVAILABLE'))
+    expect((await runCode(ctx, 'return 1')).error?.info).toEqual({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
+  })
+
+  it('keeps a distinct runtime rejection after cancellation and passes the cancellation through', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    const cancelled = async (rejection: (reason: unknown) => unknown) => {
+      const controller = new AbortController()
+      runtime.behavior = () => {
+        controller.abort(new Error('caller cancelled'))
+        // The cancellation case rejects with the signal's own reason.
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+        return Promise.reject(rejection(controller.signal.reason))
+      }
+      return (await runCode(ctx, 'return 1', { signal: controller.signal })).error
+    }
+    expect((await cancelled(() => new PtcRuntimeError('persistent PTC environment cleanup is incomplete', 'PTC_RUNTIME_UNAVAILABLE')))?.info)
+      .toEqual({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE' })
+    expect((await cancelled(() => new TypeError('cleanup observation failed')))?.info)
+      .toEqual({ name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' })
+    expect((await cancelled(reason => reason))?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+  })
+
   it('rejects a whitespace-only description with a structured isError', async () => {
     const { ctx } = await setup({ mode: 'ptc' })
     const result = await runCode(ctx, 'return 1', { description: '   ' })
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('invalid description')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it.each([
@@ -2720,6 +2755,7 @@ describe('PTC standing file policy and sandbox outcomes', () => {
       const result = await runCode(ctx, 'return 1')
       expect(result.isError).toBe(true)
       expect(result.content).toEqual([{ type: 'text', text: 'Error: dsh-tools: confined PTC runtime requires sandboxPolicy' }])
+      expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
       expect((ctx.ptcRuntime as ConfinedFakeRuntime).lastRequest).toBeUndefined()
     } finally { await ctx.fiber.dispose() }
   })
@@ -2839,6 +2875,7 @@ describe('per-program execution controls', () => {
         arguments: { code: 'pass', description: 'Try unsupported timeout', timeoutMs: 5 },
       })
       expect(rejected.isError).toBe(true)
+      expect(rejected.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       expect(python.runtime.lastRequest).toBeUndefined()
     } finally { await python.ctx.fiber.dispose() }
   })
@@ -2846,7 +2883,9 @@ describe('per-program execution controls', () => {
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, '1000', null])('rejects invalid timeout %s before runtime execution', async (timeoutMs) => {
     const { ctx, runtime, execute } = await controlledSetup()
     try {
-      expect((await execute({ timeoutMs })).isError).toBe(true)
+      const result = await execute({ timeoutMs })
+      expect(result.isError).toBe(true)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       expect(runtime.lastRequest).toBeUndefined()
     } finally { await ctx.fiber.dispose() }
   })
@@ -2860,6 +2899,7 @@ describe('per-program execution controls', () => {
       })
       expect(result.isError).toBe(true)
       expect(JSON.stringify(result.content)).toContain('sandbox_permissions is not available for this PTC runtime')
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       expect(runtime.lastRequest).toBeUndefined()
     } finally { await ctx.fiber.dispose() }
   })

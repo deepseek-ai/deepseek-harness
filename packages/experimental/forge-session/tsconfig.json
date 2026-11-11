@@ -21,6 +21,9 @@
       "path": "../forge"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../core/session"
     },
     {
@@ -43,6 +46,9 @@
     },
     {
       "path": "../../sandbox/sandbox-policy"
+    },
+    {
+      "path": "../../core/tool-executor-ptc"
     }
   ]
 }

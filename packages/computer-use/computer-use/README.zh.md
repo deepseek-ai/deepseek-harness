@@ -31,7 +31,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-computer-use'
 ```
 
-服务没有配置项。提供方插件注入 `computerUse` 并调用 `ctx.computerUse.register(brandString<ComputerUseProviderName>(name))`，其中 `brandString` 来自 `@deepseek-ai/dsh-brand`，类型来自 `@deepseek-ai/dsh-computer-use/brand`。返回的 effect 清理函数释放此次注册。
+服务没有配置项。提供方插件注入 `computerUse` 并调用 `ctx.computerUse.register(brandString<ComputerUseProviderName>(name))`，其中 `brandString` 来自 `@deepseek-ai/dsh-brand`，类型来自 `@deepseek-ai/dsh-computer-use/types`。返回的 effect 清理函数释放此次注册。
 
 提供方先停止接收工具调用、关闭资源并等待自有工作结束，再释放注册。释放前，`ctx.computerUse.providerName` 始终报告已注册的名称。
 

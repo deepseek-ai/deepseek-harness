@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { builtinCommandName, builtinCommandTokens, resolveCommand } from '../src/builtin.ts'
-import type { CommandDefinitionId } from '../src/brand.ts'
-import type { CommandDescriptor } from '../src/types.ts'
+import type { CommandDefinitionId, CommandDescriptor } from '../src/types.ts'
 
 const definitions = [
   ['goal', '@deepseek-ai/dsh-command-goal'],

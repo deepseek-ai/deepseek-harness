@@ -29,7 +29,7 @@ Use `@deepseek-ai/dsh-llm` to stream model calls through configured provider ada
 
 Any composition that calls a model provider — an agent loop, a session-title generator, a compaction summarizer — streams its requests through this service. Mount it together with at least one provider adapter; the service itself has no configuration and no provider wire code.
 
-Import message, tool-call, provider-request, attempt, and reasoning-effort identifier types from `@deepseek-ai/dsh-llm/brand` or the package root using `import type`. Brand strings with `brandString<IdentifierType>(value)` from `@deepseek-ai/dsh-brand`; branding preserves the string without validation.
+Import message, tool-call, provider-request, attempt, and reasoning-effort identifier types from `@deepseek-ai/dsh-llm/types` or the package root using `import type`. Brand strings with `brandString<IdentifierType>(value)` from `@deepseek-ai/dsh-brand`; branding preserves the string without validation.
 
 ### When to choose it
 

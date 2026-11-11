@@ -4,7 +4,7 @@ import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { Context } from '@deepseek-ai/cordis'
-import type { PtcRunSpec, PtcRunResult, PtcRunSandbox, PtcRunFailure, PtcBindingNamespace, PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntimeError, type PtcRunSpec, type PtcRunResult, type PtcRunSandbox, type PtcRunFailure, type PtcBindingNamespace, type PtcJsonValue } from '@deepseek-ai/dsh-ptc-runtime'
 import { SandboxUnavailableError, classifyRunnerFailure, isRunnerSpawnFailure } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SubprocessHandle, SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
@@ -80,8 +80,8 @@ export class ProgramWorker {
 
   /** Reject reuse until the previous evaluation and required cleanup settle. */
   assertIdle(): void {
-    if (this.running) throw new Error('persistent PTC does not accept concurrent runs for one state owner')
-    if (this.cleanupPending) throw new Error('persistent PTC environment cleanup is incomplete; release the owner before running another program')
+    if (this.running) throw new PtcRuntimeError('persistent PTC does not accept concurrent runs for one state owner', 'PTC_RUNTIME_CONFLICT')
+    if (this.cleanupPending) throw new PtcRuntimeError('persistent PTC environment cleanup is incomplete; release the owner before running another program', 'PTC_RUNTIME_UNAVAILABLE')
   }
 
   /**
