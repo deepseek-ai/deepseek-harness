@@ -3,13 +3,13 @@
  * workspace and the real dock, across docked and floating panes and a
  * phone-width viewport. The package README owns the behavior asserted here.
  */
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Locator, type Page } from 'playwright'
 import { expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import { launchWebScaffold, watchConsole } from './scaffold.ts'
+import { launchWebScaffold, seedSession, watchConsole } from './scaffold.ts'
 import { connectFreshWorkspace, saveFailureShot } from './support.ts'
 
 /** Press at the centre of `from`, travel in steps, and release at `to`. */
@@ -166,7 +166,7 @@ it('browses workspace files in tabs that share one pane tree', async () => {
   expect(await toggle.getAttribute('aria-expanded')).toBe('true')
 
   await toggle.focus()
-  // In dark mode the card takes the filled tree's background, with a soft white shadow.
+  // In dark mode the card is raised by a lighter background layer than the filled tree, and its soft shadow stays black.
   const theme = await page.locator('body').getAttribute('data-ds-dark-theme')
   try {
     await page.evaluate(() => { document.body.setAttribute('data-ds-dark-theme', '') })
@@ -174,10 +174,10 @@ it('browses workspace files in tabs that share one pane tree', async () => {
       background: getComputedStyle(node).backgroundColor,
       shadow: getComputedStyle(node).boxShadow,
     }))
-    expect(cardPaint.shadow).toContain('color(srgb 1 1 1 / 0.08)')
+    expect(cardPaint.shadow).toContain('rgba(0, 0, 0, 0.04) 0px 3px 8px 0px')
     await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 360px !important; }' })
     await column.locator('[data-files-navigator-mode="fill"]:visible').waitFor()
-    expect(await navigator.evaluate(node => getComputedStyle(node).backgroundColor)).toBe(cardPaint.background)
+    expect(await navigator.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe(cardPaint.background)
     await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 960px !important; }' })
     await navigator.getByRole('separator').waitFor()
   } finally {
@@ -290,11 +290,12 @@ it('browses workspace files in tabs that share one pane tree', async () => {
   await page.setViewportSize({ width: 1680, height: 1000 })
   await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 460px !important; }' })
 
-  // The workspace command shows the pane's tree, moves the keyboard into it, and keeps the file.
+  // The workspace command shows the pane's tree, moves the keyboard to its search field, and keeps the file.
   await input.focus()
   await page.keyboard.press('Control+Alt+p')
   await expect.poll(() => toggle.getAttribute('aria-expanded')).toBe('true')
-  await expect.poll(() => current.evaluate(node => node === document.activeElement)).toBe(true)
+  await expect.poll(() => navigator.locator('[data-files-search]').evaluate(node => node === document.activeElement)).toBe(true)
+  await expect.poll(() => current.textContent()).toBe('a.txt')
   await expect.poll(() => path.textContent()).toContain('a.txt')
   expect(await tabs.count()).toBe(tabCount + 1)
   await layout.evaluate((node) => { node.textContent = '[data-sidebar-right-panel] { width: 960px !important; }' })
@@ -537,3 +538,156 @@ it('moves a file between the docked column and a floating panel from the file me
   await expect.poll(() => floatBody.evaluate(node => node.scrollTop)).toBe(600)
   expect(errors).toEqual({ warnings: [], pageErrors: [] })
 })
+
+it('searches the whole workspace, respects .gitignore on request, saves exclusion rules, restores the default list, and shows hidden entries', async () => {
+  const scaffold = await launchWebScaffold()
+  onTestFinished(() => scaffold.close())
+  // The scaffold's workspace is a private temporary directory that its close removes.
+  const root = scaffold.workspaceCwd
+  await mkdir(join(root, 'vendor', 'deep', 'nested'), { recursive: true })
+  await writeFile(join(root, 'vendor', 'deep', 'nested', 'widget-copy.ts'), 'export const copy = 3\n')
+  await mkdir(join(root, 'ignored'))
+  await writeFile(join(root, 'ignored', 'widget-ignored.ts'), 'export const ignored = 1\n')
+  await mkdir(join(root, '.git'), { recursive: true })
+  await writeFile(join(root, '.gitignore'), 'ignored/\n')
+  await writeFile(join(root, '.hidden-widget.txt'), 'hidden\n')
+  await writeFile(join(root, 'README.md'), '# Readme\n')
+  const seed = fileURLToPath(new URL('../../../snapshots/web/markdown-file-links/session.v3.jsonl', import.meta.url))
+  await seedSession(scaffold, await readFile(seed, 'utf8'), 'file-search')
+  const browser = await chromium.launch()
+  onTestFinished(() => browser.close())
+  const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1680, height: 1000 } })
+  onTestFailed(() => saveFailureShot(page, 'web-e2e-file-search'))
+  const errors = watchConsole(page)
+  await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+  await page.locator('[role="treeitem"]').first().click()
+  await page.locator('[role="treeitem"]').nth(1).click()
+  await page.getByRole('button', { name: 'src/example.txt:24–30', exact: true }).waitFor()
+
+  await page.locator('[data-sidebar-right-expand]').click()
+  const column = page.locator('[data-rightbar-col]')
+  await page.addStyleTag({ content: '[data-sidebar-right-panel] { width: 960px !important; }' })
+  await column.locator('[data-sidebar-right-guide-entry="files"]').click()
+  const navigator = column.locator('[data-files-navigator]:visible')
+  const field = navigator.locator('[data-files-search]')
+  const body = navigator.locator('[data-files-body]')
+  const status = navigator.locator('[data-files-search-status]')
+  const eye = navigator.locator('[data-files-show-hidden]')
+  const row = (relative: string): Locator => body.locator(`[data-files-path="${root}/${relative}"]`)
+  await row('README.md').waitFor()
+  const searchToggle = column.locator('[data-files-search-toggle]')
+  await expect.poll(() => searchToggle.getAttribute('aria-expanded')).toBe('false')
+  await expect.poll(() => field.count()).toBe(0)
+  await searchToggle.click()
+  await expect.poll(() => searchToggle.getAttribute('aria-expanded')).toBe('true')
+  await expect.poll(() => field.evaluate(node => node === document.activeElement)).toBe(true)
+
+  // The eye starts closed: the tree leaves out entries whose name starts with `.`.
+  expect(await eye.getAttribute('aria-pressed')).toBe('false')
+  expect(await row('.hidden-widget.txt').count()).toBe(0)
+
+  // The search walks the whole workspace: a file three directories deep under one the tree never opened matches by name,
+  // ignoring case, with the match highlighted; the hidden file and the one `.gitignore` ignores are left out.
+  const deep = 'vendor/deep/nested/widget-copy.ts'
+  await field.fill('WIDGET')
+  await expect.poll(() => status.textContent()).toBe('Results: 1')
+  expect(await body.getAttribute('data-files-view')).toBe('search')
+  expect(await row(deep).locator('mark').textContent()).toBe('widget')
+  expect(await row('vendor/deep/nested').count()).toBe(1)
+  expect(await row('.hidden-widget.txt').count()).toBe(0)
+  expect(await row('ignored/widget-ignored.ts').count()).toBe(0)
+  expect(await row('README.md').count()).toBe(0)
+  expect(await body.locator('[data-files-row="search-incomplete"]').count()).toBe(0)
+  expect(await body.locator('[data-files-row="search-truncated"]').count()).toBe(0)
+  await searchToggle.click()
+  await expect.poll(() => searchToggle.getAttribute('aria-expanded')).toBe('false')
+  await expect.poll(() => field.count()).toBe(0)
+  await expect.poll(() => searchToggle.evaluate(node => node === document.activeElement)).toBe(true)
+  expect(await status.textContent()).toBe('Results: 1')
+  await row(deep).waitFor()
+  await searchToggle.click()
+  await expect.poll(() => field.inputValue()).toBe('WIDGET')
+  await expect.poll(() => field.evaluate(node => node === document.activeElement)).toBe(true)
+  // A query with `/` matches workspace-relative paths.
+  await field.fill('nested/widget')
+  await expect.poll(() => status.textContent()).toBe('Results: 1')
+  await row(deep).waitFor()
+
+  // Clearing the `.gitignore` choice in the settings searches again at once, and the ignored file matches.
+  await field.fill('widget')
+  await expect.poll(() => status.textContent()).toBe('Results: 1')
+  await navigator.locator('[data-files-search-settings-toggle]').click()
+  const gitignore = navigator.locator('[data-files-search-settings]').getByRole('checkbox', { name: 'Respect ignore files (.gitignore, etc.)', exact: true })
+  expect(await gitignore.isChecked()).toBe(true)
+  await gitignore.uncheck()
+  await page.keyboard.press('Escape')
+  await expect.poll(() => status.textContent()).toBe('Results: 2')
+  await row('ignored/widget-ignored.ts').waitFor()
+  await navigator.locator('[data-files-search-settings-toggle]').click()
+  await gitignore.check()
+  await page.keyboard.press('Escape')
+  await expect.poll(() => status.textContent()).toBe('Results: 1')
+  // Clearing the text gives the listed tree back, never expanded below the root.
+  await navigator.getByRole('button', { name: 'Clear search', exact: true }).click()
+  await expect.poll(() => body.getAttribute('data-files-view')).toBe('tree')
+  expect(await row('vendor/deep').count()).toBe(0)
+  expect(await field.inputValue()).toBe('')
+  expect(await status.count()).toBe(1)
+  expect(await status.textContent()).toBe('')
+  await row('README.md').waitFor()
+
+  // The magnifier opens the settings; an added path is saved when Escape closes the panel.
+  const trigger = navigator.locator('[data-files-search-settings-toggle]')
+  const settings = navigator.locator('[data-files-search-settings]')
+  const restore = settings.locator('[data-files-settings-restore]')
+  await trigger.click()
+  await settings.waitFor()
+  expect(await settings.getByText('Excluded files and directories', { exact: true }).count()).toBe(1)
+  for (const name of ['.DS_Store', 'Thumbs.db', '$RECYCLE.BIN', 'System Volume Information']) {
+    expect(await settings.locator(`[data-files-rule="${name}"]`).count()).toBe(1)
+  }
+  // The list is the default list, so there is nothing to restore.
+  expect(await restore.count()).toBe(0)
+  const add = settings.getByRole('textbox', { name: 'Add file or directory', exact: true })
+  await expect.poll(() => add.evaluate(node => node === document.activeElement)).toBe(true)
+  await add.fill('vendor')
+  await add.press('Enter')
+  await settings.locator('[data-files-rule="vendor"]').waitFor()
+  await page.keyboard.press('Escape')
+  await expect.poll(() => settings.count()).toBe(0)
+  expect(await trigger.evaluate(node => node === document.activeElement)).toBe(true)
+  const stored = (): Promise<string | null> => page.evaluate(() => localStorage.getItem('dsh.sidebar-files.workspace-search.v1'))
+  expect(await stored()).toContain('"vendor"')
+  // Exclusion rules narrow only the search; the tree still lists the directory.
+  await field.fill('widget')
+  await expect.poll(() => status.textContent()).toBe('Results: 0')
+  await field.press('Escape')
+  await expect.poll(() => body.getAttribute('data-files-view')).toBe('tree')
+  expect(await row('vendor').count()).toBe(1)
+
+  // Closing with the magnifier saves an unchecked rule.
+  await trigger.click()
+  const excludeVendor = settings.getByRole('checkbox', { name: 'Exclude vendor', exact: true })
+  await excludeVendor.uncheck()
+  await trigger.click()
+  await expect.poll(() => settings.count()).toBe(0)
+  await trigger.click()
+  expect(await excludeVendor.isChecked()).toBe(false)
+
+  // The restore control, shown while the list differs from the default list, resets it to that list.
+  await restore.click()
+  await expect.poll(() => settings.locator('[data-files-rule="vendor"]').count()).toBe(0)
+  expect(await restore.count()).toBe(0)
+  await page.keyboard.press('Escape')
+  await expect.poll(() => settings.count()).toBe(0)
+  // Back to the defaults, the workspace's stored entry goes.
+  expect(await stored()).not.toContain('"vendor"')
+
+  // The open eye shows hidden entries in the tree.
+  await eye.click()
+  await expect.poll(() => eye.getAttribute('aria-pressed')).toBe('true')
+  await row('.hidden-widget.txt').waitFor()
+  await eye.click()
+  await expect.poll(() => row('.hidden-widget.txt').count()).toBe(0)
+  expect(errors).toEqual({ warnings: [], pageErrors: [] })
+}, 120_000)

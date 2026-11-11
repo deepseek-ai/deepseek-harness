@@ -474,6 +474,29 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/chat/completions'])
   })
 
+  it('classifies a gateway 500 that relays an upstream 401 as SERVER with the rendered message', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    // The Anthropic SDK renders the whole JSON body after the gateway's own status.
+    const body = JSON.stringify({
+      error: {
+        origin: 'upstream',
+        message: 'upstream returned an error response: User not found.',
+        type: 'upstream_error',
+        upstream: { provider: 'custom', status: 401, body: { error: { message: 'User not found.' } } },
+      },
+    })
+    const server = await mockServer([{ status: 500, body }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        gateway: { apiKeyEnv: 'PI_TEST_KEY', api: 'anthropic-messages', baseURL: server.url, models: [{ id: 'gateway-model' }] },
+      },
+    })
+    const result = await assemble(ctx, { provider: 'gateway', model: 'gateway-model', messages: [] })
+    expect(result.finish).toEqual({ kind: 'error', failure: { message: `500 ${body}`, code: 'SERVER' } })
+  })
+
   it('uses the resolved catalog context window for usage-based overflow detection', async () => {
     const model = getBuiltinModels('deepseek').find(candidate => candidate.id === 'deepseek-flash')
     if (model === undefined) throw new Error('deepseek-flash missing from pi-ai test catalog')
@@ -1055,7 +1078,7 @@ describe('provider profile lifecycle', () => {
     await expect((async () => {
       for await (const _chunk of adapter.stream({ provider: 'anthropic', model: 'claude-sonnet-4', messages: [] })) { /* drain */ }
     })()).rejects.toMatchObject({ code: 'NO_ADAPTER' })
-    expect(new LlmError('x', 'X')).toBeInstanceOf(Error)
+    expect(LlmError.fromFailure({ message: 'x', code: 'X' })).toBeInstanceOf(Error)
   })
 
   it('rejects unsupported or unresolved image input before provider I/O', async () => {

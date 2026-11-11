@@ -20,7 +20,7 @@ const request: ForkRequest = {
 function share(overrides: Partial<ForkShareState> = {}): ForkShareState {
   return {
     shareId: 'share-1',
-    sessionId: 'session-1',
+    sessionIds: ['session-1'],
     allowsFork: true,
     viewerAdmitted: true,
     stopped: false,
@@ -85,6 +85,15 @@ describe('read-only fork authorization', () => {
     })
   })
 
+  it('forks any Session the share lists as one of its sources', () => {
+    const multi = share({ sessionIds: ['session-1', 'session-2'] })
+    expect(decideFork(multi, { ...request, sourceSessionId: 'session-2' }, 0)).toMatchObject({ ok: true })
+    expect(decideFork(multi, { ...request, sourceSessionId: 'session-3' }, 0)).toMatchObject({
+      ok: false,
+      code: 'source-session-mismatch',
+    })
+  })
+
   it('refuses a caller that names another session', () => {
     // A viewer that can name a session id must not be able to fork one the share does not carry.
     expect(decideFork(share(), { ...request,  sourceSessionId: 'session-2' }, 0)).toMatchObject({
@@ -111,6 +120,7 @@ describe('read-only fork authorization', () => {
     expect(ceiling.readOnly).toBe(true)
     expect(ceiling.allowedTools).toEqual([
       'read', 'read_image', 'glob', 'grep', 'present', 'todo_write', 'skill', 'web_search', 'web_fetch',
+      'run_code',
     ])
     expect(WRITE_FORK_CEILING.allowedTools).toEqual([...ceiling.allowedTools, 'edit', 'write'])
     // A ceiling that can be edited is not a ceiling: these are refused at the seam, not configured.

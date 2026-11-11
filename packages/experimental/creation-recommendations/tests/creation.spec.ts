@@ -55,16 +55,16 @@ describe('interface creation', () => {
     expect(await f.act('create')).toEqual({ status: 'accepted' })
     expect(await f.act('create')).toEqual({ status: 'accepted' })
     const spec = await f.complete()
-    expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', request: { agentPreset: 'cordis' } })
-    expect(spec.request.parent).toBe(f.agent)
+    expect(spec).toMatchObject({ provider: 'spawn', delivery: 'caller', agentPreset: 'cordis' })
+    expect(spec.parent).toBe(f.agent)
     const guide = fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/session-tab.md'))
-    expect(spec.request.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
+    expect(spec.prompt.find(block => block.type === 'text')?.text).toContain(JSON.stringify(guide))
     expect(await readFile(guide, 'utf8')).toContain('conversation.view')
-    expect(spec.request.cwd!.startsWith(join(f.agent.session.header.cwd!, '.dsh-created-plugins'))).toBe(true)
+    expect(spec.cwd!.startsWith(join(f.agent.session.header.cwd!, '.dsh-created-plugins'))).toBe(true)
     expect(f.manager.installBundle).toHaveBeenCalledOnce()
     const installedDirectory = f.manager.installBundle.mock.calls[0]![0]
-    expect(spec.request.cwd).not.toBe(installedDirectory)
-    await rm(spec.request.cwd!, { recursive: true })
+    expect(spec.cwd).not.toBe(installedDirectory)
+    await rm(spec.cwd!, { recursive: true })
     expect(JSON.parse(await readFile(join(installedDirectory, 'package.json'), 'utf8'))).toMatchObject({ name: f.current()?.bundleName })
     expect(JSON.stringify(f.current())).not.toContain(f.directory)
     expect(f.current()).toMatchObject({ phase: 'installed', slot: 'page', application: 'applied' })
@@ -74,9 +74,8 @@ describe('interface creation', () => {
     await f.ctx.plugin(CreationRecommendations)
     expect(f.current()?.phase).toBe('installed')
     expect((await f.act('create')).status).toBe('settled')
-    await f.act('keep')
-    expect(f.current()?.phase).toBe('kept')
-    expect(f.manager.removeBundle).not.toHaveBeenCalled()
+    expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
+    expect(f.current()?.phase).toBe('installed')
     await f.act('undo')
     expect(f.manager.removeBundle).toHaveBeenCalledExactlyOnceWith(f.current()?.bundleName)
     expect(f.current()?.phase).toBe('removed')
@@ -84,20 +83,34 @@ describe('interface creation', () => {
     expect(f.manager.removeBundle).toHaveBeenCalledOnce()
   })
 
+  it('leaves existing subagent receipts unchanged when the recommendation plugin loads', async () => {
+    const f = await fixture()
+    await f.fiber.dispose()
+    const child = await f.ctx.agents.create({ sessionId: SessionId('existing-creator-child'),
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    await f.propose('call-creation-1', proposal, child.agent)
+    const receipt = { callId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
+    recordCard(child.agent.session, receipt)
+    f.bundles.push(installedBundle(receipt.bundleName))
+    await f.ctx.plugin(CreationRecommendations)
+    expect(f.cardOf(callId, child.agent)).toEqual(receipt)
+    expect(f.manager.listBundles).not.toHaveBeenCalled()
+  })
+
   it('passes the user-selected left entry to Creator with only its location reference', async () => {
     const f = await fixture()
     await f.propose()
     await f.act('create', 'sidebar-left')
     const spec = await f.complete()
-    const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const instructions: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     expect(instructions).toMatchObject({ location: 'sidebar-left', uiReference: fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/sidebar-entry.md')),
       locationPolicy: 'location and uiReference are the user’s final choice in the card. They override any earlier location described in brief; preserve the requested behavior and data scope while adapting the interface to this chosen location.',
     })
     expect(f.current()).toMatchObject({ phase: 'installed', slot: 'sidebar-left' })
-    const source = await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')
+    const source = await readFile(join(spec.cwd!, 'package.json'), 'utf8')
     await f.act('undo')
     expect(f.current()?.phase).toBe('removed')
-    expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toBe(source)
+    expect(await readFile(join(spec.cwd!, 'package.json'), 'utf8')).toBe(source)
   })
 
   it('retains actual task content separately from the short plan and hands it to Creator after reload', async () => {
@@ -109,7 +122,7 @@ describe('interface creation', () => {
     await f.ctx.plugin(CreationRecommendations)
     await f.act('create', 'sidebar-left')
     const spec = await f.complete()
-    const prompt: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const prompt: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     expect(prompt).toMatchObject({ brief: proposal.brief, initialContent, location: 'sidebar-left' })
     const stringMatcher: unknown = expect.any(String)
     expect(prompt).toMatchSnapshot({
@@ -126,7 +139,7 @@ describe('interface creation', () => {
     await f.propose('call-creation-1', proposal, handle.agent)
     await f.act('create', 'sidebar-right', undefined, handle.agent)
     const spec = await f.entered.promise
-    expect(spec.request.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
+    expect(spec.cwd!.startsWith(join(f.ctx.profileContext.cwd, '.dsh-created-plugins'))).toBe(true)
     await f.act('cancel', 'sidebar-right', undefined, handle.agent)
     expect(f.manager.installBundle).not.toHaveBeenCalled()
   })
@@ -141,7 +154,7 @@ describe('interface creation', () => {
     expect(f.startActivation).not.toHaveBeenCalled()
     await f.act('create', 'page', '  左侧入口打开全屏日历  ')
     const spec = await f.complete()
-    const instructions: unknown = JSON.parse(spec.request.prompt.find(block => block.type === 'text')!.text)
+    const instructions: unknown = JSON.parse(spec.prompt.find(block => block.type === 'text')!.text)
     const references = ['sidebar-right.md', 'session-tab.md', 'sidebar-entry.md'].map(file =>
       fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-creation-recommendations/references/' + file)))
     expect(instructions).toMatchObject({ location: { request: '左侧入口打开全屏日历' }, uiReferences: references })
@@ -173,7 +186,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const firstName = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, firstName)
+    await writeBundle(spec.cwd!, firstName)
     const cleanup = Promise.withResolvers<undefined>()
     onTestFinished(() => { cleanup.resolve(undefined) })
     f.dispose.mockImplementation(async () => { f.result.resolve({ output: [], stopReason: 'aborted' }); await cleanup.promise })
@@ -187,10 +200,10 @@ describe('interface creation', () => {
     cleanup.resolve(undefined)
     expect(await cancelling).toEqual({ status: 'accepted' })
     expect(f.current()?.phase).toBe('cancelled')
-    expect(await readFile(join(spec.request.cwd!, 'package.json'), 'utf8')).toContain(firstName)
+    expect(await readFile(join(spec.cwd!, 'package.json'), 'utf8')).toContain(firstName)
     expect((await f.act('cancel')).status).toBe('settled')
     f.startActivation.mockImplementationOnce(async (retry) => {
-      await writeBundle(retry.request.cwd!, f.current()!.bundleName!)
+      await writeBundle(retry.cwd!, f.current()!.bundleName!)
       return { childId: retry.childId!, result: Promise.resolve({ output: [], stopReason: 'completed', structured: { ready: true } }),
         dispose: vi.fn(async () => {}) }
     })
@@ -211,7 +224,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     expect(f.current()?.phase).toBe('installing')
@@ -237,9 +250,9 @@ describe('interface creation', () => {
   it('refuses clicks from non-root or unauthorized connections', async () => {
     const f = await fixture()
     await f.propose()
-    const roots = vi.spyOn(f.ctx.agents, 'roots').mockReturnValue([])
+    const liveAgent = vi.spyOn(f.ctx.agents, 'get').mockReturnValue(undefined)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'not-live-root' })
-    roots.mockRestore()
+    liveAgent.mockRestore()
     vi.spyOn(f.ctx.remoteAccess, 'allows').mockReturnValue(false)
     expect(await f.act('create')).toEqual({ status: 'refused', reason: 'access-denied' })
     expect(await f.act('restore')).toEqual({ status: 'refused', reason: 'access-denied' })
@@ -294,6 +307,16 @@ describe('interface creation', () => {
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
   })
 
+  it('offers Undo on a page that an earlier build recorded as kept', async () => {
+    const f = await fixture()
+    await f.propose()
+    recordCard(f.agent.session, { callId, phase: 'kept', slot: 'page', bundleName: '@dsh-local/view-kept' })
+    f.bundles.push(installedBundle('@dsh-local/view-kept'))
+    expect(await f.act('create')).toEqual(settled('kept', { slot: 'page', bundleName: '@dsh-local/view-kept' }))
+    expect(await f.act('undo')).toEqual(settled('removed', { slot: 'page', bundleName: '@dsh-local/view-kept', application: 'applied' }))
+    expect(f.manager.removeBundle).toHaveBeenCalledExactlyOnceWith('@dsh-local/view-kept')
+  })
+
   it('ignores page receipts whose data no longer validates and decisions of other kinds', async () => {
     const f = await fixture()
     await f.propose()
@@ -321,7 +344,7 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed' })
     await vi.waitFor(() => { expect(f.current()?.phase).toBe('failed') })
     expect(f.manager.installBundle).not.toHaveBeenCalled()
@@ -382,7 +405,9 @@ describe('interface creation', () => {
     await f.propose()
     await f.act('create')
     const spec = await f.entered.promise
-    const child = await f.harness.create(spec.childId!)
+    const childHandle = await f.ctx.agents.create({ sessionId: spec.childId!,
+      meta: { parentSession: f.agent.id, origin: 'subagent' } })
+    const child = childHandle.agent
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
     const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
@@ -392,17 +417,28 @@ describe('interface creation', () => {
     expect((await run('install', f.agent)).isError).toBe(false)
     const unrelated = await f.harness.create(SessionId('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
-    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'), parentAgent: child,
+    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'),
       meta: { parentSession: child.id, origin: 'subagent' } })
-    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'), parentAgent: helper.agent,
+    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'),
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
+    await childHandle.dispose()
+    expect((await run('install', child)).isError).toBe(false)
     for (const owned of [helper.agent, nested.agent]) {
       expect((await run('install', owned)).isError).toBe(true)
       expect((await run('list_bundles', owned)).isError).toBe(false)
     }
-    // Session lineage alone is not runtime ownership.
+    // Historical ordinary forks do not acquire subagent restrictions.
     const lineage = await f.ctx.agents.create({ sessionId: SessionId('creator-lineage'), meta: { parentSession: child.id } })
     expect((await run('install', lineage.agent)).isError).toBe(false)
+    const unlinked = await f.ctx.agents.create({ sessionId: SessionId('unlinked-subagent'), meta: { origin: 'subagent' } })
+    expect((await run('install', unlinked.agent)).isError).toBe(false)
+    const cycle = await f.ctx.agents.create({ sessionId: SessionId('cycle-first'),
+      meta: { origin: 'subagent', parentSession: SessionId('cycle-second') } })
+    await f.ctx.agents.create({ sessionId: SessionId('cycle-second'),
+      meta: { origin: 'subagent', parentSession: cycle.agent.id } })
+    expect((await run('install', cycle.agent)).isError).toBe(false)
+    await helper.dispose()
+    expect((await run('install', nested.agent)).isError).toBe(false)
   })
 
   it('refuses to start a Creator while the Session is read-only and keeps dismissal available', async () => {
@@ -428,7 +464,7 @@ describe('interface creation', () => {
     f.manager.installBundle.mockImplementation(() => { installing.resolve(undefined); return gate.promise })
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.fiber.dispose()
@@ -496,7 +532,7 @@ describe('interface creation', () => {
       await f.act('create')
       const spec = await f.entered.promise
       const name = f.current()!.bundleName!
-      await writeBundle(spec.request.cwd!, name)
+      await writeBundle(spec.cwd!, name)
       if (collision) f.bundles.push(installedBundle(name))
       else f.manager.installBundle.mockResolvedValueOnce({ application: 'failed', changed: false, stage: 'install', target: name })
       f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
@@ -505,7 +541,7 @@ describe('interface creation', () => {
     }
   })
 
-  it('retains a late installed plugin after the parent disappears during installation', async () => {
+  it.each(['closed', 'replaced by a subagent'] as const)('retains a late installed plugin when the parent is %s during installation', async (state) => {
     const f = await fixture()
     await f.propose()
     const installing = Promise.withResolvers<undefined>()
@@ -514,15 +550,19 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     await f.agentHandle.dispose()
+    const replacement = state === 'closed' ? undefined : await f.ctx.agents.create({
+      sessionId: f.agent.id, meta: { origin: 'subagent' },
+    })
     f.bundles.push(installedBundle(name))
     gate.resolve({ application: 'applied', changed: true, stage: 'install', target: name })
     await vi.waitFor(() => { expect(f.manager.listBundles).toHaveBeenCalledTimes(2) })
     await f.fiber.dispose()
     expect(f.current()?.phase).toBe('installing')
+    if (replacement !== undefined) expect(f.cardOf(callId, replacement.agent)).toBeUndefined()
     expect(f.manager.removeBundle).not.toHaveBeenCalled()
     expect(f.bundles.map(bundle => bundle.name)).toContain(name)
   })
@@ -537,7 +577,7 @@ describe('interface creation', () => {
     await f.act('create')
     const spec = await f.entered.promise
     const name = f.current()!.bundleName!
-    await writeBundle(spec.request.cwd!, name)
+    await writeBundle(spec.cwd!, name)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await installing.promise
     const seed = [...f.events]
@@ -697,7 +737,7 @@ describe('interface creation', () => {
     })
     await f.act('create')
     const spec = await f.entered.promise
-    await writeBundle(spec.request.cwd!, f.current()!.bundleName!)
+    await writeBundle(spec.cwd!, f.current()!.bundleName!)
     f.result.resolve({ output: [], stopReason: 'completed', structured: { ready: true } })
     await disposed.promise
     expect(f.current()?.phase).toBe('installing')

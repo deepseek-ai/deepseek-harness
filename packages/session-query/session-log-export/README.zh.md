@@ -33,9 +33,9 @@ kind: "package-reference"
 
 格式化器读取已提交的原始日志，因此压缩产生的表层替换不会移除较早消息，fork 继承的历史只出现一次。标题与正文来自同一个 `readSession` 快照。持久化元数据报告选中的已物化产物时，记录会在标题后添加一个 `Session file:` 围栏文本块，包含该精确路径；没有时省略该块。只复制选中的 Session 及其继承前缀；子会话日志仍只由 ZIP 导出。推理块、system 与 developer 消息、source kind 不是 `user` 的注入用户角色上下文、请求头与上下文以及运行时记录都会被省略。图片与文件变成可读标签；附件字节与认证链接不会进入记录。`Assistant`、`Tool` 和附件占位符等结构性标签有意使用英文；原始消息文本保持不变。文本以恰好一个换行结尾。
 
-剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，控制器会在点击时请求延迟的 `ClipboardItem` 写入，同时加载文档相对的 `api/session.markdown?sessionId=<id>` 路由；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 通过 `aria-busy` 反映复制状态，并在操作结束前禁用各自的复制行。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入由 Promise 提供的 Blob；操作系统已经接受的剪贴板写入无法回滚。
+剪贴板是浏览器范围的唯一目标，因此本插件实例一次只运行一项复制。在支持 `ClipboardItem` 与 `navigator.clipboard.write` 的宿主上，控制器会在点击时请求延迟的 `ClipboardItem` 写入，同时加载文档相对的 `api/session.markdown?sessionId=<id>` 路由；其他宿主在准备完成后回退到共享剪贴板助手。复制进行中到达的请求会加入该操作，并保留第一次点击的 Session。所有 Session Header 菜单在复制操作结束前禁用各自的复制行；无关操作保持可用。成功、准备失败或剪贴板失败通过根 overlay 浮层反馈。释放会中止读取，并阻止后续文本进入由 Promise 提供的 Blob；操作系统已经接受的剪贴板写入无法回滚。
 
-挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。
+挂载 `ui-message-feedback` 时，同一菜单还提供“反馈”，打开已有的 Session 反馈弹窗。打开或关闭该弹窗不会导出 Session 或提交反馈。反馈入口随反馈插件的可用状态显示；两个导出操作保持独立可用。[`ui-open-in-app`](../../client/ui-open-in-app/README.zh.md) 在下载之后、反馈之前的独立分隔组中贡献应用子菜单。
 
 ### 何时选择
 
@@ -61,7 +61,7 @@ export function convertTranscript(events: readonly SessionEvent[], sourcePath?: 
   name: '@deepseek-ai/dsh-session-log-export'
 ```
 
-Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`、`dsh-client-ui-conversation` 和 `dsh-client-ui-layout` 一起挂载。layout 包声明复制反馈使用的 `shell.overlay` 座位；其他客户端包提供 Header 座位、locale 与命令界面。
+Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`、`dsh-client-ui-conversation`、`dsh-client-ui-context-menu` 和 `dsh-client-ui-layout` 一起挂载。conversation 包拥有 Header 入口，右键菜单服务渲染其共享菜单，layout 声明下载弹窗与复制反馈浮层使用的 `shell.overlay` 插槽。locale 与命令服务提供翻译文案和命令确认。
 
 ### 配置
 
@@ -78,7 +78,7 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`�
 
 ### 预期行为
 
-弹窗报告三个阶段：准备中、开始下载或失败。关闭弹窗不会取消正在进行的下载，该操作随后结束时弹窗也不会重新打开。每个会话同时只允许一项下载，重复操作共用该任务。导出包含实时会话的最新事件：Host 端点在读取前会 flush 活动的根会话，因此斜杠命令触发的 ZIP 会包含启动下载的 `command/run` 与 `command/done` 事件对；非活动的持久化会话不需要 flush。每份逻辑日志在归档中使用当前 generation 的规范文件名（v0 为 `session.jsonl`，其他版本为 `session.vN.jsonl`），每个子会话目录下也遵循同一规则。图片使用 `media/<attachmentId>.<ext>`，通用文件使用 `files/<digest-prefix>/<digest>/<name>`。通用文件以有界分块读取并压缩，因此导出大型上传文件时不会把它完整缓冲进内存。
+根级弹窗通过 ID 标识导出的 Session，并报告准备中、开始下载或失败。切换会话后弹窗仍然保留。不同 Session 可以并行下载，弹窗按发起顺序一次显示一个；关闭后显示下一个未关闭的弹窗。关闭不会取消下载，也不会在操作结束时重新打开弹窗。同一 Session 下载进行中的重复请求共用该操作并保留原位置；操作结束后的新请求取得新的位置。导出包含实时会话的最新事件：Host 端点在读取前会 flush 活动的根会话，因此斜杠命令触发的 ZIP 会包含启动下载的 `command/run` 与 `command/done` 事件对；非活动的持久化会话不需要 flush。每份逻辑日志在归档中使用当前 generation 的规范文件名（v0 为 `session.jsonl`，其他版本为 `session.vN.jsonl`），每个子会话目录下也遵循同一规则。图片使用 `media/<attachmentId>.<ext>`，通用文件使用 `files/<digest-prefix>/<digest>/<name>`。通用文件以有界分块读取并压缩，因此导出大型上传文件时不会把它完整缓冲进内存。
 
 附件收集读取内置 Session 事件声明的内容字段与已完成的 assistant 流块，包括扁平的 V4 tool 角色消息。未知事件载荷与无关字段在导出日志中保持不变，但不会触发附件读取。
 
@@ -100,11 +100,11 @@ Web bundle 将本包与 Connection、`dsh-commands`、`dsh-client-ui-commands`�
 
 本包分为两部分。Host 半包（[`src/index.ts`](src/index.ts)）注册 `/export` 命令，并向 Connection 贡献精确的 `GET`/`HEAD /api/session.export` 与 `/api/session.markdown` Fetch 路由；[`src/archive.ts`](src/archive.ts) 构建有界 ZIP 流，[`src/markdown.ts`](src/markdown.ts) 渲染 Markdown 记录。浏览器半包（[`src/client/index.ts`](src/client/index.ts)）提供共享下载与 Markdown 复制控制器和 UI，并观察 `command/executed`，因此只有提交命令的浏览器会启动下载。
 
-Header 的更多操作入口使用公共紧凑 Button，点击区域为 28px 正方形，与右侧栏展开控件共用圆角和 hover 底色。
+共享右键菜单包声明被捕获的 `sessionHeader` 目标，独立于会话行及标题右键操作；conversation 包拥有其 Header 入口。本包贡献导出及可选反馈行，观察控制器、可用性与语言源。下载弹窗和复制反馈浮层挂载在根 overlay 中，独立于 Header 生命周期。
 
 ### 下载流程
 
-两条入口都会先向文档相对的 `api/session.export?...` 发出 `HEAD` 预检请求，然后把 GET 路由交给浏览器下载管理器，JavaScript 不缓冲 ZIP。一个控制器按会话持有一项进行中的下载，把并发操作折叠进该任务，并在插件释放时取消预检。弹窗状态存放在按会话键控的快照存储中，因此按钮与命令按会话共享一个弹窗。
+两条入口都会先向文档相对的 `api/session.export?...` 发出 `HEAD` 预检请求，然后把 GET 路由交给浏览器下载管理器，JavaScript 不缓冲 ZIP。一个控制器按会话持有一项进行中的下载，把并发操作折叠进该任务，并在插件释放时取消预检。根组件依据每次操作的发起顺序，从控制器按 Session 键控的快照中选择最早的未关闭条目，不维护独立弹窗队列。释放会等待所有预检结束，防止迟到响应启动浏览器保存；已经交给浏览器的下载仍由浏览器管理。
 
 Host 路由是由该功能拥有的精确 Fetch 路由贡献。Connection 应用 Host/Origin 与浏览器会话检查并桥接流式 `Response`；本包拥有查询校验、活动会话 flush、基于句柄的日志读取与附件读取、ZIP 生成和 HTTP 状态语义。
 

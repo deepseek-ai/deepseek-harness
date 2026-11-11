@@ -465,31 +465,21 @@
 - text: Recorded result
 - list:
   - listitem:
-    - text: 检查工具卡片布局，并列出三个最值得改进的地方。 Started
-    - term: Agent ID
+    - text: Started
+    - term: ID
     - definition: agent-demo-review
+    - group:
+      - text: Task
+      - list:
+        - listitem:
+          - paragraph: 检查工具卡片布局，并列出三个最值得改进的地方。
 - button "Inspect"
 - button "List subagents 3 agents" [expanded]
 - text: Recorded result
 - list:
-  - listitem:
-    - text: 检查工具卡片布局 Running agent-demo-review
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
-  - listitem:
-    - text: 整理工具展示清单 Idle agent-demo-docs
-    - term: Parent
-    - definition: todo-diff-demo
-    - term: Depth
-    - definition: "1"
-  - listitem:
-    - text: 检查状态图标 Ready agent-demo-icons
-    - term: Parent
-    - definition: agent-demo-review
-    - term: Depth
-    - definition: "2"
+  - listitem: 检查工具卡片布局 Running agent-demo-review
+  - listitem: 整理工具展示清单 Idle agent-demo-docs
+  - listitem: 检查状态图标 Ready agent-demo-icons
 - button "Inspect"
 - button "Send message agent-demo-review" [expanded]
 - text: Recorded result
@@ -662,8 +652,7 @@
     - term: Role
     - definition: lead
   - listitem:
-    - text: ui-review Running
-    - paragraph: 检查工具卡片的可读性
+    - text: 检查工具卡片的可读性 Running ui-review
     - term: ID
     - definition: agent-demo-review
     - term: Role
@@ -673,8 +662,7 @@
     - term: Context
     - definition: fresh
   - listitem:
-    - text: docs Inactive
-    - paragraph: 整理工具清单
+    - text: 整理工具清单 Inactive docs
     - term: ID
     - definition: agent-demo-docs
     - term: Role
@@ -739,7 +727,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -759,7 +747,7 @@
     - definition: "2"
     - term: Ready
     - definition: "Yes"
-    - term: Owner
+    - term: ownerName
     - definition: ui-review
     - group:
       - text: Write scopes
@@ -781,10 +769,10 @@
         - listitem:
           - paragraph: task-demo-1
 - button "Inspect"
-- button "Wait for subagent Subagent activity" [expanded]
+- button "Wait ended" [expanded]
 - text: Recorded result
 - list:
-  - listitem: Subagent activity Change detected
+  - listitem: Wait result Wait ended
 - button "Inspect"
 - button "Interrupt agent ui-review" [expanded]
 - text: Recorded result

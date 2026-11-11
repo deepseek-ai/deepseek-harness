@@ -23,14 +23,18 @@ import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { z } from 'zod'
 import * as NativeProvider from '../src/index.ts'
 import { createCuaApi } from '@deepseek-ai/dsh-cua/api'
+import type { CuaElementId } from '@deepseek-ai/dsh-cua/api'
 import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
+
+/** Element ids are opaque strings; these fixtures use the macOS decimal form. */
+const element = (id: string): CuaElementId => id as CuaElementId
 
 const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 const calls = [
   { method: 'getCapabilities', params: {} },
   { method: 'getApp', params: { selector: 'test.fixture' } },
   { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
-  { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementIndex: 0, holdMs: 800 } },
+  { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementId: '0', holdMs: 800 } },
   { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
   { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
 ]
@@ -130,7 +134,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const toolCalls = agent.session.snapshotEvents().filter(event => event.type === 'tool/call')
   expect(events.filter(event => event.event === 'call').map(event => event.requestId)).toEqual(toolCalls.map(event => event.data.callId))
   expect(events.find(event => event.event === 'state')?.count).toBe(1)
-  expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 2000, maxDepth: 25 })
+  expect(events.find(event => event.method === 'getState')?.params).toMatchObject({ maxElements: 5000, maxDepth: 50 })
   expect(events.find(event => event.method === 'click')?.params).toMatchObject({ holdMs: 800 })
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
@@ -148,9 +152,9 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
       arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
     })
     expect(activated.isError).toBe(false)
-    expect(activated.value).toMatchObject({
-      dispatched: true, verified: false, foreground: {
-        requestId: callId, operation: 'activate', targetPid: 9, targetWindowId: null, activationRequested, raiseRequested: false,
+    expect(activated.value).toEqual({
+      dispatched: true, foregroundChanged: beforePid !== 9, foreground: {
+        requestId: callId, targetPid: 9, activationRequested,
         before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
         after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
       },
@@ -169,7 +173,15 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
   const retainedWindow = await retainedApp.getWindow(7)
-  expect(await retainedWindow.getAXState({ emit: false })).toContain('Count: 1')
+  await retainedApp.getAccessibilityTree({ maxDepth: 512 })
+  expect(await retainedWindow.getAccessibilityTree({ maxElements: 100000, emit: false })).toContain('Count: 1')
+  await retainedWindow.getAccessibilityTree({ emit: false })
+  const reads = (await readEvents()).filter(event => event.method === 'getState').slice(-3)
+  expect(reads.map(event => event.params)).toEqual([
+    { appHandle: retainedApp.appHandle, maxElements: 5000, maxDepth: 512 },
+    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 100000, maxDepth: 50 },
+    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 5000, maxDepth: 50 },
+  ])
   const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const peerApp = await objectApi(peer.agent).getApp('test.fixture')
   const peerWindow = await peerApp.getWindow(7)
@@ -177,8 +189,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   const screenshot = await peerWindow.getScreenshot({ emit: false })
   expect(screenshot).toMatchObject({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7 })
   expect(Buffer.from(screenshot.bytes).toString('base64')).toBe(png)
-  await peerWindow.click(0)
-  expect(await retainedWindow.getAXState({ emit: false })).toContain('Count: 2')
+  await (await peerApp.getWindow(8)).getAccessibilityTree({ emit: false })
+  const recovery = 'Snapshot belongs to window 8; read getAccessibilityTree on window 7'
+  await expect(peerWindow.click(element('0'))).rejects.toThrow(recovery)
+  await expect(peerWindow.mouseMove(element('0'))).rejects.toThrow(recovery)
+  expect(await peerWindow.getAccessibilityTree({ emit: false })).toContain('Count: 1')
+  await peerWindow.click(element('0'))
+  expect(await retainedWindow.getAccessibilityTree({ emit: false })).toContain('Count: 2')
   const sharedEvents = await readEvents()
   expect(sharedEvents.filter(event => event.event === 'start')).toHaveLength(1)
   expect(sharedEvents.filter(event => event.event === 'connect')).toHaveLength(2)
@@ -186,8 +203,8 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   await handle.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(0)
   expect((await readEvents()).filter(event => event.event === 'disconnect')).toHaveLength(1)
-  await peerWindow.click(0)
-  expect(await peerWindow.getAXState({ emit: false })).toContain('Count: 3')
+  await peerWindow.click(element('0'))
+  expect(await peerWindow.getAccessibilityTree({ emit: false })).toContain('Count: 3')
   await peer.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 

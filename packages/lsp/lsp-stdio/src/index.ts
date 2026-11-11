@@ -14,6 +14,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { LspError, LspProviderId } from '@deepseek-ai/dsh-lsp'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   LspProvider,
   LspProviderQuery,
@@ -114,6 +115,33 @@ function throwTeardownFailures(results: readonly PromiseSettledResult<void>[], m
   }
   if (failures.length === 1) throw failures[0]
   if (failures.length > 1) throw new AggregateError(failures, message)
+}
+
+/**
+ * A coded query failure whose instance teardown also failed. It keeps the query failure's `name`
+ * and `code` so tool results route on the query outcome; `cause` aggregates both failures. It does
+ * not keep the query failure's class, so route on `name` and `code`, not `instanceof`.
+ */
+class LspQueryTeardownError extends HarnessError {
+  constructor(query: HarnessError, teardown: unknown, cause: AggregateError) {
+    super(`${query.message}; language server teardown also failed: ${messageOf(teardown)}`, query.code, { cause })
+    this.name = query.name
+  }
+}
+
+/**
+ * Combine a query failure with the teardown failure of its instance. A `HarnessError` query
+ * failure keeps its identity on the combined error; any other query failure has no identity to keep
+ * and both surface as an `AggregateError`.
+ */
+function queryAndTeardownFailure(query: unknown, teardown: unknown): Error {
+  const both = new AggregateError([query, teardown], 'LSP operation and teardown failed')
+  return query instanceof HarnessError ? new LspQueryTeardownError(query, teardown, both) : both
+}
+
+/** Read a thrown value's message for a combined failure report. */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 /**
@@ -294,10 +322,7 @@ class LocalLspProvider implements LspProvider {
         }
         if (teardownOutcome?.status === 'rejected') {
           if (queryOutcome.status === 'rejected') {
-            throw new AggregateError(
-              [queryOutcome.reason, teardownOutcome.reason],
-              'LSP operation and teardown failed',
-            )
+            throw queryAndTeardownFailure(queryOutcome.reason, teardownOutcome.reason)
           }
           throw teardownOutcome.reason
         }

@@ -1,0 +1,11 @@
+version: 1
+scenario: team-session-mode
+profile: sdk
+composition: sdk-team-session-mode
+recording: authored
+header:
+  class: sdk-team-session-mode
+  pin: true
+  toolSchemasSource: session/team-session-mode
+  changes: 2
+  promptChanges: 2

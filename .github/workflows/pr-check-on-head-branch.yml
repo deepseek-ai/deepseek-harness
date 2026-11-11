@@ -1,7 +1,7 @@
 name: Policy
 on:
   pull_request_target:
-    branches: [master]
+    branches: [master, 'release/dsh-[0-9]+.[0-9]+.[0-9]+']
     types: [opened, synchronize, reopened, ready_for_review, review_requested, auto_merge_enabled, labeled]
 permissions:
   contents: read
@@ -108,6 +108,7 @@ jobs:
         if: steps.merge.outputs.merged == 'true'
         env:
           CHECK_MODE: ${{ vars.MERGE_POLICY_PRE_MERGE }}
+          BASE_SHA: ${{ needs.master.outputs.base_sha }}
         run: |
           # The check names one file and knows nothing else about how the merged tree builds itself.
           if [ ! -f scripts/pre-merge-check.ts ]; then

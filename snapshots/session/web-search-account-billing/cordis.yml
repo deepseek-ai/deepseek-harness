@@ -1,0 +1,21 @@
+# Authored composition: a conversation on a non-DeepSeek model provider, a signed-in DeepSeek account, and no
+# DeepSeek API key, with automatic Search billing. The account route stays unmounted so
+# the account token goes to the default account origin.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  disabled: true
+
+- id: llm-deepseek-account
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- insert:
+    - id: web-search-billing-fixture
+      name: './web-search-billing-fixture.mjs'
+
+- id: web-deepseek-api
+  name: '@deepseek-ai/dsh-web-deepseek-api'
+  config:
+    searchBilling: auto

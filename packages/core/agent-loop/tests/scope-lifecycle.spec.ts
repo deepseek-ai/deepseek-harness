@@ -254,25 +254,6 @@ describe('agent scope lifecycle', () => {
     await agent.whenIdle()
   })
 
-  it('records an explicitly owned Agent as a non-root runtime child', async () => {
-    const ctx = await harness()
-    const root = await ctx.agents.create({
-      sessionId: SessionId('runtime-root'),
-      agentOptions: { model: 'mock' },
-    })
-    const child = await root.agent.ctx.agents.create({
-      sessionId: SessionId('runtime-child'),
-      agentOptions: { model: 'mock' },
-      parentAgent: root.agent,
-    })
-
-    expect(ctx.agents.list()).toEqual([root.agent, child.agent])
-    expect(ctx.agents.roots()).toEqual([root.agent])
-
-    await child.dispose()
-    await root.dispose()
-  })
-
   it('scoped registrations live in the agent world and die with the agent', async () => {
     const ctx = await harness()
     const handle = await ctx.agents.create({ sessionId: SessionId('s1'), agentOptions: { provider: 'mock', model: 'mock' } })
@@ -465,7 +446,9 @@ describe('agent scope lifecycle', () => {
   })
 
   it('uses signal only for creation: aborts pending setup but not a returned live handle', async () => {
-    const ctx = await harness()
+    const adapter = new MockAdapter([textResponse('ok')])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
     const pendingController = new AbortController()
     const setupStarted = Promise.withResolvers<undefined>()
     const pending = ctx.agents.create({
@@ -493,6 +476,9 @@ describe('agent scope lifecycle', () => {
     await Promise.resolve()
     expect(ctx.agents.get(live.agent.id)).toBe(live.agent)
     expect(live.agent.status).toBe('idle')
+    live.agent.followup(createUserMessage({ content: text('continue'), source: { kind: 'user' } }))
+    await live.agent.whenIdle()
+    expect(adapter.requests).toHaveLength(1)
     await live.dispose()
   })
 

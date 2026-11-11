@@ -6,6 +6,8 @@ recording: authored
 header:
   class: office-authoring-checker
   pin: true
+  systemPromptSource: office-skills
+  changes: 1
   toolSchemasSource: office-progressive-native
 workspace:
   setup: office-skills

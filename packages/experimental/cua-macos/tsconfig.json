@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -16,12 +19,6 @@
     },
     {
       "path": "../../subprocess/subprocess"
-    },
-    {
-      "path": "../../util/atomic-write"
-    },
-    {
-      "path": "../../../vendor/schemastery"
     }
   ]
 }

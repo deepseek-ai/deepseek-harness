@@ -7,6 +7,13 @@
   background: var(--dsw-alias-bg-base);
 }
 
+/* `conversation.hero.frame` contract on the home: layer decorations at negative z-index paint above this
+   background and below all Conversation content. Other phases keep the root out of the stacking order, so
+   unportaled Conversation popovers still rise above AppFrame chrome that floats over the column. */
+.root[data-phase='hero'] {
+  isolation: isolate;
+}
+
 /* 76px with its rule: the height of the Sidebar's tab strip and header row
    (ui-dockkit `.tabStrip` 38px + the pane header's 38px), so the two rules
    meet at the column edge. The rows add up to it — 10px top inset, the 30px
@@ -149,11 +156,6 @@
   cursor: pointer;
 }
 
-.crumbSubagent {
-  font-size: 12px;
-  line-height: 18px;
-}
-
 @media (hover: hover) {
   button.crumb:hover {
     background: var(--dsw-alias-interactive-bg-hover);
@@ -170,7 +172,13 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+@container (max-width: 460px) {
+  .headerActions {
+    gap: 8px;
+  }
 }
 
 .headerUtilities {
@@ -183,6 +191,18 @@
 
 .headerUtilities:empty {
   display: none;
+}
+
+.headerMenuButton {
+  flex: none;
+  width: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.headerMenuButton svg {
+  width: 15px;
+  height: 15px;
 }
 
 /* The far-right corner seat reaches 16px into the header's 28px right padding,

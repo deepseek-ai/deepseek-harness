@@ -2,13 +2,13 @@
   "initial": [
     {
       "name": "apply_patch",
-      "description": "Create, update, delete, or move UTF-8 text files with one Codex-style patch; prefer it over multiple edit calls when a change spans several files or separated regions.",
+      "description": "Create, update, delete, or move UTF-8 text files with one patch; prefer it over multiple edit calls when a change spans several files or separated regions.",
       "parameters": {
         "type": "object",
         "properties": {
           "input": {
             "type": "string",
-            "description": "Codex patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
+            "description": "Patch text: start with *** Begin Patch and end with *** End Patch. Use *** Add File: path with + lines; *** Update File: path, optionally followed by *** Move to: path, with @@ or @@ context and space-prefixed context, + added, or - removed lines; *** End of File anchors the last hunk to the file end. Use *** Delete File: path to delete. Paths are relative to the Session working directory."
           },
           "sandbox_permissions": {
             "type": "string",
@@ -95,7 +95,7 @@
     },
     {
       "name": "cua",
-      "description": "Inspect macOS permissions, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
+      "description": "Inspect desktop access, select an application and window, read AX state, capture screenshots or dispatch input. Use appHandle from getApp; verify actions by reading fresh state.",
       "parameters": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "oneOf": [
@@ -302,8 +302,20 @@
                     "type": "boolean"
                   },
                   "details": {
-                    "description": "Include identifiers, global-point bounds and complete action names.",
+                    "description": "Include identifiers, global native bounds and complete action names.",
                     "type": "boolean"
+                  },
+                  "maxElements": {
+                    "description": "Maximum nodes to visit on this read. Omission uses the provider setting.",
+                    "type": "number",
+                    "minimum": 1,
+                    "multipleOf": 1
+                  },
+                  "maxDepth": {
+                    "description": "Maximum depth to traverse on this read. Omission uses the provider setting.",
+                    "type": "number",
+                    "minimum": 1,
+                    "multipleOf": 1
                   }
                 },
                 "required": [
@@ -323,7 +335,144 @@
             "properties": {
               "method": {
                 "type": "string",
-                "const": "hover"
+                "const": "listActions"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "performAction"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  },
+                  "action": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "argument": {
+                    "$ref": "#/$defs/__schema0"
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId",
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "invoke"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "snapshotId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "snapshotId",
+                  "elementId"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "mouseMove"
               },
               "params": {
                 "anyOf": [
@@ -334,20 +483,29 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -379,6 +537,10 @@
                         "description": "Omitted or false uses pixels in the latest screenshot returned by this tool.",
                         "type": "boolean",
                         "const": false
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -419,6 +581,10 @@
                         "type": "boolean",
                         "const": true,
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
+                      },
+                      "useSystemPointer": {
+                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -455,14 +621,19 @@
                         "type": "string",
                         "minLength": 1
                       },
+                      "windowId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 4294967295
+                      },
                       "snapshotId": {
                         "type": "string",
                         "minLength": 1
                       },
-                      "elementIndex": {
-                        "type": "integer",
-                        "minimum": 0,
-                        "maximum": 9007199254740991
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
                       "mouseButton": {
                         "type": "string",
@@ -507,7 +678,7 @@
                     "required": [
                       "appHandle",
                       "snapshotId",
-                      "elementIndex"
+                      "elementId"
                     ],
                     "additionalProperties": false
                   },
@@ -691,23 +862,28 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "value": {
-                    "type": "string"
+                    "$ref": "#/$defs/__schema0"
                   }
                 },
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "value"
                 ],
                 "additionalProperties": false
@@ -733,14 +909,19 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "snapshotId": {
                     "type": "string",
                     "minLength": 1
                   },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
+                  "elementId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                   },
                   "text": {
                     "type": "string",
@@ -764,51 +945,8 @@
                 "required": [
                   "appHandle",
                   "snapshotId",
-                  "elementIndex",
+                  "elementId",
                   "text"
-                ],
-                "additionalProperties": false
-              }
-            },
-            "required": [
-              "method",
-              "params"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "object",
-            "properties": {
-              "method": {
-                "type": "string",
-                "const": "performSecondaryAction"
-              },
-              "params": {
-                "type": "object",
-                "properties": {
-                  "appHandle": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "snapshotId": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "elementIndex": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "maximum": 9007199254740991
-                  },
-                  "action": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "appHandle",
-                  "snapshotId",
-                  "elementIndex",
-                  "action"
                 ],
                 "additionalProperties": false
               }
@@ -832,6 +970,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -863,6 +1006,11 @@
                   "appHandle": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
                   },
                   "text": {
                     "type": "string"
@@ -902,6 +1050,11 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
                   "key": {
                     "type": "string",
                     "minLength": 1
@@ -909,20 +1062,58 @@
                   "modifiers": {
                     "type": "array",
                     "items": {
-                      "type": "string",
-                      "enum": [
-                        "command",
-                        "control",
-                        "option",
-                        "shift",
-                        "fn"
-                      ]
+                      "type": "string"
                     }
                   }
                 },
                 "required": [
                   "appHandle",
                   "key"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "method",
+              "params"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "const": "sendKeyEvent"
+              },
+              "params": {
+                "type": "object",
+                "properties": {
+                  "appHandle": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "windowId": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 4294967295
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "down",
+                      "up"
+                    ]
+                  }
+                },
+                "required": [
+                  "appHandle",
+                  "key",
+                  "direction"
                 ],
                 "additionalProperties": false
               }
@@ -1248,6 +1439,39 @@
             "additionalProperties": false
           }
         ],
+        "$defs": {
+          "__schema0": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              },
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "$ref": "#/$defs/__schema0"
+                }
+              }
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -1346,22 +1570,6 @@
       }
     },
     {
-      "name": "interrupt_agent",
-      "description": "Ask a subagent to stop its current work. This call returns without waiting for it to stop. You can continue a local direct child's conversation later with send_message. External executions stop permanently and cannot receive follow-ups. Subagents it started will keep running.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "agent_id": {
-            "type": "string",
-            "description": "The id of an agent created under you: your direct child or a deeper descendant."
-          }
-        },
-        "required": [
-          "agent_id"
-        ]
-      }
-    },
-    {
       "name": "job_kill",
       "description": "Request cancellation of a running background job.",
       "parameters": {
@@ -1415,19 +1623,10 @@
     },
     {
       "name": "list_agents",
-      "description": "List subagents you started, with their ids, labels, and status. running means it is working; inactive means it is not currently working. You will be notified when a subagent finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
+      "description": "List your entire subagent tree: the root agent and all reachable continuable descendants, including yourself. Rows carry names, descriptions, and status. A descendant's name is its path from the root, such as reviewer/checker. You can message any other agent in the subagent tree. running means it is working; inactive means no turn is executing; it does not indicate task completion, success, or failure. corrupt, unsupported, or unavailable means this row's own descendants could not be read; the row itself is still a member you can message. While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. Use send_message to continue the conversation.",
       "parameters": {
         "type": "object",
-        "properties": {
-          "scope": {
-            "type": "string",
-            "description": "children (default) lists direct children, which accept send_message in any status. descendants lists the whole tree below you with each entry's parent session id and depth; entries deeper than 1 accept only interrupt_agent.",
-            "enum": [
-              "children",
-              "descendants"
-            ]
-          }
-        }
+        "properties": {}
       }
     },
     {
@@ -1472,13 +1671,13 @@
     },
     {
       "name": "send_message",
-      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation, not the agent's answer.",
+      "description": "Send a message to an agent. A working agent receives it at its next step; an idle agent starts a new turn with it. Returns delivery confirmation.",
       "parameters": {
         "type": "object",
         "properties": {
-          "agent_id": {
+          "agent": {
             "type": "string",
-            "description": "The agent id of your direct continuable child, or your direct parent when you are a resident continuable child."
+            "description": "The name of another agent in your subagent tree, as shown by list_agents."
           },
           "message": {
             "type": "string",
@@ -1486,7 +1685,7 @@
           }
         },
         "required": [
-          "agent_id",
+          "agent",
           "message"
         ]
       }
@@ -1509,7 +1708,7 @@
     },
     {
       "name": "subagent",
-      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a self-contained task to a subagent (a separate agent that works in its own context) to offload focused, independent work — research, a scoped implementation, an analysis — so it does not consume this conversation's context. The subagent returns its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1519,7 +1718,11 @@
           },
           "description": {
             "type": "string",
-            "description": "A short (3-5 word) description of the delegated task, for display."
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
           },
           "prompt": {
             "type": "string",
@@ -1534,7 +1737,7 @@
     },
     {
       "name": "subagent_fork",
-      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its id. The runtime notifies you when it finishes. The child reports results with `send_message`; use `send_message` to steer it while running or continue its conversation after it finishes.",
+      "description": "Delegate a task to a subagent that inherits this conversation: a child agent seeded with all completed turns so far (it does not see the current in-flight turn). Use this when the subtask builds on this conversation's context — a follow-up analysis, a review, a continuation — without consuming this conversation's context for the work itself. You receive its result, not its intermediate steps. This tool starts an independently managed subagent and immediately returns its name. If you are still online when it finishes, the runtime automatically delivers its completion notice. The notice includes the final answer unless the child sent you a message just before finishing. Use `send_message` to steer it while running or continue its conversation after it finishes.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -1544,7 +1747,11 @@
           },
           "description": {
             "type": "string",
-            "description": "A short (3-5 word) description of the delegated task, for display."
+            "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on."
           },
           "prompt": {
             "type": "string",
@@ -1642,6 +1849,19 @@
       }
     },
     {
+      "name": "wait_agent",
+      "description": "Wait for input at your next step, including agent messages, completion notifications, and user steering. Returns immediately if new input is pending. `timedOut: false` means new input is pending. Pending input is delivered to the model after code execution finishes.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "timeout_ms": {
+            "type": "integer",
+            "description": "Wait duration in milliseconds, from 10000 through 3600000. Defaults to 30000."
+          }
+        }
+      }
+    },
+    {
       "name": "web_fetch",
       "description": "Fetch the content of a specific HTTP(S) URL and return it decoded to text.",
       "parameters": {
@@ -1665,7 +1885,7 @@
         "properties": {
           "queries": {
             "type": "array",
-            "description": "1–4 search queries; their results are merged.",
+            "description": "1–10 search queries; their results are merged.",
             "items": {
               "type": "string"
             }

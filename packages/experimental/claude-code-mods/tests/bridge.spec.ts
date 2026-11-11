@@ -539,7 +539,7 @@ describe('the mods API over harness services', () => {
         usage: { startedAt: agent.session.header.createdAt, context: { window: 0 }, rateLimits: [] },
         messages: [
           { role: 'user', text: 'hello', toolUses: [] },
-          { role: 'user', text: `Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent working directory: ${JSON.stringify(h.workspace)}.`, toolUses: [] },
+          { role: 'user', text: `<system-reminder>\nThe following information describes your current session:\n\nCurrent working directory: ${JSON.stringify(h.workspace)}.\n</system-reminder>`, toolUses: [] },
           { role: 'assistant', text: 'ok', toolUses: [] },
         ],
       })
@@ -771,7 +771,7 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
     h.ctx.tools.register(echoTool('echo'))
     const root = await h.agent()
     const child = await h.ctx.agentLoop.createAgent(h.ctx, {
-      sessionId: SessionId('child-1'), parentAgent: root, agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
+      sessionId: SessionId('child-1'), agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
     })
     await h.turn(child.agent, 'child task')
     await child.dispose()

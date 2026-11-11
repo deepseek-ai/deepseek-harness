@@ -6,8 +6,10 @@ import { deadline, MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { changeRequestKey } from './keys.ts'
 import { nextPollDelay } from './schedule.ts'
 import type {
-  ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
-  ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeReviewRequest, ForgeReviewResult, MergeRequest,
+  BranchUpdateRequest, ChangeRequestKey, ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot, ChangeRequestUpdate, Config,
+  ForgeCommitList, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness, ForgeRepository, ForgeRerunRequest, ForgeReviewData,
+  ForgeReviewerCandidate, ForgeReviewersRequest, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult,
+  ForgeViewedFiles, ForgeViewedRequest, MergeRequest,
 } from './types.ts'
 
 export { changeRequestKey } from './keys.ts'
@@ -44,6 +46,8 @@ interface Watch {
   /** Epoch milliseconds of the next poll; undefined while in flight or after a terminal state. */
   dueAt: number | undefined
   failures: number
+  /** Head commit whose `stale` diff or review read last polled at once, so further stale reads at it wait for the regular poll. */
+  staleHead: string | undefined
 }
 
 /**
@@ -222,6 +226,68 @@ export class ForgeService extends Service {
   }
 
   /**
+   * Rerun the failed checks of a change request's head commit while the head is still `request.headSha`, then poll it
+   * at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - the head commit whose checks the user saw.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted the rerun, or why it did not; a provider that reruns no checks fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async rerunChecks(ref: ChangeRequestRef, request: ForgeRerunRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    return await this.act(ref, signal, provider => provider.rerunChecks?.bind(provider), 'reruns no checks',
+      (action, operation) => action(ref, request, operation))
+  }
+
+  /**
+   * Request reviews of a change request from more reviewers, then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - the reviewers to ask.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted the request, or why it did not; a provider that requests no reviews fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async requestReviews(
+    ref: ChangeRequestRef, request: ForgeReviewersRequest, signal: AbortSignal,
+  ): Promise<ForgeActionFailure | undefined> {
+    return await this.act(ref, signal,
+      provider => provider.reviewerCandidates === undefined ? undefined : provider.requestReviews?.bind(provider), 'requests no reviews',
+      (action, operation) => action(ref, request, operation))
+  }
+
+  /**
+   * List accounts a review of a change request can be requested from.
+   * @param ref - change request served by a registered provider.
+   * @param query - text the login or name contains; empty for the host's suggestions and first accounts.
+   * @param signal - cancellation of the read.
+   * @returns the accounts, the host's suggestions first, or why the host did not list them; a provider that requests no
+   * reviews returns `unsupported`.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async reviewerCandidates(
+    ref: ChangeRequestRef, query: string, signal: AbortSignal,
+  ): Promise<readonly ForgeReviewerCandidate[] | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.reviewerCandidates === undefined || provider.requestReviews === undefined
+        ? Promise.resolve({ code: 'unsupported', message: 'This provider requests no reviews' } as const)
+        : provider.reviewerCandidates(ref, query, operation))
+  }
+
+  /**
+   * Bring the base branch's new commits into a change request's head branch while its head is still
+   * `request.headSha`, then poll it at once when it is watched.
+   * @param ref - change request served by a registered provider.
+   * @param request - update method and the head commit the user confirmed.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host accepted the update, or why it did not; a provider that updates no branches fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async updateBranch(ref: ChangeRequestRef, request: BranchUpdateRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    return await this.act(ref, signal, provider => provider.updateBranch?.bind(provider), 'updates no branches',
+      (action, operation) => action(ref, request, operation))
+  }
+
+  /**
    * Read complete check details independently of periodic polling.
    * @param ref - change request served by a registered provider.
    * @param signal - cancellation of the detail view.
@@ -236,15 +302,128 @@ export class ForgeService extends Service {
   }
 
   /**
-   * Read the changes of a change request as its host computes them.
+   * Read the changes of a change request at one head commit as its host
+   * computes them. The first `stale` failure at a head commit polls a watched
+   * change request again at once, so its next status names the current head;
+   * later stale reads at the same commit wait for the regular poll, which
+   * bounds the reads while the host's answers disagree. When the latest status of a watched change request names
+   * `headSha`, its `baseSha` goes to the provider, which may then read the patch while it confirms the head.
    * @param ref - change request served by a registered provider.
+   * @param headSha - head commit the patch must describe, usually the head of the latest status.
    * @param signal - cancellation of the read.
-   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it at `headSha`.
    * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
    */
-  async diff(ref: ChangeRequestRef, signal: AbortSignal): Promise<string | ForgeFailure> {
+  async diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const latest = this.watches.get(changeRequestKey(ref))?.latest
+    const base = latest !== undefined && 'snapshot' in latest && latest.snapshot.headSha === headSha ? latest.snapshot.baseSha : undefined
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.diff(ref, headSha, operation, base))
+    if (typeof result !== 'string') this.staleRead(ref, headSha, result.code)
+    return result
+  }
+
+  /**
+   * Read the review threads of a change request at one head commit. A
+   * `stale` failure polls a watched change request again as {@link ForgeService.diff} does.
+   * @param ref - change request served by a registered provider.
+   * @param headSha - head commit the threads must be read at, usually the head of the displayed diff.
+   * @param signal - cancellation of the read.
+   * @returns the threads read at `headSha`, or why the host did not provide them; `unsupported` when the provider cannot read reviews.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async readReview(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.readReview?.(ref, headSha, operation)
+        ?? Promise.resolve({ code: 'unsupported', message: 'This provider does not support review reads' } as const))
+    if ('code' in result) this.staleRead(ref, headSha, result.code)
+    return result
+  }
+
+  /**
+   * Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then
+   * poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls
+   * it as a stale read does.
+   * @param ref - change request served by a registered provider.
+   * @param write - the write and the head commit the user saw.
+   * @param signal - cancellation of the write.
+   * @returns whether the host took the write; `unsupported` when the provider cannot write reviews, and `unknown` when the
+   * outcome must be checked on the host before the write is tried again.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.writeReview?.(ref, write, operation)
+        ?? Promise.resolve({ ok: false, code: 'unsupported', message: 'This provider does not support review writes' } as const))
+    if (!result.ok && result.code === 'stale') this.staleRead(ref, write.headSha, result.code)
+    else if (result.ok || result.code !== 'unsupported') this.refresh(ref)
+    return result
+  }
+
+  /**
+   * Read the signed-in user's viewed marks on the files of a change request at one head commit. A `stale` failure
+   * polls a watched change request again as {@link ForgeService.diff} does.
+   * @param ref - change request served by a registered provider.
+   * @param headSha - head commit the marks must be read at, usually the head of the displayed diff.
+   * @param signal - cancellation of the read.
+   * @returns the marks read at `headSha`, why the host did not provide them, or undefined when the provider keeps no
+   * viewed marks.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async viewedFiles(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure | undefined> {
+    const result = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.viewedFiles === undefined || provider.setViewed === undefined
+        ? Promise.resolve(undefined) : provider.viewedFiles(ref, headSha, operation))
+    if (result !== undefined && 'code' in result) this.staleRead(ref, headSha, result.code)
+    return result
+  }
+
+  /**
+   * Set or clear the signed-in user's viewed mark on one file of a change request while its head is still
+   * `request.headSha`. A `stale` failure polls a watched change request again as {@link ForgeService.diff} does.
+   * @param ref - change request served by a registered provider.
+   * @param request - the file, its mark, and the head commit the user saw.
+   * @param signal - cancellation of the request.
+   * @returns undefined once the host saved the mark, or why it did not; a provider that keeps no viewed marks fails.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async setViewed(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined> {
+    const failure = await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.viewedFiles === undefined || provider.setViewed === undefined
+        ? Promise.resolve({ code: 'failed', message: 'This provider keeps no viewed marks' } as const)
+        : provider.setViewed(ref, request, operation))
+    if (failure?.code === 'stale') this.staleRead(ref, request.headSha, failure.code)
+    return failure
+  }
+
+  /**
+   * List the commits of a change request at its current head.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the read.
+   * @returns the commits, why the host did not provide them, or undefined when the provider does not read commits.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async commits(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeCommitList | ForgeFailure | undefined> {
     return await this.invoke(this.registration(ref.repository.forge), signal,
-      (provider, operation) => provider.diff(ref, operation))
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve(undefined) : provider.commits(ref, operation))
+  }
+
+  /**
+   * Read the changes between two commits of a change request's repository.
+   * @param ref - change request served by a registered provider.
+   * @param base - full object name of the commit compared from.
+   * @param head - full object name of a commit that descends from `base`.
+   * @param signal - cancellation of the read.
+   * @returns one unified patch with `a/` and `b/` path prefixes, or why the host did not provide it; a provider that
+   * does not read commits returns `unavailable`.
+   * @throws when no provider serves the change request's forge, or with `signal.reason` when it aborts.
+   */
+  async compare(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    return await this.invoke(this.registration(ref.repository.forge), signal,
+      (provider, operation) => provider.commits === undefined || provider.compare === undefined
+        ? Promise.resolve({ code: 'unavailable', message: 'This provider does not read commits' } as const)
+        : provider.compare(ref, base, head, operation))
   }
 
   /**
@@ -302,7 +481,7 @@ export class ForgeService extends Service {
     const dispose = this.ctx.effect(() => {
       let watch = this.watches.get(key)
       if (watch === undefined) {
-        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0 }
+        watch = { key, ref, listeners: new Set(), latest: undefined, dueAt: Date.now(), failures: 0, staleHead: undefined }
         this.watches.set(key, watch)
         this.schedule()
       }
@@ -339,6 +518,41 @@ export class ForgeService extends Service {
    */
   latest(ref: ChangeRequestRef): ChangeRequestUpdate | undefined {
     return this.watches.get(changeRequestKey(ref))?.latest
+  }
+
+  /** Poll a watched change request at once after the first `stale` read or write at `headSha`; later ones wait for the regular poll. */
+  private staleRead(ref: ChangeRequestRef, headSha: string, code: ForgeFailure['code']): void {
+    const watch = this.watches.get(changeRequestKey(ref))
+    if (code !== 'stale' || watch === undefined || watch.staleHead === headSha) return
+    watch.staleHead = headSha
+    this.refresh(ref)
+  }
+
+  /**
+   * Run one optional provider action, then poll the change request at once when it is watched and the provider has the
+   * action.
+   * @param ref - change request served by a registered provider.
+   * @param signal - cancellation of the action.
+   * @param pick - the provider's action, or undefined when it lacks the capability.
+   * @param missing - what a provider without the action does not do, for its failure.
+   * @param run - calls the action.
+   * @returns the action's failure, or undefined once the host accepted it.
+   */
+  private async act<A>(
+    ref: ChangeRequestRef,
+    signal: AbortSignal,
+    pick: (provider: ForgeProvider) => A | undefined,
+    missing: string,
+    run: (action: A, signal: AbortSignal) => Promise<ForgeActionFailure | undefined>,
+  ): Promise<ForgeActionFailure | undefined> {
+    // Null stands for a provider without the action, which the host was never asked about.
+    const failure = await this.invoke(this.registration(ref.repository.forge), signal, (provider, operation) => {
+      const action = pick(provider)
+      return action === undefined ? Promise.resolve(null) : run(action, operation)
+    })
+    if (failure === null) return { code: 'failed', message: `This provider ${missing}` }
+    this.refresh(ref)
+    return failure
   }
 
   private provider(forge: string): ForgeProvider {

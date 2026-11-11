@@ -394,7 +394,7 @@ describe('bash tool', () => {
   ])('rejects value-invalid args %j', async (args, pattern) => {
     const ctx = await setup()
     const result = await call(ctx, 'bash', args)
-    expect(result.isError).toBe(true)
+    expect(result).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
     expect(text(result)).toMatch(pattern)
   })
 
@@ -640,7 +640,10 @@ describe('background execution through the job runtime', () => {
   it('fails loud when the job runtime is not loaded', async () => {
     const ctx = await setup() // no LocalJobRegistry / ToolJobs
     const result = await call(ctx, 'bash', { command: 'sleep 60', description: 'test command', run_in_background: true })
-    expect(result.isError).toBe(true)
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
+    })
     expect(text(result)).toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
   })
 
@@ -717,7 +720,7 @@ describe('background execution through the job runtime', () => {
 
     // Schema omission is advertising; execution must also enforce the opt-out.
     const forced = await call(ctx, 'bash', { command: 'echo hi', description: 'test command', run_in_background: true })
-    expect(forced.isError).toBe(true)
+    expect(forced).toMatchObject({ isError: true, error: { info: { name: 'JobError', code: 'JOB_BACKGROUND_DISABLED' } } })
     expect(text(forced)).toContain('run_in_background is disabled for this deployment')
     const foreground = await call(ctx, 'bash', { command: 'echo hi', description: 'test command' })
     expect(foreground.isError).toBe(false)
@@ -755,7 +758,10 @@ describe('sandbox escalation through the generic task producer', () => {
       { command: 'true', description: 'd', justification: 'why' },
       { command: 'true', description: 'd', sandbox_permissions: 'workspace-write', justification: ' ' },
     ]) {
-      expect((await call(ctx, 'bash', args)).isError).toBe(true)
+      expect(await call(ctx, 'bash', args)).toMatchObject({
+        isError: true,
+        error: { info: { name: 'SandboxEscalationError', code: 'SANDBOX_ESCALATION_INVALID_ARGUMENT' } },
+      })
     }
   })
 
@@ -793,7 +799,9 @@ describe('sandbox escalation through the generic task producer', () => {
 
   it('rejects injected escalation without a sandbox and narrower escalation without prompting', async () => {
     const plain = await setup()
-    expect(text(await call(plain, 'bash', escalate))).toContain('not available in this composition')
+    const unavailable = await call(plain, 'bash', escalate)
+    expect(text(unavailable)).toContain('not available in this composition')
+    expect(unavailable).toMatchObject({ error: { info: { name: 'SandboxEscalationError', code: 'SANDBOX_ESCALATION_UNAVAILABLE' } } })
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()
@@ -1387,6 +1395,7 @@ describe('the model-facing bash tool builds its request from named args only (no
 
     expect(bash.requests[0]?.dshEnv).toEqual({
       DSH_HOME: recordingDshHome,
+      DSH_NODE_EXECUTABLE: process.execPath,
       DSH_SESSION_ID: 'request-fg',
       DSH_SHELL: '1',
     })
@@ -1413,6 +1422,7 @@ describe('the model-facing bash tool builds its request from named args only (no
     expect(bash.requests[0]?.env).toBeUndefined()
     expect(bash.requests[0]?.dshEnv).toEqual({
       DSH_HOME: recordingDshHome,
+      DSH_NODE_EXECUTABLE: process.execPath,
       DSH_SESSION_ID: 'request-bg',
       DSH_SHELL: '1',
     })
@@ -1436,11 +1446,13 @@ describe('the model-facing bash tool builds its request from named args only (no
     expect(bash.requests.map(request => request.dshEnv)).toEqual([
       {
         DSH_HOME: recordingDshHome,
+        DSH_NODE_EXECUTABLE: process.execPath,
         DSH_SESSION_ID: 'request-parent',
         DSH_SHELL: '1',
       },
       {
         DSH_HOME: recordingDshHome,
+        DSH_NODE_EXECUTABLE: process.execPath,
         DSH_SESSION_ID: 'request-child',
         DSH_SHELL: '1',
       },
@@ -1537,5 +1549,47 @@ describe('resolved launch directory metadata', () => {
       await ctx.fiber.dispose()
       rmSync(directory, { recursive: true, force: true })
     }
+  })
+})
+
+describe('launch failures without a job registry', () => {
+  it('classifies a platform spawn error and keeps this call\'s cancellation', async () => {
+    const ctx = await setup()
+    const missing = vi.spyOn(ctx.shell, 'execute').mockRejectedValueOnce(Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }))
+    expect(await call(ctx, 'bash', { command: 'true', description: 'd' })).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    missing.mockRestore()
+
+    const controller = new AbortController()
+    const reason = new Error('caller stopped')
+    vi.spyOn(ctx.shell, 'execute').mockImplementationOnce(() => {
+      controller.abort(reason)
+      return Promise.reject(reason)
+    })
+    const aborted = await executeToolFixture(ctx, {
+      signal: controller.signal,
+      callId: ToolCallId('launch-aborted'),
+      name: 'bash',
+      arguments: { command: 'true', description: 'd' },
+    })
+    expect(aborted).toMatchObject({ isError: true, error: { info: { name: 'AbortError', code: TOOL_ABORTED } } })
+  })
+
+  it('classifies a spawn error that settles after this call was cancelled', async () => {
+    const ctx = await setup()
+    const controller = new AbortController()
+    vi.spyOn(ctx.shell, 'execute').mockImplementationOnce(() => {
+      controller.abort(new Error('caller stopped'))
+      return Promise.reject(Object.assign(new Error('spawn bash ENOENT'), { code: 'ENOENT' }))
+    })
+    const result = await executeToolFixture(ctx, {
+      signal: controller.signal,
+      callId: ToolCallId('launch-aborted-spawn-error'),
+      name: 'bash',
+      arguments: { command: 'true', description: 'd' },
+    })
+    expect(result).toMatchObject({ isError: true, error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } } })
   })
 })

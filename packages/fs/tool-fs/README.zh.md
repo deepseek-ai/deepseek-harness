@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用 `dsh-tool-fs` 可让模型带行号读取 UTF-8 文件、读取受支持的图片、创建或原子地替换文件，执行有针对性的字面量编辑，以及应用 Codex 风格的多文件补丁。结果都有上限，失败会提供稳定错误码与恢复指令。当写入和编辑必须在成功读取后执行时，请添加 `dsh-fs-observation-policy`；省略它时，变更仍是原子的，但不受此条件约束。图片读取需要持久附件存储和支持图片输入的路由模型。glob 或 grep 搜索请选择同级的发现工具包。
+使用 `dsh-tool-fs` 可让模型带行号读取 UTF-8 文件、读取受支持的图片、创建或原子地替换文件，执行有针对性的字面量编辑，以及应用多文件补丁。结果都有上限，失败会提供稳定错误码与恢复指令。当写入和编辑必须在成功读取后执行时，请添加 `dsh-fs-observation-policy`；省略它时，变更仍是原子的，但不受此条件约束。图片读取需要持久附件存储和支持图片输入的路由模型。glob 或 grep 搜索请选择同级的发现工具包。
 
 ## 目录
 
@@ -83,7 +83,9 @@ kind: "package-reference"
 
 `apply_patch` 的语法与预检拒绝在磁盘变更前抛错，结果为 `isError: true`。`FsError` 保留文件系统错误码；`PatchToolError extends HarnessError` 携带 `PATCH_SYNTAX` 和 `PATCH_SYMLINK_SOURCE`。进入提交后，即使失败或结果不确定也返回 `isError: false` 的值，确保已知部分效果的 diff 元数据得以保留；提交期间被取消的调用与其他工具一样收到工具注册表的中止结果，已完成的变更仍可通过 Review 查看。`phase`、`cancelled`、有序 `operations` 与 `affectedPaths` 描述提交；每条操作保留索引、种类、展示路径、补丁行号、状态、诊断与已知变更。完整 `before`/`after` 文本供渲染和 PTC 使用；Session 保存渲染文本以及 `meta.diffs` 与 `meta.stopped`。新建与 `write` 一样不保存 diff；删除与移动源仅在提供方返回有界基线时保存删除 diff，并使用 `newText: ''`，因为 `FileDiff.newText` 不可为 null。
 
-失败被规范化为 `Error: <message>`，并为调用方保留结构化错误码。稳定消息包括 `file_path must be a non-empty string`、`limit must be less than or equal to <max>`、`cannot read "<path>": not found`、`cannot read "<path>": not a regular file`，以及图像路由拒绝 `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`。无论拒绝来自策略还是提供方，`FS_NOT_OBSERVED` 都规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。该次重新读取确认缺失后，`edit` 报告 `FS_NOT_FOUND` 而不会重复陈旧恢复指令，`write` 则使用防护创建。
+`read_image` 在存储图像前自行作出的拒绝抛出 `ImageInputError extends HarnessError`，错误码为 `ImageInputErrorCode`：`IMAGE_UNSUPPORTED_MODEL`（切换到支持图像的模型）或 `IMAGE_UNSUPPORTED_FORMAT`（扩展名、文件签名或部署接受的媒体类型排除了该格式；转换文件）。附件存储作出的拒绝保留其 `AttachmentError` 的 `name` 与 `code`，例如 `INVALID_IMAGE`、`IMAGE_TYPE_MISMATCH` 或 `IMAGE_DIMENSION_TOO_LARGE`；对有明确补救办法的错误码，消息会写明文件与下一步，存储错误作为 `cause`。空 `file_path` 抛出 `ToolArgsError`（`INVALID_ARGS`）；缺少附件服务或无法解析模型路由时抛出 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）；文件系统失败保留其 `FsError` 错误码；存储抛出的其他失败（例如 `AbortError`、其他 `HarnessError` 或缺陷）原样传递。
+
+失败被规范化为 `Error: <message>`，并为调用方保留结构化错误码。稳定消息包括 `ToolArgsError`（`INVALID_ARGS`）消息 `invalid arguments: file_path must be a non-empty string` 与 `invalid arguments: limit must be less than or equal to <max>`、`cannot read "<path>": not found`、`cannot read "<path>": not a regular file`，以及图像路由拒绝 `cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`。无论拒绝来自策略还是提供方，`FS_NOT_OBSERVED` 都规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。该次重新读取确认缺失后，`edit` 报告 `FS_NOT_FOUND` 而不会重复陈旧恢复指令，`write` 则使用防护创建。
 
 -----
 
@@ -106,6 +108,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、工具组合、`read_image` 附件门禁 |
 | [`src/read.ts`](src/read.ts) | `read` 执行器：一次 stat、流式决策、窗口构建、观察 |
 | [`src/read-image.ts`](src/read-image.ts) | `read_image` 执行器：路由与媒体类型门禁、有界字节、附件保存 |
+| [`src/image-error.ts`](src/image-error.ts) | `ImageInputError` 及 `read_image` 自行拒绝时使用的封闭错误码 |
 | [`src/write.ts`](src/write.ts) | `write` 执行器：意图 waterfall、原子写入、观察 |
 | [`src/apply-patch.ts`](src/apply-patch.ts)、[`apply-patch-output.ts`](src/apply-patch-output.ts) | `apply_patch` 注册、严格提交值与精简诊断 |
 | [`src/apply-patch-presentation.ts`](src/apply-patch-presentation.ts) | 纯调用预览与已知结果 diff |
@@ -163,7 +166,7 @@ kind: "package-reference"
 ##### Read 指导
 
 ```markdown
-Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.
+Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.
 ```
 
 ##### Write 指导
@@ -246,7 +249,7 @@ Read a file before editing it unless you just created or edited it in this sessi
 
 #### 模型看到的内容
 
-失败会规范化为 `Error: <message>`。本包稳定的校验和读取消息是 `file_path must be a non-empty string`、`limit must be less than or equal to <max>`、`old_string must be a non-empty string`、`old_string and new_string must differ`、`cannot read "<path>": not found`、`cannot read "<path>": not a regular file`、`offset <offset> is out of range for "<path>" (<total> lines)`、`cannot read "<path>": the <ext> extension does not declare a supported image format; read_image accepts PNG/JPEG/WebP/GIF files, including extension-less files in those formats`、`cannot read "<path>": the file content is not a supported image format; read_image accepts PNG/JPEG/WebP/GIF`、`cannot read "<path>": the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt`、`cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`，以及类型不匹配的修复消息 `cannot read "<path>": the <ext> extension declares <type>, but the bytes use a different image format; rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats`（无扩展名路径的不匹配报告 `cannot read "<path>": the file signature claims <type>, but the bytes decode as a different image format; the file may be corrupt`）。16-bit 转换失败会报告 `cannot read "<path>": the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry`。提供方和策略模板在各自包的 README 中逐字列出。模型侧错误包装把所有 `FS_NOT_OBSERVED` 来源规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。两者都保留结构化错误码和原始原因。该次重新读取确认缺失后，`edit` 会报告 `FS_NOT_FOUND`，而不会重复陈旧恢复指令；`write` 则使用带防护的创建。
+失败会规范化为 `Error: <message>`。本包稳定的校验消息是带 `invalid arguments: ` 前缀的 `ToolArgsError`（`INVALID_ARGS`）消息：`file_path must be a non-empty string`、`limit must be less than or equal to <max>`、`old_string must be a non-empty string` 与 `old_string and new_string must differ`。稳定的读取消息是 `cannot read "<path>": not found`、`cannot read "<path>": not a regular file`、`offset <offset> is out of range for "<path>" (<total> lines)`、`cannot read "<path>": the <ext> extension does not declare a supported image format; read_image accepts PNG/JPEG/WebP/GIF files, including extension-less files in those formats`、`cannot read "<path>": the file content is not a supported image format; read_image accepts PNG/JPEG/WebP/GIF`、`cannot read "<path>": the bytes do not decode as a supported PNG/JPEG/WebP/GIF image; the file may be truncated or corrupt`、`cannot read "<path>" as an image: model "<model>" does not declare image input; switch to an image-capable model to read images`，以及类型不匹配的修复消息 `cannot read "<path>": the <ext> extension declares <type>, but the bytes use a different image format; rename the file to match its actual format if it is PNG/JPEG/WebP/GIF, or convert it to one of those formats`（无扩展名路径的不匹配报告 `cannot read "<path>": the file signature claims <type>, but the bytes decode as a different image format; the file may be corrupt`）。16-bit 转换失败会报告 `cannot read "<path>": the 16-bit PNG could not be converted to the normalized 8-bit sRGB form; convert it to an 8-bit PNG/JPEG/WebP and retry`。提供方和策略模板在各自包的 README 中逐字列出。模型侧错误包装把所有 `FS_NOT_OBSERVED` 来源规范化为 `cannot modify "<path>": file has not been read — read the file, then retry`；`FS_STALE_VERSION` 保留提供方原因并追加 `— re-read the file, then retry`。两者都保留结构化错误码和原始原因。该次重新读取确认缺失后，`edit` 会报告 `FS_NOT_FOUND`，而不会重复陈旧恢复指令；`write` 则使用带防护的创建。
 
 #### Token 影响
 
@@ -260,7 +263,7 @@ Read a file before editing it unless you just created or edited it in this sessi
 
 #### 模型看到的内容
 
-`apply_patch` schema 要求一个 `input` 字符串（沿用 Codex 的参数名，在该工具上训练过的模型会不经提示地发送这个键），包含 `*** Begin Patch` / `*** End Patch`、Add/Update/Delete 文件头、可选 Move to，以及上下文/新增/删除 hunk 行。路径相对于 Session 工作目录。有围栏后端追加与 write/edit 相同的提权字段。成功行按 A/M/D 分组，完成的移动显示 `M <destination>`，与 Codex rust-v0.158.0 一致。空补丁显示 `Success. No operations in patch.`。停止的补丁只包含适用的 Completed、Failed、Outcome unknown 与 Not executed 小节；结果不确定时以重读建议结束。语法错误保留解析器消息。
+`apply_patch` schema 要求一个 `input` 字符串，包含 `*** Begin Patch` / `*** End Patch`、Add/Update/Delete 文件头、可选 Move to，以及上下文/新增/删除 hunk 行。路径相对于 Session 工作目录。有围栏后端追加与 write/edit 相同的提权字段。成功行按 A/M/D 分组，完成的移动显示 `M <destination>`，与 Codex rust-v0.158.0 一致。空补丁显示 `Success. No operations in patch.`。停止的补丁只包含适用的 Completed、Failed、Outcome unknown 与 Not executed 小节；结果不确定时以重读建议结束。语法错误保留解析器消息。
 
 ##### 系统提示
 

@@ -14,7 +14,7 @@ function props(enabled = true, subagent: SessionSnapshot['subagent'] = null) {
   const value = {
     trigger: 'selection',
     dismiss: vi.fn(), readText: vi.fn((): string | null => 'Hello world'), clearSelection: vi.fn(),
-    inputActions, useSession: selector => selector({ sessionId: SessionId('quote-selection'), pendingSubmissions: [], running: false, removed: !enabled, openState: 'open', openError: null, hasMore: false, loadingOlder: false, promptError: null, blank: false, subagent, lastAgentError: null, promptAttempted: true, awaitingFirstTurn: false }),
+    inputActions, useSession: selector => selector({ sessionId: SessionId('quote-selection'), pendingSubmissions: [], running: false, removed: !enabled, openState: 'open', openError: null, hasMore: false, loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false, promptError: null, blank: false, subagent, lastAgentError: null, promptAttempted: true, awaitingFirstTurn: false }),
     t: () => 'Quote text',
   } as Props
   return { value, inputActions }
@@ -52,16 +52,13 @@ describe('quote action consumer', () => {
     expect(fixture.value.dismiss).toHaveBeenCalledOnce()
   })
 
-  it('responds to changes in a continuable subagent parent availability', () => {
+  it('allows quoting in continuable subagents and rejects one-shot records', () => {
     const child = {
       address: { parentSessionId: SessionId('parent'), childSessionId: SessionId('quote-selection'), mode: 'continuable' as const },
-      parentAvailable: true,
     }
     const fixture = props(true, child)
     const view = render(<QuoteSelectionAction {...fixture.value} />)
     expect(view.queryByRole('button')).not.toBeNull()
-    view.rerender(<QuoteSelectionAction {...props(true, { ...child, parentAvailable: false }).value} />)
-    expect(view.queryByRole('button')).toBeNull()
     view.rerender(<QuoteSelectionAction {...props(true, { ...child, address: { ...child.address, mode: 'one-shot' } }).value} />)
     expect(view.queryByRole('button')).toBeNull()
   })

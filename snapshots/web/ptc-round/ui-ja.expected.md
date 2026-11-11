@@ -12,6 +12,9 @@
 - status: 完了
 - button "完了まで {{duration}}" [expanded]
 - button "コードを実行しました、コマンドを実行しました、ファイルを読み取りました" [expanded]
+- button "コンテキスト注入 runtime-context"
+- button "コンテキスト注入 skill-catalog"
+- button "コンテキスト注入 time-context"
 - 'button "思考 The user wants me to write a single `run_code` program that:"'
 - button "コード Run bash echo and catch missing file read"
 - button "Bash Echo CODE_ROUND_OK" [expanded]

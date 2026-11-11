@@ -2,14 +2,16 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { z } from 'zod'
-import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, Request, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
+import type { ActionResult, CapabilitiesResult, FoundAppsResult, HoverResult, SystemPointerRequest, ScreenshotResult, ShowResult, WindowsResult } from './protocol.ts'
 
-/** Helper-issued application selection; public app objects bind it to one process lifetime. */
+/** Helper-issued application selection; public app objects hold only this opaque handle. */
 export type CuaAppHandle = Branded<'CuaAppHandle'>
 /** Helper-issued accessibility observation identity. */
 export type CuaSnapshotId = Branded<'CuaSnapshotId'>
+/** Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot. */
+export type CuaElementId = Branded<'CuaElementId'>
 /** One operation sent through an authorized and logged host dispatcher. */
-export type CuaOperation = z.output<typeof Request>
+export type CuaOperation = z.output<typeof SystemPointerRequest>
 type CuaParameters<M extends CuaOperation['method']> = Extract<CuaOperation, { method: M }>['params']
 /** Dispatch exactly once; a failed action must not be retried implicitly. */
 export type CuaDispatch = (operation: CuaOperation) => Promise<JsonValue>
@@ -32,26 +34,35 @@ export interface CuaObservationSink {
 }
 /** Observations emit by default. Returned values are unaffected by this option. */
 export interface CuaObservationOptions { emit?: boolean }
-/** Full observations of the requested content; each read replaces this surface's indices. */
+/** Full observations of the requested content; each read replaces the application's current snapshot. */
 export interface CuaAxOptions extends CuaObservationOptions {
   /** Reserved compatibility option; observations are never diffs. */
   disableDiffing?: boolean
   /** Expand menu contents. The default shows menu-bar entries only. */
   includeMenus?: boolean
-  /** Include identifiers, global-point bounds and complete action names. */
+  /** Include identifiers, global native bounds and complete action names. */
   details?: boolean
+  /** Maximum nodes visited for this read. Omission uses the provider setting. */
+  maxElements?: number
+  /** Maximum traversal depth for this read. Omission uses the provider setting. */
+  maxDepth?: number
 }
 /** Reported permissions and operations; null sessionLocked means no usable console session was verified. */
 export type CuaCapabilities = z.output<typeof CapabilitiesResult>
+/** Provider capabilities fixed when the provider is installed; runtime fields come from getCapabilities. */
+export type CuaStartupCapabilities = Pick<
+  CuaCapabilities,
+  'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
+> & { systemPointer?: boolean }
 /** App discovery result accepted by getApp. */
 export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
 /** An installed application match; running matches include a process identifier. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
-/** Window bounds in global macOS points. Local operations use an origin of [0,0]. */
+/** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
 /** Observed window metadata; identifiers are valid only while the window exists, and null Space membership is unknown. */
 export type CuaWindowInfo = z.output<typeof WindowsResult>[number]
-/** Successful input dispatch; application outcome still requires observation. */
+/** Reports whether the provider successfully executed the requested operation. */
 export type CuaActionResult = z.output<typeof ActionResult>
 /** Hover dispatch and the effect on the user's system pointer. */
 export type CuaHoverResult = z.output<typeof HoverResult>
@@ -83,12 +94,8 @@ export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 export type CuaSelectTextOptions = Pick<CuaParameters<'selectText'>, 'prefix' | 'suffix' | 'selectionType'>
 /** Positive deltas reveal content above/left; each axis is an integer from -10 to 10. */
 export type CuaScrollOptions = Pick<CuaParameters<'scroll'>, 'x' | 'y' | 'deltaLinesX' | 'deltaLinesY'> & CuaCoordinateOptions
-/** An observed AX tree and independently captured image; capture is not atomic. */
-export interface CuaObservation { state: string; screenshot: CuaScreenshot }
 /**
- * App-wide or explicitly scoped window observations and actions.
- * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
- * Coordinate input also rejects resizing since the latest successful AX read or screenshot.
+ * Common operations inherited by application and window objects; not a standalone object.
  * Advertised AX actions remain available; failed actions are not retried through pointer input.
  */
 export interface CuaSurface {
@@ -98,11 +105,89 @@ export interface CuaSurface {
    */
   show(): Promise<CuaShowResult>
   /**
-   * Read fresh AX text, with menu contents collapsed by default.
-   * @param options - emission, menu expansion and field detail options.
-   * @returns AX text with element indices.
+   * Read the full accessibility tree, with menu contents collapsed by default.
+   * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
+   * @param options - Output, traversal limits, menu expansion and field detail options.
+   * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
-  getAXState(options?: CuaAxOptions): Promise<string>
+  getAccessibilityTree(options?: CuaAxOptions): Promise<string>
+  /**
+   * List the actions currently advertised by an element, including attribute-setting operations.
+   * @param elementId - Element id from the application's current snapshot.
+   * @returns Provider-defined action names; empty when the element advertises none.
+   */
+  listActions(elementId: CuaElementId): Promise<string[]>
+  /**
+   * Perform an element action, including attribute-setting operations.
+   * @param elementId - Element id from the application's current snapshot.
+   * @param action - Exact action name from listActions.
+   * @param argument - Direct action argument; omit or pass null for a no-argument action, or pass the value itself for attribute setting.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  performAction(elementId: CuaElementId, action: string, argument?: JsonValue): Promise<CuaActionResult>
+  /**
+   * Invoke the element's default action.
+   * If the element's type does not support a default action, the result's dispatched field is false.
+   * @param elementId - Element id from the application's current snapshot.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  invoke(elementId: CuaElementId): Promise<CuaActionResult>
+  /**
+   * Set an observed control value.
+   * @param elementId - Element id from the application's current snapshot.
+   * @param value - Replacement value as JSON; supported values are defined by the platform provider.
+   * @returns dispatch evidence.
+   */
+  setValue(elementId: CuaElementId, value: JsonValue): Promise<CuaActionResult>
+  /**
+   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
+   * @param elementId - Element id from the application's current snapshot.
+   * @param text - Nonempty literal text; multiple matches require adjacent context.
+   * @param options - Adjacent prefix/suffix and selection or cursor placement.
+   * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
+   */
+  selectText(elementId: CuaElementId, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
+  /**
+   * Type text at the current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param text - Literal text; cancellation may leave a prefix entered.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  typeText(text: string): Promise<CuaActionResult>
+  /**
+   * Paste text or HTML at the target's current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
+   * @param text - Clipboard contents in the selected format; defaults to plain text.
+   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
+   * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
+   */
+  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
+  /**
+   * Press and release one key at the current input focus.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param key - Provider-defined key name to press and release; not a chord.
+   * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
+  /**
+   * Send one key-down or key-up event at the current input focus.
+   * Does not send the opposite event.
+   * Rejects when the provider does not support keyboard input at this scope.
+   * @param key - Platform-defined key name; modifier keys may themselves be targets.
+   * @param direction - Explicit event direction; the opposite event is never sent implicitly.
+   * @returns Whether the provider successfully executed the requested operation.
+   */
+  sendKeyEvent(key: string, direction: 'down' | 'up'): Promise<CuaActionResult>
+}
+/**
+ * An explicit window with screenshot and pointer input operations.
+ * Capture and pointer delivery reject known AX/display frame conflicts with WINDOW_CHANGED.
+ * Coordinate input requires a successful AX observation covering the window or a screenshot, and rejects resizing since that observation.
+ */
+export interface CuaWindow extends CuaSurface {
+  readonly windowId: number
   /**
    * Capture the selected window.
    * @param options - emission options.
@@ -110,51 +195,25 @@ export interface CuaSurface {
    */
   getScreenshot(options?: CuaObservationOptions): Promise<CuaScreenshot>
   /**
-   * Read AX then capture.
-   * @param options - observation options.
-   * @returns both non-atomic observations.
-   */
-  getAXStateAndScreenshot(options?: CuaAxOptions): Promise<CuaObservation>
-  /**
-   * Reveal advertised AX alternate UI, otherwise move the system cursor without pressing a button.
-   * The system-pointer route requires the app to be foreground and the point unobscured; never activates or raises it.
+   * Request a mouse move to an element or a point without pressing a button.
+   * The provider reports the route and whether the system pointer moved.
    * Returning and subsequent observations do not restore the previous pointer position.
-   * Other input and application changes can interrupt hover; observe before continuing.
-   * @param target - current AX index or screenshot-local [x,y].
-   * @param options - coordinate mode; applies only to [x,y].
-   * @returns dispatch evidence and the selected route; observe the resulting UI after its hover delay.
+   * Other input and application changes can interrupt the interaction; observe before continuing.
+   * @param target - current element id or screenshot-local [x,y].
+   * @param options - Coordinate mode for points. Only providers reporting systemPointer accept useSystemPointer.
+   * True requests physical movement for this call only.
+   * @returns dispatch evidence and the selected route; observe the resulting UI after any UI delay.
    */
-  hover(target: number | readonly [number, number], options?: CuaCoordinateOptions): Promise<CuaHoverResult>
+  mouseMove(target: CuaElementId | readonly [number, number],
+    options?: CuaCoordinateOptions & { useSystemPointer?: boolean }): Promise<CuaHoverResult>
   /**
-   * Click a current AX index or screenshot-local point.
+   * Click a current element id or screenshot-local point.
    * Cancellation or timeout releases the held button; received input cannot be undone. The operation deadline includes holdMs.
-   * @param target - index or [x,y].
+   * @param target - element id or [x,y].
    * @param options - button, click count, modifiers, optional hold duration and coordinate mode.
    * @returns dispatch evidence.
    */
-  click(target: number | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
-  /**
-   * Set an observed control value.
-   * @param index - index from this surface's latest tree.
-   * @param value - replacement value.
-   * @returns dispatch evidence.
-   */
-  setValue(index: number, value: string): Promise<CuaActionResult>
-  /**
-   * Select one literal text occurrence through writable AXSelectedTextRange and verify its range.
-   * @param index - Text control index from this surface's latest tree.
-   * @param text - Nonempty literal text; multiple matches require adjacent context.
-   * @param options - Adjacent prefix/suffix and selection or cursor placement.
-   * @returns Dispatch evidence; rejects unsupported, ambiguous or changed text without keyboard fallback.
-   */
-  selectText(index: number, text: string, options?: CuaSelectTextOptions): Promise<CuaActionResult>
-  /**
-   * Invoke an action advertised by an observed element; raising a window activates its app.
-   * @param index - Index from this surface's latest AX tree.
-   * @param action - Advertised action name, such as raise or zoomwindow.
-   * @returns Dispatch evidence; menu and window actions can change focus.
-   */
-  performSecondaryAction(index: number, action: string): Promise<CuaActionResult>
+  click(target: CuaElementId | readonly [number, number], options?: CuaClickOptions): Promise<CuaActionResult>
   /**
    * Scroll at a screenshot-local point or integer ratio.
    * @param options - point, coordinate mode and line deltas; at least one delta must be nonzero.
@@ -170,16 +229,8 @@ export interface CuaSurface {
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
 }
-/** One explicit window; keyboard operations remain app-scoped because they follow focus. */
-export interface CuaWindow extends CuaSurface { readonly windowId: number }
-/**
- * Native app handle supporting direct observations and actions without window enumeration.
- * Screenshots and coordinates reuse the latest AX observation's focused on-screen,
- * nonzero-size window, or require exactly one such window. Read fresh AX to follow
- * focus changes; explicit window objects retain their selected target.
- */
+/** Application-level accessibility, window discovery and scope-dependent input operations. */
 export interface CuaApp extends CuaSurface {
-  readonly pid: number
   readonly appHandle: CuaAppHandle
   /**
    * Activate this application explicitly, potentially changing the user's focused app and Space.
@@ -193,31 +244,12 @@ export interface CuaApp extends CuaSurface {
    */
   getWindows(options?: CuaObservationOptions): Promise<CuaWindowInfo[]>
   /**
-   * Observe a specific window.
+   * Select a specific window.
    * @param windowId - ID obtained from getWindows.
-   * @returns a reusable window object with its initial AX state emitted.
+   * @returns A window object without a native request; selection leaves the accessibility snapshot unchanged.
+   * Providers reject a closed or foreign window when operating on it.
    */
   getWindow(windowId: number): Promise<CuaWindow>
-  /**
-   * Input at the application's current focus.
-   * @param text - literal text; cancellation may leave a prefix entered.
-   * @returns dispatch evidence.
-   */
-  typeText(text: string): Promise<CuaActionResult>
-  /**
-   * Paste text or HTML through the application's standard Paste menu command.
-   * PASTE_NOT_CONSUMED means no clipboard read within the configured deadline after dispatch; inspect before retrying.
-   * @param text - Clipboard contents in the selected format; defaults to plain text.
-   * @param options - Clipboard format. Original contents are restored unless another writer changes them.
-   * @returns Dispatch evidence; unsupported Paste commands fail without typing fallback.
-   */
-  paste(text: string, options?: CuaPasteOptions): Promise<CuaActionResult>
-  /**
-   * Send a key/chord at current focus.
-   * @param key - xdotool-style chord such as super+c, shift+Tab, + or cmd++; plus is also a key name.
-   * @returns dispatch evidence.
-   */
-  pressKey(key: string): Promise<CuaActionResult>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
@@ -234,8 +266,8 @@ export interface CuaApi {
    */
   listApps(options?: CuaObservationOptions): Promise<CuaAppInfo[]>
   /**
-   * Search standard macOS application directories without launching an app.
-   * @param query - Nonempty name, bundle identifier or absolute application path.
+   * Search the provider's installed application locations without launching an app.
+   * @param query - Nonempty name, provider-specific application identifier or absolute application path.
    * @param options - Output options.
    * @returns Matching installed applications; overly broad queries reject instead of silently truncating.
    */
@@ -247,9 +279,9 @@ export interface CuaApi {
    */
   getState(options?: CuaObservationOptions): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, launch it in the background if necessary, and emit initial AX state.
+   * Select an app, obtain consent, and launch it in the background if necessary, without reading AX.
    * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
-   * @returns a handle tied to this process lifetime.
+   * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>
 }

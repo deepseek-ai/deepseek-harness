@@ -74,7 +74,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       const section = (await ctx.systemPrompt.assemble()).sections.find(value => value.name === 'computer-use:dsh-cua')
       const initialization = section?.text.match(/Persistent PTC initialization:\n\n```ts\n([\s\S]*?)\n```/u)?.[1]
       expect(initialization).toContain('/lib/bridge.js')
-      const first = await run(`${initialization}\nvar app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.click(0); var shot = await win.getScreenshot(); ({ mimeType: shot.mimeType, pixelWidth: shot.pixelWidth, pixelHeight: shot.pixelHeight, windowId: shot.windowId, byteLength: shot.bytes.length });`, 'first')
+      const first = await run(`${initialization}\nvar app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree({emit:false}); await win.click("0"); var shot = await win.getScreenshot(); ({ mimeType: shot.mimeType, pixelWidth: shot.pixelWidth, pixelHeight: shot.pixelHeight, windowId: shot.windowId, byteLength: shot.bytes.length });`, 'first')
       expect(first.error).toBeUndefined()
       expect(first.value).toEqual({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7, byteLength: 90 })
       expect(images).toBe(1)
@@ -84,7 +84,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       expect(invalid.error?.message).not.toContain('ZodError')
       expect(invalid.error?.message).not.toContain('"origin"')
       expect(calls.filter(call => call.phase === 'invalid')).toEqual([])
-      const second = await run('await win.getAXState({emit:false}); await win.click(0); await win.getAXState({emit:false});', 'second')
+      const second = await run('await win.getAccessibilityTree({emit:false}); await win.click("0"); await win.getAccessibilityTree({emit:false});', 'second')
       expect(second.error).toBeUndefined()
       expect(second.value).toContain('Count: 2')
       expect(calls.filter(call => call.phase === 'second').map(call => call.method)).toEqual(['getState', 'click', 'getState'])

@@ -206,8 +206,9 @@ describe('client bundle dynamic imports', () => {
     if (config === undefined) throw new Error('client config missing')
 
     const output = await clientChunkOutput(root, config, 'client.js')
-    expect(output).toContain('require.async("./client.terminal.js")')
-    expect(output).not.toContain('Promise.resolve().then(() => require("./client.terminal.js"))')
+    // The compressor rewrites string literals, so the quotes are not part of the contract.
+    expect(output).toMatch(/require\.async\((["'`])\.\/client\.terminal\.js\1\)/)
+    expect(output).not.toMatch(/Promise\.resolve\(\)\.then\(\(\)\s*=>\s*require\((["'`])\.\/client\.terminal\.js\1\)\)/)
   })
 })
 
@@ -362,8 +363,8 @@ describe('client bundle purity gate', () => {
 })
 
 describe('client bundle experimental input isolation', () => {
-  const experimental = '@deepseek-ai/dsh-experimental-client-ui-agent-team'
-  const experimentalDir = packageDir('experimental/client-ui-agent-team')
+  const experimental = '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+  const experimentalDir = packageDir('experimental/client-ui-voice-input')
 
   function fixture() {
     const root = mkdtempSync(join(tmpdir(), 'dsh-client-inputs-'))
@@ -626,7 +627,7 @@ describe('client bundle debug artifacts', () => {
     const resolved = new URL(workspaceSource, 'https://dsh.test/plugins/@deepseek-ai/dsh-client-connection/client.js.map')
     expect(resolved.pathname).toBe('/packages/client/connection/src/rpc.ts')
 
-    const dependencySource = '../../../../node_modules/.pnpm/zod@4.4.3/node_modules/zod/index.js'
+    const dependencySource = '../../../../node_modules/.pnpm/zod@4.6.6/node_modules/zod/index.js'
     expect(transform(dependencySource, sourceMapPath)).toBe(dependencySource)
   })
 })

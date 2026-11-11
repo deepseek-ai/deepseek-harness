@@ -287,6 +287,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: 'a.txt', offset: 0 })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('offset must be a positive integer')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a fractional offset and a zero/negative limit', async () => {
@@ -299,6 +300,7 @@ describe('read tool', () => {
       const result = await call(ctx, 'read', args)
       expect(result.isError, JSON.stringify(args)).toBe(true)
       expect(text(result)).toMatch(/must be a positive integer/)
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     }
   })
 
@@ -314,6 +316,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: 'a.txt', limit: 99999 })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('less than or equal to 2000')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a blank file_path', async () => {
@@ -321,6 +324,7 @@ describe('read tool', () => {
     const result = await call(ctx, 'read', { file_path: '   ' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('records observed state so a follow-up edit by the same session is authorized', async () => {
@@ -456,6 +460,7 @@ describe('write tool', () => {
     const result = await call(ctx, 'write', { file_path: '   ', content: 'hi' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('propagates a backend FsError as an isError result carrying its code and remedy', async () => {
@@ -494,6 +499,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: 'a.txt', old_string: 'x', new_string: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('must differ')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects an empty old_string', async () => {
@@ -501,6 +507,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: 'a.txt', old_string: '', new_string: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('old_string must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a blank file_path', async () => {
@@ -508,6 +515,7 @@ describe('edit tool', () => {
     const result = await call(ctx, 'edit', { file_path: '  ', old_string: 'a', new_string: 'b' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('file_path must be a non-empty string')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('propagates FS_NOT_OBSERVED when the file was never read (the gate decides)', async () => {
@@ -788,6 +796,7 @@ describe('read caps are plugin config', () => {
     const overCap = await call(ctx, 'read', { file_path: 'a.txt', limit: 3 })
     expect(overCap.isError).toBe(true)
     expect(text(overCap)).toContain('less than or equal to 2')
+    expect(overCap.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     const readSchema = ctx.tools.schemas().find(s => s.name === 'read')
     expect(JSON.stringify(readSchema)).toContain('Defaults to 2.')
   })
@@ -1141,6 +1150,7 @@ describe('sandbox escalation API (write/edit)', () => {
     const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write', justification: 'why' }, escalationAgent())
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('not available in this composition')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 })
 
@@ -1154,7 +1164,7 @@ async function guidanceScope(ctx: Context) {
 }
 
 const originalGuidance = {
-  read: 'Use the read tool — not shell commands like cat — to inspect text files. Use offset and limit to continue reading large files.',
+  read: 'Use the read tool — not shell commands like cat, sed, head, or tail — to inspect text files. Use offset and limit to read a line range or continue a large file.',
   write: 'Read an existing file before overwriting it with write and prefer edit for targeted changes.',
   edit: 'Read a file before editing it unless you just created or edited it in this session.',
 }

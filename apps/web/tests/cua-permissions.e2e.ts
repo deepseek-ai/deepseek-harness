@@ -31,7 +31,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const state = join(root, 'permissions.json'), audit = join(root, 'helper-events.jsonl')
   const launchApplication = { name: 'DSH Computer Use.app', path: '/Applications/DSH Computer Use.app',
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
-  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
   const fixturePatch = join(root, 'native-fixture.yml')
   // Keep the external helper override above bundle order changes when CUA is re-enabled.
@@ -42,7 +42,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   })
   resources.scaffold = scaffold
   expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
-    .toMatchObject({ listedByDefault: false, enabled: true, installed: true })
+    .toMatchObject({ availability: 'installation', enabled: true, installed: true })
   const browser = await chromium.launch()
   resources.browser = browser
   const page = await newEnglishPage(browser), tripwire = watchConsole(page)
@@ -70,6 +70,79 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   expect(await approval.getByText('/Applications/Fixture.app', { exact: true }).count()).toBe(0)
   await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-approval.expected.md', import.meta.url)),
     await captureStableAria(page, '[data-approval-key]', scaffold.workspaceCwd), webSnapshotMode())
+  const risks = approval.getByRole('button', { name: 'Risks', exact: true })
+  const warning = page.getByRole('dialog', { name: 'Computer use risks' })
+  await risks.hover()
+  await warning.waitFor()
+  expect(await warning.evaluate(element => element === document.activeElement)).toBe(false)
+  await warning.hover()
+  expect(await warning.count()).toBe(1)
+  await approval.locator('p').hover()
+  await warning.waitFor({ state: 'hidden' })
+  await risks.hover()
+  await warning.waitFor()
+  await approval.getByRole('button', { name: 'Reject', exact: true }).focus()
+  await warning.waitFor({ state: 'hidden' })
+  await approval.locator('p').hover()
+  await risks.hover()
+  await warning.waitFor()
+  await page.keyboard.press('ControlOrMeta+Slash')
+  const shortcuts = page.getByRole('dialog', { name: 'Keyboard shortcuts', exact: true })
+  await shortcuts.waitFor()
+  await warning.waitFor({ state: 'hidden' })
+  expect(await shortcuts.evaluate(element => element.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press('Escape')
+  await shortcuts.waitFor({ state: 'hidden' })
+  expect(await approval.count()).toBe(1)
+  await approval.locator('p').hover()
+  for (const selectText of [false, true]) {
+    await risks.hover()
+    await warning.waitFor()
+    const paragraph = warning.locator('p').first()
+    if (selectText) {
+      await paragraph.dblclick({ position: { x: 8, y: 10 } })
+      expect(await page.evaluate(() => window.getSelection()?.toString().trim().length ?? 0)).toBeGreaterThan(0)
+    } else {
+      await paragraph.click()
+    }
+    expect(await warning.evaluate(element => element === document.activeElement)).toBe(true)
+    await approval.locator('p').hover()
+    await warning.waitFor({ state: 'hidden' })
+  }
+  await page.keyboard.press('Tab')
+  await risks.focus()
+  await warning.waitFor()
+  expect(await risks.evaluate(element => element === document.activeElement)).toBe(true)
+  await compareOrRefreshGolden(fileURLToPath(new URL('./expected/cua-permissions/application-risks.expected.md', import.meta.url)),
+    await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), webSnapshotMode())
+  await page.keyboard.press('Escape')
+  await warning.waitFor({ state: 'hidden' })
+  expect(await approval.count()).toBe(1)
+  for (const { width, height } of [{ width: 1000, height: 800 }, { width: 390, height: 800 }, { width: 390, height: 480 }]) {
+    await page.setViewportSize({ width, height })
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(colorScheme === 'dark')
+      await risks.dispatchEvent('pointerdown', { pointerType: 'touch' })
+      await risks.click()
+      await warning.waitFor()
+      await expect.poll(async () => warning.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        return bounds.left >= 12 && bounds.top >= 12 && bounds.right <= innerWidth - 12 && bounds.bottom <= innerHeight - 12
+      })).toBe(true)
+      expect(await warning.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      expect(await approval.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      if (webSnapshotMode() === 'refresh') {
+        const directory = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+        await mkdir(directory, { recursive: true })
+        await page.screenshot({ path: join(directory, `cua-popover-${width}-${height}-${colorScheme}.png`), animations: 'disabled' })
+      }
+      await page.mouse.click(4, height / 2)
+      await warning.waitFor({ state: 'hidden' })
+    }
+  }
+  await page.emulateMedia({ colorScheme: null })
+  await page.setViewportSize({ width: 1680, height: 1000 })
   await approval.getByRole('button', { name: 'Always allow', exact: true }).click()
   expect((await grant).results).toMatchObject([{ result: { isError: false } }])
   await approval.waitFor({ state: 'hidden' })
@@ -128,7 +201,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
-  await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: true, screenRecording: false, launchApplication }))
   // Returning from System Settings refreshes the page's native permission observation.
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
@@ -224,7 +297,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     await trace.evaluate((value) => { value.stop() })
     await trace.dispose()
   }
-  await writeFile(state, JSON.stringify({ accessibility: 'unavailable', screenRecording: false }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin', accessibility: 'unavailable', screenRecording: false }))
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   const diagnostic = panel.getByRole('alert')
   await diagnostic.waitFor()
@@ -252,7 +325,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   }
   await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   await expect.poll(() => rowToggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
-  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin', accessibility: false, screenRecording: false, launchApplication }))
   await rowToggle.click()
   await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
   await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')

@@ -24,11 +24,11 @@
   en: 6a15f2e0efec4c37
   zh: 7fb5f1e4a92b01ad
 /deepseek-ai-dsh-llm-deepseek/use-this-package/endpoint-and-wire-format:
-  en: 522e74b770e9d4ca
-  zh: a8b261b41677bfe7
+  en: 2a634ead5b47fe97
+  zh: 46f199ee79a8c5dc
 /deepseek-ai-dsh-llm-deepseek/use-this-package/account-credentials:
-  en: 3853ba1a1ffbb46c
-  zh: 97203e80ad933e59
+  en: d3f232309f4963ef
+  zh: 2e0ccd028de26f3e
 /deepseek-ai-dsh-llm-deepseek/use-this-package/streaming-with-thinking-and-images:
   en: 81bf213499f015ba
   zh: e9107ef322213e56
@@ -63,8 +63,8 @@
   en: 1dc50052999253c6
   zh: 7abf968fc18bffcd
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-request/what-the-model-sees:
-  en: 14110610860656e8
-  zh: 995e28d6931ebe4e
+  en: fd508ab91893e9dc
+  zh: c653e55a47353d08
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-request/token-effect:
   en: 67f4bfa42cbee911
   zh: 5e9dc9bc07253686
@@ -87,5 +87,5 @@
   en: 05fe57d81d8d8202
   zh: 61e85a6f610842dd
 /deepseek-ai-dsh-llm-deepseek/known-limitations-and-deferred-work/dev-note:
-  en: fc7d8c8a6258331a
+  en: 267aab8281b59242
   zh: 491b454fe920a17e

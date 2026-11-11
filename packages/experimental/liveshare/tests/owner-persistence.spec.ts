@@ -22,7 +22,7 @@ function file(): string {
 /** One persisted share with every optional fact stated. */
 const share: OwnerShare = {
   shareId: 'share-one',
-  sessionId: 'session-one',
+  sessionIds: ['session-one'],
   sessionTitle: 'Review the migration',
   accessMode: 'selected',
   link: 'https://relay.example/?shareId=share-one',
@@ -42,7 +42,7 @@ const share: OwnerShare = {
   expiresAt: '2026-11-01T00:00:00.000Z',
   allowsFork: true,
   sessionMode: 'write',
-  viewerCapabilities: [{ plugin: 'ui-chat', readable: ['session/list'], writable: [] }],
+  viewerPlugins: [{ plugin: 'ui-chat', mode: 'all' }],
   online: false,
 }
 
@@ -66,7 +66,7 @@ describe('owner state round trip', () => {
     ])
     expect(loaded.shares.get('share-one')).toMatchObject({
       shareId: 'share-one',
-      sessionId: 'session-one',
+      sessionIds: ['session-one'],
       // The retired `approval` spelling reads back as the mode this build uses.
       accessMode: 'selected',
       link: 'https://relay.example/?shareId=share-one',
@@ -75,11 +75,26 @@ describe('owner state round trip', () => {
       expiresAt: '2026-11-01T00:00:00.000Z',
       allowsFork: true,
       sessionMode: 'write',
-      viewerCapabilities: [{ plugin: 'ui-chat', readable: ['session/list'], writable: [] }],
+      viewerPlugins: [{ plugin: 'ui-chat', mode: 'all' }],
       revision: 1,
       online: false,
     })
     expect(loaded.shares.get('share-one')?.access?.mode).toBe('selected')
+  })
+
+  it('restores the global plugin switch a share was saved with', async () => {
+    const path = file()
+    const { viewerPlugins: _plugins, ...withoutPlugins } = share
+    await writeOwnerState(path, undefined, 'instance-one', new Map([
+      ['share-all', { ...share, shareId: 'share-all', viewerPluginAccess: 'all' }],
+      ['share-none', { ...withoutPlugins, shareId: 'share-none', viewerPluginAccess: 'none' }],
+      ['share-custom', { ...share, shareId: 'share-custom', viewerPluginAccess: 'custom' }],
+    ]), new Map())
+
+    const loaded = loadOwnerState(path)
+    expect(loaded.shares.get('share-all')?.viewerPluginAccess).toBe('all')
+    expect(loaded.shares.get('share-none')?.viewerPluginAccess).toBe('none')
+    expect(loaded.shares.get('share-custom')?.viewerPluginAccess).toBe('custom')
   })
 
   it('mints a fresh instance and stores nothing when the host has never written its state', () => {
@@ -109,9 +124,37 @@ describe('owner state round trip', () => {
     })
   })
 
+  it('derives custom plugin access from a stored plugin selection', () => {
+    const path = file()
+    writeFileSync(path, JSON.stringify({
+      shares: [{
+        shareId: 'share-one', sessionId: 'session-one', sessionTitle: 'Review the migration',
+        accessMode: 'selected', relay: 'https://relay.example/', gatewayToken: 'gateway-token',
+        allowedSubjectIds: [], createdAt: 'now',
+        viewerPlugins: [{ plugin: 'mekGit', mode: 'all' }],
+      }],
+    }))
+    expect(loadOwnerState(path).shares.get('share-one')?.viewerPluginAccess).toBe('custom')
+  })
+
+  it('restores every source Session a share carries', async () => {
+    const path = file()
+    const multi: OwnerShare = { ...share, sessionIds: ['session-one', 'session-two'] }
+    await writeOwnerState(path, undefined, 'instance-one', new Map([[multi.shareId, multi]]), new Map())
+    expect(loadOwnerState(path).shares.get(multi.shareId)?.sessionIds)
+      .toEqual(['session-one', 'session-two'])
+  })
+
+  it('reads a record written before a share could carry several sources', async () => {
+    const path = file()
+    const { sessionIds: _sessionIds, ...legacy } = share
+    writeFileSync(path, JSON.stringify({ instanceId: 'instance-one', shares: [{ ...legacy, sessionId: 'session-one' }] }))
+    expect(loadOwnerState(path).shares.get(share.shareId)?.sessionIds).toEqual(['session-one'])
+  })
+
   it('writes a share that states no optional fact as the plain record it is', async () => {
     const path = file()
-    const { access: _access, expiresAt: _expiresAt, viewerCapabilities: _capabilities, ...minimal } = share
+    const { access: _access, expiresAt: _expiresAt, viewerPlugins: _plugins, ...minimal } = share
     await writeOwnerState(path, undefined, 'instance-one', new Map([[minimal.shareId, { ...minimal, allowsFork: false }]]), new Map())
 
     const loaded = loadOwnerState(path)
@@ -119,7 +162,7 @@ describe('owner state round trip', () => {
     expect(restored).toMatchObject({ allowsFork: false, sessionMode: 'write', relay: 'https://relay.example' })
     expect(restored?.access).toBeUndefined()
     expect(restored?.expiresAt).toBeUndefined()
-    expect(restored?.viewerCapabilities).toBeUndefined()
+    expect(restored?.viewerPlugins).toBeUndefined()
     // A write with no override and no owed row states neither.
     expect(loaded.relayUrl).toBeUndefined()
     expect(loaded.pendingRemovals.size).toBe(0)
@@ -183,25 +226,48 @@ describe('owner state validation', () => {
     expect(refusal(JSON.stringify({ shares: [noRelay] }))).toContain('invalid owner state file')
   })
 
-  it('refuses an entry in the capability list that names no plugin or no endpoint lists', () => {
-    const withCapabilities = (viewerCapabilities: unknown): string => JSON.stringify({
+  it('refuses a malformed viewer plugin policy', () => {
+    const withPolicies = (viewerPlugins: unknown): string => JSON.stringify({
       shares: [{
         shareId: 'share-one', sessionId: 's', sessionTitle: 't', accessMode: 'open',
-        relay: 'https://relay.example/', gatewayToken: 'g', allowedSubjectIds: [], createdAt: 'now', viewerCapabilities,
+        relay: 'https://relay.example/', gatewayToken: 'g', allowedSubjectIds: [], createdAt: 'now', viewerPlugins,
       }],
     })
 
-    expect(refusal(withCapabilities(3))).toContain('invalid owner state file')
+    expect(refusal(withPolicies(3))).toContain('invalid owner state file')
     for (const entry of [
-      { plugin: 3, readable: [], writable: [] },
-      { plugin: '', readable: [], writable: [] },
-      { plugin: 'ui-chat', readable: 'session/list', writable: [] },
-      { plugin: 'ui-chat', readable: [3], writable: [] },
-      { plugin: 'ui-chat', readable: [], writable: 'session/prompt' },
-      { plugin: 'ui-chat', readable: [], writable: [3] },
+      { plugin: 3, mode: 'all' },
+      { plugin: '', mode: 'all' },
+      { plugin: 'ui-chat', mode: 'sometimes' },
+      { plugin: 'ui-chat', mode: 'selected', endpoints: 'session/list' },
+      { plugin: 'ui-chat', mode: 'selected', endpoints: [3] },
     ]) {
-      expect(refusal(withCapabilities([entry])), JSON.stringify(entry)).toContain('invalid owner state file')
+      expect(refusal(withPolicies([entry])), JSON.stringify(entry)).toContain('invalid owner state file')
     }
+  })
+
+  it('refuses a global plugin switch this build does not define', () => {
+    expect(refusal(JSON.stringify({
+      shares: [{
+        shareId: 'share-one', sessionId: 's', sessionTitle: 't', accessMode: 'open',
+        relay: 'https://relay.example/', gatewayToken: 'g', allowedSubjectIds: [], createdAt: 'now',
+        viewerPluginAccess: 'sometimes',
+      }],
+    }))).toContain('invalid owner state file')
+  })
+
+  it('ignores a legacy viewerCapabilities field and restores no exposure', () => {
+    const legacy = JSON.stringify({
+      shares: [{
+        shareId: 'share-one', sessionId: 's', sessionTitle: 't', accessMode: 'open',
+        relay: 'https://relay.example/', gatewayToken: 'g', allowedSubjectIds: [], createdAt: 'now',
+        viewerCapabilities: [{ plugin: 'ui-chat', readable: ['session/list'], writable: [] }],
+      }],
+    })
+    const path = file()
+    writeFileSync(path, legacy)
+    const loaded = loadOwnerState(path)
+    expect(loaded.shares.get('share-one')?.viewerPlugins).toBeUndefined()
   })
 
   it('refuses a Relay removal row that could not delete its row', () => {

@@ -1,0 +1,218 @@
+/* The thread list docks at the end of the changes body in a view at least 1040px wide, which leaves the code about
+   480px beside the file tree and the list; it floats over the files with a scrim behind it in a narrower view, and
+   takes the files' whole width below 480px. The queries name no container, since CSS Modules rename a container name
+   per file; the nearest inline-size container is the changes view. */
+.scrim { display: none; }
+
+.pane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 320px;
+  min-height: 0;
+  border-inline-start: 0.5px solid var(--dsw-alias-border-l3);
+  background: var(--forge-changes-bg, var(--dsw-alias-bg-base));
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-family: Inter, var(--dsw-font-family);
+}
+
+.pane:focus { outline: none; }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 6px 0 12px;
+}
+
+.title { font-weight: 500; }
+
+/* Takes the place of the title and the close button where the list covers the files' whole width. */
+.back {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .back:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+.total {
+  padding: 0 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-card-fill);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.spacer { flex: 1; }
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+}
+
+.filters {
+  padding: 0 12px 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px;
+}
+
+.group + .group { margin-top: 6px; }
+
+.path {
+  margin: 0;
+  padding: 8px 6px 4px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.item {
+  display: flex;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+}
+
+.item:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -1px;
+}
+
+.itemMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.meta { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
+
+.excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tags:empty { display: none; }
+
+.note {
+  padding: 24px 12px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+}
+
+.footer {
+  padding: 10px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-state-business-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .link:hover { text-decoration: underline; }
+}
+
+/* Above the sticky file headers (z-index 2). */
+@container (max-width: 1039px) {
+  .scrim {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    display: block;
+    background: var(--dsw-alias-bg-mask-1);
+  }
+
+  .pane {
+    position: absolute;
+    z-index: 3;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: min(340px, calc(100% - 40px));
+    box-shadow: var(--dsw-elevation-panel);
+  }
+}
+
+@container (max-width: 479px) {
+  .scrim { display: none; }
+
+  .pane {
+    width: 100%;
+    border-inline-start: 0;
+    box-shadow: none;
+  }
+
+  .header { padding-inline-start: 6px; }
+
+  .back { display: inline-flex; }
+
+  .title,
+  .total,
+  .close { display: none; }
+}

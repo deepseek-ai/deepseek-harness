@@ -73,14 +73,17 @@ export interface SessionSnapshot {
   readonly running: boolean
   readonly subagent: {
     readonly address: SubagentAddress
-    /** Absent until the direct-parent catalog resolves. */
-    readonly parentAvailable?: boolean
   } | null
   readonly removed: boolean
   readonly openState: OpenState
   readonly openError: RemoteFailure | null
   readonly hasMore: boolean
+  /** This Client Session has exposed an incomplete history window; remains true across replacements. */
+  readonly historyWasPartial: boolean
+  /** Whether historyLoadStatus is loading, including Turn-jump requests. */
   readonly loadingOlder: boolean
+  /** History request status; pendingConsumption retains an unpublished ordinary page. */
+  readonly historyLoadStatus: 'idle' | 'loading' | 'pendingConsumption' | 'error'
   readonly promptError: PromptError | null
   readonly blank: boolean
   readonly lastAgentError: string | null

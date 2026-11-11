@@ -27,7 +27,7 @@
  * chevron, and each row whose value that selection carries shows one in place
  * of its check mark.
  */
-import { MenuGroup, MenuSurface, observeStickyMenuGroups, useAnchoredPosition } from '@deepseek-ai/dsh-client-ui-primitives'
+import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
   type CSSProperties, type KeyboardEvent, type FocusEvent,
@@ -54,9 +54,6 @@ interface EffortChoice {
   label: string
 }
 
-/** Unplaced portal card: hidden but laid out at a fixed origin so offsetWidth/offsetHeight are real (Menu primitive's measure pass). */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
 /**
  * Render the composer model seat.
  * @param props - owner share (locked) + injected face (shared directory
@@ -66,7 +63,7 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 export function ModelSelect(
   { locked, available, directory, load, select, resolveText, t, renderSlot }:
   ModelSelectInjected & Pick<PropsRuntime<'conversation.input.model'>, 'locked'> & PropsLocale<'model'>
-    & Omit<PropsRenderSlots<'conversation.input.model.label'>, 'SessionProvider'>,
+    & Omit<PropsRenderSlots<'conversation.input.model.label' | 'conversation.input.model.options'>, 'SessionProvider'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
@@ -89,18 +86,11 @@ export function ModelSelect(
   const searchRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const groupsRef = useRef<HTMLDivElement | null>(null)
-  const menuPos = useAnchoredPosition({
-    open: open && available,
-    anchorRef: triggerRef,
-    panelRef: menuRef,
-    side: 'top',
-    align: 'end',
-    gap: 8,
-    margin: 12,
-    layoutKey: pane,
-  })
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
+  const anchorStyle: CSSProperties & Record<'--dsh-model-anchor', string> = {
+    '--dsh-model-anchor': `--dsh-model-${id.replaceAll(':', '')}`,
+  }
 
   const accountProviderName = t('provider.account')
   const groups = useMemo(() => orderModelProviders(state.groups).map(group => ({
@@ -267,7 +257,9 @@ export function ModelSelect(
   }
 
   const moveFocus = (offset: number): void => {
-    const items = itemRefs.current.filter(item => item !== null)
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+      'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
+    ) ?? [])
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
     // Focus outside the rows (the trigger, which keeps it while the menu
@@ -321,7 +313,9 @@ export function ModelSelect(
       // control inside the card (a retry button) keeps the browser's traversal,
       // so the keystroke stays unconsumed there.
       const focused = document.activeElement
-      const rows = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null)
+      const rows = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button[role="menuitem"]:not([disabled]), button[role="menuitemradio"]:not([disabled]), button[role="switch"]:not([disabled])',
+      ) ?? [])
       if (focused instanceof HTMLButtonElement && rows.includes(focused)) {
         event.preventDefault()
         focused.click()
@@ -451,6 +445,7 @@ export function ModelSelect(
         ref={triggerRef}
         type="button"
         className={css.trigger}
+        style={anchorStyle}
         aria-label={triggerAria}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -486,7 +481,7 @@ export function ModelSelect(
           ref={menuRef}
           id={`${id}-menu`}
           className={css.menu}
-          style={menuPos ?? MEASURE_STYLE}
+          style={anchorStyle}
           role={pane === 'model' ? 'group' : 'menu'}
           aria-label={t('menu.aria')}
           aria-busy={state.status === 'loading' || busy}
@@ -507,6 +502,14 @@ export function ModelSelect(
                   <IconChevronRightOutlineRegular className={css.cellChevron} />
                 </button>
               )}
+              {renderSlot('conversation.input.model.options', {
+                locked: locked || busy,
+                dismiss: () => {
+                  close()
+                  triggerRef.current?.focus()
+                },
+                reportFailure: (message) => { setToast({ seq: ++toastSeq.current, text: message }) },
+              })}
             </>
           )}
 

@@ -17,6 +17,7 @@ import {
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { en, zh } from '../src/client/locales.ts'
 import rowCss from '../src/client/rows/Rows.module.css'
+import { renderMenuButton } from './menu-button.tsx'
 
 afterEach(cleanup)
 beforeEach(() => { vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-hover: hover)' })) })
@@ -52,22 +53,24 @@ function realDoubleClick(el: Element): void {
   fireEvent.doubleClick(el)
 }
 
-function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, openSessionMenu = vi.fn(),
+function SessionNodeItem({ renderSlot = renderNoRowEntries, onRenameRequest = () => {}, renderFactorySlot = renderMenuButton,
   useContextMenuTarget = select => select(null), useSessionAccess = allowAllAccess.useSessionAccess, ...props }: Omit<
-    SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'openSessionMenu' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'
-  > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'openSessionMenu' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'>>) {
+    SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'
+  > & Partial<Pick<SessionNodeItemProps, 'renderSlot' | 'onRenameRequest' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useSessionAccess' | 'useContextMenu'>>) {
   return <SessionNodeItemComponent {...props} renderSlot={renderSlot} onRenameRequest={onRenameRequest}
-    useContextMenu={props.useContextMenu ?? contextMenuHook((target, point) => { if (target.kind === 'session') openSessionMenu(target.value.sessionId, target.value.displayTitle, point) })} openSessionMenu={openSessionMenu} useContextMenuTarget={useContextMenuTarget} useSessionAccess={useSessionAccess} />
+    useContextMenu={props.useContextMenu ?? contextMenuHook()} renderFactorySlot={renderFactorySlot}
+    useContextMenuTarget={useContextMenuTarget} useSessionAccess={useSessionAccess} />
 }
 
 // Direct header specs hold every access answer unless the case refuses one.
 function ProjectRowItem({
-  useRemoteAccess = allowAllAccess.useRemoteAccess, useWorkspaceAccess = allowAllAccess.useWorkspaceAccess,
-  openWorkspaceMenu = vi.fn(), useContextMenuTarget = select => select(null), ...props
-}: Omit<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess' | 'openWorkspaceMenu' | 'useContextMenuTarget' | 'useContextMenu'>
-  & Partial<Pick<ProjectRowItemProps, 'useRemoteAccess' | 'useWorkspaceAccess' | 'openWorkspaceMenu' | 'useContextMenuTarget' | 'useContextMenu'>>) {
-  return <ProjectRowItemComponent {...props} useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess}
-    useContextMenu={props.useContextMenu ?? contextMenuHook((target, point) => { if (target.kind === 'workspace') openWorkspaceMenu(target.value.workspaceId, target.value.path, target.value.displayTitle, point) })} openWorkspaceMenu={openWorkspaceMenu} useContextMenuTarget={useContextMenuTarget} />
+  useWorkspaceAccess = allowAllAccess.useWorkspaceAccess,
+  renderFactorySlot = renderMenuButton, useContextMenuTarget = select => select(null), ...props
+}: Omit<ProjectRowItemProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'>
+  & Partial<Pick<ProjectRowItemProps, 'useWorkspaceAccess' | 'renderFactorySlot' | 'useContextMenuTarget' | 'useContextMenu'>>) {
+  return <ProjectRowItemComponent {...props} useWorkspaceAccess={useWorkspaceAccess}
+    useContextMenu={props.useContextMenu ?? contextMenuHook()} renderFactorySlot={renderFactorySlot}
+    useContextMenuTarget={useContextMenuTarget} />
 }
 
 /** Half detection reads the row rect; jsdom rects are all-zero by default. */
@@ -655,21 +658,25 @@ describe('workspace browser rows', () => {
     expect(screen.getByRole('treeitem').querySelector('[data-state="done"]')).not.toBeNull()
   })
 
-  it('workspace right-click and ellipsis capture the row without toggling expansion', () => {
-    const openWorkspaceMenu = vi.fn(), onToggle = vi.fn()
+  it('gives right-click and the shared button the Workspace row target without changing expansion', () => {
+    const openMenu = vi.fn(), onToggle = vi.fn()
+    const renderFactorySlot = vi.fn(renderMenuButton)
     const group: GroupNode = {
       key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
       sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
     }
-    const view = render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()} openWorkspaceMenu={openWorkspaceMenu} t={t} />)
+    const target = { kind: 'workspace', value: { workspaceId: wid('project'), path: '/projects/project', displayTitle: 'Project' } } as const
+    const view = render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 36, clientY: 48 })
-    expect(openWorkspaceMenu).toHaveBeenLastCalledWith(wid('project'), '/projects/project', 'Project', { x: 36, y: 48 })
-    fireEvent.click(screen.getByRole('button', { name: '工作区“Project”的操作' }))
-    expect(openWorkspaceMenu).toHaveBeenLastCalledWith(wid('project'), '/projects/project', 'Project', { x: 0, y: 0 }, 'toggle')
+    expect(openMenu).toHaveBeenLastCalledWith(target, { x: 36, y: 48 })
+    expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
+      target, label: '工作区“Project”的操作', className: rowCss.iconButton,
+    })
     expect(onToggle).not.toHaveBeenCalled()
     view.rerender(<ProjectRowItem group={group} onToggle={onToggle} onCreate={vi.fn()} t={t}
-      useContextMenuTarget={select => select({ kind: 'workspace', value: { workspaceId: wid('project'), path: group.cwd!, displayTitle: 'Project' } })} />)
-    expect(screen.getByRole('button', { name: '工作区“Project”的操作' }).getAttribute('aria-expanded')).toBe('true')
+      useContextMenuTarget={select => select(target)} />)
+    expect(screen.getByRole('treeitem').className).toContain(rowCss.menuOpen)
   })
 
   it('workspace row offers only the actions its Workspace access snapshot allows', () => {
@@ -700,19 +707,17 @@ describe('workspace browser rows', () => {
     view.rerender(<ProjectRowItem {...props} useWorkspaceAccess={useWorkspaceAccess} />)
     expect(screen.getByRole('treeitem').getAttribute('draggable')).toBe('true')
     fireEvent.click(screen.getByRole('button', { name: '在“Project”中新建会话' }))
-    expect(props.onCreate).toHaveBeenCalledOnce()
+    expect(props.onCreate).toHaveBeenCalledExactlyOnceWith(props.group.workspaceId)
   })
 
-  it('ungrouped bucket asks the global resource whether it may start a Session', () => {
+  it('ungrouped bucket offers no New Session and asks no access', () => {
     const group: GroupNode = {
       key: 'ungrouped', workspaceId: undefined, cwd: undefined, createdAt: undefined, label: '',
       sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
     }
-    const useRemoteAccess = vi.fn((action: string) => action !== 'session/create')
     const useWorkspaceAccess = vi.fn(() => true)
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t}
-      useRemoteAccess={useRemoteAccess} useWorkspaceAccess={useWorkspaceAccess} />)
-    expect(useRemoteAccess).toHaveBeenCalledWith('session/create')
+      useWorkspaceAccess={useWorkspaceAccess} />)
     expect(useWorkspaceAccess).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: /新建会话/ })).toBeNull()
     expect(fireEvent.contextMenu(screen.getByRole('treeitem'))).toBe(true)
@@ -952,24 +957,30 @@ describe('workspace browser rows', () => {
     })
   })
 
-  it('routes both context and More gestures to the clicked Session without selecting it', () => {
-    const onOpen = vi.fn(), openSessionMenu = vi.fn()
+  it('gives right-click and the shared button the Session row target and omits blank-row actions', () => {
+    const onOpen = vi.fn(), openMenu = vi.fn()
+    const renderFactorySlot = vi.fn(renderMenuButton)
     const node: SessionNode = {
       id: sid('s1'), title: 'One', blank: false, running: false,
       runningSubagentCount: 0, completed: false, updatedAt: 0, pinned: false, archived: false,
     }
-    render(<SessionNodeItem node={node} currentId={sid('other')} now={0} onOpen={onOpen} openSessionMenu={openSessionMenu} t={t} />)
+    const target = { kind: 'session', value: { sessionId: node.id, displayTitle: 'One' } }
+    render(<SessionNodeItem node={node} currentId={sid('other')} now={0} onOpen={onOpen}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'), { clientX: 31, clientY: 47 })
-    expect(openSessionMenu).toHaveBeenLastCalledWith(node.id, 'One', { x: 31, y: 47 })
-    fireEvent.pointerDown(screen.getByRole('button', { name: '会话“One”的操作' }))
-    fireEvent.click(screen.getByRole('button', { name: '会话“One”的操作' }))
-    expect(openSessionMenu).toHaveBeenLastCalledWith(node.id, 'One', { x: 0, y: 0 }, 'toggle')
+    expect(openMenu).toHaveBeenLastCalledWith(target, { x: 31, y: 47 })
+    expect(renderFactorySlot).toHaveBeenLastCalledWith('contextMenu.button', {
+      target, label: '会话“One”的操作', className: rowCss.iconButton,
+    })
     expect(onOpen).not.toHaveBeenCalled()
     cleanup()
-    render(<SessionNodeItem node={{ ...node, blank: true }} currentId={sid('other')} now={0} onOpen={onOpen} openSessionMenu={openSessionMenu} t={t} />)
-    openSessionMenu.mockClear()
+    openMenu.mockClear()
+    renderFactorySlot.mockClear()
+    render(<SessionNodeItem node={{ ...node, blank: true }} currentId={sid('other')} now={0} onOpen={onOpen}
+      useContextMenu={contextMenuHook(openMenu)} renderFactorySlot={renderFactorySlot} t={t} />)
     fireEvent.contextMenu(screen.getByRole('treeitem'))
-    expect(openSessionMenu).not.toHaveBeenCalled()
+    expect(openMenu).not.toHaveBeenCalled()
+    expect(renderFactorySlot).not.toHaveBeenCalled()
   })
 
   it('renders the row action list inside the actions area after the menu trigger', () => {

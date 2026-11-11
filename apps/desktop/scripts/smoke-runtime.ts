@@ -12,8 +12,22 @@ import { DesktopHostProcess } from '../src/host-process.ts'
 import { createPluginProfile } from '../src/project-manager.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 
+const OFFICE_SKILLS = ['office', 'office-docx', 'office-pptx', 'office-xlsx']
+
 /**
- * Check CLI package operations, Host startup, its frontend, external plugins and real Office-to-PDF conversion.
+ * Require each bundled Office skill to be listed and loaded with a nonempty body.
+ * @param results - Host probe results; `bytes` is the loaded body length, 0 when unlisted or not loaded.
+ * @throws Error listing every result when a bundled Office skill is missing or empty.
+ */
+export function assertOfficeSkillsLoadable(results: ReadonlyArray<{ readonly name: string; readonly bytes: number }>): void {
+  if (!OFFICE_SKILLS.every(name => results.some(skill => skill.name === name && skill.bytes > 0))) {
+    throw new Error(`desktop runtime: packaged Office skills are not loadable: ${JSON.stringify(results)}`)
+  }
+}
+
+/**
+ * Check CLI package operations, Host startup, its frontend, external plugins, packaged Office skill loading,
+ * and real Office rendering, conversion, and recalculation.
  * @param root - Materialized dsh resources.
  * @param node - Prepared target Electron executable.
  * @param runtime - Verified resource descriptor.
@@ -85,8 +99,7 @@ export function apply(ctx) {
     }))
     writeFileSync(join(plugin, 'index.js'), `
 import { Context } from '@deepseek-ai/cordis'
-import { inspect, promisify } from 'node:util'
-import { execFile } from 'node:child_process'
+import { inspect } from 'node:util'
 import { readFile } from 'node:fs/promises'
 export function apply(ctx) {
   if (!(ctx instanceof Context)) throw new Error('desktop runtime: external plugin loaded another Cordis instance')
@@ -101,18 +114,16 @@ export function apply(ctx) {
         response.end(inspect(error, { depth: 5 }))
       }
     } }))
-  ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-office-cli',
+  ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-skills',
     async handler(_request, response) {
       try {
-        const skill = await ctx.skills.get('office-export-pdf')
-        const json = skill?.content.match(/\\n(\\{\\n[\\s\\S]+)$/u)?.[1]
-        if (json === undefined) throw new Error('Office skill did not supply CLI paths')
-        const { libreofficeKit: { node, cli } } = JSON.parse(json)
-        const options = { cwd: ${JSON.stringify(home)}, env: { ...process.env, PATH: '' }, timeout: 120_000 }
-        const capabilities = await promisify(execFile)(node, [cli, 'capabilities'], options)
-        const output = ${JSON.stringify(join(home, 'cli.pdf'))}
-        await promisify(execFile)(node, [cli, 'convert', '--input', ${JSON.stringify(join(home, 'input.docx'))}, '--output', output], options)
-        response.end(JSON.stringify({ capabilities: JSON.parse(capabilities.stdout), pdf: (await readFile(output)).toString('base64') }))
+        const names = ${JSON.stringify(OFFICE_SKILLS)}
+        const listed = new Set((await ctx.skills.list()).map(skill => skill.name))
+        const loaded = await Promise.all(names.map(async name => {
+          const skill = listed.has(name) ? await ctx.skills.get(name) : undefined
+          return { name, bytes: skill?.content.length ?? 0 }
+        }))
+        response.end(JSON.stringify(loaded))
       } catch (error) {
         response.statusCode = 500
         response.end(inspect(error, { depth: 5 }))
@@ -123,7 +134,7 @@ export function apply(ctx) {
       async handler(_request, response) {
         try {
           const bytes = Buffer.from(input.bytes, 'base64')
-          const result = await ctx.officeToPdf.convert({ extension: input.extension, priority: 'foreground',
+          const result = await ctx.officeKit.convert({ extension: input.extension, priority: 'foreground',
             source: { key: 'desktop-smoke-' + input.extension, version: 'fixture', bytes: bytes.length,
               async read() { return { bytes, version: 'fixture' } } } })
           response.end(Buffer.from(result.pdf))
@@ -132,10 +143,35 @@ export function apply(ctx) {
           response.end(inspect(error, { depth: 5 }))
         }
       } }))
+    ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke-office-operations/' + input.extension,
+      async handler(_request, response) {
+        try {
+          const bytes = Buffer.from(input.bytes, 'base64')
+          const source = (operation) => ({ key: 'desktop-smoke-' + operation + '-' + input.extension, version: 'fixture', bytes: bytes.length,
+            async read() { return { bytes, version: 'fixture' } } })
+          const rendered = await ctx.officeKit.renderImages({ extension: input.extension, source: source('images'),
+            maxImages: 4, maxPixels: 16777216, maxDimension: 8192, maxBytes: 64 * 1024 * 1024 })
+          const format = { docx: 'odt', xlsx: 'ods', pptx: 'odp' }[input.extension]
+          const converted = await ctx.officeKit.convertTo({ extension: input.extension, format,
+            source: source('convert'), output: { owner: 'desktop-smoke', name: 'converted.' + format } })
+          const recalculated = input.extension === 'xlsx'
+            ? await ctx.officeKit.recalculate({ extension: 'xlsx', format: 'xlsx', source: source('recalculate'),
+              output: { owner: 'desktop-smoke', name: 'recalculated.xlsx' } })
+            : undefined
+          response.end(JSON.stringify({
+            images: rendered.images.map(image => Buffer.from(image.png.subarray(0, 8)).toString('hex')),
+            converted: (await readFile(converted.path)).subarray(0, 4).toString('hex'),
+            recalculated: recalculated === undefined ? null : (await readFile(recalculated.path)).subarray(0, 4).toString('hex'),
+          }))
+        } catch (error) {
+          response.statusCode = 500
+          response.end(inspect(error, { depth: 5 }))
+        }
+      } }))
   }
 }
 `)
-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeToPdf, skills, pluginManager]\n')
+    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer, officeKit, pluginManager, skills]\n')
     cpSync(plugin, join(profile, 'node_modules', pluginName), { recursive: true })
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -165,6 +201,11 @@ export function apply(ctx) {
     if (!installation.ok || !installed.ok || await installed.text() !== 'installed plugin ready') {
       throw new Error(`desktop runtime: bundled pnpm plugin installation failed: ${installationResult}`)
     }
+    const skills = await fetch(new URL('/desktop-smoke-skills', ready.url), { headers: { cookie }, signal: AbortSignal.timeout(120_000) })
+    if (!skills.ok) throw new Error(`desktop runtime: Office skill loading failed: ${await skills.text()}`)
+    const loadedSkills = await skills.json() as { name: string; bytes: number }[]
+    assertOfficeSkillsLoadable(loadedSkills)
+    console.log('desktop runtime: packaged Office skills listed and loaded')
     for (const { extension } of inputs) {
       const converted = await fetch(new URL(`/desktop-smoke-office/${extension}`, ready.url), {
         headers: { cookie }, signal: AbortSignal.timeout(120_000),
@@ -176,15 +217,19 @@ export function apply(ctx) {
         throw new Error(`desktop runtime: invalid ${extension} PDF output`)
       }
     }
-    const cliResponse = await fetch(new URL('/desktop-smoke-office-cli', ready.url), {
-      headers: { cookie }, signal: AbortSignal.timeout(120_000),
-    })
-    if (!cliResponse.ok) throw new Error(`desktop runtime: skill CLI failed: ${await cliResponse.text()}`)
-    const cliResult = await cliResponse.json() as { capabilities: { runtime: { cliPath: string } }; pdf: string }
-    if (!cliResult.capabilities.runtime.cliPath.endsWith('cli.js') || Buffer.from(cliResult.pdf, 'base64').subarray(0, 5).toString() !== '%PDF-') {
-      throw new Error('desktop runtime: skill CLI did not return capabilities and a PDF')
+    for (const { extension } of inputs) {
+      const operations = await fetch(new URL(`/desktop-smoke-office-operations/${extension}`, ready.url), {
+        headers: { cookie }, signal: AbortSignal.timeout(240_000),
+      })
+      if (!operations.ok) throw new Error(`desktop runtime: ${extension} Office operations failed: ${await operations.text()}`)
+      const result = await operations.json() as { images: string[]; converted: string; recalculated: string | null }
+      // PNG images, then ZIP containers for OpenDocument and XLSX outputs.
+      if (result.images.length === 0 || result.images.some(signature => signature !== '89504e470d0a1a0a')
+        || result.converted !== '504b0304' || (extension === 'xlsx' ? result.recalculated !== '504b0304' : result.recalculated !== null)) {
+        throw new Error(`desktop runtime: invalid ${extension} Office operation output: ${JSON.stringify(result)}`)
+      }
     }
-    console.log('desktop runtime: DOCX, XLSX, PPTX to PDF and skill CLI discovery passed')
+    console.log('desktop runtime: DOCX, XLSX, PPTX to PDF, image rendering, conversion, and recalculation passed')
   } finally {
     clearTimeout(timer)
     try { await host.stop() } finally {

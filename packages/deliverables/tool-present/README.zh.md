@@ -29,7 +29,7 @@ kind: "package-reference"
 
 `present` 按 Session 的当前工作目录校验路径并记录绝对路径，因此后续目录切换不会让已交付文件指向其他位置。
 
-`standard`、`ptc` 与 `cordis` Agent preset 挂载本插件。创建文件后，以 `files: [{ path, description? }]` 调用 `present`。文件必须是 Session 文件系统可访问的普通文件。相对路径按 Session 工作目录解析；绝对路径可以指向工作区外的文件，包括 `/tmp` 或 Downloads。文件缺失、为目录、最终路径为符号链接或提供方拒绝访问时，调用失败。Shell 沙箱私有 `/tmp` 中的文件需要先写入 Session 文件系统可访问的位置。
+`standard`、`ptc` 与 `cordis` Agent preset 挂载本插件。创建文件后，以 `files: [{ path, description? }]` 调用 `present`。文件必须是 Session 文件系统可访问的普通文件。相对路径按 Session 工作目录解析；绝对路径可以指向工作区外的文件，包括 `/tmp` 或 Downloads。文件缺失、为目录、最终路径为符号链接或提供方拒绝访问时，调用以 `FsError` 失败，错误码如 `FS_NOT_FOUND`、`FS_NOT_REGULAR_FILE` 与 `FS_PERMISSION_DENIED`；路径为空或文件数量不在 1 到 `maxFiles` 之间时报告 `ToolArgsError`（`INVALID_ARGS`），缺少 agent Session 或打开的 turn 时报告 `ToolContextUnavailableError`（`TOOL_CONTEXT_UNAVAILABLE`）。Shell 沙箱私有 `/tmp` 中的文件需要先写入 Session 文件系统可访问的位置。
 
 在 Agent 的 Cordis 组合中挂载，并提供 `tools`、`fs` 和 `turnBoundary` Session 投影：
 

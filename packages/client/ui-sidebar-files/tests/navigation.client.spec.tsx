@@ -9,7 +9,9 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { filesFace } from '../src/client/face.ts'
 import type { ListWorkspaceDirectory, WatchWorkspaceDirectory } from '../src/client/face.ts'
+import type { SearchWorkspace } from '../src/client/search-workspace.ts'
 import { createFilesStore } from '../src/client/store.ts'
+import { memoryBook } from './search-fixture.client.ts'
 
 const SESSION = 'navigation-session' as SessionId
 const LEFT = 'pane-left' as PaneId
@@ -73,7 +75,7 @@ function harness() {
         return () => { unsubscribe(); tab.listeners.delete(listener) }
       },
     }
-  })(SESSION, instance, () => () => {})
+  }, vi.fn<SearchWorkspace>(() => { throw new Error('Navigation must not search') }), memoryBook())(SESSION, instance, () => () => {})
 
   const tab = (id: TabId, revision = 0): TestTab => {
     const address = sessionFileAddress(SESSION, `${id}.ts`)

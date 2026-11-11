@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { access, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import WorktreeService from '../src/index.ts'
@@ -38,6 +39,10 @@ describe('creating and entering retained worktrees', () => {
     const result = await ctx.worktrees.create(agent, { name: 'topic' })
     expect(result).toEqual({ path: join(root, '.agents/worktrees/topic'), branch: 'topic', baseCommit, repositoryRoot: root })
     expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
+    const events = agent.session.snapshotEvents()
+    const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
+    expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'working-directory/change'))
+    expect(pluginRecordOf(events[created]!)?.data).toEqual(result)
     expect(await git(result.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
     expect(await git(root, 'show', ':tracked.txt')).toBe('staged')
@@ -407,6 +412,22 @@ describe('restoring removed worktrees', () => {
     expect(await registered(root)).toEqual([gitPath(root), gitPath(abandoned.path), gitPath(created.path)])
     expect(await git(root, 'branch', '--list', 'abandoned')).toContain('abandoned')
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+  })
+
+  it('finds the stale registration when the worktree listing exceeds maxOutputBytes', async () => {
+    const root = await repo()
+    ctx = await harness(root, { maxOutputBytes: 1_024 })
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await ctx.workingDirectory.set(agent, root)
+    for (let index = 0; index < 8; index++) await git(root, 'worktree', 'add', '--detach', join(root, '.agents/worktrees', `extra-${index}`))
+    expect((await git(root, 'worktree', 'list', '--porcelain', '-z')).length).toBeGreaterThan(1_024)
+    await rm(created.path, { recursive: true, force: true })
+
+    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: created.path, branchRecreated: false })
+
+    expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
+    expect(await registered(root)).toContain(gitPath(created.path))
   })
 
   it('creates a deleted branch again at its base commit, without the commits it had gained', async () => {

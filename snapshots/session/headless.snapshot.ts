@@ -9,7 +9,7 @@ import { basename, delimiter, dirname, isAbsolute, join, relative, sep } from 'n
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, foldSurface, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
@@ -60,10 +60,6 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 const snapshotsRoot = fileURLToPath(new URL('./', import.meta.url))
 const dshBin = join(repoRoot, 'apps/cli/src/bin.ts')
 const tsconfigPath = join(repoRoot, 'tsconfig.json')
-const editingCordisSkill = join(
-  repoRoot,
-  'packages/preset/agent-preset/skills/editing-cordis-compositions/SKILL.md',
-)
 
 type SnapshotMode = 'replay' | 'record' | 'refresh'
 
@@ -521,6 +517,9 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     await symlink(join(source, 'node_modules'), join(target, 'node_modules'), 'dir')
     await copyFile(join(repoRoot, `packages/experimental/cua-macos/${guidanceDirectory}/guidance.${extension}`), join(target, `guidance.${extension}`))
   },
+  async 'dsh-doc-resources'(cwd) {
+    await cp(join(repoRoot, 'packages/preset/agent-preset/skills/dsh-doc'), join(cwd, '.dsh/skills/dsh-doc'), { recursive: true })
+  },
   async 'windows-acl-skill'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'diagnose-windows-sandbox-acl', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })
@@ -528,13 +527,12 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
   },
   async 'office-skills'(cwd) {
     await cp(join(repoRoot, 'packages/skill/skill-office/assets'), join(cwd, 'office-skills'), { recursive: true })
-    // A copied macOS Node binary cannot find its adjacent libnode.dylib.
-    const nodePath = process.execPath.replaceAll("'", "'\\''")
-    await writeFile(join(cwd, 'office-node'), `#!/bin/sh\nexec '${nodePath}' "$@"\n`, { mode: 0o755 })
-    await copyFile(join(repoRoot, 'packages/skill/skill-office/node_modules/@deepseek-ai/libreoffice-kit/lib/cli.js'), join(cwd, 'office-cli.js'))
   },
   async 'office-retired-ptc'(cwd) {
     await workspaceSetups['office-skills']!(cwd)
+    // A copied macOS Node binary cannot find its adjacent libnode.dylib.
+    const nodePath = process.execPath.replaceAll("'", "'\\''")
+    await writeFile(join(cwd, 'office-node'), `#!/bin/sh\nexec '${nodePath}' "$@"\n`, { mode: 0o755 })
     // Keep the removed-tool error without process-specific stack locations.
     await writeFile(join(cwd, 'office-ptc-node'), '#!/bin/sh\nexec "$(dirname "$0")/office-node" --stack-trace-limit=0 "$@"\n', { mode: 0o755 })
   },
@@ -550,13 +548,10 @@ const workspaceSetups: Record<string, (cwd: string) => Promise<void>> = {
     await writeFile(join(cwd, 'tracked.txt'), 'DIRTY SOURCE\n')
     await writeFile(join(cwd, 'local.txt'), 'UNTRACKED SOURCE\n')
   },
-  async 'editing-cordis-skill'(cwd) {
+  async 'skill-root-isolation'(cwd) {
     const target = join(cwd, '.dsh', 'skills', 'editing-cordis-compositions', 'SKILL.md')
     await mkdir(dirname(target), { recursive: true })
-    await copyFile(editingCordisSkill, target)
-  },
-  async 'skill-root-isolation'(cwd) {
-    await workspaceSetups['editing-cordis-skill']!(cwd)
+    await copyFile(join(snapshotsRoot, 'skill-load/workspace/.dsh/skills/editing-cordis-compositions/SKILL.md'), target)
     // A symlink loop produces a real, non-absence read error without relying on chmod or root privileges.
     await symlink('broken-skills', join(cwd, 'broken-skills'))
   },
@@ -696,6 +691,65 @@ async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRo
   expect(full).toContain('session_event_search')
 }
 
+/** Require cross-tree communication and target-only restoration with an offline creator. */
+function verifyTeamTreeMessage(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(3)
+  const leaf = parseSessionLog(logs[2]!.content)
+  const results = leaf.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(2)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  const rootResults = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(rootResults.map(result => ({ id: result.toolCallId, error: result.isError, content: result.content })))
+    .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'root-resume-leaf', error: false })]))
+  const branch = parseSessionLog(logs[1]!.content)
+  expect(branch.filter(event => event.type === 'turn/start')).toHaveLength(1)
+  expect(branch.some(event => event.type === 'session/end-seed')).toBe(false)
+  expect(leaf.filter(event => event.type === 'turn/start')).toHaveLength(2)
+  expect(leaf.some(event => event.type === 'assistant/message'
+    && event.data.message.content.some(block => block.type === 'text' && block.text === 'LEAF_RESUMED'))).toBe(true)
+  const deliveries = parseSessionLog(logs[0]!.content).flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'agent-message' ? [{
+      sender: event.data.source.senderSessionId,
+      text: event.data.content.flatMap(block => block.type === 'text' ? [block.text] : []).join(''),
+    }] : [])
+  expect(deliveries).toEqual([{
+    sender: logs[2]!.header.id,
+    text: expect.stringContaining('The nested reviewer can see and contact the Lead.'),
+  }])
+}
+
+/** Task commits leave inbox waits pending until timeout without inserting input. */
+function verifyTeamTaskInbox(logs: readonly SessionLog[]): void {
+  expect(logs).toHaveLength(2)
+  const root = parseSessionLog(logs[0]!.content)
+  const child = parseSessionLog(logs[1]!.content)
+  const tasks = root.flatMap(event => event.type === 'team/task' ? [event.data.task] : [])
+  expect(tasks).toMatchObject([
+    { id: 'task-1', revision: 1, status: 'pending' },
+    { id: 'task-1', revision: 2, status: 'in_progress', ownerId: logs[1]!.header.id },
+    { id: 'task-1', revision: 3, status: 'completed', ownerId: logs[1]!.header.id },
+  ])
+  const sources = [...root, ...child].flatMap(event => event.type === 'user/message'
+    ? [event.data.source.kind]
+    : event.type === 'agent/inbox/spliced' ? event.data.inserted.map(message => message.source.kind) : [])
+  expect(sources).not.toContain('team-task-change')
+  for (const id of ['wait-past-change', 'wait-current-change']) {
+    const start = root.findIndex(event => event.type === 'tool/call' && event.data.callId === id)
+    const end = root.findIndex(event => event.type === 'tool/result' && event.data.message.toolCallId === id)
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    expect(root.slice(start, end).some(event => event.type === 'user/message'
+      || event.type === 'agent/inbox/spliced' && event.data.inserted.length > 0)).toBe(false)
+  }
+  const results = [...root, ...child].flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(7)
+  expect(results.every(result => result.isError === false)).toBe(true)
+  expect(results.find(result => result.toolCallId === 'wait-past-change')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
+  expect(results.find(result => result.toolCallId === 'wait-current-change')?.content)
+    .toEqual([{ type: 'text', text: '{"timedOut":true}' }])
+}
+
 /** Preserve successful native, program, direct-child, and workflow execution in one flow. */
 function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   expect(logs).toHaveLength(3)
@@ -710,7 +764,9 @@ function verifyAdvancedToolchain(logs: readonly SessionLog[]): void {
   const textOf = (index: number) => results[index]!.content
     .flatMap(block => block.type === 'text' ? [block.text] : []).join('')
   expect(JSON.parse(textOf(1))).toEqual(['Service', 'Event', 'Config', 'Tool'])
-  expect(textOf(2)).toBe(`started subagent ${logs[1]!.header.id}`)
+  expect(textOf(2)).toBe('started subagent agent-1')
+  expect(events.filter(event => event.type === 'subagent/catalog').map(event => event.data))
+    .toContainEqual(expect.objectContaining({ childId: logs[1]!.header.id, name: 'agent-1' }))
   const completions = events.flatMap(event => event.type === 'user/message'
     && event.data.source.kind === 'subagent-settled' ? [{
       sender: event.data.source.senderSessionId,
@@ -760,6 +816,26 @@ function verifyMcpResources(log: string, ptc: boolean): void {
     .toContain('MCP_RESOURCE_INSTRUCTION: keep {{braces}} literal.')
   expect(normalizedSystemPrompts(log, contextOf([log])).join('\n'))
     .toContain('server argument: ["catalog"]')
+}
+
+function verifyMcpTemplateError(log: string, secret: string): void {
+  const events = parseSessionLog(log)
+  const calls = events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
+  expect(calls).toEqual(['mcp__protected__ping'])
+  const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
+  expect(results).toHaveLength(1)
+  expect(results[0]).toMatchObject({ isError: true })
+  const diagnostic = results[0]!.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  expect(diagnostic).toBe('Error: MCP fixture rejected Bearer [redacted]')
+  expect(log).not.toContain(secret)
+  const resultIndex = events.findIndex(event => event.type === 'tool/result')
+  const nextRequest = events.findIndex((event, index) => index > resultIndex && event.type === 'assistant/message')
+  expect(nextRequest).toBeGreaterThan(resultIndex)
+  const prefix = events.slice(0, nextRequest)
+  const surface = foldSurface(prefix)
+  const messages = surface.nodes.map(seq => deriveEventMessage(prefix[seq]!, surface.projectedMessages))
+  expect(messages).toContainEqual(results[0])
+  expect(JSON.stringify(messages)).not.toContain(secret)
 }
 
 function verifyNoMcpServers(log: string, ptc: boolean): void {
@@ -1321,7 +1397,8 @@ describe('headless recorded-session snapshots', () => {
       const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
       const fixturePath = join(scenario.dir, fixtureFiles[0] ?? sessionFixtureName(0, SESSION_FORMAT_VERSION))
       const locatorRoot = snapshotSpillRoot(fixturePath)
-      const mcpDemo = scenario.name === 'plugin-manager-mcp' ? await startHttpMcpFixture() : undefined
+      const mcpDemo = scenario.name === 'plugin-manager-mcp' || scenario.name === 'mcp-template-error'
+        ? await startHttpMcpFixture({ rejectToolCalls: scenario.name === 'mcp-template-error' }) : undefined
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
         result = await runLoaderSmoke({
@@ -1376,7 +1453,7 @@ describe('headless recorded-session snapshots', () => {
             patchSources.forEach((source, index) => {
               materializeProfilePatch(source, cwd, 'headless', join(cwd, patchRoot), index)
             })
-            if (mcpDemo !== undefined) {
+            if (scenario.name === 'plugin-manager-mcp') {
               const profileDir = join(cwd, '.dsh/profiles/headless')
               await mkdir(profileDir, { recursive: true })
               await copyFile(join(scenario.dir, 'profile.patch.yml'), join(profileDir, 'cordis.patch.yml'))
@@ -1399,7 +1476,7 @@ describe('headless recorded-session snapshots', () => {
             if (retainedToolInput !== undefined && primaryFixture !== undefined) {
               verifyToolResultWriterParity(primaryFixture, actualLogs[0]!.content)
             }
-            if (mcpDemo !== undefined) {
+            if (scenario.name === 'plugin-manager-mcp' && mcpDemo !== undefined) {
               const log = actualLogs[0]!.content
               expect(log).toContain('mcp__demo__ping')
               expect(log).toContain('pong')
@@ -1407,6 +1484,14 @@ describe('headless recorded-session snapshots', () => {
               const saved = await readFile(join(cwd, '.dsh/profiles/headless/cordis.patch.yml'), 'utf8')
               expect(saved).toContain('id: demo')
               expect(saved).toContain('disabled: false')
+            }
+            if (scenario.name === 'mcp-template-error' && mcpDemo !== undefined) {
+              const secret = scenario.manifest.environment?.DSH_MCP_TEMPLATE_TOKEN
+              expect(secret).toBeDefined()
+              verifyMcpTemplateError(actualLogs[0]!.content, secret!)
+              expect(mcpDemo.calls).toEqual(['ping'])
+              expect(mcpDemo.authorization.length).toBeGreaterThan(1)
+              expect(mcpDemo.authorization.every(value => value === `Bearer ${secret!}`)).toBe(true)
             }
             if (scenario.name === 'toolcall-unused-args') {
               const events = parseSessionLog(actualLogs[0]!.content)
@@ -1430,11 +1515,31 @@ describe('headless recorded-session snapshots', () => {
             if (scenario.name.startsWith('office-progressive-')) {
               const log = actualLogs[0]!.content
               const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-              expect(results).toHaveLength(4)
+              if (scenario.name === 'office-progressive-native') {
+                // office_render refuses a render for a model route without image input.
+                const render = results.pop()
+                expect(render?.isError).toBe(true)
+                expect(render?.content).toEqual([{
+                  type: 'text', text: expect.stringMatching(/^Error: cannot render ".+[\\/]report\.docx": model "deepseek-v4-flash" does not accept images$/u),
+                }])
+              }
+              expect(results).toHaveLength(2)
               expect(results.every(result => result.isError === false)).toBe(true)
               expect(log).toContain('# Office task routing')
             }
             if (scenario.name === 'advanced-toolchain') verifyAdvancedToolchain(actualLogs)
+            if (scenario.name === 'subagent-depth-two-rejection') {
+              expect(actualLogs).toHaveLength(3)
+              const leaf = actualLogs[2]!
+              expect(leaf.content).toContain('DEPTH_REJECTED')
+              for (const ancestor of actualLogs.slice(0, 2)) {
+                const notices = parseSessionLog(ancestor.content).filter(event => event.type === 'user/message'
+                  && event.data.source.kind === 'subagent-settled' && event.data.source.senderSessionId === leaf.header.id)
+                expect(notices).toEqual([])
+              }
+            }
+            if (scenario.name === 'team-tree-messages') verifyTeamTreeMessage(actualLogs)
+            if (scenario.name === 'team-task-inbox') verifyTeamTaskInbox(actualLogs)
             if (scenario.name === 'session-query-spill') {
               await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
             }

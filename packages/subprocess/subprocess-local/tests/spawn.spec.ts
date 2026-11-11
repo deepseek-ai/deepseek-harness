@@ -352,7 +352,7 @@ describe('spawnSubprocess', () => {
     expect(result.signal).toBe(process.platform === 'win32' ? null : 'SIGTERM')
   })
 
-  it('throws a stable Error when already aborted before spawn', () => {
+  it('throws a stable AbortError when already aborted before spawn', () => {
     for (const [reason, message] of [
       ['too late', 'aborted before spawn: too late'],
       [null, 'aborted before spawn: aborted'],
@@ -360,7 +360,7 @@ describe('spawnSubprocess', () => {
       const controller = new AbortController()
       controller.abort(reason)
       expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-        .toThrow(new Error(message))
+        .toThrow(expect.objectContaining({ name: 'AbortError', message }))
     }
 
     const controller = new AbortController()
@@ -370,7 +370,7 @@ describe('spawnSubprocess', () => {
       },
     })
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it('rejects with a spawn error for a nonexistent cwd', async () => {
@@ -390,7 +390,7 @@ describe('spawnSubprocess', () => {
     const pidFile = join(spillDir, `zombie-group-${Date.now()}.pid`)
     const running = spawnSubprocess(spec(`sleep 60 & echo $! > ${pidFile}; echo leader-done`, { graceMs: 100 }), {
       platform: 'linux',
-      linuxProcessGroupHasLiveMembers: () => false,
+      linuxProcessGroupLiveMember: () => false,
     })
     const descendant = await waitForPidFile(pidFile)
     try {
@@ -399,6 +399,28 @@ describe('spawnSubprocess', () => {
     } finally {
       // The confirmed-absent verdict is a permanent no-more-signals boundary,
       // so terminate() must stay inert here; reap the live survivor directly.
+      process.kill(descendant, 'SIGKILL')
+      await waitGone(descendant)
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('passes the last found Linux group member back to the next probe', async () => {
+    const pidFile = join(spillDir, `known-member-${Date.now()}.pid`)
+    const known: Array<number | undefined> = []
+    const results: Array<number | false | undefined> = [4242, undefined]
+    const running = spawnSubprocess(spec(`sleep 60 & echo $! > ${pidFile}; echo leader-done`, { graceMs: 100 }), {
+      platform: 'linux',
+      linuxProcessGroupLiveMember: (_group, knownMember) => {
+        known.push(knownMember)
+        return known.length <= results.length ? results[known.length - 1] : false
+      },
+    })
+    const descendant = await waitForPidFile(pidFile)
+    try {
+      await running.done
+      await expect(running.waitForExit()).resolves.toBe(true)
+      expect(known).toEqual([undefined, 4242, 4242])
+    } finally {
       process.kill(descendant, 'SIGKILL')
       await waitGone(descendant)
     }
@@ -1170,7 +1192,7 @@ describe('coverage seams', () => {
     // terminates the direct child when the escalation tier delivers SIGKILL.
     const running = spawnSubprocess(spec('sleep 60', { graceMs: 100 }), {
       platform: 'linux',
-      linuxProcessGroupHasLiveMembers: () => false,
+      linuxProcessGroupLiveMember: () => false,
     })
     const realKill = process.kill.bind(process)
     let rootPid: number | undefined
@@ -1424,7 +1446,8 @@ describe('coverage seams 2', () => {
 
 describe('argv validation', () => {
   it('rejects an empty argv before spawning', () => {
-    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) }).toThrow(/non-empty program name/)
+    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) })
+      .toThrow(expect.objectContaining({ name: 'SubprocessError', code: 'SUBPROCESS_INVALID_ARGV' }))
   })
 
   it('rejects an empty program name before spawning', () => {
@@ -1446,7 +1469,7 @@ describe('abort edge cases', () => {
       removeEventListener() {},
     } as unknown as AbortSignal
     expect(() => { validateSubprocessSpec(spec('echo hi', { signal: bare })) })
-      .toThrow(new Error('aborted before spawn: aborted'))
+      .toThrow(expect.objectContaining({ name: 'AbortError', message: 'aborted before spawn: aborted' }))
   })
 
   it.skipIf(process.platform === 'win32')('reports the terminating signal of an externally self-killed command', async () => {

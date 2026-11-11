@@ -5,19 +5,21 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 
 interface ApprovalToolCall {
   readonly callId: string
+  readonly name: string
   readonly argsRaw: string
 }
 
 /**
- * Extract a shell command from a correlated Tool call when its arguments carry one.
- * @param call - Tool call arguments, when a correlated call exists.
- * @returns command text, or undefined for absent, malformed, or unrelated arguments.
+ * Extract the command line from a correlated Tool call: a shell `command`, or the text `terminal_send` types into a terminal.
+ * @param call - Tool call name and arguments, when a correlated call exists.
+ * @returns command text, or undefined for absent, empty, malformed, or unrelated arguments.
  */
 export function commandOf(call: ApprovalToolCall | undefined): string | undefined {
   if (call === undefined) return undefined
   try {
     const args = JSON.parse(call.argsRaw) as Record<string, unknown>
-    return typeof args.command === 'string' ? args.command : undefined
+    const command = call.name === 'terminal_send' ? args.text : args.command
+    return typeof command === 'string' && command.length > 0 ? command : undefined
   } catch {
     return undefined
   }

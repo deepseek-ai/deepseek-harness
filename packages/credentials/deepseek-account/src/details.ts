@@ -1,0 +1,79 @@
+/** Platform Web profile and wallet queries projected for account UI consumers. */
+import { z } from 'zod'
+import type { AccountDetails, AccountProfile, AccountUserId } from './types.ts'
+import { AccountUnauthorizedError, PlatformAuthError, requestAccount } from './protocol.ts'
+
+const user = z.object({
+  id: z.string().nullish(),
+  email: z.string(), mobile: z.string().optional(), mobile_number: z.string().optional(),
+  id_profile: z.object({ name: z.string().nullable(), picture: z.string().nullish() }).nullish(),
+})
+// balance and amount arrive as strings that Platform's Web client passes to big.js, whose decimal
+// grammar also accepts an omitted integer or fraction part and a decimal exponent (0E-16, 1e+3).
+const decimal = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i
+const wallet = z.object({
+  currency: z.enum(['CNY', 'USD']), balance: z.string().regex(decimal),
+})
+const summary = z.object({ normal_wallets: z.array(wallet), bonus_wallets: z.array(wallet) })
+/** Project Platform user data without retaining credentials or unneeded fields.
+ * @param value - current or exchange user response.
+ * @returns UI account profile.
+ */
+export function profile(value: unknown): AccountProfile {
+  const parsed = user.safeParse(value)
+  if (!parsed.success) throw new PlatformAuthError('protocol')
+  return projectProfile(parsed.data)
+}
+
+function projectProfile(value: z.infer<typeof user>): AccountProfile {
+  const { email, mobile, mobile_number: mobileNumber, id_profile: identity } = value
+  return {
+    id: value.id == null ? null : value.id as AccountUserId,
+    avatarUrl: identity?.picture || null,
+    name: identity?.name || null, contact: mobile || mobileNumber || email || null,
+  }
+}
+
+function accountPayload<T>(schema: z.ZodType<T>, value: unknown, field: 'profile' | 'balance'): T {
+  const parsed = schema.safeParse(value)
+  if (!parsed.success) {
+    console.error(`[deepseek-account] ${field} schema rejected`, {
+      issues: parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code })),
+    })
+    throw new PlatformAuthError('protocol')
+  }
+  return parsed.data
+}
+
+const queries: { [K in keyof AccountDetails]: {
+  path: '/auth-api/v0/users/current' | '/api/v0/users/get_user_summary'
+  parse: (value: unknown) => AccountDetails[K]
+} } = {
+  profile: { path: '/auth-api/v0/users/current', parse: value => ({
+    status: 'ready', value: projectProfile(accountPayload(user, value, 'profile')),
+  }) },
+  balance: { path: '/api/v0/users/get_user_summary', parse: (value) => {
+    const parsed = accountPayload(summary, value, 'balance')
+    return { status: 'ready', value: parsed.normal_wallets, bonusWallets: parsed.bonus_wallets }
+  } },
+}
+
+/**
+ * Read one Platform account field without waiting for the other query.
+ * @param field - profile or recharge and bonus wallet balances.
+ * @param origin - configured account API origin.
+ * @param token - stored authorization token; response tokens are discarded.
+ * @param signal - request and credential lifetime.
+ * @param headers - validated deployment headers for the configured origin.
+ * @returns sanitized query outcome; failure never becomes a zero balance.
+ * @throws AccountUnauthorizedError when Platform rejects the stored token with HTTP 401 or response code 40003.
+ */
+export async function readAccountDetail<K extends keyof AccountDetails>(field: K, origin: string, token: string,
+  signal: AbortSignal, headers: Record<string, string>): Promise<AccountDetails[K]> {
+  const query = queries[field]
+  try { return query.parse(await requestAccount(origin, query.path, token, signal, headers)) }
+  catch (error) {
+    if (error instanceof AccountUnauthorizedError) throw error
+    return { status: 'failed' }
+  }
+}

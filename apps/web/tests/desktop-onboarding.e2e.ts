@@ -5,15 +5,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { connectDesktopWelcome } from '../../desktop/src/welcome-backend.ts'
+import { authenticateWebHost } from '../../desktop/src/web-document.ts'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterEach, beforeEach, describe, expect, it, onTestFailed } from 'vitest'
 import { credentialKey, credentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-settings'
+import { isDraggableAt } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 import {
   acknowledgeReloadConnectionLoss, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { collectWindowSurface, REPO_ROOT, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const MODE = webSnapshotMode()
 const EXPECTED = fileURLToPath(new URL('./expected/desktop-onboarding', import.meta.url))
@@ -49,21 +51,21 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     screenshots = undefined
     root = await mkdtemp(join(tmpdir(), 'dsh-desktop-onboarding-'))
     server = createServer((request, response) => {
-      if (request.url === '/api/v0/users/get_unnotified_bonuses') {
+      if (request.url === '/api/v0/users/notifications/list') {
         bonusReads++
         response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: bonusOffered ? [{
-          order_id: '88888888-8888-4888-8888-888888888888', campaign: 'dsh_login_bonus',
-          amount: '5.00', currency: 'CNY', granted_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 86_400_000).toISOString(), msg: '已赠送您 5.00 元 DSH 体验赠金。',
-        }] : [] } }))
+        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: { next_poll_after: 600, notifications: bonusOffered ? [{
+          id: '88888888-8888-4888-8888-888888888888', type: 'account.bonus_granted',
+          created_at: new Date().toISOString(), title: '赠金已到账', actions: [],
+          display_until: new Date(Date.now() + 86_400_000).toISOString(), body: '已赠送您 5.00 元 DSH 体验赠金。',
+        }] : [] } } }))
         return
       }
-      if (request.url === '/api/v0/users/ack_bonus_notified') {
+      if (request.url === '/api/v0/users/notifications/events') {
         bonusAcks++
         bonusOffered = false
         response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: null } }))
+        response.end(JSON.stringify({ code: 0, data: { biz_code: 0, biz_data: { acked: true } } }))
         return
       }
       if (request.url !== '/auth-api/v0/users/current' && request.url !== '/api/v0/users/get_user_summary') {
@@ -83,7 +85,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
     if (address === null || typeof address === 'string') throw new Error('fixture server address unavailable')
     origin = `http://127.0.0.1:${address.port}`
     const overlay = join(root, 'account.patch.yml')
-    await writeFile(overlay, `- id: deepseek-account\n  config:\n    platformOrigin: ${origin}\n    allowLoopbackHttp: true\n`)
+    await writeFile(overlay, `- id: deepseek-account\n  config:\n    platformOrigin: ${origin}\n    harnessOrigin: ${origin}\n    allowLoopbackHttp: true\n`)
     scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, extraOverlayPath: overlay })
     await scaffold.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), async () => ({
       kind: 'grant', payload: { version: 1, issuer: origin, token: 'onboarding-fixture-token' },
@@ -107,7 +109,7 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
 
   async function desktopPage(locale = ZH_BROWSER_LOCALE): Promise<Page> {
     const opened = await browser.newPage({ viewport: { width: 1280, height: 840 }, locale, reducedMotion: 'reduce' })
-    const welcome = await connectDesktopWelcome(scaffold.authenticatedUrl, (input, init) => scaffold.hostFetch(input, init))
+    const welcome = connectDesktopWelcome(scaffold.baseUrl, await authenticateWebHost(scaffold.authenticatedUrl))
     await opened.exposeFunction('__onboardingHasApiKey', async () => (await welcome.read()).hasApiKey)
     await opened.addInitScript(() => {
       Object.defineProperty(globalThis, 'dshOnboarding', { value: {
@@ -251,6 +253,16 @@ describe.skipIf(MODE === 'record')('web e2e: App-only desktop onboarding', () =>
       await page.evaluate((value) => { document.documentElement.dataset.platform = value }, platform)
       expect(await page.locator('[data-desktop-onboarding]').evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe('none')
       expect(await page.getByRole('button', { name: '开始设置', exact: true }).evaluate(element => getComputedStyle(element).getPropertyValue('-webkit-app-region'))).toBe(platform === 'darwin' ? 'no-drag' : 'none')
+      if (platform === 'darwin') {
+        expect(await page.locator('[data-window-drag-controls] [data-desktop-onboarding]').count()).toBe(1)
+        const { regions } = await collectWindowSurface(page)
+        const band = await page.locator('[data-window-drag-controls]').locator('..').locator('[data-window-drag]').boundingBox()
+        const button = await page.getByRole('button', { name: '开始设置', exact: true }).boundingBox()
+        if (band === null || button === null) throw new Error('The onboarding drag fixture has no layout box')
+        expect(isDraggableAt(regions, band.x + 4, band.y + 4), 'the introduction keeps its blank drag band').toBe(true)
+        expect(isDraggableAt(regions, button.x + button.width / 2, button.y + button.height / 2),
+          'the introduction action receives clicks over the full-window drag band').toBe(false)
+      }
     }
     await page.evaluate(() => { delete document.documentElement.dataset.platform })
     await page.getByRole('button', { name: '开始设置', exact: true }).click()

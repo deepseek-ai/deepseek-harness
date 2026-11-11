@@ -126,7 +126,7 @@ function sessionSnapshot(nodes: LegacyConversationSlice['nodes']): SessionSnapsh
     openState: 'open',
     openError: null,
     hasMore: false,
-    loadingOlder: false,
+    loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false,
     promptError: null,
     blank: nodes.length === 0,
     lastAgentError: null,
@@ -429,6 +429,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
         useStore={bindSnapshotSelector(conversation)}
         actions={conversation.actions}
         renderSlot={() => null}
+        renderFactorySlot={() => null}
         open={vi.fn()}
         selectView={conversation.actions.setView}
         t={tConversation}

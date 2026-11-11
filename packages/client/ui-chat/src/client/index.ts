@@ -66,4 +66,4 @@ type PublicChatNodeDataMap = ChatNodeDataMap
 declare module './contract/chat-nodes.ts' {
   interface ChatNodeDataMap extends PublicChatNodeDataMap {}
 }
-export type { ProcessActivity, ProcessActivitySummary, ProcessGroupData } from './contract/process-groups.ts'
+export type { ProcessActivity, ProcessActivitySummary, ProcessGroupData, RunningProcessActivity } from './contract/process-groups.ts'

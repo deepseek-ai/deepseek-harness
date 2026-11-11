@@ -304,38 +304,33 @@
     },
     {
       "doc": "docs/subsystems/agent-team.md",
-      "symbol": "TeamMemberProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskView",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamProjection",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMemberSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamMessageSource",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/agent-team.md",
       "symbol": "TeamTaskSnapshot",
-      "source": "packages/experimental/agent-team/src/types.ts"
+      "source": "packages/team/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/commands.md",
@@ -854,6 +849,11 @@
     {
       "doc": "docs/subsystems/tools.md",
       "symbol": "ToolGuard",
+      "source": "packages/core/tools/src/contracts.ts"
+    },
+    {
+      "doc": "docs/subsystems/tools.md",
+      "symbol": "ToolGuardDenial",
       "source": "packages/core/tools/src/contracts.ts"
     },
     {
@@ -2388,6 +2388,11 @@
       "source": "packages/subagent/subagent/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/subagent.md",
+      "symbol": "SubagentMemberNames",
+      "source": "packages/subagent/subagent/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/product-telemetry.md",
       "symbol": "ProductTelemetryScalar",
       "source": "packages/host/product-telemetry-otel/src/index.ts"
@@ -2430,6 +2435,16 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeProvider",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommit",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitList",
       "source": "packages/experimental/forge/src/types.ts"
     },
     {
@@ -2609,6 +2624,16 @@
     },
     {
       "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCleanup",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
+      "symbol": "WorktreeCreation",
+      "source": "packages/experimental/worktree/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/worktrees.md",
       "symbol": "RestoredWorktree",
       "source": "packages/experimental/worktree/src/types.ts"
     },
@@ -2704,12 +2729,32 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranch",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAutomaticBase",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeBaseBranches",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeChangeRequestListState",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeChangeRequestStatesFrame",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommitRange",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
@@ -2729,12 +2774,22 @@
     },
     {
       "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeFileLayer",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeDiffFile",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeLocalDiff",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLocalCommits",
       "source": "packages/experimental/client-ui-forge/src/types.ts"
     },
     {
@@ -2765,6 +2820,131 @@
     {
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeReviewResult",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeThreadId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgePendingReview",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewEvent",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewWrite",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewWriteResult",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommentId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAnchor",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCommentAuthor",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewComment",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewThread",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewData",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session.md",
+      "symbol": "SessionEventInput",
+      "source": "packages/core/session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeCheckId",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BranchUpdateMethod",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ReviewVerdict",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestReviewer",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ChangeRequestIssue",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeRerunRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewersRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewerCandidate",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "BranchUpdateRequest",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedState",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedFiles",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeViewedRequest",
       "source": "packages/experimental/forge/src/types.ts"
     }
   ]

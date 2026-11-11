@@ -26,5 +26,7 @@ describe('Python runtime executable assets', () => {
     expect(result.stdout).not.toContain('skill-badge/assets/**/*')
     expect(result.stdout).toContain('node_modules/@deepseek-ai/dsh-sandbox-windows-acl/assets/**/*')
     expect(result.stdout).not.toContain('node_modules/**/*.py')
+    // skill-office reads its SKILL.md files from the package's assets directory.
+    expect(result.stdout).toContain('"node_modules/**/*.md"')
   })
 })

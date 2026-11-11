@@ -92,11 +92,31 @@ function isOpenCloseKind(kind: WireTextDocumentSyncKind): boolean {
  * other than `utf-16` is a protocol error this host does not support.
  * @param encoding - the server's advertised `positionEncoding`, if any.
  * @returns the string `'utf-16'`.
- * @throws Error for any non-`utf-16` encoding.
+ * @throws LspError `LSP_UNSUPPORTED_ENCODING` for any non-`utf-16` encoding.
  */
 export function negotiatePositionEncoding(encoding: string | undefined): 'utf-16' {
   if (encoding === undefined || encoding === 'utf-16') return 'utf-16'
-  throw new Error(`server negotiated unsupported position encoding "${encoding}"; this host requires utf-16`)
+  throw new LspError(
+    `server negotiated unsupported position encoding "${encoding}"; this host requires utf-16`,
+    'LSP_UNSUPPORTED_ENCODING',
+  )
+}
+
+/**
+ * Read the server capabilities from an untrusted `initialize` result.
+ * @param result - the raw `initialize` response result.
+ * @returns the advertised capabilities object.
+ * @throws LspError `LSP_MALFORMED_RESPONSE` when the result or its `capabilities` is not an object.
+ */
+export function initializeCapabilities(result: unknown): WireServerCapabilities {
+  if (result === null || typeof result !== 'object') {
+    throw malformedResponse('LSP initialize result was not an object')
+  }
+  const capabilities = (result as Record<string, unknown>).capabilities
+  if (capabilities === null || typeof capabilities !== 'object') {
+    throw malformedResponse('LSP initialize result had no capabilities object')
+  }
+  return capabilities
 }
 
 /** Convert a wire range to the seam's range (structurally identical, but re-shaped as `readonly`). */
@@ -141,7 +161,8 @@ function isProtocolCoordinate(value: unknown): value is number {
  * locations. `Location` maps directly; `LocationLink` maps `targetUri` + `targetSelectionRange`.
  * @param payload - the raw `textDocument/definition|references|implementation` result.
  * @returns the normalized locations (empty for `null`/`[]`).
- * @throws Error when an element is neither a `Location` nor a `LocationLink`.
+ * @throws LspError `LSP_MALFORMED_RESPONSE` when the result is missing or an element is neither a
+ *   `Location` nor a `LocationLink`.
  */
 export function normalizeLocations(payload: unknown): LspLocation[] {
   if (payload === null) return []
@@ -178,7 +199,8 @@ function renderMarkedString(value: WireMarkedString): string {
  * joins its rendered parts with one blank line. The model-facing tool owns the complete result cap.
  * @param payload - the raw `textDocument/hover` result.
  * @returns the normalized hover, or `null` when there is no content.
- * @throws Error when the payload is a non-null, non-object, or structurally invalid hover.
+ * @throws LspError `LSP_MALFORMED_RESPONSE` when the payload is a non-null, non-object, or
+ *   structurally invalid hover.
  */
 export function normalizeHover(payload: unknown): LspHover | null {
   if (payload === null) return null

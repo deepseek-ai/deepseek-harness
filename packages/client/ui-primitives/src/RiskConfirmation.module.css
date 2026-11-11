@@ -16,52 +16,26 @@
   }
 }
 
-.warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+.description {
+  margin: 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 14px;
   line-height: 22px;
 }
 
-.warning p {
-  margin: 0;
-}
-
-.warningIcon {
-  flex: none;
-  margin-top: 2px;
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.acknowledgement {
-  display: flex;
+.confirmation .acknowledgement {
   align-items: flex-start;
-  gap: 10px;
-  margin-top: 20px;
-  color: var(--dsw-alias-label-primary);
+  margin-top: 16px;
+  color: var(--dsw-alias-label-secondary);
   font-size: 14px;
-  line-height: 22px;
-  cursor: pointer;
+  font-weight: 400;
+  line-height: 20px;
 }
 
-.acknowledgement input {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 3px 0 0;
-  accent-color: var(--dsw-alias-button-primary-fill);
-  cursor: pointer;
-}
-
-.acknowledgement input:focus-visible {
-  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  outline-offset: 2px;
-}
-
-.acknowledgement input:disabled {
-  cursor: default;
+.confirmation .acknowledgement input {
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
 }
 
 .modalAction {

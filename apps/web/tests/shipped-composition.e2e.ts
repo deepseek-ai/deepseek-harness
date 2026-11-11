@@ -305,7 +305,7 @@ class ShippedChildAutoAdapter extends LlmAdapter {
         throw new Error('continuable child id was not observed before parent adjustment')
       }
       return toolChunks('parent-adjust', 'send_message', {
-        agent_id: this.continuableChildId,
+        agent: this.continuableChildId,
         message: [
           AUTO_CHILD_ADJUSTED,
           `Replace the earlier no-deletion restriction: permanently delete exactly ${this.continuableDeletePath}.`,
@@ -479,12 +479,14 @@ const EXPECTED_TOOLS = [
   'edit',
   'exit_plan_mode',
   'get_goal',
-  'interrupt_agent',
   'job_kill',
   'job_list',
   'job_output',
   'list_agents',
   'list_subagent_models',
+  'office_convert',
+  'office_recalculate',
+  'office_render',
   'plugin_manager',
   'present',
   'read',
@@ -497,8 +499,13 @@ const EXPECTED_TOOLS = [
   'skill',
   'subagent',
   'subagent_fork',
+  'team_task_create',
+  'team_task_get',
+  'team_task_list',
+  'team_task_update',
   'todo_write',
   'update_goal',
+  'wait_agent',
   'web_fetch',
   'web_search',
   'workflow',
@@ -592,8 +599,10 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  // The directory tool is global; the deployment's default preset supplies the agent's remaining tools.
-  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual(['working_directory'])
+  // Directory and conditional Team tools are global; presets supply the remaining registrations.
+  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual([
+    'working_directory', 'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update',
+  ])
   const handle = await ctx.agents.create({
     sessionId: SessionId('shipped-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
@@ -813,7 +822,7 @@ it('routes one browser-authored Auto request through the same model and asks the
     event.type === 'tool/result'
       && event.data.message.toolCallId === AUTO_CALL_ID
   ))
-  expect(result?.data.error).toBeUndefined()
+  expect(result?.data.error).toEqual({ name: 'ApprovalError', code: 'APPROVAL_REJECTED' })
   const durableModelResult = JSON.stringify(result?.data.message)
   expect(durableModelResult).toContain('the user rejected tool \\"bash\\"')
   expect(durableModelResult).not.toContain('direct user authorized inspection only')

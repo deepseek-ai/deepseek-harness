@@ -11,6 +11,8 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 
 export {
   ESCALATION_TARGETS,
+  SANDBOX_ESCALATION_ERROR_CODES,
+  SandboxEscalationError,
   WIDER_MODES,
   approveEscalation,
   escalationHintMarker,
@@ -18,13 +20,19 @@ export {
   sandboxPermissionsDescription,
   validateEscalationArgs,
 } from './escalation.ts'
-export type { EscalationApproval, EscalationApprover, EscalationOutcome, EscalationRequest } from './escalation.ts'
+export type {
+  EscalationApproval,
+  EscalationApprover,
+  EscalationOutcome,
+  EscalationRequest,
+  SandboxEscalationErrorCode,
+} from './escalation.ts'
 export { canonicalPath, workspaceWritableRoots, writableRoots, SandboxInvalidRootError } from './roots.ts'
 
 /**
  * File-effect policy for confined processes. `read-only` permits only required
  * sinks such as `/dev/null`; `workspace-write` also permits the workspace,
- * explicit extra roots, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
+ * explicit extra roots where supported, and backend-defined temp areas; `danger-full-access` bypasses confinement. Network
  * and process visibility are outside this vocabulary.
  */
 export type SandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -46,6 +54,7 @@ export interface SandboxExecutionPolicy {
    * Extra physical absolute directories `workspace-write` may also write under.
    * Absence means none. The enforcing host rejects missing, non-directory, and
    * symlinked entries on each call. Remote paths are checked on the remote host.
+   * Windows process confinement ignores these; harness filesystem operations honor them.
    * These grant nothing under `read-only` or `danger-full-access`.
    */
   additionalWritableRoots?: readonly string[]
@@ -151,11 +160,35 @@ export class SandboxUnavailableError extends HarnessError {
   }
 }
 
-/** The selected backend is available but cannot enforce the requested policy. */
-export class SandboxUnsupportedPolicyError extends HarnessError {
-  constructor(detail: string) {
-    super(detail, 'SANDBOX_UNSUPPORTED_POLICY')
-    this.name = 'SandboxUnsupportedPolicyError'
+/**
+ * Every {@link SandboxPreparationError} code:
+ * - `SANDBOX_PREPARATION_FAILED` — the provider could not set up host state the confined process needs, such as a
+ *   Windows ACL grant or a private temp directory; `cause` holds the platform failure.
+ * - `SANDBOX_INVALID_TEMP_ROOT` — the host temp root lies inside the workspace, so a private temp directory would
+ *   inherit the workspace grant; move the temp root or the workspace.
+ */
+export const SANDBOX_PREPARATION_ERROR_CODES = ['SANDBOX_PREPARATION_FAILED', 'SANDBOX_INVALID_TEMP_ROOT'] as const
+
+/** One code from {@link SANDBOX_PREPARATION_ERROR_CODES}. */
+export type SandboxPreparationErrorCode = typeof SANDBOX_PREPARATION_ERROR_CODES[number]
+
+/**
+ * Thrown by {@link SandboxProvider.confine} when host preparation for an
+ * enforceable mode fails. The provider rolls back what it prepared before
+ * throwing, and the command never runs.
+ */
+export class SandboxPreparationError extends HarnessError {
+  override readonly code: SandboxPreparationErrorCode
+
+  /**
+   * @param message - names the preparation step and the safe next step.
+   * @param code - the failure class consumers route on.
+   * @param options - the platform failure, or an `AggregateError` with the cleanup failures, as `cause`.
+   */
+  constructor(message: string, code: SandboxPreparationErrorCode, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'SandboxPreparationError'
+    this.code = code
   }
 }
 

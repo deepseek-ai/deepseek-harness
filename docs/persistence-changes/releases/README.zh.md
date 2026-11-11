@@ -90,7 +90,7 @@ pnpm run doc-sync
 
 标记区间内的索引、清单单元格和结构变化事实由快照生成。默认校验会拒绝陈旧事实。运行 `pnpm run verify-persistence-releases --write` 可在全部机器数据校验通过后刷新这些区间和配对记录；人工概述、源码证据、机器声明和 schema 文件保持不变。
 
-tag 的完整性以清单的捕获范围为准；离线检查不会自动发现后续新 tag。配对记录及 Markdown 链接由常规文档检查校验。[格式模板](../../../.agents/skills/dsh-doc/templates/persistence-release.md)规定单条记录的字段。
+tag 的完整性以清单的捕获范围为准；离线检查不会自动发现后续新 tag。配对记录及 Markdown 链接由常规文档检查校验。[格式模板](../../../.agents/skills/dsh-doc-writing/templates/persistence-release.md)规定单条记录的字段。
 
 <a id="dev-note"></a>
 ## 开发备注

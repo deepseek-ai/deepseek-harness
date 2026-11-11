@@ -121,12 +121,17 @@ export function draftTarget(draft: TaskEditorDraft, original?: ScheduleCatalogEn
   return { kind: draft.target, create }
 }
 
-/** Render manual creation and inline edits with the existing task rule controls. */
-export function TaskEditorFields({ draft, onChange, projects, disabled, original, t }: {
+/**
+ * Render manual creation and inline edits with the existing task rule controls.
+ * @param props.disabled - whether the fields reject input.
+ * @param props.held - whether a disabled state keeps the enabled look because it lasts only one brief request.
+ */
+export function TaskEditorFields({ draft, onChange, projects, disabled, held, original, t }: {
   readonly draft: TaskEditorDraft
   readonly onChange: (draft: TaskEditorDraft) => void
   readonly projects: ProjectChoices
   readonly disabled: boolean
+  readonly held: boolean
   readonly original?: ScheduleCatalogEntry | undefined
   readonly t: PropsLocale<'schedule.manager'>['t']
 }): ReactNode {
@@ -135,6 +140,8 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
   const dateAnchor = useRef<HTMLButtonElement>(null)
   const clockAnchor = useRef<HTMLButtonElement>(null)
   const id = useId()
+  const dateAnchorName = `--dsh-schedule-date-${id.replaceAll(':', '')}`
+  const clockAnchorName = `--dsh-schedule-clock-${id.replaceAll(':', '')}`
   const rowId = (name: string): string => `${id}-${name}`
   const change = (patch: Partial<TaskEditorDraft>): void => { onChange({ ...draft, ...patch }) }
   const clock = draft.frequency === 'daily' ? `${draft.dailyTime}:00` : draft.start.slice(11)
@@ -155,7 +162,7 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
     id: choice.value, label: <span className={css.workspaceMenuItem}><span>{choice.label}</span>
       <PathLabel path={choice.value} className={css.workspaceMenuPath} /></span>,
   }))
-  return <fieldset disabled={disabled} className={css.taskEditor} onKeyDownCapture={(event) => {
+  return <fieldset disabled={disabled} className={held ? `${css.taskEditor} ${css.editorHeld}` : css.taskEditor} onKeyDownCapture={(event) => {
     if (event.key !== 'Escape' || event.defaultPrevented || !dateOpen && !clockOpen) return
     event.preventDefault(); event.stopPropagation()
     if (dateOpen) { setDateOpen(false); dateAnchor.current?.focus() }
@@ -206,23 +213,23 @@ export function TaskEditorFields({ draft, onChange, projects, disabled, original
       </div>}
       {draft.frequency === 'once' && <div className={css.ruleRow}>
         <label className={css.ruleLabel} htmlFor={rowId('date')}>{t('timing.date')}</label>
-        <button ref={dateAnchor} id={rowId('date')} type="button" disabled={disabled}
+        <button ref={dateAnchor} style={{ anchorName: dateAnchorName }} id={rowId('date')} type="button" disabled={disabled}
           className={clsx(css.ruleInput, css.ruleControl, css.pickerTrigger)} aria-label={t('timing.date')}
           aria-haspopup="dialog" aria-expanded={dateOpen} onClick={() => { setDateOpen(true) }}>
           <span>{draft.start.slice(0, 10).replaceAll('-', '/')}</span><IconCalendarOutlineRegular className={css.pickerIcon} />
         </button>
-        <DatePicker open={dateOpen && !disabled} anchorRef={dateAnchor} value={draft.start.slice(0, 10)}
+        <DatePicker open={dateOpen && !disabled} anchorRef={dateAnchor} anchorName={dateAnchorName} value={draft.start.slice(0, 10)}
           onPick={(date) => { change({ start: `${date}T${clock}` }); setDateOpen(false) }}
           onClose={() => { setDateOpen(false) }} t={t} />
       </div>}
       {draft.frequency !== 'advanced' && draft.frequency !== 'minutely' && draft.frequency !== 'hourly' && <div className={css.ruleRow}>
         <label className={css.ruleLabel} htmlFor={rowId('time')}>{t('timing.time')}</label>
-        <button ref={clockAnchor} id={rowId('time')} type="button" disabled={disabled}
+        <button ref={clockAnchor} style={{ anchorName: clockAnchorName }} id={rowId('time')} type="button" disabled={disabled}
           className={clsx(css.ruleInput, css.ruleControl, css.pickerTrigger)} aria-label={t('timing.time')}
           aria-haspopup="dialog" aria-expanded={clockOpen} onClick={() => { setClockOpen(true) }}>
           <span>{clock}</span><IconClockOutlineRegular className={css.pickerIcon} />
         </button>
-        <ClockPicker open={clockOpen && !disabled} anchorRef={clockAnchor} value={clock} seconds={draft.frequency !== 'daily'}
+        <ClockPicker open={clockOpen && !disabled} anchorRef={clockAnchor} anchorName={clockAnchorName} value={clock} seconds={draft.frequency !== 'daily'}
           onPick={(time) => { change(draft.frequency === 'daily' ? { dailyTime: time.slice(0, 5) }
             : { start: `${draft.start.slice(0, 10)}T${time}` }) }} onClose={() => { setClockOpen(false) }} t={t} />
       </div>}

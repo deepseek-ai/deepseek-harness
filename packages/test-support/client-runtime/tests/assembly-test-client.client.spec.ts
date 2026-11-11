@@ -195,7 +195,8 @@ describe('TestClient (jsdom)', () => {
   it('creates no mount element when the roster cannot be loaded', async () => {
     const roster = ClientRoster.of([{ name: '@deepseek-ai/dsh-client-test-runtime-missing', inject: [], immediately: true }])
     const before = document.body.childElementCount
-    await expect(TestClient.start({ roster }, RemoteMock.create(), { mount: true })).rejects.toThrow()
+    await expect(TestClient.start({ roster }, RemoteMock.create(), { mount: true }))
+      .rejects.toThrow('client-test-runtime: cannot import @deepseek-ai/dsh-client-test-runtime-missing/client')
     expect(document.body.childElementCount).toBe(before)
   })
 

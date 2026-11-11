@@ -27,6 +27,7 @@ import { isExpired, type ViewerSessionMode } from './fork-policy.ts'
 import { describeSharedTool, sharedToolProfile } from './shared-tools.ts'
 import type { ForkRegistry } from './fork-registry.ts'
 import type { RelayAuthority } from './relay-authority.ts'
+import { primarySessionIdOf } from './source-sessions.ts'
 
 /** Owner share shape this module reads; the host owns the full record. */
 import type { OwnerShare } from './owner-types.ts'
@@ -62,6 +63,7 @@ export type WriteAccessOutcome =
 /** Installs the access layer one share's source Session needs. */
 export type SourceAccessApplier = (
   share: OwnerShare,
+  sessionId: string,
   ready: { readonly context: Context; readonly session: Session } | undefined,
   trigger: WriteAccessTrigger,
 ) => Promise<WriteAccessOutcome>
@@ -147,35 +149,40 @@ export interface SourceAccessDeps {
 /** The confined access layer and turn control one host's source Sessions carry. */
 export interface SourceAccess {
   /**
-   * Install the access layer one share's source Session needs.
+   * Install the access layer one source Session of a share needs.
    * @param share - Share the layer is being installed for.
+   * @param sessionId - Source Session of that share the layer confines.
    * @param ready - The announced agent's own scope and session, when the caller has them.
    * @param trigger - Where this attempt came from, named in the diagnostic a refusal logs.
    * @returns What this attempt did.
    */
   apply(
     share: OwnerShare,
+    sessionId: string,
     ready?: { readonly context: Context; readonly session: Session },
     trigger?: WriteAccessTrigger,
   ): Promise<WriteAccessOutcome>
   /**
-   * Whether one share's source Session carries a usable confined access layer right now.
+   * Whether one source Session of a share carries a usable confined access layer right now.
    * @param shareId - Share the request arrived through.
+   * @param sessionId - Source Session asked about.
    * @returns True only while the layer is installed and confined.
    */
-  confined(shareId: string): boolean
+  confined(shareId: string, sessionId: string): boolean
   /**
-   * Why one share's source Session is not confined for driving, or undefined while it is.
+   * Why one source Session of a share is not confined for driving, or undefined while it is.
    * @param shareId - Share the question is asked about.
-   * @returns The refusal code, or undefined while the source Session is confined for this share.
+   * @param sessionId - Source Session asked about.
+   * @returns The refusal code, or undefined while that source Session is confined for this share.
    */
-  confinementRefusal(shareId: string): string | undefined
+  confinementRefusal(shareId: string, sessionId: string): string | undefined
   /**
-   * The recorded installation's own refusal code for one share's Session.
+   * The recorded installation's own refusal code for one source Session.
    * @param shareId - Share whose source Session is asked about.
+   * @param sessionId - Source Session asked about.
    * @returns The refusal, or undefined when none was recorded.
    */
-  refusalOf(shareId: string): string | undefined
+  refusalOf(shareId: string, sessionId: string): string | undefined
   /**
    * Stop child work whose grant is being narrowed or removed.
    * @param shareId - Share whose children are stopped.
@@ -244,7 +251,8 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
    * @returns The published, unexpired shares over it, in insertion order.
    */
   const activeSharesOf = (sessionId: string): OwnerShare[] =>
-    [...ownerShares.values()].filter(share => share.sessionId === sessionId && !isExpired(share.expiresAt, Date.now()))
+    [...ownerShares.values()].filter(share => share.sessionIds.includes(sessionId)
+      && !isExpired(share.expiresAt, Date.now()))
 
   /**
    * Access layers this host installed, keyed by the SESSION they sandbox.
@@ -276,7 +284,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     if (process.env.LIVESHARE_VIEWER_DEBUG === '1') {
       console.warn(
         `[liveshare] source access not installed trigger=${trigger} share=${share.shareId}`
-        + ` session=${share.sessionId} reason=${reason}`,
+        + ` session=${primarySessionIdOf(share)} reason=${reason}`,
       )
     }
     return { kind: 'refused', reason }
@@ -337,6 +345,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
    */
   const applySourceAccess = async (
     share: OwnerShare,
+    sessionId: string,
     ready?: { readonly context: Context; readonly session: Session },
     trigger: WriteAccessTrigger = 'prompt',
   ): Promise<WriteAccessOutcome> => {
@@ -344,20 +353,20 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     // Session share the one installation. An installation that could not confine anything is replaced
     // rather than kept, so a Session whose layer failed once — because it was not live yet, for instance
     // — can still get one.
-    const wanted = sessionNeedsWrite(share.sessionId) ? 'write' : 'view'
-    const active = activeSharesOf(share.sessionId)
-    const recorded = sourceAccess.get(share.sessionId)
-    if (active.length > 0 && sourceAccessUsable(share.sessionId, wanted) && recorded !== undefined) {
+    const wanted = sessionNeedsWrite(sessionId) ? 'write' : 'view'
+    const active = activeSharesOf(sessionId)
+    const recorded = sourceAccess.get(sessionId)
+    if (active.length > 0 && sourceAccessUsable(sessionId, wanted) && recorded !== undefined) {
       return { kind: 'kept', installation: recorded }
     }
     recorded?.dispose()
-    sourceAccess.delete(share.sessionId)
+    sourceAccess.delete(sessionId)
     // Every service is read through the context lookup: this bundle declares only `connection`, so a
     // property access for another service is a Cordis injection error at runtime, casts or not.
     const agents = deps.ctx.get('agents') as
       | { get?: (id: string) => { readonly ctx?: unknown; readonly session?: unknown } | undefined }
       | undefined
-    const live = ready === undefined ? agents?.get?.(share.sessionId) : undefined
+    const live = ready === undefined ? agents?.get?.(sessionId) : undefined
     const session = (ready?.session ?? live?.session) as Session | undefined
     const liveContext = (ready?.context ?? live?.ctx) as Context | undefined
     const fs = deps.ctx.get('fs') as ForkEnforcementFs | undefined
@@ -388,23 +397,23 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     // for one of them left a write share with no layer at all, which no later path retried.
     const current = ownerShares.get(share.shareId)
     if (current === undefined) return refusedSourceAccess(share, trigger, 'share-gone')
-    if (current.sessionId !== share.sessionId) return refusedSourceAccess(share, trigger, 'share-reassigned')
+    if (!current.sessionIds.includes(sessionId)) return refusedSourceAccess(share, trigger, 'share-reassigned')
     // The Session still has to be shared at some tier, and the tier the caller asked for has to still be
     // one this Session needs: a share removed while the workspace resolved installs nothing.
-    const needsWrite = sessionNeedsWrite(share.sessionId)
+    const needsWrite = sessionNeedsWrite(sessionId)
     if (needsWrite !== (wanted === 'write')) return refusedSourceAccess(share, trigger, 'share-mode-changed')
     // Every share over the Session stopped or expired while the workspace resolved: nothing remains that
     // could drive it, so no layer is installed.
-    if (activeSharesOf(share.sessionId).length === 0) return refusedSourceAccess(share, trigger, 'share-inactive')
+    if (activeSharesOf(sessionId).length === 0) return refusedSourceAccess(share, trigger, 'share-inactive')
     // Another installation can finish while the workspace resolves. Publication below is synchronous.
-    const concurrent = sourceAccess.get(share.sessionId)
-    if (sourceAccessUsable(share.sessionId, wanted) && concurrent !== undefined) {
+    const concurrent = sourceAccess.get(sessionId)
+    if (sourceAccessUsable(sessionId, wanted) && concurrent !== undefined) {
       return { kind: 'kept', installation: concurrent }
     }
     concurrent?.dispose()
-    sourceAccess.delete(share.sessionId)
+    sourceAccess.delete(sessionId)
     const installation = installSourceSessionAccess({
-      sessionId: share.sessionId,
+      sessionId,
       context: liveContext,
       scope: scopeKey,
       grantedRoot: granted,
@@ -417,20 +426,20 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
       // The write replacement is registered once for the Session, whenever any share over it may write.
       // Whether writing is still allowed is read from the Session's shares when a write runs, so a share
       // that narrows to view stops writing on the layer that is already mounted.
-      ...(needsWrite ? { write: { mayWrite: () => sessionWritable(share.sessionId) } } : {}),
+      ...(needsWrite ? { write: { mayWrite: () => sessionWritable(sessionId) } } : {}),
       // Every operation re-reads the grants of the shares that keep this Session drivable, so an input
       // queued past the grant that admitted it cannot act on the stale admission.
       refreshAuthorization: async () => {
-        for (const current of activeSharesOf(share.sessionId)) await relay.refreshRelayAccess(current.shareId)
+        for (const current of activeSharesOf(sessionId)) await relay.refreshRelayAccess(current.shareId)
       },
     })
     // Recorded whether or not it is usable: the guard it installed still has to be released, and the
     // reader asks this record whether the source Session is confined before it drives any prompt.
-    sourceAccess.set(share.sessionId, installation)
+    sourceAccess.set(sessionId, installation)
     deps.accessChanged()
     liveContext.effect(() => () => {
       installation.dispose()
-      if (sourceAccess.get(share.sessionId) === installation) sourceAccess.delete(share.sessionId)
+      if (sourceAccess.get(sessionId) === installation) sourceAccess.delete(sessionId)
       deps.accessChanged()
     }, 'liveshare: source enforcement lifetime')
     const registrationFailure = installation.registrationFailure
@@ -452,7 +461,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     } else if (process.env.LIVESHARE_VIEWER_DEBUG === '1') {
       console.warn(
         `[liveshare] source access installed trigger=${trigger} share=${share.shareId}`
-        + ` session=${share.sessionId} tier=${wanted}`,
+        + ` session=${sessionId} tier=${wanted}`,
       )
     }
     return { kind: 'installed', installation }
@@ -464,10 +473,11 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
    * A prompt that drives that Session is refused unless this holds, so a share whose layer could not be
    * installed — or whose Session is not live yet — is never driven against the owner's own tools.
    * @param shareId Share the request arrived through.
+   * @param sessionId Source Session asked about.
    * @returns True only while the layer is installed and confined.
    */
-  function sourceConfined(shareId: string): boolean {
-    return sourceConfinementRefusal(shareId) === undefined
+  function sourceConfined(shareId: string, sessionId: string): boolean {
+    return sourceConfinementRefusal(shareId, sessionId) === undefined
   }
 
   /**
@@ -477,9 +487,10 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
    * carried no layer instead of only that it did not. Both tiers drive the Session, so both need the
    * confined read; only the write tier needs the confined write beside it.
    * @param shareId - Share the question is asked about.
-   * @returns The refusal code, or undefined while the source Session is confined for this share.
+   * @param sessionId - Source Session asked about.
+   * @returns The refusal code, or undefined while that source Session is confined for this share.
    */
-  function sourceConfinementRefusal(shareId: string): string | undefined {
+  function sourceConfinementRefusal(shareId: string, sessionId: string): string | undefined {
     const share = ownerShares.get(shareId)
     if (share === undefined) return 'share-unknown'
     // The share's own answer is part of it: a share whose deadline passed is not confined for driving,
@@ -487,18 +498,18 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     // which one the share carries and drives nothing.
     const mode = relay.drivableModeOf(shareId)
     if (mode === undefined) return 'share-mode-unknown'
-    const access = sourceAccess.get(share.sessionId)
+    const access = sourceAccess.get(sessionId)
     if (access === undefined) return 'layer-absent'
     if (!access.readConfined) return 'layer-read-unconfined'
     if (mode === 'write' && !access.writeConfined) return 'layer-write-unconfined'
     return undefined
   }
 
-  /** The recorded installation's own refusal code for one share's Session. */
-  function refusalOf(shareId: string): string | undefined {
+  /** The recorded installation's own refusal code for one source Session. */
+  function refusalOf(shareId: string, sessionId: string): string | undefined {
     const share = ownerShares.get(shareId)
     if (share === undefined) return undefined
-    return sourceAccess.get(share.sessionId)?.refusal
+    return sourceAccess.get(sessionId)?.refusal
   }
 
   /** Stop child work whose grant is being narrowed or removed. */
@@ -540,10 +551,12 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     const agents = deps.ctx.get('agents') as
       | { get?: (id: string) => LiveAgent | undefined }
       | undefined
-    const live = agents?.get?.(share.sessionId)
-    if (live === undefined || live.status !== 'running') return
-    console.warn(`[liveshare] cancelling source turn share=${shareId}`)
-    live.cancel?.({ kind: 'user' }, { keepInbox: true })
+    for (const sessionId of share.sessionIds) {
+      const live = agents?.get?.(sessionId)
+      if (live === undefined || live.status !== 'running') continue
+      console.warn(`[liveshare] cancelling source turn share=${shareId} session=${sessionId}`)
+      live.cancel?.({ kind: 'user' }, { keepInbox: true })
+    }
   }
 
   /**
@@ -570,7 +583,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     if (sourceAccessUsable(sessionId, wanted)) return
     // Any share over the Session installs what the whole Session needs: the installation reads the tier
     // from the shares, not from the record it was asked with.
-    void applySourceAccess(target, undefined, 'mode')
+    void applySourceAccess(target, sessionId, undefined, 'mode')
   }
 
   /**
@@ -591,10 +604,10 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     // The share's own record says whether a layer is needed; the Relay's narrowing tier only says whether
     // one may already be driven. Requiring the narrowing answer here would refuse to prepare exactly the
     // share whose Relay answer has not arrived yet, which is the one a reader is waiting on.
-    const share = [...ownerShares.values()].find(candidate => candidate.sessionId === sessionId)
+    const share = [...ownerShares.values()].find(candidate => candidate.sessionIds.includes(sessionId))
     if (share === undefined) return
     if (sourceAccessUsable(sessionId, share.sessionMode)) return
-    await applySourceAccess(share, undefined, trigger)
+    await applySourceAccess(share, sessionId, undefined, trigger)
   }
 
   /** One preparation in flight per Session, so repeated reader requests wait on the same activation. */
@@ -619,7 +632,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     // Nothing to prepare while the layer is usable. Otherwise the share's own record says whether one is
     // needed, because the Relay's narrowing tier may not have arrived yet: a Reader request must not be
     // the one that waits for it, and every reason this host declines to prepare is worth naming.
-    const confinement = sourceConfinementRefusal(shareId)
+    const confinement = sourceConfinementRefusal(shareId, primarySessionIdOf(share))
     if (confinement === undefined) return
     if (confinement !== 'layer-absent' && confinement !== 'layer-read-unconfined' && confinement !== 'layer-write-unconfined') {
       // A tier the Relay has not stated is still a layer this host has to be ready with, because the
@@ -629,22 +642,23 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
         if (process.env.LIVESHARE_VIEWER_DEBUG === '1') {
           console.warn(
             `[liveshare] source not prepared trigger=reader share=${shareId}`
-            + ` session=${share.sessionId} reason=${confinement}`,
+            + ` session=${primarySessionIdOf(share)} reason=${confinement}`,
           )
         }
         return
       }
     }
-    if (preparingSources.has(share.sessionId)) return
-    const started = prepareSourceSession(share.sessionId, 'reader')
+    const primary = primarySessionIdOf(share)
+    if (preparingSources.has(primary)) return
+    const started = prepareSourceSession(primary, 'reader')
       .catch((error: unknown) => {
         // A failed preparation changes nothing: the share stays refused and the reader keeps reading.
         console.warn(
           `[liveshare] preparing the source failed share=${shareId}: ${errorMessage(error)}`,
         )
       })
-      .finally(() => { preparingSources.delete(share.sessionId) })
-    preparingSources.set(share.sessionId, started)
+      .finally(() => { preparingSources.delete(primary) })
+    preparingSources.set(primary, started)
   }
 
   return {

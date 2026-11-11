@@ -1,0 +1,14 @@
+version: 1
+scenario: ptc-reset
+profile: headless
+composition: ptc
+recording: authored
+header:
+  class: ptc-reset
+  pin: true
+  systemPromptSource: ptc-persistent
+replay:
+  override: true
+permission: workspace-write
+workspace:
+  final: true

@@ -39,14 +39,14 @@
   en: ec2bf804bd1a5439
   zh: 316e767507e859ef
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/creation-and-teardown:
-  en: eaaed8cc22640221
-  zh: 557e2e67888ef7f6
+  en: 4a10108fb0d37732
+  zh: cc3be0eb8f00901c
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/persistence-integration:
   en: 3b48a480036bd5df
   zh: 28cea2036b0dccee
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/turn-and-step-flow:
-  en: ad92c751515520ff
-  zh: ca6b24db5ab4e471
+  en: 4bd3c8b4a9ee8cf8
+  zh: 2f4965a3197bed0e
 /deepseek-ai-dsh-agent-loop/understand-the-implementation/failure-and-cancellation:
   en: eea56903c4ff82f5
   zh: c0d5abb5767780ed
@@ -60,14 +60,26 @@
   en: 5507d83eb979c737
   zh: 0ffde85d627b3933
 /deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/what-the-model-sees:
-  en: ed0e841bed26a836
-  zh: f30d91bc5a64fa20
+  en: 5535c140d026135c
+  zh: 9364a413606fe3e4
 /deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/token-effect:
   en: ad93d8d61968a25d
   zh: 268ff858b0fa96e8
 /deepseek-ai-dsh-agent-loop/model-experience/complete-conversation-request/kv-cache-effect:
   en: 12a2fc9e3654ddbf
   zh: 133b7ca59925c82a
+/deepseek-ai-dsh-agent-loop/model-experience/runtime-context-reminders:
+  en: 26e77ac20c98b259
+  zh: fdb8ff9283361077
+/deepseek-ai-dsh-agent-loop/model-experience/runtime-context-reminders/what-the-model-sees:
+  en: 68708ef860055484
+  zh: ab6c1adf49781491
+/deepseek-ai-dsh-agent-loop/model-experience/runtime-context-reminders/token-effect:
+  en: 23892a2e82df1adc
+  zh: e7d01e3b28da6bcd
+/deepseek-ai-dsh-agent-loop/model-experience/runtime-context-reminders/kv-cache-effect:
+  en: c7a9803ccea0c7d3
+  zh: ba8a882feebe3132
 /deepseek-ai-dsh-agent-loop/model-experience/retained-message-history:
   en: 50d33d852dec1e28
   zh: ec15695304f25f38

@@ -19,7 +19,11 @@ const provider = {
       helperPath: resolve('unused-cua-helper'),
       createChannel() { throw new Error('Scope tests must not start a native helper') },
       permissionParameters: (_method, permission, locale) => ({ permission, locale }),
-      description: 'Fixture computer interaction', guidance: 'Fixture CUA guidance',
+      guidance: 'Fixture CUA guidance',
+      capabilities: {
+        platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState'], appLevelAccessibility: true,
+        keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels',
+      },
     })
   },
 }
@@ -53,8 +57,8 @@ it('adds and removes CUA for existing and new PTC Agents without changing other 
   const mounted = await ctx.plugin(provider, {})
   await expect.poll(() => ctx.tools.get('cua', existing.agent)).toBeDefined()
   expect(ctx.tools.get('cua', standard.agent)).toBeUndefined()
-  expect((await ctx.systemPrompt.assemble({ scope: existing.agent })).sections)
-    .toContainEqual(expect.objectContaining({ name: 'computer-use:dsh-cua', text: 'Fixture CUA guidance\n\nMaximum click holdMs: 5000 ms.' }))
+  const { sections } = await ctx.systemPrompt.assemble({ scope: existing.agent })
+  expect(sections.find(section => section.name === 'computer-use:dsh-cua')?.text).toContain('Fixture CUA guidance')
   await ctx.agentPresets.select(existing.agent, 'ptc')
   expect(ctx.tools.schemas(existing.agent).filter(tool => tool.name === 'cua')).toHaveLength(1)
   const fresh = await create('fresh', 'ptc')

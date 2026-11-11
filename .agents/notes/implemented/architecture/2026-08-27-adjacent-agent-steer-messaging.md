@@ -4,26 +4,25 @@ Status: implemented
 
 English | [中文](2026-08-27-adjacent-agent-steer-messaging.zh.md)
 
+The adjacency, discovery, and parent-lifetime restrictions below are superseded by [tree-wide communication](2026-10-16-tree-wide-agent-communication.md); the remaining decisions stay active. The tool identity marker and initial-task communication guidance below are superseded by [tool-owned communication](2026-10-22-subagent-tool-owned-communication.md).
+
 ## Problem
 
 Continuable Agents originally used direction-specific model controls. A parent called `send_message({ subagent_id, message })`, which delegated to a FIFO `followup` service operation. A child instead received a child-scoped `report({ output })` tool, a `tool:report` system-prompt section, and deployment-selected quiet or waking delivery. The tools described one adjacent-Agent operation through different schemas, service paths, source attribution, and scheduling.
 
-A continuable child owns its own Session, so its parent does not automatically receive the child's transcript, tool output, or reasoning. The return path must therefore remain explicit and repeatable: a child may send progress before it finishes, remain available after sending, or fail before it can cooperate. Turning every final assistant message into an implicit result would conflate turn completion with model-selected communication and would not cover abnormal endings.
+A continuable child owns its own Session, so its parent does not automatically receive the child's transcript, tool output, or reasoning. Explicit messages let a child send actionable findings before finishing. The runtime separately delivers terminal output in a settlement notice when the direct creator is still online.
 
 The child-only tool and system-prompt section also preceded every inherited fork turn. They made a continuable fork child's request head differ from its parent's before the history that fork exists to reuse, forcing the provider to prefill the entire copied transcript again.
 
 ## Decision
 
-`SubagentRuntime.sendMessage(sender, targetId, content, { signal })` is the only public model-authored message operation. The continuation manager accepts only the exact live sender and a target on one adjacent edge:
+`SubagentRuntime.sendMessage(sender, targetId, content, { signal })` is the only public model-authored message operation. The continuation manager accepts only the exact live sender and a target in the same root tree; [tree-wide communication](2026-10-16-tree-wide-agent-communication.md) owns authorization and discovery.
 
-- parent to direct continuable child, authorized by the child's durable `SessionHeader.parentSession`;
-- resident continuable child to its exact live direct parent, authorized by the child's Activation.
+Self-targets, stale Agent objects, unknown targets, and external executions are not alternate routes. The operation has no caller-supplied source, delivery mode, offline root mailbox, or provider dispatch.
 
-Siblings, self-targets, ancestors beyond one edge, stale Agent objects, unknown targets, and one-shot children are not alternate routes. The operation has no caller-supplied source, delivery mode, offline parent mailbox, or provider dispatch.
+Every accepted message uses `Agent.steer()`. A running target receives it at the nearest step boundary; an idle target starts a turn. An absent target is cold-resumed under the root before the same Steer delivery; its creation ancestors can remain offline. The manager retains waking-send accounting so a continuation-managed target cannot settle between synchronous inbox insertion and driver admission.
 
-Every accepted message uses `Agent.steer()`. A running target receives it at the nearest step boundary; an idle target starts a turn. An absent direct child is cold-resumed through the existing continuation lifecycle before the same Steer delivery. The manager retains waking-send accounting so a continuation-managed target cannot settle between synchronous inbox insertion and driver admission.
-
-Every direction uses one durable source. The service derives `senderSessionId` from the authorized Agent and frames the model-visible content as `Agent <sender-id> sent a message:`, so attribution cannot diverge from authority.
+Every direction uses one durable source. The service derives `senderSessionId` from the exact live sender and frames content as `Agent <sender-id> sent a message:`.
 
 ```ts
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -41,20 +40,20 @@ The globally registered model tool is direction-neutral and has one fixed schema
 
 ```ts
 interface SendMessageInput {
-  readonly agent_id: string
+  readonly agent: string
   readonly message: string
 }
 ```
 
-Parents and children inherit the same definition in the same registry order. The standard definition carries a process-stable internal identity that a scoped same-name tool does not satisfy. An independently selected preset may omit the tool, a historical descriptor filter may remove it on resume, and a scoped replacement may provide different semantics; neither case receives the standard call instruction. When the standard tool remains visible, the continuation manager appends the JSON-encoded direct parent id and the instruction to send one self-contained result before finishing, plus earlier actionable findings, to the child's initial user task. For a fork child this task follows the inherited completed-turn prefix; no child-only system-prompt section or tool schema precedes that prefix.
+Parents and children inherit the same definition in the same registry order. The standard definition carries a process-stable internal identity that a scoped same-name tool does not satisfy. An independently selected preset may omit the tool, a historical descriptor filter may remove it on resume, and a scoped replacement may provide different semantics; none receives the standard call instruction. When the standard tool remains visible, the continuation manager appends the JSON-encoded direct parent id, automatic final-answer delivery conditions, and guidance to send earlier actionable findings to the child's initial user task. For a fork child this task follows the inherited completed-turn prefix; no child-only system-prompt section or tool schema precedes that prefix.
 
-The instruction is guidance, not settlement enforcement. Sending does not end the child's turn, zero or several calls remain mechanically valid, and the runtime never rejects a child for staying silent. The manager-owned `subagent-settled` notice remains unconditional and separately attributed because it records how an Activation ended and preserves terminal output when the child cannot cooperate.
+The instruction is guidance, not settlement enforcement. Sending does not end the child's turn, zero or several calls remain mechanically valid, and the runtime never rejects a child for staying silent. The separately attributed `subagent-settled` notice records the Activation's outcome and terminal output only when its direct creator is still online and delivery is `parent`.
 
 Human browser prompts are not model-authored Agent messages. The remote prompt path keeps a private Queue delivery so each human prompt remains a distinct turn. Interrupt behavior and settlement delivery remain independent.
 
 ### Complete removal and reintroduction condition
 
-The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema, `tool:report` prompt section, `reportDelivery` configuration, report-specific message source, catalog entries, composition rows, and supported-behavior snapshots are absent. The unified tool gives up the recipient-free child shortcut and the old ability for a structural return tool to survive an explicit child allow-list. Those capabilities return only if a concrete use case requires semantics that an adjacent `agent_id` and fixed Steer cannot express; reintroducing them requires a distinct model operation and prefix-cost evidence, not an alias over `sendMessage()`.
+The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema, `tool:report` prompt section, `reportDelivery` configuration, report-specific message source, catalog entries, composition rows, and supported-behavior snapshots are absent. The unified tool gives up the recipient-free child shortcut and the old ability for a structural return tool to survive an explicit child allow-list. Those capabilities return only if a concrete use case requires semantics that a tree member’s `agent` reference and fixed Steer cannot express; reintroducing them requires a distinct model operation and prefix-cost evidence, not an alias over `sendMessage()`.
 
 ## Alternatives considered
 
@@ -64,16 +63,16 @@ The standalone `@deepseek-ai/dsh-tool-subagent-report` package, `report` schema,
 
 **Make `report` global.** Roots, one-shot children, remote children, and agentless callers cannot derive a report recipient. Advertising it globally would make schema visibility disagree with authority, while `send_message` already makes the recipient explicit.
 
-**Turn every child final message into an implicit send.** A long-lived child may have nothing useful to send in one turn and several findings in another. Automatic delivery would merge model-authored communication with the runtime's settlement account and could not replace the unconditional notice on errors, cancellation, or token exhaustion.
+**Treat the final answer as a model-authored send.** A settlement notice must preserve terminal output and abnormal endings even when the child cannot cooperate. It keeps runtime attribution distinct from findings the child explicitly chose to send.
 
-**Rely only on the tool description.** A tool description helps after the model considers that tool; the failure mode is a child that believes it is finished without considering any return call. Initial-task guidance reaches that decision without changing the inherited system or tool prefix.
+**Rely only on the tool description.** A tool description helps after the model considers that tool; initial-task guidance also explains which earlier findings should reach the parent and what the final answer must contain, without changing the inherited system or tool prefix.
 
 **Keep quiet delivery as deployment policy.** A quiet model-authored message can be accepted while an idle target never reads it. Fixed Steer gives both directions one delivery meaning and preserves accepted order with later settlement notices.
 
 ## Consequences
 
-- Model consumers expose one `send_message({ agent_id, message })` definition to parents and children, with no model-selected Queue versus Steer parameter.
-- The continuation manager remains the sole owner of adjacency authorization, residency, cold resume, waking admission, and teardown races.
+- Model consumers expose one `send_message({ agent, message })` definition to parents and children, with no model-selected Queue versus Steer parameter.
+- The continuation manager remains the sole owner of tree authorization, residency, cold resume, waking admission, and teardown races.
 - Accepted messages may extend a running target's current turn; messages waiting together share next-step FIFO ordering.
 - Caller cancellation owns work only until inbox acceptance and does not retract an accepted message or dispose the target.
 - The initial task carries JSON-encoded dynamic parent addressing after a fork prefix, while the request-head system prompt and tool ordering remain reusable.

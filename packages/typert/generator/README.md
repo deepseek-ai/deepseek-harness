@@ -113,13 +113,13 @@ Host and Client are independent TypeScript programs. Direct project references e
 
 ### Emission and publication contract
 
-`FaceModelEmitter` emits executable JavaScript containing success-cached Zod schema factories and the `TYPERT` contribution, plus a declaration file whose factories return `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
+`FaceModelEmitter` emits executable JavaScript containing success-cached Zod schema factories and the `TYPERT` contribution, plus a declaration file whose factories return `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client, including the declaration map its generated declaration references. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
 
 [Unary binary results](../protocol/README.md) are recognized after generic type resolution. Their codecs validate the byte-array type and JSON metadata without iterating, copying, or freezing the byte payload; generated Client declarations retain the authored metadata and narrow the byte backing to `ArrayBuffer`.
 
 ### Catalog projection
 
-The runtime type closure indexes exported workspace declarations and referenced framework enums. Vendored declarations stay outside business API discovery; their enums remain available when a public result refers to them.
+The runtime type closure indexes exported workspace declarations and referenced framework enums. Vendored declarations stay outside business API discovery; their enums remain available when a public result refers to them. Class declaration text includes callable method overloads and omits their implementation signatures.
 
 The root export includes the model-driven extraction, completeness checks, and deterministic text renderers used by this repository's Cordis catalogs. They accept a `CordisCatalogPolicy`; repository-owned type links, foundation and exemption classifications, and inherited Cordis entries stay in `scripts/gen-cordis-catalog.ts` and are passed in explicitly, so this package contains projection mechanics, not a hidden copy of the repository's documentation taxonomy.
 

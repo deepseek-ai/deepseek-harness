@@ -9,6 +9,7 @@
 - navigation "Turn navigation":
   - button "Jump to turn 1"
   - button "Jump to turn 2"
+- button "Start of conversation" [disabled]
 - text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy"
 - status: Completed
@@ -22,6 +23,7 @@
 - button "compact Compacted 5 history items (~{{tokens}} tokens)"
 - status: Completed
 - button "Completed in {{duration}}" [disabled]
+- button "Context injection AGENTS.md"
 - textbox "Message or run a task, / commands, @ files or sessions"
 - button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write

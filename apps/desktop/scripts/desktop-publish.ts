@@ -8,8 +8,8 @@ import type { DesktopUploadArtifact, DesktopUploadPlan } from './desktop-upload-
 
 /** File identity computed from bytes, never inferred from COS ETags. */
 export interface DesktopObjectDigest { readonly size: number; readonly sha512: string }
-/** Remote object observation; channel objects additionally carry their exact YAML. */
-export interface DesktopRemoteObject extends DesktopObjectDigest { readonly contents?: string }
+/** Remote bytes, optional download filename header, and exact YAML for channel objects. */
+export interface DesktopRemoteObject extends DesktopObjectDigest { readonly contents?: string; readonly contentDisposition?: string }
 /** Transport owned by the caller holding the destination channel lock. */
 export interface DesktopPublishTransport {
   /** Read and hash remote bytes; only a confirmed missing object returns null. */

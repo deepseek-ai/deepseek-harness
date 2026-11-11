@@ -126,6 +126,12 @@ async function runWindows(
 }
 
 describe('closed runner protocol', () => {
+  it.each([null, 'pipe', [1, 7], ['2']].map(pipeFds => ({ pipeFds })))('rejects invalid child-owned pipe descriptors: $pipeFds', ({ pipeFds }) => {
+    const files = track(createLinuxLaunchFiles({ cwd: '/work', env: {} }))
+    writeFileSync(files.requestPath, JSON.stringify({ cwd: '/work', env: {}, pipeFds }))
+    expect(() => consumeLinuxLaunchRequest(files.requestPath)).toThrow('invalid Linux launch request')
+  })
+
   it('preserves the explicit control request and rejects other transport values', () => {
     const files = track(createLinuxLaunchFiles({ cwd: '/target', env: {}, control: 'pipe' }))
     expect(consumeLinuxLaunchRequest(files.requestPath)).toEqual({ cwd: '/target', env: {}, control: 'pipe' })
@@ -518,7 +524,7 @@ describe('Linux one-shot exec bootstrap', () => {
       hostArgument(new FakeRunnerHost()),
       internals({ execve: rootExecve }),
     )
-    expect(rootExecve).toHaveBeenCalledWith('/tool', ['tool'], { PATH: '' })
+    expect(rootExecve).toHaveBeenCalledWith('/tool', ['tool'], { PATH: '' }, undefined, undefined)
   })
 
   it.skipIf(process.platform === 'win32')('preserves symlink-sensitive parent traversal in PATH candidates', async () => {
@@ -537,7 +543,7 @@ describe('Linux one-shot exec bootstrap', () => {
       })
     })
     await runSpawnRunner(files.requestPath, ['--', 'tool'], hostArgument(new FakeRunnerHost()), internals({ execve }))
-    expect(execve).toHaveBeenCalledWith(`${cwd}/link/../tool`, ['tool'], { PATH: 'link/..' })
+    expect(execve).toHaveBeenCalledWith(`${cwd}/link/../tool`, ['tool'], { PATH: 'link/..' }, undefined, undefined)
     expect(readLinuxStartupError(files.startupErrorPath)).toMatchObject({
       type: 'error', error: { code: 'EIO' },
     })
@@ -555,8 +561,8 @@ describe('Linux one-shot exec bootstrap', () => {
       internals({ execve: execve as never }),
     )
     expect(execve.mock.calls).toEqual([
-      ['/work/bin/tool', ['tool', 'literal arg'], { PATH: 'bin' }, ...control === undefined ? [] : [control]],
-      ['/bin/sh', ['/bin/sh', '/work/bin/tool', 'literal arg'], { PATH: 'bin' }, ...control === undefined ? [] : [control]],
+      ['/work/bin/tool', ['tool', 'literal arg'], { PATH: 'bin' }, control, undefined],
+      ['/bin/sh', ['/bin/sh', '/work/bin/tool', 'literal arg'], { PATH: 'bin' }, control, undefined],
     ])
     expect(readLinuxStartupError(files.startupErrorPath)).toMatchObject({
       type: 'error', error: { code: 'EIO', path: 'tool' },

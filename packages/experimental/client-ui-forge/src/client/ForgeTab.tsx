@@ -43,6 +43,14 @@ export interface ForgeTabInjected {
   readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
+  /** Rerun the failed checks or one check; settles once the outcome is reported. */
+  readonly rerunChecks: NonNullable<ChangeRequestActions['rerunChecks']>
+  /** Request reviews from more reviewers; settles once the outcome is reported. */
+  readonly requestReviews: NonNullable<ChangeRequestActions['requestReviews']>
+  /** List accounts a review can be requested from. */
+  readonly reviewerCandidates: NonNullable<ChangeRequestActions['reviewerCandidates']>
+  /** Bring the base branch's new commits into the head branch; settles once the outcome is reported. */
+  readonly updateBranch: NonNullable<ChangeRequestActions['updateBranch']>
   /** Check the removed worktree of the Session out again, reporting the outcome. */
   readonly restore: () => void
   /** Open a URL outside the app. */
@@ -158,7 +166,7 @@ function SignIn({ state, copyText, t }: {
  */
 export function ForgeTab({
   useTabInfo, sessionId, usePanel, useHost, useLocale, reconnect, refresh, remove, markReady, merge, readChecks, restore,
-  openLink, copyText, copyPath,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, copyPath,
   reportVisible, createChangeRequest, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
@@ -190,6 +198,7 @@ export function ForgeTab({
   }
   const actions: ChangeRequestActions = {
     openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge, readChecks,
+    rerunChecks, requestReviews, reviewerCandidates, updateBranch,
     viewChanges: (entry) => { viewChanges({ kind: 'change', url: entry.url }) },
   }
   const local = state.local !== null && state.local.files.length > 0 ? state.local : null

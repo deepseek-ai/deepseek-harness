@@ -2,9 +2,9 @@
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
-  SessionListState, SessionSnapshot, SessionSummary,
+  SessionListState, SessionSnapshot, SessionSummary, SessionProjectionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -12,7 +12,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import {
-  SubagentHeaderLineage, type SubagentCatalogInjected,
+  SubagentHeaderLineage, type SubagentCatalogInjected, type SubagentCatalogActionInjected,
 } from '../src/client/SubagentHeaderLineage.tsx'
 import {
   SubagentReadOnlyComposer, type SubagentReadOnlyMatch,
@@ -35,7 +35,8 @@ const sid = (id: string) => id as SessionId
 function sessionsWith(sessions: SessionSummary[]) {
   const byId: Record<string, SessionSummary> = {}
   for (const s of sessions) byId[s.id] = s
-  const snapshot: SessionListState = { ids: sessions.map(s => s.id), byId, phase: 'ready', projectionsBySession: {} }
+  const projections: Record<SessionId, SessionProjectionSnapshot> = {}
+  const snapshot: SessionListState = { ids: sessions.map(s => s.id), byId, phase: 'ready', projectionsBySession: projections }
   const actionCalls: { method: string; args: unknown[] }[] = []
   const address: SubagentAddress = {
     parentSessionId: sid('parent'),
@@ -48,6 +49,7 @@ function sessionsWith(sessions: SessionSummary[]) {
       subscribe: () => () => {},
     },
     actionCalls,
+    projections,
     subagentAddress: (childSessionId: SessionId) => childSessionId === address.childSessionId
       ? address
       : undefined,
@@ -108,6 +110,53 @@ describe('apply', () => {
     expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight'])
   })
 
+  it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
+    const { ctx } = await fullBench(FAMILY)
+    onTestFinished(() => ctx.fiber.dispose())
+    ctx.slots.register({ name: 'conversation.session.header.actions.subagent.footer', id: 'test-content' }, () => null)
+    const registerResource = vi.fn(() => () => {})
+    const registerTab = vi.fn(() => () => {})
+    ctx.provide('resources', { register: registerResource } as never)
+    ctx.provide('sidebarRightTabs', { register: registerTab } as never)
+    await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
+    expect(registerTab).toHaveBeenCalledOnce()
+    expect(ctx.slots.entries('conversation.session.header.actions.subagent.footer')).toHaveLength(1)
+  })
+
+  it('reads direct child catalogs sequentially after reading the parent', async () => {
+    const { ctx, face } = await fullBench([...FAMILY, summary({ id: sid('legacy'), formatStatus: 'migration-required' })])
+    onTestFinished(() => ctx.fiber.dispose())
+    const entry = ctx.slots.entries('conversation.session.header.lineage')
+      .find(entry => entry.component === SubagentHeaderLineage)!
+    const actions = (entry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
+    const projections = face.projections
+    const held = Promise.withResolvers<undefined>()
+    const refresh = vi.spyOn(face, 'refreshProjections').mockImplementation(async (id) => {
+      if (id === sid('parent')) projections[id] = { state: 'ready', error: null, values: { subagentCatalog: [
+        { id: sid('external'), mode: 'external', createdAt: 1 },
+        ...['c1', 'c2', 'legacy', 'blocked', 'failed'].map(id => ({ id: sid(id), mode: 'one-shot' as const, createdAt: 1 })),
+      ] } }
+      if (id === sid('c1')) {
+        await held.promise
+        projections[id] = { state: 'ready', error: null, values: { subagentCatalog: [
+          { id: sid('grandchild'), mode: 'one-shot', createdAt: 1 },
+        ] } }
+      }
+    })
+    onTestFinished(() => { refresh.mockRestore() })
+    projections[sid('blocked')] = { state: 'migration-required', error: null, values: {} }
+    projections[sid('failed')] = { state: 'error', error: null, values: {} }
+    const reading = actions.prepareCatalog(sid('parent'))
+    await vi.waitFor(() => { expect(refresh.mock.calls).toEqual([[sid('parent')], [sid('c1')]]) })
+    held.resolve(undefined)
+    await reading
+    expect(refresh.mock.calls).toEqual([[sid('parent')], [sid('c1')], [sid('c2')]])
+    await actions.prepareCatalog(sid('c2'))
+    projections[sid('c2')] = { state: 'ready', error: null, values: {} }
+    await actions.prepareCatalog(sid('c2'))
+    expect(refresh.mock.calls.slice(3)).toEqual([[sid('c2')], [sid('c2')]])
+  })
+
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {
     const { ctx, face } = await fullBench(FAMILY)
     const catalogEntry = ctx.slots.entries('conversation.session.header.lineage')
@@ -139,7 +188,20 @@ describe('apply', () => {
     const actionEntry = ctx.slots.entries('conversation.session.header.actions')
       .find(entry => entry.options.id === 'subagent-catalog')!
     expect(actionEntry.options.order).toBe(10)
-    expect(actionEntry.inject).toBe(catalogEntry.inject)
+    const actionProps = (actionEntry.inject as (id: SessionId) => SubagentCatalogActionInjected)(sid('parent'))
+    const source = actionProps.hooks.footerAvailable
+    const changed = vi.fn()
+    const unsubscribe = source.subscribe(changed)
+    expect(source.getSnapshot()).toBe(false)
+    const remove = ctx.slots.register({
+      name: 'conversation.session.header.actions.subagent.footer', id: 'test-footer',
+    }, () => null)
+    expect(source.getSnapshot()).toBe(true)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledOnce() })
+    remove()
+    expect(source.getSnapshot()).toBe(false)
+    await vi.waitFor(() => { expect(changed).toHaveBeenCalledTimes(2) })
+    unsubscribe()
 
     const composerEntry = ctx.slots.entries('conversation.composer')
       .find(entry => entry.component === SubagentReadOnlyComposer)!
@@ -156,19 +218,14 @@ describe('apply', () => {
     })
     expect(select(owner(undefined))).toBeNull()
     expect(select(owner(null))).toBeNull()
-    expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true })))
+    expect(select(owner({ address: { ...address, mode: 'one-shot' } })))
       .toEqual({ reason: 'one-shot' })
     // One-shot stays read-only even while running: it has no stop action.
-    expect(select(owner({ address: { ...address, mode: 'one-shot' }, parentAvailable: true }, true)))
+    expect(select(owner({ address: { ...address, mode: 'one-shot' } }, true)))
       .toEqual({ reason: 'one-shot' })
-    expect(select(owner({ address: { ...address, mode: 'unknown' }, parentAvailable: true })))
+    expect(select(owner({ address: { ...address, mode: 'unknown' } })))
       .toEqual({ reason: 'unknown' })
     expect(select(owner({ address }))).toBeNull()
-    expect(select(owner({ address, parentAvailable: true }))).toBeNull()
-    expect(select(owner({ address, parentAvailable: false })))
-      .toEqual({ reason: 'parent-unavailable' })
-    // A RUNNING parent-offline continuable yields the default composer, whose
-    // disabled input still carries the primary Stop; stopped, it takes back over.
-    expect(select(owner({ address, parentAvailable: false }, true))).toBeNull()
+    expect(select(owner({ address }, true))).toBeNull()
   })
 })

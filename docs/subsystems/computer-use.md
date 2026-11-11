@@ -14,8 +14,10 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 |---|---|
 | `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
-| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native privilege checks, observed helper/parent processes, and the application identified by macOS process responsibility at helper startup. The independent helper uses its own bundle when system attribution is unavailable; application metadata is absent if neither bundle can be identified. |
+| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `win32`, with helper process identity. macOS includes permission checks, parent identity and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
+
+The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
 
 ## Choose a provider
 
@@ -92,7 +94,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Inspect system privileges independently of application decisions and icons.
- * @returns Fresh native preflight and launch metadata.
+ * @returns Platform-tagged access observations and native process metadata.
  */
 @Remote async systemStatus(): Promise<CuaSystemPermissionState>
 

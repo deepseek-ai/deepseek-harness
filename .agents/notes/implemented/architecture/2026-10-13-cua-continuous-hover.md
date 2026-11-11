@@ -10,7 +10,7 @@ Hover interactions span movement, delayed content, observation and input inside 
 
 ## Decision
 
-App and Window expose `hover` for an observed AX element or an explicit coordinate target. It never presses a mouse button; disabled controls can use system-pointer movement. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click. The [input-routing decision](2026-10-13-cua-hover-routes-and-coordinates.md) selects AX alternate UI before falling back to system movement with foreground and mouse-hit checks. It never activates or raises the app implicitly. Other input or window changes can race that check.
+An explicit Window exposes `mouseMove` for coordinates or an observed element ID. The result reports `hoverRoute` and `systemPointerMoved`. It never presses a mouse button. With session approval, system-pointer movement also works on disabled controls. Completion, AX reads and screenshots do not restore a previous pointer position. Successive calls can visit intermediate points before entering a popup. Clicks deliver button events at their target without an off-window priming click. The [input-routing decision](2026-10-13-cua-hover-routes-and-coordinates.md) requires foreground and mouse-hit checks for system movement. It never activates or raises the app implicitly. Other input or window changes can race that check.
 
 The [shared helper](2026-10-09-cua-shared-native-helper.md) serializes complete individual operations. It grants no application ownership across calls. Earlier arrival, a retained app object and Session lifetime do not establish task priority. Waiting for the model does not reserve the application. Explicit task coordination determines any required execution order.
 
@@ -20,7 +20,7 @@ The [shared helper](2026-10-09-cua-shared-native-helper.md) serializes complete 
 
 **Click or drag as hover** introduces button input that can activate a control, select text or dismiss a popup. Hover requires a separate unpressed movement operation.
 
-**PID-directed virtual movement** can display Chromium hover content after prior interaction, but a fresh window can ignore it, and later pointer checks can dismiss the content. Native AppKit tracking also requires real pointer movement in the measured fixture. The system-pointer fallback avoids reporting this unreliable event route as continuous hover.
+**PID-directed virtual movement** can display Chromium hover content after prior interaction, but a fresh window can ignore it, and later pointer checks can dismiss the content. Native AppKit tracking also requires real pointer movement in the measured fixture. The approved system-pointer route avoids reporting this unreliable event route as continuous hover.
 
 ## Consequences
 

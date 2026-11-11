@@ -34,12 +34,30 @@ import {
 } from '@deepseek-ai/node-addon-system/landlock-run'
 import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { SandboxProvider, SandboxUnavailableError, SandboxUnsupportedPolicyError, canonicalPath } from '@deepseek-ai/dsh-sandbox'
+import { SandboxPreparationError, SandboxProvider, SandboxUnavailableError, canonicalPath } from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, ConfinedSandboxMode, RunnerFailureRule, SandboxEnforcement, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { SessionId } from '@deepseek-ai/dsh-session'
-import { AclWriteGrant, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
+import { AclWriteGrant, isTempRootInsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from './profiles.ts'
+
+/**
+ * Classify one failed Windows ACL preparation step; the platform failure, or an
+ * `AggregateError` of it and its cleanup failures, becomes the `cause`.
+ * @param step - the preparation step, as the message names it.
+ * @param error - the step's own failure, typically a `Win32Error` or Node errno error.
+ * @param cleanupFailures - rollback failures that followed it.
+ * @returns the coded preparation failure.
+ */
+function aclPreparationFailure(step: string, error: unknown, cleanupFailures: readonly unknown[] = []): SandboxPreparationError {
+  const failed = cleanupFailures.length === 0 ? `${step} failed` : `${step} failed and its cleanup also failed`
+  return new SandboxPreparationError(
+    `sandbox-local: windows-acl ${failed}: ${String(error)}. The command did not run; `
+    + 'check that the current user can change permissions on the workspace and temp directories, or run with danger-full-access.',
+    'SANDBOX_PREPARATION_FAILED',
+    { cause: cleanupFailures.length === 0 ? error : new AggregateError([error, ...cleanupFailures], `sandbox-local windows-acl ${failed}`) },
+  )
+}
 
 /** Plugin config. All optional — `static Config` supplies the defaults. */
 export interface Config {
@@ -363,13 +381,12 @@ export class LocalSandboxProvider extends SandboxProvider {
    * `--temp-write-sid` and grants nothing itself. Agentless workspace-write
    * calls pass the ambient temp ROOT and no SID flags: the runner creates and
    * removes a random private child directory for that one invocation.
+   * Additional directory grants apply only to harness filesystem operations
+   * on Windows; process confinement keeps the workspace and private temp grants.
    * @param policy - the resolved per-call policy.
    * @returns the runner invocation.
    */
   private windowsAclRunnerArgv(policy: SandboxPolicy): string[] {
-    if (policy.mode === 'workspace-write' && (policy.additionalWritableRoots?.length ?? 0) > 0) {
-      throw new SandboxUnsupportedPolicyError('Windows ACL confinement does not support additional writable directories; remove the extra grants or use a supported host')
-    }
     const sessionId = policy.sessionId
     if (sessionId === undefined || policy.mode === 'read-only') {
       return [
@@ -398,16 +415,37 @@ export class LocalSandboxProvider extends SandboxProvider {
    * SID to enter it. A fresh provider always chooses a new path; crash
    * residue therefore cannot collide with or authorize a resumed session.
    * Fail-closed: a half-materialized temp grant is revoked and its directory
-   * removed before the error propagates.
+   * removed before the error propagates. A temp root inside the workspace
+   * throws `SandboxPreparationError` `SANDBOX_INVALID_TEMP_ROOT` before any ACL
+   * change; any other failure throws `SANDBOX_PREPARATION_FAILED` with the
+   * platform error as `cause`.
    * @param sessionId - the policy's calling-session identity.
    * @param workspaceRoot - the resolved policy root.
    * @returns the pair's private temp directory and write capability.
    */
   private materializeAclGrant(sessionId: SessionId, workspaceRoot: string): AclTempCapability {
-    assertTempRootOutsideWorkspace(workspaceRoot, tmpdir())
+    let tempInsideWorkspace: boolean
+    try {
+      tempInsideWorkspace = isTempRootInsideWorkspace(workspaceRoot, tmpdir())
+    } catch (error) {
+      throw aclPreparationFailure('workspace and temp directory resolution', error)
+    }
+    if (tempInsideWorkspace) {
+      throw new SandboxPreparationError(
+        `sandbox-local: windows-acl temp root must be outside the workspace: workspace=${workspaceRoot}; temp=${tmpdir()}. `
+        + 'A private temp directory there would inherit the workspace grant, so the command did not run. '
+        + 'Set TEMP and TMP to a directory outside the workspace, or open a workspace that does not contain the temp directory.',
+        'SANDBOX_INVALID_TEMP_ROOT',
+      )
+    }
     const writeSid = workspaceWriteSid(workspaceRoot)
     if (!this.workspaceGrants.has(workspaceRoot)) {
-      const grant = AclWriteGrant.create(writeSid)
+      let grant: AclWriteGrant
+      try {
+        grant = AclWriteGrant.create(writeSid)
+      } catch (error) {
+        throw aclPreparationFailure('workspace grant', error)
+      }
       try {
         grant.add(workspaceRoot, true)
       } catch (error) {
@@ -417,16 +455,21 @@ export class LocalSandboxProvider extends SandboxProvider {
         try {
           grant.dispose()
         } catch (cleanupError) {
-          throw new AggregateError([error, cleanupError], 'sandbox-local windows-acl workspace grant failed and its cleanup also failed')
+          throw aclPreparationFailure('workspace grant', error, [cleanupError])
         }
-        throw error
+        throw aclPreparationFailure('workspace grant', error)
       }
       this.workspaceGrants.set(workspaceRoot, grant)
     }
     const key = JSON.stringify([String(sessionId), workspaceRoot])
     const existing = this.tempCapabilities.get(key)
     if (existing !== undefined) return existing
-    const tempDir = mkdtempSync(join(tmpdir(), 'dsh-'))
+    let tempDir: string
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), 'dsh-'))
+    } catch (error) {
+      throw aclPreparationFailure('private temp directory creation', error)
+    }
     const tempSid = tempWriteSid(tempDir)
     let grant: AclWriteGrant | undefined
     try {
@@ -446,10 +489,7 @@ export class LocalSandboxProvider extends SandboxProvider {
       } catch (cleanupError) {
         cleanupFailures.push(cleanupError)
       }
-      if (cleanupFailures.length > 0) {
-        throw new AggregateError([error, ...cleanupFailures], 'sandbox-local windows-acl temp grant materialization failed and its cleanup also failed')
-      }
-      throw error
+      throw aclPreparationFailure('temp grant materialization', error, cleanupFailures)
     }
     const capability = { dir: tempDir, writeSid: tempSid, grant }
     this.tempCapabilities.set(key, capability)

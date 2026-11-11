@@ -81,16 +81,19 @@
       "path": "../../boot/plugin-manager"
     },
     {
+      "path": "../../mcp/mcp-manager"
+    },
+    {
       "path": "../../boot/plugin-market"
     },
     {
       "path": "../../host/plugin-inventory"
     },
     {
-      "path": "../account-controller"
+      "path": "../../credentials/deepseek-account"
     },
     {
-      "path": "../../credentials/deepseek-account"
+      "path": "../../web/web"
     }
   ]
 }

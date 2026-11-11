@@ -6,11 +6,73 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { expect, vi, type MockInstance } from 'vitest'
+import type { RegionRect } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 
 /** The built page under test; `pnpm run test:web` rebuilds it before running. */
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
 
 export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
+
+/** A visible control, including controls that declare no native window region. */
+interface WindowControlBox extends Omit<RegionRect, 'draggable'> {
+  /** Sample points where the browser hit test reaches this control or its content. */
+  readonly hits: readonly (readonly [number, number])[]
+}
+
+/** Native region owners and optional control probes from one browser evaluation. */
+export interface CollectedWindowSurface {
+  readonly regions: readonly RegionRect[]
+  /** Empty when no control probe was requested. */
+  readonly controls: readonly WindowControlBox[]
+}
+
+/** Controls to probe alongside the native region owners. */
+interface WindowControlProbe {
+  readonly selector: string
+  /** Containers whose nested drag rows own their pixels independently of the container. */
+  readonly containersWithDragRows: string
+}
+
+/**
+ * Collect visible native window regions in DOM order and optionally probe controls in the same frame.
+ * Controls with computed `none` contribute no native rectangle but still receive hit-test probes.
+ * @param page - Page whose current layout is sampled.
+ * @param controlProbe - Control selectors; omit when only native regions are needed.
+ * @returns Native regions with unclipped bounds and independently sampled controls.
+ */
+export async function collectWindowSurface(page: Page, controlProbe?: WindowControlProbe): Promise<CollectedWindowSurface> {
+  return page.evaluate((probe) => {
+    const regions: RegionRect[] = []
+    const controls: WindowControlBox[] = []
+    for (const element of document.querySelectorAll('*')) {
+      const style = getComputedStyle(element)
+      const region = style.getPropertyValue('-webkit-app-region')
+      if (style.visibility === 'hidden' || style.display === 'none') continue
+      const rect = element.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) continue
+      const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      if (region === 'drag' || region === 'no-drag') regions.push({ ...box, draggable: region === 'drag' })
+      if (probe === undefined || !element.matches(probe.selector)) continue
+      const insetX = Math.min(2, rect.width / 4)
+      const insetY = Math.min(2, rect.height / 4)
+      const samples: [number, number][] = [
+        [rect.x + rect.width / 2, rect.y + rect.height / 2],
+        [rect.x + insetX, rect.y + insetY],
+        [rect.x + rect.width - insetX, rect.y + insetY],
+        [rect.x + insetX, rect.y + rect.height - insetY],
+        [rect.x + rect.width - insetX, rect.y + rect.height - insetY],
+      ]
+      const hits = samples.filter(([x, y]) => {
+        const top = document.elementFromPoint(x, y)
+        const strip = top?.closest('[data-window-drag]')
+        if (element.matches(probe.containersWithDragRows) && strip != null && element.contains(strip)) return false
+        return top !== null && (top === element || element.contains(top))
+      })
+      controls.push({ ...box, hits })
+    }
+    return { regions, controls }
+  }, controlProbe)
+}
 
 /**
  * Read the `meta.description` an experimental bundle's plugin page shows for one locale.
@@ -24,6 +86,36 @@ export function experimentalBundleDescription(bundle: string, locale: string): s
 }
 
 const installationRequire = createRequire(join(REPO_ROOT, 'apps/cli/package.json'))
+
+/**
+ * Check the shared warning title, theme color, and compact body alignment.
+ * @param dialog - visible warning dialog under test.
+ */
+export async function assertWarningDialogLayout(dialog: Locator): Promise<void> {
+  const layout = await dialog.evaluate((element) => {
+    const title = element.querySelector('h2')!
+    const icon = title.querySelector('svg')!
+    const paragraph = element.querySelector('p')!
+    const titleRect = title.getBoundingClientRect()
+    const bodyRect = paragraph.getBoundingClientRect()
+    const color = getComputedStyle(icon).color
+    const previous = icon.style.color
+    icon.style.color = 'var(--dsw-alias-state-warn-primary)'
+    const warningColor = getComputedStyle(icon).color
+    icon.style.color = previous
+    return {
+      decorative: icon.getAttribute('aria-hidden'),
+      matchesWarningColor: color === warningColor,
+      leftGap: Math.abs(bodyRect.left - titleRect.left),
+      topGap: bodyRect.top - titleRect.bottom,
+    }
+  })
+  expect(layout.decorative).toBe('true')
+  expect(layout.matchesWarningColor).toBe(true)
+  expect(layout.leftGap).toBeLessThan(1)
+  expect(layout.topGap).toBeGreaterThanOrEqual(0)
+  expect(layout.topGap).toBeLessThanOrEqual(16)
+}
 
 /**
  * The built copy of a workspace package, as the dsh installation resolves it.

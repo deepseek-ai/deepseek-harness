@@ -7,17 +7,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { SANDBOX_UNAVAILABLE, SandboxUnavailableError, SandboxUnsupportedPolicyError } from '@deepseek-ai/dsh-sandbox'
-
-describe('SandboxUnsupportedPolicyError', () => {
-  it('distinguishes an unsupported policy from an unavailable backend', () => {
-    const error = new SandboxUnsupportedPolicyError('The selected backend cannot grant additional directories.')
-    expect(error).toBeInstanceOf(Error)
-    expect(error.name).toBe('SandboxUnsupportedPolicyError')
-    expect(error.code).toBe('SANDBOX_UNSUPPORTED_POLICY')
-    expect(error.message).toBe('The selected backend cannot grant additional directories.')
-  })
-})
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { SANDBOX_PREPARATION_ERROR_CODES, SANDBOX_UNAVAILABLE, SandboxPreparationError, SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 
 describe('SandboxUnavailableError', () => {
   it('carries the structured { name, code } identity consumers key on', () => {
@@ -41,5 +32,15 @@ describe('SandboxUnavailableError', () => {
     const error = new SandboxUnavailableError('read-only', 'landlock-run: landlock is not enforced by this kernel')
     expect(error.code).toBe(SANDBOX_UNAVAILABLE)
     expect(error.message).toContain('Runner failure: landlock-run: landlock is not enforced by this kernel')
+  })
+})
+
+describe('SandboxPreparationError', () => {
+  it('carries a literal name, a closed code, and the platform failure as cause', () => {
+    const cause = new Error('SetNamedSecurityInfoW failed (Win32 5)')
+    const error = new SandboxPreparationError('cannot grant the workspace', 'SANDBOX_PREPARATION_FAILED', { cause })
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'SandboxPreparationError', code: 'SANDBOX_PREPARATION_FAILED', cause })
+    expect(SANDBOX_PREPARATION_ERROR_CODES).toEqual(['SANDBOX_PREPARATION_FAILED', 'SANDBOX_INVALID_TEMP_ROOT'])
   })
 })

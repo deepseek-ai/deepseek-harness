@@ -396,29 +396,25 @@ export interface LaunchOptions {
   welcomeNoticePending?: boolean
   /** Leave first-use Workspace initialization eligible; ordinary scenarios start after the default was removed. */
   firstUse?: boolean
-  /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
-   * credential reference. Browser search scenarios keep the real provider and
-   * credentials seam while avoiding external search traffic and ambient keys.
-   */
+  /** Pin the legacy Messages search endpoint and credential reference. */
   deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
+    /** Anthropic-compatible base URL; `/messages` is appended. */
     baseURL?: string
-    /** Credential reference resolved by the shipped search provider. */
+    /** Credential reference read for each search. */
     apiKeyEnv: string
   }
   /**
-   * Patch the shipped DeepSeek Search and Fetch API row to a deterministic
-   * endpoint and credential reference, optionally selecting both providers as
-   * the settings switch does.
+   * Give both sections of the shipped DeepSeek Search and Fetch API row their
+   * own credential reference and, when given, endpoint, so neither follows the
+   * conversation's DeepSeek credential. Browser search scenarios keep the real
+   * providers and credentials seam while avoiding external search traffic and
+   * ambient keys.
    */
   deepSeekWebApi?: {
-    /** Search and Fetch API base URL; omitted uses the provider default. The providers append `/search` or `/fetch`. */
+    /** Base URL of both sections; omitted uses the official base. The providers append `/search` or `/fetch`. */
     baseURL?: string
-    /** Credential reference resolved by both providers. */
+    /** Credential reference of both sections. */
     apiKeyEnv: string
-    /** Select `deepseek-search-api` and `deepseek-fetch-api` in place of the shipped selection. */
-    select?: boolean
   }
   /** Preset selection default and additional declarative definitions for this scenario. */
   agentPresets?: {
@@ -690,27 +686,25 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       { id: 'agent-preset-registry', config: { default: options.agentPresets.default } },
       { insert: (options.agentPresets.definitions ?? []).map(config => ({ id: `preset-${config.id}`, name: '@deepseek-ai/dsh-agent-preset', config })) },
     ],
-    ...options.deepSeekSearch === undefined
-      ? []
-      : [{
-        id: 'web-search-deepseek',
-        config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          ...options.deepSeekSearch.baseURL === undefined ? {} : { baseURL: options.deepSeekSearch.baseURL },
-        },
-      }],
     ...options.deepSeekWebApi === undefined ? [] : [
       {
         id: 'web-deepseek-api',
         config: {
-          apiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
-          ...options.deepSeekWebApi.baseURL === undefined ? {} : { baseURL: options.deepSeekWebApi.baseURL },
+          searchApiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
+          fetchApiKeyEnv: options.deepSeekWebApi.apiKeyEnv,
+          ...options.deepSeekWebApi.baseURL === undefined ? {} : {
+            searchBaseURL: options.deepSeekWebApi.baseURL, fetchBaseURL: options.deepSeekWebApi.baseURL,
+          },
         },
       },
-      ...options.deepSeekWebApi.select === true
-        ? [{ id: 'web', config: { searchProvider: 'deepseek-search-api', fetchProvider: 'deepseek-fetch-api' } }]
-        : [],
     ],
+    ...options.deepSeekSearch === undefined ? [] : [{
+      id: 'web-search-deepseek',
+      config: {
+        apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
+        ...options.deepSeekSearch.baseURL === undefined ? {} : { baseURL: options.deepSeekSearch.baseURL },
+      },
+    }],
     { id: 'llm-deepseek', disabled: mode !== 'record' && !maskDeepSeekCredential },
   ]
 
@@ -1776,10 +1770,12 @@ export async function assertFixtureInventory(dir: string, expected: string[]): P
 
 /**
  * Console tripwires: reconnect/gap-repair self-healing or a pageerror must
- * fail the scenario, not mask a dead wire behind eventual consistency.
+ * fail the scenario, not mask a dead wire behind eventual consistency. A boot
+ * audit warning fails it too: the product boot tolerates inactive optional
+ * entries, but every e2e composition must activate completely.
  */
 export interface WebConsoleTripwire {
-  /** Console warnings matching reconnect/gap-repair/discontinuity copy. */
+  /** Console warnings matching reconnect/gap-repair/discontinuity copy or the boot audit's inactive-entry warning. */
   warnings: string[]
   /** Uncaught page errors. */
   pageErrors: string[]
@@ -1795,7 +1791,7 @@ export function watchConsole(page: Page): WebConsoleTripwire {
   const pageErrors: string[] = []
   page.on('console', (message) => {
     const text = message.text()
-    if (/connection lost|gap repair|discontinuous/i.test(text)) warnings.push(text)
+    if (/connection lost|gap repair|discontinuous|web boot: warning/i.test(text)) warnings.push(text)
   })
   page.on('pageerror', (error) => { pageErrors.push(String(error)) })
   return { warnings, pageErrors }

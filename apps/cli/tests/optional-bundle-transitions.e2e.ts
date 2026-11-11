@@ -171,9 +171,9 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('keeps the default host and minimal tool catalogs while every optional bundle is off', async () => {
     const minimal = await agent('minimal')
     const standard = await agent()
-    expect(names()).toEqual(['working_directory'])
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'working_directory'])
-    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'ralph']) expect(names(standard.agent)).not.toContain(name)
+    expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
+    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'user_terminal_list', 'ralph']) expect(names(standard.agent)).not.toContain(name)
     expect((await ctx.skills.list({ cwd: workspace, scope: standard.agent })).some(skill => skill.name === 'dsh-badge')).toBe(false)
   })
 
@@ -246,7 +246,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'badge-on')).toContain('dsh-badge.png')
     const minimal = await agent('minimal')
     expect((await ctx.skills.list({ cwd: workspace, scope: minimal.agent })).map(skill => skill.name)).toContain('dsh-badge')
-    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'working_directory'])
+    expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
     await select(bundles.badge, false)
     expect((await load('badge-after')).isError).toBe(true)
   })
@@ -254,6 +254,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('runs and closes a real persistent terminal delivered by its bundle', async () => {
     await select(bundles.terminal, true)
     const owner = await agent()
+    expect(names(owner.agent)).toEqual(expect.arrayContaining(['terminal_open', 'user_terminal_list', 'user_terminal_read']))
     const target = join(workspace, 'terminal-output.txt')
     let terminalId: string | undefined
     const id = () => {
@@ -280,6 +281,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'terminal-close')).toContain('closed terminal session')
     await select(bundles.terminal, false)
     expect(names((await agent()).agent)).not.toContain('terminal_open')
+    expect(names((await agent()).agent)).not.toContain('user_terminal_list')
   })
 
   it('runs a real fresh-Agent Ralph workflow through the selected bundle', async () => {
@@ -332,7 +334,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     let coded: Agent | undefined
     for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
       const owner = await agent(preset)
-      expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
+      expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'user_terminal_read', 'ralph']))
       if (preset === 'ptc') coded = owner.agent
     }
     if (coded === undefined) throw new Error('the PTC Agent was not created')

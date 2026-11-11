@@ -18,23 +18,32 @@
   en: ef43c4f149195939
   zh: 49fc6c83fd3a05ce
 /deepseek-ai-dsh-client-ui-conversation/sent-user-text:
-  en: cc4dafd1aae02468
-  zh: be6b67724b7ac4a3
+  en: 4a094cd97426ad18
+  zh: 5faadddb7e2b0a43
 /deepseek-ai-dsh-client-ui-conversation/shell-and-standard-props:
-  en: 99ec447f0a6bda48
-  zh: 922cf64666676530
+  en: 7c45c9c9767b3184
+  zh: 290037aa8a71b1df
 /deepseek-ai-dsh-client-ui-conversation/temporary-composer-entries:
   en: 59cd63057dfb6eeb
   zh: b2e2c86e810b7bb8
 /deepseek-ai-dsh-client-ui-conversation/model-experience:
-  en: e0a05b73ba3e4318
-  zh: dc85ab8433bb4456
-/deepseek-ai-dsh-client-ui-conversation/model-experience/kv-cache-effect:
-  en: 9f4e0da7c8addf88
-  zh: 1a33d9981af75643
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-client-ui-conversation/model-experience/manual-continuation-request:
+  en: 6a7ae99570c9c007
+  zh: 26e86063e97d82c7
+/deepseek-ai-dsh-client-ui-conversation/model-experience/manual-continuation-request/what-the-model-sees:
+  en: 017391d7ad0f9eb7
+  zh: 2693ed29d44b1164
+/deepseek-ai-dsh-client-ui-conversation/model-experience/manual-continuation-request/token-effect:
+  en: 517c56dbd522c929
+  zh: 55fa3a02d026e36a
+/deepseek-ai-dsh-client-ui-conversation/model-experience/manual-continuation-request/kv-cache-effect:
+  en: f8621bbc481c26ae
+  zh: 5be844989dc80803
 /deepseek-ai-dsh-client-ui-conversation/known-limitations-and-deferred-work:
-  en: 1413851e9d622bd3
-  zh: 84502501f8ce599b
+  en: c8323c1986c1be46
+  zh: 6151492c67d4cb88
 /deepseek-ai-dsh-client-ui-conversation/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: e88aeb617ffb74ea

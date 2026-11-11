@@ -13,7 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { truncateWithoutSplittingSurrogatePair } from '@deepseek-ai/dsh-output-retention'
 import type { TerminalReadResult, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 // TODO: Replace the file-search advice; arbitrary command output need not come from a searchable file.
 const TRUNCATED_MESSAGE = '<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with Select-String in order to find the line numbers of what you are looking for.</NOTE>'
@@ -439,9 +439,9 @@ function registerPersistentPwsh(ctx: Context, config: ResolvedConfig): void {
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     async execute(args, exec) {
-      if (args.command.trim().length === 0) throw new Error('command must be a non-empty string')
+      if (args.command.trim().length === 0) throw new ToolArgsError(['command must be a non-empty string'])
       const owner = exec.agent
-      if (owner === undefined) throw new Error('pwsh requires an owning agent session')
+      if (owner === undefined) throw new ToolContextUnavailableError('pwsh requires an owning agent session')
       return serialized(owner, async () => {
         if (exec.signal.aborted) return '' // ToolRuntime publishes ABORTED after settlement.
         return executeCommand(ctx, shells, owner, args.command, config, exec.signal)

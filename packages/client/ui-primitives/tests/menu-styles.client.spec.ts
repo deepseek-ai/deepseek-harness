@@ -23,8 +23,8 @@ describe('Menu.module.css', () => {
     // The fallback first: a browser that drops `dvh` keeps the layout-viewport
     // cap, and mobile browser chrome can then only hide the card's far edge.
     expect(maxHeights()).toEqual([
-      'min(calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh))',
-      'min(calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh))',
+      'calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)))',
+      'calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)))',
     ])
   })
 

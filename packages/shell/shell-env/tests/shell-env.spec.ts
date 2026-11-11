@@ -17,7 +17,7 @@ import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 
 const testToolSignal = new AbortController().signal
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 function execution(sessionId?: string): ToolExecution {
   return {
@@ -46,28 +46,44 @@ describe('ShellEnvRegistry', () => {
 
     expect(registry.collect(execution())).toEqual({
       DSH_HOME: resolve('./test-dsh-home'),
+      DSH_NODE_EXECUTABLE: process.execPath,
       DSH_SHELL: '1',
     })
     expect(registry.collect(execution('session-a'))).toEqual({
       DSH_HOME: resolve('./test-dsh-home'),
+      DSH_NODE_EXECUTABLE: process.execPath,
       DSH_SESSION_ID: 'session-a',
       DSH_SHELL: '1',
     })
   })
 
-  it('collects the launcher-provided profile name and directory when a profile context exists', () => {
+  it('omits the Node executable inside a single-executable application', () => {
+    vi.spyOn(process, 'getBuiltinModule').mockReturnValue({ isSea: () => true })
+    expect(new ShellEnvRegistry(new Context()).collect(execution())).not.toHaveProperty('DSH_NODE_EXECUTABLE')
+  })
+
+  it('keeps the Node executable where the runtime answers no single-executable module', () => {
+    vi.spyOn(process, 'getBuiltinModule').mockReturnValue(undefined)
+    expect(new ShellEnvRegistry(new Context()).collect(execution()).DSH_NODE_EXECUTABLE).toBe(process.execPath)
+  })
+
+  it('collects the launcher-provided profile name, directory, and installation directory when a profile context exists', () => {
     const ctx = new Context()
     ctx.provide('profileContext', {
       name: 'web', dir: '/profiles/web', patchPath: '/profiles/web/cordis.patch.yml', installAnchor: '/dsh/package.json',
       cwd: '/work', home: '/home', startedBundles: [], overlays: [], telemetryDisabledEnv: undefined,
     })
     const registry = new ShellEnvRegistry(ctx, { dshHome: './test-dsh-home' })
-    expect(registry.collect(execution())).toMatchObject({ DSH_PROFILE: 'web', DSH_PROFILE_DIR: '/profiles/web' })
-    expect(() => registry.register({
-      name: 'profile-claimer',
-      variables: { DSH_PROFILE: { description: 'Reserved key.' } },
-      resolve: () => ({}),
-    })).toThrow(/reserved key "DSH_PROFILE"/)
+    expect(registry.collect(execution())).toMatchObject({
+      DSH_INSTALL_DIR: '/dsh', DSH_PROFILE: 'web', DSH_PROFILE_DIR: '/profiles/web',
+    })
+    for (const key of ['DSH_PROFILE', 'DSH_INSTALL_DIR', 'DSH_NODE_EXECUTABLE']) {
+      expect(() => registry.register({
+        name: `${key}-claimer`,
+        variables: { [key]: { description: 'Reserved key.' } },
+        resolve: () => ({}),
+      })).toThrow(new RegExp(`reserved key "${key}"`))
+    }
   })
 
   it('resolves DSH_HOME from the ambient override or the user-home default', () => {
@@ -176,6 +192,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/drifted-provider.*DSH_UNDECLARED/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('rejects non-string values returned by a contributor', () => {
@@ -187,6 +204,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/wrong-value-type.*non-string.*DSH_STRING/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('removes an effect-scoped contributor when its plugin is disposed', async () => {

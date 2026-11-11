@@ -31,6 +31,10 @@ export class NativeError extends Error {
   }
 }
 
+function connectionFailure(code: string, message: string, cause: unknown): NativeError {
+  return cause instanceof NativeError ? cause : new NativeError(code, message, { cause })
+}
+
 /** Resolved helper executable and bounded process/response configuration. */
 export interface NativeClientConfig {
   helperPath: string
@@ -77,7 +81,12 @@ export class NativeClient {
   private diagnostics: string[] = []
   private diagnosticBytes = 0
   private discardedDiagnostics = false
-  private active: { id: string; resolve: (value: JsonValue) => void; reject: (error: NativeError) => void } | undefined
+  private active: {
+    id: string
+    outcome: Promise<JsonValue>
+    resolve: (value: JsonValue) => void
+    reject: (error: NativeError) => void
+  } | undefined
 
   /**
    * @param owner - Managed subprocess provider.
@@ -90,13 +99,13 @@ export class NativeClient {
     this.config = config
     this.handle = createChannel(owner, config)
     this.handle.stdout.on('data', (chunk: Buffer) => { this.receive(chunk) })
-    this.handle.stdout.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', `Native connection failed: ${error.message}`, { cause: error })) })
+    this.handle.stdout.on('error', (error: Error) => { this.fail(connectionFailure('NATIVE_IO', `Native connection failed: ${error.message}`, error)) })
     this.handle.stdout.on('end', () => { this.fail(new NativeError('NATIVE_EOF', 'Native connection ended; acquire fresh application handles')) })
     this.handle.stdout.on('close', () => { this.fail(new NativeError('NATIVE_EOF', 'Native connection closed; acquire fresh application handles')) })
-    this.handle.stdin.on('error', (error: Error) => { this.fail(new NativeError('NATIVE_IO', 'Writing native requests failed', { cause: error })) })
+    this.handle.stdin.on('error', (error: Error) => { this.fail(connectionFailure('NATIVE_IO', 'Writing native requests failed', error)) })
     void this.handle.done.then(
       () => { this.fail(new NativeError('NATIVE_EXITED', 'Native connection closed; acquire fresh application handles')) },
-      (error: unknown) => { this.fail(new NativeError('NATIVE_EXITED', 'Native connection failed', { cause: error })) },
+      (error: unknown) => { this.fail(connectionFailure('NATIVE_EXITED', 'Native connection failed', error)) },
     )
   }
 
@@ -129,7 +138,10 @@ export class NativeClient {
       throw new NativeError('NATIVE_REQUEST_LIMIT', 'Request exceeded the configured byte limit before dispatch')
     }
     const outcome = Promise.withResolvers<JsonValue>()
-    this.active = { id, resolve: outcome.resolve, reject: (error) => { nativeFailure = error; outcome.reject(error) } }
+    this.active = {
+      id, outcome: outcome.promise, resolve: outcome.resolve,
+      reject: (error) => { nativeFailure = error; outcome.reject(error) },
+    }
     if (capture) this.diagnostic(screenshotPrefix + JSON.stringify({ requestId: id, stage: 'host.dispatch', elapsedMs: 0 }))
     const interrupt = (error: NativeError): void => {
       if (interruption || this.active?.id !== id) return
@@ -139,10 +151,10 @@ export class NativeClient {
       }, this.config.graceMs)
       try {
         this.handle.stdin.write(`${JSON.stringify({ type: 'cancel', id })}\n`, (failure) => {
-          if (failure) this.fail(new NativeError('NATIVE_IO', 'Sending native cancellation failed', { cause: failure }))
+          if (failure) this.fail(connectionFailure('NATIVE_IO', 'Sending native cancellation failed', failure))
         })
       } catch (failure) {
-        this.fail(new NativeError('NATIVE_IO', 'Sending native cancellation failed', { cause: failure }))
+        this.fail(connectionFailure('NATIVE_IO', 'Sending native cancellation failed', failure))
       }
     }
     const abort = (): void => { interrupt(new NativeError('NATIVE_CANCELLED', 'Operation cancelled; inspect fresh state before retrying input')) }
@@ -154,10 +166,10 @@ export class NativeClient {
     try {
       try {
         this.handle.stdin.write(frame, (error) => {
-          if (error) this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
+          if (error) this.fail(connectionFailure('NATIVE_IO', 'Writing a helper request failed', error))
         })
       } catch (error) {
-        this.fail(new NativeError('NATIVE_IO', 'Writing a helper request failed', { cause: error }))
+        this.fail(connectionFailure('NATIVE_IO', 'Writing a helper request failed', error))
       }
       const result = await outcome.promise
       if (this.failure) throw this.failure
@@ -187,6 +199,17 @@ export class NativeClient {
         }
       }
     }
+  }
+
+  /**
+   * Dispatch cleanup after any active request acknowledges completion or cancellation.
+   * @param method - Host-only helper cleanup operation.
+   * @param params - Resources owned by the enclosing execution.
+   * @returns The native cleanup acknowledgement, bounded by the connection's request deadline.
+   */
+  async requestCleanup(method: string, params: Record<string, JsonValue>): Promise<JsonValue> {
+    while (this.active) await this.active.outcome.catch(() => undefined)
+    return this.request(method, params, new AbortController().signal)
   }
 
   private screenshotDiagnostics(): string {

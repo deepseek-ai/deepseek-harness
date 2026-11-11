@@ -73,7 +73,7 @@ Remote 方法如下：
 
 三者都没有时，结果为 `{ status: 'none' }`。找到的文档携带其 `origin`（`locale`、`readme` 或 `repository`）、去掉开头 YAML front matter 块后的 Markdown 内容和 `document` id。结果，以及再次读取也会重复出现的 `too-large`、`denied` 和 `invalid` 失败，缓存 `cacheTtlMs`；传入 `refresh` 时改为重新读取；并发读取共享一次读取。只要每个 `cacheTtlMs` 内至少有一次读取返回某个 `document` id 或有一次图片请求引用它，该 id 就保持有效；未使用的 id 会被遗忘，在再次读取该文档之前，其图片请求返回 404。
 
-`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问；除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
+`github.com` 上的仓库文件通过 GitHub 的原始文件主机读取，`detailGitlabHosts` 中主机上的仓库文件通过 GitLab 仓库文件 API 读取。API 请求跟随同一 origin 内的重定向。API 返回 401、403 或 404 时，由一次不带任何凭据、发往该仓库 smart HTTP 端点的请求判断仓库是否公开；公开仓库中未找到文件即表示该文件不存在。需要凭据的仓库，以及所在主机没有此类 API 的仓库，通过 https、http 或 ssh 从部分克隆中读取。Git 使用用户的配置、凭据助手和 `url.<base>.insteadOf` 规则，且不提示输入，因此 https URL 可能被改为通过 ssh 访问。Git 拒绝 http(s) URL 时，部分克隆改从 `ssh://git@<host>/<path>`（插件安装也使用的 SSH 形式）再次获取，并保留该远程地址；重试失败时报告两次的诊断，原因是网络或大小限制时分别报告 `network` 或 `too-large`，否则报告 `denied`。因此打开详情页可能通过 ssh 连接索引条目指定的主机；在批处理模式和默认的主机密钥检查下，ssh 只向用户 known hosts 中的主机认证。除非设置了 `GIT_SSH` 或 `GIT_SSH_COMMAND`，ssh 以批处理模式运行。
 
 `GET /api/plugin-market/detail-file?document=<id>&path=<destination>` 向已通过认证的 owner 连接提供已读取文档旁的图片。目标路径相对于该文档；以 `/` 开头时相对于包或仓库的根目录；路径中的查询和片段被忽略。只提供该根目录内的 PNG、JPEG、GIF、WebP、AVIF 和 SVG 文件，响应带有 `Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff` 和时长为 `cacheTtlMs` 的私有缓存。文件不存在、文档未知或其他路径返回 404；下文所列的失败依次返回 413、502、403、503 和 400；失败响应不被缓存。
 
@@ -94,7 +94,7 @@ Host 使用进程的 `fetch` 获取，因此配置的出站代理生效，并拒
 
 过滤和排序只读取文档；安装状态和兼容性在每次调用时只为返回的页计算。一份文档上第一次带文本的查询使用 [MiniSearch](https://github.com/lucaong/minisearch) 构建其文本索引，每轮事件循环处理 500 个插件，之后的查询复用该索引，直到文档被替换。
 
-兼容性按版本计算：使用 `evaluatePluginCompatibility`，传入该版本的 `engines.dsh` 和 profile 的版本豁免，与安装时执行的检查相同。插件的默认版本是其不带先行版本号的最高兼容版本；插件完全没有此类版本时，使用其最高兼容的先行版本；没有兼容版本的插件没有默认版本。安装状态按包名根据 `pluginManager.listBundles()` 计算，以默认版本为准，没有默认版本时以最高版本为准：`not-installed`（包括当前 profile 尚未安装的按需目录条目）；版本相同时为 `installed`；该版本更高时为 `update-available`；已安装版本未知、不是有效的 SemVer 或更高时为 `different-version`；DSH 安装随附的组合包（bundle）为 `provided`。
+兼容性按版本计算：使用 `evaluatePluginCompatibility`，传入该版本的 `engines.dsh` 和 profile 的版本豁免，与安装时执行的检查相同。插件的默认版本是其不带先行版本号的最高兼容版本；插件完全没有此类版本时，使用其最高兼容的先行版本；没有兼容版本的插件没有默认版本。安装状态按包名根据 `pluginManager.listBundles()` 计算，以默认版本为准，没有默认版本时以最高版本为准：`not-installed`（包括当前 profile 尚未安装的按需目录条目）；版本相同时为 `installed`；该版本更高时为 `update-available`；已安装版本未知、不是有效的 SemVer 或更高时为 `different-version`；DSH 安装随附的组合包（bundle）为 `provided`。版本比 `listBundles` 标为 `update: 'git'` 的副本新，且固定到该副本所固定的仓库与目录中的一个提交时，其 `update` 为 true，插件页因此可以通过 `pluginManager.updateBundle` 用它替换该副本；注册表副本的新版本则来自其注册表。
 
 条目详细介绍的读取共用服务拥有的一个读取器；文档选择和 npm 文件 CDN 来自 [`dsh-plugin-detail`](../../util/plugin-detail/README.zh.md)。每个部分克隆是 `detailCacheDir` 下的一个裸仓库，以其 URL 的哈希命名，先在暂存目录中初始化，再重命名到目标位置，并使用 `--depth 1 --filter=blob:none` 获取，因此只下载提交和树对象；读取文件时 Git 才下载其内容。命令运行时不继承除 ssh 程序之外的 `GIT_*` 变量，禁用 hook、文件系统监视器、子模块递归，以及 https、http 和 ssh 之外的所有传输协议，且不创建工作树。Git 下载期间每 200 毫秒检查一次目录大小；单条命令执行期间增长超过 `detailRepositoryMaxBytes` 时停止 Git，且输出保留文件末尾的换行字节。文件内容超过本次读取的限制时，读取即停止；浏览器放弃请求时，图片读取仍会完成，因此离开页面不会中断克隆。`refs/dsh/` 下的 ref 记录每个已获取的提交，因此不会在没有大小检查的情况下延迟获取提交。对同一仓库的操作逐个执行，共享 `detailCacheDir` 的多个进程（例如同一 profile 上的 Web 和 Desktop）之间也是如此，由仓库旁的一个锁文件实现；淘汰只在这些操作结束后删除该仓库，并在每次获取和每次文件读取后执行 `detailCacheMaxBytes` 总量限制；正在使用的仓库单独超过该总量时，淘汰最后删除它，并等到其操作结束后再删除；除文件超过本次读取的限制外，任何原因导致操作失败或被取消时，都删除该仓库，使下一次读取从新的克隆开始。淘汰时还会删除存在时间超过 `detailGitTimeoutMs` 的暂存目录。销毁时停止 Git 并等待其退出。
 
@@ -123,7 +123,7 @@ Host 使用进程的 `fetch` 获取，因此配置的出站代理生效，并拒
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **不支持升级**——索引版本更新的已安装组合包报告为 `update-available`；升级仍需先卸载再安装。
+- **只支持 Git 更新**——只有从 Git 提交安装的副本会更新到索引中较新的版本，且只在其来源的仓库目录内更新；从注册表安装的副本从其注册表更新，从其他来源（例如本地目录、分支或其他仓库）安装的副本需要先卸载再安装。
 - **索引没有签名**——索引内容（包括 Git 条目的名称和版本）是索引的声明；实际安装什么由已安装的 manifest（元数据清单）决定。
 - **后写入者覆盖**——`setIndexes` 会替换整个列表，因此两个窗口同时编辑索引源时，可能互相覆盖对方的修改。
 - **拒绝重定向**——只能经重定向访问的索引必须以其最终 URL 配置。

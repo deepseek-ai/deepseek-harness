@@ -35,10 +35,11 @@ describe('web e2e: plugin configuration pages', () => {
   beforeAll(async () => {
     // The live-client fixture is a bundle with a browser half; switched on
     // below, that half registers its row's configuration into the page.
+    // Legacy Messages search names an unset credential so the goldens show the
+    // unconfigured key whatever keys the host environment carries.
     scaffold = await launchWebScaffold({
       extraOverlayPath: fileURLToPath(new URL('./pin-browse-picker.overlay.yml', import.meta.url)),
       deepSeekSearch: { apiKeyEnv: UNUSED_KEY_ENV },
-      deepSeekWebApi: { apiKeyEnv: UNUSED_KEY_ENV },
       profile: { packages: [{ dir: join(FIXTURE_PLUGINS, 'fixture-live-client') }] },
     })
     browser = await chromium.launch()
@@ -92,12 +93,12 @@ describe('web e2e: plugin configuration pages', () => {
 
     // Every page the shipped web composition exposes: the shell executor, the
     // agent loop, subagent selection, and the DeepSeek search provider.
-    await panel.getByRole('button', { name: '查看 网页搜索', exact: true }).waitFor({ timeout: 20_000 })
+    await panel.getByRole('button', { name: '查看 网页搜索与获取', exact: true }).waitFor({ timeout: 20_000 })
     const basic = panel.locator('[data-plugin-group="basic"]')
     expect(await basic.locator('[data-plugin-item]').count()).toBe(4)
     expect(await basic.locator(':scope > ul > li').evaluateAll(cards => cards.map(card => card.getAttribute('data-plugin-item'))))
       .toEqual(['subagent', 'web-search', 'agent-loop', 'shell'])
-    for (const title of ['子智能体', '网页搜索', 'Agent 循环', '终端']) {
+    for (const title of ['子智能体', '网页搜索与获取', 'Agent 循环', '终端']) {
       expect(await basic.getByRole('button', { name: `查看 ${title}`, exact: true }).count()).toBe(1)
     }
     // A card carries the one-liner; the fields wait for the page.
@@ -142,63 +143,116 @@ describe('web e2e: plugin configuration pages', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('switches search and fetch to the Search and Fetch APIs together and preserves each API’s endpoint', async () => {
+  it('selects search and fetch providers independently and keeps each provider’s settings', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-search-api-settings'))
     const panel = await openPlugins()
-    await openPage(panel, '网页搜索')
-    const toggle = panel.getByRole('switch', { name: '启用新版 Web 搜索 API', exact: true })
-    const endpoint = panel.locator('#plugin-config-web-search-endpoint')
-    const maxUses = panel.getByLabel('单次请求最多搜索次数', { exact: true })
-    const save = panel.getByRole('button', { name: '保存', exact: true })
-    expect(await toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await panel.getByRole('link', { name: '网页搜索与抓取指南', exact: true }).getAttribute('href'))
-      .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
-    expect(await panel.getByLabel('Messages API 基础地址', { exact: true }).count()).toBe(1)
-    expect(await maxUses.inputValue()).toBe('5')
-    expect(await endpoint.inputValue()).toBe('')
-    expect(await save.isDisabled()).toBe(true)
-    await endpoint.fill('https://messages.test/anthropic/v1')
-    await save.click()
-    await expect.poll(() => save.isDisabled()).toBe(true)
-    await toggle.focus()
-    await page.keyboard.press('Space')
-    expect(await panel.getByLabel('Search / Fetch API 基础地址', { exact: true }).count()).toBe(1)
-    expect(await endpoint.inputValue()).toBe('https://api.deepseek.com/v1/tools')
-    expect(await maxUses.count()).toBe(0)
+    await openPage(panel, '网页搜索与获取')
+    // A menu's accessible name is its label followed by the selected entry, so the menus are found by id.
+    const searchMenu = panel.locator('#plugin-config-web-search-provider')
+    const fetchMenu = panel.locator('#plugin-config-web-fetch-provider')
+    const searchSection = panel.getByRole('region', { name: '网页搜索提供方', exact: true })
+    const fetchSection = panel.getByRole('region', { name: '网页获取提供方', exact: true })
     const count = panel.getByLabel('每次搜索结果数', { exact: true })
+    const save = panel.getByRole('button', { name: '保存', exact: true })
+    /** Pick one entry from a menu. */
+    async function choose(menu: Locator, label: string): Promise<void> {
+      await menu.click()
+      await page.getByRole('menuitem', { name: label, exact: true }).click()
+    }
+    /** Open a menu and read its entries in order, then close it. */
+    async function entries(menu: Locator): Promise<string[]> {
+      await menu.click()
+      const items = await page.getByRole('menuitem').allTextContents()
+      await page.keyboard.press('Escape')
+      await expect.poll(() => page.getByRole('menuitem').count()).toBe(0)
+      return items
+    }
+    // The shipped composition selects the DeepSeek Search API and local fetch, and the page writes nothing on mount.
+    expect(await searchMenu.textContent()).toBe('DeepSeek Search API')
+    expect(await fetchMenu.textContent()).toBe('本机直接获取')
+    expect(await panel.getByRole('button', { name: '网页搜索提供方 DeepSeek Search API', exact: true }).count()).toBe(1)
+    expect(await panel.getByRole('button', { name: '网页获取提供方 本机直接获取', exact: true }).count()).toBe(1)
+    expect(await entries(searchMenu)).toEqual(['DeepSeek Search API', 'DeepSeek（旧版）'])
+    expect(await entries(fetchMenu)).toEqual(['本机直接获取', 'DeepSeek Fetch API'])
+    expect(await settingsDocument()).not.toContain('searchProvider:')
+    // The page fixes the menu order itself; the Loader imports plugins concurrently, so the
+    // Host's registration order is not the YAML row order and only its membership is checked here.
+    const hostWeb = scaffold.ctx.get('web') as { listProviders(): Record<'search' | 'fetch', { id: string }[]> } | undefined
+    expect(hostWeb?.listProviders().search.map(provider => provider.id).sort()).toEqual(['deepseek-official', 'deepseek-search-api'])
+    expect(await panel.getByRole('link', { name: '网页搜索与获取指南', exact: true }).getAttribute('href'))
+      .toBe('https://api-docs.deepseek.com/zh-cn/guides/search')
+    // Each section shows the description its selected provider registered with the Host, in the active language.
+    expect(await searchSection.getByText('会产生费用，由「计费方式」选定的账号或 API Key 支付。', { exact: true }).count()).toBe(1)
+    expect(await fetchSection.getByText('免费，可访问内网和本机。不支持需要 JavaScript 或登录的页面，也不支持 PDF。', { exact: true }).count()).toBe(1)
+    // The Fetch API suggestion is text, not an action.
+    expect(await fetchSection.getByRole('button').count()).toBe(1)
+    expect(await save.isDisabled()).toBe(true)
+
+    // The Search panel holds the result count and the billing menu, automatic by default.
+    expect(await searchSection.getByRole('textbox').count()).toBe(1)
+    expect(await panel.locator('#plugin-config-web-search-billing').textContent()).toBe('自动')
     expect(await count.inputValue()).toBe('10')
     await count.fill('51')
     await panel.getByText('请填 1–50 的整数；留空表示使用默认值。', { exact: true }).waitFor()
     expect(await save.isDisabled()).toBe(true)
-    expect(await toggle.isDisabled()).toBe(true)
+    for (const menu of [searchMenu, fetchMenu]) expect(await menu.isDisabled()).toBe(true)
     await count.fill('10')
-    expect(await settingsDocument()).not.toContain('searchProvider: deepseek-search-api')
-    await endpoint.fill('https://search-api.test/api/v1/tools')
+    expect(await save.isDisabled()).toBe(true)
+
+    // The Fetch API shows only its billing menu, and the page saves the billing with the selection.
+    await choose(fetchMenu, 'DeepSeek Fetch API')
+    expect(await fetchSection.getByText('无法访问内网和本机。会产生费用，由「计费方式」选定的账号或 API Key 支付。', { exact: true }).count()).toBe(1)
+    expect(await fetchSection.getByRole('textbox').count()).toBe(0)
+    expect(await fetchSection.getByRole('button').count()).toBe(2)
+    const fetchBilling = panel.locator('#plugin-config-web-fetch-billing')
+    await choose(fetchBilling, 'DeepSeek API Key')
+    await fetchSection.getByText('使用「模型」页配置的 API Key，需要先配置。', { exact: true }).waitFor()
     await save.click()
     await expect.poll(() => save.isDisabled()).toBe(true)
-    await expect.poll(settingsDocument).toContain('searchProvider: deepseek-search-api')
     await expect.poll(settingsDocument).toContain('fetchProvider: deepseek-fetch-api')
-    await expect.poll(settingsDocument).toContain('baseURL: https://search-api.test/api/v1/tools')
+    await expect.poll(settingsDocument).toContain('fetchBilling: api-key')
+    await choose(fetchBilling, '自动')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).not.toContain('fetchBilling:')
+
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await openPlugins()
-    await openPage(panel, '网页搜索')
-    expect(await toggle.getAttribute('aria-checked')).toBe('true')
-    expect(await endpoint.inputValue()).toBe('https://search-api.test/api/v1/tools')
+    await openPage(panel, '网页搜索与获取')
+    expect(await searchMenu.textContent()).toBe('DeepSeek Search API')
+    expect(await fetchMenu.textContent()).toBe('DeepSeek Fetch API')
     const snapshot = await captureStableAria(page, '[data-plugin-panel]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'web-search.expected.md'), snapshot, MODE)
-    await panel.getByRole('button', { name: '恢复默认', exact: true }).click()
-    expect(await endpoint.inputValue()).toBe('https://api.deepseek.com/v1/tools')
+
+    await choose(fetchMenu, '本机直接获取')
     await save.click()
     await expect.poll(() => save.isDisabled()).toBe(true)
-    await expect.poll(settingsDocument).not.toContain('https://search-api.test/api/v1/tools')
-    await toggle.click()
-    expect(await endpoint.inputValue()).toBe('https://messages.test/anthropic/v1')
-    await save.click()
-    await expect.poll(() => save.isDisabled()).toBe(true)
-    await expect.poll(settingsDocument).not.toContain('searchProvider: deepseek-search-api')
     await expect.poll(settingsDocument).not.toContain('fetchProvider: deepseek-fetch-api')
-    expect(await settingsDocument()).toContain('baseURL: https://messages.test/anthropic/v1')
+
+    await choose(searchMenu, 'DeepSeek（旧版）')
+    const messagesEndpoint = panel.locator('#plugin-config-web-search-endpoint')
+    expect(await panel.getByLabel('单次请求最多搜索次数', { exact: true }).inputValue()).toBe('5')
+    await messagesEndpoint.fill('https://messages.test/anthropic/v1')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).toContain('searchProvider: deepseek-official')
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openPlugins()
+    await openPage(panel, '网页搜索与获取')
+    expect(await searchMenu.textContent()).toBe('DeepSeek（旧版）')
+    expect(await messagesEndpoint.inputValue()).toBe('https://messages.test/anthropic/v1')
+    expect(await entries(searchMenu)).toEqual(['DeepSeek Search API', 'DeepSeek（旧版）'])
+    expect(await save.isDisabled()).toBe(true)
+    expect(await settingsDocument()).toContain('searchProvider: deepseek-official')
+    await choose(searchMenu, 'DeepSeek Search API')
+    await count.fill('20')
+    await save.click()
+    await expect.poll(() => save.isDisabled()).toBe(true)
+    await expect.poll(settingsDocument).not.toContain('searchProvider:')
+    expect(await settingsDocument()).toContain('count: 20')
+    expect(await settingsDocument()).not.toMatch(/ApiKeyEnv:|searchBaseURL:|fetchBaseURL:/)
     expect(tripwire.pageErrors).toEqual([])
   })
 

@@ -10,7 +10,7 @@ This page documents slot ownership, component inputs, extension APIs, and the sh
 
 The plugin catalog declares `plugins.add.actions`, a root-scoped list for `MenuItemButton` rows after installation in the Add plugin menu. Its owner supplies `onDismiss()` to close the menu before starting an action. The slot follows the owning Plugins page declaration lifetime.
 
-The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.views.actions`, and `sidebar.right.tab.guide.actions` supply the rows of the More menus after the panel rows, the View tabs, and the right-sidebar guide cards. A region draws its More button and menu only while its list has registrations, and passes the customizable entries with their pin state, `onOpen`, `onPinnedChange`, and `onDismiss`. Panel and View entries also carry optional `active` state for the current selection, independently of pin state. Each region keeps its own unpinned entry ids in memory; [`ui-entry-customization`](../../packages/client/ui-entry-customization/README.md) registers the shipped rows.
+The root-scoped lists `sidebar.panellist.actions`, `conversation.session.header.views.actions`, and `sidebar.right.tab.guide.actions` supply the rows of the More menus after the panel rows, the View tabs, and the right-sidebar guide cards. A region draws its More button and menu only while its list has registrations, and passes the customizable entries with their pin state, `onOpen`, `onPinnedChange`, and `onDismiss`. Panel and View entries also carry optional `active` state for the current selection, independently of pin state. The `sidebar.panel.icon` root-scoped factory owns the `sidebar.panellist` list and renders its registered icon by `id`, `size`, and `active` for both sidebar rows and More entries. Each region keeps its own unpinned entry ids in memory; [`ui-entry-customization`](../../packages/client/ui-entry-customization/README.md) registers the shipped rows.
 
 [ui-workspace](../../packages/client/ui-workspace/README.md#understand-the-implementation) documents Session-row extension positions, visibility, and keyboard behavior.
 
@@ -61,11 +61,24 @@ The slot declaration fixes two independent axes.
 | cardinality | `list` | Cells are addressed by required `id` and ordered by `order`, then registration order. |
 | cardinality | `keyed` | The owner dispatches an `entryKey`; the matching cell renders with any key-specific props. |
 | cardinality | `chain` | Each entry supplies a pure `select(owner)` function. The first non-null result in priority order renders and receives that result as `matched`; otherwise the owner fallback renders. |
+| cardinality | `hoc` | Entries nest around the owner's `renderSlot(key, owner, { children })` content, lowest outermost; an optional `key` selects layers by the owner's `entryKey`. See [Hoc layers](#hoc-layers). |
 | scope | `root` | One root-scoped component and store instance. |
 | scope | `session-maybe` | Inherits the surrounding Provider binding but stays renderable without one; Session values are optional. |
 | scope | `session` | Requires a resolved surrounding Provider binding and receives definite Session values. |
 
-`priority` is a shadowing rank for `single`, `list`, and `keyed` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list `id` or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
+`priority` is a shadowing rank for `single`, `list`, `keyed`, and `hoc` cells and an election order for `chain`. Lower values run or render first. Ordinary additive contributions should choose a fresh list or hoc `id`, or keyed `key`; intentionally reusing a shipped cell replaces its presentation.
+
+<a id="hoc-layers"></a>
+
+### Hoc layers
+
+A hoc entry is a layer addressed by its required `id` and optional `key`. A layer without `key` is a wildcard that applies to every dispatch; a layer with `key` applies only when the owner passes the same `entryKey` to `renderSlot`, and an owner that omits `entryKey` gets only wildcard layers. Each `(key, id)` pair, with the wildcard as its own key, is one shadowing cell; within one `id`, an exact-key layer replaces the wildcard layer for that key.
+
+Layers nest by ascending `order`, then `priority`, then registration order, lowest outermost. Each layer receives the same owner props plus the next inner layer as `children`, the owner's content at the innermost, and renders it at most once; a layer that omits it replaces everything inside it. Owner props must not use the name `children`. Omitted `children` renders the layers around nothing, and with no applicable layer the content renders unchanged.
+
+- Remounting: adding or removing a layer that applies to a dispatch remounts the content inside it; a `session` or `session-maybe` layer also remounts it when its Session binding changes. Outlets that dispatch the same key share one compiled layer chain, so a registration for another key does not remount their content; an outlet that switches its `entryKey` switches chains and remounts its content even when the same layers apply.
+- Errors: a crashed layer reports its error and renders its `children` at the occurrence that failed, for the rest of that occurrence's mount even when its owner props change. The layer stays registered, so other occurrences, including those dispatching the same key, keep it, and a remounted occurrence renders it again. An error thrown by the wrapped content passes every layer and is reported against none; a layer that wraps its `children` in its own error boundary catches it as an internal wrapper error rather than the original.
+- Layout: the outlet inserts a `display: contents` `[data-slot]` element between the owner and its content, so owner selectors cannot rely on the content being a direct child. A layer that wraps its `children` must not create a box of its own unless its slot documents otherwise — for example, use `display: contents` — or the content leaves its parent's layout.
 
 The [context-menu plugin](../../packages/client/ui-context-menu/README.md) contributes `useContextMenu` through `provideRoot`; every scope receives the same plugin-owned trigger factory. Its prop and retained handlers retire when the provider unloads. Its root-scoped keyed `contextMenu.icon` Slot renders business-owned icons from action metadata.
 
@@ -81,6 +94,7 @@ A registered component receives inputs assembled at its binding site. Components
 | private data, callbacks, and observable hooks | the registration's `inject` factory | `InjectFace<I>` |
 | localized `t` function | the registration's `locale` namespace | `PropsLocale<N>` |
 | selected chain value | the registration's `select` result | `matched` through `ComposedProps` |
+| wrapped owner content | the `SlotMap` row's `hoc` kind | `children` through `ComposedProps` |
 
 `SessionProvider` is also present in `PropsRenderSlots` when an entry declares a `session` or `session-maybe` child. With no `session` prop it inherits the surrounding binding; an explicit `SessionReference` or `undefined` overrides only that subtree. The Provider does not key its whole body. A strict `session` entry remounts when its binding generation changes. A blank `session-maybe` entry adopts its first binding without remounting, then remounts for a later generation or a return to absence.
 
@@ -142,6 +156,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
+│     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]
@@ -182,6 +197,8 @@ Factory: conversation.content [ConversationContent]
 ├─ conversation.input.dock
 │  └─ id=queue [QueueDock]
 │     └─ calls Factory: conversation.user.text
+├─ conversation.hero.frame [hoc]
+│  └─ id=pixel-whale [PixelWhale]
 ├─ conversation.hero.brand.mark
 ├─ conversation.hero.workspace
 │  └─ conversation.hero.workspace.directoryFlow
@@ -210,4 +227,4 @@ The generated [Client inspect catalog](../../packages/extensions/cordis-client-r
 - Keep business and transport state in their owning Cordis services or Client models. Slot stores hold shared viewing and interaction state only.
 - Keep observable source and snapshot identities stable between changes. Republish through the same source whenever its value changes.
 - Pass JSON-compatible data and callbacks between UI domains. The `hooks` compartment is the sole exception for bare observables; React content travels through slots.
-- Treat `single` and an occupied keyed cell as replacement points. Use list ids or an unoccupied key for additive extensions.
+- Treat `single` and an occupied keyed cell as replacement points. Use fresh list or hoc ids, or an unoccupied key, for additive extensions.

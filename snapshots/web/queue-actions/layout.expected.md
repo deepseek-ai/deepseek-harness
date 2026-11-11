@@ -12,15 +12,18 @@
 - button "Continuing goal {{clock}}":
   - text: Continuing goal
   - time: {{clock}}
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
 - paragraph: partial
 - status: Deep diving
 - text: Deep diving for {{duration}} ···
 - region "To-dos":
   - button "To-dos 1 completed · 1 in progress"
 - text: Ongoing Goal Keep the composer context panels aligned
-- button "Pause goal"
 - button "Edit goal"
 - button "Clear goal"
+- button "Pause goal"
 - button "2 queued messages"
 - textbox "Cmd/Ctrl+Enter steers all queued messages"
 - button "Add files or run commands"

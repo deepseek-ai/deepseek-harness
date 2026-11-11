@@ -1,13 +1,14 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeFailure, ForgeProvider, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
-import type { Config, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import type { Config, ForgeLocalDiff, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState } from '../src/index.ts'
+import { GitOutputTooLarge } from '../src/git.ts'
 import { WORKTREE_RECORD } from '../src/worktree.ts'
 import { missingWorktree } from '../src/panel.ts'
 import {
@@ -305,6 +306,8 @@ describe('forgePanel.follow', () => {
 
     expect(moved.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
     expect(opened.provider.probes).toEqual(['fake.test', 'other.test'])
+    // A new commit gives the next inspection a state of its own to publish.
+    await git(repo, 'commit', '--allow-empty', '-m', 'again')
     shellTurn(opened.session, 2, [{ callId: 'again', command: 'ls', output: '' }])
     await follower.next(state => state.checkout.state === 'ready')
     expect(follower.states.at(-1)?.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
@@ -500,11 +503,102 @@ describe('forgePanel local changes', () => {
     await writeFile(join(repo, 'notes.md'), 'hello\n')
     const opened = await open(repo)
 
-    const diff = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch' }, signal)
+    const diff = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null, commits: null }, signal)
     expect(diff.base).toBe('origin/main')
     expect(diff.files.map(file => [file.path, file.status, file.untracked])).toEqual([['tracked.txt', 'modified', false], ['notes.md', 'added', true]])
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'staged' }, signal)).resolves.toEqual({ base: null, files: [], omitted: 0 })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', signal)).resolves.toBe('initial\nmore\n')
+  })
+
+  it('compares the branch scope with a chosen base branch and lists the branches it can choose', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    await writeFile(join(repo, 'feature.txt'), 'feature\n')
+    await git(repo, 'add', 'feature.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'feature')
+    await git(repo, 'branch', 'topic')
+    await writeFile(join(repo, 'notes.md'), 'hello\n')
+    const opened = await open(repo)
+    const paths = (diff: ForgeLocalDiff): string[] => diff.files.map(file => file.path)
+
+    const automatic = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null, commits: null }, signal)
+    expect([automatic.base, paths(automatic)]).toEqual(['origin/main', ['feature.txt', 'notes.md']])
+    const chosen = await opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: 'refs/heads/topic', commits: null }, signal)
+    expect([chosen.base, paths(chosen)]).toEqual(['topic', ['notes.md']])
+    await expect(opened.ctx.forgePanel.diffBases(opened.session, '', signal)).resolves.toEqual({
+      automatic: { name: 'origin/main', worktree: false },
+      remote: [{ ref: 'refs/remotes/origin/main', name: 'origin/main' }],
+      local: [{ ref: 'refs/heads/topic', name: 'topic' }],
+    })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: 'refs/heads/gone', commits: null }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/base-missing' })
+
+    const outside = await open(await plain())
+    await expect(outside.ctx.forgePanel.diffBases(outside.session, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+  })
+
+  it('lists the commits of the branch scope and reads chosen ones', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    for (const name of ['one', 'two', 'three']) {
+      await writeFile(join(repo, `${name}.txt`), `${name}\n`)
+      await git(repo, 'add', `${name}.txt`)
+      await git(repo, 'commit', '--quiet', '-m', name)
+    }
+    await git(repo, 'branch', 'topic', 'HEAD~1')
+    await writeFile(join(repo, 'notes.md'), 'hello\n')
+    const opened = await open(repo, { maxCommits: 2 })
+
+    const listed = await opened.ctx.forgePanel.localCommits(opened.session, null, signal)
+    expect(listed).toMatchObject({ truncated: true, headSha: await git(repo, 'rev-parse', 'HEAD') })
+    expect(listed.commits.map(commit => commit.title)).toEqual(['two', 'three'])
+    await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/topic', signal))
+      .resolves.toMatchObject({ truncated: false, commits: [{ title: 'three' }] })
+    const [two, three] = listed.commits.map(commit => commit.sha)
+    const chosen = await opened.ctx.forgePanel.localDiff(opened.session,
+      { kind: 'branch', base: null, commits: { from: two ?? '', to: three ?? '' } }, signal)
+    expect(chosen.files.map(file => file.path)).toEqual(['three.txt', 'two.txt'])
+    await expect(opened.ctx.forgePanel.localText(opened.session,
+      { kind: 'branch', base: null, commits: { from: two ?? '', to: two ?? '' } }, 'two.txt', signal)).resolves.toBe('two\n')
+    await expect(opened.ctx.forgePanel.localDiff(opened.session,
+      { kind: 'branch', base: 'refs/heads/topic', commits: { from: two ?? '', to: three ?? '' } }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
+    await expect(opened.ctx.forgePanel.localCommits(opened.session, 'refs/heads/gone', signal)).rejects.toMatchObject({ code: 'forgePanel/base-missing' })
+    // A merged side branch lists its commit beside the branch's own, so a run across them is refused.
+    await git(repo, 'checkout', '--quiet', '-b', 'side', 'origin/main')
+    await writeFile(join(repo, 'side.txt'), 'side\n')
+    await git(repo, 'add', 'side.txt')
+    await git(repo, 'commit', '--quiet', '-m', 'side')
+    await git(repo, 'checkout', '--quiet', '-')
+    await git(repo, 'merge', '--quiet', '--no-ff', '--no-edit', 'side')
+    const order = (await git(repo, 'log', '--topo-order', '--reverse', '--format=%H %P', 'origin/main..HEAD')).split('\n').map(line => line.split(' '))
+    const leaving = order.findIndex(([, parent], index) => index > 0 && parent !== order[index - 1]?.[0])
+    await expect(opened.ctx.forgePanel.localDiff(opened.session,
+      { kind: 'branch', base: null, commits: { from: order[leaving - 1]?.[0] ?? '', to: order[leaving]?.[0] ?? '' } }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/commits-not-linear' })
+
+    const unrelated = await project()
+    const lonely = await open(unrelated.repo)
+    await expect(lonely.ctx.forgePanel.localCommits(lonely.session, null, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
+    const outside = await open(await plain())
+    await expect(outside.ctx.forgePanel.localCommits(outside.session, null, signal)).rejects.toMatchObject({ code: 'forgePanel/not-a-checkout' })
+  })
+
+  it('lists more refs than other Git output may print, up to maxDiffBytes', async () => {
+    const { repo } = await project()
+    await withDefaultBranch(repo)
+    for (let index = 0; index < 40; index += 1) await git(repo, 'update-ref', `refs/remotes/origin/a-long-branch-name-${index}`, 'HEAD')
+    const listing = await git(repo, 'for-each-ref', 'refs/remotes/')
+    expect(listing.length).toBeGreaterThan(1024)
+
+    const limited = await open(repo, { maxOutputBytes: 1024, maxBranches: 3 })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, '', signal)).resolves.toMatchObject({ remote: { length: 3 } })
+    await expect(limited.ctx.forgePanel.diffBases(limited.session, 'name-39', signal)).resolves.toMatchObject({
+      remote: [{ name: 'origin/a-long-branch-name-39' }],
+    })
+
+    const refused = await open(repo, { maxOutputBytes: 1024, maxDiffBytes: 1024 })
+    await expect(refused.ctx.forgePanel.diffBases(refused.session, '', signal)).rejects.toBeInstanceOf(GitOutputTooLarge)
   })
 
   it('reports a directory outside a checkout, a branch without a fork point, and a diff over the limit', async () => {
@@ -516,7 +610,7 @@ describe('forgePanel local changes', () => {
     const { repo } = await project()
     await writeFile(join(repo, 'tracked.txt'), 'x\n'.repeat(2000))
     const opened = await open(repo, { maxDiffBytes: 1024 })
-    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch' }, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
+    await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'branch', base: null, commits: null }, signal)).rejects.toMatchObject({ code: 'forgePanel/no-fork-point' })
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, signal)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
@@ -562,7 +656,7 @@ describe('forgePanel change request diffs', () => {
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await reader(opened).until(state => polled(state, pullUrl(7)))
 
-    const diff = await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal)
+    const diff = await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
     expect(diff).toMatchObject({ headSha: head, localAhead: 1, fileUrls: { 'src/a.ts': `${pullUrl(7)}/files/${head}/src/a.ts` } })
     expect(diff.files.map(file => [file.path, file.additions, file.deletions])).toEqual([['src/a.ts', 1, 1]])
     await expect(opened.ctx.forgePanel.changeRequestText(opened.session, pullUrl(7), head, 'src/a.ts', signal)).resolves.toBe('new\n')
@@ -576,7 +670,8 @@ describe('forgePanel change request diffs', () => {
     await reader(opened).until(state => polled(state, pullUrl(7)))
     opened.sandbox.failure = new Error('sandbox unavailable')
 
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal)).resolves.toMatchObject({ localAhead: null })
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal))
+      .resolves.toMatchObject({ localAhead: null })
   })
 
   it('downloads a diff once per head commit and base branch for every Session, keeping no failed read', async () => {
@@ -586,7 +681,7 @@ describe('forgePanel change request diffs', () => {
     const follower = reader(opened)
     await follower.until(state => polled(state, pullUrl(7)))
     const paths = async (session: Session = opened.session): Promise<string[]> =>
-      (await opened.ctx.forgePanel.changeRequestDiff(session, pullUrl(7), signal)).files.map(file => file.path)
+      (await opened.ctx.forgePanel.changeRequestDiff(session, pullUrl(7), null, signal)).files.map(file => file.path)
     const moved = async (snapshot: { headSha: string; baseBranch: string }): Promise<void> => {
       opened.provider.overrides.set(7, snapshot)
       await opened.ctx.forgePanel.refresh(opened.session, signal)
@@ -612,6 +707,149 @@ describe('forgePanel change request diffs', () => {
     expect(opened.provider.diffs).toEqual([7, 7, 7, 7])
   })
 
+  it('classifies files by the root .gitattributes at the head and refuses attributes the host does not provide', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const head = 'a'.repeat(40)
+    opened.provider.patches.set(7, `${PATCH}${PATCH.replaceAll('src/a.ts', 'gen/b.ts')}${PATCH.replaceAll('src/a.ts', 'src/a.spec.ts')}`)
+    opened.provider.texts.set(`${head}:.gitattributes`, 'gen/** linguist-generated\n')
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => polled(state, pullUrl(7)))
+
+    const diff = await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
+    expect(diff.files.map(file => [file.path, file.layer])).toEqual([['src/a.ts', 'implementation'], ['gen/b.ts', 'test'], ['src/a.spec.ts', 'test']])
+
+    const other = await open(repo)
+    other.provider.patches.set(7, PATCH)
+    other.provider.texts.set(`${head}:.gitattributes`, { code: 'unavailable', message: 'down' })
+    shellTurn(other.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(other).until(state => polled(state, pullUrl(7)))
+    await expect(other.ctx.forgePanel.changeRequestDiff(other.session, pullUrl(7), null, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'down' })
+  })
+
+  it('reads the patch and the .gitattributes together, and reports the patch\'s failure before the attributes failure', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => polled(state, pullUrl(7)))
+    const read = async (): Promise<unknown> => await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
+    const cancelled: string[] = []
+    // The patch read ends only after the attributes read has failed, so the attributes failure always comes first.
+    let attributesFailed = Promise.withResolvers<undefined>()
+    const later = <T>(value: T) => async (): Promise<T> => {
+      await attributesFailed.promise
+      return value
+    }
+
+    // Failed reads are not kept, so each case reads again.
+    const diff = vi.spyOn(opened.provider, 'diff').mockImplementation(later<string | ForgeFailure>({ code: 'too-large', message: 'diff over 300 files' }))
+    const text = vi.spyOn(opened.provider, 'fileText').mockImplementation(async () => {
+      attributesFailed.resolve(undefined)
+      return { code: 'unavailable', message: 'attributes down' }
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'diff over 300 files' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>({ code: 'stale', message: 'head moved' }))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'head moved' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>(PATCH))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'attributes down' })
+
+    // A failed patch read cancels the attributes read it no longer needs.
+    diff.mockResolvedValue({ code: 'unavailable', message: 'patch down' })
+    text.mockImplementation(async (_ref, _commit, _path, operation) => {
+      await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+      cancelled.push('attributes')
+      throw operation.reason
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'patch down' })
+    expect(cancelled).toEqual(['attributes'])
+
+    // The patch read finishes only once the attributes read has started, so reading them one after the other never ends.
+    const attributesStarted = Promise.withResolvers<undefined>()
+    diff.mockImplementation(async () => {
+      await attributesStarted.promise
+      return PATCH
+    })
+    text.mockImplementation(async () => {
+      attributesStarted.resolve(undefined)
+      return 'src/** linguist-generated\n'
+    })
+    await expect(read()).resolves.toMatchObject({ files: [{ path: 'src/a.ts', layer: 'test' }] })
+  })
+
+  it('lists the commits of a change request and reads consecutive ones from the first one\'s parent', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const sha = (n: number): string => String(n).repeat(40)
+    const commit = (n: number, parent: string | null) => ({ sha: sha(n), parent, title: `c${n}`, author: 'octo', authoredAt: '2026-10-09T00:00:00Z' })
+    const list = { headSha: sha(3), truncated: false, commits: [commit(1, null), commit(2, sha(1)), commit(3, sha(2))] }
+    opened.provider.commitLists.set(7, list)
+    opened.provider.comparisons.set(`${sha(1)}..${sha(3)}`, PATCH)
+    opened.provider.texts.set(`${sha(3)}:.gitattributes`, 'src/** linguist-generated\n')
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => polled(state, pullUrl(7)))
+    const read = (from: number, to: number) =>
+      opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), { from: sha(from), to: sha(to) }, signal)
+
+    await expect(opened.ctx.forgePanel.changeRequestCommits(opened.session, pullUrl(7), signal)).resolves.toEqual(list)
+    await expect(read(2, 3)).resolves.toEqual({
+      headSha: sha(3), localAhead: null, fileUrls: { 'src/a.ts': `${pullUrl(7)}/files/${sha(3)}/src/a.ts` },
+      files: [expect.objectContaining({ path: 'src/a.ts', layer: 'test' })],
+    })
+    expect(opened.provider.diffs).toEqual([])
+    await expect(read(1, 1)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'The first chosen commit has no parent to compare with' })
+    await expect(read(3, 2)).rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
+    await expect(read(4, 3)).rejects.toMatchObject({ code: 'forgePanel/commits-missing' })
+    // A commit of another branch listed between two others leaves the run of first parents.
+    opened.provider.commitLists.set(7, { ...list, commits: [commit(1, null), commit(2, sha(1)), commit(5, sha(1)), commit(3, sha(2))] })
+    await expect(read(2, 5)).rejects.toMatchObject({ code: 'forgePanel/commits-not-linear' })
+    opened.provider.commitLists.set(7, list)
+    await expect(read(3, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: `no comparison ${sha(2)}..${sha(3)}` })
+    opened.provider.comparisons.set(`${sha(2)}..${sha(3)}`, { code: 'too-large', message: 'too many files' })
+    await expect(read(3, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-too-large' })
+
+    opened.provider.commitLists.set(7, { code: 'unavailable', message: 'down' })
+    await expect(opened.ctx.forgePanel.changeRequestCommits(opened.session, pullUrl(7), signal)).rejects.toMatchObject({ code: 'forgePanel/diff-failed' })
+    await expect(read(2, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'down' })
+    delete opened.provider.commits
+    await expect(opened.ctx.forgePanel.changeRequestCommits(opened.session, pullUrl(7), signal)).resolves.toBeNull()
+    await expect(read(2, 3)).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'The code host provider does not read commits' })
+    await expect(opened.ctx.forgePanel.changeRequestCommits(opened.session, pullUrl(9), signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+  })
+
+  it('never labels a diff read after a push with the head of the earlier status', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const [polledHead, pushedHead] = ['a'.repeat(40), 'b'.repeat(40)]
+    const patches = new Map([[polledHead, PATCH], [pushedHead, PATCH.replaceAll('src/a.ts', 'src/b.ts')]])
+    // The host serves the head of the moment it answers, as GitHub's pull request diff does.
+    let hostHead = polledHead
+    const reads: string[] = []
+    Object.assign(opened.provider, {
+      diff: async (_ref: unknown, headSha: string): Promise<string | ForgeFailure> => {
+        reads.push(headSha)
+        return headSha === hostHead ? patches.get(hostHead)! : { code: 'stale', message: `head moved to ${hostHead}` }
+      },
+    })
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const follower = reader(opened)
+    await follower.until(state => polled(state, pullUrl(7)))
+    hostHead = pushedHead
+    opened.provider.overrides.set(7, { headSha: pushedHead })
+    const fetches = opened.provider.fetches.length
+
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: `head moved to ${pushedHead}` })
+    // The refused read polls again at once, without waiting for the idle interval.
+    await follower.until(state => state.changeRequests[0]?.snapshot?.headSha === pushedHead)
+    expect(opened.provider.fetches.length).toBe(fetches + 1)
+    const diff = await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
+    expect([diff.headSha, diff.files.map(file => file.path)]).toEqual([pushedHead, ['src/b.ts']])
+    expect(reads).toEqual([polledHead, pushedHead])
+  })
+
   it('reports a diff or file over a size limit as too large', async () => {
     const { repo } = await project()
     const opened = await open(repo)
@@ -621,7 +859,7 @@ describe('forgePanel change request diffs', () => {
     shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
     await reader(opened).until(state => polled(state, pullUrl(7)))
 
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal))
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'the diff exceeded the maximum number of files (300)' })
     await expect(opened.ctx.forgePanel.changeRequestText(opened.session, pullUrl(7), head, 'big.bin', signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'big.bin is too large to fetch' })
@@ -637,10 +875,10 @@ describe('forgePanel change request diffs', () => {
     ])
     await reader(opened).until(state => polled(state, pullUrl(7)) && failing(state, pullUrl(8)))
 
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(9), signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(8), signal))
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(9), null, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(8), null, signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'The change request status has not been read yet' })
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), signal))
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'no diff of #7' })
     await expect(opened.ctx.forgePanel.changeRequestText(opened.session, pullUrl(7), 'a'.repeat(40), 'gone.ts', signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: `no gone.ts at ${'a'.repeat(40)}` })
@@ -775,7 +1013,18 @@ describe('forgePanel worktree requests', () => {
     await expect(opened.ctx.forgePanel.requestWorktree(opened.session, 'main', signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     await expect(opened.ctx.forgePanel.cancelWorktree(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/session-started' })
     expect(worktreeState(opened)).toMatchObject({ request: { from: null }, locked: false, stepped: false, restoring: false })
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
+  })
+
+  it('forwards the worktree service\'s cleanup state and answers null without the service', async () => {
+    const { repo } = await project()
+    const without = await open(repo)
+    expect(await without.ctx.forgePanel.worktreeCleanup(without.session, null)).toBeNull()
+    const opened = await open(repo, {}, { worktrees: true })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, null)).toBeNull()
+    vi.spyOn(opened.ctx.worktrees, 'cleanupOf').mockResolvedValue({ revision: 3, status: 'removed' })
+    expect(await opened.ctx.forgePanel.worktreeCleanup(opened.session, 3)).toEqual({ revision: 3, status: 'removed' })
   })
 
   it('refuses worktree requests and restoration without a worktree service, and keeps a waiting message for the withdrawal', async () => {
@@ -907,7 +1156,10 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
     expect(opened.agent.inbox.nextStep).toEqual([notice(created?.path ?? '')])
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toEqual([
+      { path: created?.path, branch: created?.branch, baseCommit: created?.baseCommit, repositoryRoot: created?.repositoryRoot },
+    ])
   })
 
   it('keeps the message waiting with the failure the panel shows, and tries again with a new branch when asked', async () => {
@@ -935,7 +1187,8 @@ describe('forgePanel worktree creation while a message waits', () => {
     expect(created?.branch).not.toBe(failed.worktree.failure?.branch)
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first'])
-    expect(opened.records).toEqual([{ action: 'request', from: 'later' }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: 'later' }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('keeps the message waiting when the request changes, and lets it go on in the current checkout once the request is withdrawn', async () => {
@@ -1079,7 +1332,8 @@ describe('forgePanel worktree creation while a message waits', () => {
 
     expect(opened.agent.wakes).toBe(1)
     expect(queued(opened)).toEqual(['first', 'second'])
-    expect(opened.records).toHaveLength(2)
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 
   it('leaves a message that arrives while the Agent has other work to the first step', async () => {
@@ -1136,7 +1390,8 @@ describe('forgePanel worktree requests during a creation', () => {
     const created = worktreeState(opened)?.created ?? null
     expect(created).toMatchObject({ from: null, repositoryRoot: repo })
     expect(opened.ctx.workingDirectory.get(opened.session)).toBe(created?.path)
-    expect(opened.records).toEqual([{ action: 'request', from: null }, { action: 'created', worktree: created }])
+    expect(opened.records).toEqual([{ action: 'request', from: null }])
+    expect(opened.created).toHaveLength(1)
   })
 })
 
@@ -1524,18 +1779,35 @@ describe('forgePanel actions', () => {
     expect(settled).toBe(false)
     inspection.release()
     await inspected
-    await follower.next(() => true)
 
     const probe = Promise.withResolvers<ForgeReadiness>()
     opened.provider.readinessImpl = () => probe.promise
     settled = false
     const probed = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
-    await follower.next(() => true)
+    await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
     probe.resolve({ state: 'ready', message: null })
     await probed
     expect(opened.provider.probes).toHaveLength(3)
+  })
+
+  it('publishes nothing when a reinspection and a sign-in probe find what the panel already shows', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && state.readiness !== null)
+    await settle()
+    const published = follower.states.length
+    const inspections = opened.sandbox.calls.length
+
+    shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await settle()
+
+    expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
+    expect(opened.provider.probes).toHaveLength(2)
+    expect(follower.states).toHaveLength(published)
   })
 
   it('refreshes a Session outside a checkout without polling change requests that no provider serves', async () => {
@@ -1547,8 +1819,10 @@ describe('forgePanel actions', () => {
 
     await opened.ctx.forgePanel.refresh(opened.session, signal)
 
-    const refreshed = await follower.next(state => state.checkout.state === 'none')
-    expect(refreshed.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
+    // The refresh found the same state, which the panel already published.
+    const refreshed = follower.states.at(-1)
+    expect(refreshed?.checkout.state).toBe('none')
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])
@@ -1575,6 +1849,88 @@ describe('forgePanel actions', () => {
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Pull Request is not mergeable' })
 
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
+  })
+
+  it('reads and saves viewed marks of a bound change request through its provider, separating a moved head', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+    const request = { path: 'src/app.ts', viewed: true, headSha: head }
+
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toBeNull()
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider keeps no viewed marks' })
+    const marks = { headSha: head, files: { 'src/app.ts': 'dismissed' as const }, truncated: false }
+    const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(async () => marks)
+    const setViewed = vi.fn<NonNullable<ForgeProvider['setViewed']>>(async () => undefined)
+    Object.assign(opened.provider, { viewedFiles, setViewed })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toEqual(marks)
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal)).resolves.toBeUndefined()
+    expect(setViewed).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), request, expect.any(AbortSignal))
+
+    viewedFiles.mockResolvedValueOnce({ code: 'stale', message: 'moved' }).mockResolvedValueOnce({ code: 'unavailable', message: 'rate limited' })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'rate limited' })
+    setViewed.mockResolvedValueOnce({ code: 'stale', message: 'moved' })
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head' })
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), { ...request, path: '' }, signal)).rejects.toThrow('Invalid viewed file')
+    for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
+      await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, url, head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.setFileViewed(opened.session, url, request, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    }
+    expect(setViewed).toHaveBeenCalledTimes(2)
+  })
+
+  it('reruns checks, requests reviews, lists reviewers, and updates the branch of a bound change request', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+    const reviewers = [{ kind: 'user' as const, login: 'mona' }]
+
+    await expect(opened.ctx.forgePanel.rerunChecks(opened.session, pullUrl(7), { headSha: head }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider reruns no checks' })
+    await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, pullUrl(7), '', signal))
+      .rejects.toMatchObject({ code: 'forgePanel/reviewers-failed', message: 'This provider requests no reviews' })
+    const candidates = [{ login: 'mona', name: 'Mona', avatarUrl: null, suggested: true }]
+    const rerunChecks = vi.fn<NonNullable<ForgeProvider['rerunChecks']>>(async () => undefined)
+    const requestReviews = vi.fn<NonNullable<ForgeProvider['requestReviews']>>(async () => undefined)
+    const reviewerCandidates = vi.fn<NonNullable<ForgeProvider['reviewerCandidates']>>(async () => candidates)
+    const updateBranch = vi.fn<NonNullable<ForgeProvider['updateBranch']>>(async () => ({ code: 'stale', message: 'moved' }))
+    Object.assign(opened.provider, { rerunChecks, requestReviews, reviewerCandidates, updateBranch })
+
+    await expect(opened.ctx.forgePanel.rerunChecks(opened.session, pullUrl(7), { headSha: head }, signal)).resolves.toBeUndefined()
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal)).resolves.toBeUndefined()
+    await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, pullUrl(7), 'mo', signal)).resolves.toEqual(candidates)
+    await expect(opened.ctx.forgePanel.updateBranch(opened.session, pullUrl(7), 'rebase', head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    updateBranch.mockResolvedValueOnce(undefined)
+    await expect(opened.ctx.forgePanel.updateBranch(opened.session, pullUrl(7), 'merge', head, signal)).resolves.toBeUndefined()
+    expect(requestReviews).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), { reviewers }, expect.any(AbortSignal))
+    expect(updateBranch).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), { method: 'rebase', headSha: head }, expect.any(AbortSignal))
+    for (const invalid of [[], [{ kind: 'user' as const, login: ' ' }]]) {
+      await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), invalid, signal)).rejects.toThrow('Invalid reviewers')
+    }
+    requestReviews.mockResolvedValueOnce({ code: 'failed', message: 'Could not resolve user' })
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Could not resolve user' })
+    // An outcome the host did not confirm keeps its own code, so the reader is told to check it there.
+    requestReviews.mockResolvedValueOnce({ code: 'unknown', message: 'Something went wrong' })
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'Something went wrong' })
+    for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
+      await expect(opened.ctx.forgePanel.rerunChecks(opened.session, url, { headSha: head }, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.requestReviews(opened.session, url, reviewers, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, url, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.updateBranch(opened.session, url, 'merge', head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    }
+    expect(rerunChecks).toHaveBeenCalledTimes(1)
   })
 
   it('publishes a review only for a visible binding and validates wire ranges before calling the provider', async () => {
@@ -1651,7 +2007,7 @@ describe('forgePanel actions', () => {
     await expect(opened.ctx.forgePanel.refresh(opened.session, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localDiff(opened.session, { kind: 'unstaged' }, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.localText(opened.session, { kind: 'unstaged' }, 'tracked.txt', controller.signal)).rejects.toThrow('closed')
-    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
+    await expect(opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(1), null, controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.changeRequestText(opened.session, pullUrl(1), 'a'.repeat(40), 'x', controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.markReady(opened.session, pullUrl(1), controller.signal)).rejects.toThrow('closed')
     await expect(opened.ctx.forgePanel.merge(opened.session, pullUrl(1), 'merge', 'a'.repeat(40), controller.signal)).rejects.toThrow('closed')
@@ -1703,6 +2059,9 @@ describe('forgePanel configuration', () => {
     [{ maxBranches: 0 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],
+    [{ maxCommits: 0 }, 'forge-panel: maxCommits must be a positive integer'],
+    [{ testPaths: ['**/*.spec.*', ' '] }, 'forge-panel: testPaths entries must not be empty'],
+    [{ interfacePaths: [''] }, 'forge-panel: interfacePaths entries must not be empty'],
     [{ worktreePrefix: '-dsh/' }, prefix],
     [{ worktreePrefix: 'dsh /' }, prefix],
     [{ worktreePrefix: 'dsh:' }, prefix],

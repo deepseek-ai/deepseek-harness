@@ -47,6 +47,7 @@ function projectCredentialInfo(info: CredentialInfo): CredentialInfo {
     configured: info.configured,
     ...info.source === undefined ? {} : { source: info.source },
     writable: info.writable,
+    ...info.masked === undefined ? {} : { masked: info.masked },
   }
 }
 
@@ -61,7 +62,7 @@ declare module '@deepseek-ai/cordis' {
  * Host service backing the generated `ctx.remote.credentials` namespace. It
  * carries every wire obligation the credential seam itself does not: the batch
  * fan-out bound, the field-by-field view projection, the reference-grammar
- * guard, and the refusal mapping. Secret values cross in one direction only —
+ * guard, and the refusal mapping. Full secret values cross in one direction only —
  * no method here returns one.
  */
 export class CredentialsController extends TypertRemoteService {

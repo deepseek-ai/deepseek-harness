@@ -28,7 +28,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : { platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -93,15 +93,15 @@ it.each([
   expect(question).toMatchObject({
     id: 'cua-app-access',
     question: 'Allow computer use to launch if needed, read, capture, and control Test application?',
-    detail: 'Allowing or denying applies to every version and copy sharing the same application identity. Session access and denial apply only to this conversation.',
+    detail: 'Manage app permissions for all sessions on the plugin page.',
     intent: { kind: 'approval', approve: 'Allow for this session', reject: 'Deny',
       subject: { name: 'Test application' }, display: {
-        question: { en: 'Allow computer use to launch, read, capture and control this application?',
-          zh: '允许 Computer Use 启动、读取、截图和控制此应用吗？',
-          ja: 'Computer Use によるこのアプリの起動、読み取り、画面キャプチャ、操作を許可しますか？' },
-        detail: { en: 'Allowing or denying applies to every version and copy sharing the same application identity. Session access and denial apply only to this conversation.',
-          zh: '允许或拒绝会应用于同一应用标识的所有版本和副本。会话许可和拒绝仅在当前对话中生效。',
-          ja: '許可または拒否は、同じアプリ識別子を持つすべてのバージョンとコピーに適用されます。セッションの許可と拒否はこの会話にのみ適用されます。' },
+        question: { en: 'Allow agent to control this application via computer use?',
+          zh: '允许智能体通过 Computer Use 控制此应用吗？',
+          ja: 'エージェントが Computer Use でこのアプリを操作することを許可しますか？' },
+        detail: { en: 'Manage app permissions for all sessions on the plugin page.',
+          zh: '在插件页面管理所有会话的应用权限。',
+          ja: 'プラグインページで、すべてのセッションのアプリ権限を管理できます。' },
         approve: { en: 'Allow for this session', zh: '本会话允许', ja: 'このセッションで許可',
           es: 'Permitir durante esta sesión', fr: 'Autoriser pour cette session', de: 'Für diese Sitzung zulassen',
           ru: 'Разрешить для этого сеанса', pt: 'Permitir nesta sessão' },

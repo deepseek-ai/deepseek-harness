@@ -30,8 +30,8 @@
   top: calc(100% + 4px);
   left: 0;
   z-index: 100;
-  min-width: min(144px, var(--dsh-anchored-max-width, 100vw));
-  max-width: min(360px, var(--dsh-anchored-max-width, 100vw));
+  min-width: min(144px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
 }
 
 /* Legacy slots can render no rows; keep empty context popups out of layout. */
@@ -39,15 +39,90 @@
   display: none;
 }
 
-/* Portal mode: fixed in the viewport, coordinates supplied inline from the
- * anchor rect (side/align resolved in JS, the in-place offset rules above
- * don't apply). Portaled lists must layer above modal overlays (z 1000) —
- * an anchor inside a dialog still expects its menu on top. */
+/* Every candidate reserves layout-window margins while browser zoom moves the page. */
 .portal {
+  --dsh-menu-window-top: max(12px, var(--dsh-frame-overlay-top, 12px));
   position: fixed;
-  top: auto;
-  left: auto;
+  position-area: none;
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  justify-self: start;
+  align-self: start;
+  margin: 0;
+  position-try-fallbacks: --dsh-menu-wide-below, --dsh-menu-above, --dsh-menu-wide-above, --dsh-menu-window, --dsh-menu-wide-window;
+  width: max-content;
+  height: fit-content;
   z-index: 1100;
+}
+.portal[data-anchor-side='top'] {
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+  position-try-fallbacks: --dsh-menu-wide-above, --dsh-menu-below, --dsh-menu-wide-below, --dsh-menu-window, --dsh-menu-wide-window;
+}
+.portal[data-anchor-side='right'] {
+  top: max(var(--dsh-menu-window-top), anchor(top));
+  bottom: 12px;
+  left: max(12px, calc(anchor(right) + 4px));
+  right: 12px;
+  position-try-fallbacks: --dsh-menu-left, --dsh-menu-wide-below, --dsh-menu-window, --dsh-menu-wide-window;
+}
+.portal[data-anchor-align='end']:not([data-anchor-side='right']) {
+  left: 12px;
+  right: max(12px, anchor(right));
+  justify-self: end;
+  --dsh-menu-wide-align: start;
+}
+.portal[data-match-anchor-width] { min-width: min(anchor-size(width), calc(100vw - 24px)); }
+.portal[data-context-menu] { --dsh-menu-window-top: 12px; }
+
+@position-try --dsh-menu-below {
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  align-self: start;
+}
+@position-try --dsh-menu-above {
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
+  align-self: end;
+}
+@position-try --dsh-menu-wide-below {
+  top: max(var(--dsh-menu-window-top), calc(anchor(bottom) + 4px));
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  align-self: start;
+  justify-self: safe var(--dsh-menu-wide-align, end);
+}
+@position-try --dsh-menu-wide-above {
+  top: var(--dsh-menu-window-top);
+  bottom: max(12px, calc(anchor(top) + 4px));
+  left: 12px;
+  right: 12px;
+  align-self: end;
+  justify-self: safe var(--dsh-menu-wide-align, end);
+}
+@position-try --dsh-menu-left {
+  left: 12px;
+  right: max(12px, calc(anchor(left) + 4px));
+  justify-self: end;
+}
+/* A tall card keeps its trigger alignment before horizontal clamping is needed. */
+@position-try --dsh-menu-window {
+  top: var(--dsh-menu-window-top);
+  bottom: 12px;
+  align-self: safe start;
+}
+
+@position-try --dsh-menu-wide-window {
+  top: var(--dsh-menu-window-top);
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  align-self: safe start;
+  justify-self: safe var(--dsh-menu-wide-align, end);
 }
 
 /* Open above the anchor (empty-state workspace chip: figma 122:9481). */
@@ -61,18 +136,11 @@
   right: 0;
 }
 
-/* Viewport fit: the card stops 12px short of the viewport's top/bottom edges
- * (the portal MARGIN in Menu.tsx; the top side widens to the frame's published
- * overlay inset) and taller content scrolls inside .viewport, so a pinned
- * .footer stays visible. The dynamic unit, not `vh`: mobile browser chrome
- * shrinks the visible height while `vh` keeps the taller bars-hidden height, so
- * a `vh` cap exceeds the viewport the placement clamps into and the card ends
- * up taller than the screen showing it. Menus with submenu rows skip this
- * class — the overflow clip would crop the side card, so they rely on staying
- * short. */
+/* Tall lists scroll within the layout viewport, independently of pinch zoom.
+ * Child cards use their own body portal, so a scrolling parent never clips them. */
 .scrollable {
-  max-height: min(calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
-  max-height: min(calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px))), var(--dsh-anchored-max-height, 100vh));
+  max-height: calc(100vh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
+  max-height: calc(100dvh - 12px - max(12px, var(--dsh-frame-overlay-top, 12px)));
 }
 
 .viewport {
@@ -149,7 +217,7 @@
 
 .list.compactList,
 .submenu.compactList {
-  min-width: min(156px, var(--dsh-anchored-max-width, 100vw));
+  min-width: min(156px, calc(100vw - 24px));
   padding: 4px;
 }
 
@@ -295,29 +363,81 @@
   display: block;
 }
 
-/* The submenu aligns with the parent's bottom edge. Its hit bridge covers
- * the menu inset and the 6px gap so pointer movement keeps it open. */
-.submenu {
+/* The parent card's anchor for an open child card: an unscrolled box matching the
+ * card. WebKit does not re-resolve anchors on the anchor-positioned card itself
+ * after it settles, and resolves rows inside the scrolling list without their
+ * scroll offset; a descendant box avoids both. */
+.submenuAnchor {
   position: absolute;
-  top: auto;
-  bottom: -4px;
-  left: calc(100% + 10px);
-  z-index: 101;
-  min-width: 163px;
+  inset: 0;
+  pointer-events: none;
 }
 
-.submenu::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -10px;
-  width: 10px;
+/* Child cards stay mounted while switching between side and single-panel layouts.
+ * Both layouts use the parent card's anchor box as the default anchor, which
+ * browsers track through movement and zoom. JavaScript selects the layout and
+ * supplies the active row's offset within the parent card and the child card's
+ * natural height. */
+.submenu {
+  --dsh-menu-window-top: max(12px, var(--dsh-frame-overlay-top, 12px));
+  position: fixed;
+  position-anchor: var(--dsh-submenu-parent);
+  position-visibility: always;
+  margin: 0;
+  z-index: 1101;
+  width: max-content;
+  min-width: min(163px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 12px - var(--dsh-menu-window-top));
+}
+.submenu[data-contextual] { --dsh-menu-window-top: 12px; }
+
+/* Side card: beside the parent card with a 4px gap, top edge on the active row,
+ * moved up when its height does not fit below the row. The only placement
+ * fallback is the left side. */
+.submenu[data-submenu-layout='side'] {
+  top: max(var(--dsh-menu-window-top), min(
+    calc(anchor(top) + var(--dsh-submenu-row-offset, 0px)),
+    calc(100dvh - 12px - var(--dsh-submenu-height, 0px))
+  ));
+  left: calc(anchor(right) + 4px);
+  right: 12px;
+  justify-self: start;
+  height: max-content;
+  position-try-fallbacks: --dsh-submenu-left;
+}
+@position-try --dsh-submenu-left {
+  left: 12px;
+  right: calc(anchor(left) + 4px);
+  justify-self: end;
+}
+
+/* Single-panel page: the child takes the parent card's place and at least its width. */
+.submenu[data-submenu-layout='page'] {
+  top: max(var(--dsh-menu-window-top), anchor(top));
+  bottom: 12px;
+  left: max(12px, anchor(left));
+  right: 12px;
+  align-self: start;
+  justify-self: start;
+  height: fit-content;
+  min-width: min(anchor-size(width), calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+}
+
+/* Retain the parent's geometry and rows for placement and focus restoration. */
+.parentPage {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.submenu > .item {
+  flex: none;
 }
 
 .list[data-menu-phase='dismiss'],
 .list[data-menu-phase='replace'] { pointer-events: none; }
 .list[data-context-menu].scrollable {
-  max-height: min(calc(100vh - 24px), var(--dsh-anchored-max-height, 100vh));
-  max-height: min(calc(100dvh - 24px), var(--dsh-anchored-max-height, 100vh));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
 }
