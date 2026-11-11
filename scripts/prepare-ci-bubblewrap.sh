@@ -9,8 +9,9 @@ readonly BUBBLEWRAP_VERSION='0.12.0-1'
 readonly BUBBLEWRAP_SHA256='db4d572a7927bfd34cc9b8e24b56983efa8e0483d03da6c810f6caae081dcc36'
 # The recorded build remains addressable after Ubuntu prunes its live package pool.
 readonly BUBBLEWRAP_URL="https://launchpad.net/ubuntu/+source/bubblewrap/${BUBBLEWRAP_VERSION}/+build/33546835/+files/bubblewrap_${BUBBLEWRAP_VERSION}_amd64.deb"
-# Workflows restore and save this directory as `~/.cache/dsh-ci/bubblewrap`
-# with actions/cache, so a warm cache needs no Launchpad request.
+# Workflows that run on ephemeral runners restore and save this directory as
+# `~/.cache/dsh-ci/bubblewrap` with actions/cache, so a warm cache needs no
+# Launchpad request; the persistent self-hosted pool keeps the directory itself.
 readonly BUBBLEWRAP_CACHE_DIR="${HOME}/.cache/dsh-ci/bubblewrap"
 
 # shellcheck source=scripts/ci-verified-download.sh

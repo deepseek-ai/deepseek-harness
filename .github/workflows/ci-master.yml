@@ -177,22 +177,8 @@ jobs:
       - name: Install Playwright Chromium and WebKit
         run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install chromium webkit
 
-      - name: Restore verified bubblewrap archive
-        id: bubblewrap-cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: ~/.cache/dsh-ci/bubblewrap
-          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
-
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
-
-      - name: Save verified bubblewrap archive
-        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6.1.0
-        with:
-          path: ~/.cache/dsh-ci/bubblewrap
-          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run complete unsharded primary Node CI serially
         env:
@@ -509,13 +495,9 @@ jobs:
           console.log(JSON.stringify({ arch: process.arch, cpus: os.cpus().length,
           memoryGiB: Math.round(os.totalmem() / 2 ** 30) }))"
 
-      - name: Restore verified bubblewrap archive
-        id: bubblewrap-cache
-        uses: actions/cache/restore@v6.1.0
-        with:
-          path: ~/.cache/dsh-ci/bubblewrap
-          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
-
+      # No archive cache: this manual matrix includes the persistent 64/96-core
+      # fleet rows, and a `~` cache written by an ephemeral runner does not
+      # restore into the preparation directory there.
       - name: Install and prepare Linux
         if: matrix.platform == 'linux'
         run: |
@@ -529,13 +511,6 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
-
-      - name: Save verified bubblewrap archive
-        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6.1.0
-        with:
-          path: ~/.cache/dsh-ci/bubblewrap
-          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Install (immutable)
         if: matrix.platform == 'windows'

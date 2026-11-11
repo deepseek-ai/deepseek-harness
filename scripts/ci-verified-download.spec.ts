@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +11,7 @@ const library = resolve(import.meta.dirname, 'ci-verified-download.sh')
 const url = 'https://downloads.invalid/payload.deb'
 const payload = Buffer.from('verified payload\n')
 const payloadSha256 = createHash('sha256').update(payload).digest('hex')
+const bash = ['/bin/bash', '/usr/bin/bash'].find(candidate => existsSync(candidate)) ?? 'bash'
 
 // Records each invocation, then copies FAKE_CURL_SOURCE to the --output path
 // or fails as curl does for an HTTP error when no source is configured.
@@ -60,11 +63,11 @@ function createFixture(served?: Buffer): Fixture {
   return { root, cacheDir, cacheFile: join(cacheDir, 'payload.deb'), curlLog, env }
 }
 
-function acquire(fixture: Fixture): { status: number | null; signal: NodeJS.Signals | null; stderr: string } {
+function acquire(fixture: Fixture, env: NodeJS.ProcessEnv = fixture.env): { status: number | null; signal: NodeJS.Signals | null; stderr: string } {
   const result = spawnSync(
-    'bash',
+    bash,
     ['-c', 'set -euo pipefail; source "$1"; acquire_verified_archive "$2" "$3" "$4"', 'acquire', library, url, payloadSha256, fixture.cacheFile],
-    { encoding: 'utf8', env: fixture.env, timeout: 30_000 },
+    { encoding: 'utf8', env, timeout: 30_000 },
   )
   return { status: result.status, signal: result.signal, stderr: result.stderr }
 }
@@ -78,8 +81,26 @@ function seedCache(fixture: Fixture, content: Buffer): void {
   writeFileSync(fixture.cacheFile, content)
 }
 
-// The library targets Linux CI runners and needs bash with sha256sum.
-describe.skipIf(process.platform === 'win32')('acquire_verified_archive', () => {
+// Builds a PATH that reaches only the named executables plus the fixture's fake
+// curl, so a child can run on a host that provides a SHA-256 tool but see none.
+function restrictedPath(fixture: Fixture, names: readonly string[]): string {
+  const bin = join(fixture.root, 'restricted-bin')
+  mkdirSync(bin, { recursive: true })
+  for (const name of names) {
+    const resolved = spawnSync('sh', ['-c', `command -v ${name}`], { encoding: 'utf8' }).stdout.trim()
+    if (resolved === '') throw new Error(`the test host does not provide ${name}`)
+    symlinkSync(resolved, join(bin, name))
+  }
+  return [bin, join(fixture.root, 'bin')].join(delimiter)
+}
+
+function hasDigestTool(): boolean {
+  return spawnSync('sh', ['-c', 'command -v sha256sum || command -v shasum'], { stdio: 'ignore' }).status === 0
+}
+
+// The library targets Linux CI runners; the suite needs bash and a SHA-256 tool
+// (sha256sum or shasum -a 256) and skips elsewhere.
+describe.skipIf(process.platform === 'win32' || !hasDigestTool())('acquire_verified_archive', () => {
   it('uses a verified cached archive without contacting the download host', () => {
     const fixture = createFixture()
     seedCache(fixture, payload)
@@ -110,10 +131,26 @@ describe.skipIf(process.platform === 'win32')('acquire_verified_archive', () => 
     expect(acquire(fixture).status).toBe(0)
 
     const [call] = curlCalls(fixture)
-    expect(call).toMatch(/--connect-timeout \d+ /u)
-    expect(call).toMatch(/--max-time \d+ /u)
-    expect(call).toMatch(/--retry-max-time \d+ /u)
+    expect(call).toContain('--connect-timeout 15 ')
+    expect(call).toContain('--max-time 60 ')
+    expect(call).toContain('--retry 8 ')
+    // The last attempt may still run for its full --max-time, so the bounded
+    // failure time is this window plus 60 seconds.
+    expect(call).toContain('--retry-max-time 240 ')
     expect(call).toContain(url)
+  })
+
+  it('fails immediately and reports the missing tool instead of a digest mismatch', () => {
+    const fixture = createFixture(payload)
+    const env = { ...fixture.env, PATH: restrictedPath(fixture, ['bash', 'dirname', 'mkdir', 'mktemp', 'mv', 'rm']) }
+
+    const result = acquire(fixture, env)
+
+    expect(result.signal).toBeNull()
+    expect(result.status).toBe(2)
+    expect(result.stderr).toContain('No SHA-256 tool found')
+    expect(curlCalls(fixture)).toEqual([])
+    expect(existsSync(fixture.cacheFile)).toBe(false)
   })
 
   it('replaces a cached archive whose digest does not match with a verified download', () => {

@@ -92,6 +92,9 @@ jobs:
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
 
+      # A restored archive whose digest fails is re-downloaded but not re-saved
+      # (the hit key already exists), so a tampered entry survives until
+      # eviction; that needs deliberate cache poisoning.
       - name: Save verified bubblewrap archive
         if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
