@@ -18,6 +18,9 @@
       "path": "../../sandbox/sandbox"
     },
     {
+      "path": "../../attachment/attachment"
+    },
+    {
       "path": "../../util/error"
     }
   ]

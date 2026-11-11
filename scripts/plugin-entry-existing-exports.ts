@@ -73,10 +73,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-experimental-worktree': [
     'CREATED_RECORD', 'createdWorktreeSchema', 'generatedWorktreeName', 'worktreeProjection',
   ],
-  '@deepseek-ai/dsh-file-reference-local': [
-    'DEFAULT_FILE_SEARCH_EXCLUDED_DIRECTORIES', 'DEFAULT_FILE_SEARCH_MAX_ENTRIES', 'DEFAULT_FILE_SEARCH_MAX_RESULTS',
-    'FILE_REFERENCE_PROMPT', 'WorkspaceFileSearch', 'activeAtToken', 'formatFileMention',
-  ],
   '@deepseek-ai/dsh-goal': [
     'GOAL_CHANGE_VERSION', 'GoalId', 'applyGoalProjection', 'decodeGoalChange', 'foldGoal', 'goalChangeRef',
     'goalProjectionDefinition',
@@ -111,18 +107,13 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   ],
   '@deepseek-ai/dsh-llm-deepseek-account': ['plainAccountOptions', 'resolveAccountOptions'],
   '@deepseek-ai/dsh-llm-deepseek-api-key': ['plainOptions', 'resolveAdapterOptions'],
-  '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'recordKeyFor', 'supportedProtocols'],
+  '@deepseek-ai/dsh-llm-pi-ai': ['PiAiAdapter', 'supportedProtocols'],
   '@deepseek-ai/dsh-llm-replay': [
     'deriveReplayScript', 'installLlmReplay', 'loadReplayScript', 'loadSessionScripts', 'parseSessionHeader',
     'parseSessionLog', 'prepareSessionSnapshotFixtureForComparison', 'resolveScriptedEntry',
   ],
   '@deepseek-ai/dsh-llm-retry': ['RetryId'],
   '@deepseek-ai/dsh-lsp': ['LspProviderId', 'finalExtension'],
-  '@deepseek-ai/dsh-lsp-stdio': [
-    'LspConnection', 'LspInstance', 'MessageDecoder', 'canonicalizeWorkspace', 'encodeMessage',
-    'negotiatePositionEncoding', 'normalizeHover', 'normalizeLocations', 'readHostSource', 'requestMethod',
-    'supportsOperation', 'supportsTransientOpen',
-  ],
   '@deepseek-ai/dsh-mcp-client': [
     'ReconnectSchema', 'SERVER_NAME_PATTERN', 'assertTemplateSyntax', 'connectionStatusOf', 'createMcpToolDefinition',
     'probeServer', 'resolveReconnectPolicy',

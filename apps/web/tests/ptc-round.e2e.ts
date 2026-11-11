@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, recordFixture, selectedSessionFixture, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot } from './support.ts'
 
@@ -23,7 +23,7 @@ const MODE = webSnapshotMode()
 
 // Elicits the successful and failed sub-rows this scenario asserts.
 const PROMPT = 'Using ONE run_code program: run bash `echo CODE_ROUND_OK`, then read the file missing.txt '
-  + 'catching its error in the program. Return an object with both outcomes. Then reply DONE and stop.'
+  + 'catching its error in the program. Use `inspect(...)` to display an object with both outcomes. Then reply DONE and stop.'
 
 describe('web e2e: PTC mode round renders nested sub-calls', () => {
   let scaffold: WebScaffold
@@ -58,7 +58,7 @@ describe('web e2e: PTC mode round renders nested sub-calls', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ptc-drive'))
     const requestStates: string[] = []
     if (MODE !== 'record') {
-      expect(fixtureUserPrompts(await readFile(FIXTURE, 'utf8'))).toEqual([PROMPT])
+      expect(fixtureUserPrompts(await readFile(await selectedSessionFixture(FIXTURE), 'utf8'))).toEqual([PROMPT])
     }
     const input = page.locator('[data-composer-input]').first()
     await input.waitFor({ timeout: 10_000 })

@@ -1,0 +1,196 @@
+/* Overview rows of an expanded change request card and the menus they open. */
+
+/* A row that anchors its menu keeps the card's row grid. */
+.rowAnchor {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+/* Overlapping reviewer avatars at the end of the review row. */
+.avatars {
+  display: inline-flex;
+  align-items: center;
+}
+
+.avatars > .avatar + .avatar {
+  margin-left: -5px;
+}
+
+.avatars > .avatar {
+  box-shadow: 0 0 0 1.5px var(--dsw-alias-bg-layer-1);
+}
+
+.moreCount {
+  margin-left: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-active);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  object-fit: cover;
+}
+
+/* The update action named at the end of the merge row. */
+.action {
+  color: var(--dsw-alias-link);
+  white-space: nowrap;
+}
+
+.menu {
+  width: min(300px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - 48px));
+}
+
+.menuLabel {
+  padding: 6px 8px 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.menuStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.checkTime {
+  flex: none;
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A reviewer is information, not a choice, so it sits in the menu's row geometry without a hover. */
+.reviewer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.who {
+  display: inline-flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.kind {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The outcome, then a note when it was given on an older commit, on one line. */
+.outcome {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.outcome [data-tone='success'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.outcome [data-tone='error'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.outcome [data-tone='pending'] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.older {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.older::before {
+  content: '· ';
+}
+
+.menuSearch {
+  padding: 4px 4px 6px;
+}
+
+.menuRows {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.candidate {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+/* An issue the change request closes, named by its number; a closed one takes the merged tone. */
+.issue {
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-link);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.issue[data-state='closed'] {
+  color: var(--dsw-alias-state-done-primary);
+}
+
+@media (hover: hover) {
+  .issue:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+}
+
+.issue:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: 1px;
+}
