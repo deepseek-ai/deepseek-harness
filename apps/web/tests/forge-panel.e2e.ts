@@ -1929,7 +1929,7 @@ it.skipIf(MODE === 'record')('lets a plugin filter the changes by its lens, anno
   const session = scaffold.ctx.sessions.get(await settled)
   if (session === undefined) throw new Error('Session must stay loaded')
   scaffold.ctx.forgeSession.track(session, PULL)
-  await page.locator('[data-forge-header]').click()
+  await showSessionPanel(page)
 
   // The card button the plugin adds opens the changes view with its lens chosen.
   await page.locator(`[data-forge-change="${PULL}"]`).getByRole('button', { name: '打开导出视图', exact: true }).click()
