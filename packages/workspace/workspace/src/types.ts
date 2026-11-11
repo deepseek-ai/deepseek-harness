@@ -6,7 +6,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
@@ -98,6 +98,13 @@ export interface Workspace {
    * candidates. This does not admit new sessions or recreate directories.
    */
   readonly sessionIds: readonly SessionId[]
+
+  /**
+   * Stored headers of {@link sessionIds}, in the same order. Read from the
+   * registry's startup and attach-time header index without persistence I/O;
+   * headers are immutable, so an indexed header never goes stale.
+   */
+  readonly sessionHeaders: readonly SessionHeader[]
 
   /**
    * Replace the display title durably.

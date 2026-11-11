@@ -233,9 +233,7 @@ describe('read-only Session list tools', () => {
     })
     await mounted.ctx.workspaceRegistry.pinSession(SessionId('z'))
     expect(value(await mounted.call('list_session', { limit: 1, offset: 1 }))).toEqual([item('b', 100)])
-    expect(value(await mounted.call('list_session', { contain_subagent: true }))).toEqual([
-      item('child', 200), item('a', 100), item('b', 100), item('z', 100),
-    ])
+    expect(value(await mounted.call('list_session'))).toEqual([item('a', 100), item('b', 100), item('z', 100)])
     expect(value(await mounted.call('list_session', { archived: true }))).toEqual([item('archived', 500)])
     expect(value(await mounted.call('list_session', { archived: true, offset: 1 }))).toEqual([])
   })
@@ -248,33 +246,36 @@ describe('read-only Session list tools', () => {
     ])
   })
 
-  it('inherits explicit Workspace membership only for subagents and stops at the nearest assigned ancestor', async () => {
+  it('lists recorded non-subagent Workspace members from indexed headers without enumerating the corpus', async () => {
     const path = await directory()
     const otherPath = join(path, 'other')
     await mkdir(otherPath)
     const mounted = await mount({
       headers: [
         header('parent', 10, { cwd: path }),
-        header('same-cwd', 20, { cwd: path }),
-        header('child', 30, { cwd: path, origin: 'subagent', parentSession: SessionId('parent') }),
-        header('grandchild', 40, { origin: 'subagent', parentSession: SessionId('child') }),
-        header('fork', 50, { cwd: path, parentSession: SessionId('parent') }),
-        header('assigned-child', 60, { cwd: otherPath, origin: 'subagent', parentSession: SessionId('parent') }),
-        header('assigned-grandchild', 70, { origin: 'subagent', parentSession: SessionId('assigned-child') }),
-        header('orphan', 80, { origin: 'subagent', parentSession: SessionId('absent') }),
-        header('unassigned-child', 90, { origin: 'subagent', parentSession: SessionId('same-cwd') }),
+        header('member', 20, { cwd: path }),
+        header('same-cwd', 30, { cwd: path }),
+        header('child', 40, { cwd: path, origin: 'subagent', parentSession: SessionId('parent') }),
+        header('assigned-child', 50, { cwd: path, origin: 'subagent', parentSession: SessionId('parent') }),
+        header('other-member', 60, { cwd: otherPath }),
       ],
-      workspaces: [['primary', workspace(path, ['parent'])], ['other', workspace(otherPath, ['assigned-child'])]],
+      workspaces: [
+        ['primary', workspace(path, ['parent', 'member', 'assigned-child'])],
+        ['other', workspace(otherPath, ['other-member'])],
+      ],
       archived: ['parent'],
     })
-    expect(value(await mounted.call('list_session', { workspace_id: 'primary', contain_subagent: true }))).toEqual([
-      item('grandchild', 40), item('child', 30),
-    ])
+    const corpus = vi.spyOn(mounted.ctx.sessionQuery, 'listSessions')
+    // Registry startup already listed the stored headers; only later listings matter.
+    const stored = vi.spyOn(mounted.ctx.sessionPersistence, 'list')
+    stored.mockClear()
+    expect(value(await mounted.call('list_session', { workspace_id: 'primary' }))).toEqual([item('member', 20)])
     expect(value(await mounted.call('list_session', { workspace_id: 'primary', archived: true }))).toEqual([item('parent', 10)])
-    expect(value(await mounted.call('list_session', { workspace_id: 'other', contain_subagent: true }))).toEqual([
-      item('assigned-grandchild', 70), item('assigned-child', 60),
-    ])
-    expect(value(await mounted.call('list_session', { workspace_id: 'primary' }))).toEqual([])
+    expect(value(await mounted.call('list_session', { workspace_id: 'other' }))).toEqual([item('other-member', 60)])
+    expect(corpus).not.toHaveBeenCalled()
+    expect(stored).not.toHaveBeenCalled()
+    expect(value(await mounted.call('list_session'))).toEqual([item('other-member', 60), item('same-cwd', 30), item('member', 20)])
+    expect(corpus).toHaveBeenCalledOnce()
   })
 
   it('defaults to twenty rows and accepts the upper page limit', async () => {
@@ -295,16 +296,10 @@ describe('read-only Session list tools', () => {
     }
   })
 
-  it('rejects an unknown Workspace and corrupt subagent ancestry with typed failures', async () => {
-    const path = await directory()
-    const mounted = await mount({
-      headers: [header('cycle-a', 10, { origin: 'subagent', parentSession: SessionId('cycle-b') }), header('cycle-b', 20, { origin: 'subagent', parentSession: SessionId('cycle-a') })],
-      workspaces: [['known', workspace(path)]],
-    })
+  it('rejects an unknown Workspace with a typed failure', async () => {
+    const mounted = await mount()
     expect((await mounted.call('list_session', { workspace_id: 'absent' })).error?.info)
       .toMatchObject({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
-    expect((await mounted.call('list_session', { workspace_id: 'known', contain_subagent: true })).error?.info)
-      .toMatchObject({ name: 'SessionQueryError', code: 'SESSION_QUERY_INVALID_LINEAGE' })
     expect(mounted.open).not.toHaveBeenCalled()
   })
 

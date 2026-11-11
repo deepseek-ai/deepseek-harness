@@ -1929,7 +1929,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 
 ### `list_session`
 
-按最近人工提示词时间从新到旧列出会话，时间相同时按 ID 排列。返回 ID、可用标题以及 ISO 创建时间和更新时间。缺少活动元数据时使用创建时间；标题不可用时为 null。
+按最近人工提示词时间从新到旧列出非 subagent 会话，时间相同时按 ID 排列。返回 ID、可用标题以及 ISO 创建时间和更新时间。缺少活动元数据时使用创建时间；标题不可用时为 null。
 
 ```json
 {
@@ -1937,11 +1937,7 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
   "properties": {
     "workspace_id": {
       "type": "string",
-      "description": "Workspace ID from list_workspace. Includes its members and, when requested, subagents belonging through their nearest member ancestor. Omit to list all accessible sessions."
-    },
-    "contain_subagent": {
-      "type": "boolean",
-      "description": "Include subagent sessions. Defaults to false."
+      "description": "Workspace ID from list_workspace. Lists only its member sessions. Omit to list sessions in every workspace and outside all workspaces."
     },
     "archived": {
       "type": "boolean",

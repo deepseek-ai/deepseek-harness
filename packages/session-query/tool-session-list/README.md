@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Discover workspaces and sessions without resuming an agent or reading cold conversation logs. List empty workspaces, find sessions in a workspace, or include subagents and archived sessions. Results contain identifiers and lightweight metadata, with bounded page sizes. Enable these tools when callers may inspect the metadata of the whole mounted runtime.
+Discover workspaces and sessions without resuming an agent or reading cold conversation logs. List empty workspaces, find sessions in a workspace, or list archived sessions. Results contain identifiers and lightweight metadata, with bounded page sizes. Enable these tools when callers may inspect the metadata of the whole mounted runtime.
 
 ## Table of Contents
 
@@ -47,15 +47,15 @@ When the composition already mounts `workspaceRegistry`, add only the tool row. 
 
 Both tools return an array directly. The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-session-list) defines arguments. Pagination follows filtering and ordering; each call defaults to 20 entries, accepts at most 100, and starts at offset zero. Increase the offset by the number of returned entries to continue; an empty array ends the traversal.
 
-`list_workspace` preserves registry order and includes workspaces with no sessions. `list_session` includes unarchived ordinary sessions by default, including sessions outside every Workspace when no `workspace_id` is supplied. Explicit Workspace selection uses recorded membership, not a matching working directory. With subagents included, a directly assigned Workspace wins; otherwise the nearest recorded member ancestor determines membership. Ordinary forked sessions do not inherit membership through their parents. Archival matches each Session's own ID, independently of its ancestors.
+`list_workspace` preserves registry order and includes workspaces with no sessions. `list_session` never returns subagent sessions. It includes unarchived sessions by default, including sessions outside every Workspace when no `workspace_id` is supplied. Explicit Workspace selection uses recorded membership, not a matching working directory. Archival matches each Session's own ID.
 
 Session order is descending `updated_at`, then ascending Session ID for ties. Activity time is the later of creation and the latest human-authored prompt; assistant activity and title changes do not advance it. Titles come from live projections or persisted projection metadata. Unavailable titles are `null`, and unavailable activity metadata falls back to creation time. Timestamps are ISO 8601 strings. Pin order and manual sidebar order do not affect the results.
 
-After header enumeration, filtering, metadata reads, and sorting run synchronously. The call does not promise prompt handling of new cancellation requests during this work or one snapshot across all Sessions.
+With `workspace_id`, the call reads its members' headers from the Workspace registry index without persistence I/O, so its work grows with the member count. Without `workspace_id`, it first enumerates every stored and live Session header. Filtering, metadata reads, and sorting then run synchronously. The call does not promise prompt handling of new cancellation requests during this work or one snapshot across all Sessions.
 
 ### Failures
 
-Invalid pagination and an unknown `workspace_id` fail with `ToolArgsError` (`INVALID_ARGS`); use `list_workspace` to find a registered ID. Query and storage failures fail the call, and cyclic subagent ancestry encountered during Workspace selection fails with `SESSION_QUERY_INVALID_LINEAGE`. Cancellation returns no partial result. These failures leave sessions and Workspace records untouched.
+Invalid pagination and an unknown `workspace_id` fail with `ToolArgsError` (`INVALID_ARGS`); use `list_workspace` to find a registered ID. Query and storage failures fail the call. Cancellation returns no partial result. These failures leave sessions and Workspace records untouched.
 
 -----
 
@@ -65,7 +65,7 @@ Invalid pagination and an unknown `workspace_id` fail with `ToolArgsError` (`INV
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The tools combine the existing header-only query listing with Workspace membership and projected metadata. The shared `registerSessionListMetadata` helper acquires the same projection unit used by the Session API; each consumer releases its own registration when disposed. The title projection remains owned by `dsh-session-title`. Cold rows read the projection cache without opening the underlying log, including on a cache miss. No Session Controller or Agent activation is required.
+A Workspace selection reads `Workspace.sessionHeaders`; an unscoped call uses the existing header-only query listing. Both combine headers with projected metadata. The shared `registerSessionListMetadata` helper acquires the same projection unit used by the Session API; each consumer releases its own registration when disposed. The title projection remains owned by `dsh-session-title`. Cold rows read the projection cache without opening the underlying log, including on a cache miss. No Session Controller or Agent activation is required.
 
 | File | Role |
 |---|---|
@@ -80,7 +80,7 @@ The tools combine the existing header-only query listing with Workspace membersh
 ## Further Exploration
 
 - [Workspace registry](../../workspace/workspace/README.md) — recorded membership, registry order, and archival.
-- [Session query](../session-query/README.md) — header enumeration and the shared list metadata reader.
+- [Session query](../session-query/README.md) — corpus header enumeration and the shared list metadata reader.
 - [Session projection cache](../../session/session-projection-cache/README.md) — persisted metadata and cache availability.
 - [Session query package map](../README.md) — adjacent retrieval capabilities.
 
@@ -110,7 +110,7 @@ The schemas remain stable while tool availability is unchanged. Calls append ord
 These constraints affect consumers of the lists.
 
 - **Cold metadata can be missing or stale** — listing never rebuilds it by reading the full log. A `null` title can mean either no title or unavailable title metadata.
-- **Pagination is not a stable snapshot** — concurrent registry or Session changes can move entries between calls. Session listing enumerates candidates before selecting a page, so the page size does not bound total scan work.
+- **Pagination is not a stable snapshot** — concurrent registry or Session changes can move entries between calls. Session listing reads every candidate before selecting a page, so the page size does not bound total work; an unscoped call scales with the Session count.
 - **Metadata access is runtime-wide** — callers needing per-agent Workspace authorization require a separately defined access policy before these tools are enabled for them.
 
 <a id="dev-note"></a>

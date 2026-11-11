@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-无需恢复 agent（智能体）运行或读取冷会话的日志，即可发现工作区和会话。可以列出空工作区、查找某工作区中的会话，或包含 subagent 和已归档会话。结果包含标识符及轻量元数据，并限制每页条目数。当调用者可以查看整个已挂载运行时的元数据时，启用这些工具。
+无需恢复 agent（智能体）运行或读取冷会话的日志，即可发现工作区和会话。可以列出空工作区、查找某工作区中的会话，或列出已归档会话。结果包含标识符及轻量元数据，并限制每页条目数。当调用者可以查看整个已挂载运行时的元数据时，启用这些工具。
 
 ## 目录
 
@@ -47,15 +47,15 @@ kind: "package-reference"
 
 两个工具都直接返回数组。[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-session-list)定义参数。先过滤和排序，再分页；每次调用默认返回 20 条，最多接受 100 条，起始偏移为零。继续遍历时，将偏移增加已返回的条目数；空数组表示遍历结束。
 
-`list_workspace` 保留注册表顺序，并包含没有会话的工作区。`list_session` 默认包含未归档的普通会话；没有指定 `workspace_id` 时，也包含不属于任何 Workspace 的会话。显式选择 Workspace 时使用已记录的成员关系，而非相同的工作目录。包含 subagent 时，直接分配的 Workspace 优先；否则由最近的已记录成员祖先确定归属。普通 fork 会话不会通过父级继承成员关系。归档筛选匹配每个 Session 自身的 ID，与祖先无关。
+`list_workspace` 保留注册表顺序，并包含没有会话的工作区。`list_session` 从不返回 subagent 会话。它默认包含未归档会话；没有指定 `workspace_id` 时，也包含不属于任何 Workspace 的会话。显式选择 Workspace 时使用已记录的成员关系，而非相同的工作目录。归档筛选匹配每个 Session 自身的 ID。
 
 会话按 `updated_at` 降序排列，时间相同则按 Session ID 升序排列。活动时间取创建时间与最近人工提示词时间的较晚值；助手活动和标题变化不会推进它。标题来自实时投影或持久化投影元数据。标题不可用时为 `null`，活动元数据不可用时回退到创建时间。时间戳使用 ISO 8601 字符串。置顶顺序和侧边栏手动顺序不影响结果。
 
-header 枚举之后，筛选、元数据读取和排序同步执行。调用不承诺在这段工作中及时处理新收到的取消请求，也不承诺所有 Session 共享同一个快照。
+指定 `workspace_id` 时，调用从 Workspace 注册表索引读取成员 header，不做持久化 I/O，因此工作量随成员数增长。不指定 `workspace_id` 时，先枚举所有已存储和 live Session 的 header。随后的筛选、元数据读取和排序同步执行。调用不承诺在这段工作中及时处理新收到的取消请求，也不承诺所有 Session 共享同一个快照。
 
 ### 失败
 
-无效分页参数或未知的 `workspace_id` 以 `ToolArgsError`（`INVALID_ARGS`）失败；使用 `list_workspace` 查找已注册的 ID。查询和存储故障使调用失败，按 Workspace 筛选时遇到循环的 subagent 祖先关系则以 `SESSION_QUERY_INVALID_LINEAGE` 失败。取消不返回部分结果。这些失败不会修改会话或 Workspace 记录。
+无效分页参数或未知的 `workspace_id` 以 `ToolArgsError`（`INVALID_ARGS`）失败；使用 `list_workspace` 查找已注册的 ID。查询和存储故障使调用失败。取消不返回部分结果。这些失败不会修改会话或 Workspace 记录。
 
 -----
 
@@ -65,7 +65,7 @@ header 枚举之后，筛选、元数据读取和排序同步执行。调用不�
 <details>
 <summary>实现细节——点击展开</summary>
 
-工具将现有的仅 header 查询列表与 Workspace 成员关系及投影元数据结合。共享的 `registerSessionListMetadata` 辅助函数获取 Session API 使用的同一个投影单元；每个消费方在释放时只移除自己的注册。标题投影仍由 `dsh-session-title` 拥有。冷条目读取投影缓存，不打开底层日志，缓存未命中时也一样。不需要 Session 控制器，也不会激活 agent。
+选定 Workspace 时读取 `Workspace.sessionHeaders`；不指定范围时使用现有的仅 header 查询列表。两者都把 header 与投影元数据结合。共享的 `registerSessionListMetadata` 辅助函数获取 Session API 使用的同一个投影单元；每个消费方在释放时只移除自己的注册。标题投影仍由 `dsh-session-title` 拥有。冷条目读取投影缓存，不打开底层日志，缓存未命中时也一样。不需要 Session 控制器，也不会激活 agent。
 
 | 文件 | 职责 |
 |---|---|
@@ -80,7 +80,7 @@ header 枚举之后，筛选、元数据读取和排序同步执行。调用不�
 ## 进一步探索
 
 - [Workspace 注册表](../../workspace/workspace/README.zh.md)——已记录的成员关系、注册表顺序与归档。
-- [Session 查询](../session-query/README.zh.md)——header 枚举与共享列表元数据读取函数。
+- [Session 查询](../session-query/README.zh.md)——全量 header 枚举与共享列表元数据读取函数。
 - [Session 投影缓存](../../session/session-projection-cache/README.zh.md)——持久化元数据与缓存可用性。
 - [Session 查询包映射](../README.zh.md)——相邻的检索能力。
 
@@ -110,7 +110,7 @@ header 枚举之后，筛选、元数据读取和排序同步执行。调用不�
 以下约束影响列表消费方。
 
 - **冷元数据可能缺失或过期**——列表不会通过读取完整日志重建它。标题为 `null` 可能表示没有标题，也可能表示标题元数据不可用。
-- **分页不是稳定快照**——并发的注册表或 Session 变化可能让条目在多次调用间移动。会话列表先枚举候选项，再选取一页，因此每页大小不限制总扫描工作量。
+- **分页不是稳定快照**——并发的注册表或 Session 变化可能让条目在多次调用间移动。会话列表先读取全部候选项，再选取一页，因此每页大小不限制总工作量；不指定范围的调用随 Session 总数增长。
 - **元数据访问覆盖整个运行时**——需要逐 agent Workspace 授权的调用者，必须先定义独立的访问策略，再为其启用这些工具。
 
 <a id="dev-note"></a>

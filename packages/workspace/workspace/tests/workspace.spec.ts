@@ -667,6 +667,7 @@ describe('Workspace session ordering', () => {
     expect(workspace.sessionIds).toEqual(['s2', 's1'])
     await workspace.attachSession(SessionId('s1'))
     expect(workspace.sessionIds).toEqual(['s2', 's1'])
+    expect(workspace.sessionHeaders).toEqual([header('s2', dir, 2), header('s1', dir, 1)])
     expect(storedRecord(result.pool, workspace.id).sessionIds).toEqual(['s2', 's1'])
   })
 
@@ -890,6 +891,7 @@ describe('header-validated membership projection', () => {
     onTestFinished(() => result.ctx.fiber.dispose())
     const workspace = result.registry.get(id)!
     expect(workspace.sessionIds).toEqual(['missing-dir'])
+    expect(workspace.sessionHeaders).toEqual([header('missing-dir', missing)])
     await workspace.setTitle('Validated')
     expect(storedRecord(pool, id).sessionIds).toEqual(['missing-dir'])
   })

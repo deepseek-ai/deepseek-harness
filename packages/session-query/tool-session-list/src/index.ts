@@ -52,10 +52,9 @@ export async function apply(ctx: Context): Promise<void> {
   }))
   ctx.tools.register(defineTool({
     name: 'list_session',
-    description: 'List sessions by latest human prompt time, newest first, then by ID. Returns IDs, available titles, and ISO creation and update times. Missing activity metadata uses creation time; unavailable titles are null.',
+    description: 'List non-subagent sessions by latest human prompt time, newest first, then by ID. Returns IDs, available titles, and ISO creation and update times. Missing activity metadata uses creation time; unavailable titles are null.',
     parameters: {
-      workspace_id: { type: 'string', description: 'Workspace ID from list_workspace. Includes its members and, when requested, subagents belonging through their nearest member ancestor. Omit to list all accessible sessions.' },
-      contain_subagent: { type: 'boolean', description: 'Include subagent sessions. Defaults to false.' },
+      workspace_id: { type: 'string', description: 'Workspace ID from list_workspace. Lists only its member sessions. Omit to list sessions in every workspace and outside all workspaces.' },
       archived: { type: 'boolean', description: 'Return only archived sessions when true, otherwise only unarchived sessions. Defaults to false.' },
       ...pagination,
     },

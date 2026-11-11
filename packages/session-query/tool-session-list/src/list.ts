@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import { SessionQueryError, type SessionListMetadata } from '@deepseek-ai/dsh-session-query'
+import type { SessionListMetadata } from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { ToolArgsError } from '@deepseek-ai/dsh-tools'
@@ -17,7 +17,6 @@ export interface PageInput {
 /** Optional Session selection arguments. */
 export interface SessionListInput extends PageInput {
   readonly workspace_id?: string
-  readonly contain_subagent?: boolean
   readonly archived?: boolean
 }
 
@@ -74,6 +73,8 @@ export function listWorkspaces(ctx: Context, input: PageInput, signal: AbortSign
 
 /**
  * List live and persisted Session metadata without opening cold logs or activating Agents.
+ * A Workspace selection reads only its members' indexed headers; an unscoped call enumerates
+ * the corpus headers. Subagent Sessions are excluded.
  * @param ctx - context providing query, Workspace, and projection services.
  * @param readLiveMetadata - ready reader owned by this plugin's registration.
  * @param input - filters and pagination arguments.
@@ -88,30 +89,22 @@ export async function listSessions(
 ): Promise<SessionListItem[]> {
   const { limit, offset } = resolvePage(input)
   signal.throwIfAborted()
-  const workspaceId = input.workspace_id === undefined ? undefined : WorkspaceId(input.workspace_id)
-  if (workspaceId !== undefined && ctx.workspaceRegistry.get(workspaceId) === undefined) {
-    throw new ToolArgsError([`workspace_id ${JSON.stringify(workspaceId)} is not registered; use list_workspace to find a workspace`])
-  }
-  const records = await ctx.sessionQuery.listSessions(signal)
-  signal.throwIfAborted()
-  const archived = new Set(ctx.workspaceRegistry.archivedSessionIds)
-  const ownership = new Map<SessionId, WorkspaceId>()
-  if (workspaceId !== undefined) {
-    for (const workspace of ctx.workspaceRegistry.list()) {
-      for (const id of workspace.sessionIds) ownership.set(id, workspace.id)
-    }
-  }
-  const headers = new Map(records.map(record => [record.header.id, record.header]))
-  const nearestWorkspace = ancestorWorkspaceReader(headers, ownership)
-  const items = []
-  for (const { header } of records) {
+  let headers: readonly SessionHeader[]
+  if (input.workspace_id === undefined) {
+    headers = (await ctx.sessionQuery.listSessions(signal)).map(record => record.header)
     signal.throwIfAborted()
-    if (!input.contain_subagent && header.origin === 'subagent') continue
-    if (archived.has(header.id) !== (input.archived ?? false)) continue
-    if (workspaceId !== undefined) {
-      const owner = header.origin === 'subagent' ? nearestWorkspace(header) : ownership.get(header.id)
-      if (owner !== workspaceId) continue
+  } else {
+    const workspace = ctx.workspaceRegistry.get(WorkspaceId(input.workspace_id))
+    if (workspace === undefined) {
+      throw new ToolArgsError([`workspace_id ${JSON.stringify(input.workspace_id)} is not registered; use list_workspace to find a workspace`])
     }
+    headers = workspace.sessionHeaders
+  }
+  const archived = new Set(ctx.workspaceRegistry.archivedSessionIds)
+  const items = []
+  for (const header of headers) {
+    if (header.origin === 'subagent') continue
+    if (archived.has(header.id) !== (input.archived ?? false)) continue
     const metadata = readListMetadata(ctx, header, readLiveMetadata)
     items.push({
       session_id: header.id,
@@ -122,7 +115,6 @@ export async function listSessions(
   }
   items.sort((left, right) => right.updatedAt - left.updatedAt
     || (left.session_id < right.session_id ? -1 : 1))
-  signal.throwIfAborted()
   return items.slice(offset, offset + limit).map(({ updatedAt, ...item }) => ({
     ...item,
     updated_at: new Date(updatedAt).toISOString(),
@@ -147,26 +139,5 @@ function readListMetadata(
   return {
     title: snapshot?.values.title ?? null,
     lastPromptAt: snapshot?.values.sessionListMetadata?.lastPromptAt ?? null,
-  }
-}
-
-function ancestorWorkspaceReader(
-  headers: ReadonlyMap<SessionId, SessionHeader>,
-  ownership: ReadonlyMap<SessionId, WorkspaceId>,
-): (header: SessionHeader) => WorkspaceId | undefined {
-  const resolved = new Map<SessionId, WorkspaceId | undefined>(ownership)
-  return (header) => {
-    const visited = new Set<SessionId>()
-    let current: SessionHeader | undefined = header
-    while (current !== undefined && !resolved.has(current.id)) {
-      if (visited.has(current.id)) {
-        throw new SessionQueryError(`Session ${header.id} has cyclic parent ancestry`, 'SESSION_QUERY_INVALID_LINEAGE')
-      }
-      visited.add(current.id)
-      current = current.parentSession === undefined ? undefined : headers.get(current.parentSession)
-    }
-    const workspace = current === undefined ? undefined : resolved.get(current.id)
-    for (const id of visited) resolved.set(id, workspace)
-    return workspace
   }
 }
