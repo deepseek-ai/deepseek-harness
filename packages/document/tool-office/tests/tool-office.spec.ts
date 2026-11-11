@@ -15,7 +15,8 @@ import { crc32, deflateSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import { LlmAdapter, LlmRuntime, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, LlmRuntime, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmModelInfo, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
@@ -23,7 +24,7 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import OfficeKit, { OfficeKitError, type OfficeKitErrorCode, type OfficeImagesRequest, type OfficeImagesResult, type OfficeKitSource } from '@deepseek-ai/dsh-office-kit'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import * as ToolOffice from '../src/index.ts'
 import { renderImagesContent } from '../src/content.ts'
@@ -76,7 +77,7 @@ class CatalogAdapter extends LlmAdapter {
 class FakeRuntime extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ output: [] })
   resolve(request: PtcRunRequest): PtcRunSpec {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
@@ -163,7 +164,7 @@ async function setup(options: SetupOptions = {}) {
 
 let sessions = 0
 function agentOn(model: string | undefined, options: { provider?: string; model?: string } = {}) {
-  const id = SessionId(`office-session-${++sessions}`)
+  const id = brandString<SessionId>(`office-session-${++sessions}`)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd: dir, isSeeded: false })
   vi.spyOn(session, 'requestHeader').mockReturnValue(model === undefined ? undefined : { config: { provider: 'visual', model } })
   return { options, session }
@@ -177,7 +178,7 @@ async function loadOffice(ctx: Context, agent: object): Promise<void> {
     execute: async () => 'Office instructions',
   }))
   try {
-    await executeToolFixture(ctx, { signal, name: 'skill', callId: ToolCallId(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
+    await executeToolFixture(ctx, { signal, name: 'skill', callId: brandString<ToolCallId>(`skill-${++calls}`), arguments: { name: 'office' }, agent: agent as never })
   } finally { dispose() }
 }
 
@@ -188,7 +189,7 @@ async function office(ctx: Context, args: Record<string, unknown>, agent: object
     modelSelection: { provider: 'visual', model: 'vision' }, signal: callSignal })
   try {
     return await executeToolFixture(ctx, {
-      signal: callSignal, callId: ToolCallId(`office-${++calls}`), name: `office_${String(operation)}`, arguments: parameters,
+      signal: callSignal, callId: brandString<ToolCallId>(`office-${++calls}`), name: `office_${String(operation)}`, arguments: parameters,
       ...agent === null ? {} : { agent: agent as never }, ...toolSet === undefined ? {} : { toolSet },
     })
   } finally { toolSet?.dispose() }
@@ -234,7 +235,7 @@ describe('office schema', () => {
   ])('refuses a direct %s body call without an Agent', async (name, args) => {
     const { ctx, kit } = await setup()
     const definition = ctx.tools.get(name)!
-    const call = { signal, callId: ToolCallId(`agentless-${name}`), name, arguments: args, deferContext: vi.fn(), concludeTurn: vi.fn() }
+    const call = { signal, callId: brandString<ToolCallId>(`agentless-${name}`), name, arguments: args, deferContext: vi.fn(), concludeTurn: vi.fn() }
     await expect(definition.execute(args as never, call as never)).rejects.toThrow('Office tools run only in an Agent step')
     expect(kit.renderImages).not.toHaveBeenCalled()
     expect(kit.convertTo).not.toHaveBeenCalled()
@@ -648,24 +649,30 @@ describe('arguments and paths', () => {
 })
 
 describe('PTC dispatch', () => {
-  it('forwards nested render images and applies execution policy to the nested call', async () => {
+  it('records nested render images and applies execution policy to the nested call', async () => {
     const { ctx } = await setup({ ptc: true })
     const runtime = ctx.ptcRuntime as FakeRuntime
     runtime.behavior = async (request) => {
-      const value = await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
-      return { logs: [], value }
+      await request.bindings[0]!.functions.office_render!({ input: 'deck.pptx' })
+      return { output: [] }
     }
     const agent = { ...agentOn('vision'), ctx }
     await loadOffice(ctx, agent)
     const toolSet = await ctx.tools.resolve({ agent: agent as never, modelSelection: { provider: 'visual', model: 'vision' }, signal })
     onTestFinished(() => { toolSet.dispose() })
     const run = (args: Record<string, unknown>) => executeModelToolFixture(ctx, {
-      signal, callId: ToolCallId(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
+      signal, callId: brandString<ToolCallId>(`run-${++calls}`), name: RUN_CODE_NAME, arguments: args, agent: agent as never,
       toolSet,
     })
-    const result = await run({ code: 'return await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
+    const result = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
     expect(result.isError).toBe(false)
-    expect(result.additionalContexts?.[0]?.content.some(block => block.type === 'image')).toBe(true)
+    const dispatch = agent.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
+    expect(dispatch?.data.content.some(block => block.type === 'image')).toBe(true)
+    expect(result.content.some(block => block.type === 'image')).toBe(false)
+    expect(result.additionalContexts).toHaveLength(1)
+    expect(result.additionalContexts?.[0]).toMatchObject({
+      source: { kind: 'ptc-mode' }, content: dispatch?.data.content,
+    })
 
     const denied: string[] = []
     ctx.on('tools/pre-execute', (exec, next) => {
@@ -673,7 +680,7 @@ describe('PTC dispatch', () => {
       denied.push(exec.name)
       return Promise.resolve({ kind: 'deny' as const, reason: 'office denied by policy' })
     }, { prepend: true })
-    const refused = await run({ code: 'return await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
+    const refused = await run({ code: 'await tools.office_render({ input: "deck.pptx" })', description: 'Render' })
     expect(denied).toEqual(['office_render'])
     expect(text(refused)).toContain('office denied by policy')
   })

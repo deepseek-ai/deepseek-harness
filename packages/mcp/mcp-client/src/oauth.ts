@@ -74,20 +74,20 @@ export class McpOAuthAuthorization {
    * when it fails or `MCP OAuth cleanup did not settle` when closeTimeoutMs elapses first.
    */
   async start(): Promise<McpOAuthAttemptView> {
-    if (this.closed) throw new McpLocalError('MCP OAuth authorization owner is closed')
+    if (this.closed) throw new McpLocalError('MCP OAuth authorization owner is closed', 'MCP_OAUTH_FAILED')
     const previous = this.attempt
     if (previous !== undefined) {
       if (['starting', 'waiting-browser', 'exchanging', 'committing'].includes(previous.view.phase)) return { ...previous.view }
       await withDeadline(previous.done, this.config.closeTimeoutMs, CLEANUP_UNSETTLED)
         .catch((error: unknown) => { throw safeOAuthError(error) })
       // oxlint-disable-next-line typescript/no-unnecessary-condition -- Retirement can occur while previous cleanup is awaited.
-      if (this.closed) throw new McpLocalError('MCP OAuth authorization owner is closed')
+      if (this.closed) throw new McpLocalError('MCP OAuth authorization owner is closed', 'MCP_OAUTH_FAILED')
       if (this.attempt !== undefined && this.attempt !== previous) return { ...this.attempt.view }
     }
     const authorization = this.ctx.get('authorization')
     const webServer = this.ctx.get('webServer')
     if (authorization === undefined || webServer === undefined) {
-      throw new McpLocalError('Starting MCP OAuth requires authorization and WebServer services')
+      throw new McpLocalError('Starting MCP OAuth requires authorization and WebServer services', 'MCP_OAUTH_FAILED')
     }
     const attempt: Attempt = {
       view: { id: brandString<McpOAuthAttemptId>(randomUUID()), phase: 'starting' },
@@ -101,7 +101,7 @@ export class McpOAuthAuthorization {
     this.attempt = attempt
     attempt.done = authorization.begin({
       key: this.credentials.key, signal: attempt.controller.signal,
-      interaction: { notify: () => undefined, prompt: () => Promise.reject(new McpLocalError('MCP OAuth does not request text input')) },
+      interaction: { notify: () => undefined, prompt: () => Promise.reject(new McpLocalError('MCP OAuth does not request text input', 'MCP_OAUTH_FAILED')) },
     }).then(
       (outcome) => { this.update(attempt, { phase: outcome.status }) },
       (error: unknown) => { this.update(attempt, { phase: 'failed', lastError: this.safeFailure(error).message }) },
@@ -109,7 +109,7 @@ export class McpOAuthAuthorization {
       await attempt.running.catch(() => undefined)
       try { await attempt.removeCallback?.() }
       finally { unregister() }
-    }).catch(() => { throw new McpLocalError(CLEANUP_FAILED) })
+    }).catch(() => { throw new McpLocalError(CLEANUP_FAILED, 'MCP_OAUTH_FAILED') })
     void attempt.done.catch(() => { this.update(attempt, { phase: 'failed', lastError: CLEANUP_FAILED }) })
     this.changed()
     return { ...attempt.view }
@@ -174,7 +174,7 @@ export class McpOAuthAuthorization {
     const timeout = setTimeout(() => { deadline.abort() }, this.config.oauth.authorizationTimeoutMs)
     const code = Promise.withResolvers<{ code: string; iss: string | undefined }>()
     void code.promise.catch(() => undefined)
-    const abort = (): void => { code.reject(new McpLocalError('MCP OAuth authorization ended before callback')) }
+    const abort = (): void => { code.reject(new McpLocalError('MCP OAuth authorization ended before callback', 'MCP_OAUTH_FAILED')) }
     signal.addEventListener('abort', abort, { once: true })
     if (signal.aborted) abort()
     let clientKey: CredentialKey | undefined
@@ -221,7 +221,7 @@ export class McpOAuthAuthorization {
             if (authorizationCode === null) {
               if (parameters.get('error') === 'access_denied') attempt.controller.abort()
               else if (parameters.get('error') === OAuthErrorCode.InvalidClient) code.reject(new OAuthError(OAuthErrorCode.InvalidClient, 'MCP OAuth client registration was rejected'))
-              else code.reject(new McpLocalError('MCP OAuth authorization was rejected'))
+              else code.reject(new McpLocalError('MCP OAuth authorization was rejected', 'MCP_OAUTH_FAILED'))
               reply(200)
               return
             }
@@ -250,7 +250,7 @@ export class McpOAuthAuthorization {
         },
         state: () => state,
         clientInformation: async (context) => {
-          if (context === undefined) throw new McpLocalError('MCP OAuth issuer is unavailable')
+          if (context === undefined) throw new McpLocalError('MCP OAuth issuer is unavailable', 'MCP_OAUTH_FAILED')
           clientKey = issuerKey(context.issuer)
           information = await this.credentials.client(clientKey, context.issuer)
           this.binding.remember(information?.client_secret)
@@ -261,19 +261,19 @@ export class McpOAuthAuthorization {
           return information
         },
         saveClientInformation: async (value, context) => {
-          if (context === undefined) throw new McpLocalError('MCP OAuth issuer is unavailable')
+          if (context === undefined) throw new McpLocalError('MCP OAuth issuer is unavailable', 'MCP_OAUTH_FAILED')
           this.binding.remember(value.client_secret)
           await this.credentials.saveClient(issuerKey(context.issuer), context.issuer, value, signal)
           information = value
         },
         tokens: () => undefined,
-        saveTokens: () => { throw new McpLocalError('MCP OAuth requires an authorization callback before committing') },
+        saveTokens: () => { throw new McpLocalError('MCP OAuth requires an authorization callback before committing', 'MCP_OAUTH_FAILED') },
         saveDiscoveryState: (value) => { discovery = value },
         discoveryState: () => discovery,
         saveResourceUrl: (value) => { resource = value },
         saveCodeVerifier: (value) => { verifier = this.binding.remember(value) },
         codeVerifier: () => {
-          if (verifier === undefined) throw new McpLocalError('MCP OAuth verifier is unavailable')
+          if (verifier === undefined) throw new McpLocalError('MCP OAuth verifier is unavailable', 'MCP_OAUTH_FAILED')
           return verifier
         },
         redirectToAuthorization: (url) => {
@@ -292,7 +292,7 @@ export class McpOAuthAuthorization {
       signal.throwIfAborted()
       this.update(attempt, { phase: 'exchanging' })
       if (discovery === undefined || information === undefined || verifier === undefined) {
-        throw new McpLocalError('MCP OAuth authorization context is incomplete')
+        throw new McpLocalError('MCP OAuth authorization context is incomplete', 'MCP_OAUTH_FAILED')
       }
       const issuer = discovery.authorizationServerMetadata?.issuer ?? discovery.authorizationServerUrl
       const tokens = await exchangeAuthorization(issuer, {
@@ -317,7 +317,7 @@ export class McpOAuthAuthorization {
       this.update(attempt, { phase: 'committing' })
       await session.commit(oauthRecord(grant))
     } catch (error) {
-      if (deadline.signal.aborted) throw new McpLocalError('MCP OAuth authorization timed out')
+      if (deadline.signal.aborted) throw new McpLocalError('MCP OAuth authorization timed out', 'MCP_TIMEOUT')
       // A withdrawn attempt settles as cancelled, so its interrupted work is not a failure to log.
       if (signal.aborted) throw safeOAuthError(error)
       const failure = this.safeFailure(error)

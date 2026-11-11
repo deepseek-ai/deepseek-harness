@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/attachment-error-codes/guide.md
+/:
+  en: 8a0a1ff4ca3ad446
+  zh: 4bd6cd51cbd791c2
+/attachment-failures-keep-their-codes:
+  en: 4f2b2f0db0646d3b
+  zh: 9467f41336a65c48
+/attachment-failures-keep-their-codes/change:
+  en: 0f8c05c401f15a7d
+  zh: adf5976a05802bf1
+/attachment-failures-keep-their-codes/migration:
+  en: 8599ead7a17bc7eb
+  zh: 1120fd02065567f5

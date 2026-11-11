@@ -1,7 +1,7 @@
 /** The optional namespace and both UI contributions leave with the plugin. */
 import assert from 'node:assert/strict'
 import { Context, Service } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { InjectParams, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
@@ -12,9 +12,10 @@ import type { CotTranslationPreferences, CotTranslationSnapshot } from '../src/p
 import type { TranslationBodyInjected } from '../src/client/TranslationBody.tsx'
 import type { TranslationFormInjected } from '../src/client/preferences-form.ts'
 import { inject, mountTranslation } from '../src/client/mount.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contribution: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-cot-translation', descriptors: [] }
-const sourceSessionId = SessionId('reasoning-source')
+const sourceSessionId = brandString<SessionId>('reasoning-source')
 
 async function fixture(failure = false, preferences: CotTranslationPreferences = { provider: 'bing', targetLanguage: 'auto' }) {
   const ctx = new Context(), unmount = vi.fn(async () => {})
@@ -72,10 +73,10 @@ it.each(['bing', 'google'] as const)('binds %s requests to each reasoning Sessio
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
     const entry = b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!
-    const first = injectReasoning(entry, sourceSessionId), otherSessionId = SessionId('other-reasoning-source')
+    const first = injectReasoning(entry, sourceSessionId), otherSessionId = brandString<SessionId>('other-reasoning-source')
     const second = injectReasoning(entry, otherSessionId)
     bodyFace(first); bodyFace(second)
-    const request = { text: 'original', provider, targetLanguage: 'ja', sessionId: SessionId('forged-source') }
+    const request = { text: 'original', provider, targetLanguage: 'ja', sessionId: brandString<SessionId>('forged-source') }
     const signal = new AbortController().signal
     expect(await first.translate(request, signal)).toBe('translated')
     expect(await second.translate(request, signal)).toBe('translated')
@@ -363,7 +364,7 @@ it('advertises eligible paid routes without changing Bing selection or sending a
     const settings = b.ctx.slots.entries('plugins.bundle.config')[0]!.inject!()
     assert(typeof settings.refreshProviders === 'function')
     expect(settings.hooks).toBeTruthy()
-    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, SessionId('reasoning-session'))
+    const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, brandString<SessionId>('reasoning-session'))
     bodyFace(body)
     expect(body.hooks.preferences.getSnapshot()).toEqual({ provider: 'bing', targetLanguage: 'auto' })
     expect(b.translate).not.toHaveBeenCalled()
@@ -378,11 +379,11 @@ it.each(['deepseek-account', 'deepseek-official'] as const)('binds selected paid
   b.setCatalog(catalog)
   try {
     const dispose = await mountTranslation(b.ctx, contribution)
-    const sessionId = SessionId('existing-viewed-session')
+    const sessionId = brandString<SessionId>('existing-viewed-session')
     const body = injectReasoning(b.ctx.slots.entries('conversation.chat.reasoning.body')[0]!, sessionId)
     bodyFace(body)
     expect(b.translate).not.toHaveBeenCalled()
-    await body.translate({ text: 'original', provider, targetLanguage: 'zh', sessionId: SessionId('other-session') },
+    await body.translate({ text: 'original', provider, targetLanguage: 'zh', sessionId: brandString<SessionId>('other-session') },
       new AbortController().signal)
     expect(b.translate).toHaveBeenCalledWith({ text: 'original', provider, targetLanguage: 'zh', sessionId }, expect.any(AbortSignal))
     await body.translate({ text: 'another', provider, targetLanguage: 'zh' }, new AbortController().signal)

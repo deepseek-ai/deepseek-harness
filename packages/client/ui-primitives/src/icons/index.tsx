@@ -42,6 +42,18 @@ export const IconSearchOutlineRegular = productIcon('search-outline', 'regular')
 /** Medium IconSearchOutline artwork with a 1.3px stroke. */
 export const IconSearchOutlineMedium = productIcon('search-outline', 'medium')
 
+/** Regular one-pixel IconEyeOutline artwork. */
+export const IconEyeOutlineRegular = productIcon('eye-outline', 'regular')
+
+/** Medium IconEyeOutline artwork with a 1.3px stroke. */
+export const IconEyeOutlineMedium = productIcon('eye-outline', 'medium')
+
+/** Regular one-pixel IconEyeOffOutline artwork. */
+export const IconEyeOffOutlineRegular = productIcon('eye-off-outline', 'regular')
+
+/** Medium IconEyeOffOutline artwork with a 1.3px stroke. */
+export const IconEyeOffOutlineMedium = productIcon('eye-off-outline', 'medium')
+
 /** Regular one-pixel IconGlobeOutline artwork. */
 export const IconGlobeOutlineRegular = productIcon('globe-outline', 'regular')
 

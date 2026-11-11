@@ -4,12 +4,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsObservation } from '@deepseek-ai/dsh-fs'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
@@ -55,7 +56,7 @@ export async function setup(options: { policy?: boolean; mode?: SandboxMode; pro
   const fs = ctx.fs as LocalFileSystem
   const controller = new AbortController()
   const exec: ToolExecution = {
-    signal: controller.signal, callId: ToolCallId('patch-test'), rootCallId: ToolCallId('patch-test'),
+    signal: controller.signal, callId: brandString<ToolCallId>('patch-test'), rootCallId: brandString<ToolCallId>('patch-test'),
     token: Symbol('patch-test') as ToolExecutionToken, name: 'apply_patch', arguments: {},
     // Only the session header and owner identity are consumed by these services.
     agent: { session: { header: { cwd: workspace } } } as never,
@@ -89,7 +90,7 @@ export async function setup(options: { policy?: boolean; mode?: SandboxMode; pro
   const run = (text: string) => executePatch(ctx, sandbox, exec, { patch: text, sandboxPolicy: policy })
   const bytes = (name: string) => readFile(resolve(workspace, name), 'utf8')
   const editIntent = async (name: string) => ctx.waterfall('fs/edit-intent', await target(name), exec, () => undefined)
-  const version = async (name: string) => (await fs.stat(await target(name)))?.version ?? FsVersion('missing-fixture')
+  const version = async (name: string) => (await fs.stat(await target(name)))?.version ?? brandString<FsVersion>('missing-fixture')
   return { ctx, fs, toolFiber, workspace, controller, exec, sandbox, policy, observations,
     target, file, absent, record, run, bytes, editIntent, version }
 }

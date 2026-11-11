@@ -49,6 +49,8 @@ When Gateway is mounted, a Client query with no live event stream fails before d
 
 Client queries accept the first valid page response within `clientInspectTimeoutMs`. A failed page does not prevent another page from answering successfully. If no valid result arrives, the query rejects with the first Client failure or output-validation diagnostic; when no page answers, it asks the caller to open or reconnect the Harness page and retry. Cancellation and registry disposal also end pending queries. Reconnecting a page does not replay a missed request, so retry after the connection is restored. Host queries are unaffected by this timeout.
 
+Query failures throw `InspectError`: `INSPECT_PROVIDER_NOT_FOUND`, `INSPECT_METHOD_NOT_FOUND`, and `INSPECT_INVALID_INPUT` reject the request before dispatch; `INSPECT_INVALID_OUTPUT` rejects a provider value; `INSPECT_CLIENT_UNAVAILABLE` reports a missing page or registry disposal; and `INSPECT_TIMEOUT` reports the Client deadline. A Host provider may throw its own `HarnessError`, such as `INSPECT_TARGET_NOT_FOUND`; any other provider failure becomes `INSPECT_FAILED` with the original error as `cause`. Cancellation rethrows the signal's reason.
+
 ### What a run does
 
 Programmatic callers use `define`, `run`, `stop`, and `undefine`; the browser panel operates existing definitions. Host-only packages activate in this process. A package with a browser half waits for approval or cancellation, then loads Host before Client. `mode: "run"` starts the current version; `mode: "update"` replaces it. Stop disposes the live effects and retains the definition; undefine also forgets it.
@@ -56,6 +58,8 @@ Programmatic callers use `define`, `run`, `stop`, and `undefine`; the browser pa
 ### What happens to definitions
 
 Definitions are session-scoped and process-local: other sessions read them as absent, and restart clears them. Historical logs retain tool arguments and receipts but do not restore the registry. Reloading a browser page requires another explicit run to load its Client half.
+
+A tool defined through `harness.defineTool` fails with `PluginToolError`: `PLUGIN_TOOL_FAILED` when `execute` throws, keeping the thrown message and any string `code` in `message`, and `PLUGIN_TOOL_INVALID_RESULT` when it returns a value that is not lossless JSON data. A thrown `HarnessError` and any failure after cancellation keep their own identity.
 
 ### Trust stance
 

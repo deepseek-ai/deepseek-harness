@@ -1,7 +1,8 @@
 /** Browser-safe panel state, the worktree request record, Remote error codes, and Host configuration of the forge panel. */
 
 import type {} from '@deepseek-ai/dsh-typert-protocol'
-import type { ChangeRequestSnapshot, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { ChangeRequestRef, ChangeRequestSnapshot, ForgeCommit, ForgeReadiness, ForgeRepository } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session/types'
 
 /** Git facts for the checkout that contains the Session's current directory. */
@@ -185,6 +186,11 @@ export type ForgeChangeRequestStatesFrame =
 export interface ForgePanelChangeRequest extends SessionChangeRequest {
   /** Latest snapshot a poll returned, kept while later polls fail, or null before the first successful poll. */
   readonly snapshot: ChangeRequestSnapshot | null
+  /**
+   * Number of review changes `forge/review-changed` announced for the change request since the panel host started; it
+   * grows when any plugin's write is accepted, so a reader shows threads and viewed marks read after it.
+   */
+  readonly reviewRevision: number
 }
 
 /** Everything the panel shows for one Session. */
@@ -242,14 +248,26 @@ export interface ForgeBaseBranches {
   readonly local: readonly ForgeBaseBranch[]
 }
 
+/**
+ * Consecutive commits a changes view shows instead of its whole comparison, named by full object names in the order
+ * the commit list shows them, oldest first; the view shows the changes from the first commit's first parent to the last.
+ */
+export interface ForgeCommitRange {
+  /** First, oldest commit shown. */
+  readonly from: string
+  /** Last, newest commit shown; equal to `from` for one commit. */
+  readonly to: string
+}
+
 /** Which local changes a diff covers; each reads the Session's checkout through Git. */
 export type ForgeLocalScope =
   /**
    * The working tree and untracked files against a fork point: the merge base of HEAD with the
    * `base` ref, or while `base` is null, the base commit of the worktree the Session created,
-   * else the merge base of HEAD with the default branch of the code host remote.
+   * else the merge base of HEAD with the default branch of the code host remote. With `commits`, only the changes
+   * of those commits between the fork point and HEAD, without uncommitted or untracked files.
    */
-  | { readonly kind: 'branch'; readonly base: string | null }
+  | { readonly kind: 'branch'; readonly base: string | null; readonly commits: ForgeCommitRange | null }
   /** The working tree and untracked files against HEAD. */
   | { readonly kind: 'uncommitted' }
   /** The working tree and untracked files against the index. */
@@ -274,6 +292,13 @@ export interface ForgeDiffHunk {
 /** How one file changed. */
 export type ForgeDiffStatus = 'added' | 'deleted' | 'modified' | 'renamed'
 
+/**
+ * Review layer of a changed file: the layer the repository's root `.gitattributes` names with `dsh-review-layer`, else
+ * `test` for a file it marks `linguist-generated`, else the first of `testPaths`, `interfacePaths`, and the built-in
+ * test and interface rules that the path matches, else `implementation`.
+ */
+export type ForgeFileLayer = 'interface' | 'implementation' | 'test'
+
 /** One changed file of a diff. */
 export interface ForgeDiffFile {
   /** Path relative to the repository root after the change, or before it for a deleted file. */
@@ -294,6 +319,13 @@ export interface ForgeDiffFile {
   readonly deletions: number
   /** Hunks in file order; none for a binary file or a change of mode or name only. */
   readonly hunks: readonly ForgeDiffHunk[]
+  /** Review layer the path falls in. */
+  readonly layer: ForgeFileLayer
+  /**
+   * Digest of the file's change: its paths, status, and hunks, plus the blob names of a binary change, or the content
+   * of an untracked binary file. Equal digests describe the same change; reading the same comparison again keeps it.
+   */
+  readonly digest: string
 }
 
 /** Local changes of the Session's checkout in one scope. */
@@ -306,19 +338,125 @@ export interface ForgeLocalDiff {
   readonly omitted: number
 }
 
-/** Changes of a change request as its code host computes them. */
+/** Changes of a change request, or of consecutive commits of it, as its code host computes them. */
 export interface ForgeChangeRequestDiff {
-  /** Head commit the diff describes. */
+  /** Commit whose new side the diff describes: the head, or the last chosen commit. */
   readonly headSha: string
   /** Changed files in the host's order. */
   readonly files: readonly ForgeDiffFile[]
   /**
    * Commits the checkout's branch has beyond the head when that branch is the change request's head
-   * branch and the head commit is present locally; null otherwise.
+   * branch and the head commit is present locally; null otherwise and for chosen commits.
    */
   readonly localAhead: number | null
-  /** Web page of each changed file at the head commit, by path. */
+  /** Web page of each changed file at `headSha`, by path. */
   readonly fileUrls: Readonly<Record<string, string>>
+}
+
+/** Opaque identity of a filter lens, chosen by the plugin that registers it, such as `example/public-interface`. */
+export type ForgeLensId = Branded<'ForgeLensId'>
+
+/** One changed file a lens classifies: the diff's description of it, without the lines. */
+export type ForgeLensFile = Pick<ForgeDiffFile, 'path' | 'previousPath' | 'status' | 'binary' | 'layer' | 'hunks' | 'digest'>
+
+/** Lines `start` through `end` of one side of a file, both inclusive and 1-based. */
+export interface ForgeLineRange {
+  readonly start: number
+  readonly end: number
+}
+
+/** What a lens keeps of one file. */
+export interface ForgeLensKeep {
+  /**
+   * Lines the lens is about on each side; hunks that touch none of them fold into one row the reader can expand.
+   * Omitted: every hunk of the file shows.
+   */
+  readonly ranges?: { readonly old: readonly ForgeLineRange[]; readonly new: readonly ForgeLineRange[] }
+}
+
+/** The files a lens keeps, by path; a file the result does not name is filtered out. */
+export interface ForgeLensResult {
+  readonly files: Readonly<Record<string, ForgeLensKeep>>
+}
+
+/** What a changes view shows, as a lens sees it. */
+export type ForgeLensSource =
+  /** Local changes of a Session's checkout in one scope. */
+  | { readonly kind: 'local'; readonly scope: ForgeLocalScope }
+  /** A change request at one head commit, whole or as consecutive commits. */
+  | { readonly kind: 'change'; readonly ref: ChangeRequestRef; readonly headSha: string; readonly commits: ForgeCommitRange | null }
+
+/** What one `classify` call receives. */
+export interface ForgeLensInput {
+  /** What the view shows. */
+  readonly source: ForgeLensSource
+  /** Every file of the diff in display order, with the layer the panel gave it. */
+  readonly files: readonly ForgeLensFile[]
+  /**
+   * Read one side of a file of `files`, by its `path`: the old side reads `previousPath` for a renamed file. Resolves to
+   * null when the side does not exist, as the old side of an added file, or holds binary content. Rejects for a path not
+   * in `files`, once the reads of one call exceed the panel's `maxLensReadBytes`, for an old side the provider cannot
+   * locate, and when the read fails.
+   */
+  text(side: 'old' | 'new', path: string, signal: AbortSignal): Promise<string | null>
+  /** Report how many of `total` units the lens finished; the changes view shows it while the lens runs. */
+  progress(done: number, total: number): void
+}
+
+/** A filter over the files of a changes view, which a plugin registers with `ctx.forgePanel.registerLens()`. */
+export interface ForgeLens {
+  /** Identity the plugin chooses; one registration holds an id at a time. */
+  readonly id: ForgeLensId
+  /** Changes whenever `classify` may answer differently for the same input, which drops results kept under another version. */
+  readonly version: string
+  /**
+   * Decide which files the lens keeps and which lines it is about. The signal aborts when the reader stops waiting, the
+   * registration ends, or `lensTimeoutMs` passes; a rejection fails the request without a partial result.
+   */
+  classify(input: ForgeLensInput, signal: AbortSignal): Promise<ForgeLensResult>
+}
+
+/** What a changes view asks a lens to classify: its source, the version of the files it shows, and the lens. */
+export interface ForgeLensRequest {
+  /** The view's source: local changes in a scope, or a binding URL with its chosen commits. */
+  readonly source:
+    | { readonly kind: 'local'; readonly scope: ForgeLocalScope }
+    | { readonly kind: 'change'; readonly url: string; readonly commits: ForgeCommitRange | null }
+  /** `lensVersion` of the files the view shows; files read since with another version refuse the request. */
+  readonly version: string
+  /** Identity of the registered lens. */
+  readonly lens: string
+}
+
+/** One frame of a lens request: how far the lens is, then what it keeps. */
+export type ForgeLensFrame =
+  | { readonly kind: 'progress'; readonly done: number; readonly total: number }
+  | { readonly kind: 'result'; readonly files: Readonly<Record<string, ForgeLensKeep>> }
+
+/** A registered lens as changes views see it. */
+export interface ForgeRegisteredLens {
+  /** Identity of the lens. */
+  readonly id: string
+  /** The lens's `version`; a view does not reuse results of another version. */
+  readonly version: string
+}
+
+/** Facts about the panel's extensions that every changes view reads. */
+export interface ForgeExtensionState {
+  /** The registered lenses, in registration order. */
+  readonly lenses: readonly ForgeRegisteredLens[]
+  /** Most line annotations a changes view shows in one file, across every annotation source. */
+  readonly maxAnnotationsPerFile: number
+}
+
+/** Commits of the `branch` scope at one HEAD commit, which the changes view can show one or several of. */
+export interface ForgeLocalCommits {
+  /** HEAD commit the list was read at. */
+  readonly headSha: string
+  /** Commits oldest first, ending with HEAD's commit. */
+  readonly commits: readonly ForgeCommit[]
+  /** Whether the branch has more commits than `maxCommits`; the listed ones are the newest. */
+  readonly truncated: boolean
 }
 
 /** One file the `branch` scope changes, without its hunks. */
@@ -366,6 +504,33 @@ export interface Config {
   maxUntrackedFiles?: number
   /** Most UTF-8 bytes of change request diffs kept in memory for later reads at the same head commit and base branch. */
   maxCachedDiffBytes?: number
+  /** Most commits of the `branch` scope listed; a longer branch lists its newest ones. */
+  maxCommits?: number
+  /**
+   * Globs of files in the `test` layer, which the changes view can hide, beside the built-in rules and checked before
+   * them; matched against repository-relative paths with dot files included. A repository's `.gitattributes` overrides both.
+   */
+  testPaths?: string[]
+  /**
+   * Globs of files in the `interface` layer beside the built-in rules, matched like `testPaths`; checked after
+   * `testPaths` and before the built-in rules.
+   */
+  interfacePaths?: string[]
+  /** Most UTF-8 bytes, as JSON, of change request review threads kept in memory for later reads at the same head commit and update time. */
+  maxCachedReviewBytes?: number
+  /**
+   * Age in milliseconds at which review threads kept in memory are read from the code host again; a GitHub pull
+   * request's update time does not change when a thread is resolved.
+   */
+  reviewRefreshMs?: number
+  /** Deadline in milliseconds for one lens `classify` call. */
+  lensTimeoutMs?: number
+  /** Most UTF-8 bytes of file text one lens `classify` call may read. */
+  maxLensReadBytes?: number
+  /** Most UTF-8 bytes, as JSON, of lens results kept in memory for later requests with the same files, lens, and lens version. */
+  maxCachedLensBytes?: number
+  /** Most line annotations a changes view shows in one file, across every annotation source. */
+  maxAnnotationsPerFile?: number
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
@@ -388,10 +553,17 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/restore-failed': Record<string, never>
     /** The URL is not a visible binding of the Session that a provider serves, so the panel does not act on it. */
     'forgePanel/not-bound': Record<string, never>
-    /** The change request has new commits since the head the user confirmed, so it was not merged. */
+    /**
+     * The change request's head is no longer the commit the request named: the head the user confirmed for a merge,
+     * the head displayed for complete checks, the head of the latest status for a diff, or the head of the displayed
+     * diff for review threads and viewed marks. A diff, review, or viewed mark read the host refuses polls the change
+     * request again at once, so a later status names the current head.
+     */
     'forgePanel/stale-head': Record<string, never>
     /** The code host refused the change or could not be reached; the message gives the host's reason. */
     'forgePanel/action-failed': Record<string, never>
+    /** The code host did not confirm whether it applied the change, which must be checked there before trying again. */
+    'forgePanel/action-unknown': Record<string, never>
     /** The Session's directory is not inside a Git checkout, so it has no local changes. */
     'forgePanel/not-a-checkout': Record<string, never>
     /**
@@ -412,6 +584,27 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'forgePanel/checks-failed': Record<string, never>
     /** The code host did not provide the change request's diff or file, or its status has not been read yet; the message says why. */
     'forgePanel/diff-failed': Record<string, never>
+    /** A chosen commit is no longer among the listed commits of the branch or change request, or the commits are out of order. */
+    'forgePanel/commits-missing': Record<string, never>
+    /** A chosen commit after the first lacks the commit listed before it as its first parent, so two ends cannot name the run. */
+    'forgePanel/commits-not-linear': Record<string, never>
+    /** The code host did not provide the signed-in user's viewed marks on the change request's files; the message says why. */
+    'forgePanel/viewed-failed': Record<string, never>
+    /** The code host did not list the accounts a review can be requested from; the message says why. */
+    'forgePanel/reviewers-failed': Record<string, never>
+    /** The code host's provider cannot read review threads, so the changes view shows none. */
+    'forgePanel/review-unsupported': Record<string, never>
+    /** The code host did not provide the change request's review threads, or its status has not been read yet; the message says why. */
+    'forgePanel/review-failed': Record<string, never>
+    /** No lens with the requested identity is registered, as after its plugin unloaded. */
+    'forgePanel/lens-missing': Record<string, never>
+    /** The files the view shows are no longer the files the panel reads, so the view reads them again before asking. */
+    'forgePanel/lens-stale': Record<string, never>
+    /**
+     * The lens failed, ran past `lensTimeoutMs`, read more than `maxLensReadBytes`, or answered over `maxCachedLensBytes`;
+     * the message says which.
+     */
+    'forgePanel/lens-failed': Record<string, never>
   }
 }
 

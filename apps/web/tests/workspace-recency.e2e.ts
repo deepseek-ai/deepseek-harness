@@ -155,7 +155,30 @@ describe('web e2e: workspace recency', () => {
     const blank = page.getByRole('treeitem').filter({ has: page.getByText('New Session', { exact: true }) })
     await expect.poll(() => blank.getAttribute('draggable')).toBe('false')
     const blankWarningStart = tripwire.warnings.length
-    await page.reload({ waitUntil: 'load' })
+    const selectedRowKey = await blank.getAttribute('data-row-key')
+    expect(selectedRowKey).not.toBeNull()
+    const restoredRowKeys = await page.locator('[role="treeitem"]:not([aria-expanded])')
+      .evaluateAll(rows => rows.map(row => row.getAttribute('data-row-key')))
+    expect(restoredRowKeys).toHaveLength(4)
+    const workspaceRow = page.getByRole('treeitem').filter({ has: page.getByText(workspaceTitle, { exact: true }) })
+    // Document load does not restore the Workspace stream or the selected blank Session. Hold the baseline to exercise that gap.
+    const releaseHeldWorkspace = (): void => { releaseWorkspace?.() }
+    releaseWorkspace = undefined
+    holdWorkspace = true
+    try {
+      await page.reload({ waitUntil: 'load' })
+      await expect.poll(() => releaseWorkspace !== undefined, { timeout: 30_000 }).toBe(true)
+      expect(await workspaceRow.count()).toBe(0)
+    } finally {
+      holdWorkspace = false
+      releaseHeldWorkspace()
+    }
+    await workspaceRow.waitFor({ state: 'visible', timeout: 30_000 })
+    for (const rowKey of restoredRowKeys) {
+      await page.locator(`[data-row-key="${rowKey}"]`).waitFor({ state: 'visible', timeout: 30_000 })
+    }
+    await page.locator(`[data-row-key="${selectedRowKey}"][aria-selected="true"]`)
+      .waitFor({ state: 'visible', timeout: 30_000 })
     await expect.poll(titles).toEqual(['New Session', ...TITLES])
     acknowledgeReloadConnectionLoss(tripwire, blankWarningStart)
     await pick('Last updated')

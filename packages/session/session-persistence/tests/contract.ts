@@ -12,9 +12,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { MessageId, freezeMessage } from '@deepseek-ai/dsh-llm'
+import { type MessageId, freezeMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   SessionAlreadyExistsError,
   SessionAlreadyOwnedError,
@@ -51,7 +52,7 @@ export interface ContractBackend extends ContractBackendInstance {
 export function meta(id: string, cwd?: string): SessionHeader {
   return {
     version: SESSION_FORMAT_VERSION,
-    id: SessionId(id),
+    id: brandString<SessionId>(id),
     createdAt: 1000,
     isSeeded: false,
     ...cwd !== undefined ? { cwd } : {},
@@ -63,7 +64,7 @@ export function oneTurnLog(): SessionEvent[] {
   return [
     { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     { type: 'user/message', seq: SessionSeq(1), time: 2, data: freezeMessage({
-      id: MessageId('one-turn-user'),
+      id: brandString<MessageId>('one-turn-user'),
       role: 'user',
       content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' },
     }), surfaceOp: 'append' },
@@ -71,7 +72,7 @@ export function oneTurnLog(): SessionEvent[] {
     { type: 'assistant/message', seq: SessionSeq(3), time: 4, data: {
       turn: 1, step: 1,
       message: freezeMessage({
-        id: MessageId('one-turn-assistant'),
+        id: brandString<MessageId>('one-turn-assistant'),
         role: 'assistant',
         content: [{ type: 'text', text: 'hello' }],
         source: {
@@ -241,8 +242,8 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
     it('open of an absent session rejects with SessionPersistenceNotFoundError for both accesses', async () => {
       const { persistence, dispose } = await make()
       try {
-        await expect(persistence.open(SessionId('absent'), 'read')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
-        await expect(persistence.open(SessionId('absent'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+        await expect(persistence.open(brandString<SessionId>('absent'), 'read')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
+        await expect(persistence.open(brandString<SessionId>('absent'), 'write')).rejects.toBeInstanceOf(SessionPersistenceNotFoundError)
       } finally {
         await dispose()
       }
@@ -328,9 +329,9 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
           const reopened = await backend.reopen()
           try {
             // The barrier materialized the empty session durably...
-            expect(await reopened.persistence.stat(SessionId('flush-all'))).toBeDefined()
+            expect(await reopened.persistence.stat(brandString<SessionId>('flush-all'))).toBeDefined()
             // ...while the one that closed unappended never existed.
-            expect(await reopened.persistence.stat(SessionId('flush-all-closing'))).toBeUndefined()
+            expect(await reopened.persistence.stat(brandString<SessionId>('flush-all-closing'))).toBeUndefined()
           } finally {
             await reopened.dispose()
           }
@@ -605,7 +606,7 @@ export function runPersistenceContract(name: string, make: () => Promise<Contrac
         await reader.close()
         await writer.close()
 
-        expect(await persistence.stat(SessionId('absent-stat'))).toBeUndefined()
+        expect(await persistence.stat(brandString<SessionId>('absent-stat'))).toBeUndefined()
       } finally {
         await dispose()
       }

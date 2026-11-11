@@ -61,7 +61,9 @@ export interface FileTypeProjectContext {
 
 const CODE_FILE_TYPE_SET = new Set<string>(CODE_FILE_TYPES)
 
-const FILE_NAME_TYPES: Readonly<Record<string, CodeFileType>> = {
+// Maps, not objects: a basename or extension equal to an `Object.prototype` key
+// (`constructor`, `__proto__`) must miss instead of resolving the inherited member.
+const FILE_NAME_TYPES: ReadonlyMap<string, CodeFileType> = new Map(Object.entries({
   '.bash_profile': 'shell',
   '.bashrc': 'shell',
   '.env': 'env',
@@ -90,7 +92,7 @@ const FILE_NAME_TYPES: Readonly<Record<string, CodeFileType>> = {
   'package.json': 'node',
   'podfile': 'ruby',
   'rakefile': 'ruby',
-}
+}))
 
 const FILE_NAME_PREFIX_TYPES: readonly (readonly [string, CodeFileType])[] = [
   ['dockerfile.', 'docker'],
@@ -109,7 +111,7 @@ const FILE_NAME_SUFFIX_TYPES: readonly (readonly [string, CodeFileType])[] = [
   ['.dockerfile', 'docker'],
 ]
 
-const EXTENSION_TYPES: Readonly<Record<string, CodeFileType>> = {
+const EXTENSION_TYPES: ReadonlyMap<string, CodeFileType> = new Map(Object.entries({
   'bash': 'shell',
   'c': 'c',
   'c++': 'cpp',
@@ -217,7 +219,7 @@ const EXTENSION_TYPES: Readonly<Record<string, CodeFileType>> = {
   'yml': 'yaml',
   'zig': 'zig',
   'zsh': 'shell',
-}
+}))
 
 const LINK_CODE_EXTENSIONS = new Set([
   'ts',
@@ -322,7 +324,7 @@ export function classifyCodeFileType(
   extension: string,
   context?: FileTypeProjectContext,
 ): CodeFileType | null {
-  const exact = FILE_NAME_TYPES[name]
+  const exact = FILE_NAME_TYPES.get(name)
   if (exact !== undefined) return exact
   for (const [prefix, type] of FILE_NAME_PREFIX_TYPES) {
     if (name.startsWith(prefix)) return type
@@ -334,5 +336,5 @@ export function classifyCodeFileType(
     const pubspec = Object.entries(context.files).find(([path]) => basename(path).toLowerCase() === 'pubspec.yaml')?.[1]
     if (pubspec?.includes('flutter:') === true) return 'flutter'
   }
-  return EXTENSION_TYPES[extension] ?? null
+  return EXTENSION_TYPES.get(extension) ?? null
 }

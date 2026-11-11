@@ -8,12 +8,13 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const testToolSignal = new AbortController().signal
 
@@ -23,8 +24,8 @@ function execution(sessionId?: string): ToolExecution {
   return {
     signal: testToolSignal,
     token: Symbol('bash-env-test') as ToolExecution['token'],
-    callId: ToolCallId('bash-env-call'),
-    rootCallId: ToolCallId('bash-env-call'),
+    callId: brandString<ToolCallId>('bash-env-call'),
+    rootCallId: brandString<ToolCallId>('bash-env-call'),
     name: 'bash',
     arguments: { command: 'true' },
     ...(sessionId === undefined
@@ -192,6 +193,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/drifted-provider.*DSH_UNDECLARED/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('rejects non-string values returned by a contributor', () => {
@@ -203,6 +205,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/wrong-value-type.*non-string.*DSH_STRING/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('removes an effect-scoped contributor when its plugin is disposed', async () => {

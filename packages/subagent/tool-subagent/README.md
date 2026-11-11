@@ -94,7 +94,7 @@ One instance is one provider plus one tool name. The plugin registers its defini
 
 ### Activation ownership
 
-The tool calls `ctx.subagents.startActivation()` with parent delivery selected. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result; failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
+The tool calls `ctx.subagents.startActivation()` with parent delivery selected. The runtime owns startup cancellation, execution, outcome reporting, and cleanup. A startup failure is an errored tool result. Rejections before startup are coded: a missing calling Agent, `llm` service, or effective parent route throws `ToolContextUnavailableError`; an empty or unpaired route field throws `ToolArgsError`; and `SubagentError` reports a disabled selection (`MODEL_SELECTION_DISABLED`, `PRESET_SELECTION_DISABLED`), a preset outside the allowlist (`PRESET_NOT_ALLOWED`), a route the Session does not authorize (`MODEL_ROUTE_NOT_ALLOWED`), an LLM provider unknown to discovery (`LLM_PROVIDER_NOT_FOUND`), or a provider replaced during route preflight (`PROVIDER_CHANGED`). Failures after publication arrive through the completion notice, with diagnostics and partial output preserved by the runtime.
 
 ### Result acknowledgement
 

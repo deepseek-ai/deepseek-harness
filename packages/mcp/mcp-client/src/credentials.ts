@@ -39,7 +39,7 @@ export class McpTemplateBinding<T extends Config = Config> {
     if (config.expandTemplates) {
       for (const value of strings) assertTemplateSyntax(value, `mcp-client(${config.serverName})`)
       if (this.refs.size > 0 && ctx.get('credentials') === undefined) {
-        throw new McpLocalError('MCP credential templates require a credentials provider')
+        throw new McpLocalError('MCP credential templates require a credentials provider', 'MCP_CREDENTIALS_UNAVAILABLE')
       }
     }
   }
@@ -93,7 +93,7 @@ export class McpTemplateBinding<T extends Config = Config> {
       let value = values.get(ref)
       if (value === undefined) {
         const provider = this.ctx.get('credentials')
-        if (provider === undefined) throw new McpLocalError('MCP credential templates require a credentials provider')
+        if (provider === undefined) throw new McpLocalError('MCP credential templates require a credentials provider', 'MCP_CREDENTIALS_UNAVAILABLE')
         value = provider.resolve(ref as CredentialRef).then((result) => {
           return result === undefined ? undefined : this.remember(result.value)
         })

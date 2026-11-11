@@ -71,7 +71,7 @@ For a finite timed call, `{ "pending": true, "callId": "…" }` means the foregr
 
 ### When the call fails
 
-Legacy and `timeout: -1` calls wait for an answer or cancellation; without an accepting answerer, they return an error. A finite timed call without an answerer returns pending at its deadline. Cancellation and a caller that is not the exact live runtime root also return errors. A live child agent is rejected with `DELEGATED_CALLER` and must include the unresolved decision in its final result.
+Legacy and `timeout: -1` calls wait for an answer or cancellation; without an accepting answerer, they return an error. A finite timed call without an answerer returns pending at its deadline. Cancellation and a caller that is not the exact live runtime root also return errors. A timed call rejects an out-of-range `timeout` and a repeated question id with `ToolArgsError` `INVALID_ARGS`, and a missing calling agent with `ToolContextUnavailableError`. A live child agent is rejected with `DELEGATED_CALLER` and must include the unresolved decision in its final result.
 
 -----
 
