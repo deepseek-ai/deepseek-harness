@@ -29,12 +29,14 @@ const output = {
  * @returns the effect disposer that removes all three tools synchronously.
  */
 export function registerResourceTools(ctx: Context, request: RequestResource): () => void {
+  // All three tools are read-only and parallel-safe; `McpResourceProvider.request` settles concurrent requests independently.
   const dispose = ctx.effect(function* () {
     yield ctx.tools.register(defineTool({
       name: 'list_mcp_resources',
       description: 'List resources available from an MCP server.',
       parameters: listParameters,
       output,
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, {
         method: 'resources/list', ...args.cursor === undefined ? {} : { cursor: args.cursor },
       }, exec),
@@ -44,6 +46,7 @@ export function registerResourceTools(ctx: Context, request: RequestResource): (
       description: 'List parameterized resource URI templates from an MCP server.',
       parameters: listParameters,
       output,
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, {
         method: 'resources/templates/list', ...args.cursor === undefined ? {} : { cursor: args.cursor },
       }, exec),
@@ -56,6 +59,7 @@ export function registerResourceTools(ctx: Context, request: RequestResource): (
         uri: { type: 'string', required: true, description: 'Resource URI to read.' },
       },
       output,
+      isConcurrencySafe: () => true,
       execute: (args, exec) => request(args.server, { method: 'resources/read', uri: args.uri }, exec),
     }))
   }, 'mcpResources.resourceTools')

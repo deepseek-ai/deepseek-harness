@@ -1,7 +1,7 @@
 /** Durable EOF refusals preserve historical generations and never fall back from the selected generation. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
@@ -14,8 +14,9 @@ import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { generationLogPath, type JsonlCompression } from '../src/format.ts'
 import { compressZstdFrame } from '../src/zstd.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const id = SessionId('migration-refusal')
+const id = brandString<SessionId>('migration-refusal')
 const config = { provider: 'historical', model: 'historical-model' }
 const question = {
   id: 'question', role: 'user', source: { kind: 'user' },

@@ -11,7 +11,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 
 interface Bench {
@@ -41,7 +42,7 @@ async function harness(withPlanMode: boolean): Promise<Bench> {
 
 /** Append one logged /plan selection record (the executor's command/run shape). */
 function runPlanCommand(session: Session, args: string, index: number): CommandId {
-  const commandId = CommandId(`plan-proj-${String(index)}`)
+  const commandId = brandString<CommandId>(`plan-proj-${String(index)}`)
   session.append('command/run', {
     commandId,
     name: 'plan',
@@ -93,12 +94,12 @@ describe('plan projection unit', () => {
     commitPlanMode(bench.session, true, 0)
     // Another command's record never touches plan state.
     bench.session.append('command/run', {
-      commandId: CommandId('other-1'), name: 'compact', args: '', source: { kind: 'user' },
+      commandId: brandString<CommandId>('other-1'), name: 'compact', args: '', source: { kind: 'user' },
     })
     expect(bench.values().plan).toEqual({ active: true, pending: false })
     // A command lifecycle with omitted input carries no plan selection.
     bench.session.append('command/run', {
-      commandId: CommandId('plan-no-input'), name: 'plan', source: { kind: 'user' },
+      commandId: brandString<CommandId>('plan-no-input'), name: 'plan', source: { kind: 'user' },
     })
     expect(bench.values().plan).toEqual({ active: true, pending: false })
     runPlanCommand(bench.session, ' off', 1)

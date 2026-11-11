@@ -490,6 +490,36 @@ describe('LocalSubprocessRuntime', () => {
     }
   })
 
+  it('reports an unloadable node-pty as SUBPROCESS_PTY_UNAVAILABLE', async () => {
+    const loadFailure = new Error('Cannot find module node-pty')
+    vi.resetModules()
+    mockWin32ForIsolatedRuntime()
+    vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
+      createLazyRequire: () => () => { throw loadFailure },
+    }))
+    vi.doMock('../src/linux-scope.ts', async importOriginal => ({
+      ...await importOriginal<typeof import('../src/linux-scope.ts')>(),
+      probeLinuxNative: () => undefined,
+    }))
+    try {
+      const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
+      const ctx = new Context()
+      const fiber = await ctx.plugin(IsolatedLocalSubprocessRuntime)
+      await expect(ctx.subprocess.spawnTerminal({
+        argv: ['shell'], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 1,
+      })).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_PTY_UNAVAILABLE', cause: loadFailure })
+      await expect(ctx.subprocess.spawnTerminal({
+        argv: [''], cwd: process.cwd(), rows: 24, cols: 80, terminalType: 'dumb', graceMs: 1,
+      })).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_INVALID_ARGV' })
+      await fiber.dispose()
+    } finally {
+      unmockLazyRequireForIsolatedRuntime()
+      vi.doUnmock('../src/linux-scope.ts')
+      unmockWin32ForIsolatedRuntime()
+      vi.resetModules()
+    }
+  })
+
   it('allocates Windows terminals through the console host node-pty ships', async () => {
     const exitListeners: ((event: { exitCode: number; signal?: number }) => void)[] = []
     const terminal = {

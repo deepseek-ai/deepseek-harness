@@ -55,7 +55,7 @@ export interface PushedBranch {
   readonly remote: string
   /** Branch name on the remote. */
   readonly branch: string
-  /** Sequence number of the latest `tool/result` event that reported this branch. */
+  /** Sequence number of the latest `tool/result` or `tool/ptc-dispatch` event that reported this branch. */
   readonly seq: SessionSeq
 }
 

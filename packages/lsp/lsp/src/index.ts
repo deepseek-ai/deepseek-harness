@@ -42,12 +42,23 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /**
- * Structured LSP failure. Extends {@link HarnessError} with a stable `code`
- * (`LSP_INVALID_PROVIDER`, `LSP_CONFLICT`, `LSP_UNAVAILABLE`, `LSP_DISPOSED`,
- * `LSP_UNSUPPORTED_OPERATION`, `LSP_MALFORMED_RESPONSE`, …) that callers route on instead of
- * parsing `message`.
+ * Structured LSP failure. Extends {@link HarnessError} with a stable `code` that callers route on
+ * instead of parsing `message`. The seam raises `LSP_INVALID_PROVIDER`, `LSP_CONFLICT`, and
+ * `LSP_UNAVAILABLE`; providers raise `LSP_DISPOSED`, `LSP_UNSUPPORTED_OPERATION`, and
+ * `LSP_MALFORMED_RESPONSE`. Providers and consumers add their own documented codes, so `code`
+ * stays open and consumers tolerate codes they do not know.
  */
-export class LspError extends HarnessError {}
+export class LspError extends HarnessError {
+  /**
+   * @param message - actionable description of the failure.
+   * @param code - stable failure code.
+   * @param options - the underlying failure, when one exists.
+   */
+  constructor(message: string, code: string, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'LspError'
+  }
+}
 
 /**
  * Extract a file's final extension as a normalized, lowercase, leading-dot key (e.g. `Foo.TS` →

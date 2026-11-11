@@ -100,6 +100,7 @@ export type GoalErrorCode =
   | 'GOAL_INVALID_BLOCK_REASON'
   | 'GOAL_INVALID_EDIT'
   | 'GOAL_INVALID_TRANSITION'
+  | 'GOAL_STATE_CORRUPT'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {

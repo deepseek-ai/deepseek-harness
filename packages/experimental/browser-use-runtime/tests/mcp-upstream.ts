@@ -16,8 +16,9 @@ import BrowserUse from '@deepseek-ai/dsh-browser-use'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools from '@deepseek-ai/dsh-tools'
 import Llm from '@deepseek-ai/dsh-llm'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import Projections from '@deepseek-ai/dsh-session-projection'
@@ -78,13 +79,13 @@ export async function verifyMcpBrowser(
     } as unknown as NonNullable<typeof ctx.loader.internal>
     await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
     await ctx.loader.await()
-    const owner = await ctx.agents.create({ sessionId: SessionId('browser-upstream'), meta: { cwd: root } })
+    const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('browser-upstream'), meta: { cwd: root } })
     await owner.agent.whenIdle()
     await ctx.systemPrompt.assemble({ agent: owner.agent, scope: owner.agent, signal: new AbortController().signal })
     const schemas = ctx.tools.schemas(owner.agent)
     expect(schemas.length).toBeGreaterThan(5)
     expect(schemas.every(tool => tool.name.startsWith(`mcp__${namespace}__`))).toBe(true)
-    const result = await executeToolFixture(ctx, { agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: ToolCallId('navigate'), signal: new AbortController().signal })
+    const result = await executeToolFixture(ctx, { agent: owner.agent, name: `mcp__${namespace}__${navigate.name}`, arguments: navigate.arguments(url), callId: brandString<ToolCallId>('navigate'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(observed.has(`/${namespace}-${mode}`)).toBe(true)
     expect(result.content.length).toBeGreaterThan(0)

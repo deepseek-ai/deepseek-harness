@@ -5,6 +5,8 @@
 .row { box-sizing: border-box; display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; min-height: 30px; padding: 4px 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .row svg { flex: none; }
 .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Unresolved host review threads of a file, in the thread count chip treatment of the file header. */
+.threads { flex: none; min-width: 16px; padding: 0 5px; box-sizing: border-box; border-radius: var(--dsw-radius-xs); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent); color: var(--dsw-alias-state-business-primary); font-size: 11px; line-height: 16px; text-align: center; }
 .selected { background: var(--dsw-alias-interactive-bg-hover); }
 .chevron { display: inline-flex; flex: 0 0 12px; }
 .collapsed { transform: rotate(-90deg); }
@@ -12,6 +14,11 @@
 .menu { width: min(360px, calc(100vw - 24px)); }
 .trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; white-space: nowrap; cursor: pointer; }
 .trigger:disabled { color: var(--dsw-alias-label-tertiary); cursor: default; }
+/* The label ends in an ellipsis once its toolbar lets the entry shrink. */
+.anchor { min-width: 0; max-width: 100%; }
+.trigger { min-width: 0; max-width: 100%; }
+.triggerLabel { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.triggerChevron { flex: none; }
 @media (hover: hover) { .row:hover, .trigger:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); } }
 @media (pointer: coarse) { .row { min-height: 44px; } .search input { font-size: 16px; } }
 

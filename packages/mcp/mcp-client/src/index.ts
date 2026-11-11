@@ -30,6 +30,8 @@ import type { McpOAuthConfig } from './oauth-options.ts'
 import type {} from '@deepseek-ai/dsh-tools'
 
 export { createMcpToolDefinition } from './tools.ts'
+export { McpLocalError, McpToolError } from './diagnostic.ts'
+export type { McpLocalErrorCode, McpToolErrorCode } from './diagnostic.ts'
 export type { McpResult, McpToolDefinitionOptions } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
 export type { ConfigInput } from './config.ts'

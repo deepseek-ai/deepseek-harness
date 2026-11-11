@@ -1,7 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {
   AssistantLiveChunkEvent, SessionEventLike, SessionEventLikeEntry,
@@ -37,7 +38,7 @@ const SID = 'stats-session' as SessionId
 
 /** One durable image the prompt fixtures attach. */
 const IMAGE: ImageAttachmentRef = {
-  attachmentId: AttachmentId('sha256:image'),
+  attachmentId: brandString<AttachmentId>('sha256:image'),
   mediaType: 'image/png',
   bytes: 12,
   width: 2,
@@ -72,7 +73,7 @@ function transient(turn: number, step: number, chunk: StreamChunk, time?: number
     type: 'assistant/live-chunk',
     seq,
     time: time ?? 1_000 + seq,
-    data: { attemptId: LlmAttemptId('attempt-1'), turn, step, chunk },
+    data: { attemptId: brandString<LlmAttemptId>('attempt-1'), turn, step, chunk },
   }
   return { type: 'transient', event: chunkEvent }
 }

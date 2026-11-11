@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import ShellExecutor from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
@@ -65,11 +66,11 @@ async function fixture() {
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(ShellEnv, { dshHome: process.cwd() })
   await ctx.plugin(LookupShell)
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('reference-observer') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('reference-observer') })
   const controller = new AbortController()
   const exec: ToolExecution = {
     name: 'bash', agent,
-    callId: ToolCallId('reference'), rootCallId: ToolCallId('reference'), token: Symbol('reference') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('reference'), rootCallId: brandString<ToolCallId>('reference'), token: Symbol('reference') as ToolExecutionToken,
     arguments: { command: 'gh pr view 9 -R octo/demo --json number' }, signal: controller.signal,
   }
   const result: ToolExecutionResult = {
@@ -169,12 +170,11 @@ describe('PR reference lookup', () => {
     expect(f.warn).not.toHaveBeenCalled()
   })
 
-  it('skips unsupported, unsuccessful, already identified, nested, or cancelled calls', async () => {
+  it('skips unsupported, unsuccessful, already identified, or cancelled calls', async () => {
     const f = await fixture()
     f.emit({ ...f.exec, name: 'pwsh' })
     const { agent: _agent, ...withoutAgent } = f.exec
     f.emit(withoutAgent)
-    f.emit({ ...f.exec, parent: f.exec.token })
     f.emit(f.exec, { isError: true, error: { message: 'failed' }, content: [] })
     f.emit({ ...f.exec, arguments: {} })
     f.emit(f.exec, { isError: false, value: { kind: 'background' }, content: [] })
@@ -187,5 +187,89 @@ describe('PR reference lookup', () => {
     expect(f.execute).not.toHaveBeenCalled()
     expect(f.records()).toEqual([])
     expect(f.warn).not.toHaveBeenCalled()
+  })
+
+  describe('inside a PTC program', () => {
+    /** A `run_code` root call and nested `bash` calls whose run-scoped signal aborts when the program settles. */
+    function program(f: Awaited<ReturnType<typeof fixture>>) {
+      const rootController = new AbortController()
+      const root: ToolExecution = {
+        name: 'run_code', agent: f.agent,
+        callId: brandString<ToolCallId>('program'), rootCallId: brandString<ToolCallId>('program'), token: Symbol('program') as ToolExecutionToken,
+        arguments: { code: 'await tools.bash({ command })', description: 'Run it' }, signal: rootController.signal,
+      }
+      const run = new AbortController()
+      const nested = (n: number, command: string, cwd = process.cwd()): [ToolExecution, ToolExecutionResult] => [{
+        ...f.exec,
+        callId: brandString<ToolCallId>(`program:ptc:${n}`), rootCallId: root.callId, token: Symbol(`nested ${n}`) as ToolExecutionToken,
+        parent: root.token, arguments: { command, description: 'View it' }, signal: run.signal,
+      }, { ...f.result, value: { kind: 'foreground', cwd, exitCode: 0, signal: null, timedOut: false, aborted: false } }]
+      const settle = (outcome: ToolExecutionResult = { isError: false, value: null, content: [{ type: 'text', text: 'done' }] }) => {
+        run.abort(new Error('run_code settled'))
+        f.emit(root, outcome)
+      }
+      return { root, rootController, nested, settle }
+    }
+
+    it('looks up after the root call settles, in each call\'s shell world, even when the program fails', async () => {
+      const f = await fixture()
+      const p = program(f)
+      const resolve = vi.spyOn(f.ctx.shell, 'resolve')
+      const [first, firstResult] = p.nested(1, 'gh pr view 9 -R octo/demo --json number', '/tmp/first')
+      const [second, secondResult] = p.nested(2, 'gh pr view 7 --repo octo/other', '/tmp/second')
+      f.emit(first, firstResult)
+      f.emit(second, secondResult)
+      expect(f.execute).not.toHaveBeenCalled()
+
+      p.settle({ isError: true, error: { message: 'code run failed' }, content: [] })
+      await vi.waitFor(() => { expect(f.execute).toHaveBeenCalledTimes(2) })
+      expect(resolve.mock.calls.map(([request]) => [request.command, request.workdir, request.dshEnv])).toEqual([
+        ['env gh pr view 9 --repo octo/demo --json url', '/tmp/first', f.ctx.shellEnv.collect(first)],
+        ['env gh pr view 7 --repo octo/other --json url', '/tmp/second', f.ctx.shellEnv.collect(second)],
+      ])
+      expect(resolve.mock.calls.every(([request]) => request.signal?.aborted === false)).toBe(true)
+      await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
+      expect(f.warn).not.toHaveBeenCalled()
+    })
+
+    it('carries lookups through every enclosing call to the root call', async () => {
+      const f = await fixture()
+      const p = program(f)
+      const [inner, innerResult] = p.nested(1, 'gh pr view 9 -R octo/demo')
+      const middle: ToolExecution = { ...p.root, name: 'cua_run_code', callId: brandString<ToolCallId>('program:ptc:2'), token: Symbol('middle') as ToolExecutionToken, parent: p.root.token }
+      f.emit({ ...inner, parent: middle.token }, innerResult)
+      f.emit(middle, { isError: false, value: null, content: [] })
+      expect(f.execute).not.toHaveBeenCalled()
+
+      p.settle()
+      await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
+    })
+
+    it('continues with the next lookup after one fails', async () => {
+      const f = await fixture()
+      const p = program(f)
+      f.execute.mockResolvedValueOnce(execution(async () => output({ exitCode: 1 })))
+      for (const [call, outcome] of [p.nested(1, 'gh pr view 8 -R octo/demo'), p.nested(2, 'gh pr view 9 -R octo/demo')]) f.emit(call, outcome)
+      p.settle()
+
+      await vi.waitFor(() => { expect(f.records()).toEqual([{ action: 'reference', url: pullUrl(9) }]) })
+      expect(f.warn).toHaveBeenCalledTimes(1)
+      expect(f.warn).toHaveBeenCalledWith(expect.stringContaining('PR reference lookup failed'))
+    })
+
+    it('drops queued lookups when the root call is cancelled, and skips calls whose output names their own URL', async () => {
+      const f = await fixture()
+      const p = program(f)
+      f.emit(...p.nested(1, 'gh pr view 9 -R octo/demo'))
+      const [printed, printedResult] = p.nested(2, 'gh pr view 7 -R octo/demo --json url')
+      f.emit(printed, { ...printedResult, content: [{ type: 'text', text: JSON.stringify({ url: pullUrl(7) }) }] })
+      p.rootController.abort()
+      p.settle()
+      await f.service.dispose()
+
+      expect(f.execute).not.toHaveBeenCalled()
+      expect(f.records()).toEqual([])
+      expect(f.warn).not.toHaveBeenCalled()
+    })
   })
 })

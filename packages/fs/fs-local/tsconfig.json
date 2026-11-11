@@ -7,6 +7,9 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../fs-patch"
     },
     {

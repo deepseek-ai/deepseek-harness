@@ -14,7 +14,7 @@
           "type": "tool-call",
           "id": "esm_static",
           "name": "run_code",
-          "arguments": "{\"code\":\"var dependency = await import(\\\"./entry.mjs\\\"); dependency.first()\",\"description\":\"Import ESM and its runner object\"}"
+          "arguments": "{\"code\":\"var dependency = await import(\\\"./entry.mjs\\\"); inspect(dependency.first())\",\"description\":\"Import ESM and its runner object\"}"
         }
       },
       {
@@ -47,7 +47,7 @@
           "type": "tool-call",
           "id": "esm_dynamic",
           "name": "run_code",
-          "arguments": "{\"code\":\"await dependency.later()\",\"description\":\"Invoke a retained function with a dynamic import\"}"
+          "arguments": "{\"code\":\"inspect(await dependency.later())\",\"description\":\"Invoke a retained function with a dynamic import\"}"
         }
       },
       {
@@ -80,7 +80,7 @@
           "type": "tool-call",
           "id": "esm_denied",
           "name": "run_code",
-          "arguments": "{\"code\":\"await dependency.denied().catch(error => error.message)\",\"description\":\"Catch a rejected dependency import\"}"
+          "arguments": "{\"code\":\"inspect(await dependency.denied().catch(error => error.message))\",\"description\":\"Catch a rejected dependency import\"}"
         }
       },
       {

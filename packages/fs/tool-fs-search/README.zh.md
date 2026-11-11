@@ -52,6 +52,8 @@ kind: "package-reference"
 
 常规预算不进入面向模型的 schema：需要周边上下文的模型用 `read` 读取匹配文件，需要后续结果的模型遵循返回的 spill locator 检索提示。
 
+两个工具都选择与同批并行安全调用并发调度。搜索不记录文件观察，超出上限的 spill 在按模型顺序执行的 post-execute 阶段运行，工作目录恢复由工作目录服务按会话串行化。
+
 ### 配置
 
 `sampleOverCapGlobResults` 为必填；其余键是可选的搜索上限，默认值如下。
@@ -76,7 +78,7 @@ Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ri
 
 ### 失败与恢复
 
-搜索失败携带本包定义的错误码：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则或 glob）、`SEARCH_FAILED`（启动失败、目标不可访问、信号终止或 `--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过上限）与 `SEARCH_ABORTED`（协作式超时或调用方取消）。退出 0 表示成功且有结果，退出 1 表示成功的空搜索；模型参数错误仍是普通工具参数错误。
+搜索失败携带本包定义的错误码：`SEARCH_INVALID_PATTERN`（ripgrep 拒绝正则或 glob）、`SEARCH_FAILED`（启动失败、目标不可访问、信号终止或 `--json` 输出格式错误）、`SEARCH_RAW_OUTPUT_OVERFLOW`（原始输出超过上限）与 `SEARCH_ABORTED`（协作式超时或调用方取消）。退出 0 表示成功且有结果，退出 1 表示成功的空搜索；模型参数错误抛出 `ToolArgsError`，错误码为 `INVALID_ARGS`。
 
 -----
 
@@ -107,7 +109,7 @@ Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ri
 
 未显式提供 `path` 时，如果目录部分的每一项都是普通相对名称且不属于 VCS 元数据目录，`glob` 会为 `packages/core/src/*.ts` 这样的模式跳过无关子树。按顺序添加的 ripgrep glob 先排除目录树，再按前缀中去重后的名称放行目录，最后应用原始文件模式。其他位置的同名目录也可能被遍历，但文件仍只按原模式匹配。新增参数上限为 8 KiB，超过时沿用原遍历方式。搜索根目录、路径分隔符、符号链接处理、匹配规则和修改时间排序保持不变；其他模式仍按原方式遍历。
 
-每次调用解析打包二进制（`@vscode/ripgrep`，或 pkg 单文件运行时中可执行程序的 `-rg` 伴随文件），前置 `--no-config`，使宿主的 `RIPGREP_CONFIG_PATH` 无法向不受约束的 spawn 注入 `--pre` 预处理器，并把每个模型控制的值作为普通 argv 元素传入——不存在 shell 层，因此不涉及 shell 引号处理。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
+每次调用通过共享的 [ripgrep 库](../../util/ripgrep/README.zh.md) 解析并启动打包二进制，由它前置 `--no-config` 防止配置启用预处理程序。模型控制的值作为普通 argv 元素传入，不经过 shell 引号处理。collect 模式预算限制完整 stdout 与 stderr 尾部；lossy stdout 读取以 `SEARCH_RAW_OUTPUT_OVERFLOW` 失败，而不是解析静默不完整的流。工具从不读取原始 spill 路径。
 
 ### Native 模式 benchmark
 

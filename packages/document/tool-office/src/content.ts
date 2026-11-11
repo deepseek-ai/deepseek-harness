@@ -4,7 +4,8 @@
  */
 
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { AttachmentId, type ImageAttachmentRef, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { OfficeConversionFormat, OfficeRecalculationFormat } from '@deepseek-ai/dsh-office-kit'
 
 /**
@@ -80,7 +81,7 @@ export function renderImagesContent(value: OfficeRenderValue): ContentBlock[] {
   for (const image of value.images) {
     blocks.push({ type: 'text', text: `${location(image)}: ${image.width}x${image.height} px` })
     blocks.push({ type: 'image', attachment: {
-      attachmentId: AttachmentId(image.attachmentId), mediaType: image.mediaType, bytes: image.bytes,
+      attachmentId: brandString<AttachmentId>(image.attachmentId), mediaType: image.mediaType, bytes: image.bytes,
       width: image.width, height: image.height,
       ...image.originalDimensions === undefined ? {} : { originalDimensions: { ...image.originalDimensions } },
     } })

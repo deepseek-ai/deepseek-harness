@@ -4,12 +4,14 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
-import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type MessageId } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
-  Session, SessionId, SessionLogOffset,
+  Session, type SessionId, SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
@@ -44,8 +46,8 @@ async function commandHarness(
   await ctx.plugin(TypertRegistry)
   installSessionReadTestServices(ctx)
   await ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
-  const sessionId = SessionId('commands-session')
-  const ancestor = Session.create(SessionId('ancestor'))
+  const sessionId = brandString<SessionId>('commands-session')
+  const ancestor = Session.create(brandString<SessionId>('ancestor'))
   ancestor.append('subagent/descriptor', snapshotSubagentDescriptor({
     mode: 'continuable', provider: 'test', label: 'ancestor',
   }))
@@ -62,7 +64,7 @@ async function commandHarness(
       cwd: '/workspace',
       ...(childMode === undefined ? {} : {
         origin: 'subagent' as const,
-        parentSession: SessionId('offline-parent'),
+        parentSession: brandString<SessionId>('offline-parent'),
       }),
       ...lineage === undefined ? {} : { isSeeded: true },
     },
@@ -152,7 +154,7 @@ describe('Session queue commands', () => {
     } as unknown as ApiSessionAgentController, '/workspace')
     try {
       await expect(controller.updateQueue({
-        sessionId: SessionId('cold-child'), itemId: MessageId('pending'), action: { kind: 'remove' },
+        sessionId: brandString<SessionId>('cold-child'), itemId: brandString<MessageId>('pending'), action: { kind: 'remove' },
       })).rejects.toBe(error)
     } finally {
       await ctx.fiber.dispose()
@@ -175,7 +177,7 @@ describe('Session queue commands', () => {
           // @ts-expect-error -- remote edit payloads can carry unsupported image blocks.
           type: 'image',
           attachment: {
-            attachmentId: AttachmentId('att-edit'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+            attachmentId: brandString<AttachmentId>('att-edit'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
           },
         }],
       },
@@ -189,10 +191,10 @@ describe('Session queue commands', () => {
     }
     expect(inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: 'queued' }])
     await expectFailure(Promise.resolve().then(() => controller.updateQueue({
-      sessionId: SessionId('missing'), itemId: queued.id, action: { kind: 'remove' },
+      sessionId: brandString<SessionId>('missing'), itemId: queued.id, action: { kind: 'remove' },
     })), 'session/queue-item-not-found')
     await expectFailure(Promise.resolve().then(() => controller.updateQueue({
-      sessionId: agent.id, itemId: MessageId('missing'), action: { kind: 'remove' },
+      sessionId: agent.id, itemId: brandString<MessageId>('missing'), action: { kind: 'remove' },
     })), 'session/queue-item-not-found')
     await expectFailure(Promise.resolve().then(() => controller.updateQueue({
       sessionId: agent.id, itemId: nextStep.id, action: { kind: 'steer' },
@@ -226,7 +228,7 @@ describe('Session queue commands', () => {
     const queuedFile = createUserMessage({
       content: [{
         type: 'file',
-        attachment: { attachmentId: AttachmentId('file-queued'), name: 'queued.txt', bytes: 6 },
+        attachment: { attachmentId: brandString<AttachmentId>('file-queued'), name: 'queued.txt', bytes: 6 },
       }],
       source: { kind: 'user', rpcId: 'file-rpc' as never },
     })
@@ -241,7 +243,7 @@ describe('Session queue commands', () => {
     })
 
     await expectFailure(Promise.resolve().then(() => controller.cancel({
-      sessionId: SessionId('missing'),
+      sessionId: brandString<SessionId>('missing'),
     })), 'session/not-found')
     expect(controller.cancel({ sessionId: agent.id })).toEqual({ accepted: true })
     expect(cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
@@ -328,7 +330,7 @@ describe('Session attachment reads', () => {
   it.each(['commands-session', 'other-session', 'missing-session'])('reads a supplied reference without looking up history for %s', async (id) => {
     const { ctx, controller, agent, resolveAgent } = await commandHarness()
     const ref: ImageAttachmentRef = {
-      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'ab'.repeat(32)}`),
       mediaType: 'image/png', bytes: 2, width: 1, height: 1,
     }
     agent.session.append('user/message', createUserMessage({
@@ -341,7 +343,7 @@ describe('Session attachment reads', () => {
     const snapshot = vi.spyOn(agent.session, 'snapshotEvents').mockImplementation(failHistory)
     const observe = vi.spyOn(ctx.sessionQuery, 'observeSession').mockImplementation(failHistory)
     try {
-      await expect(controller.attachment({ sessionId: SessionId(id), attachment: ref }))
+      await expect(controller.attachment({ sessionId: brandString<SessionId>(id), attachment: ref }))
         .resolves.toEqual({ attachment: ref, data: 'AQI=' })
       expect(readImage).toHaveBeenCalledExactlyOnceWith(ref)
       expect(get).not.toHaveBeenCalled()
@@ -365,8 +367,8 @@ describe('Session attachment reads', () => {
     const controller = new SessionCommandController(ctx, new ApiSessionAgentController(ctx), '/workspace')
     try {
       await expect(controller.attachment({
-        sessionId: SessionId('unopened'),
-        attachment: { attachmentId: AttachmentId('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+        sessionId: brandString<SessionId>('unopened'),
+        attachment: { attachmentId: brandString<AttachmentId>('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
       }))
         .rejects.toMatchObject({ code: 'session/attachment-invalid', details: { reason } })
     } finally {
@@ -380,8 +382,8 @@ describe('Session attachment reads', () => {
     const controller = new SessionCommandController(ctx, new ApiSessionAgentController(ctx), '/workspace')
     try {
       await expect(controller.attachment({
-        sessionId: SessionId('unopened'),
-        attachment: { attachmentId: AttachmentId('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+        sessionId: brandString<SessionId>('unopened'),
+        attachment: { attachmentId: brandString<AttachmentId>('requested'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
       }))
         .rejects.toMatchObject({ code: 'gateway/internal', message: 'Unable to read image attachment.', details: {} })
     } finally {

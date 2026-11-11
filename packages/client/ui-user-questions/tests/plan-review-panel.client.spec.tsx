@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import {
   createWaterfallRequest, PendingQuestion, planReviewOf, type QuestionComposerProps, type QuestionWait,
 } from '../src/client/contract/slots.ts'
@@ -43,7 +43,7 @@ const sessionState: SessionState = {
   openState: 'open',
   openError: null,
   hasMore: false,
-  loadingOlder: false,
+  loadingOlder: false, historyLoadStatus: 'idle', historyWasPartial: false,
   promptError: null,
   blank: false,
   lastAgentError: null,

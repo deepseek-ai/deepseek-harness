@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ptc-runtime-node",
-  "description": "Node PTC execution with async function, REPL and VM Script evaluators and optional retained state",
-  "version": "0.2.2-rc.1",
+  "description": "Node PTC execution with async function, REPL, scoped REPL and VM Script evaluators and optional retained state",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -59,6 +59,7 @@
     "birpc": "4.2.0"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
@@ -70,6 +71,7 @@
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-subprocess-local": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-sandbox-local": "workspace:*"
+    "@deepseek-ai/dsh-sandbox-local": "workspace:*",
+    "@deepseek-ai/dsh-attachment": "workspace:*"
   }
 }

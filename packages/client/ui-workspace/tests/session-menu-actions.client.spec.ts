@@ -4,9 +4,10 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { registerSessionMenus } from '../src/client/session-actions/context-menus.tsx'
 import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function bench() {
   const ctx = new Context()
@@ -31,7 +32,7 @@ function bench() {
   const actions = { pinSession: vi.fn(), unpinSession: vi.fn(), archiveSession: vi.fn(), unarchiveSession: vi.fn(),
     forkSession: vi.fn(), requestSessionRename: vi.fn(), copySessionId: vi.fn(async () => {}) }
   const fiber = ctx.plugin({ apply: (plugin: Context) => { registerSessionMenus(plugin, actions) } })
-  const target = { kind: 'session' as const, value: { sessionId: SessionId('background'), displayTitle: 'Background' } }
+  const target = { kind: 'session' as const, value: { sessionId: brandString<SessionId>('background'), displayTitle: 'Background' } }
   const open = () => registry.resolve(target)
   return { ctx, fiber, registry, locale, list, access, actions, target, open }
 }

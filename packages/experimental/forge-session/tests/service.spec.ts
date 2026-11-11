@@ -7,7 +7,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ForgeSessionService from '../src/index.ts'
 import type { Config, SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
-import { bench, demo, FakeProvider, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
+import { bench, demo, FakeProvider, programTurn, pull, pullUrl, pushOutput, shellTurn, snapshot } from './fixtures.ts'
 import type { Bench } from './fixtures.ts'
 
 const contexts: Context[] = []
@@ -35,6 +35,14 @@ function create(session: Session, callId: string, url: string): void {
 
 function push(session: Session, callId: string, branch: string, remote?: string): void {
   shellTurn(session, [{ callId, command: `git push -u origin ${branch}`, output: pushOutput(branch, remote) }])
+}
+
+/** Restore checkpoint rows over the Session log suffix that starts at `from`, as a cold read does. */
+function restorer(ctx: Context, session: Session) {
+  const events = session.snapshotEvents()
+  return (checkpoints: ReturnType<Context['sessionProjections']['checkpoint']>, from: number) => ctx.sessionProjections.restore(
+    checkpoints, events.slice(from), SessionLogOffset(from), session.header, session.inheritedEventCount,
+  ).checkpoint
 }
 
 async function settle(): Promise<void> {
@@ -113,6 +121,16 @@ describe('forgeSession discovery', () => {
     const { ctx, provider, session } = await open()
     provider.heads.set('feat', [pull(7)])
     push(session, 'push', 'feat')
+
+    await vi.waitFor(() => { expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }]) })
+    expect(provider.lookups.map(lookup => [lookup.repository, lookup.branch])).toEqual([[demo, 'feat']])
+    expect(ctx.forgeSession.changeRequests(session)).toEqual([{ url: pullUrl(7), origin: 'discovered', ref: pull(7), update: null }])
+  })
+
+  it('records change requests found for a branch that a PTC program pushes', async () => {
+    const { ctx, provider, session } = await open()
+    provider.heads.set('feat', [pull(7)])
+    programTurn(session, 'program', [{ command: 'git push -u origin feat', output: pushOutput('feat') }])
 
     await vi.waitFor(() => { expect(records(session)).toEqual([{ action: 'discover', url: pullUrl(7) }]) })
     expect(provider.lookups.map(lookup => [lookup.repository, lookup.branch])).toEqual([[demo, 'feat']])
@@ -314,6 +332,18 @@ describe('forgeSession watch', () => {
     expect(ctx.forgeSession.changeRequests(session)).toEqual(lastList(listener))
   })
 
+  it('notifies watchers when a PTC program binds a change request', async () => {
+    const { ctx, session } = await open()
+    const listener = vi.fn<SessionChangeRequestsListener>()
+    ctx.forgeSession.watch(session, listener)
+
+    programTurn(session, 'program', [{ command: 'gh pr view 3 --repo fake.test/octo/demo --json number', output: '{"number":3}' }])
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(lastList(listener)).toEqual([{ url: pullUrl(3), origin: 'referenced', ref: pull(3), update: null }])
+    await vi.waitFor(() => { expect(lastList(listener)[0]?.update).toMatchObject({ snapshot: snapshot(pull(3)) }) })
+  })
+
   it('does not notify for events that leave the bindings unchanged', async () => {
     const { ctx, session } = await open()
     create(session, 'create', pullUrl(1))
@@ -375,11 +405,8 @@ describe('forgeSession lifecycle', () => {
     shellTurn(session, [{ callId: 'number', command: 'gh pr view 9 -R fake.test/octo/demo --json number', output: '{"number":9}' }])
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(8) })
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(9) })
-    const events = session.snapshotEvents()
     const expected = ctx.sessionProjections.checkpoint(session)
-    const restore = (checkpoints: typeof rows, from: number) => ctx.sessionProjections.restore(
-      checkpoints, events.slice(from), SessionLogOffset(from), session.header, session.inheritedEventCount,
-    ).checkpoint
+    const restore = restorer(ctx, session)
     expect(restore({}, 0)).toEqual(expected)
     expect(restore(rows, offset)).toEqual(expected)
     const row = rows.forgeChangeRequests!
@@ -388,6 +415,24 @@ describe('forgeSession lifecycle', () => {
       { url: pullUrl(1), origin: 'created', dismissed: false },
       { url: pullUrl(9), origin: 'referenced', dismissed: true },
       { url: pullUrl(8), origin: 'referenced', dismissed: false },
+    ] })
+  })
+
+  it('refolds a checkpoint that predates program dispatches and matches full replay across a program suffix', async () => {
+    const { ctx, session } = await open()
+    programTurn(session, 'first', [{ command: 'gh pr create --fill', output: `${pullUrl(1)}\n` }])
+    const rows = ctx.sessionProjections.checkpoint(session)
+    const offset = session.snapshotEvents().length
+    programTurn(session, 'second', [{ command: 'gh pr view 2 --repo fake.test/octo/demo', output: 'title:\tChange 2' }])
+    const expected = ctx.sessionProjections.checkpoint(session)
+    const restore = restorer(ctx, session)
+    const row = rows.forgeChangeRequests!
+    expect(restore(rows, offset)).toEqual(expected)
+    // A row written before dispatches folded holds no binding for them; its version makes recovery refold the log.
+    expect(restore({ forgeChangeRequests: { ...row, ver: 3, val: { pending: [], bindings: [], pushes: [] } } }, 0)).toEqual(expected)
+    expect(expected.forgeChangeRequests?.val).toMatchObject({ bindings: [
+      { url: pullUrl(1), origin: 'created', dismissed: false },
+      { url: pullUrl(2), origin: 'referenced', dismissed: false },
     ] })
   })
 

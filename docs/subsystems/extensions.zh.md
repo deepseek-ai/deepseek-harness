@@ -48,6 +48,9 @@ list(): CordisInspectProviderView[]
  * @param signal - tool-call cancellation.
  * @returns provider JSON data; Client queries fail fast when Gateway has no live Client
  * and retain only the first observed failure diagnostic for timeout reporting.
+ * @throws {InspectError} for an unknown provider or method, invalid input or output, a missing
+ *   Client, a Client timeout, or a Host provider failure without its own `HarnessError`; cancellation
+ *   rethrows the signal's reason.
  */
 async query( platform: CordisInspectPlatform, providerId: string, methodName: string, input: JsonValue | undefined, agent: Agent, signal: AbortSignal, ): Promise<JsonValue>
 
