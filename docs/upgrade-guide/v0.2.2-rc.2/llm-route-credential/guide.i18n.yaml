@@ -1,13 +1,13 @@
 # Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/llm-route-credential/guide.md
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/llm-route-credential/guide.md
 /:
   en: f0cf30e5430471e8
   zh: 2e6e871797dfdd6b
 /deepseek-routes-publish-the-credential-web-consumers-reuse:
-  en: d7412a58aadc57a0
-  zh: 82243a8cd8563083
+  en: f0139803159ee9c9
+  zh: 73bd5dfd53ed8d36
 /deepseek-routes-publish-the-credential-web-consumers-reuse/change:
   en: 7a63f24e07fb3d33
   zh: 99c64684a589088e

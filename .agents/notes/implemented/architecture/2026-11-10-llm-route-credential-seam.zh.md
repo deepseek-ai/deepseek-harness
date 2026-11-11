@@ -34,4 +34,4 @@ Web 提供方消费这些发布的凭据。`web-deepseek-api` 从 `ctx.llm.route
 
 ## 后果
 
-新增凭据种类或路由凭据的消费方只触及一个路由插件或一个消费方，而不是传输层。传输层、Web 提供方和账号服务之间的交叉依赖消失，`hasRunningAccountTasks()` 依赖注册的报告而非账号服务可见的 Agent。构造 `DeepSeekRequestAuth` 的消费方需提供 `value`；被移除的辅助函数和路由插件的配置导出不复存在，[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.1/llm-route-credential/guide.zh.md)列出了替代方案。路由的配置失败通过 `routeCredential()` 以抛出错误的形式到达 Web 消费方，它们将其报告为 `WEB_PROVIDER_MISCONFIGURED`。
+新增凭据种类或路由凭据的消费方只触及一个路由插件或一个消费方，而不是传输层。传输层、Web 提供方和账号服务之间的交叉依赖消失，`hasRunningAccountTasks()` 依赖注册的报告而非账号服务可见的 Agent。构造 `DeepSeekRequestAuth` 的消费方需提供 `value`；被移除的辅助函数和路由插件的配置导出不复存在，[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/llm-route-credential/guide.zh.md)列出了替代方案。路由的配置失败通过 `routeCredential()` 以抛出错误的形式到达 Web 消费方，它们将其报告为 `WEB_PROVIDER_MISCONFIGURED`。
