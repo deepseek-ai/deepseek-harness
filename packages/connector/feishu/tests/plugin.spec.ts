@@ -43,17 +43,20 @@ describe('Feishu plugin', () => {
   it('lists the packaged feishu skill and loads its entry without running lark-cli', async () => {
     await ctx.plugin(Feishu, { ...CONFIG, binDir })
 
-    const catalog = await ctx.skills.list()
-    expect(catalog.map(skill => `${skill.provider}/${skill.source}/${skill.name}`)).toEqual(['feishu/bundled/feishu'])
-    expect(catalog[0]?.description).toContain('Load it before any Feishu or Lark task')
+    expect(await ctx.skills.list()).toEqual([{
+      name: 'feishu',
+      description: expect.stringContaining('Load it before any Feishu or Lark task') as string,
+      invocation: { modelInvocable: true, userInvocable: true },
+      provider: 'feishu',
+      source: 'bundled',
+      resourceBase: { kind: 'opaque', description: 'Embedded lark-cli guides; open them with the skills read command given in the loaded skill.' },
+    }])
 
     const loaded = await ctx.skills.get('feishu')
     const file = await readFile(ENTRY, 'utf8')
     expect(loaded?.content.trim()).toBe(file.slice(file.indexOf('\n---\n', 4) + '\n---\n'.length).trim())
     expect(loaded?.content).toContain('# Feishu in DSH')
     expect(loaded?.content).toContain('open one with `lark-cli skills read <name>` in the Host Shell, not with the skill tool')
-    expect(loaded?.resourceBase?.kind).toBe('directory')
-    expect(loaded?.resourceBase?.kind === 'directory' ? loaded.resourceBase.path : '').toMatch(/[\\/]skills[\\/]feishu$/u)
     expect(subprocess.lookups).toEqual([])
     expect(subprocess.processes).toEqual([])
     expect(warnings).toEqual([])

@@ -45,10 +45,10 @@
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-cli-account": "workspace:*",
-    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@larksuite/cli": "1.0.97",
+    "yaml": "^2.4.2",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

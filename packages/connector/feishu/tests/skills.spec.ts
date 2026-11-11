@@ -1,9 +1,12 @@
 /** The packaged entry skill: its index names exactly the guides lark-cli 1.0.97 embeds, and it stays below the pruner threshold. */
 import { readdirSync, readFileSync } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderSkillContent } from '@deepseek-ai/dsh-skill'
 import { expect, it } from 'vitest'
+import { FeishuSkillProvider } from '../src/skills.ts'
 
 const skills = fileURLToPath(new URL('../skills/', import.meta.url))
 const entry = join(skills, 'feishu')
@@ -41,4 +44,27 @@ it('renders the entry below the pruner threshold', () => {
 it('indexes every guide of the pinned lark-cli exactly once', () => {
   const indexed = [...body().matchAll(/^- `([a-z-]+)`:/gmu)].map(match => match[1] ?? '')
   expect(indexed.toSorted()).toEqual(GUIDES)
+})
+
+it('lists the entry with an opaque resource base and returns its body without the catalog-only fields', async () => {
+  const file = join(entry, 'SKILL.md')
+  const provider = new FeishuSkillProvider(file)
+  expect(await provider.list()).toMatchObject([{ name: 'feishu', provider: 'feishu', source: 'bundled', locator: file, resourceBase: { kind: 'opaque' } }])
+  const definition = await provider.get()
+  expect(definition).not.toHaveProperty('rank')
+  expect(definition).not.toHaveProperty('locator')
+  expect(definition.content).toBe(body().trim())
+})
+
+it('refuses an entry without YAML frontmatter or without a skill name and description', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dsh-feishu-entry-'))
+  try {
+    const file = join(dir, 'SKILL.md')
+    await writeFile(file, '# No frontmatter\n')
+    expect(() => new FeishuSkillProvider(file)).toThrow('has no YAML frontmatter')
+    await writeFile(file, '---\nname: Not A Skill\n---\n\nbody\n')
+    expect(() => new FeishuSkillProvider(file)).toThrow('needs a skill name and a description')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })

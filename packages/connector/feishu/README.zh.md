@@ -76,9 +76,9 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并挂载包内的 skill 根目录。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析账号命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并以退出码报告失败的命令。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析账号命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并以退出码报告失败的命令。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
-[`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。插件把 `skills/` 作为名为 `feishu` 的 [skill 文件系统](../../skill/skill-filesystem/README.zh.md)提供方的内置根目录挂载且不监听，因此目录列出入口、加载返回该文件时都不运行 CLI。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
+[`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。[`src/skills.ts`](src/skills.ts) 在插件加载时读取一次入口，并把它作为 `feishu` 提供方的唯一 skill 列出，资源基址为 opaque 类型，因此目录列出入口、加载返回该文件时都不运行 CLI。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
 
 </details>
 
@@ -122,7 +122,7 @@ Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base,
 
 #### 模型看到什么
 
-`feishu` 的 `skill` 工具结果约 6,700 个字符：DSH 指引、为 `lark-cli` 1.0.97 内嵌的 28 个子指南各给一行并附路由规则的索引，以及打开子指南的方法。DSH 指引告诉 agent 按当前运行时上下文给出的绝对路径运行 `lark-cli`，在自己运行 CLI 的配置与登录流程之前先请用户到插件页连接飞书，并为保存登录状态的命令设置最窄的 `sandbox_permissions`。打开说明告诉 agent 子指南不是 skill，子指南及其引用的文件都用 `lark-cli skills read` 读取。入口的资源基址是它自己的目录，其中只有入口文件。
+`feishu` 的 `skill` 工具结果约 6,700 个字符：DSH 指引、为 `lark-cli` 1.0.97 内嵌的 28 个子指南各给一行并附路由规则的索引，以及打开子指南的方法。DSH 指引告诉 agent 按当前运行时上下文给出的绝对路径运行 `lark-cli`，在自己运行 CLI 的配置与登录流程之前先请用户到插件页连接飞书，并为保存登录状态的命令设置最窄的 `sandbox_permissions`。打开说明告诉 agent 子指南不是 skill，子指南及其引用的文件都用 `lark-cli skills read` 读取。其资源描述为 `Embedded lark-cli guides; open them with the skills read command given in the loaded skill.`
 
 #### Token 影响
 

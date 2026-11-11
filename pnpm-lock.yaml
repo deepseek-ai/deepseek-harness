@@ -7612,9 +7612,6 @@ importers:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*
         version: link:../cli-account
-      '@deepseek-ai/dsh-skill-filesystem':
-        specifier: workspace:*
-        version: link:../../skill/skill-filesystem
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values
@@ -7624,6 +7621,9 @@ importers:
       '@larksuite/cli':
         specifier: 1.0.97
         version: 1.0.97
+      yaml:
+        specifier: ^2.4.2
+        version: 2.9.0
       zod:
         specifier: ^4.4.3
         version: 4.6.6
