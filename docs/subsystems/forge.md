@@ -1212,7 +1212,7 @@ Other plugins extend change request review through the services above and five m
 | Slots | `forge.changes.toolbar`, `forge.changes.file.menu`, `forge.diff.line.annotation`, `forge.diff.comment.actions`, `forge.change-request.card.actions` | Client plugins | The changes view and the change request card |
 | Session data | The `forgeChangeRequests` and `forgeWorktree` projections | forge-session and the forge panel | Client plugins through `useProjection`, Host plugins through `ctx.forgeSession.changeRequests` or `ctx.sessionProjections.snapshot` |
 
-`ctx.forge` announces `forge/review-changed` after a review write, a submitted review, or a viewed mark the host accepted, whichever plugin made it; an outcome that is unknown, refused, stale, or unsupported is not announced. The panel host then drops the threads it keeps for the change request and raises `reviewRevision` on its entries, so an open changes view reads the threads again without a refresh.
+`ctx.forge` announces `forge/review-changed` after a review write, a submitted review, or a viewed mark the host accepted, whichever plugin made it; an outcome that is unknown, refused, stale, or unsupported is not announced. The panel host then drops the threads it keeps for the change request and raises `reviewRevision` on its entries, so an open changes view reads the threads and the viewed marks again without a refresh.
 
 ```ts type-equiv
 /**
@@ -1279,7 +1279,7 @@ interface ForgeLensKeep {
 }
 ```
 
-`ctx.forgeChanges` also mints and reads changes addresses, names the tab `kinds`, and opens a view with `open(target, { path, lens })` in the Session the sidebar shows. `registerAnnotations(source)` adds line annotations: the source observes each view's annotations by path, and its `forge.diff.line.annotation` entry, keyed by the source's identity, draws each one inside a frame the view draws. Annotations stack on the row of their last line after the comment form, the browser drafts, and the host threads, in the column of their side; whole-file annotations come first, and those written on another `digest` follow the file in their own section. A file shows at most `maxAnnotationsPerFile`, and nothing draws before its section comes within reach of the scrollport. The owner props of every slot live in [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts).
+`ctx.forgeChanges` also mints and reads changes addresses, names the tab `kinds`, and opens a view with `open(target, { path, lens })` in the Session the sidebar shows. `registerAnnotations(source)` adds line annotations: the source observes each view's annotations by path, and its `forge.diff.line.annotation` entry, keyed by the source's identity, draws each one inside a frame the view draws. Annotations stack on the row of their last line after the comment form, the browser drafts, and the host threads, in the column of their side; whole-file annotations come first, and those written on another `digest` follow the file in their own section. A file shows at most `maxAnnotationsPerFile`, and a file that draws its lines draws no annotation before its section comes within reach of the scrollport. The owner props of every slot live in [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts).
 
 ```ts type-equiv
 /** Where one line annotation sits in a file of a changes view. */
@@ -1825,7 +1825,8 @@ registerLens(lens: ForgeLens): () => Promise<void>
  * @param signal - ends the classification.
  * @returns progress frames, then one result frame.
  * @throws `forgePanel/lens-missing` while no lens holds the identity or once its registration ends;
- * `forgePanel/lens-stale` before a change request's status was read and when the files differ from `request.version`;
+ * `forgePanel/lens-stale` before a change request's status was read, when the files differ from `request.version`, and
+ * when local files changed while the lens ran;
  * `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers
  * over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.
  */

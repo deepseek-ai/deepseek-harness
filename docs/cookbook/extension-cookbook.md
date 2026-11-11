@@ -97,6 +97,7 @@ Change request review opens to plugins through the [forge extension API](../subs
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ForgeLensId } from '@deepseek-ai/dsh-experimental-client-ui-forge'
 
 export const name = 'exports-lens'
@@ -105,7 +106,7 @@ export const inject = ['forgePanel']
 export function apply(ctx: Context) {
   // An effect of this plugin's fiber: unloading the plugin withdraws the lens and aborts its runs.
   ctx.forgePanel.registerLens({
-    id: 'example/exports' as ForgeLensId,
+    id: brandString<ForgeLensId>('example/exports'),
     version: '1',
     async classify(input, signal) {
       const files: Record<string, { ranges: { old: []; new: { start: number; end: number }[] } }> = {}
@@ -126,7 +127,7 @@ A Client plugin names that lens and adds line annotations; `notesOf` returns one
 export const inject = ['forgeChanges', 'slots']
 
 export function apply(ctx: Context) {
-  ctx.effect(() => ctx.forgeChanges.describeLens({ id: 'example/exports' as ForgeLensId, title: () => 'Exports' }))
+  ctx.effect(() => ctx.forgeChanges.describeLens({ id: brandString<ForgeLensId>('example/exports'), title: () => 'Exports' }))
   ctx.effect(() => ctx.forgeChanges.registerAnnotations({ id: 'example-notes', observe: target => notesOf(target) }))
   ctx.slots.inject('forge.diff.line.annotation', () => ctx.slots.register(
     { name: 'forge.diff.line.annotation', key: 'example-notes' }, NoteBody))

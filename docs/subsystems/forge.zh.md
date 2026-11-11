@@ -1214,7 +1214,7 @@ interface ForgeLocalChanges {
 | Slot | `forge.changes.toolbar`、`forge.changes.file.menu`、`forge.diff.line.annotation`、`forge.diff.comment.actions`、`forge.change-request.card.actions` | Client 插件 | 变更视图与变更请求卡片 |
 | Session 数据 | `forgeChangeRequests` 与 `forgeWorktree` 投影 | forge-session 与 forge 面板 | Client 插件经 `useProjection` 读取，Host 插件经 `ctx.forgeSession.changeRequests` 或 `ctx.sessionProjections.snapshot` 读取 |
 
-托管平台接受一次评审写入、一次评审提交或一个已审阅标记后，`ctx.forge` 发出 `forge/review-changed`，无论是哪个插件做的；结果未知、被拒绝、已过时或不支持时不发出。面板 Host 随后丢弃为该变更请求保留的讨论，并让对应条目的 `reviewRevision` 加一，因此已打开的变更视图无需刷新就会重新读取讨论。
+托管平台接受一次评审写入、一次评审提交或一个已审阅标记后，`ctx.forge` 发出 `forge/review-changed`，无论是哪个插件做的；结果未知、被拒绝、已过时或不支持时不发出。面板 Host 随后丢弃为该变更请求保留的讨论，并让对应条目的 `reviewRevision` 加一，因此已打开的变更视图无需刷新就会重新读取讨论和已审阅标记。
 
 ```ts type-equiv
 /**
@@ -1281,7 +1281,7 @@ interface ForgeLensKeep {
 }
 ```
 
-`ctx.forgeChanges` 还可以生成和解析变更视图地址，给出标签的 `kinds`，并用 `open(target, { path, lens })` 在侧栏所显示的 Session 中打开视图。`registerAnnotations(source)` 添加行注解：数据源按路径观察每个视图的注解，它在 `forge.diff.line.annotation` 中按数据源身份登记的条目，负责绘制视图所画外框里的内容。注解放在其最后一行之后，位于评论框、浏览器草稿和托管平台讨论之后，落在所在一侧的那一栏；整个文件的注解排在最前，写在另一个 `digest` 上的注解在文件之后单独成段。每个文件最多显示 `maxAnnotationsPerFile` 条，文件段进入可视区附近之前不绘制任何内容。所有 slot 的 owner props 见 [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts)。
+`ctx.forgeChanges` 还可以生成和解析变更视图地址，给出标签的 `kinds`，并用 `open(target, { path, lens })` 在侧栏所显示的 Session 中打开视图。`registerAnnotations(source)` 添加行注解：数据源按路径观察每个视图的注解，它在 `forge.diff.line.annotation` 中按数据源身份登记的条目，负责绘制视图所画外框里的内容。注解放在其最后一行之后，位于评论框、浏览器草稿和托管平台讨论之后，落在所在一侧的那一栏；整个文件的注解排在最前，写在另一个 `digest` 上的注解在文件之后单独成段。每个文件最多显示 `maxAnnotationsPerFile` 条；逐行绘制的文件在文件段进入可视区附近之前不绘制注解。所有 slot 的 owner props 见 [`src/client/slots.ts`](../../packages/experimental/client-ui-forge/src/client/slots.ts)。
 
 ```ts type-equiv
 /** Where one line annotation sits in a file of a changes view. */
@@ -1827,7 +1827,8 @@ registerLens(lens: ForgeLens): () => Promise<void>
  * @param signal - ends the classification.
  * @returns progress frames, then one result frame.
  * @throws `forgePanel/lens-missing` while no lens holds the identity or once its registration ends;
- * `forgePanel/lens-stale` before a change request's status was read and when the files differ from `request.version`;
+ * `forgePanel/lens-stale` before a change request's status was read, when the files differ from `request.version`, and
+ * when local files changed while the lens ran;
  * `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers
  * over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.
  */
