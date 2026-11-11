@@ -100,12 +100,13 @@ export type WorkflowEventName =
   | 'workflow/end'
 
 /**
- * Machine-routable fatal workflow failures: parse/meta/argument/schema errors,
- * resource caps, subagent infrastructure failures, unserializable boundary
- * values, and cancellation. `RUN_FAILED` is the consumer's classification of a
- * run that settled with `stopReason: 'error'`, whose {@link WorkflowResult}
- * carries only the failure message. An ordinary child failure resolves its item
- * to `null` and is not one of these fatal codes.
+ * Machine-routable workflow failures. Hooks throw the fatal codes:
+ * parse/meta/argument/schema errors, resource caps, subagent infrastructure
+ * failures, unserializable boundary values, and cancellation; an engine
+ * reports the one that ended a run as {@link WorkflowResult.errorCode}.
+ * `RUN_FAILED` classifies an `error` run without such a code: the script's own
+ * exception or an engine runtime failure. An ordinary child failure resolves
+ * its item to `null` and is not one of these codes.
  */
 export type WorkflowErrorCode =
   | 'SCRIPT_PARSE'
@@ -131,12 +132,14 @@ export type WorkflowErrorCode =
  * distinction is explicit at every catch site rather than implied.
  */
 export class WorkflowError extends HarnessError {
+  override readonly code: WorkflowErrorCode
   /** Whether combinators must propagate this error instead of nulling the item. */
   readonly fatal: boolean
 
   constructor(message: string, code: WorkflowErrorCode, options?: ErrorOptions & { fatal?: boolean }) {
     super(message, code, options)
     this.name = 'WorkflowError'
+    this.code = code
     this.fatal = options?.fatal ?? true
   }
 }

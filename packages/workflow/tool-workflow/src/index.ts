@@ -202,7 +202,7 @@ function stopReasonError(result: WorkflowResult): WorkflowError | undefined {
     case 'cancelled':
       return new WorkflowError(`workflow run was cancelled${result.error !== undefined ? ` (${result.error})` : ''}`, 'CANCELLED')
     case 'error':
-      return new WorkflowError(`workflow run failed: ${result.error ?? 'unknown error'}`, 'RUN_FAILED')
+      return new WorkflowError(`workflow run failed: ${result.error ?? 'unknown error'}`, result.errorCode ?? 'RUN_FAILED')
     /* v8 ignore start -- defensive: WorkflowStopReason is a closed union, exhaustive by construction; a future variant fails here loudly */
     default:
       return new WorkflowError(`workflow run ended abnormally (${String(result.stopReason satisfies never)})`, 'RUN_FAILED')

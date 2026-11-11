@@ -229,6 +229,7 @@ describe('workflow runtime outcomes', () => {
     [{ value: null, stopReason: 'cancelled', agentsStarted: -1 }, 'invalid workflow agent count'],
     [{ stopReason: 'completed', agentsStarted: 0 }, 'missing its value'],
     [{ value: null, stopReason: 'error', agentsStarted: 0, error: 5 }, 'error must be a string'],
+    [{ value: null, stopReason: 'error', agentsStarted: 0, error: 'cap', errorCode: 'NOT_A_CODE' }, 'invalid workflow error code'],
   ] as const)('maps an invalid terminal result %j to a workflow error', async (value, message) => {
     const { start } = await setup(() => Promise.resolve({ logs: [], value }))
     const handle = start()
@@ -236,6 +237,15 @@ describe('workflow runtime outcomes', () => {
       const result = await handle.result
       expect(result.stopReason).toBe('error')
       expect(result.error).toContain(message)
+    } finally { await handle.dispose() }
+  })
+
+  it('carries a guest-reported fatal code onto the run result', async () => {
+    const value = { value: null, stopReason: 'error', agentsStarted: 1, error: 'total agent cap (1)', errorCode: 'AGENT_CAP' }
+    const { start } = await setup(() => Promise.resolve({ logs: [], value }))
+    const handle = start()
+    try {
+      expect(await handle.result).toEqual(value)
     } finally { await handle.dispose() }
   })
 

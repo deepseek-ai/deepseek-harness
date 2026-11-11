@@ -307,6 +307,16 @@ describe('dsh-tool-workflow', () => {
     expect(engine.disposed).toBe(1)
   })
 
+  it('keeps the fatal code that ended a failed run', async () => {
+    const { ctx, engine, parent } = await setup()
+    const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
+    await vi.waitFor(() => { expect(engine.requests.length).toBe(1) })
+    engine.settle({ value: null, stopReason: 'error', error: 'total agent cap (1)', errorCode: 'AGENT_CAP', agentsStarted: 1 })
+    const result = await pending
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'AGENT_CAP' })
+  })
+
   it('reports a cancelled run distinctly (with and without a reason)', async () => {
     const { ctx, engine, parent } = await setup()
     const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
