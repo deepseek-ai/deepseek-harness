@@ -65,6 +65,7 @@ function fixedHook<T>(value: T): SnapshotSelectorHook<T> {
 const NO_LENSES = fixedHook<readonly ForgeLensDescription[]>([])
 const NO_EXTENSIONS = fixedHook<StreamSnapshot<ForgeExtensionState | null>>({ state: null, disconnected: false })
 const NO_BINDING = (): (() => void) => () => {}
+/* v8 ignore next -- the changes view renders plugin slots only for a target, and the review page passes none */
 const NO_SLOT = (): null => null
 
 /** Refreshes relative times once a minute. */
@@ -129,8 +130,8 @@ export function ReviewPage({
   const query = useStore(state => state.query)
   const directOnly = useStore(state => state.directOnly)
   const conversation = useStore(state => selected === null ? undefined : state.conversations[selected])
-  const onConversation = useCallback((sessionId: SessionId | null) => {
-    if (selected !== null) actions.conversed(selected, sessionId)
+  const onConversation = useMemo(() => selected === null ? null : (sessionId: SessionId | null) => {
+    actions.conversed(selected, sessionId)
   }, [actions, selected])
   const scope = repository === null ? '' : `${repository.owner}/${repository.name}`
   const lists = useHostStream(openLists, scope, subscribeReset)
@@ -166,7 +167,7 @@ export function ReviewPage({
           copyText={copyText}
           t={t}
         />
-        {selected === null || cardActions === null
+        {selected === null || cardActions === null || onConversation === null
           ? (
             <div className={clsx(css.detail, css.placeholder)}>
               <div className={css.centered}>

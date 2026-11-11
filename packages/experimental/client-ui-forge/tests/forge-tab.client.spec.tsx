@@ -17,7 +17,8 @@ import { ForgeTab, type ForgeTabProps } from '../src/client/ForgeTab.tsx'
 import { en } from '../src/client/locales.ts'
 import type { PanelSnapshot } from '../src/client/source.ts'
 import css from '../src/client/ForgeTab.module.css'
-import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
+import type { ChangeRequestEntry } from '../src/client/status.ts'
+import type { ForgePanelState } from '../src/types.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -52,9 +53,9 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const useVisibility = bindSnapshotSelector(visibility)
   const reconnect = vi.fn<() => void>()
   const refresh = vi.fn<() => Promise<void>>(async () => {})
-  const remove = vi.fn<(entry: ForgePanelChangeRequest) => void>()
-  const markReady = vi.fn<(entry: ForgePanelChangeRequest) => Promise<void>>(async () => {})
-  const merge = vi.fn<(entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>>(async () => {})
+  const remove = vi.fn<(entry: ChangeRequestEntry) => void>()
+  const markReady = vi.fn<(entry: ChangeRequestEntry) => Promise<void>>(async () => {})
+  const merge = vi.fn<(entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>>(async () => {})
   const readChecks = vi.fn<ForgeTabProps['readChecks']>(async () => snapshot(1))
   const rerunChecks = vi.fn<ForgeTabProps['rerunChecks']>(async () => {})
   const requestReviews = vi.fn<ForgeTabProps['requestReviews']>(async () => {})

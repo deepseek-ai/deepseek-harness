@@ -131,7 +131,15 @@ class Scope {
   readonly readers = new Set<Reader<ForgeReviewFrame>>()
   readonly hosts = new Map<string, ForgeReviewHost>()
   reading = false
-  poller: Poller | undefined
+  readonly poller: Poller
+
+  /**
+   * @param round - reads every list of the scope once; resolves to whether every read succeeded.
+   * @param delay - milliseconds before the next round after the given number of consecutive failed rounds.
+   */
+  constructor(round: (scope: Scope, signal: AbortSignal) => Promise<boolean>, delay: (failures: number) => number) {
+    this.poller = new Poller(signal => round(this, signal), delay)
+  }
 
   frame(order: readonly ForgeViewerSource[]): ForgeReviewFrame {
     const hosts: ForgeReviewHost[] = []
@@ -171,12 +179,10 @@ export class ViewerLists {
     const key = scope === null ? '' : `${scope.owner}/${scope.name}`.toLowerCase()
     let state = this.scopes.get(key)
     if (state === undefined) {
-      const created = new Scope()
-      this.scopes.set(key, created)
-      created.poller = new Poller(
-        round => this.readScope(created, scope, round), failures => this.delay(this.timing.listIntervalMs, failures),
+      state = new Scope(
+        (created, round) => this.readScope(created, scope, round), failures => this.delay(this.timing.listIntervalMs, failures),
       )
-      state = created
+      this.scopes.set(key, state)
     }
     const reader = new Reader<ForgeReviewFrame>(signal)
     state.readers.add(reader)
@@ -188,7 +194,7 @@ export class ViewerLists {
       state.readers.delete(reader)
       if (state.readers.size === 0 && this.scopes.get(key) === state) {
         this.scopes.delete(key)
-        await state.poller?.stop()
+        await state.poller.stop()
       }
     }
   }
@@ -224,7 +230,7 @@ export class ViewerLists {
 
   /** Read every streamed list and the count again at once. */
   refresh(): void {
-    for (const scope of this.scopes.values()) scope.poller?.refresh()
+    for (const scope of this.scopes.values()) scope.poller.refresh()
     this.countPoller?.refresh()
   }
 
@@ -246,7 +252,7 @@ export class ViewerLists {
    */
   async dispose(): Promise<void> {
     this.disposed = true
-    const pollers = [...this.scopes.values()].flatMap(scope => scope.poller === undefined ? [] : [scope.poller])
+    const pollers = [...this.scopes.values()].map(scope => scope.poller)
     if (this.countPoller !== undefined) pollers.push(this.countPoller)
     for (const scope of this.scopes.values()) for (const reader of scope.readers) reader.end()
     for (const reader of this.countReaders) reader.end()

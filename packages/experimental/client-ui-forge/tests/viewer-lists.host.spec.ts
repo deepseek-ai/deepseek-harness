@@ -29,27 +29,29 @@ function summary(number: number, repository = 'demo'): ChangeRequestSummary {
 }
 
 /** A registry fake whose list and count answers each test sets; every call is recorded. */
-function registry(sources: ForgeViewerSource[]): ViewerListSources & {
+interface RegistryFake extends ViewerListSources {
   readonly calls: ForgeViewerQuery[]
   readonly counts: string[]
   readonly reported: unknown[]
-  answer: (query: ForgeViewerQuery) => Promise<ForgeViewerList | ForgeFailure>
+  answer: (query: ForgeViewerQuery, signal: AbortSignal) => Promise<ForgeViewerList | ForgeFailure>
   answerCount: (host: string) => Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>
   sourcesNow: ForgeViewerSource[]
-} {
-  const fake = {
-    calls: [] as ForgeViewerQuery[],
-    counts: [] as string[],
-    reported: [] as unknown[],
+}
+
+function registry(sources: ForgeViewerSource[]): RegistryFake {
+  const fake: RegistryFake = {
+    calls: [],
+    counts: [],
+    reported: [],
     sourcesNow: sources,
     answer: async (query: ForgeViewerQuery): Promise<ForgeViewerList | ForgeFailure> =>
       await Promise.resolve({ viewer: 'octo', items: [summary(query.filter === 'authored' ? 2 : 1)], total: 3 }),
     answerCount: async (): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure> =>
       await Promise.resolve(new Map([['review-requested', 7]])),
     sources: () => fake.sourcesNow,
-    list: async (_forge: string, query: ForgeViewerQuery) => {
+    list: async (_forge: string, query: ForgeViewerQuery, signal: AbortSignal) => {
       fake.calls.push(query)
-      return await fake.answer(query)
+      return await fake.answer(query, signal)
     },
     count: async (_forge: string, host: string) => {
       fake.counts.push(host)
@@ -149,12 +151,45 @@ describe('ViewerLists', () => {
   it('turns a rejected read into an unavailable failure and reports it', async () => {
     const fake = registry([github])
     fake.answer = async () => await Promise.reject(new Error('boom'))
+    const lists = hub(fake)
     const controller = new AbortController()
-    const read = follow(hub(fake).lists(null, controller.signal))
+    const read = follow(lists.lists(null, controller.signal))
     const failed = await until(read, frame => frame.hosts[0]?.lists['review-requested']?.failure !== null)
     expect(failed.hosts[0]?.lists['review-requested']?.failure).toEqual({ code: 'unavailable', message: 'boom' })
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- a provider's read may reject with a value that is not an Error
     fake.answer = async () => await Promise.reject('text')
-    expect(fake.reported).toEqual([new Error('boom')])
+    lists.refresh()
+    await until(read, frame => frame.hosts[0]?.lists['review-requested']?.failure?.message === 'text')
+    expect(fake.reported).toEqual([new Error('boom'), 'text'])
+    controller.abort()
+    await read.done
+  })
+
+  it('reports no read that rejects once the last stream of its scope ended', async () => {
+    const fake = registry([github])
+    fake.answer = async (_query, signal) => {
+      await new Promise((resolve) => { signal.addEventListener('abort', resolve, { once: true }) })
+      throw new Error('read aborted')
+    }
+    const controller = new AbortController()
+    const read = follow(hub(fake).lists(null, controller.signal))
+    await vi.waitFor(() => { expect(fake.calls).toHaveLength(1) })
+    controller.abort()
+    await read.done
+    expect(fake.reported).toEqual([])
+  })
+
+  it('adds a list that a provider starts offering on a host it already lists', async () => {
+    const fake = registry([{ ...github, filters: new Set(['authored']) }])
+    const lists = hub(fake)
+    const controller = new AbortController()
+    const read = follow(lists.lists(null, controller.signal))
+    const first = await until(read, frame => !frame.reading && frame.hosts[0]?.viewer !== null)
+    expect(Object.keys(first.hosts[0]?.lists ?? {})).toEqual(['authored'])
+    fake.sourcesNow = [github]
+    lists.sourcesChanged()
+    const grown = await until(read, frame => !frame.reading && (frame.hosts[0]?.lists.involved?.items ?? null) !== null)
+    expect(grown.hosts[0]?.lists['review-requested']).toEqual(expect.objectContaining({ items: [summary(1)], total: 3, failure: null }))
     controller.abort()
     await read.done
   })
@@ -211,6 +246,25 @@ describe('ViewerLists', () => {
     listing.abort()
     controller.abort()
     await Promise.all([read.done, counts.done])
+  })
+
+  it('keeps reading the count while another count stream lasts, and counts a host without review requests as zero', async () => {
+    vi.useFakeTimers()
+    const fake = registry([github])
+    fake.answerCount = async () => await Promise.resolve(new Map<ForgeViewerFilter, number>([['authored', 2]]))
+    const lists = hub(fake)
+    const first = new AbortController()
+    const second = new AbortController()
+    const one = follow<ForgeReviewCountFrame>(lists.count(first.signal))
+    const two = follow<ForgeReviewCountFrame>(lists.count(second.signal))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(two.frames.at(-1)).toEqual({ reviewRequested: 0 })
+    first.abort()
+    await one.done
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(fake.counts).toEqual(['github.com', 'github.com'])
+    second.abort()
+    await two.done
   })
 
   it('forgets hosts whose provider left, publishes that, and reads the hosts that remain', async () => {

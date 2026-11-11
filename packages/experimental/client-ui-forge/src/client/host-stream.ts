@@ -33,7 +33,10 @@ export function useHostStream<F>(
     if (key === null) return
     const controller = new AbortController()
     const stream = open(key, controller.signal)
-    setRead(previous => ({ key, frame: previous?.key === key ? previous.frame : undefined, stopped: null }))
+    const show = (stopped: StreamRead<F>['stopped']): void => {
+      setRead(previous => ({ key, frame: previous?.key === key ? previous.frame : undefined, stopped }))
+    }
+    show(null)
     void (async () => {
       try {
         for await (const frame of stream) {
@@ -41,12 +44,11 @@ export function useHostStream<F>(
           setRead({ key, frame, stopped: null })
         }
         if (controller.signal.aborted) return
-        setRead(previous => ({ key, frame: previous?.key === key ? previous.frame : undefined, stopped: ENDED }))
+        show(ENDED)
       } catch (error) {
         if (controller.signal.aborted) return
         const failure = remoteErrorOf(error)
-        const stopped = { code: failure?.code ?? 'ended', message: failure?.message ?? (error instanceof Error ? error.message : String(error)) }
-        setRead(previous => ({ key, frame: previous?.key === key ? previous.frame : undefined, stopped }))
+        show({ code: failure?.code ?? 'ended', message: failure?.message ?? (error instanceof Error ? error.message : String(error)) })
       }
     })()
     return () => {

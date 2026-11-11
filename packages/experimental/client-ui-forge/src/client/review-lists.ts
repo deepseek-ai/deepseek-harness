@@ -55,15 +55,16 @@ export function reviewSections(frame: ForgeReviewFrame | undefined, query: strin
   const needle = query.trim().toLowerCase()
   const sections: ReviewSection[] = []
   for (const filter of REVIEW_FILTERS) {
-    const hosts = frame.hosts.filter(host => host.lists[filter] !== undefined)
-    if (hosts.length === 0) continue
+    const lists = frame.hosts.flatMap((host) => {
+      const list = host.lists[filter]
+      return list === undefined ? [] : [{ host, list }]
+    })
+    if (lists.length === 0) continue
     let items: ReviewItem[] | null = null
     let total = 0
     let truncated = false
     let failure: ReviewSection['failure'] = null
-    for (const host of hosts) {
-      const list = host.lists[filter]
-      if (list === undefined) continue
+    for (const { host, list } of lists) {
       if (list.failure !== null && failure === null) failure = { host: host.host, forge: host.forge, failure: list.failure }
       if (list.items === null) continue
       total += list.total
@@ -168,7 +169,7 @@ export function pastedUrl(query: string): string | undefined {
 }
 
 /** An HTML image tag with its source in double or single quotes. */
-const HTML_IMAGE = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>/gi
+const HTML_IMAGE = /<img\b[^>]*?\bsrc\s*=\s*(["'])([\s\S]*?)\1[^>]*>/gi
 
 /**
  * Prepare a change request description for Markdown rendering: an HTML image becomes a Markdown image, which the
@@ -178,10 +179,10 @@ const HTML_IMAGE = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>/gi
  * @returns the Markdown to render.
  */
 export function descriptionMarkdown(body: string, images: Readonly<Record<string, string>>): string {
-  const markdown = body.replace(HTML_IMAGE, (tag: string, double?: string, single?: string) => {
+  const markdown = body.replace(HTML_IMAGE, (tag: string, _quote: string, source: string) => {
     const alt = /\balt\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag)
     const text = (alt?.[1] ?? alt?.[2] ?? '').replace(/[[\]]/g, '')
-    return `![${text}](${double ?? single ?? ''})`
+    return `![${text}](${source})`
   })
   let replaced = markdown
   for (const [address, signed] of Object.entries(images)) replaced = replaced.split(address).join(signed)
