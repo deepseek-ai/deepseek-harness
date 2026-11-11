@@ -44,11 +44,30 @@
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
+/* The caption is one group: the fork glyph names what the line separates, and
+   it shares the label's tertiary ink. Its 6px inset from the label matches the
+   flow-row leading glyph; the row's own 12px gap keeps both off the hairlines. */
+.inheritedHistoryCaption {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Same 14px flow-row glyph edge as DisclosureRow's leading icon: the CSS edge
+   overrides the svg's own width/height so the glyph follows the font delta. */
+.inheritedHistoryIcon {
+  flex: none;
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
+}
+
 .inheritedHistoryLabel {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   text-overflow: ellipsis;

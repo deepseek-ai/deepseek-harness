@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconBranchOutlineRegular, JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'
@@ -384,7 +384,10 @@ export const InheritedHistoryNodeView = memo(function InheritedHistoryNodeView({
   return (
     <div className={css.inheritedHistoryRow} role="separator" aria-label={t('message.inheritedHistory')}>
       <span className={css.inheritedHistoryLine} aria-hidden />
-      <span className={css.inheritedHistoryLabel} aria-hidden>{t('message.inheritedHistory')}</span>
+      <span className={css.inheritedHistoryCaption} aria-hidden>
+        <IconBranchOutlineRegular className={css.inheritedHistoryIcon} />
+        <span className={css.inheritedHistoryLabel}>{t('message.inheritedHistory')}</span>
+      </span>
       <span className={css.inheritedHistoryLine} aria-hidden />
     </div>
   )
