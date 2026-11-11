@@ -19,13 +19,15 @@ interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
    * follows the provider's programFormat: an async function body supports
-   * top-level `await` and `return`; REPL and Script programs support top-level
+   * top-level `await` and `return`; REPL (`repl`, `scoped-repl`) and Script programs support top-level
    * declarations, `await`, and a final expression, but not top-level `return`.
    * The Script provider lowers top-level await; its executionInstructions and
    * documentation define retained-binding semantics. The completion value
    * becomes {@link PtcRunResult.value}.
    */
   program: string
+  /** Discard the completion without JSON validation when true; omission preserves the completion value. */
+  discardCompletion?: boolean
   /**
    * Object-identity owner for optional in-memory state. Omission requests a fresh
    * environment. Consumers must await runtime.release(owner) when the owner ends.
@@ -93,11 +95,12 @@ interface PtcRunResult {
    */
   value?: PtcJsonValue
   /**
-   * Captured text. Each source channel preserves emission order; interleaving
+   * Captured text fragments retain their emitted line breaks. Concatenate adjacent text without separators.
+   * Each source channel preserves emission order; interleaving
    * across independent channels is backend-dependent. Bounded only as part of
    * the outer result.
    */
-  logs: string[]
+  output: PtcOutput[]
   /** Present iff the run failed; see {@link PtcRunFailure} for the taxonomy. */
   error?: PtcRunFailure
 }
@@ -105,10 +108,10 @@ interface PtcRunResult {
 
 ```ts type-equiv
 /** Source evaluation form, independent of retained program state. */
-type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 ```
 
-`programFormat` 区分异步函数体、REPL 语句与脚本。REPL 与 Script 程序接受顶层 `await`、声明和末尾表达式，不支持顶层 `return`。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。`retainsState` 独立于源码语法报告是否保留内存。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
+`programFormat` 区分异步函数体、REPL 语句、scoped REPL 语句与脚本。REPL、scoped REPL 与 Script 程序接受顶层 `await`、声明和末尾表达式，不支持顶层 `return`。保留状态的 REPL 各次调用共用一个作用域；scoped REPL 每次调用开始时拿到之前调用留下的顶层绑定的拷贝，因此可以再次声明这些名字，而不改变之前的代码。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。`retainsState` 独立于源码语法报告是否保留内存。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
 
 ## 绑定：宿主函数作为程序全局变量
 
@@ -150,7 +153,7 @@ interface PtcBindingNamespace {
    * words, so the same namespace list works against every backend regardless
    * of `language` — a JS-only spelling like `$tools` is rejected by design,
    * not just by the Python backend. Names that satisfy the identifier rule but
-   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `console`,
+   * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
    */
@@ -171,7 +174,7 @@ type PtcJsonValue = null | boolean | number | string | PtcJsonValue[] | { [key: 
 /**
  * One host-side function exposed to the program as an async callable. The
  * runtime bridges calls to it (possibly across a serialization boundary), so
- * `args` and the resolution value MUST be lossless JSON. A runtime rejects a
+ * `args` must be lossless JSON; resolutions also support host-issued PtcImage values. A runtime rejects a
  * lossy or non-cloneable value with a descriptive error rather than corrupting
  * the run. No seam-level byte cap applies to a binding resolution. A rejection
  * of this function surfaces inside the program as a rejection of the
@@ -182,7 +185,29 @@ type PtcBindingFunction = (args: unknown) => Promise<PtcJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是纯字符串。每个来源通道保留自身的发出顺序；由于通道元数据不属于 seam，相互独立的通道如何交错由后端决定。运行时捕获程序的 console 与流输出，Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
+`output` 按发出顺序保存文本和图片条目：文本使用 `{ type: 'text', text }`，图片使用 `{ type: 'image', attachment }`。文本条目保留实际输出的换行，相邻文本直接拼接，不额外插入分隔符。每个来源通道都保留发出顺序；独立通道之间的交错顺序由后端决定。宿主绑定返回 `PtcImage` 描述符，包含附件引用和可在执行环境读取的 `path`；程序收到带有该路径和存储像素尺寸的 `Image`。Node 提供方对序列化文本、图片描述符、完成值或诊断一起计量；超限会显式失败。
+
+```ts public-api
+/** A stored image readable from the program's execution environment. */
+declare class PtcImage {
+  readonly [key: string]: PtcJsonValue;
+  /** Absolute attachment file path readable in the execution world. */
+  readonly path: string;
+  /** Stored image selected when the program inspects this value. */
+  readonly attachment: Readonly<ImageAttachmentRef>;
+  /**
+   * Describe one immutable image file in the execution world.
+   * @param path - Absolute path to the stored image.
+   * @param attachment - Reference to the immutable stored image.
+   */
+  constructor(path: string, attachment: ImageAttachmentRef);
+}
+```
+
+```ts type-equiv
+/** Raw text fragments and inspected images in emission order; concatenate adjacent text without separators. */
+type PtcOutput = { type: 'text'; text: string } | { type: 'image'; attachment: ImageAttachmentRef }
+```
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns/general.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 
@@ -236,6 +261,21 @@ Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and subst
  * @throws When managed resource cleanup fails.
  */
 release(owner: object): Promise<void>
+
+/**
+ * Register source evaluated once when each execution environment is created.
+ * Registration must precede the first run admission; only one initializer may
+ * be registered. Current bindings are installed before initialization. Its
+ * completion is discarded; logs, timeout, cancellation and output bounds share
+ * the first run. Initialization failure discards the environment without
+ * executing the user program or rolling back external effects.
+ * @param program - Initialization source in the provider's language and format.
+ * @returns An idempotent async disposer that stops admission, cancels and drains
+ * admitted runs, and releases environments. Failed cleanup blocks execution
+ * until the disposer succeeds on retry. The caller owns this disposer.
+ * @throws When unsupported, registered twice, registered after admission, or invalid.
+ */
+registerEnvironmentInitializer(program: string): () => Promise<void>
 
 /**
  * Resolve supported options and provider defaults before execution.

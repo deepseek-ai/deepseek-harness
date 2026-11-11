@@ -33,10 +33,10 @@ const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG
 const calls = [
   { method: 'getCapabilities', params: {} },
   { method: 'getApp', params: { selector: 'test.fixture' } },
-  { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
+  { method: 'getState', params: { appHandle: 'fixture-app', windowId: '7' } },
   { method: 'click', params: { appHandle: 'fixture-app', snapshotId: 'fixture-snapshot-1', elementId: '0', holdMs: 800 } },
-  { method: 'getState', params: { appHandle: 'fixture-app', windowId: 7 } },
-  { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+  { method: 'getState', params: { appHandle: 'fixture-app', windowId: '7' } },
+  { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
 ]
 
 class VisualModel extends LlmAdapter {
@@ -139,13 +139,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
   const direct = await executeToolFixture(context, { agent, signal: new AbortController().signal,
-    callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+    callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(direct.isError).toBe(false)
   expect(direct.value).toMatchObject({ mimeType: 'image/png', data: png })
   expect(context.computerUse.providerName).toBe('dsh-cua')
   for (const [callId, activationRequested, beforePid, beforeWindowId] of [
-    ['activate-first', true, 42, 99], ['activate-repeat', false, 9, 7],
+    ['activate-first', true, 42, '99'], ['activate-repeat', false, 9, '7'],
   ] as const) {
     const activated = await executeToolFixture(context, {
       agent, signal: new AbortController().signal, callId: ToolCallId(callId), name: 'cua',
@@ -155,8 +155,8 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     expect(activated.value).toEqual({
       dispatched: true, foregroundChanged: beforePid !== 9, foreground: {
         requestId: callId, targetPid: 9, activationRequested,
-        before: { frontPid: beforePid, focusedWindowId: 7, frontWindowId: beforeWindowId, frontWindowPid: beforePid },
-        after: { frontPid: 9, focusedWindowId: 7, frontWindowId: 7, frontWindowPid: 9 },
+        before: { frontPid: beforePid, focusedWindowId: '7', frontWindowId: beforeWindowId, frontWindowPid: beforePid },
+        after: { frontPid: 9, focusedWindowId: '7', frontWindowId: '7', frontWindowPid: 9 },
       },
     })
     expect(JSON.stringify(activated.content)).toContain(callId)
@@ -169,33 +169,39 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     const result = await executeToolFixture(context, { agent: owner, signal: new AbortController().signal,
       callId: ToolCallId(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
     if (result.isError) throw new Error(JSON.stringify(result.content))
+    const image = result.content.find(block => block.type === 'image')
+    if (image !== undefined) {
+      const path = context.attachments.imageHostPath(image.attachment)
+      if (path === undefined) throw new Error('Fixture image path is unavailable')
+      return { attachmentId: image.attachment.attachmentId, path, width: image.attachment.width, height: image.attachment.height }
+    }
     return z.json().parse(result.value)
   })
   const retainedApp = await objectApi(agent).getApp('test.fixture')
-  const retainedWindow = await retainedApp.getWindow(7)
+  const retainedWindow = await retainedApp.getWindow('7')
   await retainedApp.getAccessibilityTree({ maxDepth: 512 })
-  expect(await retainedWindow.getAccessibilityTree({ maxElements: 100000, emit: false })).toContain('Count: 1')
-  await retainedWindow.getAccessibilityTree({ emit: false })
+  expect(await retainedWindow.getAccessibilityTree({ maxElements: 100000 })).toContain('Count: 1')
+  await retainedWindow.getAccessibilityTree()
   const reads = (await readEvents()).filter(event => event.method === 'getState').slice(-3)
   expect(reads.map(event => event.params)).toEqual([
     { appHandle: retainedApp.appHandle, maxElements: 5000, maxDepth: 512 },
-    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 100000, maxDepth: 50 },
-    { appHandle: retainedApp.appHandle, windowId: 7, maxElements: 5000, maxDepth: 50 },
+    { appHandle: retainedApp.appHandle, windowId: '7', maxElements: 100000, maxDepth: 50 },
+    { appHandle: retainedApp.appHandle, windowId: '7', maxElements: 5000, maxDepth: 50 },
   ])
   const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const peerApp = await objectApi(peer.agent).getApp('test.fixture')
-  const peerWindow = await peerApp.getWindow(7)
+  const peerWindow = await peerApp.getWindow('7')
   expect(peerApp.appHandle).not.toBe(retainedApp.appHandle)
-  const screenshot = await peerWindow.getScreenshot({ emit: false })
-  expect(screenshot).toMatchObject({ mimeType: 'image/png', pixelWidth: 1, pixelHeight: 1, windowId: 7 })
-  expect(Buffer.from(screenshot.bytes).toString('base64')).toBe(png)
-  await (await peerApp.getWindow(8)).getAccessibilityTree({ emit: false })
+  const screenshot = await peerWindow.getScreenshot()
+  expect(screenshot).toMatchObject({ width: 1, height: 1 })
+  expect((await readFile(screenshot.path)).toString('base64')).toBe(png)
+  await (await peerApp.getWindow('8')).getAccessibilityTree()
   const recovery = 'Snapshot belongs to window 8; read getAccessibilityTree on window 7'
   await expect(peerWindow.click(element('0'))).rejects.toThrow(recovery)
   await expect(peerWindow.mouseMove(element('0'))).rejects.toThrow(recovery)
-  expect(await peerWindow.getAccessibilityTree({ emit: false })).toContain('Count: 1')
+  expect(await peerWindow.getAccessibilityTree()).toContain('Count: 1')
   await peerWindow.click(element('0'))
-  expect(await retainedWindow.getAccessibilityTree({ emit: false })).toContain('Count: 2')
+  expect(await retainedWindow.getAccessibilityTree()).toContain('Count: 2')
   const sharedEvents = await readEvents()
   expect(sharedEvents.filter(event => event.event === 'start')).toHaveLength(1)
   expect(sharedEvents.filter(event => event.event === 'connect')).toHaveLength(2)
@@ -204,13 +210,13 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(0)
   expect((await readEvents()).filter(event => event.event === 'disconnect')).toHaveLength(1)
   await peerWindow.click(element('0'))
-  expect(await peerWindow.getAccessibilityTree({ emit: false })).toContain('Count: 3')
+  expect(await peerWindow.getAccessibilityTree()).toContain('Count: 3')
   await peer.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 
   const next = await context.agents.create({ sessionId: SessionId('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const stale = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
-    callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: 7 } },
+    callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(stale.isError).toBe(true)
   expect(JSON.stringify(stale.content)).toContain('APP_ACCESS_REQUIRED')

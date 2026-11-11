@@ -48,7 +48,7 @@ func refusesInvalidRequestEnvelopes(_ source: String) {
     let encoded = try JSONEncoder().encode(window.json)
     let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
     #expect(object["onCurrentSpace"] is NSNull)
-    #expect(window.json["windowId"] == .number(7))
+    #expect(window.json["windowId"] == .string("7"))
     #expect(window.json["bounds"]["x"] == .number(-100))
     #expect(window.json["isOnScreen"] == .bool(true))
 }
@@ -88,11 +88,24 @@ func discoversNormalWindowsAndVisibleAuxiliaryWindows(layer: Int, onScreen: Bool
     }
 }
 
-@Test(arguments: ["true", "1.5", "0", "4294967296", "\"7\""])
-func rejectsInvalidWindowIDs(_ value: String) throws {
-    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"screenshot\",\"params\":{\"windowId\":\(value)}}".utf8))
+@Test func acceptsWindowIDStrings() throws {
+    let request = try NativeRequest(data: Data(#"{"id":"call","method":"screenshot","params":{"windowId":"7"}}"#.utf8))
     let params = try RequestParameters(request)
-    #expect(throws: NativeFailure.self) { try params.windowID() }
+    #expect(try params.windowID() == 7)
+    #expect(try params.optionalWindowID() == 7)
+}
+
+@Test(arguments: ["true", "null", "7"])
+func rejectsNonStringWindowIDs(_ value: String) throws {
+    let request = try NativeRequest(data: Data("{\"id\":\"call\",\"method\":\"screenshot\",\"params\":{\"windowId\":\(value)}}".utf8))
+    #expect(throws: NativeFailure.self) { try RequestParameters(request) }
+}
+
+@Test func validatesOptionalWindowIDsBeforeOperationDispatch() throws {
+    let absent = try RequestParameters(NativeRequest(data: Data(#"{"id":"call","method":"getState","params":{}}"#.utf8)))
+    #expect(try absent.optionalWindowID() == nil)
+    let numeric = try NativeRequest(data: Data(#"{"id":"call","method":"listActions","params":{"windowId":7}}"#.utf8))
+    #expect(throws: NativeFailure.self) { try RequestParameters(numeric) }
 }
 
 @Test func rejectsRoundedIntegerOverflowWithoutTrapping() throws {

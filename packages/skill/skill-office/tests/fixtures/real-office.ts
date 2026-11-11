@@ -1,5 +1,6 @@
 /** Shared model configuration and context assertions for real Office workflows. */
 import { expect } from 'vitest'
+import type { ImageBlock } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 
 /** @returns Model provider patches for the configured development or official API. */
@@ -49,6 +50,19 @@ export function officeCalls(events: readonly SessionEvent[]): OfficeCall[] {
     return event.type === 'tool/call'
       ? [{ callId: event.data.callId, name, args: JSON.parse(event.data.arguments) as OfficeCall['args'] }]
       : [{ callId: event.data.subCallId, name, args: event.data.arguments as OfficeCall['args'] }]
+  })
+}
+
+/**
+ * Collect images displayed during an Office task.
+ * @param events - Recorded task events.
+ * @returns Images in successful tool results and PTC additional context, excluding private dispatch output.
+ */
+export function officeImages(events: readonly SessionEvent[]): ImageBlock[] {
+  return events.flatMap((event) => {
+    const content = event.type === 'tool/result' && !event.data.message.isError ? event.data.message.content
+      : event.type === 'user/message' && event.data.source.kind === 'ptc-mode' ? event.data.content : []
+    return content.filter(block => block.type === 'image')
   })
 }
 

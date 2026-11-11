@@ -202,7 +202,7 @@ def main():
             # The Host consent barrier is separately exercised by provider-lifecycle.spec.ts.
             app = call("launchApp", owner)
             assert app["running"] is True, app
-            pid = wait_for_state(state_file, lambda value: value["windowId"] > 0)["pid"]
+            pid = wait_for_state(state_file, lambda value: bool(value["windowId"]))["pid"]
             if args.keyboard_only:
                 check_keyboard(call, owner, state_file, json.loads(state_file.read_text()))
                 print("PASS: Shift+D shortcut, two-second W+D hold, independent D up, explicit W repeat and one final up")

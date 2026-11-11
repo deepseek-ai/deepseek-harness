@@ -6,5 +6,10 @@
       disabled: !!js process.platform !== 'darwin'
       config:
         agentPreset: ptc
+    - id: cua-windows
+      name: '@deepseek-ai/dsh-cua-windows'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        agentPreset: ptc
     - id: ui-cua
       name: '@deepseek-ai/dsh-cua'

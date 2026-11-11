@@ -19,6 +19,9 @@
     },
     {
       "path": "../../util/error"
+    },
+    {
+      "path": "../../attachment/attachment"
     }
   ]
 }

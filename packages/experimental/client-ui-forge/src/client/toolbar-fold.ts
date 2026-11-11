@@ -1,7 +1,7 @@
 /** Width-driven folding of the changes toolbar into its More menu. */
 
 /** Fold levels, from none to the deepest: level 1 folds the line totals, expansion, side by side, and wrapping; level 2
- * the test switch, with the progress shown as a ring; level 3 refresh. */
+ * the test switch, with the progress label shortened to the bare count beside its ring; level 3 refresh. */
 export const DEEPEST_FOLD = 3
 
 /**

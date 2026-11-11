@@ -3,14 +3,8 @@
   - text: typescript
   - button "Wrap lines"
   - button "Copy code"
-- code: "const bashResult = await tools.bash({ command: \"echo CODE_ROUND_OK\", description: \"Echo CODE_ROUND_OK\" }); let readError = null; try { await tools.read({ file_path: \"missing.txt\" }); } catch (e) { readError = { toolName: e.toolName, message: e.message }; } return { bash: bashResult.stdout.text.trim(), readError };"
+- code: "const bashResult = await tools.bash({ command: \"echo CODE_ROUND_OK\", description: \"Echo CODE_ROUND_OK\" }); let readError = null; try { await tools.read({ file_path: \"missing.txt\" }); } catch (e) { readError = { toolName: e.toolName, message: e.message }; } inspect({ bash: bashResult.stdout.text.trim(), readError }); return;"
 - heading "Output Copy output" [level=3]:
   - button "Output"
   - button "Copy output"
-- text: "{"
-- tree "Result JSON":
-  - treeitem "bash:\"CODE_ROUND_OK\","
-  - 'treeitem "Expand readError:{toolName: \"read\", message: \"cannot read \\\"{{cwd}}/workspace/missing.txt\\\": not found\"}"':
-    - button "Expand"
-    - text: "readError:{toolName: \"read\", message: \"cannot read \\\"{{cwd}}/workspace/missing.txt\\\": not found\"}"
-- text: "}"
+- text: "{ bash: 'CODE_ROUND_OK', readError: { toolName: 'read', message: 'cannot read \"{{cwd}}/workspace/missing.txt\": not found' } }"

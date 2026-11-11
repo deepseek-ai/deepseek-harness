@@ -189,7 +189,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(names(minimal.agent)).toContain('session_search')
     await turn(coded.agent, 'Read this session lineage through run_code.', [
       toolCallResponse('ptc-search', 'run_code', {
-        code: 'console.log(await tools.session_trace({}));',
+        code: 'inspect(await tools.session_trace({}));',
         description: 'Read the current session lineage',
       }), textResponse('PTC_SEARCH_DONE'),
     ])
@@ -340,7 +340,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     if (coded === undefined) throw new Error('the PTC Agent was not created')
     await turn(coded, 'Read this session lineage and load the badge through one program.', [
       toolCallResponse('combined-program', 'run_code', {
-        code: 'console.log(await tools.session_trace({})); console.log(await tools.skill({ name: "dsh-badge" }));',
+        code: 'inspect(await tools.session_trace({})); inspect(await tools.skill({ name: "dsh-badge" }));',
         description: 'Use optional session search and badge together',
       }), textResponse('COMBINED_DONE'),
     ])

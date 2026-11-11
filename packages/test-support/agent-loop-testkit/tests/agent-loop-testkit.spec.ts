@@ -27,7 +27,7 @@ class FixtureRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 1_000 }
   }
   run(): Promise<PtcRunResult> {
-    return Promise.resolve({ logs: [] })
+    return Promise.resolve({ output: [] })
   }
 }
 
