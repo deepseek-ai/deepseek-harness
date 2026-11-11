@@ -99,6 +99,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   fs: 'filesystem.md',
   goals: 'goal.md',
   schedule: 'schedule.md',
+  automationTasks: 'schedule.md',
   inspector: 'extensions.md',
   webServer: 'web-server.md',
   webApp: 'web-server.md',
@@ -310,6 +311,12 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  AutomationCandidate: 'schedule.md',
+  AutomationSource: 'schedule.md',
+  AutomationTaskId: 'schedule.md',
+  AutomationTaskReceiver: 'schedule.md',
+  SourceConnection: 'schedule.md',
+  SourceReceiver: 'schedule.md',
   Principal: 'typert.md',
   PrincipalMap: 'typert.md',
   RemoteAccessResource: 'typert.md',

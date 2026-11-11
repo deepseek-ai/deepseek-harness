@@ -36,8 +36,11 @@
   en: 3f70e357501fad06
   zh: 430d24e125268650
 /deepseek-ai-dsh-schedule/understand-the-implementation/dispatch-and-lifecycle:
-  en: fdf1d2e347420fab
-  zh: fd7257b8e843fc83
+  en: 3eb9d6b53b501c02
+  zh: bb79aab6bead4bcd
+/deepseek-ai-dsh-schedule/understand-the-implementation/source-delivery:
+  en: 17c730faf0206571
+  zh: e9017076be788449
 /deepseek-ai-dsh-schedule/further-exploration:
   en: 5c98e7a8bd720560
   zh: dc1d41e7762b067a
@@ -86,6 +89,18 @@
 /deepseek-ai-dsh-schedule/model-experience/due-reminders-in-the-target-session/kv-cache-effect:
   en: 7f75bfa484baaa5f
   zh: f60e81285e2228e7
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session:
+  en: 1dd9c7bbe4e5fa35
+  zh: d0bf99647f26e523
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/what-the-model-sees:
+  en: eeec11818f3e7373
+  zh: cf04343a7573b5bb
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/token-effect:
+  en: 2b5002dd6865e619
+  zh: 3fb5f4653e8c6715
+/deepseek-ai-dsh-schedule/model-experience/source-observations-in-the-target-session/kv-cache-effect:
+  en: aaef9758ec0dff30
+  zh: 972f37c55f3924d3
 /deepseek-ai-dsh-schedule/model-experience/change-notices-in-involved-sessions:
   en: 4c6fcd0b338a4fc7
   zh: 77a94c6c6f77d38d

@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-11-typed-source-instances.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-11-typed-source-instances.md
+/agent-note-typed-source-instances-for-automation-input:
+  en: cd582bcfdcbc3690
+  zh: 6ee9bbc351710742
+/agent-note-typed-source-instances-for-automation-input/problem:
+  en: 58ee681512401860
+  zh: d915a5e57f123a3d
+/agent-note-typed-source-instances-for-automation-input/decision:
+  en: 68726a007f697def
+  zh: 7d825b9e2da325c0
+/agent-note-typed-source-instances-for-automation-input/alternatives-considered:
+  en: f876366acd0ee5dd
+  zh: 873eabf6393f2abb
+/agent-note-typed-source-instances-for-automation-input/consequences:
+  en: 3b1b7b2403f365fe
+  zh: 28bf8ef14e43f8bc

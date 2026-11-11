@@ -4,6 +4,15 @@
 
 Schedule 独立于 Session 的激活状态存储宿主任务。同一管理 API 按 id 操作任务，同一求值器处理七种权威时间类型：`after`、`at`、`every`、`daily`、`weekly`、`cron` 和 `rrule`。目标可以复用已有 Session、创建一个 Session 后复用，或每次投递创建 Session。[包 README](../../packages/schedule/schedule/README.zh.md) 负责组合与提醒格式；完整值类型和请求类型以 [`types.ts`](../../packages/schedule/schedule/src/types.ts) 为准。
 
+<a id="source-instances"></a>
+## Source 实例
+
+[`dsh-source`](../../packages/schedule/source/README.zh.md) 定义 `AutomationSource<T>`：每个 class 实例拥有自己的观测，通过可等待的订阅发出具有类型约束的值。复合 source 直接持有上游实例引用，只拥有自己对上游的订阅。同类实例彼此独立；不存在 source-kind 单例、每任务 handler 或任务数量限制。生产者拥有定时器、输入串行化、条件求值和需要持久化的观测状态。
+
+`SourceReceiver<T>` 异步消费具有类型约束的值。`SourceConnection.dispose()` 立即停止接收新值，并排空已接收的调用。source 的销毁也等待连接已经断开但仍在执行的调用。多接收者投递等待每个接收者，并聚合失败，不回滚或自动重放。中间输出仅存在于进程内，不是模型输入。
+
+`AutomationTaskRouter` 通过已注册的 `AutomationTaskReceiver`，把 `AutomationSource<AutomationCandidate>` 的输出连接到 `AutomationTaskId`。只有最终任务输出要求 `{ text: string }`。Schedule 接收者在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义失败码和消息格式；已存储的定时任务继续使用既有求值器。
+
 <a id="durable-tasks"></a>
 ## 持久任务
 
@@ -144,6 +153,34 @@ Session 收件箱持久化先于任务回执写入，因此两份存储之间崩
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxautomationtasks--automationtaskrouter"></a>
+
+### `ctx.automationTasks` — `AutomationTaskRouter`
+
+Connects source output to stored automation tasks; source-to-source subscriptions need no router.
+
+```ts cordis-catalog
+/**
+ * Install the task service's delivery endpoint as a Cordis-owned effect.
+ * @param receiver - Task service responsible for admission, delivery, and durable acknowledgement.
+ * @returns Disposer that rejects new deliveries and awaits accepted deliveries before storage can close.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_DUPLICATE while another receiver is registered.
+ */
+registerReceiver(receiver: AutomationTaskReceiver): () => Promise<void>
+
+/**
+ * Subscribe a task to a source instance. Multiple sources can feed one task and one source can feed multiple tasks.
+ * @param source - Source whose output is ready for delivery, rather than an intermediate observation value.
+ * @param taskId - Task identity interpreted by the registered task service.
+ * @returns Connection owned by the composing plugin; dispose it before releasing the task service.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if no task service is installed. Later receiver
+ * removal rejects output through the source's aggregate failure; an existing connection never silently rebinds.
+ */
+connect(source: AutomationSource<AutomationCandidate>, taskId: AutomationTaskId): SourceConnection
+```
+
+Source: [`packages/schedule/source/src/index.ts`](../../packages/schedule/source/src/index.ts)
 
 <a id="ctxschedule--scheduleservice"></a>
 

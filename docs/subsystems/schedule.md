@@ -4,6 +4,15 @@ English | [中文](schedule.zh.md)
 
 Schedule stores Host tasks independently of Session activation. One management API addresses tasks by id, and one evaluator handles seven authoritative timing kinds: `after`, `at`, `every`, `daily`, `weekly`, `cron`, and `rrule`. Targets reuse an existing Session, create one Session and reuse it, or create a Session for each delivery. The [package README](../../packages/schedule/schedule/README.md) owns composition and reminder framing; [`types.ts`](../../packages/schedule/schedule/src/types.ts) owns the complete value and request types.
 
+<a id="source-instances"></a>
+## Source instances
+
+[`dsh-source`](../../packages/schedule/source/README.md) defines `AutomationSource<T>`: each class instance owns its observations and emits typed values through awaited subscriptions. A composite source holds direct references to upstream instances and owns only its subscriptions to them. Instances of one class are independent; there is no source-kind singleton, per-task handler, or task-count restriction. Producers own timers, input serialization, condition evaluation, and any durable observation state.
+
+`SourceReceiver<T>` consumes a typed value asynchronously. `SourceConnection.dispose()` stops accepting values immediately and drains accepted calls. Source disposal also drains calls whose connections have already detached. Fan-out awaits every receiver and aggregates failures without rollback or automatic replay. Intermediate output is process-local, not model input.
+
+`AutomationTaskRouter` connects `AutomationSource<AutomationCandidate>` output to an `AutomationTaskId` through a registered `AutomationTaskReceiver`. Only final task output requires `{ text: string }`. Schedule's receiver checks active status and delivery admission inside its mutation FIFO, delivers the stored instruction with the extra source data, and commits its receipt after Session persistence. It preserves the task's timing and status. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns failure codes and message framing; stored timing tasks continue to use their existing evaluator.
+
 <a id="durable-tasks"></a>
 ## Durable tasks
 
@@ -144,6 +153,34 @@ Historical version-1 `schedule/change` events retain the frozen `LegacyScheduleR
 ## Cordis API
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
+
+<a id="ctxautomationtasks--automationtaskrouter"></a>
+
+### `ctx.automationTasks` — `AutomationTaskRouter`
+
+Connects source output to stored automation tasks; source-to-source subscriptions need no router.
+
+```ts cordis-catalog
+/**
+ * Install the task service's delivery endpoint as a Cordis-owned effect.
+ * @param receiver - Task service responsible for admission, delivery, and durable acknowledgement.
+ * @returns Disposer that rejects new deliveries and awaits accepted deliveries before storage can close.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_DUPLICATE while another receiver is registered.
+ */
+registerReceiver(receiver: AutomationTaskReceiver): () => Promise<void>
+
+/**
+ * Subscribe a task to a source instance. Multiple sources can feed one task and one source can feed multiple tasks.
+ * @param source - Source whose output is ready for delivery, rather than an intermediate observation value.
+ * @param taskId - Task identity interpreted by the registered task service.
+ * @returns Connection owned by the composing plugin; dispose it before releasing the task service.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if no task service is installed. Later receiver
+ * removal rejects output through the source's aggregate failure; an existing connection never silently rebinds.
+ */
+connect(source: AutomationSource<AutomationCandidate>, taskId: AutomationTaskId): SourceConnection
+```
+
+Source: [`packages/schedule/source/src/index.ts`](../../packages/schedule/source/src/index.ts)
 
 <a id="ctxschedule--scheduleservice"></a>
 

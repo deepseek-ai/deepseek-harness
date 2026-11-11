@@ -15,6 +15,8 @@ Reacting to changes brings two problems that time rules do not have.
 
 ## Proposal
 
+The provider/trigger implementation split below is superseded by [typed source instances](../../implemented/architecture/2026-11-11-typed-source-instances.md). Event-only task storage, restricted event turns, observation records, and notifications remain proposed here.
+
 An automation task becomes an instruction, a source with parameters, and a Session mode. Time is one source among several, so a scheduled task is an automation task whose source is time. Each observation passes three layers, and only the last one calls a model: a source event passes the trigger's filter and becomes a candidate, the candidate is delivered to a Session where the model judges it, and only a notify call produces a notice for the user. This partially supersedes the two notes linked above: tasks stop being bound to their original Session, and task records stop meaning inbox delivery only.
 
 ```mermaid

@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-source'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -237,6 +238,7 @@ export class ScheduleService extends TypertRemoteService {
   private chain: Promise<unknown> = Promise.resolve()
   private notifications: Promise<void> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
+  private sourceReceiver: (() => Promise<void>) | undefined
   private resolveWebAgent: ((sessionId: SessionId) => Promise<Agent>) | undefined
   private stopping = false
 
@@ -288,6 +290,7 @@ export class ScheduleService extends TypertRemoteService {
       let cleanup: () => Promise<void>
       try {
         cleanup = ctx.effect(() => async () => {
+          await this.sourceReceiver?.()
           this.stopping = true
           await this.runtime?.dispose()
           await this.chain // The chain contains failures after returning them to their callers.
@@ -300,7 +303,7 @@ export class ScheduleService extends TypertRemoteService {
         throw error
       }
       const tasks = domain.table('tasks')
-      this.runtime = new ScheduleRuntime(ctx,
+      const runtime = this.runtime = new ScheduleRuntime(ctx,
         () => [...tasks.entries()].map(([, task]) => task),
         work => this.serialize(work),
         async (task) => {
@@ -313,7 +316,19 @@ export class ScheduleService extends TypertRemoteService {
           if (this.resolveWebAgent === undefined) throw new Error('schedule: no Session activation provider')
           return this.resolveWebAgent(sessionId)
         })
-      this.runtime.requestDrive()
+      ctx.inject(['automationTasks'], (sourceCtx) => {
+        sourceCtx.effect(() => {
+          const dispose = sourceCtx.automationTasks.registerReceiver({
+            deliver: (id, candidate) => runtime.deliverSource(ScheduleId(id), candidate),
+          })
+          this.sourceReceiver = dispose
+          return async () => {
+            await dispose()
+            if (this.sourceReceiver === dispose) this.sourceReceiver = undefined
+          }
+        })
+      })
+      runtime.requestDrive()
       return cleanup
     })
     // Host tasks outlive their Session's Agent, so archive admission reads the

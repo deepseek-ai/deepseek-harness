@@ -26,6 +26,7 @@ Choose this package for persistent scheduled task management.
 
 | Package | Role |
 |---|---|
+| [`source/`](source/README.md) | Typed source-instance subscriptions and connections to stored tasks |
 | [`schedule/`](schedule/README.md) | Host-owned task persistence, scheduling, delivery targets, inspection, and explicit deletion |
 | [`tool-schedule/`](tool-schedule/README.md) | Preset-scoped `schedule_create`, `schedule_list`, `schedule_view`, and `schedule_edit` tools over the Host `ctx.schedule` service |
 

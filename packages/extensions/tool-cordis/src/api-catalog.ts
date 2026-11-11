@@ -554,6 +554,27 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'automationTasks',
+    summary: 'Connects source output to stored automation tasks; source-to-source subscriptions need no router.',
+    description: 'Connects source output to stored automation tasks; source-to-source subscriptions need no router.',
+    methods: [
+      {
+        signature: 'registerReceiver(receiver: AutomationTaskReceiver): () => Promise<void>',
+        description: 'Install the task service\'s delivery endpoint as a Cordis-owned effect.',
+        parameters: [{ name: 'receiver', description: 'Task service responsible for admission, delivery, and durable acknowledgement.' }],
+        returns: 'Disposer that rejects new deliveries and awaits accepted deliveries before storage can close.',
+        throws: ['SourceError with SOURCE_TASK_RECEIVER_DUPLICATE while another receiver is registered.'],
+      },
+      {
+        signature: 'connect(source: AutomationSource<AutomationCandidate>, taskId: AutomationTaskId): SourceConnection',
+        description: 'Subscribe a task to a source instance. Multiple sources can feed one task and one source can feed multiple tasks.',
+        parameters: [{ name: 'source', description: 'Source whose output is ready for delivery, rather than an intermediate observation value.' }, { name: 'taskId', description: 'Task identity interpreted by the registered task service.' }],
+        returns: 'Connection owned by the composing plugin; dispose it before releasing the task service.',
+        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if no task service is installed. Later receiver removal rejects output through the source\'s aggregate failure; an existing connection never silently rebinds.'],
+      },
+    ],
+  },
+  {
     key: 'browserUse',
     summary: 'Owns one optional provider registration in the shared browser-use service.',
     description: 'Owns one optional provider registration in the shared browser-use service.',
@@ -6074,6 +6095,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AuthorizationStatus = \'authorized\' | \'cancelled\';',
   },
   {
+    name: 'AutomationCandidate',
+    declaration: 'export interface AutomationCandidate {\n    readonly text: string;\n}',
+  },
+  {
+    name: 'AutomationSource',
+    declaration: 'export abstract class AutomationSource<T> {\n    subscribe(receive: SourceReceiver<T>): SourceConnection;\n    dispose(): Promise<void>;\n}',
+  },
+  {
+    name: 'AutomationTaskId',
+    declaration: 'export type AutomationTaskId = Branded<\'AutomationTaskId\'>;',
+  },
+  {
+    name: 'AutomationTaskReceiver',
+    declaration: 'export interface AutomationTaskReceiver {\n    deliver(taskId: AutomationTaskId, candidate: AutomationCandidate): Promise<void>;\n}',
+  },
+  {
     name: 'BackendRegistry',
     declaration: 'export class BackendRegistry {\n    register(name: string, backend: StorageBackend): () => void;\n    get(name: string): StorageBackend;\n    names(): string[];\n}',
   },
@@ -9596,6 +9633,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillViewOptions',
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
+  },
+  {
+    name: 'SourceReceiver',
+    declaration: 'export type SourceReceiver<T> = (value: T) => Promise<void>;',
   },
   {
     name: 'SpeechCatalog',

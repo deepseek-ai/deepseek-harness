@@ -26,6 +26,7 @@ kind: "package-group"
 
 | 包 | 职责 |
 |---|---|
+| [`source/`](source/README.zh.md) | 具有类型约束的 source 实例订阅与已存储任务的连接 |
 | [`schedule/`](schedule/README.zh.md) | Host 拥有的任务持久化、调度、投递目标、查询与显式删除 |
 | [`tool-schedule/`](tool-schedule/README.zh.md) | 基于宿主 `ctx.schedule` 服务的 preset 级 `schedule_create`、`schedule_list`、`schedule_view` 和 `schedule_edit` 工具 |
 

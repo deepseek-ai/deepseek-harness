@@ -443,6 +443,7 @@
     { "path": "./packages/goal/goal-round-driver" },
     { "path": "./packages/goal/command-goal" },
     { "path": "./packages/feedback/command-feedback" },
+    { "path": "./packages/schedule/source" },
     { "path": "./packages/schedule/schedule" },
     { "path": "./packages/schedule/tool-schedule" },
     { "path": "./packages/context/time-context" },
