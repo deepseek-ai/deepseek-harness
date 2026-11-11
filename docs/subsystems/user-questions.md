@@ -209,7 +209,7 @@ After a Host restart, the Remote layer resumes the root agent when the Session r
 
 ## Errors
 
-`UserQuestionError` extends `HarnessError`, so `ctx.tools.execute()` preserves `{ name, code }` for model-facing tool failures such as `EMPTY_QUESTIONS`, `BAD_INTENT`, `NO_PROVIDER`, `ASK_ABORTED`, or UI-side cancellation.
+`UserQuestionError` extends `HarnessError`, so `ctx.tools.execute()` preserves `{ name, code }` for model-facing tool failures such as `EMPTY_QUESTIONS`, `BAD_INTENT`, `NO_PROVIDER`, `ASK_ABORTED`, or UI-side cancellation. An answerer failure that is not a `HarnessError` becomes `PROVIDER_ERROR` with the original message and the original as `cause`; another `HarnessError` keeps its own `name` and `code`.
 
 ```ts type-equiv
 /** Stable error taxonomy for user-questions failures. */
@@ -286,8 +286,11 @@ async askTimed( request: AskUserQuestionRequest & { agent: Agent }, callId: Tool
  * @returns The answer chosen or typed by the human.
  * @throws {UserQuestionError} code `ASK_ABORTED` when the supplied signal
  *   is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent
- *   is not the registry's exact live instance, or `DELEGATED_CALLER` when
- *   that live agent has subagent origin.
+ *   is not the registry's exact live instance, `DELEGATED_CALLER` when
+ *   that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the
+ *   original message, when an answerer fails with a value that is not a
+ *   `HarnessError`; a coded `HarnessError` from an answerer keeps its `name`
+ *   and `code`.
  */
 async ask(request: AskUserQuestionRequest): Promise<AskUserQuestionAnswer>
 ```

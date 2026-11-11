@@ -1,7 +1,8 @@
 /** Whole-patch admission rejects all writes while preserving prior observation state. */
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { FsError, FsVersion } from '@deepseek-ai/dsh-fs'
+import { FsError, type FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsErrorCode } from '@deepseek-ai/dsh-fs'
 import { expect, it, vi } from 'vitest'
 import { add, move, patch, remove, setup, update } from './harness.ts'
@@ -55,7 +56,7 @@ it.each([
 it.each(['delete', 'move'] as const)('rejects a %s source the provider reports as a symbolic link', async (kind) => {
   const t = await setup()
   await t.file('a', 'old\n')
-  vi.spyOn(t.fs, 'lstat').mockResolvedValue({ type: 'symlink', version: FsVersion('link') })
+  vi.spyOn(t.fs, 'lstat').mockResolvedValue({ type: 'symlink', version: brandString<FsVersion>('link') })
   const a = t.record(kind, 'a', 0, 2, kind === 'move' ? 'b' : undefined)
   expect(await t.run(patch(kind === 'delete' ? remove('a') : move('a', 'b')))).toEqual({ phase: 'preflight', refusals: [
     { operation: a, failure: { code: 'PATCH_SYMLINK_SOURCE',

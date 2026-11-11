@@ -67,7 +67,7 @@ export class PtcCalls {
       await Promise.all(pending.map(call => call.done))
     }
     signal.throwIfAborted()
-    if (this.disposed) throw new Error('PTC tool executor disposed')
+    if (this.disposed) throw new CodeRunFailedError('PTC tool executor disposed', 'CODE_RUN_UNAVAILABLE')
     const controller = new AbortController()
     const done = Promise.withResolvers<undefined>()
     const currentSignal = AbortSignal.any([signal, controller.signal])

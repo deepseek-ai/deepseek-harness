@@ -19,12 +19,14 @@ interface ControlOptions extends AccessOptions {
   permissionParameters: (method: 'requestPermission' | 'openPermissionSettings', permission: CuaSystemPermission, locale: string) => Record<string, JsonValue>
 }
 type Control = (method: string, params: Record<string, JsonValue>) => Promise<JsonValue>
-const permissionProcess = z.object({ pid: z.number().int().positive(), path: z.string().optional(), name: z.string().optional() })
+const permissionProcess = z.object({ path: z.string().optional(), name: z.string().optional() })
+const macPermissionProcess = permissionProcess.extend({ pid: z.number().int().positive() })
 const systemPermissions = z.discriminatedUnion('platform', [z.object({
-  platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(), helper: permissionProcess, parent: permissionProcess,
+  platform: z.literal('darwin'), accessibility: z.boolean(), screenRecording: z.boolean(),
+  helper: macPermissionProcess, parent: macPermissionProcess,
   launchApplication: z.object({ name: z.string().min(1), path: z.string().min(1), icon: ApplicationIcon.optional() }).optional(),
 }), z.object({
-  platform: z.literal('win32'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
+  platform: z.literal('windows'), sessionLocked: z.boolean().nullable(), captureAvailable: z.boolean(),
   elevated: z.boolean(), helper: permissionProcess,
 })])
 

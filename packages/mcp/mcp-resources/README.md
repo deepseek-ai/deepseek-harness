@@ -37,7 +37,7 @@ A caller with no configured MCP server sees no MCP prompt text or resource tools
 
 When system-prompt assembly is mounted, the prompt lists server names visible to the calling agent. Call `list_mcp_resources` or `list_mcp_resource_templates` with one of those names as `server`. Without a cursor, the MCP SDK collects the server’s pages. An explicit `cursor` requests that page; pass a returned `nextCursor` unchanged. Read a listed URI or an expanded template with `read_mcp_resource`, using the same `server` name and an explicit `uri`.
 
-Every operation resolves the server in the calling agent's scope. A missing server argument or unavailable server fails before dispatch. The connection owner handles request cancellation, timeouts, and recovery; a failed request remains a failed tool call.
+Every operation resolves the server in the calling agent's scope. A missing server argument or unavailable server fails before dispatch; an unavailable server fails as `ToolArgsError` with `INVALID_ARGS`. The connection owner handles request cancellation, timeouts, and recovery; a failed request remains a failed tool call.
 
 -----
 

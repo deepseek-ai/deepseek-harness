@@ -5,7 +5,8 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TerminalController } from '@deepseek-ai/dsh-api-terminal-controller'
 import type { TerminalScreenPage, WebTerminalId, WebTerminalInfo } from '@deepseek-ai/dsh-api-terminal-controller'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -40,7 +41,7 @@ async function registries(): Promise<Context> {
 }
 
 function call(ctx: Context, agent: Agent | undefined, name: string, args: unknown) {
-  return executeModelToolFixture(ctx, { signal, callId: ToolCallId(`panel-${++callNumber}`), name, arguments: args, ...agent === undefined ? {} : { agent } })
+  return executeModelToolFixture(ctx, { signal, callId: brandString<ToolCallId>(`panel-${++callNumber}`), name, arguments: args, ...agent === undefined ? {} : { agent } })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {

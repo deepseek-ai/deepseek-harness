@@ -1,36 +1,13 @@
 /**
  * Display resolution for roster presets, shared by every surface that renders
  * preset names: shipped presets resolve through locale dictionary keys, and
- * user-authored metadata is never translated. A pure fold with no imports, so
+ * user-authored metadata is never translated. A pure fold with no runtime imports, so
  * browser bundles inline it and the Host uses the same single home for which
  * shipped id carries which copy key.
  * @module @deepseek-ai/dsh-agent-preset-registry/display
  */
 
-/** Dictionary keys carrying one shipped preset's display copy. */
-export type BuiltInPresetCopyKey =
-  | 'presetStandardName' | 'presetStandardDescription'
-  | 'presetPtcName' | 'presetPtcDescription'
-  | 'presetMinimalName' | 'presetMinimalDescription'
-  | 'presetCordisName' | 'presetCordisDescription'
-
-/** Preset roster fields needed to resolve display copy. */
-export interface PresetDisplaySource {
-  /** Stable preset id. */
-  readonly id: string
-  /** Unlocalized name published by the preset. */
-  readonly name?: string
-  /** Unlocalized description published by the preset. */
-  readonly description?: string
-}
-
-/** Display copy resolved for the active locale. */
-export interface PresetDisplayText {
-  /** Localized built-in name or the preset's own fallback name. */
-  readonly name: string
-  /** Localized built-in description or the preset's own description. */
-  readonly description?: string
-}
+import type { BuiltInPresetCopyKey, PresetDisplaySource, PresetDisplayText } from './types.ts'
 
 interface PresetLocaleKeys {
   readonly name: BuiltInPresetCopyKey

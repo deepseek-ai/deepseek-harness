@@ -11,7 +11,8 @@
 import { createElement } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { StatsView } from '../src/client/StatsView.tsx'
@@ -220,7 +221,7 @@ type LoadOlder = () => Promise<LoadOlderResult>
 /** One durable prompt image reference. */
 function imageRef(id = 'sha256:image'): ImageAttachmentRef {
   return {
-    attachmentId: AttachmentId(id),
+    attachmentId: brandString<AttachmentId>(id),
     mediaType: 'image/png',
     bytes: 12,
     width: 2,

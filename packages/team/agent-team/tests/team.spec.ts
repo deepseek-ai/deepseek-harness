@@ -7,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset, type SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Commands from '@deepseek-ai/dsh-commands'
 import SubagentService, { type SubagentActivation } from '@deepseek-ai/dsh-subagent'
@@ -16,7 +16,9 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { bindSubagentActivation } from '../../../subagent/subagent/tests/manager-internals.ts'
-import TeamService, { TeamId, TeamTaskId } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import TeamService from '../src/index.ts'
+import type { TeamId, TeamTaskId } from '../src/types.ts'
 import { teamProjectionDefinition } from '../src/projection.ts'
 import type { TeamProjectionState } from '../src/projection.ts'
 import { TestSessionQuery } from './test-session-query.ts'
@@ -28,7 +30,7 @@ const contexts: Context[] = []
 /** Resident idle recipients exercise delivery without scheduling model work. */
 async function resident(ctx: Context, root: Agent, id: string): Promise<Agent> {
   return (await ctx.agents.create({
-    sessionId: SessionId(id), agentOptions: { provider: 'mock', model: 'mock' },
+    sessionId: brandString<SessionId>(id), agentOptions: { provider: 'mock', model: 'mock' },
     meta: { origin: 'subagent', parentSession: root.id },
     setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, root) },
   })).agent
@@ -69,7 +71,7 @@ async function setup(
   const teamFiber = await ctx.plugin(TeamService, config)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const lead = await ctx.agentLoop.create(SessionId('team-root'), { provider: 'mock', model: 'mock' })
+  const lead = await ctx.agentLoop.create(brandString<SessionId>('team-root'), { provider: 'mock', model: 'mock' })
   if (enabled) await ctx.agentTeams.setEnabled(lead, true)
   return { ctx, lead, adapter, storageRoot, teamFiber }
 }
@@ -130,7 +132,7 @@ describe('Tree-owned task boards', () => {
   it.each([false, true])('preserves a selection saved during setup: %s', async (enabled) => {
     const { ctx } = await setup([], { defaultEnabled: true }, false)
     const handle = await ctx.agents.create({
-      sessionId: SessionId('selected-root'),
+      sessionId: brandString<SessionId>('selected-root'),
       setup: (_ctx, agent) => { agent.session.append('team/mode', { enabled }) },
     })
     expect(durable(handle.agent).enabled).toBe(enabled)
@@ -143,7 +145,7 @@ describe('Tree-owned task boards', () => {
     await ctx.agentTeams.createTask(lead, { subject: 'source', description: 'belongs to source' })
     await ctx.agentTeams.setEnabled(lead, false)
     const handle = await ctx.agents.create({
-      sessionId: SessionId('configured-fork'),
+      sessionId: brandString<SessionId>('configured-fork'),
       seed: lead.session.snapshotEvents(),
       meta: { parentSession: lead.id, isSeeded: true },
       inheritedEventCount: SessionLogOffset(lead.session.seq),
@@ -157,7 +159,7 @@ describe('Tree-owned task boards', () => {
   it('unregisters default initialization when the Team service unloads', async () => {
     const { ctx, teamFiber } = await setup([], { defaultEnabled: true }, false)
     await teamFiber.dispose()
-    const handle = await ctx.agents.create({ sessionId: SessionId('without-team') })
+    const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('without-team') })
     expect(handle.agent.session.ownEvents().filter(event => event.type === 'team/mode')).toEqual([])
     await handle.dispose()
   })
@@ -165,7 +167,7 @@ describe('Tree-owned task boards', () => {
   it('rejects Agent creation if saving the configured mode fails', async () => {
     const { ctx } = await setup([], { defaultEnabled: true }, false)
     const failure = new Error('mode save failed')
-    const id = SessionId('failed-mode-save')
+    const id = brandString<SessionId>('failed-mode-save')
     vi.spyOn(ctx.sessions, 'flush').mockRejectedValueOnce(failure)
     await expect(ctx.agents.create({ sessionId: id })).rejects.toBe(failure)
     expect(ctx.agents.get(id)).toBeUndefined()
@@ -274,16 +276,17 @@ describe('Tree-owned task boards', () => {
     const { ctx, lead } = await setup([])
     lead.session.append('team/task', {
       version: 2,
-      teamId: TeamId(lead.id),
+      teamId: brandString<TeamId>(lead.id),
       task: {
-        id: TeamTaskId('task-1'), revision: 2, subject: 'invalid', description: 'missing initial revision',
+        id: brandString<TeamTaskId>('task-1'), revision: 2, subject: 'invalid', description: 'missing initial revision',
         status: 'pending', blockedBy: [], writeScopes: [],
       },
     })
-    expect(() => ctx.agentTeams.listTasks(lead)).toThrow('must begin at revision 1')
+    const corrupt = { name: 'TeamError', code: 'TEAM_STATE_CORRUPT', message: expect.stringContaining('must begin at revision 1') as string }
+    expect(() => ctx.agentTeams.listTasks(lead)).toThrow(expect.objectContaining(corrupt))
     const eventCount = lead.session.snapshotEvents().length
     await expect(ctx.agentTeams.createTask(lead, { subject: 'blocked', description: 'blocked' }))
-      .rejects.toThrow('must begin at revision 1')
+      .rejects.toMatchObject(corrupt)
     expect(lead.session.snapshotEvents()).toHaveLength(eventCount)
   })
 
@@ -337,7 +340,7 @@ describe('Tree-owned task boards', () => {
     await waitNoAgent(ctx, alpha)
     await ctx.agentTeams.createTask(lead, { subject: 'parent task', description: 'belongs to parent' })
     const handle = await ctx.agents.create({
-      sessionId: SessionId('ordinary-fork'),
+      sessionId: brandString<SessionId>('ordinary-fork'),
       seed: lead.session.snapshotEvents(),
       meta: { parentSession: lead.id, isSeeded: true },
       inheritedEventCount: SessionLogOffset(lead.session.seq),
@@ -384,11 +387,11 @@ describe('Tree-owned task boards', () => {
     expect(assigned).toMatchObject({ ownerId: grandchild.id, ownerName: 'agent-1/agent-1' })
     for (const phase of ['provisioning', 'active'] as const) {
       lead.session.append('team/member', {
-        version: 2, teamId: TeamId(lead.id),
-        member: { id: SessionId('old-child'), name: 'legacy', description: 'old', provider: 'spawn', context: 'fresh', phase },
+        version: 2, teamId: brandString<TeamId>(lead.id),
+        member: { id: brandString<SessionId>('old-child'), name: 'legacy', description: 'old', provider: 'spawn', context: 'fresh', phase },
       })
     }
-    for (const owner of [SessionId('old-child'), SessionId('nested'), SessionId('unrelated-root')]) {
+    for (const owner of [brandString<SessionId>('old-child'), brandString<SessionId>('nested'), brandString<SessionId>('unrelated-root')]) {
       await expect(ctx.agentTeams.updateTask(lead, {
         taskId: task.id, expectedRevision: assigned.revision, action: 'reassign', owner,
       })).rejects.toMatchObject({ code: 'TEAM_MEMBER_NOT_FOUND' })
@@ -409,7 +412,7 @@ describe('Tree-owned task boards', () => {
       direct.createTask(lead, { subject: 'one', description: 'one' }),
       direct.createTask(lead, { subject: 'two', description: 'two' }),
     ])
-    expect([first.id, second.id]).toEqual([TeamTaskId('task-1'), TeamTaskId('task-2')])
+    expect([first.id, second.id]).toEqual([brandString<TeamTaskId>('task-1'), brandString<TeamTaskId>('task-2')])
   })
 
   it.each([
@@ -417,7 +420,7 @@ describe('Tree-owned task boards', () => {
   ] as const)('rejects a queued %s after its caller is %s', async (action, stopped) => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('queued-caller'), agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: brandString<SessionId>('queued-caller'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
@@ -461,7 +464,7 @@ describe('Tree-owned task boards', () => {
   it('does not reinterpret an orphaned subagent child as a Team root', async () => {
     const { ctx } = await setup([textResponse('ordinary child done'), textResponse('orphan turn')])
     const parent = await ctx.agents.create({
-      sessionId: SessionId('temporary-parent'),
+      sessionId: brandString<SessionId>('temporary-parent'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const child = (await spawn(ctx, parent.agent, 'orphan')).childId
@@ -477,8 +480,8 @@ describe('Tree-owned task boards', () => {
     await orphan.dispose()
 
     const rootWithOfflineSource = await ctx.agents.create({
-      sessionId: SessionId('orphan-ordinary-root'),
-      meta: { parentSession: SessionId('absent-parent') },
+      sessionId: brandString<SessionId>('orphan-ordinary-root'),
+      meta: { parentSession: brandString<SessionId>('absent-parent') },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     await ctx.agentTeams.setEnabled(rootWithOfflineSource.agent, true)
@@ -490,10 +493,10 @@ describe('Tree-owned task boards', () => {
 describe('Team shared task DAG', () => {
   it('fails loudly when the durable numeric task id space is exhausted', async () => {
     const { ctx, lead } = await setup([])
-    const id = TeamTaskId(`task-${Number.MAX_SAFE_INTEGER}`)
+    const id = brandString<TeamTaskId>(`task-${Number.MAX_SAFE_INTEGER}`)
     lead.session.append('team/task', {
       version: 2,
-      teamId: TeamId(lead.id),
+      teamId: brandString<TeamId>(lead.id),
       task: {
         id,
         revision: 1,
@@ -525,7 +528,7 @@ describe('Team shared task DAG', () => {
     })
     const second = await ctx.agentTeams.createTask(lead, { subject: 'second', description: 'second task' })
     expect(deleted.status).toBe('deleted')
-    expect(second.id).toBe(TeamTaskId('task-2'))
+    expect(second.id).toBe(brandString<TeamTaskId>('task-2'))
     expect(ctx.agentTeams.getTask(lead, first.id).status).toBe('deleted')
     expect(ctx.agentTeams.listTasks(lead).map(task => task.id)).toEqual([second.id])
   })
@@ -613,7 +616,7 @@ describe('Team shared task DAG', () => {
       subject: 'two', description: 'two', blockedBy: [first.id],
     })
     await expect(ctx.agentTeams.createTask(lead, {
-      subject: 'bad', description: 'bad', blockedBy: [TeamTaskId('missing')],
+      subject: 'bad', description: 'bad', blockedBy: [brandString<TeamTaskId>('missing')],
     })).rejects.toMatchObject({ code: 'TEAM_TASK_NOT_FOUND' })
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: first.id,
@@ -652,7 +655,7 @@ describe('Team shared task DAG', () => {
     await ctx.agentTeams.createTask(lead, {
       subject: 'dependent', description: 'dependent', blockedBy: [blocker.id],
     })
-    expect(() => ctx.agentTeams.getTask(lead, TeamTaskId('missing')))
+    expect(() => ctx.agentTeams.getTask(lead, brandString<TeamTaskId>('missing')))
       .toThrow(expect.objectContaining({ code: 'TEAM_TASK_NOT_FOUND' }))
     for (const action of ['release', 'complete', 'reopen'] as const) {
       await expect(ctx.agentTeams.updateTask(lead, {
@@ -746,7 +749,7 @@ describe('Team shared task DAG', () => {
       blockedBy: [blocker.id],
     })
     await expect(ctx.agentTeams.updateTask(lead, {
-      taskId: TeamTaskId('missing-update'), expectedRevision: 1, action: 'delete',
+      taskId: brandString<TeamTaskId>('missing-update'), expectedRevision: 1, action: 'delete',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_NOT_FOUND' })
     await expect(ctx.agentTeams.updateTask(lead, {
       taskId: task.id, expectedRevision: task.revision, action: 'reassign', owner: editor.id,
@@ -826,13 +829,13 @@ describe('Task-board persistence', () => {
     const { ctx, lead, adapter } = await setup([])
     const alpha = await resident(ctx, lead, 'notify-alpha')
     const beta = (await ctx.agents.create({
-      sessionId: SessionId('notify-beta'), meta: { origin: 'subagent', parentSession: alpha.id },
+      sessionId: brandString<SessionId>('notify-beta'), meta: { origin: 'subagent', parentSession: alpha.id },
       agentOptions: { provider: 'mock', model: 'mock' },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, alpha.id]) },
     })).agent
-    const unrelated = await ctx.agentLoop.create(SessionId('unrelated'), { provider: 'mock', model: 'mock' })
+    const unrelated = await ctx.agentLoop.create(brandString<SessionId>('unrelated'), { provider: 'mock', model: 'mock' })
     const unbound = (await ctx.agents.create({
-      sessionId: SessionId('unbound-subagent'),
+      sessionId: brandString<SessionId>('unbound-subagent'),
       meta: { origin: 'subagent', parentSession: lead.id },
       agentOptions: { provider: 'mock', model: 'mock' },
     })).agent
@@ -878,10 +881,10 @@ describe('Task-board persistence', () => {
       message: 'task "task-2" revision 1 is visible, but persistence was not confirmed; read the task before retrying',
       cause: new Error('storage unavailable'),
     })
-    expect(ctx.agentTeams.getTask(lead, TeamTaskId('task-2'))).toMatchObject({ subject: 'two', revision: 1 })
+    expect(ctx.agentTeams.getTask(lead, brandString<TeamTaskId>('task-2'))).toMatchObject({ subject: 'two', revision: 1 })
     expect(ctx.agentTeams.listTasks(lead)).toHaveLength(2)
     await expect(ctx.agentTeams.updateTask(lead, {
-      taskId: TeamTaskId('task-1'), expectedRevision: 99, action: 'claim',
+      taskId: brandString<TeamTaskId>('task-1'), expectedRevision: 99, action: 'claim',
     })).rejects.toMatchObject({ code: 'TEAM_TASK_STALE_REVISION' })
   })
 
@@ -891,7 +894,7 @@ describe('Task-board persistence', () => {
 
     await expect(ctx.agentTeams.createTask(lead, { subject: 'unconfirmed', description: 'read before retrying' }))
       .rejects.toMatchObject({ code: 'TEAM_TASK_PERSISTENCE_UNCONFIRMED' })
-    const taskId = TeamTaskId('task-1')
+    const taskId = brandString<TeamTaskId>('task-1')
     expect(ctx.agentTeams.getTask(lead, taskId)).toMatchObject({ subject: 'unconfirmed', revision: 1 })
 
     await expect(ctx.agentTeams.updateTask(lead, { taskId, expectedRevision: 1, action: 'claim' }))

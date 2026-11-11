@@ -1,7 +1,7 @@
 /** Discover the caller's entire subagent tree; the control plugin owns registration. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -54,6 +54,8 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       + 'While you remain active, you will be notified when a direct child finishes; there is no need to keep checking its status. '
       + 'Use send_message to continue the conversation.',
     parameters: {},
+    // Catalog observations are read-only and release their Session handles.
+    isConcurrencySafe: () => true,
     output: {
       schema: {
         type: 'array',
@@ -78,7 +80,7 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       const parent = exec.agent
       if (!parent) {
         // Non-agent callers have no session whose children could be listed.
-        throw new Error('list_agents requires a calling agent (exec.agent was undefined)')
+        throw new ToolContextUnavailableError('list_agents requires a calling agent (exec.agent was undefined)')
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)

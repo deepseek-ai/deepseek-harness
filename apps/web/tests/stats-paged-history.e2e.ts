@@ -129,6 +129,11 @@ describe('web e2e: whole-session stats survive history paging', () => {
     // counts, wall times, or token groups.
     await page.getByRole('button', { name: 'Load earlier' }).click()
     await expect.poll(() => page.getByText('m1', { exact: true }).count(), { timeout: 10_000 }).toBe(1)
+    const history = page.locator('[data-chat-history]')
+    await expect.poll(() => history.getAttribute('data-chat-history'), { timeout: 10_000 }).toBe('idle')
+    await expect.poll(() => history.getByRole('button', { name: 'Start of conversation', exact: true }).isDisabled(), {
+      timeout: 10_000,
+    }).toBe(true)
     expect(await strip.textContent()).toBe(stripBeforePaging)
     // With the whole log loaded, the window mounts one turn-tail footer per
     // settled turn — the loaded-window probe the scroll/perf lanes count now

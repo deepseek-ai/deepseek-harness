@@ -45,7 +45,7 @@ Load the package with a default mode; the fail-safe default is `read-only`, and 
 | Field | Default | Meaning |
 |---|---|---|
 | `mode` | `read-only` | The deployment default mode a session starts from, validated at load |
-| `workspaceRoot` | `process.cwd()` | Absolute fallback root for agentless calls or sessions without a cwd; relative values fail at load. Normal agent calls use the session's immutable cwd |
+| `workspaceRoot` | `process.cwd()` | Absolute fallback root for agentless calls or sessions without a cwd; relative values fail at load. Normal agent calls use the session's immutable cwd; a relative cwd or one containing a NUL byte fails the call with `SANDBOX_INVALID_ROOT` |
 | `additionalWritableRoots` | `[]` | Physical absolute directories also writable under `workspace-write`; Windows file tools honor them, Windows subprocesses ignore them, and `read-only` grants no access |
 
 For a linked Git worktree, the caller can grant its shared Git directory with `additionalWritableRoots`. The caller selects that directory explicitly; the policy does not inspect Git files or grant a parent checkout. These grants are deployment configuration shared by the composition's sessions, rather than saved Session permissions. Granting the entire Git directory also permits changes to hooks and configuration that a later host Git invocation can execute outside the sandbox; use that grant only for trusted tasks. Use physical absolute directory paths. The enforcing host rejects missing paths, non-directories, and symlinked directories on each call, including a directory replaced by a symlink between calls. Remote grants are validated on the remote host.

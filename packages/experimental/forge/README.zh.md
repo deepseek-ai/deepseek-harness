@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-读取并操作 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，批量读取其状态，读取其 diff 与文件，并按请求把草稿标记为可评审或合并变更请求。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
+读取并操作 pull request 与 merge request，而不把消费方绑定到某一个代码托管平台。提供方把远端 URL 和变更请求（change request，即 pull request 或 merge request）URL 映射为提供方无关的引用，按 head 分支查找变更请求，批量读取其状态，读取其 diff 与文件，读取和写入其评审讨论，并按请求把草稿标记为可评审或合并变更请求。同一变更请求的所有监听方共享一个轮询循环，轮询节奏随检查、可合并性与生命周期状态变化。
 
 ## 目录
 
@@ -34,9 +34,19 @@ kind: "package-reference"
 
 `ctx.forge.register(provider)` 是调用方 fiber 上的 effect，返回异步 disposer，取消并等待该次注册的调用结束。取消后到达的结果会被丢弃。一个提供方服务一个 forge 家族；为同一家族注册第二个提供方会抛错。注册变化会发出 `forge/providers-changed`；注册提供方会立即轮询其已有监听。`repositoryFromRemote(url)` 与 `changeRequestFromUrl(url)` 按注册顺序询问提供方并返回第一个匹配结果。`changeRequestUrl(ref)`、`findByHead(repository, branch, signal)` 与 `readiness(repository, signal)` 委托给引用所属 forge 的提供方，没有注册提供方时抛错；`readiness` 报告提供方能否用当前凭据访问该主机。
 
-`markReady(ref, signal)` 把草稿标记为可评审；`merge(ref, { method, headSha }, signal)` 只在 head 仍是 `headSha` 时合并变更请求。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错；主机接受时 resolve 为 undefined，否则为 `ForgeActionFailure`：`unauthenticated`、head 已越过 `headSha` 时的 `stale`，或带主机原因的 `failed`。两者结束后，被监听的变更请求会立即重新轮询。快照带有 `mergeReady`（主机现在是否会为已登录用户合并该变更请求）与 `mergeMethods`（仓库接受的合并方式，该用户常用的方式排在最前）。
+`markReady(ref, signal)` 把草稿标记为可评审；`merge(ref, { method, headSha }, signal)` 只在 head 仍是 `headSha` 时合并变更请求。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错；主机接受时 resolve 为 undefined，否则为 `ForgeActionFailure`：`unauthenticated`、head 已越过 `headSha` 时的 `stale`、带主机原因的 `failed`，或主机的答复无法确认结果时的 `unknown`：此时改动可能已经生效，再次尝试前必须先到主机上核对。两者结束后，被监听的变更请求会立即重新轮询。快照带有 `mergeReady`（主机现在是否会为已登录用户合并该变更请求）与 `mergeMethods`（仓库接受的合并方式，该用户常用的方式排在最前）。
 
-`diff(ref, signal)` 读取托管平台计算出的变更请求统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
+`diff(ref, headSha, signal)` 读取托管平台计算出的变更请求在 head 提交 `headSha` 处的统一补丁，路径带 `a/` 与 `b/` 前缀；`fileText(ref, commit, path, signal)` 读取其仓库中某个提交下的一个文件。两者都委托给引用所属 forge 的提供方，没有注册提供方时抛错，resolve 为文本或 `ForgeFailure`；托管平台或提供方因结果超过其大小上限而拒绝时，失败为 `too-large`。提供方只在补丁描述 `headSha` 时返回补丁；head 已是其他提交时，`diff` resolve 为 `stale`。同一 head 提交的第一次 stale 读取会让被 watch 的变更请求立即重新轮询，使下一次状态给出当前 head；之后在该提交上的 stale 读取等待常规轮询，从而在托管平台的应答短暂不一致时限制读取次数。被 watch 的变更请求的最新状态给出 `headSha` 并携带 `baseSha`（托管平台随该 head 记录的基准提交）时，`diff` 把它传给提供方，提供方可以在确认 head 之前就从它开始读取。快照携带 `unresolvedThreads` 与 `threadsTruncated`；提供方只统计了部分评审讨论时，后者表示该计数只是下限。`fileUrl(ref, commit, path)` 返回该文件在该提交下的网页地址。
+
+提供方可以同时实现 `commits` 与 `compare`。`commits(ref, signal)` 在一个 head 提交上按从旧到新列出变更请求的提交，每个提交带完整对象名、第一个父提交、标题、作者与作者时间，并带 `truncated` 标志；`compare(ref, base, head, signal)` 读取从提交 `base` 到提交 `head` 的统一补丁。提供方缺少其中任一方法时，注册表的 `commits` 返回 undefined，`compare` 返回 `unavailable` 失败，因此使用方只在两者都存在时提供按提交查看。
+
+提供方可以同时实现 `viewedFiles` 与 `setViewed`。`viewedFiles(ref, headSha, signal)` 在 head 提交 `headSha` 上读取当前登录用户对变更请求各文件的已审阅标记，每个文件为 `viewed`、`unviewed`，或在标记后又有改动时为 `dismissed`，并带 `truncated` 标志；`setViewed(ref, { path, viewed, headSha }, signal)` 仅在 head 仍是 `headSha` 时设置或清除一个文件的标记。两者都把已移动的 head 报告为 `stale`，并像过期的 `diff` 一样立即轮询被监听的变更请求。提供方缺少其中任一方法时，`viewedFiles` 返回 undefined，`setViewed` 返回 `failed` 失败，因此使用方自行保存已审阅标记。
+
+提供方可以实现 `mergeBase(ref, base, head, signal)`，给出变更请求 diff 旧侧所显示文件所在的提交；缺少它时 `ctx.forge.mergeBase` 返回 `unsupported`。托管平台接受一次评审写入、一次评审提交或一个已审阅标记后，注册表以该变更请求和这次变化发出 `forge/review-changed`，无论是哪个插件做的；结果未知、被拒绝、已过时或不支持时不发出。[扩展 API](../../../docs/subsystems/forge.zh.md#extension-api) 列出其他插件可以依赖的内容。
+
+快照携带变更请求的概览。`reviewers` 先列出被请求的评审者，再列出每个账号最近一次评审的结论及其所针对的提交；`closingIssues` 列出变更请求合并时代码托管平台会关闭的 issue；`reviewersTruncated` 与 `closingIssuesTruncated` 标记提供方只读取了部分的列表。`branchUpdates` 列出能让落后于基线的 head 为当前登录用户更新的方式；head 已是最新、存在冲突或不允许更新时为空，因此使用方无法告诉没有更新权限的用户 head 已落后。`canRequestReviews` 与 `canRerunChecks` 说明当前登录用户的权限，每个检查的 `rerun` 指出能重跑它的托管平台运行，否则为 null；指向同一运行的检查一起重跑，且要等其中没有检查仍在进行。
+
+提供方可以实现 `rerunChecks(ref, { headSha }, signal)`，重跑 head 提交 `headSha` 中所在运行没有进行中检查的失败检查；可以同时实现 `requestReviews(ref, { reviewers }, signal)` 与 `reviewerCandidates(ref, query, signal)`，后者列出可以请求评审的账号，托管平台的建议排在最前；还可以实现 `updateBranch(ref, { method, headSha }, signal)`，仅在 head 仍是 `headSha` 时把基线合并或变基进 head。每个操作在托管平台接受后返回 undefined，否则返回 `ForgeActionFailure`，结束后会立即轮询被监听的变更请求。提供方缺少某个操作时，注册表以 `failed` 失败返回且不轮询；除非提供方同时实现两个评审请求方法，`reviewerCandidates` 返回 `unsupported`。
 
 `fetchChecks(ref, signal)` 按需读取单个变更请求的完整检查，使用独立的 `fetchTimeoutMs` 时限，不占用轮询批次，也不向其监听方发布结果。读取失败时保留已有轮询快照。提供方未实现 `fetchChecks` 时返回 `unavailable`。调用方取消、提供方或服务销毁都会中止读取；销毁会等待读取结束。
 
@@ -44,7 +54,11 @@ kind: "package-reference"
 
 达到 `fetchTimeoutMs` 时，读取信号会以 `FORGE_FETCH_TIMEOUT` 中止。提供方必须在信号中止时停止工作并结束请求；被拒绝的读取会转为 `unavailable` 失败。忽略取消的提供方可能阻塞轮询和服务销毁。
 
-provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。待提交草稿由消费者管理，不由轮询注册表保存。
+provider 可以实现 `submitReview`，在指定的 head 提交上发布行内评论或完整评审。未实现该能力时，注册表返回不支持；提交结束后会刷新受关注的状态。成功的写操作返回网页 URL；失败区分 head 变化、明确拒绝与结果不明。调用方必须先核对结果不明的操作，再次提交。用户留待之后一起提交的评论通过 `writeReview` 写入代码托管平台的待提交评审，不由轮询注册表保存。
+
+提供方可以实现 `readReview`，在一个 head 提交处读取变更请求的评审讨论。只有读取时的 head 就是 `headSha` 时，`readReview(ref, headSha, signal)` 才返回 `ForgeReviewData`，其中每个行级讨论都带有它在 head 上的位置和在写下时所在提交上的位置；否则返回 `stale`，并立即重新轮询被关注的变更请求，每个 head 提交只轮询一次，这个次数与 diff 读取遇到 `stale` 时共用。提供方未实现该方法时，注册表返回 `unsupported` 失败。
+
+提供方可以实现 `writeReview`，修改变更请求的评审讨论和当前登录用户的待提交评审。`writeReview(ref, write, signal)` 接收一个 `ForgeReviewWrite`：回复讨论，立即发布，或在 `pending` 时加入待提交评审；把讨论标记为已解决或取消解决；编辑或删除评论；在 head 上添加一条行内评论到待提交评审；或提交、丢弃待提交评审。用户还没有待提交评审时，待提交的回复或评论会先开始一个评审。只有 head 仍是 `write.headSha` 时提供方才会写入；否则返回 `stale`，并像读取遇到 `stale` 时那样重新轮询被关注的变更请求；其他结果之后，注册表都会立即重新轮询被关注的变更请求。写操作从不重试；结果为 `unknown` 时，必须先在托管平台上核对，再重试。提供方未实现该方法时，注册表返回 `unsupported`。`ForgeReviewData` 给出用户的待提交评审，以及用户能否回复和解决每个讨论、编辑和删除每条评论、向待提交评审添加评论并提交或丢弃它；未实现 `writeReview` 的提供方不报告任何这类权限。
 
 -----
 

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const CONFIG = { fallbackMaxWords: 8, fallbackMaxBytes: 64, maxTitleBytes: 256 }
 
@@ -15,7 +16,7 @@ async function harness(withTitleService: boolean): Promise<{ ctx: Context; sessi
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (withTitleService) await ctx.plugin(SessionTitleService, CONFIG)
-  return { ctx, session: ctx.sessions.create(SessionId('titled')) }
+  return { ctx, session: ctx.sessions.create(brandString<SessionId>('titled')) }
 }
 
 function appendTitle(session: Session, title: string): SessionSeqType {

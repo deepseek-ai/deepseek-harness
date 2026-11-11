@@ -25,7 +25,7 @@ Read the Session’s current directory or enter an existing directory with the s
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount alongside `tools` and `workingDirectory`. Call `working_directory({})` to read or `working_directory({ cd: "src" })` to change directory. The tool has no configuration fields.
+Mount alongside `tools` and `workingDirectory`. Call `working_directory({})` to read or `working_directory({ cd: "src" })` to change directory. The tool has no configuration fields. A call without a calling Agent fails with `ToolContextUnavailableError` (`TOOL_CONTEXT_UNAVAILABLE`), an empty `cd` with `ToolArgsError` (`INVALID_ARGS`), and a missing directory with the service's `WorkingDirectoryError` codes.
 
 ```yaml
 - name: '@deepseek-ai/dsh-tool-working-directory'
