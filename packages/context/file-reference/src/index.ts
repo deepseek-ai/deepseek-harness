@@ -10,8 +10,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { FileReferenceCandidate } from './types.ts'
 
 export { activeAtToken, formatFileMention } from './grammar.ts'
-export type { ActiveAtToken } from './grammar.ts'
-export type { FileReferenceCandidate } from './types.ts'
+export type { ActiveAtToken, FileReferenceCandidate } from './types.ts'
 
 /** Model guidance for path-only references selected by a user interface. */
 export const FILE_REFERENCE_PROMPT = 'Tokens prefixed with @ are paths the user explicitly referenced. Relative paths resolve from the workspace root; absolute paths identify files or directories on the host. A trailing slash marks a directory: list it when its contents matter. Anything else is a file: use the read tool when its contents are needed, and do not claim to have inspected it before reading. @"..." quotes a path containing spaces.'

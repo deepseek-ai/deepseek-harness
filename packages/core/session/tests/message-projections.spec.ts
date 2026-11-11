@@ -2,10 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import SessionStore, { Session, SessionId, SessionSeq, SessionLogOffset, foldSurface, deriveEventMessage } from '../src/index.ts'
+import SessionStore, { Session, type SessionId, SessionSeq, SessionLogOffset, foldSurface, deriveEventMessage } from '../src/index.ts'
 import type { SessionEvent, SessionMessageProjection } from '../src/index.ts'
 import { MESSAGE_PROJECTION_EVENT_TYPES } from '../src/known-event-types.ts'
 import { SurfaceManager } from '../src/surface.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
@@ -36,7 +37,7 @@ describe('plugin-owned message projections', () => {
   it('refuses required events when no interpreter is supplied', () => {
     const type = [...MESSAGE_PROJECTION_EVENT_TYPES][0]!
     const event = { type, seq: SessionSeq(0), time: 0, data: {} } as SessionEvent
-    const session = Session.create(SessionId('missing'))
+    const session = Session.create(brandString<SessionId>('missing'))
     expect(() => session.append(event.type as 'test/project', event.data as never)).toThrow(/requires a message projection/)
     expect(() => foldSurface([event])).toThrow(/requires a message projection/)
     expect(() => Session.create(session.id, [event])).toThrow(/requires a message projection/)
@@ -45,7 +46,7 @@ describe('plugin-owned message projections', () => {
 
   it('applies generic decisions atomically and replays them through detached folds', () => {
     const definitions = [projection]
-    const session = Session.create(SessionId('pure'), undefined, undefined, undefined, definitions)
+    const session = Session.create(brandString<SessionId>('pure'), undefined, undefined, undefined, definitions)
     const source = input(session)
     const original = session.deriveMessages()
     expect(() => session.append('test/project', { seq: source.seq, text: 'reject' })).toThrow('rejected decision')
@@ -59,6 +60,24 @@ describe('plugin-owned message projections', () => {
     expect(source.data.content).toEqual([{ type: 'text', text: 'original' }])
   })
 
+  it.each(['projected', 'reject'])('admits message projections through array append (%s)', (text) => {
+    const session = Session.create(brandString<SessionId>('array-projection'), undefined, undefined, undefined, [projection])
+    const original = createUserMessage({ content: [{ type: 'text', text: 'original' }], source: { kind: 'user' } })
+    const append = () => session.append([
+      ['user/message', original, { surfaceOp: 'append' }],
+      ['test/project', { seq: SessionSeq(0), text }],
+    ])
+    if (text === 'reject') {
+      expect(append).toThrow('rejected decision')
+      expect(session.seq).toBe(0)
+      expect(session.deriveMessages()).toEqual([])
+    } else {
+      append()
+      expect(session.deriveMessages()[0]?.content).toEqual([{ type: 'text', text }])
+      expect(session.surface.contentGeneration).toBe(1)
+    }
+  })
+
   it('registers by fiber and refuses cached or pending decisions after disposal', async () => {
     const ctx = new Context()
     contexts.push(ctx)
@@ -68,17 +87,17 @@ describe('plugin-owned message projections', () => {
       apply(owner: Context) { owner.sessions.registerMessageProjection(projection) },
     })
     expect(() => ctx.sessions.registerMessageProjection(projection)).toThrow(/already registered/)
-    const live = ctx.sessions.create(SessionId('live'))
+    const live = ctx.sessions.create(brandString<SessionId>('live'))
     const source = input(live)
     live.append('test/project', { seq: source.seq, text: 'changed' })
-    const pending = ctx.sessions.create(SessionId('pending'))
+    const pending = ctx.sessions.create(brandString<SessionId>('pending'))
     input(pending)
     pending.append('test/project', { seq: source.seq, text: 'changed' })
     const before = live.deriveMessages()
     const child = ctx.sessions.fork(live)
     expect(child.deriveMessages()).toEqual(before)
-    const restored = ctx.sessions.prepare(SessionId('restore'), {
-      seed: [...live.snapshotEvents()], meta: { ...live.header, id: SessionId('restore') },
+    const restored = ctx.sessions.prepare(brandString<SessionId>('restore'), {
+      seed: [...live.snapshotEvents()], meta: { ...live.header, id: brandString<SessionId>('restore') },
       inheritedEventCount: live.inheritedEventCount, eventState: 'shared-frozen',
     })
     ctx.effect(() => ctx.sessions.enter(restored))
@@ -97,7 +116,7 @@ describe('plugin-owned message projections', () => {
   })
 
   it('applies a supplied interpreter to a loaded window with absolute sequences', () => {
-    const session = Session.create(SessionId('window'), undefined, undefined, undefined, [projection])
+    const session = Session.create(brandString<SessionId>('window'), undefined, undefined, undefined, [projection])
     input(session)
     const source = input(session)
     session.append('test/project', { seq: source.seq, text: 'window' })
@@ -108,7 +127,7 @@ describe('plugin-owned message projections', () => {
   })
 
   it('does not retain an interpreter for a candidate that never committed', () => {
-    const session = Session.create(SessionId('candidate'))
+    const session = Session.create(brandString<SessionId>('candidate'))
     const source = input(session)
     const definitions: SessionMessageProjection[] = [projection]
     const surface = new SurfaceManager(session.snapshotEvents(), undefined, definitions)

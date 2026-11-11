@@ -141,6 +141,7 @@ export class ReactLoopAgent implements Agent {
     public readonly session: Session,
     projections: LoopProjections,
     lastTurn: number,
+    private readonly lifetimeSignal: AbortSignal,
   ) {
     this.requestSurfaceGeneration = session.surface.contentGeneration
     this.dispatch = agentEvents(loopCtx, this)
@@ -189,11 +190,15 @@ export class ReactLoopAgent implements Agent {
   }
 
   cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
-    if (!options.keepInbox) {
-      this.inbox.clear()
-      if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+    try {
+      if (!options.keepInbox) this.inbox.clear()
+    } finally {
+      // Queue persistence must not prevent cancellation of admitted work.
+      if (this.phase.kind !== 'idle') {
+        if (!options.keepInbox) this.phase.wakeRequested = false
+        this.phase.abort.abort(cause)
+      }
     }
-    if (this.phase.kind !== 'idle') this.phase.abort.abort(cause)
   }
 
   runMaintenance<T>(job: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -228,6 +233,7 @@ export class ReactLoopAgent implements Agent {
    *   the inbox insertion so a reentrant cancel cannot reclassify it.
    */
   private wakeDriver(wakeAfterAbort = false): void {
+    if (this.lifetimeSignal.aborted) return
     if (this.phase.kind !== 'idle') {
       // Maintenance and aborted drivers cannot deliver the wake: latch it for
       // replay at convergence. Live drivers claim queued work themselves;

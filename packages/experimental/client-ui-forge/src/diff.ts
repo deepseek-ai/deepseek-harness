@@ -1,13 +1,20 @@
 /** Unified patch parsing into the panel's browser-safe diff model, and the diff and size of an untracked file. */
 
+import { createHash } from 'node:crypto'
 import { parsePatch } from 'diff'
-import type { ForgeChangedFile, ForgeDiffFile, ForgeDiffStatus } from './types.ts'
+import type { ForgeChangedFile, ForgeDiffFile, ForgeDiffHunk, ForgeDiffStatus } from './types.ts'
+
+/** A changed file before its path is classified into a review layer. */
+export type ParsedDiffFile = Omit<ForgeDiffFile, 'layer'>
 
 /** Git's name for the missing side of an added or deleted file. */
 const NULL_PATH = '/dev/null'
 
 /** Bytes Git inspects for a NUL byte before it calls content binary. */
 const BINARY_PROBE_BYTES = 8000
+
+/** Blob names of both sides on a Git `index` header line, which identify a binary change that carries no hunks. */
+const INDEX_LINE = /^index ([0-9a-f]+\.\.[0-9a-f]+)/m
 
 /**
  * Parse a Git-style unified patch, as `git diff` or a code host prints it,
@@ -16,8 +23,11 @@ const BINARY_PROBE_BYTES = 8000
  * @param patch - the patch text.
  * @returns one file per patch section in patch order.
  */
-export function parseDiff(patch: string): ForgeDiffFile[] {
-  return parsePatch(patch).flatMap((section) => {
+export function parseDiff(patch: string): ParsedDiffFile[] {
+  const parsed = parsePatch(patch)
+  // Hunk lines start with a space, `+`, `-`, or `\`, so only a Git section header starts a line with `diff --git `.
+  const headers = patch.split(/^(?=diff --git )/m).filter(section => section.startsWith('diff --git '))
+  return parsed.flatMap((section, index) => {
     const before = pathOf(section.oldFileName, 'a/')
     const after = pathOf(section.newFileName, 'b/')
     const path = after ?? before
@@ -33,18 +43,27 @@ export function parseDiff(patch: string): ForgeDiffFile[] {
         else if (line.startsWith('-')) deletions++
       }
     }
+    const binary = section.isBinary === true
+    const previousPath = status === 'renamed' ? before : null
+    const hunks = section.hunks.map(({ oldStart, oldLines, newStart, newLines, lines }) => (
+      { oldStart, oldLines, newStart, newLines, lines }))
+    // Each header matches its parsed section only when every section starts with a Git header.
+    const header = binary && headers.length === parsed.length ? String(headers[index]) : ''
+    const blobs = INDEX_LINE.exec(header)?.[1] ?? ''
+    // A mode change, such as `chmod +x`, shows only in the `old mode` and `new mode` header lines.
+    const modes = `${section.oldMode ?? ''}..${section.newMode ?? ''}`
     return [{
-      path,
-      previousPath: status === 'renamed' ? before : null,
-      status,
-      binary: section.isBinary === true,
-      oversized: false,
-      untracked: false,
-      additions,
-      deletions,
-      hunks: section.hunks.map(({ oldStart, oldLines, newStart, newLines, lines }) => ({ oldStart, oldLines, newStart, newLines, lines })),
+      path, previousPath, status, binary, oversized: false, untracked: false, additions, deletions, hunks,
+      digest: changeDigest(path, previousPath, status, hunks, blobs, modes),
     }]
   })
+}
+
+/** Digest of one change: its paths, status, hunks, file modes, and the identity of content that hunks do not show. */
+function changeDigest(
+  path: string, previousPath: string | null, status: ForgeDiffStatus, hunks: readonly ForgeDiffHunk[], content: string, modes: string,
+): string {
+  return createHash('sha256').update(JSON.stringify([path, previousPath, status, hunks, content, modes])).digest('hex').slice(0, 32)
 }
 
 /**
@@ -53,26 +72,40 @@ export function parseDiff(patch: string): ForgeDiffFile[] {
  * @param content - the file's bytes.
  * @returns the file with one hunk of added lines, none when it is empty, or none and `binary` when its content is not text.
  */
-export function untrackedFile(path: string, content: Uint8Array): ForgeDiffFile {
-  const file: ForgeDiffFile = {
-    path, previousPath: null, status: 'added', binary: false, oversized: false, untracked: true, additions: 0, deletions: 0, hunks: [],
-  }
+export function untrackedFile(path: string, content: Uint8Array): ParsedDiffFile {
   const text = decodeText(content)
-  if (text === undefined) return { ...file, binary: true }
-  if (text.length === 0) return file
+  if (text === undefined) return addedFile(path, [], { binary: true, oversized: false, content: createHash('sha256').update(content).digest('hex') })
+  if (text.length === 0) return addedFile(path, [], { binary: false, oversized: false, content: '' })
   const lines = text.split('\n')
   const ended = lines.at(-1) === ''
   if (ended) lines.pop()
+  return addedFile(path, [{
+    oldStart: 1,
+    oldLines: 0,
+    newStart: 1,
+    newLines: lines.length,
+    lines: [...lines.map(line => `+${line}`), ...ended ? [] : ['\\ No newline at end of file']],
+  }], { binary: false, oversized: false, content: '' })
+}
+
+/**
+ * Describe an untracked file over `maxDiffBytes`, which carries no hunks and whose content is not read.
+ * @param path - path relative to the repository root.
+ * @returns the oversized added file.
+ */
+export function oversizedUntrackedFile(path: string): ParsedDiffFile {
+  return addedFile(path, [], { binary: false, oversized: true, content: 'oversized' })
+}
+
+/** An untracked file as added, whose digest also covers `content`, the identity of content its hunks do not show. */
+function addedFile(path: string, hunks: readonly ForgeDiffHunk[], { binary, oversized, content }: {
+  readonly binary: boolean
+  readonly oversized: boolean
+  readonly content: string
+}): ParsedDiffFile {
   return {
-    ...file,
-    additions: lines.length,
-    hunks: [{
-      oldStart: 1,
-      oldLines: 0,
-      newStart: 1,
-      newLines: lines.length,
-      lines: [...lines.map(line => `+${line}`), ...ended ? [] : ['\\ No newline at end of file']],
-    }],
+    path, previousPath: null, status: 'added', binary, oversized, untracked: true,
+    additions: hunks[0]?.newLines ?? 0, deletions: 0, hunks, digest: changeDigest(path, null, 'added', hunks, content, ''),
   }
 }
 

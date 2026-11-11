@@ -8,16 +8,16 @@ const key = 'a'.repeat(64)
 
 function fixture() {
   const run = { id: 123, run_attempt: 2, status: 'completed', conclusion: 'success', event: 'workflow_dispatch',
-    path: '.github/workflows/cua-helper-package.yml', head_sha: 'c'.repeat(40), repository: { full_name: repository }, head_repository: { full_name: repository } }
+    path: '.github/workflows/cua-helper-package-macos.yml', head_sha: 'c'.repeat(40), repository: { full_name: repository }, head_repository: { full_name: repository } }
   const jobs = [{ jobs: [{ name: 'package', conclusion: 'success', run_attempt: 2 }] }]
   const matchesSource = vi.fn(async (_commit: string) => true)
-  const artifact = { id: 456, name: `cua-helper-123-2-${key}`, expired: false, size_in_bytes: 4096 }
-  const artifacts = [{ artifacts: [{ ...artifact, id: 455, name: `cua-helper-123-1-${key}` }] }, { artifacts: [artifact] }]
+  const artifact = { id: 456, name: `cua-helper-macos-123-2-${key}`, expired: false, size_in_bytes: 4096 }
+  const artifacts = [{ artifacts: [{ ...artifact, id: 455, name: `cua-helper-macos-123-1-${key}` }] }, { artifacts: [artifact] }]
   const api = vi.fn(async (path: string, paginate?: boolean) => {
     if (path === base) { expect(paginate).toBeUndefined(); return { run_attempt: 2 } }
     if (path === `${base}/attempts/2`) { expect(paginate).toBeUndefined(); return run }
     expect(paginate).toBe(true)
-    if (path.includes('/workflows/cua-helper-package.yml/runs?')) return [{ workflow_runs: [{ id: 123 }] }]
+    if (path.includes('/workflows/cua-helper-package-macos.yml/runs?')) return [{ workflow_runs: [{ id: 123 }] }]
     if (path.includes('/workflows/release-publish.yml/runs?')) return [{ workflow_runs: [] }]
     if (path === `${base}/jobs?filter=all&per_page=100`) return jobs
     if (path === `${base}/artifacts?per_page=100`) return artifacts
@@ -38,7 +38,7 @@ it('allows successful helper packaging when later npm publication failed', async
   const f = fixture()
   f.run.path = '.github/workflows/release-publish.yml'
   f.run.conclusion = 'failure'
-  f.jobs[0]!.jobs = [{ name: 'cua-helper / package', conclusion: 'success', run_attempt: 2 }, { name: 'Publish to npm', conclusion: 'failure', run_attempt: 2 }]
+  f.jobs[0]!.jobs = [{ name: 'cua-helper-macos / package', conclusion: 'success', run_attempt: 2 }, { name: 'Publish to npm', conclusion: 'failure', run_attempt: 2 }]
   expect((await selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource))?.artifactId).toBe('456')
 })
 
@@ -72,27 +72,34 @@ it.each(['workflow', 'event', 'repository', 'head_repository', 'id', 'attempt', 
   },
 )
 
-it.each(['failure', 'cancelled', 'skipped', 'missing', 'duplicate'])(
+it('identifies a release run missing the macOS packaging job', async () => {
+  const f = fixture()
+  f.run.path = '.github/workflows/release-publish.yml'
+  f.jobs[0]!.jobs = [{ name: 'cua-helper / package', conclusion: 'success', run_attempt: 2 }]
+  await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource))
+    .rejects.toThrow('this run contains no cua-helper-macos / package job')
+  expect(f.api.mock.calls.some(([path]) => path.includes('/artifacts'))).toBe(false)
+})
+
+it.each(['failure', 'cancelled', 'skipped', 'duplicate'])(
   'rejects %s helper jobs without falling back to attempt 1', async (status) => {
     const f = fixture()
     f.run.path = '.github/workflows/release-publish.yml'
     f.run.conclusion = 'failure'
-    f.jobs[0]!.jobs = status === 'missing' ? [] : status === 'duplicate'
-      ? [{ name: 'cua-helper / package', conclusion: 'success', run_attempt: 2 }, { name: 'cua-helper / package', conclusion: 'success', run_attempt: 2 }]
-      : [{ name: 'cua-helper / package', conclusion: status, run_attempt: 2 }]
-    await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource)).rejects.toThrow('last executed cua-helper / package job did not succeed')
+    f.jobs[0]!.jobs = status === 'duplicate'
+      ? [{ name: 'cua-helper-macos / package', conclusion: 'success', run_attempt: 2 }, { name: 'cua-helper-macos / package', conclusion: 'success', run_attempt: 2 }]
+      : [{ name: 'cua-helper-macos / package', conclusion: status, run_attempt: 2 }]
+    await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource)).rejects.toThrow('last executed cua-helper-macos / package job did not succeed')
     expect(f.api.mock.calls.some(([path]) => path.includes('/attempts/1') || path.includes('/artifacts'))).toBe(false)
   },
 )
 
-it.each(['missing', 'expired', 'empty', 'mismatch', 'legacy'] as const)(
+it.each(['missing', 'expired', 'empty'] as const)(
   'rebuilds on automatic %s but rejects the same explicit selection', async (change) => {
     const f = fixture()
     if (change === 'missing') f.artifacts.pop()
     if (change === 'expired') f.artifact.expired = true
     if (change === 'empty') f.artifact.size_in_bytes = 0
-    if (change === 'mismatch') f.artifact.name = `cua-helper-123-2-${'b'.repeat(64)}`
-    if (change === 'legacy') f.artifact.name = 'cua-helper-123-2'
     expect(await selectCuaHelperArtifact(repository, '', key, f.api, f.matchesSource)).toBeUndefined()
     await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource)).rejects.toThrow('CUA reuse: run 123:')
   },
@@ -101,9 +108,9 @@ it.each(['missing', 'expired', 'empty', 'mismatch', 'legacy'] as const)(
 it('selects a match across workflows and pages after a newer failed producer', async () => {
   const f = fixture()
   const api = vi.fn(async (path: string, paginate?: boolean): Promise<unknown> => {
-    if (path.includes('/workflows/cua-helper-package.yml/runs?')) return [{ workflow_runs: [] }]
+    if (path.includes('/workflows/cua-helper-package-macos.yml/runs?')) return [{ workflow_runs: [] }]
     if (path.includes('/workflows/release-publish.yml/runs?')) return [{ workflow_runs: [{ id: 124 }] }, { workflow_runs: [{ id: 123 }] }]
-    if (path.endsWith('/runs/124/artifacts?per_page=100')) return [{ artifacts: [{ ...f.artifact, name: `cua-helper-124-1-${key}` }] }]
+    if (path.endsWith('/runs/124/artifacts?per_page=100')) return [{ artifacts: [{ ...f.artifact, name: `cua-helper-macos-124-1-${key}` }] }]
     if (path.endsWith('/runs/124')) return { run_attempt: 1 }
     if (path.endsWith('/runs/124/attempts/1')) return { ...f.run, id: 124, run_attempt: 1, conclusion: 'failure' }
     return f.api(path, paginate)
@@ -128,19 +135,26 @@ it.each(['', '123'])('propagates unavailable GitHub evidence with selection %j',
   expect(api).toHaveBeenCalledTimes(1)
 })
 
-it('does not query job or attempt details when artifact names exclude the requested build key', async () => {
+it.each([
+  ['another build key', `cua-helper-macos-123-2-${'b'.repeat(64)}`],
+  ['no build key', 'cua-helper-macos-123-2'],
+  ['Windows', `cua-helper-windows-123-2-${key}`],
+  ['no platform', `cua-helper-123-2-${key}`],
+] as const)('skips an artifact with %s in discovery and rejects it by run ID', async (_case, name) => {
   const f = fixture()
-  f.artifact.name = 'cua-helper-123-2-legacy'
   f.artifacts.shift()
+  f.artifact.name = name
   expect(await selectCuaHelperArtifact(repository, '', key, f.api, f.matchesSource)).toBeUndefined()
   expect(f.api.mock.calls.map(([path]) => path).filter(path => !path.includes('/workflows/')))
     .toEqual([`${base}/artifacts?per_page=100`])
+  await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource))
+    .rejects.toThrow('no artifact matches')
 })
 
 it.each(['123', ''])('retains the original helper after a publish-only rerun with selection %j', async (runId) => {
   const f = fixture()
   f.run.path = '.github/workflows/release-publish.yml'
-  f.jobs[0]!.jobs = [{ name: 'cua-helper / package', conclusion: 'success', run_attempt: 1 },
+  f.jobs[0]!.jobs = [{ name: 'cua-helper-macos / package', conclusion: 'success', run_attempt: 1 },
     { name: 'Publish to npm', conclusion: 'success', run_attempt: 2 }]
   f.artifacts.pop()
   expect(await selectCuaHelperArtifact(repository, runId, key, f.api, f.matchesSource))
@@ -151,8 +165,8 @@ it.each(['123', ''])('retains the original helper after a publish-only rerun wit
 it('does not reuse an older successful helper after a newer helper execution failed', async () => {
   const f = fixture()
   f.run.path = '.github/workflows/release-publish.yml'
-  f.jobs[0]!.jobs = [{ name: 'cua-helper / package', conclusion: 'success', run_attempt: 1 },
-    { name: 'cua-helper / package', conclusion: 'failure', run_attempt: 2 }]
+  f.jobs[0]!.jobs = [{ name: 'cua-helper-macos / package', conclusion: 'success', run_attempt: 1 },
+    { name: 'cua-helper-macos / package', conclusion: 'failure', run_attempt: 2 }]
   expect(await selectCuaHelperArtifact(repository, '', key, f.api, f.matchesSource)).toBeUndefined()
   await expect(selectCuaHelperArtifact(repository, '123', key, f.api, f.matchesSource)).rejects.toThrow('did not succeed')
   expect(f.matchesSource).not.toHaveBeenCalled()

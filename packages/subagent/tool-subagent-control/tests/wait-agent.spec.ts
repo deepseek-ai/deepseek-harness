@@ -4,8 +4,10 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentCarrier, emitAgentEvent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, HarnessError, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import * as control from '../src/index.ts'
@@ -24,8 +26,8 @@ async function setup() {
   const harness = await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(SubagentRuntime)
   const fiber = await ctx.plugin(control)
-  const handle = await ctx.agents.create({ sessionId: SessionId('waiting') })
-  const other = await harness.create(SessionId('other'))
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('waiting') })
+  const other = await harness.create(brandString<SessionId>('other'))
   return { ctx, harness, fiber, handle, agent: handle.agent, other }
 }
 
@@ -42,7 +44,7 @@ async function startWait(ctx: Context, agent: Agent, args: unknown = {}, signal 
     return result
   })
   const result = executeToolFixture(ctx, {
-    name: 'wait_agent', callId: ToolCallId(callId), rootCallId: ToolCallId(rootCallId), arguments: args, agent, signal,
+    name: 'wait_agent', callId: brandString<ToolCallId>(callId), rootCallId: brandString<ToolCallId>(rootCallId), arguments: args, agent, signal,
   })
   await entered.promise
   off()
@@ -268,7 +270,7 @@ describe('wait_agent', () => {
 
   it('reports agent disposal without claiming an inbox update', async () => {
     const { ctx, agent, handle } = await setup()
-    const unrelated = await ctx.agents.create({ sessionId: SessionId('unrelated') })
+    const unrelated = await ctx.agents.create({ sessionId: brandString<SessionId>('unrelated') })
     vi.useFakeTimers()
     const { result } = await startWait(ctx, agent)
     await unrelated.dispose()
@@ -294,7 +296,7 @@ describe('wait_agent', () => {
   it('rejects calls without a live calling agent', async () => {
     const { ctx, agent, handle } = await setup()
     const missing = await executeToolFixture(ctx, {
-      name: 'wait_agent', callId: ToolCallId('missing'), arguments: {}, signal: new AbortController().signal,
+      name: 'wait_agent', callId: brandString<ToolCallId>('missing'), arguments: {}, signal: new AbortController().signal,
     })
     expect(missing).toMatchObject({ isError: true, error: { info: { code: 'WAIT_UNAVAILABLE' } } })
     await handle.dispose()

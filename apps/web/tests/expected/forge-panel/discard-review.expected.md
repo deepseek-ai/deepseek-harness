@@ -1,0 +1,19 @@
+- dialog "提交评审":
+  - heading "提交评审" [level=2]
+  - button "关闭"
+  - text: 待提交评论（1）
+  - group "丢弃评审":
+    - text: 丢弃待提交的评审及其中的 1 条评论？此操作无法撤销
+    - button "取消"
+    - button "丢弃评审"
+  - textbox "评审总结…"
+  - status
+  - radio "评论" [checked]
+  - text: 评论
+  - radio "批准"
+  - text: 批准
+  - radio "请求更改"
+  - text: 请求更改
+  - button "丢弃评审" [disabled]
+  - button "取消"
+  - button "提交评审" [disabled]

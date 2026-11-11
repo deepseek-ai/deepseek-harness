@@ -3,6 +3,7 @@
   "compilerOptions": { "rootDir": "src", "outDir": "lib/types" },
   "include": ["src"],
   "references": [
+    { "path": "../../util/brand" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../../browser-use/browser-use" },

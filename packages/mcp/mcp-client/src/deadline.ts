@@ -3,8 +3,8 @@
 import { McpLocalError } from './diagnostic.ts'
 
 /**
- * Settle with `promise`, or reject with `timeoutMessage` once `remainingMs`
- * elapses first. The timer never holds the process open, and a non-Error
+ * Settle with `promise`, or reject with an `MCP_TIMEOUT` {@link McpLocalError}
+ * carrying `timeoutMessage` once `remainingMs` elapses first. The timer never holds the process open, and a non-Error
  * rejection is wrapped so callers always observe an Error.
  * @param promise - operation the deadline bounds.
  * @param remainingMs - remaining budget in milliseconds (clamped to at least 1).
@@ -14,7 +14,7 @@ import { McpLocalError } from './diagnostic.ts'
 export function withDeadline<T>(promise: Promise<T>, remainingMs: number, timeoutMessage: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new McpLocalError(timeoutMessage))
+      reject(new McpLocalError(timeoutMessage, 'MCP_TIMEOUT'))
     }, Math.max(1, remainingMs))
     timer.unref()
     promise.then(

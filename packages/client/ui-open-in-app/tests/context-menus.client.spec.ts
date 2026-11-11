@@ -4,12 +4,13 @@ import { Blob as NodeBlob } from 'node:buffer'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { OpenInAppPathController } from '../src/client/open-path.ts'
 import { OpenInAppController } from '../src/client/controller.ts'
 import { registerFileMenus } from '@deepseek-ai/dsh-client-ui-file-actions/src/client/context-menus.tsx'
 import { registerContextMenus } from '../src/client/context-menus.tsx'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -18,7 +19,7 @@ it('offers image actions on file targets, copies absolute paths, and keeps save 
   const ctx = new Context()
   const notify = vi.fn(), failed = vi.fn()
   const registry = new MenuRegistry(failed)
-  const id = SessionId('context-file')
+  const id = brandString<SessionId>('context-file')
   const save = vi.fn(async (_source: FileActionSource, _mode: 'download' | 'saveAs') => ({ status: 'saved' as const, path: '/downloads/original.svg' }))
   const copy = vi.fn(async () => {})
   const writeText = vi.fn(async () => {})

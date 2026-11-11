@@ -5,9 +5,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { LlmResolvedModelInfo, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import {
   normalizeSessionTitle,
-  SessionTitleProviderId,
   type SessionTitleUserMessage,
 } from '@deepseek-ai/dsh-session-title'
 import {
@@ -144,7 +145,7 @@ function titleFromResponse(response: SessionTitleLlmResponse): string {
  */
 export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
-  const titleProvider = SessionTitleProviderId(name)
+  const titleProvider = brandString<SessionTitleProviderId>(name)
   ctx.sessionTitle.register({
     id: titleProvider,
     automatic: 'first-prompt',

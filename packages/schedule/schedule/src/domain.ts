@@ -3,6 +3,7 @@
  * @module @deepseek-ai/dsh-schedule
  */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Temporal } from '@js-temporal/polyfill'
 import {
   Cron,
@@ -189,7 +190,7 @@ export function decodeId(value: unknown): ScheduleIdType {
   if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
     throw new ScheduleLogError('schedule id must be a non-empty string without surrounding whitespace')
   }
-  return ScheduleId(value)
+  return brandString<ScheduleIdType>(value)
 }
 
 /** Stable Schedule diagnostic for a `scheduledAt` outside the canonical profile. */

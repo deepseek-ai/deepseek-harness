@@ -58,7 +58,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Observable success and failures
 
-Loading a listed skill returns its full instructions; the model sees one canonical shape whether the load came from the tool or from a user's explicit invocation. An invalid name reports `Error: invalid skill name "<name>"`, an unknown name reports the skill is unknown or no longer available, and a skill disabled for model invocation reports it is not available for model invocation. The catalog is omitted entirely when no catalog was ever published and either discovery is complete with no model-invocable skills or the `skill` tool is hidden or shadowed; after a catalog has been published, either visibility loss — the `skill` tool hidden or shadowed by a same-name scoped tool — or removal of every skill instead appends an empty catalog that retires older names.
+Loading a listed skill returns its full instructions; the model sees one canonical shape whether the load came from the tool or from a user's explicit invocation. An invalid name reports `Error: invalid arguments: invalid skill name "<name>"`, an unknown name reports the skill is unknown or no longer available, and a skill disabled for model invocation reports it is not available for model invocation. The catalog is omitted entirely when no catalog was ever published and either discovery is complete with no model-invocable skills or the `skill` tool is hidden or shadowed; after a catalog has been published, either visibility loss — the `skill` tool hidden or shadowed by a same-name scoped tool — or removal of every skill instead appends an empty catalog that retires older names.
 
 -----
 
@@ -229,7 +229,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Invalid or stale selections return exactly `Error: invalid skill name "<name>"`, `Error: skill "<name>" is unknown or no longer available`, or `Error: skill "<name>" is not available for model invocation`. Provider-thrown lookup text is data-dependent and receives the same `Error: <message>` wrapper.
+Invalid or stale selections return exactly `Error: invalid arguments: invalid skill name "<name>"` as `ToolArgsError` with `INVALID_ARGS`, or `Error: skill "<name>" is unknown or no longer available` and `Error: skill "<name>" is not available for model invocation` as `SkillError` with `SKILL_NOT_FOUND` and `SKILL_NOT_MODEL_INVOCABLE`. Provider-thrown lookup text is data-dependent and receives the same `Error: <message>` wrapper.
 
 #### Token effect
 

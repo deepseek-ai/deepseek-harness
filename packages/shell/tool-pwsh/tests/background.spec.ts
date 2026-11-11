@@ -3,8 +3,8 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
@@ -13,12 +13,14 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
+import { SandboxPreparationError } from '@deepseek-ai/dsh-sandbox'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellProcess } from '@deepseek-ai/dsh-shell'
 import { renderPwshPromoted } from '../src/render.ts'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { processSources, ringDelta } from '../src/background.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const testToolSignal = new AbortController().signal
 
@@ -104,7 +106,7 @@ let callCounter = 0
 function call(ctx: Context, args: Record<string, unknown>) {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`pwsh-background-${++callCounter}`),
+    callId: brandString<ToolCallId>(`pwsh-background-${++callCounter}`),
     name: 'pwsh',
     arguments: args,
   })
@@ -207,7 +209,7 @@ describe('background pwsh output', () => {
 describe('owned background output (pwsh)', () => {
   it('keeps an owned background run under the owning session', async () => {
     const { ctx, pwsh } = await setup()
-    const ownerId = SessionId('pwsh-background-owner')
+    const ownerId = brandString<SessionId>('pwsh-background-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
@@ -231,7 +233,7 @@ describe('owned background output (pwsh)', () => {
     pwsh.backgroundHandler = () => scripted.proc
     await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('pwsh-background-owned'),
+      callId: brandString<ToolCallId>('pwsh-background-owned'),
       name: 'pwsh',
       arguments: { command: 'Get-Slow', description: 'test command', run_in_background: true },
       agent: owner,
@@ -344,10 +346,58 @@ describe('foreground commands as jobs (pwsh)', () => {
 
   it('a command whose start fails reports the failure as an error result and leaves no job behind', async () => {
     const { ctx, pwsh } = await setup()
-    pwsh.backgroundHandler = () => { throw new Error('spawn pwsh ENOENT') }
+    pwsh.backgroundHandler = () => { throw Object.assign(new Error('spawn pwsh EACCES'), { code: 'EACCES' }) }
     const result = await call(ctx, { command: 'Get-Missing', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_FAILED' } },
+    })
+    expect((result.content[0] as { text: string }).text).toBe('Error: cannot start "pwsh": spawn pwsh EACCES')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a spawn that fails after the process published reports a coded failure', async () => {
+    const { ctx, pwsh } = await setup()
+    pwsh.backgroundHandler = () => {
+      const started = observableProcess()
+      started.finish()
+      return Object.assign(started.proc, {
+        result: () => Promise.reject(Object.assign(new Error('spawn pwsh ENOENT'), { code: 'ENOENT' })),
+      })
+    }
+    const result = await call(ctx, { command: 'Get-ChildItem', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SubprocessError', code: 'SUBPROCESS_SPAWN_NOT_FOUND' } },
+    })
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a job stopped from outside before its process published reports the stop', async () => {
+    const { ctx, pwsh } = await setup()
+    vi.spyOn(pwsh, 'execute').mockImplementation(spec => new Promise((_resolve, reject) => {
+      spec.signal?.addEventListener('abort', () => { reject(new Error('preparation stopped')) }, { once: true })
+    }))
+    const pending = call(ctx, { command: 'Get-ChildItem', description: 'test command' })
+    await vi.waitFor(() => { expect(ctx.jobs.list()).toHaveLength(1) })
+    ctx.jobs.kill(ctx.jobs.list()[0]!.id, undefined, 'cancelled by the user')
+    const result = await pending
     expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toBe('Error: spawn pwsh ENOENT')
+    expect((result.content[0] as { text: string }).text).toBe('Error: preparation stopped; cancelled by the user')
+    expect(ctx.jobs.list()).toEqual([])
+  })
+
+  it('a Windows ACL preparation failure keeps its name and code through the job path', async () => {
+    const { ctx, pwsh } = await setup()
+    const cause = new Error('SetNamedSecurityInfoW failed (Win32 5): C:\\ws')
+    pwsh.backgroundHandler = () => {
+      throw new SandboxPreparationError('sandbox-local: windows-acl workspace grant failed', 'SANDBOX_PREPARATION_FAILED', { cause })
+    }
+    const result = await call(ctx, { command: 'Get-ChildItem', description: 'test command' })
+    expect(result).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SandboxPreparationError', code: 'SANDBOX_PREPARATION_FAILED' } },
+    })
     expect(ctx.jobs.list()).toEqual([])
   })
 
@@ -358,7 +408,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('pwsh-call-aborted'),
+      callId: brandString<ToolCallId>('pwsh-call-aborted'),
       name: 'pwsh',
       arguments: { command: 'Get-Slow', description: 'test command', timeoutMs: 5_000 },
     })
@@ -381,7 +431,7 @@ describe('foreground commands as jobs (pwsh)', () => {
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('pwsh-call-aborted-slow-kill'),
+      callId: brandString<ToolCallId>('pwsh-call-aborted-slow-kill'),
       name: 'pwsh',
       arguments: { command: 'Get-Slow', description: 'test command', timeoutMs: 100 },
     })
@@ -410,7 +460,7 @@ describe('foreground commands as jobs (pwsh)', () => {
 
   it('registers the job under the calling agent and stops it through the registry kill', async () => {
     const { ctx, pwsh } = await setup()
-    const ownerId = SessionId('pwsh-promote-owner')
+    const ownerId = brandString<SessionId>('pwsh-promote-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
@@ -435,7 +485,7 @@ describe('foreground commands as jobs (pwsh)', () => {
 
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('pwsh-observe-promote-owned'),
+      callId: brandString<ToolCallId>('pwsh-observe-promote-owned'),
       name: 'pwsh',
       arguments: { command: 'Get-Slow', description: 'test command', timeoutMs: 250 },
       agent: owner,

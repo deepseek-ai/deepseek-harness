@@ -6,10 +6,11 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { afterEach, describe, expect, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import WebhookRuntime, {
-  WebhookDeliveryId,
-  WebhookRuleId,
-  WebhookSourceId,
+  type WebhookDeliveryId,
+  type WebhookRuleId,
+  type WebhookSourceId,
 } from '../src/index.ts'
 
 let root: string | undefined
@@ -49,7 +50,7 @@ describe('real Loader composition', () => {
       inject: ['webhookRuntime'],
       apply(ctx: Context) {
         ctx.webhookRuntime.register({
-          id: WebhookRuleId('loader-rule'),
+          id: brandString<WebhookRuleId>('loader-rule'),
           kind: 'fixture',
           run() {
             called.resolve(true)
@@ -83,8 +84,8 @@ describe('real Loader composition', () => {
     expect([...context.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
     context.webhookRuntime.dispatch({
       kind: 'fixture',
-      source: WebhookSourceId('loader'),
-      deliveryId: WebhookDeliveryId('loader-delivery'),
+      source: brandString<WebhookSourceId>('loader'),
+      deliveryId: brandString<WebhookDeliveryId>('loader-delivery'),
       event: {},
       receivedAt: 1,
     })

@@ -5,7 +5,7 @@
  * @module @deepseek-ai/dsh-api-job-controller/types
  */
 
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
+import type { JobId } from '@deepseek-ai/dsh-jobs/types'
 import type { JobChunk, JobView } from '@deepseek-ai/dsh-jobs/view'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 

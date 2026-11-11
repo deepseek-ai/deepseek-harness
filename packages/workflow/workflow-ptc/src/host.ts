@@ -4,13 +4,15 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { PtcBindingFunction, PtcJsonValue, PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import { assertNever, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
-import type { WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowMeta, WorkflowResult, WorkflowRun, WorkflowRunId } from '@deepseek-ai/dsh-workflow'
+import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
+import type { WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowErrorCode, WorkflowMeta, WorkflowResult, WorkflowRun } from '@deepseek-ai/dsh-workflow'
 import { WORKFLOW_GUEST_SOURCE } from './guest-source.ts'
 import type { WorkflowProgress } from './guest-types.ts'
 import { renderThrown } from './realm.ts'
@@ -67,7 +69,7 @@ function agentInfo(value: unknown): WorkflowAgentInfo {
   return {
     seq: info.seq as number,
     label: text(info.label, 'agent label'),
-    childId: SessionId(text(info.childId, 'child id')),
+    childId: brandString<SessionId>(text(info.childId, 'child id')),
     ...info.phase === undefined ? {} : { phase: text(info.phase, 'agent phase') },
   }
 }
@@ -92,6 +94,18 @@ function progressBatch(value: unknown): WorkflowProgress[] {
   return value.map(progress)
 }
 
+/** Every fatal code a guest may report; `satisfies` keeps the set aligned with the seam union. */
+const WORKFLOW_ERROR_CODES: ReadonlySet<string> = new Set(Object.keys({
+  SCRIPT_PARSE: true, META_INVALID: true, INVALID_ARGUMENT: true, UNSUPPORTED_OPTION: true, UNSUPPORTED_SCHEMA: true,
+  AGENT_CAP: true, ITEM_CAP: true, AGENT_START: true, AGENT_RESULT: true, RESULT_UNSERIALIZABLE: true, CANCELLED: true,
+  RUN_FAILED: true,
+} satisfies Record<WorkflowErrorCode, true>))
+
+function errorCode(value: unknown): WorkflowErrorCode {
+  if (typeof value !== 'string' || !WORKFLOW_ERROR_CODES.has(value)) throw new Error('invalid workflow error code')
+  return value as WorkflowErrorCode
+}
+
 function workflowResult(value: unknown): WorkflowResult {
   const result = object(value)
   if (result.stopReason !== 'completed' && result.stopReason !== 'error' && result.stopReason !== 'cancelled') throw new Error('invalid workflow stop reason')
@@ -102,6 +116,7 @@ function workflowResult(value: unknown): WorkflowResult {
     stopReason: result.stopReason,
     agentsStarted: result.agentsStarted as number,
     ...result.error === undefined ? {} : { error: text(result.error, 'error') },
+    ...result.errorCode === undefined ? {} : { errorCode: errorCode(result.errorCode) },
   }
 }
 
@@ -290,6 +305,7 @@ export class PtcWorkflowRun implements WorkflowRun {
           'function-body': PROGRAM,
           repl: `await (async () => {\n${PROGRAM}\n})()`,
           script: `(async () => {\n${PROGRAM}\n})()`,
+          'scoped-repl': `await (async () => {\n${PROGRAM}\n})()`,
         }[this.runtime.programFormat],
         bindings: [{ global: 'workflowHost', functions: this.bindings() }],
         cwd,

@@ -339,8 +339,11 @@ function SidebarPanel(panel: PanelProps & { width: number; panelRef: RefObject<H
     <div
       ref={panelRef}
       className={css.panel}
-      style={{ width: fullscreen ? '100vw' : width,
-        '--dsh-sidebar-width': fullscreen ? '100vw' : `${width}px` } as CSSProperties}
+      // Fullscreen is 1px wider than the viewport: the first column's divider,
+      // which separates the panel from the conversation, sits past the window's
+      // left edge where the frame clips it, and slides into view with the panel.
+      style={{ width: fullscreen ? 'calc(100vw + 1px)' : width,
+        '--dsh-sidebar-width': fullscreen ? 'calc(100vw + 1px)' : `${width}px` } as CSSProperties}
       data-sidebar-right-session={sessionId}
       data-sidebar-right-panel={fullscreen ? 'fullscreen' : 'push'}
       data-sidebar-right-open={expanded || undefined}

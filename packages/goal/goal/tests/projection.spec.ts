@@ -17,7 +17,9 @@ import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import GoalService, { GoalId, applyGoalProjection, foldGoal, goalProjectionDefinition } from '@deepseek-ai/dsh-goal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+import GoalService, { applyGoalProjection, foldGoal, goalProjectionDefinition } from '@deepseek-ai/dsh-goal'
 import type { GoalProjection, GoalProjectionState, GoalRef } from '@deepseek-ai/dsh-goal'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
@@ -156,7 +158,7 @@ describe('goal projection unit', () => {
     })
     const user = { type: 'user/message', seq: 0, time: 1, data: plainUser } as never
     const current: GoalProjection = {
-      goal: { id: GoalId('g1'), revision: 1, objective: 'x', phase: 'active', maxGoalRounds: 4 },
+      goal: { id: brandString<GoalId>('g1'), revision: 1, objective: 'x', phase: 'active', maxGoalRounds: 4 },
       roundsStarted: 0,
       createdAt: 1,
       updatedAt: 1,
@@ -243,7 +245,8 @@ describe('goal projection unit', () => {
 
     await expect(agentEvents(bench.ctx, bench.agent).serial('agent/created', { source: 'resume' }))
       .resolves.toBeUndefined()
-    expect(() => bench.ctx.goals.get(bench.agent)).toThrow(failure)
+    expect(() => bench.ctx.goals.get(bench.agent))
+      .toThrow(expect.objectContaining({ name: 'GoalError', code: 'GOAL_STATE_CORRUPT', message: failure }))
     expect(bench.tailValues().goal).toMatchObject({ goal: { objective: 'poisoned replay' } })
   })
 

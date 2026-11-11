@@ -508,7 +508,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
                 raise AssertionError("PTC mode must advertise only run_code")
             return tool_call_chunks(
                 "advanced-code", "run_code",
-                {"code": "return await tools.snapshot_double({ value: 21 })",
+                {"code": "inspect(await tools.snapshot_double({ value: 21 }))",
                  "description": "Call the configured Plugin tool"},
             )
         assert_advertised_tool(body, "snapshot_double")
@@ -536,7 +536,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         return tool_call_chunks(
             "call-code-worker",
             "run_code",
-            {"code": "return 6 * 7", "description": "Compute the smoke value"},
+            {"code": "inspect(6 * 7)", "description": "Compute the smoke value"},
         )
     if prompt == WORKFLOW_PROMPT:
         assert_advertised_tool(body, "workflow")
@@ -692,7 +692,7 @@ def advanced_tool_followup(
         if "42" not in tool_text:
             raise AssertionError(f"run_code returned no configured-tool value: {tool_text}")
         return tool_call_chunks("advanced-denied-ptc", "run_code", {
-            "code": "try { await tools.snapshot_double({ value: -1 }) } catch (error) { return error.message }",
+            "code": "try { await tools.snapshot_double({ value: -1 }) } catch (error) { inspect(error.message) }",
             "description": "Catch a structured inner tool denial",
         })
     if call_id == "advanced-denied-ptc" and tool_name == "run_code":

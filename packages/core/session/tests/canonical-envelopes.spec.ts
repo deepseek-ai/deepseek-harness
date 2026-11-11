@@ -1,11 +1,11 @@
 import { Context } from '@deepseek-ai/cordis'
-import { createMessage, createSystemMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createMessage, createSystemMessage, createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import SessionStore, {
   adoptSessionEvent,
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
   SessionSeq,
   snapshotSessionEvent,
@@ -15,8 +15,9 @@ import SessionStore, {
   type SurfaceIntent,
   type SurfaceOp,
 } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const id = SessionId('canonical-envelopes')
+const id = brandString<SessionId>('canonical-envelopes')
 const header = { version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false } as const
 const config = { provider: 'mock', model: 'mock', maxTokens: 1 }
 const failure = { name: 'ToolError', code: 'FAILED' }
@@ -32,22 +33,26 @@ function toolEvent(data: unknown): SessionEvent {
 function toolData(isError: boolean) {
   return {
     turn: 1, step: 1,
-    message: createToolResultMessage({ callId: ToolCallId('tool'), content: [], isError }),
+    message: createToolResultMessage({ callId: brandString<ToolCallId>('tool'), content: [], isError }),
   }
 }
 
 function appendEvent(session: Session, event: SessionEvent) {
-  const append = session.append.bind(session) as (
-    type: SessionEvent['type'], data: unknown, metadata?: unknown,
-  ) => SessionEvent
-  return append(event.type, event.data, {
+  return Reflect.apply(session.append.bind(session), session, [event.type, event.data, {
     ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
     ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
-  })
+  }]) as SessionEvent
 }
 
 const entryPaths: Record<string, (event: SessionEvent) => unknown> = {
   append: (event: SessionEvent) => appendEvent(Session.create(id), event),
+  batch: (event: SessionEvent) => {
+    const session = Session.create(id)
+    return Reflect.apply(session.append.bind(session), session, [[[event.type, event.data, {
+      ...event.surfaceOp === undefined ? {} : { surfaceOp: event.surfaceOp },
+      ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs },
+    }]]]) as readonly SessionEvent[]
+  },
   seed: (event: SessionEvent) => Session.create(id, [event]),
   restore: (event: SessionEvent) => Session.fromRestore(id, [event], { ...header }, SessionLogOffset(0), 'detached'),
   adopt: adoptSessionEvent,
@@ -222,8 +227,8 @@ describe('canonical event payload acceptance', () => {
       const messages = session.deriveMessages()
       for (const { event } of invalidData) {
         expect(() => appendEvent(session, event)).toThrow()
-        expect(() => ctx.sessions.create(SessionId('invalid-seed'), { seed: [event] })).toThrow()
-        expect(ctx.sessions.get(SessionId('invalid-seed'))).toBeUndefined()
+        expect(() => ctx.sessions.create(brandString<SessionId>('invalid-seed'), { seed: [event] })).toThrow()
+        expect(ctx.sessions.get(brandString<SessionId>('invalid-seed'))).toBeUndefined()
         expect(session.seq).toBe(0)
         expect(session.snapshotEvents()).toBe(events)
         expect(session.surface.nodes).toEqual([])
@@ -290,7 +295,7 @@ describe('canonical event-local surface metadata', () => {
       surfaceOp: { opaque: ['not', 'placement'] }, sourceEventSeqs: { opaque: [null, true] },
     } as unknown as SessionEvent
     for (const [path, accept] of Object.entries(entryPaths)) {
-      if (path === 'append') continue
+      if (path === 'append' || path === 'batch') continue
       expect(() => accept(structuredClone(event))).not.toThrow()
     }
     const session = Session.create(id, [event])

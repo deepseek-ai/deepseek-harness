@@ -9,7 +9,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
@@ -35,6 +35,7 @@ import type { ForkShareState } from '../src/host/fork-policy.ts'
 import { createViewerAccessPolicy, readerWriteRefusal, type ViewerAccessFacts } from '../src/host/viewer-access-policy.ts'
 import { createViewerReadService } from '../src/host/viewer-read.ts'
 import type { ViewerCallRequest } from '../src/viewer-channel.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertLookupMap {
@@ -45,7 +46,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 
 const alice = { providerId: 'provider-a', tenantId: 'tenant', subjectId: 'viewer' }
 const bob = { ...alice, providerId: 'provider-b' }
-const sourceSession = SessionId('source-session')
+const sourceSession = brandString<SessionId>('source-session')
 
 /** One `session/cancel` as the viewer client sends it. */
 function cancelRequest(sessionId: string): ViewerCallRequest {
@@ -98,7 +99,7 @@ async function readerHarness(creator: ShareRpcActor, target: 'fork' | 'source' =
   })
   expect(Reflect.get(controller, 'cancel')).toBe(Reflect.get(SessionController.prototype, 'cancel'))
 
-  const sessionId = target === 'fork' ? SessionId('child-session') : sourceSession
+  const sessionId = target === 'fork' ? brandString<SessionId>('child-session') : sourceSession
   const forks = new ForkRegistry(join(directory, 'forks.json'))
   if (target === 'fork') {
     await forks.record({ shareId: 'share', sourceSessionId: sourceSession, childSessionId: sessionId,

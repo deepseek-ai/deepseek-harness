@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Serveur MCP d’utilisation de l’ordinateur",
+    "description": "Fournit Computer Use à Codex, Claude Code et d’autres clients MCP depuis le profil cua-mcp : cua_run_code exécute des programmes persistants sur les applications de bureau et cua_reset les efface."
+  }
+}

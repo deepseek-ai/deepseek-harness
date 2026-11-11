@@ -49,7 +49,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-该工具要求 Agent Session；非 Agent 调用会在任何查询前以 `LSP_WORKSPACE_REQUIRED` 失败。工作目录服务提供并校验当前根目录。当没有提供方处理该文件扩展名时，查询以 `LSP_UNAVAILABLE` 失败；格式错误的提供方载荷仍保持为结构化 `LSP_MALFORMED_RESPONSE` 错误。这些会呈现为模型可读、可路由的错误工具结果。
+未知操作、空白 `file_path` 或不是正整数的坐标会在任何查询前以 `ToolArgsError` `INVALID_ARGS` 失败。该工具要求 Agent Session；非 Agent 调用会在任何查询前以 `LSP_WORKSPACE_REQUIRED` 失败。工作目录服务提供并校验当前根目录。当没有提供方处理该文件扩展名时，查询以 `LSP_UNAVAILABLE` 失败；格式错误的提供方载荷仍保持为结构化 `LSP_MALFORMED_RESPONSE` 错误。这些失败以及所有提供方失败都会呈现为保留失败 `name` 与 `code` 的错误工具结果；[LSP 导航子系统](../../../docs/subsystems/lsp.zh.md#failures)列出了这些错误码。
 
 -----
 

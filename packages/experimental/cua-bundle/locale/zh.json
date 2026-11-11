@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "目前仅支持 macOS，Windows 支持正在开发中。为已有及新建 PTC 会话加载 Computer Use。请切换到 PTC 模式来使用，并授予辅助功能和屏幕录制权限。",
+    "description": "在 macOS 和 Windows 上操作应用。通过 npm 安装 DSH 的 Windows 用户需要单独配置 helper。",
     "detail": "docs/DETAIL.zh.md"
   }
 }

@@ -5,9 +5,10 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { createUserMessage, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import * as retry from '@deepseek-ai/dsh-llm-retry'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class RetryAdapter extends MockAdapter {
   override providerRetryPolicy(): ResolvedRetryPolicy {
@@ -34,7 +35,7 @@ describe('retry activation', () => {
       textResponse('recovered'),
     ])
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await ctx.agentLoop.create(SessionId('initial-retry'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('initial-retry'), { provider: 'mock', model: 'mock' })
     const register = ctx.sessionProjections.register.bind(ctx.sessionProjections)
     const spy = vi.spyOn(ctx.sessionProjections, 'register').mockImplementation(async (definition) => {
       const handle = await register(definition)

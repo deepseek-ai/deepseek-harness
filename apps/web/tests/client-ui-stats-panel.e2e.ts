@@ -8,8 +8,9 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { parseEntryYaml } from '@deepseek-ai/cordis-plugin-include'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  createAssistantMessage, createMessage, createUserMessage, ToolCallId,
+  createAssistantMessage, createMessage, createUserMessage, type ToolCallId,
   type AssistantStreamRecord, type TokenUsage,
 } from '@deepseek-ai/dsh-llm'
 import {
@@ -99,7 +100,7 @@ describe('web e2e: Statistics view', () => {
     agent.session.append('tool/call', {
       turn: 1,
       step: 1,
-      callId: ToolCallId('call-1'),
+      callId: brandString<ToolCallId>('call-1'),
       name: 'read',
       arguments: JSON.stringify({ file_path: '/work/notes.md' }),
     })
@@ -109,8 +110,8 @@ describe('web e2e: Statistics view', () => {
       message: createMessage({
         role: 'tool',
         content: [{ type: 'text', text: 'one\ntwo' }],
-        source: { kind: 'tool', callId: ToolCallId('call-1') },
-        toolCallId: ToolCallId('call-1'),
+        source: { kind: 'tool', callId: brandString<ToolCallId>('call-1') },
+        toolCallId: brandString<ToolCallId>('call-1'),
       }),
     }, { surfaceOp: 'append' })
     agent.session.append('step/end', { turn: 1, step: 1 })

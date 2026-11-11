@@ -1,6 +1,7 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ActionCardProposalOf, ActionCardResult } from '../src/index.ts'
 import { ACTION, callId, fixture, proposal, type TestDetails } from './fixture.ts'
@@ -12,7 +13,7 @@ it('refuses unknown cards, closed owners, verbs of removed kinds and undeclared 
   expect(await f.ctx.actionCards.act(f.agent, callId, 'start')).toEqual({ status: 'refused', reason: 'unknown' })
   f.propose()
   for (const id of ['toString', 'constructor']) {
-    expect(await f.ctx.actionCards.act(f.agent, ToolCallId(id), 'dismiss')).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>(id), 'dismiss')).toEqual({ status: 'refused', reason: 'unknown' })
   }
   for (const verb of ['toString', 'missing']) {
     expect(await f.ctx.actionCards.act(f.agent, callId, verb)).toEqual({ status: 'refused', reason: 'unavailable' })
@@ -43,8 +44,8 @@ it('applies the shared access and read-only checks the kind declares, then hands
   expect((await f.ctx.actionCards.act(f.agent, callId, 'publish')).status).toBe('settled')
   resolve.mockReturnValue({ mode: 'workspace-write', workspaceRoot: '/' })
   expect((await f.ctx.actionCards.act(f.agent, callId, 'write')).status).toBe('settled')
-  f.propose(ToolCallId('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-invalid'), 'start')).toEqual({ status: 'refused', reason: 'unavailable' })
+  f.propose(brandString<ToolCallId>('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-invalid'), 'start')).toEqual({ status: 'refused', reason: 'unavailable' })
   expect(f.act).toHaveBeenCalledTimes(3)
 })
 
@@ -62,8 +63,8 @@ it('records dismissal of an unstarted or open card with the kind data, and settl
   f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'running', data: { step: 1 } })
   expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss')).toEqual({ status: 'settled',
     decision: { callId, action: ACTION, phase: 'running', data: { step: 1 } } })
-  f.propose(ToolCallId('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-invalid'), 'dismiss')).toEqual({ status: 'settled',
+  f.propose(brandString<ToolCallId>('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-invalid'), 'dismiss')).toEqual({ status: 'settled',
     decision: { callId: 'call-invalid', action: ACTION, phase: 'dismissed' } })
   expect(f.act).not.toHaveBeenCalled()
 })
@@ -93,10 +94,10 @@ it('rejects a second kind for the same action and releases a kind through its di
     act: () => Promise.resolve<ActionCardResult>({ status: 'accepted' }) })
   expect(() => f.ctx.actionCards.register(kind(ACTION))).toThrow('action-cards: action "test_action" is already registered')
   const unregister = f.ctx.actionCards.register(kind('other_action'))
-  f.propose(ToolCallId('call-other'), { action: 'other_action', title: 'Other', brief: 'Other card.', details: {} })
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-other'), 'start')).toEqual({ status: 'accepted' })
+  f.propose(brandString<ToolCallId>('call-other'), { action: 'other_action', title: 'Other', brief: 'Other card.', details: {} })
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-other'), 'start')).toEqual({ status: 'accepted' })
   unregister()
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-other'), 'start')).toEqual({ status: 'refused', reason: 'unavailable' })
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-other'), 'start')).toEqual({ status: 'refused', reason: 'unavailable' })
 })
 
 it('lets the kind reconcile before every action, so a card that is no longer open settles instead of being dismissed', async () => {
@@ -114,8 +115,8 @@ it('lets the kind reconcile before every action, so a card that is no longer ope
   expect(f.view().decisions[callId]?.phase).toBe('installed')
   expect(await f.ctx.actionCards.act(f.agent, callId, 'start')).toEqual({ status: 'settled', decision: { callId, action: ACTION, phase: 'start' } })
   expect(reconcile).toHaveBeenCalledTimes(2)
-  f.propose(ToolCallId('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
-  expect((await f.ctx.actionCards.act(f.agent, ToolCallId('call-invalid'), 'dismiss')).status).toBe('settled')
+  f.propose(brandString<ToolCallId>('call-invalid'), { ...proposal, details: { value: 3 } }, f.agent, 2)
+  expect((await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-invalid'), 'dismiss')).status).toBe('settled')
   expect(reconcile).toHaveBeenCalledTimes(2)
 })
 
@@ -150,18 +151,18 @@ it('refuses to record decisions of actions no kind registered or of phases the p
 
 it('dismisses an unstarted card whose kind is no longer registered, without data, and settles recorded ones', async () => {
   const f = await fixture({ openPhases: ['failed'], dismissal: () => ({ value: 'kind data' }) })
-  f.propose(ToolCallId('call-failed'), proposal, f.agent, 1)
-  f.ctx.actionCards.record(f.agent, { callId: ToolCallId('call-failed'), action: ACTION, phase: 'failed' })
-  f.propose(ToolCallId('call-done'), proposal, f.agent, 2)
-  f.ctx.actionCards.record(f.agent, { callId: ToolCallId('call-done'), action: ACTION, phase: 'dismissed' })
+  f.propose(brandString<ToolCallId>('call-failed'), proposal, f.agent, 1)
+  f.ctx.actionCards.record(f.agent, { callId: brandString<ToolCallId>('call-failed'), action: ACTION, phase: 'failed' })
+  f.propose(brandString<ToolCallId>('call-done'), proposal, f.agent, 2)
+  f.ctx.actionCards.record(f.agent, { callId: brandString<ToolCallId>('call-done'), action: ACTION, phase: 'dismissed' })
   f.propose(callId, proposal, f.agent, 3)
   await f.kindFiber.dispose()
   expect(await f.ctx.actionCards.act(f.agent, callId, 'dismiss', { choice: 'later' })).toEqual(dismissed())
   expect(f.view().decisions[callId]).toEqual({ callId, action: ACTION, phase: 'dismissed' })
   // The kind may return and act on its recorded phases, so they stay as they are.
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-failed'), 'dismiss')).toEqual({ status: 'settled',
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-failed'), 'dismiss')).toEqual({ status: 'settled',
     decision: { callId: 'call-failed', action: ACTION, phase: 'failed' } })
-  expect(await f.ctx.actionCards.act(f.agent, ToolCallId('call-done'), 'dismiss')).toEqual({ status: 'settled',
+  expect(await f.ctx.actionCards.act(f.agent, brandString<ToolCallId>('call-done'), 'dismiss')).toEqual({ status: 'settled',
     decision: { callId: 'call-done', action: ACTION, phase: 'dismissed' } })
   expect(f.act).not.toHaveBeenCalled()
 })

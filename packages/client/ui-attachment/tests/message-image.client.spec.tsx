@@ -5,8 +5,9 @@ import { useState } from 'react'
 import type { PropsRenderFactories, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { en, zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
@@ -27,7 +28,7 @@ const labels: MessageImageLabels = {
 }
 
 const attachment = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png' as const,
   bytes: 68,
   width: 640,
@@ -354,7 +355,7 @@ describe('ImageGallery', () => {
     } })
     await runtime.mount(attachmentPlugin)
     await runtime.sessions.add({ id: 'message-images-test' })
-    const session = runtime.sessions.retainFor(runtime.ctx, SessionId('message-images-test'))
+    const session = runtime.sessions.retainFor(runtime.ctx, brandString<SessionId>('message-images-test'))
     const loadImage = vi.fn().mockResolvedValue('blob:slot-image')
     const slot = runtime.renderSlot('conversation.chat.message.images', {
       images: [{ attachment }], loadImage, align: 'end',

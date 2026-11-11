@@ -6,7 +6,8 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-fs'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { errorChain, ReasoningEffortId, type MessageSource } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { errorChain, type ReasoningEffortId, type MessageSource } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import { canOpenNativePath, nativeFileManager, nativeFileApplications, openNativeFileApplication, openNativeAssociatedPath, revealNativePath } from '@deepseek-ai/dsh-native-command'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -331,7 +332,8 @@ export class SessionController extends TypertRemoteService {
     if (model === undefined) throw new RemoteError('session/provider-models-unavailable',
       `provider "${provider}" has no available models`, { provider })
     const selection = { provider, model: model.id,
-      ...model.reasoning?.defaultEffort === undefined ? {} : { reasoningEffort: ReasoningEffortId(model.reasoning.defaultEffort) },
+      ...model.reasoning?.defaultEffort === undefined ? {}
+        : { reasoningEffort: brandString<ReasoningEffortId>(model.reasoning.defaultEffort) },
     }
     await this.ctx.agentDefaultModel.saveSelection(selection)
   }

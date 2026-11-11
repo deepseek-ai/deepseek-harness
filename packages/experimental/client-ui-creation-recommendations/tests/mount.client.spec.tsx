@@ -3,8 +3,9 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ActionCardDescriptor } from '@deepseek-ai/dsh-client-ui-action-cards/client'
 import { FoldedText } from '@deepseek-ai/dsh-client-ui-action-cards/src/client/Card.tsx'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -28,8 +29,8 @@ it('registers the page body and its copy for the plugin lifetime', async () => {
   expect(descriptor).toMatchObject({ action: 'create_personalized_page', locale: 'creationRecommendations' })
   expect(locale.bind('creationRecommendations')('heading')).toBe('Personalized pages')
   const t = locale.bind('creationRecommendations')
-  render(<descriptor.Body proposal={{ callId: ToolCallId('card'), turn: 1, action: 'create_personalized_page', title: 'Counter', brief: 'Keep count.',
-    details: { slot: 'page' } }} decision={undefined} sessionId={SessionId('session')} summary={null} Folded={FoldedText} act={vi.fn()} t={t} />)
+  render(<descriptor.Body proposal={{ callId: brandString<ToolCallId>('card'), turn: 1, action: 'create_personalized_page', title: 'Counter', brief: 'Keep count.',
+    details: { slot: 'page' } }} decision={undefined} sessionId={brandString<SessionId>('session')} summary={null} Folded={FoldedText} act={vi.fn()} t={t} />)
   expect(screen.getByRole('note').textContent).toContain(en.creationCost)
   await fiber.dispose()
   expect(unregister).toHaveBeenCalledOnce()

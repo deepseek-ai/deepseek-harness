@@ -8,7 +8,7 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { boot, initProfile, loadProfileDirectory, readProfilePatches, readProfileManifest, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import PluginManager from '@deepseek-ai/dsh-plugin-manager'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -21,6 +21,7 @@ import Access from '@deepseek-ai/dsh-api-remote-access'
 import * as ActionCards from '@deepseek-ai/dsh-action-cards'
 import * as Recommendations from '../src/index.ts'
 import { ACTION, logProposal } from './fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class Model extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
@@ -77,7 +78,7 @@ it.each(['normal', 'consumer-unload'] as const)('enables through the real Loader
   expect([...ctx.loader.entries()].filter(entry => entry.options.id === 'action-cards')).toHaveLength(1)
   const model = new Model()
   ctx.llm.registerAdapter(['mock'], model)
-  const agent = await ctx.agentLoop.create(SessionId('recommendation-live'), { provider: 'mock', model: 'test' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('recommendation-live'), { provider: 'mock', model: 'test' })
   const callId = logProposal(ctx, agent, 'call-live', { title: 'Session search', brief: 'Search saved conversations', details: { name } })
   expect((await ctx.skills.list()).map(skill => skill.name)).toContain('official-plugins')
   expect(readProfileManifest('test', dir).dsh?.profile?.bundles).not.toContain(name)

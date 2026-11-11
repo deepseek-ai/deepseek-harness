@@ -1,6 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 /** Script one delegation, then acknowledge the receipt and the completion notice. */
 class MockDelegatingAdapter extends LlmAdapter {
@@ -16,8 +18,8 @@ class MockDelegatingAdapter extends LlmAdapter {
     if (!options.messages.some(message => message.role === 'tool')) {
       const args = JSON.stringify({ description: 'cwd probe', prompt: 'report your workspace' })
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'tool-call-delta', index: 0, id: ToolCallId('call-delegate'), name: 'subagent', argumentsDelta: args }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('call-delegate'), name: 'subagent', arguments: args } }
+      yield { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('call-delegate'), name: 'subagent', argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('call-delegate'), name: 'subagent', arguments: args } }
       yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return

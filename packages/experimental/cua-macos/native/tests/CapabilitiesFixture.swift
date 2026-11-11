@@ -85,14 +85,20 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
             guard let self else { return }
             var value: [String: Any] = ["type": event.type.rawValue, "timestamp": event.timestamp, "flags": event.modifierFlags.rawValue,
                                        "shift": event.modifierFlags.contains(.shift), "command": event.modifierFlags.contains(.command)]
-            if [.keyDown, .keyUp].contains(event.type) { value["keyCode"] = event.keyCode; value["characters"] = event.characters ?? "" }
-            else { value["button"] = event.buttonNumber }
+            if [.keyDown, .keyUp].contains(event.type) {
+                value["keyCode"] = event.keyCode
+                value["characters"] = event.characters ?? ""
+                value["repeat"] = event.isARepeat
+            } else { value["button"] = event.buttonNumber }
             self.events.append(value)
             self.persist()
         }
         window.contentView!.addSubview(pad)
         if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureBackground") as? Bool == true || CommandLine.arguments.contains("--background") {
-            window.orderFront(nil)
+            if Bundle.main.object(forInfoDictionaryKey: "DSHFixtureKeyboard") as? Bool == true {
+                window.makeFirstResponder(pad)
+                window.orderBack(nil)
+            } else { window.orderFront(nil) }
         } else {
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(text)
@@ -120,7 +126,7 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         }
         let frame = pad.convert(pad.bounds, to: nil)
         let selection = text.selectedRange()
-        let result: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowId": window.windowNumber,
+        let result: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "active": NSApplication.shared.isActive, "keyWindow": window.isKeyWindow,
             "textFocused": window.firstResponder === text, "pasteAttempts": pasteAttempts,
             "text": text.string, "selection": [selection.location, selection.length], "runs": runs, "events": events, "axPresses": axPresses, "axMenus": axMenus,

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { JobId, JobRegistry } from '@deepseek-ai/dsh-jobs'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { type JobId, JobRegistry } from '@deepseek-ai/dsh-jobs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JobEvents, JobOutputRead, JobRead, JobSpec, JobStatus, JobView } from '@deepseek-ai/dsh-jobs'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 
@@ -67,7 +68,7 @@ class ScriptedJobRegistry extends JobRegistry {
 
   private view(row: Row): JobView {
     return {
-      id: JobId(row.id),
+      id: brandString<JobId>(row.id),
       kind: 'bash',
       label: row.label,
       ...row.owner === undefined ? {} : { owner: row.owner },
@@ -92,8 +93,8 @@ function stop(ctx: Context, sessionId: SessionId): Promise<void> {
   return ctx.parallel('workspace/session-stop', { sessionId })
 }
 
-const owner = SessionId('owner')
-const other = SessionId('other')
+const owner = brandString<SessionId>('owner')
+const other = brandString<SessionId>('other')
 
 describe('Job archive admission', () => {
   it('reports the running or stopping jobs the session owns, never unowned, foreign, or settled ones', async () => {
@@ -110,7 +111,7 @@ describe('Job archive admission', () => {
       { kind: 'job', items: [{ id: 'bash-1', label: 'pnpm run build' }, { id: 'bash-2', label: 'pnpm test' }] },
       { kind: 'turn' },
     ])
-    expect(await ask(ctx, SessionId('nobody'))).toEqual([{ kind: 'turn' }])
+    expect(await ask(ctx, brandString<SessionId>('nobody'))).toEqual([{ kind: 'turn' }])
   })
 
   it('kills each owned live job with the archive reason and keeps going when one producer refuses', async () => {
@@ -123,9 +124,9 @@ describe('Job archive admission', () => {
     jobs.refusing = 'bash-1'
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     await stop(ctx, owner)
-    expect(jobs.kills).toEqual([[JobId('bash-2'), owner, 'session archived']])
+    expect(jobs.kills).toEqual([[brandString<JobId>('bash-2'), owner, 'session archived']])
     expect(warn.mock.calls.map(([message]) => String(message))).toEqual([expect.stringContaining('killing "bash-1"')])
-    expect(jobs.get(JobId('bash-3')).status).toBe('running')
+    expect(jobs.get(brandString<JobId>('bash-3')).status).toBe('running')
     // A second stop finds the survivor already stopping and asks it again; the refusal is logged again.
     await stop(ctx, owner)
     expect(jobs.kills).toHaveLength(2)

@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import {
-  connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
+  connectFreshWorkspace, fullscreenBox, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
 } from './support.ts'
 
 /** The produced file the seeded turn writes, and what the preview should show. */
@@ -524,7 +524,7 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(await width(column)).toBe(trackWidth)
       const viewport = page.viewportSize()
       if (viewport === null) throw new Error('expected a fixed viewport')
-      await expect.poll(async () => await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+      await expect.poll(async () => await panel.boundingBox()).toEqual(fullscreenBox(viewport))
       expect(await expandOf(page).count()).toBe(0)
       expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
       await shot(page, '03-fullscreen-panel')
@@ -558,7 +558,7 @@ describe('web e2e: shipped right Sidebar', () => {
       await frame.evaluate(async (node) => { await Promise.allSettled(node.getAnimations().map(animation => animation.finished)) })
       const normalColumns = (await geometry()).columns
       await column.locator('[data-sidebar-right-mode="fullscreen"]').click()
-      await expect.poll(() => panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+      await expect.poll(() => panel.boundingBox()).toEqual(fullscreenBox(viewport))
       await column.locator('[data-sidebar-right-toggle]').click()
       await Promise.all([
         panel.evaluate(async (node) => {
@@ -586,7 +586,7 @@ describe('web e2e: shipped right Sidebar', () => {
 
         await held.evaluate((state) => { (state.animation as Animation).finish() })
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
-        expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+        expect(await panel.boundingBox()).toEqual(fullscreenBox(viewport))
         expect(await geometry()).toEqual({ columns: normalColumns, transition: 'none', handles: ['none'], animatingGrid: false })
 
         const exit = await holdPanelSlide(panel)
@@ -621,7 +621,7 @@ describe('web e2e: shipped right Sidebar', () => {
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBeNull()
         await expandOf(page).click()
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
-        expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport })
+        expect(await panel.boundingBox()).toEqual(fullscreenBox(viewport))
         expect((await geometry()).columns).toBe(normalColumns)
         expect((await geometry()).animatingGrid).toBe(false)
       } finally {
@@ -733,7 +733,7 @@ describe('web e2e: shipped right Sidebar', () => {
 
         await page.setViewportSize({ width: 767, height: viewport.height })
         await expect.poll(async () => await panel.getAttribute('data-sidebar-right-panel')).toBe('fullscreen')
-        await expect.poll(async () => await width(panel)).toBe(767)
+        await expect.poll(async () => await width(panel)).toBe(768)
         await expect.poll(() => frame.getAttribute('data-rightbar-fullscreen')).toBe('true')
         expect(await expandOf(page).count()).toBe(0)
         expect(await frame.locator('[data-side="rightbar"]').count()).toBe(0)
@@ -1045,9 +1045,11 @@ describe('web e2e: shipped right Sidebar', () => {
       await proseChip(page).click()
       await expect.poll(async () => await tabTitles(first)).toEqual(['Files', SAMPLE_NAME])
       const order = await tabTitles(first)
-      // The insertion index is measured against chip midpoints, not strip width.
-      await dragTo(page, first.locator('[data-dockkit-tab]').last(),
-        await pointIn(first.locator('[data-dockkit-tab]').first(), 0.25, 0.5),
+      const tabs = first.locator('[data-dockkit-tab]')
+      const firstTab = tabs.first()
+      // Drag coordinates are viewport-relative. Wait for the strip to settle before measuring the first chip.
+      await firstTab.hover({ trial: true })
+      await dragTo(page, tabs.last(), await pointIn(firstTab, 0.25, 0.5),
         strip.locator('[data-dockkit-caret="0"]'))
       await expect.poll(async () => await tabTitles(first)).toEqual([...order].reverse())
 

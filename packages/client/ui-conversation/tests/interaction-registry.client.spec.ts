@@ -1,9 +1,10 @@
 /** Plugin dispatch is synchronous, scoped, and independent of browser default cancellation. */
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { TextInteractionRequest } from '../src/client/contract/text-interaction.ts'
 import { ConversationInteractionRegistry } from '../src/client/conversation/interaction-registry.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function fixture() {
   const ctx = new Context()
@@ -11,7 +12,7 @@ function fixture() {
   return new ConversationInteractionRegistry(ctx)
 }
 
-const sessionId = SessionId('interaction')
+const sessionId = brandString<SessionId>('interaction')
 const gesture = () => ({ trigger: 'selection' as const, hasSelection: true, readText: () => 'selected', preventDefault: vi.fn() })
 
 describe('Conversation interaction registrations', () => {

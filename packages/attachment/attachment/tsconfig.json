@@ -5,6 +5,7 @@
   "references": [
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
-    { "path": "../../util/brand" }
+    { "path": "../../util/brand" },
+    { "path": "../../util/error" }
   ]
 }

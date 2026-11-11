@@ -14,10 +14,11 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import {
-  SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
+  SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { sessionFixtureName } from '@deepseek-ai/dsh-session-snapshot'
@@ -277,7 +278,7 @@ function replyEntry(marker: string): ReplayEntry {
 function liveLongTurn(prefix: string): ReplayEntry[] {
   const entries: ReplayEntry[] = []
   for (let step = 1; step <= LIVE_STEPS; step++) {
-    const id = ToolCallId(`${prefix.toLowerCase()}-read-${step}`)
+    const id = brandString<ToolCallId>(`${prefix.toLowerCase()}-read-${step}`)
     const args = JSON.stringify({ file_path: READ_FILE })
     entries.push({ kind: 'chunks', chunks: [
       ...textChunks(paragraphs(`${prefix}_STEP_${step}`, 10, `${prefix} narration for step ${step}, paragraph`)),
@@ -525,7 +526,7 @@ function sessionKey(scenario: Case): string {
 }
 
 async function createChild(scaffold: WebScaffold, parentId: SessionId, scenario: Case): Promise<SessionId> {
-  const childId = SessionId(`${sessionKey(scenario)}-child`)
+  const childId = brandString<SessionId>(`${sessionKey(scenario)}-child`)
   const createdAt = Date.now() - 30_000
   const header: SessionHeader = {
     version: SESSION_FORMAT_VERSION, id: childId, createdAt, isSeeded: false, cwd: scaffold.workspaceCwd,
@@ -598,7 +599,7 @@ async function prepareWorld(browser: Browser, scenario: Case, scaffold: WebScaff
   await page.addInitScript(installMeasure)
   await page.setViewportSize(scenario.surface === 'main' ? { width: 1280, height: 720 } : { width: 1680, height: 900 })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-  const sessionId = SessionId(sessionKey(scenario))
+  const sessionId = brandString<SessionId>(sessionKey(scenario))
   if (scenario.surface === 'main') {
     const fixture = seededFixture(scenario.id, scenario.bodyParagraphs)
     await seedSession(scaffold, fixture.log, sessionId)
