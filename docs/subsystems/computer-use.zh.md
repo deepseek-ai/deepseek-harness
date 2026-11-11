@@ -4,9 +4,9 @@
 
 计算机操作让模型通过配置的提供方观察并操作本地桌面。DSH 的共享能力称为 **computer use（计算机操作）**；**Cua Driver** 是上游实现的名称。
 
-[Computer Use](../../packages/experimental/cua-bundle/README.zh.md) 提供 macOS CUA 及权限设置 的可选实验性开关。
+[Computer Use](../../packages/experimental/cua-bundle/README.zh.md) 是适用于 macOS 和 Windows 的可选实验性插件组合。
 
-[macOS CUA 提供方](../../packages/experimental/cua-macos/README.zh.md)使用[共享 CUA 对象与执行器](../../packages/experimental/cua/README.zh.md)，通过 User Questions 和配置档设置执行应用授权。
+[macOS 后端](../../packages/experimental/cua-macos/README.zh.md)和 [Windows 后端](../../packages/experimental/cua-windows/README.zh.md)都通过[共享 CUA 服务](../../packages/experimental/cua/README.zh.md)检查应用访问授权。
 
 CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申请和应用授权撤销。[权限页面](../../packages/experimental/cua/README.zh.md)投影这些控件；app/window 操作在分派前执行 provider 的授权检查。
 
