@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/cua-hover-ax-only/guide.md
+/:
+  en: 5ebb4c8a6b20b644
+  zh: 22a8983d06fa5789
+/macos-hover-keeps-the-system-pointer-in-place-by-default:
+  en: 6833a7851486f10d
+  zh: 22983f326fb725ce
+/macos-hover-keeps-the-system-pointer-in-place-by-default/change:
+  en: e6d2e56ccb50e46a
+  zh: a788fc19e0771a46
+/macos-hover-keeps-the-system-pointer-in-place-by-default/migration:
+  en: 5db40025fe40c374
+  zh: a5556c0e0b000d1c

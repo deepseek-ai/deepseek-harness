@@ -74,7 +74,8 @@ The service owns everything except terminal mechanics: session identity, publica
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`: backend registry, spawn/send/read/signal/kill/list, owner cleanups, disposal |
-| [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set, error codes |
+| [`src/types.ts`](src/types.ts) | Shared contracts: backend interface, session types, wait reasons, signal set |
+| [`src/error.ts`](src/error.ts) | `TerminalError`, its codes, and `TerminalBackendCleanupError` |
 
 ### Data model and lifecycle
 
@@ -83,12 +84,12 @@ Each published session is a record of its id, owner, optional name, backend type
 ### Ownership and cleanup rules
 
 - Fencing uses the exact `Agent` object: `hasOwnerActivity(owner)` spans unpublished setup through final close with no publication gap, so lifecycle policy can fence the owner precisely.
-- A backend that cannot clean partial startup resources rejects with `TerminalBackendCleanupError`; the service retains that failure as tracked owner activity until owner or service disposal consumes and reports it.
+- A backend that cannot clean partial startup resources rejects with `TerminalBackendCleanupError`, a `TerminalError` with code `CLEANUP_FAILED` that lists both failures in `errors` and in an `AggregateError` `cause`; the service retains that failure as tracked owner activity until owner or service disposal consumes and reports it.
 - Caller cancellation keeps its exact `AbortSignal.reason`; `kill()` and disposal resolve only after the backend's captured process tree is quiescent.
 
 ### Send reservation
 
-The service reserves a session synchronously for one active send before returning the operation, including before a background job id becomes visible; a second send fails with `SEND_ACTIVE`, so output and cancellation never cross operation ownership.
+The service reserves a session synchronously for one active send before returning the operation, including before a background job id becomes visible; a second send fails with `SEND_ACTIVE`, so output and cancellation never cross operation ownership. Failures are `TerminalError` instances (a `HarnessError`); besides the registry codes, a send to a closing session fails with `SESSION_CLOSING`, and backends report `SESSION_EXITED`, `STARTUP_EXITED`, `STARTUP_TIMEOUT`, and `NO_SANDBOX` with the same class. A consumer that drives a shell uses `INIT_REJECTED` when that shell rejects the consumer's setup input.
 
 </details>
 

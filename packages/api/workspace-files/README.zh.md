@@ -1,5 +1,5 @@
 ---
-description: "面向 Web GUI 的工作区文件服务：有界文件读取、按目标监听文件系统变化，以及 Session 工作区根内的目录列举。"
+description: "面向 Web GUI 的工作区文件服务：有界文件读取、按目标监听文件系统变化，以及 Session 工作区根内的目录列举与按名称或路径搜索。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-使用本包可从 Web Client 预览 Session 文件系统允许读取的文件。它按页读取 UTF-8 文本、按有界窗口或完整文件读取原始字节、从基文件目录解析关联文件，并报告文件元数据。可以跟随一个文件或一个目录直接子项的变化。文件读取和监听可以指向工作区外路径；目录列举和监听仍限定于工作区。本服务不提供修改操作。
+使用本包可从 Web Client 预览 Session 文件系统允许读取的文件。它按页读取 UTF-8 文本、按有界窗口或完整文件读取原始字节、从基文件目录解析关联文件，并报告文件元数据。可以跟随一个文件或一个目录直接子项的变化。可以按名称或相对路径搜索工作区条目。文件读取和监听可以指向工作区外路径；目录列举、搜索和目录监听仍限定于工作区。本服务不提供修改操作。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把本包与 `dsh-fs`、`dsh-sandbox-policy`、Session store 和 Typert Gateway 一起挂载；bundle 把它紧随 Session Controller 之后挂载。每个方法都在线路上携带 Session 身份，Client 调用 `remote.workspaceFiles.read(sessionId, path, range, signal)`、`stat(sessionId, path, signal)`、`readBytes(sessionId, path, options, signal)`、`list(sessionId, path, signal)` 或 `changes(sessionId, path, signal)`，从不自己指定根。Host 读取 live Session header，cold Session 则使用持久层 `stat`；它不会激活 Agent、读取事件正文或借用父 Session 的根。live 读取不要求挂载 Session persistence；未挂载时 cold Session 无法解析，Gateway 返回 `gateway/lookup-not-found`。
+把本包与 `dsh-fs`、`dsh-sandbox-policy`、Session store 和 Typert Gateway 一起挂载；bundle 把它紧随 Session Controller 之后挂载。每个方法都在线路上携带 Session 身份，Client 调用 `remote.workspaceFiles.read(sessionId, path, range, signal)`、`stat(sessionId, path, signal)`、`readBytes(sessionId, path, options, signal)`、`list(sessionId, path, signal)`、`search(sessionId, request, signal)` 或 `changes(sessionId, path, signal)`，从不自己指定根。Host 读取 live Session header，cold Session 则使用持久层 `stat`；它不会激活 Agent、读取事件正文或借用父 Session 的根。live 读取不要求挂载 Session persistence；未挂载时 cold Session 无法解析，Gateway 返回 `gateway/lookup-not-found`。
 
 | 方法 | 返回 | 用途 |
 |---|---|---|
@@ -33,6 +33,7 @@ kind: "package-reference"
 | `read(path, { offset?, limit? })` | `WorkspaceFileText` = stat + `{ offset, text, lines, eof }` | UTF-8 文本文件的一个行窗口；`lines` 计行数，使单个空行与越过文件末尾的页可区分 |
 | `readBytes(path, { range?, baseFile? })` | `WorkspaceFileBytes` = stat + `{ offset, data, eof }` | 以 `Uint8Array` 返回完整文件或有界字节范围；可从另一个文件所在目录解析目标 |
 | `list(path)` | `WorkspaceDirectoryListing { path, entries, truncated }` | 一个目录的直接子项 |
+| `search({ query, excludedPaths, includeHidden, respectGitignore })` | `WorkspaceFileSearchResult { matches, truncated, incomplete }` | 工作区任意位置中名称或相对路径包含查询的条目 |
 | `changes(path)` | `WorkspaceFileWatchFrame` 流 | 订阅就绪确认，随后为单个文件或目录直接子项的失效通知 |
 
 ### 寻址与路径
@@ -51,7 +52,16 @@ kind: "package-reference"
 
 ### 文件读取与目录检查
 
-每项操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为工作区内的目录，因此被链接的目录与其目标一样可列举；`changes` 也以同样方式把被监听的目录限制在工作区内。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。配置的分页、窗口、完整文件和目录列举上限仍然适用。文本页还拒绝无效 UTF-8 与 NUL 字节；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
+每个带路径的操作都先通过 `lstat` 拒绝不存在的路径或错误的文件类型；读取文件的操作还拒绝末端符号链接，包括指回工作区内的链接。`list` 改为跟随末端链接——任何平台上的目录符号链接，包括 Windows 目录联接——要求它解析为工作区内的目录，因此被链接的目录与其目标一样可列举；`changes` 也以同样方式把被监听的目录限制在工作区内。文件操作随后通过组合文件系统解析和读取，不做额外的工作区包含检查。配置的分页、窗口、完整文件和目录列举上限仍然适用。文本页还拒绝无效 UTF-8 与 NUL 字节；字节读取不解码内容。读取或列举的空路径是 `gateway/bad-request`。
+
+<a id="search"></a>
+### 搜索
+
+`search` 对 `query` 做 trim，结果为空时以 `gateway/bad-request` 拒绝。不含 `/` 的查询按名称匹配，含 `/` 的查询按以 `/` 连接的工作区相对路径匹配；两者都为不区分大小写的子串匹配。匹配包含文件与从文件推导并去重的祖先目录；空目录不出现。`excludedPaths` 不含 `/` 的值按任意深度的名称排除，含 `/` 的值只排除根下的精确相对路径；所有 glob 元字符均按字面处理。`includeHidden` 为 false 时跳过隐藏文件与目录；VCS 元数据始终排除。
+
+`respectGitignore` 使用 ripgrep 原生忽略规则，包括其仓库检测、嵌套与祖先 `.gitignore`、`.git/info/exclude`、全局 Git 排除文件及 `.ignore`。关闭时传入 `--no-ignore`。本服务不解析 Git 配置，也不把 `core.ignorecase` 用于忽略匹配。`maxFileBytes` 不限制忽略文件；读取错误沿用 rg 的退出语义。
+
+每次调用通过按需获取的 `subprocess` 运行打包的 `rg --files --sort=path`。最多处理 rg 列出的 `search.maxEntries` 个文件，在此有界文件集内按深度与路径排序并截到 `search.maxResults`；匹配数超过结果上限时置 `truncated`。额外的一条文件记录只用于检测超限，不贡献匹配。超过文件数上限会终止 rg 并置 `incomplete`，rg 退出码 2 同样表示部分结果；退出码 1 表示无结果。链接文件与目录均不返回，也不跟随。取消信号传给子进程，调用等待进程清理后以 signal 的 reason 拒绝。缺少 subprocess、启动或执行失败以及超时均以 `workspace-file/search-failed` 失败，消息说明具体原因；不回退到 JS 遍历，其他文件操作不受影响。
 
 ### 变更流
 
@@ -65,6 +75,11 @@ kind: "package-reference"
 | `maxFileBytes` | `33554432`（32 MiB） | `readBytes` 未传 `range` 时的完整文件字节上限（含）；更大文件以 `too-large` 失败 |
 | `maxLines` | `5000` | 页大小的缺省值与上限（行）；更大的 `limit` 被拒绝 |
 | `maxEntries` | `2000` | 返回目录条目数上限；其余丢弃并报告截断 |
+| `search.maxResults` | `512` | 返回匹配数上限；更多匹配置 `truncated` |
+| `search.maxEntries` | `100000` | 处理 rg 输出的文件数上限；发现额外文件时终止进程并置 `incomplete` |
+| `search.graceMs` | `3000` | 进程终止宽限期（毫秒） |
+| `search.timeoutMs` | `30000` | 搜索截止时间（毫秒）；到期拒绝调用 |
+| `search.stderrMaxBytes` | `65536` | 子进程 stderr 诊断保留字节上限 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-api-workspace-files)是每个可接受字段及其 JSDoc 的完备来源。
 
@@ -100,7 +115,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `WorkspaceFiles`：`workspaceFiles` 服务与 Remote 命名空间、`Config`、四道关、切页器、`read`、`readBytes`、`stat`、`list` |
+| [`src/index.ts`](src/index.ts) | `WorkspaceFiles`：`workspaceFiles` 服务与 Remote 命名空间、`Config`、四道关、切页器、`read`、`readBytes`、`stat`、`list`、`search` |
+| [`src/search.ts`](src/search.ts) | rg 参数、文件祖先推导、排序与有界搜索 |
 | [`src/changes.ts`](src/changes.ts) | `WorkspaceChangeFeed`：目标监听、匹配的 `fs/observed` 通知与每代流各自的队列 |
 | [`src/types.ts`](src/types.ts) | 线路类型与 `RemoteErrorDetailsMap` 错误码，以 `./types` 发布给 Client 包 |
 | [`src/client/index.ts`](src/client/index.ts)、[`provider.ts`](src/client/provider.ts)、[`change-feed.ts`](src/client/change-feed.ts) | 浏览器插件、文件元数据与按目标建立的变更流 |
@@ -145,6 +161,7 @@ Typert 生成 `./typert` 与 `./remote` 暴露的 Host 与 Client Remote 产物�
 - **读取不具备事务性**——结果元数据来自内容读取之前的 stat；并发写入可能使报告版本与返回内容不一致。
 - **generation 队列无界**——一个 `changes` generation 会缓冲操作观察与目标失效通知直到消费方 pull；停滞的消费方会在流的生命期内持续增长 Host 内存。
 - **`maxEntries` 限制的是答案，不是列举**——`list` 让 `ctx.fs.listDir` 列出全部子项后再截断数组，远超上限的目录仍让 Host 付出整个列举的代价（`fs-local` 上每个子项一次 stat）；要限制这份工作，需要文件系统 seam 的 `listDir` 支持上限。
+- **搜索执行环境**——每次搜索重新运行 rg，不维护索引。子进程提供方必须能执行 Host 打包的二进制，并与文件系统共享工作区；不满足时搜索失败，包括缺少该路径的 SSH 配置。文件数上限前的路径前缀可能漏掉较浅的匹配；`incomplete` 明确报告这种不完整性。
 - **失效流保留元数据**——Host 结束 `changes` 或流终态失败后，已打开的值保持最后已知状态，直到重新打开。
 
 <a id="dev-note"></a>

@@ -3,7 +3,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
  * Browser half: register `files` as a right-Sidebar tab type, and the
  * workspace navigator beside every file preview. The navigator, the page body,
  * and the toggle share one store and one face per store instance. The package
- * README lists the registrations.
+ * README lists the registrations. Search lives in `search-workspace.ts`, which
+ * binds the Host's workspace search, `search-rules.ts`, `search-tree.ts`,
+ * `search-preferences.ts`, and `SearchSettings.tsx`.
  */
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -11,22 +13,27 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import type { BoundActions } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-store'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { FILES_ID, FILES_KIND, filesDefinition } from './definition.tsx'
 import { canOpenOf, createList, createWatch, filesFace, type FilesInjected } from './face.ts'
+import { createSearch } from './search-workspace.ts'
 import { FileTree } from './FileTree.tsx'
 import { FileNavigator } from './FileNavigator.tsx'
 import { FilesBody } from './FilesBody.tsx'
 import { FilesTitle } from './FilesTitle.tsx'
 import { en, ja, es, fr, de, ru, pt, zh } from './locales.ts'
 import { NavigatorToggle } from './NavigatorToggle.tsx'
+import { createSearchPreferenceBook, SEARCH_PREFERENCES_KEY } from './search-preferences.ts'
 import { createFilesStore } from './store.ts'
 
 export type { SidebarFilesKey } from './locales.ts'
-export type { DirLevel, FilesPaneState, FilesState, FilesTreeState, LevelState } from './store.ts'
+export type { DirLevel, FilesPaneState, FilesSearchResult, FilesSearchState, FilesState, FilesTreeState, LevelState } from './store.ts'
 export type { FilesInjected, ListWorkspaceDirectory, WorkspaceFilesListRemote } from './face.ts'
+export type { SearchWorkspace, WorkspaceFilesSearchRemote, WorkspaceSearchAnswer, WorkspaceSearchRequest } from './search-workspace.ts'
+export type { SearchMatch } from './search-tree.ts'
+export type { ExclusionRule, WorkspaceSearchPreferences } from './search-rules.ts'
 export type { FilesBodyProps } from './FilesBody.tsx'
 // Also keeps the Factory declaration in this entry's emitted types, which an `import type {}` would not.
 export type { TreeEntry, TreeEntryMeta, TreeEntryKind, TreeDirectoryState, FileTreeInput } from './FileTree.tsx'
@@ -65,6 +72,8 @@ export const inject = ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'r
 export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   const handle = createFilesStore()
+  // One book for the plugin, not per Session: Sessions rooted at the same workspace share its preferences.
+  const preferences = createSearchPreferenceBook(createSnapshotStore<unknown>({}, { persist: { name: SEARCH_PREFERENCES_KEY } }))
   const face = filesFace(createList(ctx.remote), createWatch(ctx.remote), canOpenOf(ctx.sidebarRightTabs), (sessionId, tabId) => {
     const source = ctx.sidebarRight.tabDomain.occurrence(sessionId, { id: tabId }).navigation
     return {
@@ -78,7 +87,7 @@ export function apply(ctx: ClientContext): void {
         return () => { active = false; unsubscribe() }
       }, 'ui-sidebar-files: tab navigation'),
     }
-  })
+  }, createSearch(ctx.remote), preferences)
   // A Factory runs its inject per occurrence, so each store instance gets its
   // one face when it is minted. The shortcut, which acts outside any body, finds
   // the face placed beside the target tab; a tab's loading and loaded drawings
@@ -136,7 +145,8 @@ export function apply(ctx: ClientContext): void {
         if (target === undefined) return { status: 'blocked', reason: t('shortcut.noSession') }
         /* jscpd:ignore-end */
         return { status: 'handled', run: () => {
-          // A docked tab with a navigator beside its content that can draw a tree keeps it: the navigator is shown and takes the keyboard.
+          // A docked tab with a navigator beside its content that can draw a tree keeps it:
+          // the navigator is shown and its search field takes the keyboard.
           const placed = target.tabId === undefined ? undefined : beside.get(target.sessionId)?.get(target.tabId)
           if (target.host === 'dock' && placed !== undefined) {
             if (!ctx.sidebarRight.isExpanded()) ctx.sidebarRight.toggleExpanded()

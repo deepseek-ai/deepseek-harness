@@ -3,8 +3,9 @@ import { isValidElement } from 'react'
 import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountActionCards, inject } from '../src/client/mount.ts'
 import { apply as hostApply } from '../src/index.ts'
@@ -33,12 +34,12 @@ it('binds actions to the displayed session, serves registered bodies and removes
   const entry = slots.entries('conversation.chat.turnTail')[0]!
   expect(slots.entries('tool.call.toolview').map(item => item.options.key)).toEqual(['propose_action'])
   const resolve = entry.inject as NonNullable<typeof entry.inject> & ((sessionId: SessionId) => TailInjected)
-  const bound = resolve(SessionId('session-one'))
+  const bound = resolve(brandString<SessionId>('session-one'))
   expect(bound.sessionId).toBe('session-one')
-  expect(await bound.act(ToolCallId('card'), 'create', { slot: 'page' })).toEqual({ status: 'accepted' })
+  expect(await bound.act(brandString<ToolCallId>('card'), 'create', { slot: 'page' })).toEqual({ status: 'accepted' })
   expect(act).toHaveBeenCalledWith('session-one', 'card', 'create', { slot: 'page' })
   act.mockResolvedValueOnce({ ok: false })
-  expect(await bound.act(ToolCallId('card'), 'dismiss')).toBeUndefined()
+  expect(await bound.act(brandString<ToolCallId>('card'), 'dismiss')).toBeUndefined()
   expect(bound.bind('actionCards')('dismiss')).toBe('Not now')
   const changes = vi.fn()
   const unsubscribe = bound.hooks.bodies.subscribe(changes)
@@ -47,9 +48,9 @@ it('binds actions to the displayed session, serves registered bodies and removes
   } })
   expect([...bound.hooks.bodies.getSnapshot().keys()]).toEqual(['test_action'])
   const translate = (key: string) => key
-  const element = bound.hooks.bodies.getSnapshot().get('test_action')!.render({ proposal: { callId: ToolCallId('card'), turn: 1,
+  const element = bound.hooks.bodies.getSnapshot().get('test_action')!.render({ proposal: { callId: brandString<ToolCallId>('card'), turn: 1,
     action: 'test_action', title: 'Counter', brief: 'Keep count.', details: {} }, decision: undefined,
-  sessionId: SessionId('session-one'), summary: null, Folded: Body, act: vi.fn() }, translate)
+  sessionId: brandString<SessionId>('session-one'), summary: null, Folded: Body, act: vi.fn() }, translate)
   expect(isValidElement(element) && element.type === Body && (element.props as { t: unknown }).t === translate).toBe(true)
   expect(() => ctx.actionCards.register({ action: 'test_action', locale: 'actionCards', Body })).toThrow('a body for "test_action" is already registered')
   await kind.dispose()

@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol/guide.md
+/:
+  en: cee454924a9ab1f8
+  zh: 2d7cbdcc398fa914
+/node-ptc-bootstrap-protocol-version-3-and-the-scoped-repl-format:
+  en: 541c4f16c0107c90
+  zh: edda22e2ebf01992
+/node-ptc-bootstrap-protocol-version-3-and-the-scoped-repl-format/change:
+  en: f9b071385a270a1e
+  zh: e664c70b769579e9
+/node-ptc-bootstrap-protocol-version-3-and-the-scoped-repl-format/migration:
+  en: 350de9ad88b43420
+  zh: 8b8bfe380cbf6fe8

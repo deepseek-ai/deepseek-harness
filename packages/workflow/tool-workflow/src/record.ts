@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { JobHandle } from '@deepseek-ai/dsh-jobs'
-import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow'
+import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
 
 /** Job-ring taps for the background runs the tool tracks. */
 export interface WorkflowRecordMirror {

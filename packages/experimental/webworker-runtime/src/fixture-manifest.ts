@@ -14,12 +14,39 @@ export interface PreviewFixtureManifestEntry {
   readonly overlays: readonly string[]
 }
 
+/** A page the source chooser links to, such as a report published beside the Preview. */
+export interface PreviewLink {
+  readonly label: string
+  /** URL resolved against the manifest URL; one that resolves to another origin is rejected. */
+  readonly href: string
+}
+
 /** Complete built-in fixture catalog consumed before Worker startup. */
 export interface PreviewFixtureManifest {
   readonly version: number
   /** Required default fixture id, or null when the chooser should default to an empty overlay. */
   readonly defaultFixture: string | null
   readonly fixtures: readonly PreviewFixtureManifestEntry[]
+  /** Links shown on the source chooser; the parser reads an absent list as empty. */
+  readonly links: readonly PreviewLink[]
+}
+
+/** Resolving against this base shows whether an href could leave the manifest's origin. */
+const SAME_ORIGIN_PROBE = new URL('https://preview.invalid/')
+
+function parseLinks(value: unknown): PreviewLink[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) throw new Error('preview fixture manifest links must be an array')
+  return value.map((item) => {
+    const link = recordOf(item)
+    const label = link?.label
+    const href = link?.href
+    if (typeof label !== 'string' || label.length === 0
+      || typeof href !== 'string' || href.length === 0 || new URL(href, SAME_ORIGIN_PROBE).origin !== SAME_ORIGIN_PROBE.origin) {
+      throw new Error('preview fixture manifest contains an invalid link')
+    }
+    return { label, href }
+  })
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -31,7 +58,7 @@ function recordOf(value: unknown): Record<string, unknown> | undefined {
 /**
  * Validate the static fixture catalog before it controls Worker fetches.
  * @param value - Parsed JSON response.
- * @returns A detached manifest with unique ids and non-empty overlay lists.
+ * @returns A detached manifest with unique ids, non-empty overlay lists, and relative links.
  */
 export function parsePreviewFixtureManifest(value: unknown): PreviewFixtureManifest {
   const record = recordOf(value)
@@ -64,5 +91,5 @@ export function parsePreviewFixtureManifest(value: unknown): PreviewFixtureManif
   if (defaultFixture !== null && (typeof defaultFixture !== 'string' || !ids.has(defaultFixture))) {
     throw new Error('preview fixture manifest defaultFixture does not name a fixture')
   }
-  return { version: PREVIEW_FIXTURE_MANIFEST_VERSION, defaultFixture, fixtures }
+  return { version: PREVIEW_FIXTURE_MANIFEST_VERSION, defaultFixture, fixtures, links: parseLinks(record.links) }
 }

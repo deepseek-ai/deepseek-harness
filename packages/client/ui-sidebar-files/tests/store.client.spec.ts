@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { createFilesStore } from '../src/client/store.ts'
 import { DEFAULT_NAVIGATOR_WIDTH } from '../src/client/store.ts'
-import type { DirLevel } from '../src/client/store.ts'
+import type { DirLevel, FilesSearchResult } from '../src/client/store.ts'
 import type { PaneId } from '@deepseek-ai/dsh-client-ui-dockkit'
 
 const ROOT = '/work/app'
@@ -22,13 +22,29 @@ describe('createFilesStore', () => {
     expect(second.getSnapshot().byPane[PANE]).toBeUndefined()
   })
 
+  it('keeps each pane\'s search-bar choice independent without changing its search', () => {
+    const store = createFilesStore().create()
+    const other = 'pane-2' as PaneId
+    store.actions.start(PANE, ROOT)
+    store.actions.start(other, ROOT)
+    store.actions.queried(PANE, 'target')
+    store.actions.searching(PANE)
+    const search = store.getSnapshot().byPane[PANE]!.search
+    store.actions.searchBarShown(PANE, true)
+    expect(store.getSnapshot().byPane[PANE]!.searchBarOpen).toBe(true)
+    expect(store.getSnapshot().byPane[other]!.searchBarOpen).toBe(false)
+    store.actions.searchBarShown(PANE, false)
+    expect(store.getSnapshot().byPane[PANE]!.query).toBe('target')
+    expect(store.getSnapshot().byPane[PANE]!.search).toBe(search)
+  })
+
   it('seeds a pane at its root with the root expanded and nothing loaded', () => {
     const store = createFilesStore().create()
     const { actions } = store
     const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
     actions.start(PANE, ROOT)
     expect(getSnapshot().byPane[PANE]).toEqual({
-      open: undefined, width: DEFAULT_NAVIGATOR_WIDTH,
+      open: undefined, width: DEFAULT_NAVIGATOR_WIDTH, query: '', searchBarOpen: false, search: undefined,
       tree: { root: ROOT, levels: {}, expanded: [ROOT], autoRefresh: true },
     })
   })
@@ -147,12 +163,12 @@ describe('createFilesStore', () => {
     const { actions } = store
     actions.shown(PANE, true)
     actions.resized(PANE, 320)
-    expect(store.getSnapshot().byPane[PANE]).toEqual({ open: true, width: 320, tree: undefined })
+    expect(store.getSnapshot().byPane[PANE]).toEqual({ open: true, width: 320, tree: undefined, query: '', searchBarOpen: false, search: undefined })
     actions.start(PANE, ROOT)
     actions.loaded(PANE, ROOT, LEVEL)
     actions.start(PANE, '/work/other')
     expect(store.getSnapshot().byPane[PANE]).toEqual({
-      open: true, width: 320,
+      open: true, width: 320, query: '', searchBarOpen: false, search: undefined,
       tree: { root: '/work/other', levels: {}, expanded: ['/work/other'], autoRefresh: true },
     })
   })
@@ -170,5 +186,52 @@ describe('createFilesStore', () => {
     actions.start('pane-2' as PaneId, ROOT)
     actions.forget(PANE)
     expect(Object.keys(getSnapshot().byPane)).toEqual(['pane-2'])
+  })
+
+  it('keeps a pane\'s search apart from its tree, and drops a result the query already ended', () => {
+    const store = createFilesStore().create()
+    const { actions } = store
+    const getSnapshot = (): ReturnType<typeof store.getSnapshot> => store.getSnapshot()
+    const search = () => getSnapshot().byPane[PANE]?.search
+    const found = () => {
+      const result = search()?.result
+      return result?.kind === 'found' ? result : undefined
+    }
+    const result = (query: string): FilesSearchResult => ({
+      kind: 'found', query, count: 0, truncated: false, incomplete: false, hiddenLeftOut: true, excluded: true, ignored: true,
+      tree: { root: ROOT, levels: {}, expanded: [ROOT, `${ROOT}/src`], autoRefresh: false },
+    })
+    actions.searching(PANE)
+    actions.searched(PANE, result('a'))
+    actions.searchToggled(PANE, ROOT)
+    expect(getSnapshot().byPane).toEqual({})
+    actions.queried(PANE, '  ')
+    actions.searching(PANE)
+    actions.searched(PANE, result('a'))
+    expect(getSnapshot().byPane[PANE]).toMatchObject({ query: '  ', search: undefined })
+    actions.queried(PANE, 'a')
+    expect(search()).toBeUndefined()
+    // A search under way before its first answer has nothing to draw yet.
+    actions.searching(PANE)
+    expect(search()).toEqual({ pending: true, result: undefined })
+    actions.searchToggled(PANE, ROOT)
+    actions.searched(PANE, result('a'))
+    expect(search()?.pending).toBe(false)
+    actions.searchToggled(PANE, ROOT)
+    expect(found()?.tree.expanded).toEqual([`${ROOT}/src`])
+    actions.searchToggled(PANE, ROOT)
+    expect(found()?.tree.expanded).toEqual([`${ROOT}/src`, ROOT])
+    // Other text keeps the last result, pending, until the next is recorded.
+    actions.queried(PANE, 'ab')
+    actions.searching(PANE)
+    expect(search()).toMatchObject({ pending: true, result: { query: 'a' } })
+    const failure = new RemoteError('gateway/internal', 'down', {})
+    actions.searched(PANE, { kind: 'failed', query: 'ab', failure })
+    expect(search()).toEqual({ pending: false, result: { kind: 'failed', query: 'ab', failure } })
+    // A failed search has no tree to toggle.
+    actions.searchToggled(PANE, ROOT)
+    expect(search()?.result).toEqual({ kind: 'failed', query: 'ab', failure })
+    actions.queried(PANE, '')
+    expect(search()).toBeUndefined()
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { ConversationTimelineSnapshot, TurnLocation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import type { ChatConversationViewNode, ChatNode } from '../src/client/contract/chat-nodes.ts'
@@ -211,6 +211,7 @@ describe('Definition-owned Chat process groups', () => {
 
   it.each([
     ['read', 'read'], ['read_image', 'readImage'], ['write', 'write'], ['edit', 'edit'], ['apply_patch', 'edit'],
+    ['run_code', 'code'], ['cua_run_code', 'code'],
     ['todo_write', 'plan'], ['create_goal', 'plan'], ['update_goal', 'plan'], ['get_goal', 'plan'],
     ['list_mcp_resources', 'tools'], ['list_mcp_resource_templates', 'tools'], ['read_mcp_resource', 'tools'],
   ] as const)('%s keeps its activity category through preparation, dispatch, and result', (name, kind) => {

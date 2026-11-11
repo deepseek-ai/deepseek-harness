@@ -72,7 +72,7 @@ RRULE 时间规则使用 `{ kind: "rrule", rrule: "DTSTART:…\nRRULE:…" }`。
 
 `edit({ id, action: "update", patch, expectedUpdatedAt? }, actorSessionId?, signal?)` 修改 `title`、`prompt`、`timing`、`target` 或 `active`；`action: "delete"` 删除任务。版本不匹配返回 `schedule_conflict`；`null` 比较存储版本字段缺失的情况。等价编辑保留已提交发生时点，并写入当前行格式。暂停保留任务；恢复计算下一个未来发生时点。
 
-`list({ active?, limit?, offset? })`、`catalog()`、`view({ id })`、`history({ id, limit, before? })` 和 `run({ id })` 服务宿主全部任务。Remote `create` 和 `edit` 委托同一原生方法。包根入口与 `/client` 暴露同名无前缀类型。Remote 输入错误使用 `schedule/input-invalid` 和 `details.code`。
+`list({ active?, limit?, offset? })`、`catalog()`、`view({ id })`、`history({ id, limit, before? })` 和 `run({ id })` 服务宿主全部任务。Remote `create` 和 `edit` 委托同一原生方法。包根入口与 `/client` 暴露同名无前缀类型。`ScheduleId` 仅为类型；`dsh-brand` 的 `brandString<ScheduleId>(value)` 为已准入的字符串添加品牌，不校验或生成 id。Remote 输入错误使用 `schedule/input-invalid` 和 `details.code`。
 
 `deleteInactive()` 通过一次领域批量写入移除全部已结束任务，保留活动和已暂停任务。它返回删除数量；没有已结束任务时不执行写入。非空批量写入成功后发出 `schedule/changed`，不通知 Agent。批量写入被拒绝时也发出该事件，且不返回数量；正常失败保留全部行，`unknown-state` 失败则可能已移除行，并隔离领域直到重新打开。
 
