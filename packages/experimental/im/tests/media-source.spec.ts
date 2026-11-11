@@ -96,6 +96,11 @@ describe('admitMediaSource', () => {
     await expect(admitMediaSource('https://mixed/x.png', REFUSING, split)).rejects.toThrow('10.0.0.5')
   })
 
+  it('refuses localhost through the system resolver', async () => {
+    // The default resolver, not a stub: a name that only ever points at this host is refused like the literal address.
+    await expect(admitMediaSource('http://localhost/x.png', REFUSING)).rejects.toThrow('non-public address')
+    await expect(admitMediaSource('http://localhost/x.png', ACCEPTING)).resolves.toBeUndefined()
+  })
   it('leaves an unresolvable name for the fetch to report', async () => {
     await expect(admitMediaSource('https://nowhere.example/x.png', REFUSING, resolve)).resolves.toBeUndefined()
   })
