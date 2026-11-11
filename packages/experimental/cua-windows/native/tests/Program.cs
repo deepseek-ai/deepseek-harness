@@ -16,7 +16,7 @@ void Refuses(Action action, string code)
 
 var request = NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":20,"maxDepth":5}}"""));
 Check(request.Method == "getState" && request.Id == "one", "Valid requests retain correlation and method");
-foreach (var (maxElements, maxDepth) in new[] { (1, 1), (7, 3), (10000, 100), (10001, 101), (100000, 512) })
+foreach (var (maxElements, maxDepth) in new[] { (1, 1), (7, 3), (10000, 100) })
 {
     var observation = NativeRequest.Parse(WireJson.Parse(System.Text.Json.JsonSerializer.Serialize(new
     {
@@ -28,8 +28,8 @@ foreach (var (maxElements, maxDepth) in new[] { (1, 1), (7, 3), (10000, 100), (1
 }
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"click","params":{"appHandle":"app","windowId":"1","x":-1,"y":2}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":0,"maxDepth":5}}""")), "INVALID_ARGUMENT");
-Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":100001,"maxDepth":512}}""")), "INVALID_ARGUMENT");
-Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":100000,"maxDepth":513}}""")), "INVALID_ARGUMENT");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10001,"maxDepth":100}}""")), "INVALID_ARGUMENT");
+Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"getState","params":{"appHandle":"app","maxElements":10000,"maxDepth":101}}""")), "INVALID_ARGUMENT");
 Refuses(() => NativeRequest.Parse(WireJson.Parse("""{"id":"one","method":"typeText","params":{"appHandle":"app","text":"hello","unowned":1}}""")), "INVALID_ARGUMENT");
 Refuses(() => WireJson.Parse("""{"id":"one","id":"two"}"""), "INVALID_REQUEST");
 Refuses(() => WireJson.Parse("""{"params":{"x":1,"x":2}}"""), "INVALID_REQUEST");
