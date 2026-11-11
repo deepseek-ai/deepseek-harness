@@ -7,11 +7,9 @@ Schedule 独立于 Session 的激活状态存储宿主任务。同一管理 API 
 <a id="source-instances"></a>
 ## Source 实例
 
-[`dsh-source`](../../packages/schedule/source/README.zh.md) 定义 `AutomationSource<T>`：每个 class 实例拥有自己的观测，通过可等待的订阅发出具有类型约束的值。复合 source 直接持有上游实例引用，只拥有自己对上游的订阅。同类实例彼此独立；不存在 source-kind 单例、每任务 handler 或任务数量限制。生产者拥有定时器、输入串行化、条件求值和需要持久化的观测状态。
+`@deepseek-ai/dsh-schedule/source` 定义 `AutomationSource<T>` 及其订阅、组合与任务连接类型。[source 实例参考](../../packages/schedule/schedule/source/README.zh.md)拥有 source class、独立实例、source 间组合、原生一次性 disposer 语义、`SourceError` 身份与模型体验。每个 class 实例拥有自己的观测，通过可等待的订阅发出具有类型约束的值；中间输出仅存在于进程内，不是模型输入。生产者拥有定时器、输入串行化、条件求值和需要持久化的观测状态。
 
-`SourceReceiver<T>` 异步消费具有类型约束的值。`SourceConnection.dispose()` 立即停止接收新值，并排空已接收的调用。source 的销毁也等待连接已经断开但仍在执行的调用。多接收者投递等待每个接收者，并聚合失败，不回滚或自动重放。中间输出仅存在于进程内，不是模型输入。
-
-`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`，并返回归调用方 context 所有的原生 Cordis `Disposable<void | Promise<void>>`。首次调用排空已接受调用；重复调用返回 void，不等待尚未完成的清理。应等待首次结果或所属插件的销毁，并在将所有权转移给 generator effect 时 yield 该函数本身。消费者声明 `schedule` 依赖；同步连接 API 随服务一起就绪，不向远端暴露。只有最终任务输出要求 `{ text: string }`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；已存储的定时任务继续使用既有求值器。
+`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执；它保留任务的时间规则和状态。[Schedule 包 source 投递](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；连接与 disposer 契约由 source 参考拥有。
 
 <a id="durable-tasks"></a>
 ## 持久任务

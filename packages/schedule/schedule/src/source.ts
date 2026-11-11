@@ -1,6 +1,6 @@
 /** Typed output subscriptions shared by independently owned source instances. */
-import { SourceError } from '@deepseek-ai/dsh-source'
-import type { SourceConnection, SourceReceiver } from './types.ts'
+import { SourceError } from '@deepseek-ai/dsh-schedule'
+import type { SourceConnection, SourceReceiver } from './source-types.ts'
 
 interface Subscription<T> {
   readonly receive: SourceReceiver<T>

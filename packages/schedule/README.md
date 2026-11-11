@@ -26,9 +26,10 @@ Choose this package for persistent scheduled task management.
 
 | Package | Role |
 |---|---|
-| [`source/`](source/README.md) | Typed source-instance subscriptions and connections to stored tasks |
 | [`schedule/`](schedule/README.md) | Host-owned task persistence, scheduling, delivery targets, inspection, and explicit deletion |
 | [`tool-schedule/`](tool-schedule/README.md) | Preset-scoped `schedule_create`, `schedule_list`, `schedule_view`, and `schedule_edit` tools over the Host `ctx.schedule` service |
+
+The Schedule package also exposes `@deepseek-ai/dsh-schedule/source`; the [source instance reference](schedule/source/README.md) owns the typed source class, subscriptions, and task connections.
 
 -----
 
@@ -36,6 +37,7 @@ Choose this package for persistent scheduled task management.
 ## Related documentation
 
 - [Schedule subsystem](../../docs/subsystems/schedule.md) — task records, recurrence rules, delivery targets, latest receipts, and delivery contracts.
+- [Source instances](schedule/source/README.md) — typed source classes, subscriptions, composition, and Schedule task connections.
 - [Generated tool catalog](../../docs/tool-catalog.md#deepseek-aidsh-tool-schedule) — the `schedule_create`/`schedule_list`/`schedule_view`/`schedule_edit` schemas a mounting preset contributes.
 - [Schedule user guide](../../docs/user/guide/schedule.md) — create, inspect, run, edit, and delete scheduled tasks.
 - [Automation tasks page](../client/ui-schedule/README.md) — the sidebar page that manages every Host task in the browser.

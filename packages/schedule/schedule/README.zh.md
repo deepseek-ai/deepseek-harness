@@ -183,9 +183,7 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 <a id="source-delivery"></a>
 ### Source 投递
 
-插件声明 `schedule` 依赖，并调用 `ctx.schedule.connectSource(source, id)`，将 [`dsh-source`](../source/README.zh.md) 实例连接到已有活动任务。这个同步、同进程 API 在 Schedule 就绪时即可使用，不是 Remote 方法。它返回归调用方 context 所有的原生 Cordis disposer，因此卸载消费者会断开订阅并排空已接受调用，但不销毁 source。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
-
-通过 `const disconnect = ctx.schedule.connectSource(source, id)` 同步取得 disposer，不要 await 连接创建。首次调用立即断开订阅，并返回排空已接受调用的 Promise。重复调用返回 `undefined`，即使首次调用仍未完成；等待清理应 await 首次结果或所属插件的销毁。generator effect 可以通过 `yield disconnect` 转移原生句柄本身的所有权并安排清理顺序。这个一次性 disposer 不同于直接 source 订阅返回的 `SourceConnection.dispose()`，后者的重复调用会等待同一批工作。
+插件声明 `schedule` 依赖，并调用 `ctx.schedule.connectSource(source, id)`，将来自 `@deepseek-ai/dsh-schedule/source` 的 [`AutomationSource`](source/README.zh.md) 实例连接到已有活动任务。这个同步、同进程 API 在 Schedule 就绪时即可使用，不是 Remote 方法。它返回归调用方 context 所有的原生 Cordis disposer，因此卸载消费者会断开订阅并排空已接受调用，但不销毁 source。[source 实例参考](source/README.zh.md)拥有 source class、订阅以及 disposer 首次调用与重复调用的契约。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
 
 source、手动与定时投递共用单任务准入：复用目标共用执行槽，所有目标共用各自的最小投递间隔。因此，source 投递可能延迟后续到期投递，但不改变任务存储的 `scheduledAt`。`new_once` 目标的首次 source 投递可以在原定时发生时点之前创建预留 Session；确认后，后续投递复用该 Session。`new` 目标每次 source 投递创建一个 Session，创建时间也可能早于原定时发生时点。
 
@@ -199,6 +197,7 @@ source、手动与定时投递共用单任务准入：复用目标共用执行�
 ## 进一步探索
 
 - [Schedule 子系统](../../../docs/subsystems/schedule.zh.md)——时间、管理、存储与投递契约。
+- [Source 实例](source/README.zh.md)——类型化 source class、订阅、组合与 Schedule 任务连接。
 - [时间工具](../../util/time/README.zh.md)——Cron 与 RRULE 解析和发生时点计算。
 - [领域助手](src/domain.ts)、[时间编辑](src/update.ts)、[存储](src/storage.ts)和[运行时](src/runtime.ts)拥有 Schedule 策略。
 
@@ -261,6 +260,7 @@ This is a scheduled message from the user
 
 提醒消息追加到目标 Session 的历史并保留既有消息内容，不替换已有请求前缀。`new` 目标的每次投递都开始一个新 Session，其历史不包含之前的任何投递。
 
+<a id="source-observations-in-the-target-session"></a>
 ### 目标 Session 中的 source 观测
 
 #### 模型看到什么

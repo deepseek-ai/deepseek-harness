@@ -80,7 +80,7 @@ import { isSurfaceEligibleType } from '../../core/session/src/surface.ts'
 - 集合之外的键（`./brand` 5 个包、`./worker` 4 个、`./startup`、`./runner`、`./protocol` 各 2 个，另有大量一次性键）没有文档含义，属待核项，不是可照抄的先例。
 - `dsh-tools` 另行提供 `./pipeline`，用于复用调用阶段与批量调度。主入口与 pipeline bundle 共享运行时 chunk，以保持错误类的身份一致；工作区检查验证导出目标与发布文件。
 - `dsh-tool-executor-ptc` 提供 `./run-code`，用于共享程序工具工厂、显式指定运行时及调用上限，并传入私有可调用工具定义。工作区检查验证其导出目标与发布文件。
-- `dsh-source` 通过 `./source` 提供可继承的类型化 source 实例，与打包的错误及类型入口分开。工作区检查验证声明、运行时导出目标和编译后的 JavaScript 发布文件；两个入口保持公共 `SourceError` 构造器的身份一致。
+- `@deepseek-ai/dsh-schedule` 通过 `./source` 提供可继承的类型化 source 实例，与打包的错误及类型入口分开。根入口在运行时导出 `SourceError`，仅以类型导出 `AutomationSource`；`./source` leaf 通过根包 specifier 导入 `SourceError`，而非相对 leaf 文件，因此两个入口共享公共 `SourceError` 构造器，且根入口不在运行时导入 leaf，不产生运行时循环。工作区检查验证其声明、运行时导出目标和编译后的 JavaScript 发布文件。
 - 判定条件：改动是否新增了标准集合以外的 export 键？
 - 例外：无默认例外；新增键须先改正家文档与检查，并取得对应领域专家确认。
 - 复算分布：

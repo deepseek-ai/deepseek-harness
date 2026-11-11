@@ -15,7 +15,7 @@ Status: proposed
 
 ## 提案
 
-下文的 provider/trigger 实现拆分已由[具有类型约束的 source 实例](../../implemented/architecture/2026-11-11-typed-source-instances.zh.md)取代。纯事件任务存储、受限事件轮次、观测记录和通知仍属于本提案。
+下文的 provider/trigger 实现拆分已由[Schedule 包中具有类型约束的 source 实例](../../implemented/architecture/2026-11-11-typed-source-instances.zh.md)取代。纯事件任务存储、受限事件轮次、观测记录和通知仍属于本提案。
 
 自动化任务改为由指令、带参数的来源和会话模式组成。时间是多种来源中的一种，因此定时任务就是来源为时间的自动化任务。每次观察依次经过三层，只有最后一层调用模型：来源事件经过触发器过滤成为候选事件（candidate），候选事件投递到会话，由模型在会话中判断，只有调用通知工具才会为用户产生一条通知（notice）。本提案部分取代上面链接的两篇笔记：任务不再绑定原会话，任务记录也不再只表示收件箱投递。
 

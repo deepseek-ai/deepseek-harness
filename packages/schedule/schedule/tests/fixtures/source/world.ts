@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-agent-loop'
 import { LlmAdapter, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule'
-import { AutomationSource } from '@deepseek-ai/dsh-source/source'
+import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 
 /** Explicit observation producer; it owns no timers or external connections. */
 export class ObservationSource extends AutomationSource<string> {

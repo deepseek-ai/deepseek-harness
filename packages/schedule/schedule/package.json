@@ -18,6 +18,10 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./source": {
+      "types": "./lib/types/source.d.ts",
+      "default": "./lib/types/source.js"
+    },
     "./client": {
       "types": "./lib/types/client.d.ts",
       "default": "./lib/types/client.js"
@@ -57,7 +61,7 @@
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-source": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/dsh-storage-domain": "workspace:*",
     "@deepseek-ai/dsh-subagent": "workspace:*",
     "@deepseek-ai/dsh-tools": "workspace:*",
@@ -72,6 +76,8 @@
     "zod": "4.6.6"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-app-boot": "workspace:*",
+    "@deepseek-ai/dsh-loader-smoke": "workspace:*",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop": "workspace:*",
@@ -83,7 +89,7 @@
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",
     "@deepseek-ai/dsh-session-projection": "workspace:*",
-    "@deepseek-ai/dsh-source": "workspace:*",
+    "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/dsh-session-title": "workspace:*",
     "@deepseek-ai/dsh-storage": "workspace:*",
     "@deepseek-ai/dsh-storage-domain": "workspace:*",

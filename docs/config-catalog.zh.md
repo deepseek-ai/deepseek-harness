@@ -3102,7 +3102,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-schedule`
 
 - `inject`: `agents` · `sessions` · `storageDomain` · `sessionPersistence`
-- `source`: [`packages/schedule/schedule/src/index.ts:82`](../packages/schedule/schedule/src/index.ts)
+- `source`: [`packages/schedule/schedule/src/index.ts:86`](../packages/schedule/schedule/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the Host Schedule domain. */
@@ -5293,7 +5293,6 @@ export interface Config {
 | `@deepseek-ai/dsh-session-snapshot` | — | [`packages/test-support/session-snapshot/src/index.ts`](../packages/test-support/session-snapshot/src/index.ts) |
 | `@deepseek-ai/dsh-session-telemetry` | — | [`packages/session/session-telemetry/src/index.ts`](../packages/session/session-telemetry/src/index.ts) |
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
-| `@deepseek-ai/dsh-source` | — | [`packages/schedule/source/src/index.ts`](../packages/schedule/source/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
 | `@deepseek-ai/dsh-tool-testkit` | — | [`packages/test-support/tool-testkit/src/index.ts`](../packages/test-support/tool-testkit/src/index.ts) |

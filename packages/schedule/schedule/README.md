@@ -183,9 +183,7 @@ History stays with the task and is pruned only on append. Missing old history ke
 <a id="source-delivery"></a>
 ### Source delivery
 
-Plugins declare a `schedule` dependency and call `ctx.schedule.connectSource(source, id)` to connect a [`dsh-source`](../source/README.md) instance to an existing active task. This synchronous, in-process API is available when Schedule becomes ready; it is not a Remote method. It returns the native Cordis disposer owned by the caller's context, so unloading the consumer detaches the subscription and drains accepted calls without disposing the source. Schedule checks status and admission inside the same FIFO as management, then uses the existing target, Session flush, and receipt commit. The stored instruction, timing, and active status remain unchanged; source input is not a timed occurrence and does not advance or end the task.
-
-Acquire the disposer synchronously as `const disconnect = ctx.schedule.connectSource(source, id)`; do not await connection creation. The first invocation detaches immediately and returns a Promise draining accepted calls. Repeated invocations return `undefined`, even while the first is pending: await that first result or the owning plugin's disposal to await cleanup. A generator effect can `yield disconnect` to transfer the exact native handle and order its cleanup. This one-shot disposer differs from `SourceConnection.dispose()` returned by a direct source subscription, whose repeated calls await the same work.
+Plugins declare a `schedule` dependency and call `ctx.schedule.connectSource(source, id)` to connect an [`AutomationSource`](source/README.md) instance from `@deepseek-ai/dsh-schedule/source` to an existing active task. This synchronous, in-process API is available when Schedule becomes ready; it is not a Remote method. It returns the native Cordis disposer owned by the caller's context, so unloading the consumer detaches the subscription and drains accepted calls without disposing the source. The [source instance reference](source/README.md) owns the source class, subscriptions, and the disposer's first-call and repeated-call contract. Schedule checks status and admission inside the same FIFO as management, then uses the existing target, Session flush, and receipt commit. The stored instruction, timing, and active status remain unchanged; source input is not a timed occurrence and does not advance or end the task.
 
 Source, manual, and timed deliveries share per-task admission: reused targets share an execution slot, and every target shares its minimum delivery interval. A source delivery can therefore delay an upcoming timed delivery without changing the task's stored `scheduledAt`. The first source delivery to a `new_once` target can create its reserved Session before the timed occurrence; after acknowledgment, later deliveries reuse that Session. A `new` target creates a Session for each source delivery, which can also occur before the timed occurrence.
 
@@ -199,6 +197,7 @@ Missing tasks reject with `SOURCE_TASK_UNAVAILABLE`, paused or ended tasks with 
 ## Further Exploration
 
 - [Schedule subsystem](../../../docs/subsystems/schedule.md) — timing, management, storage, and delivery contracts.
+- [Source instances](source/README.md) — typed source classes, subscriptions, composition, and Schedule task connections.
 - [Time utilities](../../util/time/README.md) — Cron and RRULE parsers and occurrence arithmetic.
 - [Domain helpers](src/domain.ts), [timing edits](src/update.ts), [storage](src/storage.ts), and [runtime](src/runtime.ts) own Schedule policy.
 
@@ -261,6 +260,7 @@ Each delivery adds fixed framing and content-dependent payload tokens. A batch i
 
 Reminder messages append to the target Session's history and preserve earlier message content; they do not replace the existing request prefix. Each delivery of a `new` target starts a fresh Session whose history contains none of the earlier deliveries.
 
+<a id="source-observations-in-the-target-session"></a>
 ### Source observations in the target Session
 
 #### What the model sees

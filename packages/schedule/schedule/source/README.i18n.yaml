@@ -1,0 +1,43 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/schedule/schedule/source/README.md
+/:
+  en: 0d7b3e026c5f3882
+  zh: 5fa04bdb0ec21518
+/deepseek-ai-dsh-schedule-source:
+  en: cbf6b48a99d239f9
+  zh: fe485c0c87ec11ba
+/deepseek-ai-dsh-schedule-source/summary:
+  en: c831e6515d48e0ba
+  zh: 7a33736db350afaf
+/deepseek-ai-dsh-schedule-source/table-of-contents:
+  en: 08c5df62dbf1ffbd
+  zh: e5cdd5e6c5beee60
+/deepseek-ai-dsh-schedule-source/use-this-entry:
+  en: 747f2c2629901b42
+  zh: 4ec461896cdedd4e
+/deepseek-ai-dsh-schedule-source/understand-the-implementation:
+  en: 6465f38c39a32759
+  zh: cc04fb891d9824ae
+/deepseek-ai-dsh-schedule-source/further-exploration:
+  en: 0fc0eca17839752c
+  zh: ed78f59f3ff54b2d
+/deepseek-ai-dsh-schedule-source/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-schedule-source/model-experience/source-produced-task-input:
+  en: ac46c9d3c420f43e
+  zh: 964557d18fea68fc
+/deepseek-ai-dsh-schedule-source/model-experience/source-produced-task-input/what-the-model-sees:
+  en: 2a2490691d6e1920
+  zh: 408d1f1aab88f965
+/deepseek-ai-dsh-schedule-source/model-experience/source-produced-task-input/token-effect:
+  en: e6481ccb69b3a4e8
+  zh: f36558bf17fdc7fd
+/deepseek-ai-dsh-schedule-source/model-experience/source-produced-task-input/kv-cache-effect:
+  en: 49d46a91bc1eeef8
+  zh: c1e83263af12423e
+/deepseek-ai-dsh-schedule-source/known-limitations-and-deferred-work:
+  en: 903bebc1046d483a
+  zh: ed5249aa4336d3cf

@@ -10,7 +10,7 @@ Observing an event and deciding whether to emit it can require the same local st
 
 ## Decision
 
-[`AutomationSource<T>`](../../../../packages/schedule/source/README.md) represents one output-producing instance. Concrete classes own observation, input methods, timing, and condition evaluation. They compose through typed object references and asynchronous subscriptions; the same class can have multiple independent instances. Source-to-source data is not constrained to task text. Schedule directly connects final `{ text }` candidates to existing tasks through its ready service. Source classes do not require a separate router, task-id registry, or receiver registration.
+[`AutomationSource<T>`](../../../../packages/schedule/schedule/source/README.md) represents one output-producing instance. Concrete classes own observation, input methods, timing, and condition evaluation. They compose through typed object references and asynchronous subscriptions; the same class can have multiple independent instances. Source-to-source data is not constrained to task text. Schedule directly connects final `{ text }` candidates to existing tasks through its ready service. Source classes do not require a separate router, task-id registry, or receiver registration.
 
 Subscription disposal stops accepting new calls and drains accepted calls. A composite source owns its subscriptions, not borrowed upstream instances. Fan-out waits for every receiver and reports aggregate failure without implying rollback. These obligations preserve task-storage lifetime through pending delivery and keep one failing subscriber from suppressing unrelated subscribers.
 

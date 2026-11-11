@@ -383,7 +383,7 @@ describe('package payload constraints', () => {
   })
 
   it('publishes the typed source class separately from its bundled error entry', () => {
-    const dir = 'packages/schedule/source'
+    const dir = 'packages/schedule/schedule'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
     expect(manifest.peerDependencies).toHaveProperty('@deepseek-ai/dsh-error', 'workspace:*')

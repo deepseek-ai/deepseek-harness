@@ -1,8 +1,7 @@
 /** Loader-owned subscriptions connecting two borrowed source instances to a stored automation task. */
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-schedule'
-import { AutomationSource } from '@deepseek-ai/dsh-source/source'
-import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-source'
+import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
+import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-schedule'
 import type { ObservationSource } from './world.ts'
 
 class CombinedObservation extends AutomationSource<AutomationCandidate> {

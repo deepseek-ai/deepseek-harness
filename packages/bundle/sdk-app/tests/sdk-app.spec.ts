@@ -16,7 +16,7 @@ describe('dsh-sdk-app bundle', () => {
     }
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-sdk-jsonrpc-server')
-    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-source')
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-schedule')
     const patches = yaml.load(
       readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'),
       { schema: entryListSchema },
@@ -28,7 +28,6 @@ describe('dsh-sdk-app bundle', () => {
       config: { personaPrefix: 'You are a coding agent powered by the {{model}} model.' },
     })
     const rows = patches.flatMap(patch => patch.insert ?? [])
-    expect(rows.some(row => row.name === '@deepseek-ai/dsh-source')).toBe(false)
     expect(rows.find(row => row.id === 'sdk-app-startup')?.name).toBe('@deepseek-ai/dsh-sdk-app')
     expect(rows.find(row => row.id === 'sdk-jsonrpc-server')?.inject).toEqual(['sdkAppStartup', 'loader'])
   })

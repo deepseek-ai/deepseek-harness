@@ -1,7 +1,7 @@
 /** Typed sources compose through object references without kinds, task bindings, or a graph executor. */
 import { describe, expect, expectTypeOf, it, onTestFinished } from 'vitest'
 import { AutomationSource } from '../src/source.ts'
-import type { SourceConnection } from '../src/types.ts'
+import type { SourceConnection } from '../src/source-types.ts'
 
 class NumberSource extends AutomationSource<number> {
   publish(value: number): Promise<void> { return this.emit(value) }

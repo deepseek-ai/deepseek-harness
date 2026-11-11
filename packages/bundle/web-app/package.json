@@ -165,7 +165,6 @@
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "@deepseek-ai/dsh-plugin-market": "workspace:*",
     "@deepseek-ai/dsh-schedule": "workspace:*",
-    "@deepseek-ai/dsh-source": "workspace:*",
     "@deepseek-ai/dsh-session-log-export": "workspace:*",
     "@deepseek-ai/dsh-session-reference": "workspace:*",
     "@deepseek-ai/dsh-session-stats": "workspace:*",

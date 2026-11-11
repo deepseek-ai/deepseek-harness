@@ -18,7 +18,7 @@
   config:
     backend: json
 - id: schedule
-  name: '@deepseek-ai/dsh-schedule'
+  name: ./schedule-provider.ts
 - name: ./world.ts
 - id: source-owner
   name: ./source-owner.ts

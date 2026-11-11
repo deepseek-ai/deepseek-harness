@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[`AutomationSource<T>`](../../../../packages/schedule/source/README.zh.md) 表示一个产生输出的实例。具体 class 拥有观测、输入方法、计时与条件求值。实例通过具有类型约束的对象引用和异步订阅组合；同一 class 可以有多个独立实例。source 之间的数据不受任务文本格式约束。Schedule 通过已就绪的服务，直接把最终 `{ text }` 候选连接到已有任务。source class 不需要独立路由器、任务标识注册表或接收者注册。
+[`AutomationSource<T>`](../../../../packages/schedule/schedule/source/README.zh.md) 表示一个产生输出的实例。具体 class 拥有观测、输入方法、计时与条件求值。实例通过具有类型约束的对象引用和异步订阅组合；同一 class 可以有多个独立实例。source 之间的数据不受任务文本格式约束。Schedule 通过已就绪的服务，直接把最终 `{ text }` 候选连接到已有任务。source class 不需要独立路由器、任务标识注册表或接收者注册。
 
 订阅销毁会停止接受新调用，并排空已接受的调用。复合 source 拥有自己的订阅，不拥有借用的上游实例。多接收者投递等待每个接收者，报告聚合失败，但不暗示已经回滚。这些要求让任务存储在尚未完成的投递期间保持有效，也防止一个订阅者的失败阻止无关订阅者。
 

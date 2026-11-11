@@ -4,8 +4,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import ScheduleService, { ScheduleId, scheduleDomain } from '@deepseek-ai/dsh-schedule'
-import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-source'
-import { AutomationSource } from '@deepseek-ai/dsh-source/source'
+import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-schedule'
+import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 
 class SampleSource extends AutomationSource<string> {
   sample(text: string): Promise<void> {
