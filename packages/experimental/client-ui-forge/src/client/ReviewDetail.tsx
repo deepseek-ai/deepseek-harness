@@ -40,7 +40,7 @@ const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'unavailable': 'change.failure.unavailable',
 }
 
-const TABS: readonly ReviewTab[] = ['summary', 'changes', 'chat']
+const TAB_ORDER: readonly ReviewTab[] = ['summary', 'changes', 'chat']
 
 /** Props of the detail. */
 export interface ReviewDetailProps {
@@ -282,7 +282,7 @@ export function ReviewDetail({
           <span className={css.branches}>{`${snapshot.headBranch} → ${snapshot.baseBranch}`}</span>
         </div>
         <div className={css.tabs} role="tablist" aria-label={t('reviewPage.tabs')}>
-          {TABS.map(value => (
+          {TAB_ORDER.map(value => (
             <button key={value} type="button" role="tab" className={css.tab} aria-selected={tab === value} id={`forge-review-tab-${value}`}
               aria-controls="forge-review-panel" onClick={() => { onTab(value) }}>
               {tabLabel(value)}
