@@ -89,7 +89,6 @@ describe('release families', () => {
       '@deepseek-ai/dsh-personalized-recommendations',
       '@deepseek-ai/dsh-experimental-plugin-market-bundle',
       '@deepseek-ai/dsh-plugin-recommendations',
-      '@deepseek-ai/dsh-experimental-ptc-runtime-python',
       '@deepseek-ai/dsh-experimental-ralph-bundle',
       '@deepseek-ai/dsh-experimental-session-inspector',
       '@deepseek-ai/dsh-experimental-session-search',

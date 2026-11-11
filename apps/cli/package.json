@@ -138,7 +138,6 @@
     "@deepseek-ai/dsh-credentials-local": "workspace:*",
     "@deepseek-ai/dsh-deepseek-llm-api-extensions": "workspace:*",
     "@deepseek-ai/dsh-agent-team": "workspace:*",
-    "@deepseek-ai/dsh-experimental-ptc-runtime-python": "workspace:*",
     "@deepseek-ai/dsh-tool-agent-team": "workspace:*",
     "@deepseek-ai/dsh-fs-observation-policy": "workspace:*",
     "@deepseek-ai/dsh-fs-sandbox": "workspace:*",

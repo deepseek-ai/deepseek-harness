@@ -486,7 +486,6 @@
     { "path": "./packages/experimental/tool-terminal" },
     { "path": "./packages/experimental/terminal-panel" },
     { "path": "./packages/ptc-runtime/ptc-runtime" },
-    { "path": "./packages/experimental/ptc-runtime-python" },
     { "path": "./packages/ptc-runtime/ptc-runtime-node" },
     { "path": "./packages/llm/llm-deepseek" },
     { "path": "./packages/llm/llm-deepseek-api-key" },

@@ -66,10 +66,6 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   ],
   '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
   '@deepseek-ai/dsh-experimental-inspector': ['resolveInspectorOptions', 'startInspector'],
-  '@deepseek-ai/dsh-experimental-ptc-runtime-python': [
-    'checkDoneValue', 'detachResidual', 'encodeJsonPlain', 'hasNonLosslessNumber', 'hasUnsafeIntegerToken',
-    'hostFrameParseCeiling', 'logTruncationMarker', 'readProcessStart', 'resolvePythonBin', 'validateChildFrame',
-  ],
   '@deepseek-ai/dsh-experimental-worktree': [
     'CREATED_RECORD', 'createdWorktreeSchema', 'generatedWorktreeName', 'worktreeProjection',
   ],

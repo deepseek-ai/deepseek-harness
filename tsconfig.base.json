@@ -406,7 +406,6 @@
       "@deepseek-ai/dsh-experimental-liveshare/client": ["./packages/experimental/liveshare/src/client/index.ts"],
       "@deepseek-ai/dsh-experimental-liveshare/viewer-declarations": ["./packages/experimental/liveshare/src/viewer-declarations.ts"],
       "@deepseek-ai/dsh-experimental-liveshare-protocol": ["./packages/experimental/liveshare-protocol/src"],
-      "@deepseek-ai/dsh-experimental-ptc-runtime-python": ["./packages/experimental/ptc-runtime-python/src"],
       "@deepseek-ai/dsh-util-crypto": ["./packages/util/crypto/src"],
       "@deepseek-ai/dsh-util-values": ["./packages/util/values/src"],
       "@deepseek-ai/dsh-util-code-language": ["./packages/util/code-language/src"],

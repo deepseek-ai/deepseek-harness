@@ -61,7 +61,6 @@ export const LEGACY_PREFIXED_EXPERIMENTAL_PACKAGE_DIRECTORIES: readonly string[]
   'packages/experimental/liveshare',
   'packages/experimental/liveshare-protocol',
   'packages/experimental/plugin-market-bundle',
-  'packages/experimental/ptc-runtime-python',
   'packages/experimental/ralph-bundle',
   'packages/experimental/session-inspector',
   'packages/experimental/session-search',
