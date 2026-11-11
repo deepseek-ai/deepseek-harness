@@ -189,6 +189,9 @@ importers:
       '@yarnpkg/cli-dist':
         specifier: 4.18.0
         version: 4.18.0
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       eslint-plugin-sonarjs:
         specifier: ^4.2.0
         version: 4.2.0(eslint@10.5.0(jiti@2.7.0)(supports-color@9.4.0))

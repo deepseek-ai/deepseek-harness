@@ -15,6 +15,7 @@ const MANIFEST: PreviewFixtureManifest = {
     description: 'A deterministic example.',
     overlays: ['fixtures/base.tar.gz', 'fixtures/tail.tar.gz'],
   }],
+  links: [],
 }
 
 function setLocation(search = ''): void {
@@ -106,6 +107,31 @@ describe('Preview source chooser', () => {
     expect(root.childElementCount).toBe(1)
     expect(document.querySelector('[data-preview-source-chooser]')).toBeNull()
     expect(document.querySelector('[data-preview-source-style]')).toBeNull()
+  })
+
+  it('shows manifest links resolved against the manifest URL', async () => {
+    installManifest({ ...MANIFEST, links: [{ label: 'Snapshot <changes>', href: '../snapshot-diff/' }] })
+
+    const selected = choosePreviewSource(MANIFEST_URL)
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-preview-source-link]')).not.toBeNull()
+    })
+    const link = document.querySelector<HTMLAnchorElement>('[data-preview-source-link]')
+    expect([link?.textContent, link?.href]).toEqual(['Snapshot <changes>', 'https://preview.test/snapshot-diff/'])
+    submitChooser()
+    await selected
+  })
+
+  it('shows no link when the manifest has none', async () => {
+    installManifest()
+
+    const selected = choosePreviewSource(MANIFEST_URL)
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-preview-source-chooser]')).not.toBeNull()
+    })
+    expect(document.querySelector('[data-preview-source-link]')).toBeNull()
+    submitChooser()
+    await selected
   })
 
   it('selects the empty source when the manifest has no default', async () => {
