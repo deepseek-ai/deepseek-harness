@@ -494,7 +494,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const body = server.requests[0] as { messages: Array<{ content: unknown }> }
     expect(JSON.stringify(body.messages[0]?.content).match(/"type":"image"/g)).toHaveLength(2)
     expect(JSON.stringify(body)).not.toContain('file_id')
-    expect(files.ensureUploaded).toHaveBeenCalledTimes(1)
+    expect(files.ensureUploaded).toHaveBeenCalledTimes(2)
   })
 
   it('fails a base64 fallback whose retained images exceed the inline bound with the count to offload', async () => {
