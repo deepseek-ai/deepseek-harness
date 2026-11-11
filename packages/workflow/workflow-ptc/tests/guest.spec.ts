@@ -338,16 +338,25 @@ describe('workflow script validation', () => {
     const result = await runWorkflowGuest(fixture(body).host)
     expect(result.stopReason).toBe('error')
     expect(result.error).toContain(message)
+    expect(result.errorCode).toMatch(/^(INVALID_ARGUMENT|UNSUPPORTED_OPTION|UNSUPPORTED_SCHEMA)$/)
+  })
+
+  it('reports no fatal code when the script throws its own error', async () => {
+    const result = await runWorkflowGuest(fixture('throw new Error("script bug")').host)
+    expect(result).toMatchObject({ stopReason: 'error', error: expect.stringContaining('script bug') as string })
+    expect(result).not.toHaveProperty('errorCode')
   })
 
   it('applies the ordinary total-child and per-combinator item limits', async () => {
     const total = await runWorkflowGuest(fixture('await agent("one"); return await agent("two")', {}, { maxTotalAgents: 1 }).host)
     expect(total.stopReason).toBe('error')
     expect(total.error).toContain('total agent cap (1)')
+    expect(total.errorCode).toBe('AGENT_CAP')
     for (const body of ['return await parallel([() => 1, () => 2])', 'return await pipeline([1, 2], value => value)']) {
       const result = await runWorkflowGuest(fixture(body, {}, { maxItemsPerCall: 1 }).host)
       expect(result.stopReason).toBe('error')
       expect(result.error).toContain('per-call cap (1)')
+      expect(result.errorCode).toBe('ITEM_CAP')
     }
   })
 })

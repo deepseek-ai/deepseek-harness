@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { isEntry } from '../release/process.ts'
 import { cuaHelperSourceMatches } from './build-inputs.ts'
 
-const workflows = ['cua-helper-package.yml', 'release-publish.yml'] as const
+const workflows = ['cua-helper-package-macos.yml', 'release-publish.yml'] as const
 
 function record(value: unknown): Record<string, unknown> {
   assert(value !== null && typeof value === 'object' && !Array.isArray(value), 'CUA reuse: invalid GitHub object')
@@ -61,16 +61,17 @@ export async function selectCuaHelperArtifact(repository: string, runId: string,
     const workflow = workflows.find(name => run.path === `.github/workflows/${name}`)
     assert(workflow && run.event === 'workflow_dispatch', 'CUA reuse: select a supported repository packaging or release run')
     if (run.status !== 'completed') return 'the latest attempt has not completed'
-    if (workflow === 'cua-helper-package.yml' && run.conclusion !== 'success') return 'the latest packaging attempt did not succeed'
-    const jobName = workflow === 'cua-helper-package.yml' ? 'package' : 'cua-helper / package'
+    if (workflow === 'cua-helper-package-macos.yml' && run.conclusion !== 'success') return 'the latest packaging attempt did not succeed'
+    const jobName = workflow === 'cua-helper-package-macos.yml' ? 'package' : 'cua-helper-macos / package'
     const jobs = rows(await api(`${base}/runs/${candidate}/jobs?filter=all&per_page=100`, true), 'jobs')
       .filter(job => job.name === jobName)
+    if (jobs.length === 0) return `this run contains no ${jobName} job. Select a run that built the macOS helper`
     const attempts = jobs.map(job => Number(id(job.run_attempt)))
     assert(attempts.every(value => value <= Number(attempt)), 'CUA reuse: run advanced during selection; retry with the same run ID')
-    const producerAttempt = Math.max(0, ...attempts)
+    const producerAttempt = Math.max(...attempts)
     const producers = jobs.filter(job => job.run_attempt === producerAttempt)
     if (producers.length !== 1 || producers[0]?.conclusion !== 'success') return `the last executed ${jobName} job did not succeed`
-    const name = `cua-helper-${candidate}-${producerAttempt}-${buildKey}`
+    const name = `cua-helper-macos-${candidate}-${producerAttempt}-${buildKey}`
     const artifacts = (retained ?? rows(await api(`${base}/runs/${candidate}/artifacts?per_page=100`, true), 'artifacts'))
       .filter(artifact => artifact.name === name)
     if (artifacts.length === 0) return 'no artifact matches the current source bytes and build configuration; use the producer run linked in its summary or rebuild'
@@ -99,7 +100,7 @@ export async function selectCuaHelperArtifact(repository: string, runId: string,
     const candidateId = id(candidate.id)
     const artifacts = rows(await api(`${base}/runs/${candidateId}/artifacts?per_page=100`, true), 'artifacts')
     if (!artifacts.some(artifact => typeof artifact.name === 'string'
-      && artifact.name.startsWith(`cua-helper-${candidateId}-`) && artifact.name.endsWith(`-${buildKey}`))) continue
+      && artifact.name.startsWith(`cua-helper-macos-${candidateId}-`) && artifact.name.endsWith(`-${buildKey}`))) continue
     const selected = await selectRun(candidateId, artifacts)
     if (typeof selected !== 'string') return selected
   }
@@ -193,7 +194,7 @@ if (isEntry(import.meta.url)) {
   const repository = env.GITHUB_REPOSITORY
   const root = resolve(import.meta.dirname, '../..')
   const sourceMatches = new Map<string, boolean>()
-  const selection = await selectCuaHelperArtifact(repository, env.CUA_RUN_ID ?? '', env.CUA_BUILD_KEY, githubJson, async (commit) => {
+  const selection = await selectCuaHelperArtifact(repository, env.CUA_MACOS_RUN_ID ?? '', env.CUA_BUILD_KEY, githubJson, async (commit) => {
     let matches = sourceMatches.get(commit)
     if (matches === undefined) {
       matches = await cuaHelperSourceMatches(root, repository, commit, githubJson)

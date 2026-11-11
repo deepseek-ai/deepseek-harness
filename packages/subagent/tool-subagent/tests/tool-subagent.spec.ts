@@ -243,6 +243,7 @@ describe('dsh-tool-subagent', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('changed while resolving the child LLM route')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'PROVIDER_CHANGED' })
     expect(oldStart).not.toHaveBeenCalled()
     expect(replacementStart).not.toHaveBeenCalled()
   })
@@ -343,6 +344,7 @@ describe('dsh-tool-subagent', () => {
     const result = await callSubagent(ctx, { description: 'd', prompt: 'p' }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('registers when the provider appears LATER — no load-order requirement (Loader starts siblings concurrently)', async () => {

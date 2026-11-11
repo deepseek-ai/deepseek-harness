@@ -86,7 +86,7 @@ A run is holder-owned: engine-plugin unload prevents new starts but does not rev
 
 ### Failure discipline
 
-`WorkflowError` carries a machine-routable code and a `fatal` flag; every code is fatal, and `parallel()` and `pipeline()` re-throw fatal errors instead of mapping the item to `null` — a typo'd option must kill the script loudly. Codes cover start failures, contract violations, exceeded caps, provider and result faults, unserializable values, and cancellation; the exact set and meanings live in [`src/index.ts`](src/index.ts).
+`WorkflowError` carries a machine-routable code and a `fatal` flag; every code is fatal, and `parallel()` and `pipeline()` re-throw fatal errors instead of mapping the item to `null` — a typo'd option must kill the script loudly. Codes cover start failures, contract violations, exceeded caps, provider and result faults, unserializable values, and cancellation; the code that ended a run is reported as `WorkflowResult.errorCode`, and `RUN_FAILED` classifies an `error` run without one; the exact set and meanings live in [`src/index.ts`](src/index.ts).
 
 The per-item `null` is reserved for child-run failures and ordinary in-stage script errors, so a child that resolves normally with a non-completed stop reason is not an infrastructure exception: `agent()` returns `null`, letting the script handle an ordinary child failure.
 

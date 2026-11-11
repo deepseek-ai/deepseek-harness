@@ -19,7 +19,7 @@ function fixture() {
     'packages/experimental/cua-macos/native/Info.plist': 'application identity',
     'scripts/cua-helper/package.ts': 'build helper',
     'apps/desktop/scripts/notarize-macos.mjs': 'notarize helper',
-    '.github/workflows/cua-helper-package.yml': 'build configuration',
+    '.github/workflows/cua-helper-package-macos.yml': 'build configuration',
     '.github/workflows/release-publish.yml': 'publish configuration',
     'packages/client/unrelated/src/index.ts': 'unrelated feature',
   }
@@ -62,7 +62,7 @@ it.each(['add', 'delete', 'rename', 'resource', 'dependency', 'script', 'workflo
     if (change === 'resource') writeFileSync(join(f.root, 'packages/experimental/cua-macos/native/Info.plist'), 'changed identity')
     if (change === 'dependency') writeFileSync(join(f.root, 'pnpm-lock.yaml'), 'changed dependency')
     if (change === 'script') writeFileSync(join(f.root, 'apps/desktop/scripts/notarize-macos.mjs'), 'changed notarization')
-    if (change === 'workflow') writeFileSync(join(f.root, '.github/workflows/cua-helper-package.yml'), 'changed build configuration')
+    if (change === 'workflow') writeFileSync(join(f.root, '.github/workflows/cua-helper-package-macos.yml'), 'changed build configuration')
     if (change === 'package manager') writeFileSync(join(f.root, 'package.json'), JSON.stringify({ packageManager: 'pnpm@12.0.0' }))
     f.git('add', '-A')
     expect(cuaHelperSourceDigest(f.root)).not.toBe(before)
@@ -170,7 +170,7 @@ it.each(['helper workflow', 'publish workflow', 'packaging script', 'manifest li
     const f = fixture()
     const previous = producerSnapshot(f.root)
     const digest = cuaHelperSourceDigest(f.root)
-    if (change === 'helper workflow') writeFileSync(join(f.root, '.github/workflows/cua-helper-package.yml'), 'forged uploader')
+    if (change === 'helper workflow') writeFileSync(join(f.root, '.github/workflows/cua-helper-package-macos.yml'), 'forged uploader')
     if (change === 'publish workflow') writeFileSync(join(f.root, '.github/workflows/release-publish.yml'), 'forged caller')
     if (change === 'packaging script') writeFileSync(join(f.root, 'scripts/cua-helper/package.ts'), 'forged metadata')
     if (change === 'manifest lifecycle') writeFileSync(join(f.root, 'package.json'), JSON.stringify({
@@ -229,11 +229,11 @@ it.skipIf(process.platform === 'win32').each(['match', 'miss', 'api failure', 'm
     Object.assign(snapshot.responses, {
       [base]: { run_attempt: 2 },
       [`${base}/attempts/2`]: { id: 123, run_attempt: 2, status: 'completed', conclusion: 'success',
-        event: 'workflow_dispatch', path: '.github/workflows/cua-helper-package.yml', head_sha: snapshot.commit,
+        event: 'workflow_dispatch', path: '.github/workflows/cua-helper-package-macos.yml', head_sha: snapshot.commit,
         repository: { full_name: repository }, head_repository: { full_name: repository } },
       [`${base}/jobs?filter=all&per_page=100`]: { jobs: [{ name: 'package', conclusion: 'success', run_attempt: 2 }] },
       [`${base}/artifacts?per_page=100`]: { artifacts: scenario === 'match'
-        ? [{ id: 456, name: `cua-helper-123-2-${key}`, expired: false, size_in_bytes: 4096 }] : [] },
+        ? [{ id: 456, name: `cua-helper-macos-123-2-${key}`, expired: false, size_in_bytes: 4096 }] : [] },
     })
     const data = join(f.root, 'responses.json')
     writeFileSync(data, JSON.stringify(snapshot.responses))
@@ -251,7 +251,7 @@ globalThis.fetch = async (input, options) => {
   }
   if (process.env.FIXTURE_API_FAILURE === '1') return new Response('fixture API failure', { status: 503 });
   const path = url.pathname.slice(1) + url.search;
-  if (path.includes('/workflows/')) return Response.json({ workflow_runs: path.includes('cua-helper-package.yml') ? [{ id: 123 }] : [] });
+  if (path.includes('/workflows/')) return Response.json({ workflow_runs: path.includes('cua-helper-package-macos.yml') ? [{ id: 123 }] : [] });
   if (!(path in data)) throw new Error('unexpected GitHub path');
   return Response.json(data[path]);
 };
@@ -262,7 +262,7 @@ globalThis.fetch = async (input, options) => {
       cwd: f.root, encoding: 'utf8', timeout: 60_000,
       env: { ...process.env, NODE_OPTIONS: '', PATH: bin, GH_TOKEN: scenario === 'missing token' ? '' : 'fixture-token',
         GITHUB_API_URL: 'https://api.github.com', GITHUB_REPOSITORY: repository, GITHUB_OUTPUT: output,
-        GITHUB_STEP_SUMMARY: summary, CUA_RUN_ID: '', CUA_BUILD_KEY: key,
+        GITHUB_STEP_SUMMARY: summary, CUA_MACOS_RUN_ID: '', CUA_BUILD_KEY: key,
         FIXTURE_API_DATA: data, FIXTURE_API_FAILURE: scenario === 'api failure' ? '1' : '0' },
     })
     expect(result.error).toBeUndefined()

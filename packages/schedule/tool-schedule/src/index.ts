@@ -296,7 +296,8 @@ function internalError(): InternalScheduleError {
  * Run one Schedule operation for the root Agent that dispatched the call.
  *
  * A delegated subagent cannot use scheduled tasks, so every tool refuses it here even when its preset exposes the
- * tool. An input error keeps its code when the tool declares that code; every other failure becomes `internal_error`.
+ * tool. An input error keeps its code when the tool declares that code; every other operation failure becomes
+ * `internal_error`. An invalid runtime delegation depth is a caller defect and throws its `SubagentError`.
  * @param exec - Run context of the call.
  * @param codes - Error codes of the tool.
  * @param operation - Service call for the calling Agent.

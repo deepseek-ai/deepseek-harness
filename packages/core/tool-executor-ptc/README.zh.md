@@ -38,6 +38,8 @@ kind: "package-reference"
 
 `maxSubCallsPerMinute` 默认值为 `1024`，必须是正整数。每次 `run_code` 的工具调用额度为 `floor(最终 timeoutMs / 60000 × maxSubCallsPerMinute)`：Node 默认超时为两分钟，因此允许 2048 次。计算前先应用运行时默认值和超时上限；没有截止时间时，调用额度也没有有限上限。这是总额度，不是滑动窗口，因此可以集中调用。所有工具绑定共用计数，排队调用、无效参数和失败调用也计入。达到上限后，下一次尝试会通过运行时取消路径终止整个程序，取消进行中的子调用，并放弃排队调用，然后返回 `CODE_RUN_FAILED`。与超时一样，捕获绑定错误也不能让程序继续运行；运行时保留的状态会被丢弃。已完成的工具操作仍然生效，新的程序重新计数。
 
+自定义 `PtcRuntime` 提供方可以报告 `language: 'typescript'` 或 `language: 'python'`。本执行器生成匹配的 SDK 与工具 schema；提供方负责执行。Python 渲染器继续供外部提供方使用，不依赖仓库提供哪些运行时包。
+
 本包将 `ctx.ptcRuntime` 和 `ctx.systemPrompt` 声明为必需注入；带 Agent 的程序要求 `ctx.workingDirectory`。执行器在运行时可用后才激活，并在运行时卸载时撤回。启用 PTC 执行器但未提供运行时会阻止应用启动。已撤回的 PTC 选择不会回退到原生执行。
 
 共享分派事件与 `ptc-mode` 消息来源声明位于 `@deepseek-ai/dsh-tool-executor-ptc/types`；Client 代码通过 `@deepseek-ai/dsh-tool-executor-ptc/client` 导入同一组声明。两个入口都不引入 Host 服务声明。Host 策略扩展通过包主入口的 `import type` 获取 `PtcDispatchLog` 与 `tools/ptc-dispatch-log`，无需挂载执行器。
