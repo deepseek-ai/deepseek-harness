@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/python-ptc-removal/guide.md
+/:
+  en: dbdbb46d75c3dab6
+  zh: 046691366a3298da
+/python-ptc-runtime-removal:
+  en: 7a0929c90f83d53e
+  zh: eab1f3556013f570
+/python-ptc-runtime-removal/change:
+  en: 09f1d48815a593eb
+  zh: 9fc1b25ae0736c64
+/python-ptc-runtime-removal/migration:
+  en: 8732f177cc07862f
+  zh: 54a1bc7a425ed286

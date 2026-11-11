@@ -1,6 +1,7 @@
 # Agent Note: the ptc-runtime-python fd-3 frame protocol
 
 Status: implemented
+Archived: 2026-11-11
 
 The CPython PTC runtime lives at `packages/experimental/ptc-runtime-python` and publishes as `@deepseek-ai/dsh-experimental-ptc-runtime-python`; the [publication policy](../../../../packages/experimental/README.md) preserves its experimental status.
 

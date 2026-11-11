@@ -73,8 +73,7 @@ export const DUNDER_MEMBER = /^__.+__$/
 /**
  * Reserved words of every portable target language (ECMAScript ∪ Python),
  * refused as {@link PtcBindingNamespace.global} / error-class names by all
- * backends, one per language: the released TypeScript Node process and the
- * experimental, private CPython subprocess. The portable-identifier contract
+ * backends. The portable-identifier contract
  * promises a namespace list valid on one backend is valid on every backend; a
  * per-language check would let `lambda` pass the TypeScript backend and fail
  * the Python one. Extending the seam with a new language means widening this
@@ -113,8 +112,7 @@ export abstract class PtcRuntime extends Service {
    * generates language-specific presentation (typed SDK stubs, usage
    * instructions) switches on it and fails loud on a language it cannot
    * present. Well-known values: `'typescript'` and `'python'`, those
-   * `dsh-tool-executor-ptc` presents; the TypeScript backend is released, the Python
-   * backend is experimental and private (not published).
+   * `dsh-tool-executor-ptc` presents. The shipped Node backend reports `'typescript'`.
    */
   abstract readonly language: string
 
