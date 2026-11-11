@@ -1112,6 +1112,50 @@ describe('bubblewrap preparation script', () => {
     // Ubuntu removes superseded versions from its live package pool.
     expect(script).not.toMatch(/https?:\/\/[^/'"\s]+\/ubuntu(?:-ports)?\/pool\//u)
   })
+
+  it('verifies the archive against the pinned digest', () => {
+    const script = readFileSync(resolve(root, 'scripts/prepare-ci-bubblewrap.sh'), 'utf8')
+
+    expect(script).toMatch(/^readonly BUBBLEWRAP_SHA256='[0-9a-f]{64}'$/mu)
+    expect(script).toContain('acquire_verified_archive "$BUBBLEWRAP_URL" "$BUBBLEWRAP_SHA256" "$archive"')
+  })
+
+  it.each(['ci.yml', 'ci-master.yml', 'e2e.yml'])(
+    '%s restores the verified archive cache before preparation and saves it after a miss',
+    (name) => {
+      const script = readFileSync(resolve(root, 'scripts/prepare-ci-bubblewrap.sh'), 'utf8')
+      expect(script).toContain('readonly BUBBLEWRAP_CACHE_DIR="${HOME}/.cache/dsh-ci/bubblewrap"')
+      const cache = {
+        path: '~/.cache/dsh-ci/bubblewrap',
+        key: "bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}",
+      }
+      const workflow = loadWorkflow('.github/workflows/' + name)
+      if (!isRecord(workflow.jobs)) throw new TypeError(`${name} must define jobs`)
+
+      let preparations = 0
+      for (const job of Object.values(workflow.jobs)) {
+        if (!isRecord(job) || !Array.isArray(job.steps)) continue
+        const steps = job.steps.filter(isRecord)
+        const preparation = steps.findIndex(step =>
+          typeof step.run === 'string' && step.run.includes('bash scripts/prepare-ci-bubblewrap.sh'))
+        if (preparation < 0) continue
+        preparations += 1
+        expect(steps[preparation - 1]).toEqual({
+          name: 'Restore verified bubblewrap archive',
+          id: 'bubblewrap-cache',
+          uses: 'actions/cache/restore@v6.1.0',
+          with: cache,
+        })
+        expect(steps[preparation + 1]).toEqual({
+          name: 'Save verified bubblewrap archive',
+          if: "steps.bubblewrap-cache.outputs.cache-hit != 'true'",
+          uses: 'actions/cache/save@v6.1.0',
+          with: cache,
+        })
+      }
+      expect(preparations).toBeGreaterThan(0)
+    },
+  )
 })
 
 describe('DeepSeek e2e workflow', () => {

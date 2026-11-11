@@ -179,6 +179,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
 
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -191,6 +198,13 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
+
+      - name: Save verified bubblewrap archive
+        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run exhaustive coverage
         run: pnpm run check:ci:coverage
@@ -406,6 +420,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -418,6 +439,13 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
+
+      - name: Save verified bubblewrap archive
+        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       # Blacksmith's Ubuntu HTTP archive endpoints can be unreachable while HTTPS works.
       - name: Use HTTPS for Ubuntu archives on Blacksmith
@@ -532,8 +560,22 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      - name: Save verified bubblewrap archive
+        if: steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run compatibility smokes
         env:
