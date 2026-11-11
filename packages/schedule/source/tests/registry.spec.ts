@@ -40,11 +40,16 @@ describe('automation task connections', () => {
     router.connect(other, brandString<AutomationTaskId>('task-two'))
     const first = source.publish('first')
     const second = other.publish('second')
-    await entered.promise
-    expect(delivered).toEqual([])
-    release.resolve(undefined)
-    await Promise.all([first, second])
-    expect(delivered).toEqual([[taskId, 'first'], ['task-two', 'second']])
+    try {
+      await entered.promise
+      expect(delivered).toEqual([])
+      release.resolve(undefined)
+      await Promise.all([first, second])
+      expect(delivered).toEqual([[taskId, 'first'], ['task-two', 'second']])
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([first, second])
+    }
   })
 
   it('requires a task receiver and rejects a duplicate registration', async () => {
@@ -64,23 +69,29 @@ describe('automation task connections', () => {
     const unregister = router.registerReceiver({ deliver: async () => { entered.resolve(undefined); await release.promise } })
     router.connect(source, taskId)
     const output = source.publish('accepted')
-    await entered.promise
-    let closed = false
-    const closing = unregister().then(() => { closed = true })
-    await Promise.resolve()
-    expect(closed).toBe(false)
-    const received: string[] = []
-    const next = router.registerReceiver({ deliver: async (_id, value) => { received.push(value.text) } })
-    onTestFinished(next)
-    await expect(source.publish('stale')).rejects.toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
-    release.resolve(undefined)
-    await Promise.all([output, closing])
-    await unregister()
-    const newSource = new CandidateSource()
-    onTestFinished(async () => { await newSource.dispose() })
-    router.connect(newSource, taskId)
-    await newSource.publish('new')
-    expect(received).toEqual(['new'])
+    let closing: Promise<void> | undefined
+    try {
+      await entered.promise
+      let closed = false
+      closing = unregister().then(() => { closed = true })
+      await Promise.resolve()
+      expect(closed).toBe(false)
+      const received: string[] = []
+      const next = router.registerReceiver({ deliver: async (_id, value) => { received.push(value.text) } })
+      onTestFinished(next)
+      await expect(source.publish('stale')).rejects.toMatchObject({ code: 'SOURCE_DELIVERY_FAILED' })
+      release.resolve(undefined)
+      await Promise.all([output, closing])
+      await unregister()
+      const newSource = new CandidateSource()
+      onTestFinished(async () => { await newSource.dispose() })
+      router.connect(newSource, taskId)
+      await newSource.publish('new')
+      expect(received).toEqual(['new'])
+    } finally {
+      release.resolve(undefined)
+      await Promise.allSettled([output, closing])
+    }
   })
 
   it('removes a receiver through its contributing Cordis fiber', async () => {
