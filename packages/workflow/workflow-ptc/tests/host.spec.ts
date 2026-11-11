@@ -242,7 +242,7 @@ describe('workflow runtime outcomes', () => {
 
   it('carries a guest-reported fatal code onto the run result', async () => {
     const value = { value: null, stopReason: 'error', agentsStarted: 1, error: 'total agent cap (1)', errorCode: 'AGENT_CAP' }
-    const { start } = await setup(() => Promise.resolve({ logs: [], value }))
+    const { start } = await setup(() => Promise.resolve({ output: [], value }))
     const handle = start()
     try {
       expect(await handle.result).toEqual(value)
