@@ -344,7 +344,7 @@ describe('GitHub provider status documents', () => {
 
     expect(gh.calls.map(call => documentNumbers(call).length)).toEqual(sizes)
     expect(gh.calls.flatMap(documentNumbers)).toEqual(refs.map(ref => ref.number))
-    expect(refs.map(ref => results.get(changeRequestKey(ref)))).toEqual(refs.map(ref => expect.objectContaining({ title: `Change ${ref.number}` })))
+    for (const ref of refs) expect(results.get(changeRequestKey(ref))).toMatchObject({ title: `Change ${ref.number}` })
   })
 
   it('requests a document only after the previous one is read', async () => {
