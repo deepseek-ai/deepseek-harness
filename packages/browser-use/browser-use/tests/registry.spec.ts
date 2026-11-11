@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import BrowserUseRegistry from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { BrowserUseProviderName } from '../src/brand.ts'
+import type { BrowserUseProviderName } from '../src/types.ts'
 
 const MCP = brandString<BrowserUseProviderName>('playwright-mcp')
 const NATIVE = brandString<BrowserUseProviderName>('stagehand')

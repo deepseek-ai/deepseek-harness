@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
-import type { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandDefinitionId, CommandDescriptor } from '@deepseek-ai/dsh-commands/types'
 import { queryCommand } from '../src/query-input.ts'
 
 const commands: readonly CommandDescriptor[] = [

@@ -6,7 +6,7 @@ import type {
 } from '../../types.ts'
 import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { AssistantStreamRecord } from '@deepseek-ai/dsh-llm/assistant-stream'
-import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import type {
   SessionAssistantSettlementEntry,
   SessionEventLikeEntry,

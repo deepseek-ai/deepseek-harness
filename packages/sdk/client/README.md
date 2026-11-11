@@ -64,7 +64,7 @@ The following example imports `brandString` at runtime. Declare `@deepseek-ai/ds
 ```ts
 import { DeepSeekHarness } from '@deepseek-ai/dsh-sdk-client'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 
 await using harness = new DeepSeekHarness({
   profile: 'sdk',

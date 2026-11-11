@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type {
   AssistantLiveChunkEvent, SessionEventLike, SessionEventLikeEntry,

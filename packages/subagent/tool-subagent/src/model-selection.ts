@@ -1,7 +1,7 @@
 /** Child LLM route selection for the subagent tool. */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'

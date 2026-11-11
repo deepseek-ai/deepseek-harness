@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TeamCommandRow, type TeamCommandRowProps } from '../src/client/TeamCommandRow.tsx'

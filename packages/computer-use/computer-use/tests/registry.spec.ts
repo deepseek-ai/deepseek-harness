@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import ComputerUseRegistry from '../src/index.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ComputerUseProviderName } from '../src/brand.ts'
+import type { ComputerUseProviderName } from '../src/types.ts'
 
 const MCP = brandString<ComputerUseProviderName>('cua-driver-mcp')
 const NATIVE = brandString<ComputerUseProviderName>('cua-driver-native')

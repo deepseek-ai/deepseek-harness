@@ -6,7 +6,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/types'
 import { SessionResources } from '@deepseek-ai/dsh-experimental-browser-use-runtime'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
