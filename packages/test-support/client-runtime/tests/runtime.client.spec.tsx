@@ -17,7 +17,7 @@ import { createScope, type SessionReference } from '@deepseek-ai/dsh-api-session
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
-  PropsRenderSlots, SessionStandardProps, SlotRendererHost,
+  GlobalStandardProps, PropsRenderSlots, SessionStandardProps, SlotRendererHost,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 
@@ -787,6 +787,25 @@ describe('fixture session face', () => {
     expect(view.container.textContent).toContain('todos:1')
     // A never-subscribed key sets without listeners (the empty-notify arm).
     session.projections.set('untouched', 1)
+    await runtime.dispose()
+  })
+
+  it('publishes running status through the real ui-session-status root hook', async () => {
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
+    runtime.slots.register({ name: 'trt.chat' }, (props: SessionStandardProps & GlobalStandardProps) => (
+      <span>running:{props.useSessionStatus(status => String(status.get(props.sessionId)?.running))}</span>
+    ))
+    const view = runtime.renderRoot()
+    await runtime.sessions.add({ id: 's1' })
+    using bound = runtime.sessions.retain('s1' as SessionId)
+    await bound.ready
+    act(() => { reference.set(bound) })
+    expect(view.container.textContent).toContain('running:false')
+
+    act(() => { runtime.remote.emit('api-session/status', ['s1', true]) })
+    expect(view.container.textContent).toContain('running:true')
+    expect(runtime.ctx.uiSession.sessionStatus.getSnapshot().get('s1' as SessionId)?.running).toBe(true)
     await runtime.dispose()
   })
 

@@ -60,7 +60,7 @@ describe('createChangesStore', () => {
     const store = createChangesStore().create()
     store.actions.navigated('tab-1', 1)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'branch', base: null, commits: null, lens: 'all', hideTests: false, split: true, wrap: true, navigated: 1,
+      scope: 'branch', base: null, commits: null, lens: 'all', filterLens: null, hideTests: false, split: true, wrap: true, navigated: 1,
     })
     store.actions.scoped('tab-1', 'staged')
     store.actions.based('tab-1', { ref: 'refs/heads/topic', name: 'topic' })
@@ -68,10 +68,11 @@ describe('createChangesStore', () => {
     store.actions.toggledWrap('tab-1')
     store.actions.lensed('tab-1', 'interface')
     store.actions.toggledTests('tab-1')
+    store.actions.filtered('tab-1', 'fixture/exports')
     store.actions.navigated('tab-1', 2)
     expect(store.getSnapshot().byTab['tab-1']).toEqual({
-      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', hideTests: true,
-      split: false, wrap: false, navigated: 2,
+      scope: 'staged', base: { ref: 'refs/heads/topic', name: 'topic' }, commits: null, lens: 'interface', filterLens: 'fixture/exports',
+      hideTests: true, split: false, wrap: false, navigated: 2,
     })
     store.actions.navigated('tab-2', 1)
     store.actions.forget('tab-1')

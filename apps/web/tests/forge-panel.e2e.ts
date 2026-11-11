@@ -26,6 +26,8 @@ declare global {
 }
 
 const BUNDLE = fileURLToPath(new URL('../../../packages/experimental/forge-bundle', import.meta.url))
+/** A plugin that uses the forge extension API: a Host lens, line annotations, and every forge slot. */
+const EXTENSION = fileURLToPath(new URL('./fixtures/plugins/fixture-forge-extension', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/lifecycle-chrome/session.v4.jsonl', import.meta.url))
 const EXPECTED = fileURLToPath(new URL('./expected/forge-panel', import.meta.url))
 const MODE = webSnapshotMode()
@@ -471,11 +473,19 @@ interface PanelLaunch {
  * Launch the bundle against a GitHub checkout of `main` and `release` and open the New Session screen of that workspace.
  * @param failureShot - name of the screenshot saved when the test fails.
  * @param scenario - normal conversation, a restoration follow-up, or a numbered PR lookup through `bash` or a PTC program.
- * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, and diff output limit.
+ * @param options - desktop transport, checkout branch, browser input, sandbox runner availability, diff output limit, and
+ * whether the extension fixture plugin loads.
  * @returns the scaffold, page, and checkout.
  */
 async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up' | 'reference' | 'ptc-reference' = 'normal',
-  options: { desktop?: 'darwin' | 'win32'; branch?: string; hasTouch?: boolean; missingSandbox?: boolean; maxDiffBytes?: number } = {}): Promise<PanelLaunch> {
+  options: {
+    desktop?: 'darwin' | 'win32'
+    branch?: string
+    hasTouch?: boolean
+    missingSandbox?: boolean
+    maxDiffBytes?: number
+    extension?: boolean
+  } = {}): Promise<PanelLaunch> {
   const { desktop } = options
   const resources: { scaffold?: WebScaffold; browser?: Browser } = {}
   const root = await mkdtemp(join(tmpdir(), 'dsh-forge-panel-'))
@@ -517,7 +527,7 @@ async function launchPanel(failureShot: string, scenario: 'normal' | 'follow-up'
     ] }))
   }
   const scaffold = await launchWebScaffold({
-    profile: { packages: [{ dir: BUNDLE, enabled: true }] },
+    profile: { packages: [{ dir: BUNDLE, enabled: true }, ...options.extension === true ? [{ dir: EXTENSION, enabled: true }] : []] },
     extraOverlayPath: overlay,
     replayFixture: FIXTURE,
     ...scenario !== 'normal' ? { replayOverride: override } : {},
@@ -1945,6 +1955,65 @@ async function openReview(page: Page, scaffold: WebScaffold): Promise<{ readonly
 async function shownPaths(view: ReturnType<Page['locator']>): Promise<(string | null)[]> {
   return await view.locator('[data-forge-diff-file]').evaluateAll(sections => sections.map(section => section.getAttribute('data-forge-diff-file')))
 }
+
+it.skipIf(MODE === 'record')('lets a plugin filter the changes by its lens, annotate lines and files, and act from the toolbar, comment form, and card', async () => {
+  const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-extension', 'normal', { extension: true })
+  await writeReviewFixture(root)
+  // The plugin's lens keeps the export lines; past line 9 the head's src/panel.ts has none, so its second hunk folds.
+  const contents = JSON.parse(await readFile(join(root, 'contents.json'), 'utf8')) as Record<string, string>
+  contents[`src/panel.ts@${HEAD7}`] = `${Array.from({ length: 20 }, (_, index) => index < 9 ? panelLine(index + 1, 'new')
+    : panelLine(index + 1, 'new').replace(/^export /, '')).join('\n')}\n`
+  await writeFile(join(root, 'contents.json'), JSON.stringify(contents))
+  const { settled } = await sendPrompt(page, scaffold)
+  const session = scaffold.ctx.sessions.get(await settled)
+  if (session === undefined) throw new Error('Session must stay loaded')
+  scaffold.ctx.forgeSession.track(session, PULL)
+  await page.locator('[data-forge-header]').click()
+
+  // The card button the plugin adds opens the changes view with its lens chosen.
+  await page.locator(`[data-forge-change="${PULL}"]`).getByRole('button', { name: '打开导出视图', exact: true }).click()
+  await page.getByRole('button', { name: '全屏', exact: true }).click()
+  const view = page.locator('[data-forge-changes="change"]')
+  const lens = view.locator('[data-forge-filter-lens]')
+  await expect.poll(() => lens.getAttribute('data-forge-filter-lens'), { timeout: 20_000 }).toBe('fixture/exports')
+  await expect.poll(() => shownPaths(view), { timeout: 20_000 }).toEqual(['src/panel.ts'])
+  await expect.poll(() => lens.textContent()).toBe('导出1')
+  const panel = view.locator('[data-forge-diff-file="src/panel.ts"]')
+  const fold = panel.locator('[data-forge-lens-fold]')
+  await expect.poll(() => fold.textContent()).toBe('另有 1 处与「导出」无关的改动已折叠展开')
+  await fold.click()
+  await expect.poll(() => fold.count()).toBe(0)
+  await panel.locator('[data-review-code][data-new-line="15"]').waitFor()
+  await compareOrRefreshGolden(join(EXPECTED, 'extension-lens.expected.md'),
+    await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
+
+  await lens.click()
+  await page.getByRole('menuitem', { name: '不使用透镜', exact: true }).click()
+  await expect.poll(() => shownPaths(view)).toHaveLength(6)
+
+  // The comment form's plugin button pins the comment as a line note; the toolbar toggle hides and shows the notes.
+  await panel.getByRole('button', { name: '选择第 R2 行', exact: true }).click()
+  await panel.getByRole('button', { name: '添加评论', exact: true }).click()
+  await panel.getByRole('textbox', { name: '留下评论…', exact: true }).fill('Check the quoted value')
+  await panel.getByRole('button', { name: '钉为笔记', exact: true }).click()
+  const note = panel.locator('[data-forge-annotation^="fixture-notes/"]')
+  await expect.poll(() => note.textContent()).toBe('笔记Check the quoted value移除')
+  const toggle = view.locator('[data-fixture-notes-toggle]')
+  await expect.poll(() => toggle.textContent()).toBe('笔记 1')
+  await toggle.click()
+  await expect.poll(() => note.count()).toBe(0)
+  await toggle.click()
+  await expect.poll(() => note.count()).toBe(1)
+
+  // The file menu's plugin row pins a note on the whole file.
+  const docs = view.locator('[data-forge-diff-file="docs/panel.md"]')
+  await docs.getByRole('button', { name: 'panel.md 的更多操作', exact: true }).click()
+  await page.getByRole('menuitem', { name: '钉上文件笔记', exact: true }).click()
+  await expect.poll(() => docs.locator('[data-forge-annotation^="fixture-notes/"]').textContent()).toBe('笔记已看过此文件移除')
+  await compareOrRefreshGolden(join(EXPECTED, 'extension-annotations.expected.md'),
+    await captureStableAria(page, '[data-forge-changes="change"]', scaffold.workspaceCwd), MODE)
+  expect(tripwire.pageErrors).toEqual([])
+})
 
 it.skipIf(MODE === 'record')('reviews a change request by layer, hides test files, marks files viewed, and views chosen commits', async () => {
   const { scaffold, page, root, tripwire } = await launchPanel('web-e2e-forge-review-layers')
