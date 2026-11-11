@@ -268,6 +268,15 @@ describe('ImSender.send', () => {
       .toHaveLength(0)
   })
 
+  it('keeps a confirmed publication when storing its own message fails', async () => {
+    // The platform answered; only this host's copy of the message could not be written.
+    const { sender } = await boot({ announced: async () => { throw new Error('im_messages is full') } })
+    const result = await sender.send(CHAT, h.text('hello'))
+    expect(result.status).toBe('confirmed')
+    expect(result.handle?.parts[0]?.id).toBeDefined()
+    expect(result.message).toBeUndefined()
+  })
+
   it('marks a partial publication as partial', async () => {
     const { sender, stub, sessions } = await boot()
     const session = sessions.add('im-session', [{ chat: STUB_CHAT, writable: true, home: true }])

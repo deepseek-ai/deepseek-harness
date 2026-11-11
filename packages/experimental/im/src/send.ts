@@ -344,7 +344,15 @@ export class ImSender {
     let message = key === undefined ? undefined : this.deps.store.get(key)
     // The own message is stored by the `send` listener, which the core does not await: without waiting for that write
     // the receipt raced it and carried no `message` and no `seq`.
-    if (message === undefined && key !== undefined) message = await this.deps.announced?.(key)
+    if (message === undefined && key !== undefined) {
+      try {
+        message = await this.deps.announced?.(key)
+      } catch (error) {
+        // The platform published and answered; only this host's own copy is missing. A local write failure cannot turn
+        // a confirmed publication into an uncertain one, and the handle stays known.
+        this.ctx.logger.warn('IM own message %s was not stored: %s', key, messageOf(error))
+      }
+    }
     return {
       status: 'confirmed', handle: result.handle, report: result.report,
       ...message === undefined ? {} : { message },
