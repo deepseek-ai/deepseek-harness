@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cua-windows",
   "description": "Windows C# computer use through shared application and window objects",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },
