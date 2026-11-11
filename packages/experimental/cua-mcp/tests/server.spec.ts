@@ -1,4 +1,4 @@
-/** Server behavior beyond the fixture desktop: registry projection, the reference tool, unknown tools, creation and reset failures. */
+/** Server behavior beyond the fixture desktop: registry projection, the reference tool, unknown tools, and reset ordering. */
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -60,12 +60,15 @@ interface SetupOptions {
 
 function fixture(options: SetupOptions = {}) {
   const ctx = new Context()
-  // The Agent runs a maintenance task at once and cancels it through this controller, as its disposal does.
+  // The Agent runs a maintenance task at once and cancels it through this controller, as its cancel and disposal do.
   const maintenance = new AbortController()
-  const members: Pick<Agent, 'id' | 'ctx' | 'runMaintenance'> = {
+  const members: Pick<Agent, 'id' | 'ctx' | 'runMaintenance' | 'cancel' | 'whenIdle'> = {
     id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(), runMaintenance: task => task(maintenance.signal),
+    cancel: (cause) => { maintenance.abort(cause) }, whenIdle: async () => {},
   }
   const runMaintenance = vi.spyOn(members, 'runMaintenance')
+  const cancel = vi.spyOn(members, 'cancel')
+  const whenIdle = vi.spyOn(members, 'whenIdle')
   const agent = members as Agent
   const dispose = vi.fn(async () => {})
   let failures = options.createFailures ?? 0
@@ -93,15 +96,18 @@ function fixture(options: SetupOptions = {}) {
   const assemble = vi.fn(async () => ({
     sections: options.reference === false ? [] : [{ name: 'computer-use:dsh-cua', text: 'Fixture guidance' }], contexts: [], variables: {}, tools: [],
   }))
-  const reset = vi.fn(async () => {})
+  const release = vi.fn(async () => {})
   ctx.provide('agents', { create, withInitiator } as never)
   ctx.provide('agentPresets', { defaultId: 'cua-mcp', mount } as never)
   ctx.provide('tools', { execute, get } as never)
   ctx.provide('systemPrompt', { assemble } as never)
   ctx.provide('attachments', {} as never)
-  if (options.programs !== false) ctx.provide('cuaPrograms', { reset, screenshotRequestTarget: () => undefined, ...options.programs } as never)
+  if (options.programs !== false) ctx.provide('cuaPrograms', { release, screenshotRequestTarget: () => undefined, ...options.programs } as never)
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  return { ctx, agent, maintenance, runMaintenance, create, withInitiator, initiators, mount, execute, get, assemble, reset, dispose }
+  return {
+    ctx, agent, maintenance, runMaintenance, cancel, whenIdle, create, withInitiator, initiators, mount, execute, get, assemble,
+    release, dispose,
+  }
 }
 
 async function setup(options: SetupOptions = {}) {
@@ -125,7 +131,8 @@ async function setup(options: SetupOptions = {}) {
     await adapter.dispose()
   })
   const run = (args: Record<string, unknown>) => client.callTool({ name: 'cua_run_code', arguments: args })
-  return { ...parts, adapter, client, run, elicitations }
+  const reset = () => client.callTool({ name: 'cua_reset', arguments: {} })
+  return { ...parts, adapter, client, run, reset, elicitations }
 }
 
 function texts(result: CallToolResult): string[] {
@@ -182,7 +189,7 @@ describe('Computer Use MCP server', () => {
   })
 
   it('lists no program tool without a registration, names the missing provider, and refuses every unlisted name before the executor', async () => {
-    const { client, run, execute } = await setup({ registered: false, programs: false, reference: false })
+    const { client, run, reset, execute, cancel } = await setup({ registered: false, programs: false, reference: false })
     expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_reset'])
     const reference = await client.callTool({ name: 'cua_get_api_reference', arguments: {} })
     expect(reference.isError).toBe(true)
@@ -194,20 +201,21 @@ describe('Computer Use MCP server', () => {
     expect(other.isError).toBe(true)
     expect(texts(other)).toEqual(['unknown tool "cua_other"'])
     expect(execute).not.toHaveBeenCalled()
-    const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
-    expect(reset.isError).toBe(true)
-    expect(texts(reset).join('')).toContain('no active CUA provider')
+    const refused = await reset()
+    expect(refused.isError).toBe(true)
+    expect(texts(refused).join('')).toContain('no active CUA provider')
+    expect(cancel).not.toHaveBeenCalled()
   })
 
   it('serves the API reference whenever asked, without running a program, waiting for one, or changing program results', async () => {
-    const { client, run, execute, runMaintenance, assemble, agent } = await setup()
+    const { client, run, reset, execute, runMaintenance, assemble, agent } = await setup()
     const reference = () => client.callTool({ name: 'cua_get_api_reference', arguments: {} })
     expect(await reference()).toEqual({ content: [{ type: 'text', text: '## cua API reference\n\nFixture guidance' }] })
     expect(assemble).toHaveBeenCalledWith({ scope: agent })
     expect(execute).not.toHaveBeenCalled()
     expect(runMaintenance).not.toHaveBeenCalled()
     expect(texts(await run({ code: '1', description: 'First' }))).toEqual(['program output'])
-    await client.callTool({ name: 'cua_reset', arguments: {} })
+    await reset()
     expect(texts(await reference())).toEqual(['## cua API reference\n\nFixture guidance'])
     expect(texts(await run({ code: '2', description: 'Second' }))).toEqual(['program output'])
     // A running program does not delay the reference: the read is not queued behind it.
@@ -228,21 +236,70 @@ describe('Computer Use MCP server', () => {
     expect(execute).not.toHaveBeenCalled()
   })
 
-  it('fails the call as a protocol error when the executor settles without a result and reports reset failures', async () => {
-    const { run, client, reset, execute } = await setup()
+  it('fails the call as a protocol error when the executor settles without a result', async () => {
+    const { run, execute } = await setup()
     execute.mockResolvedValueOnce({ results: [], additionalContexts: [], concluded: false })
     await expect(run({ code: '2', description: 'Lost' })).rejects.toThrow('settled without a cua_run_code result')
-    reset.mockRejectedValueOnce(new Error('cleanup is incomplete'))
-    expect(await client.callTool({ name: 'cua_reset', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'cleanup is incomplete' }], isError: true })
-    reset.mockRejectedValueOnce('opaque failure')
-    expect(await client.callTool({ name: 'cua_reset', arguments: {} })).toEqual({ content: [{ type: 'text', text: 'opaque failure' }], isError: true })
-    expect(texts(await run({ code: '1', description: 'Still first environment' }))).toEqual(['program output'])
-    expect(await client.callTool({ name: 'cua_reset', arguments: {} })).toEqual({ content: [{
+  })
+
+  it('resets by cancelling the running program, releasing its environment, and answering after that program settled', async () => {
+    const { run, reset, agent, cancel, release, whenIdle, execute } = await setup()
+    const order: string[] = []
+    cancel.mockImplementationOnce(() => { order.push('cancel') })
+    release.mockImplementationOnce(async () => { order.push('release') })
+    // The cancelled program takes this long to settle; the Agent is idle only afterwards.
+    const settled = Promise.withResolvers<undefined>()
+    whenIdle.mockImplementationOnce(async () => { order.push('wait for the cancelled program'); await settled.promise })
+    let answered = false
+    const pending = reset().then((result) => { answered = true; return result })
+    await vi.waitFor(() => { expect(order).toEqual(['cancel', 'release', 'wait for the cancelled program']) })
+    expect(cancel).toHaveBeenCalledExactlyOnceWith({ kind: 'user' }, { keepInbox: true })
+    expect(release).toHaveBeenCalledExactlyOnceWith(agent)
+    expect(answered).toBe(false)
+    settled.resolve(undefined)
+    expect(await pending).toEqual({ content: [{
       type: 'text',
-      text: 'Program environment cleared. Application access and native connections are retained; the next cua_run_code call starts a fresh environment.',
+      text: 'Program environment cleared: variables, imports, and application and window objects from earlier calls are gone. '
+        + 'Application access granted earlier still applies; select applications again with cua.getApp.',
     }] })
-    expect(reset).toHaveBeenCalledTimes(3)
+    // The Agent serves the next program: only its environment was replaced.
     expect(texts(await run({ code: '1', description: 'Fresh' }))).toEqual(['program output'])
+    expect(execute.mock.calls[0]?.[0].agent).toBe(agent)
+  })
+
+  it('reports a failed release, asks for another reset, and still waits for the cancelled program', async () => {
+    const { reset, release, whenIdle } = await setup()
+    release.mockRejectedValueOnce(new Error('the program process did not exit'))
+    expect(await reset()).toEqual({ isError: true, content: [{
+      type: 'text',
+      text: 'Program environment reset failed: the program process did not exit. Call cua_reset again before running another program.',
+    }] })
+    release.mockRejectedValueOnce('opaque failure')
+    expect(texts(await reset())).toEqual(['Program environment reset failed: opaque failure. Call cua_reset again before running another program.'])
+    expect(whenIdle).toHaveBeenCalledTimes(2)
+    expect((await reset()).isError).not.toBe(true)
+    expect(release).toHaveBeenCalledTimes(3)
+  })
+
+  it('shares one release between concurrent resets and holds back programs that arrive during it', async () => {
+    const { run, reset, release, cancel, execute } = await setup()
+    const released = Promise.withResolvers<undefined>()
+    release.mockImplementationOnce(() => released.promise)
+    const resets = Promise.all([reset(), reset()])
+    const program = run({ code: '1', description: 'Arrives during the reset' })
+    await vi.waitFor(() => { expect(release).toHaveBeenCalledOnce() })
+    // The runtime rejects a program while the previous process is still exiting, so the call has not reached it.
+    expect(execute).not.toHaveBeenCalled()
+    released.resolve(undefined)
+    const [first, second] = await resets
+    expect(first.isError).not.toBe(true)
+    expect(second).toEqual(first)
+    expect(texts(await program)).toEqual(['program output'])
+    expect(release).toHaveBeenCalledOnce()
+    expect(cancel).toHaveBeenCalledOnce()
+    // A later reset is a release of its own.
+    await reset()
+    expect(release).toHaveBeenCalledTimes(2)
   })
 
   it('answers consent only for its own Agent and forwards a request without a signal', async () => {
@@ -262,6 +319,22 @@ describe('Computer Use MCP server', () => {
     await served.client.close()
     await served.adapter.dispose()
     expect(served.dispose).toHaveBeenCalledOnce()
+  })
+
+  it('lets a reset in progress settle before disposing the Agent', async () => {
+    const served = await setup()
+    const released = Promise.withResolvers<undefined>()
+    served.release.mockImplementationOnce(() => released.promise)
+    // The client's request ends with its connection; the server finishes the release regardless.
+    const reset = served.reset().then(() => 'answered', () => 'connection closed')
+    await vi.waitFor(() => { expect(served.release).toHaveBeenCalledOnce() })
+    const disposed = served.adapter.dispose()
+    expect(await reset).toBe('connection closed')
+    expect(served.dispose).not.toHaveBeenCalled()
+    released.resolve(undefined)
+    await disposed
+    expect(served.dispose).toHaveBeenCalledOnce()
+    await served.client.close()
   })
 
   it('disposes the Agent when closing the protocol server fails', async () => {

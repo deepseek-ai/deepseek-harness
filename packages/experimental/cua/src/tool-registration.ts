@@ -4,7 +4,7 @@ import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
-import { createRunCodeToolHandle } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
+import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
@@ -22,15 +22,17 @@ const programDescription = 'Run a TypeScript program to observe and operate desk
 /** Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`. */
 export interface CuaPrograms {
   /**
-   * Release one Agent's retained program environment. Active programs of that Agent are cancelled, new
-   * programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the
-   * `cua` global; application grants, native connections, and the desktop applications themselves are
-   * unaffected. Resolves when no environment exists.
+   * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
+   * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
+   * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
+   * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+   * programs until the release settles, so the caller holds them back; after a failed release it rejects them
+   * until a later release succeeds. Resolves when no environment exists.
    * @param agent - Agent whose `cua_run_code` state owner is released.
-   * @returns Completion after the process and its nested-call cleanup settle.
-   * @throws CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.
+   * @returns Completion after the process has exited and its output has drained.
+   * @throws When the process cleanup fails.
    */
-  reset(agent: Agent): Promise<void>
+  release(agent: Agent): Promise<void>
   /**
    * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
    * A host that forwards screenshots outside a model request reads the same request version with it, so the
@@ -139,14 +141,13 @@ var cua = connectCua(() => tools.cua);
             const child = owner.plugin({
               name: 'cua-program-tools', inject: ['ptcRuntime', 'tools', 'workingDirectory'],
               apply(consumer: Context) {
-                const handle = createRunCodeToolHandle(consumer, {
+                const definition = createRunCodeTool(consumer, {
                   name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
                   tools: [tool], limits: config.standaloneRunCode.executor,
                 })
-                const definition = handle.definition
-                // Hosts without a model (MCP frontends) reset through this service; the factory owns call coordination.
+                // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
                 consumer.provide('cuaPrograms', {
-                  reset: (agent: Agent) => handle.reset(agent),
+                  release: (agent: Agent) => consumer.ptcRuntime.release(agent),
                   screenshotRequestTarget: image => config.screenshotTarget === undefined
                     ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
                 } satisfies CuaPrograms)

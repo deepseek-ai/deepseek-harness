@@ -79,7 +79,7 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
   // CUA mounts the installed provider and shares executor error classes with PTC.
   '@deepseek-ai/dsh-ptc-runtime-node': ['default'],
-  '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeToolHandle'],
+  '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeTool'],
   // CUA checks UserQuestionError and preserves AttachmentError from image admission; longEdgeDimensions is pure
   // arithmetic that rides the same peer.
   '@deepseek-ai/dsh-attachment': ['admitEncodedImages', 'longEdgeDimensions'],

@@ -189,36 +189,63 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(ctx.ptcRuntime.retainsState).toBe(false)
 })
 
-it('resets one Agent program environment through ctx.cuaPrograms while keeping its application access', async () => {
+it('releases one Agent program environment through ctx.cuaPrograms while keeping its application access', async () => {
   const { ctx, native, model, agent, run } = await setup([
     'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); inspect(process.pid)',
-    'inspect(JSON.stringify(typeof win === "undefined" ? { reset: true, visits: globalThis.visits ?? null, pid: process.pid } : { reset: false, pid: process.pid }))',
+    'inspect(JSON.stringify(typeof win === "undefined" ? { fresh: true, visits: globalThis.visits ?? null, pid: process.pid } : { fresh: false, pid: process.pid }))',
   ])
   const programs = ctx.get('cuaPrograms')
   if (programs === undefined) throw new Error('CUA provider did not publish ctx.cuaPrograms')
-  // Hold the second model request until the host reset between the two programs has settled.
+  // The caller holds the next program back until the release has settled: the second model request waits for it.
   const firstSettled: PromiseWithResolvers<void> = Promise.withResolvers()
-  const resetDone: PromiseWithResolvers<void> = Promise.withResolvers()
-  model.gates.set(1, resetDone.promise)
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  model.gates.set(1, released.promise)
   ctx.on('session/event', (session, event) => {
     if (session === agent.session && event.type === 'tool/result' && event.data.message.toolCallId === 'cua-program-1') firstSettled.resolve()
   })
   const completed = run()
   await firstSettled.promise
-  await programs.reset(agent)
-  resetDone.resolve()
+  await programs.release(agent)
+  released.resolve()
   await completed
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
   expect(results.map(result => result.isError)).toEqual([false, false])
   const text = (index: number) => JSON.parse(results[index]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')) as Record<string, unknown>
   const firstPid = z.number().int().positive().parse(text(0))
   const second = text(1)
-  expect(second).toMatchObject({ reset: true, visits: null })
+  expect(second).toMatchObject({ fresh: true, visits: null })
   expect(second.pid).not.toBe(firstPid)
   expect(() => process.kill(firstPid, 0)).toThrow()
   // The native connection and its application grant survive; only the program process was replaced.
   expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
-  await expect(programs.reset(agent)).resolves.toBeUndefined()
+  await expect(programs.release(agent)).resolves.toBeUndefined()
+})
+
+it('fails a running program as aborted when its environment is released and starts the next program fresh', async () => {
+  const { ctx, native, model, agent, run } = await setup([
+    'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); await new Promise(() => {})',
+    'inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined" }))',
+  ])
+  const programs = ctx.get('cuaPrograms')
+  if (programs === undefined) throw new Error('CUA provider did not publish ctx.cuaPrograms')
+  const released: PromiseWithResolvers<void> = Promise.withResolvers()
+  model.gates.set(1, released.promise)
+  // The first program is running inside its environment once its application selection has settled.
+  const selected: PromiseWithResolvers<void> = Promise.withResolvers()
+  ctx.on('session/event', (session, event) => {
+    if (session === agent.session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-program-1') selected.resolve()
+  })
+  const completed = run()
+  await selected.promise
+  await programs.release(agent)
+  released.resolve()
+  await completed
+  const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
+  const text = (index: number) => results[index]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+  expect(results.map(result => result.isError)).toEqual([true, false])
+  expect(text(0)).toContain('code run failed (abort)')
+  expect(JSON.parse(text(1))).toEqual({ visits: null, hasApp: false })
+  expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
 })
 
 it('recreates the automatic facade when its environment is rebuilt', async () => {

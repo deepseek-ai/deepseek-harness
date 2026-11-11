@@ -49,6 +49,8 @@ interface SetupOptions {
   provider?: boolean
   /** Hold the fixture desktop's cancellation acknowledgements back this long, as a native operation that is slow to stop does. */
   cancellationAcknowledgementMs?: number
+  /** How long the program runtime waits for a cancelled program to yield before it stops the process. */
+  stopGraceMs?: number
   /** Elicitation handler of the client; omission advertises no elicitation capability. */
   elicit?: (request: ElicitationRequest) => Promise<{ action: 'accept' | 'decline' | 'cancel'; content?: Record<string, string> }>
 }
@@ -129,6 +131,7 @@ async function setup(options: SetupOptions = {}) {
     ...name === 'cua' ? { config: {
       screenshotTarget: { longEdge: 1, maxBytes: 100_000 },
       allowedApps: options.granted === false ? [] : [{ id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app' }],
+      ...options.stopGraceMs === undefined ? {} : { standaloneRunCode: { runtime: { stopGraceMs: options.stopGraceMs } } },
     } } : {},
   }))
   const configPath = join(directory, 'cordis.yml')
@@ -265,21 +268,107 @@ describe('Computer Use MCP composition', () => {
     expect(texts(invalid)).toEqual(['invalid arguments: missing required property "description"'])
   })
 
-  it('resets the program environment while keeping the native connection and the API reference', async () => {
-    const { native, run, client } = await setup()
-    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); inspect(process.pid)')
+  it('resets only the program environment: a fresh process and cua object, the same Agent and native connection', async () => {
+    const { ctx, native, run, client, adapter } = await setup()
+    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); inspect(process.pid)')
     const pid = lastJson(first) as number
+    const { agent } = adapter
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).not.toBe(true)
-    expect(texts(reset)[0]).toContain('Program environment cleared')
-    const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", pid: process.pid }))')
+    expect(texts(reset)).toEqual(['Program environment cleared: variables, imports, and application and window objects from earlier calls '
+      + 'are gone. Application access granted earlier still applies; select applications again with cua.getApp.'])
+    const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", cua: typeof cua, pid: process.pid }))')
     expect(next.content).toHaveLength(1)
-    const state = lastJson(next) as { visits: null; hasApp: boolean; pid: number }
-    expect(state).toMatchObject({ visits: null, hasApp: false })
+    const state = lastJson(next) as { visits: null; hasApp: boolean; cua: string; pid: number }
+    // The fresh process re-created the cua object; the variables and application objects of the previous one are gone.
+    expect(state).toMatchObject({ visits: null, hasApp: false, cua: 'object' })
     expect(state.pid).not.toBe(pid)
     expect(() => process.kill(pid, 0)).toThrow()
-    expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
+    // The program selects the application and its window again and operates them over the connection the Agent kept.
+    const again = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify(win.windowId))')
+    expect(lastJson(again)).toBe('7')
+    expect(native.state).toMatchObject({ count: 1, openedChannels: 1, closedChannels: 0 })
+    expect(ctx.agents.list()).toEqual([agent])
     expect(texts(await client.callTool({ name: 'cua_get_api_reference', arguments: {} }))[0]).toContain('## cua API reference')
+  })
+
+  it('keeps session consent across a reset: a granted application is selected again without a request, and a refusal stays', async () => {
+    const select = (served: Awaited<ReturnType<typeof setup>>) => served.run('var app = await cua.getApp("test.fixture"); inspect("selected")')
+    const granted = await setup({
+      consent: 'elicit', granted: false, elicit: async () => ({ action: 'accept', content: { decision: 'Allow for this session' } }),
+    })
+    expect((await select(granted)).isError).not.toBe(true)
+    await granted.client.callTool({ name: 'cua_reset', arguments: {} })
+    expect((await select(granted)).isError).not.toBe(true)
+    expect(granted.elicitations).toHaveLength(1)
+
+    const refused = await setup({
+      consent: 'elicit', granted: false, elicit: async () => ({ action: 'accept', content: { decision: 'Deny' } }),
+    })
+    expect((await select(refused)).isError).toBe(true)
+    await refused.client.callTool({ name: 'cua_reset', arguments: {} })
+    const again = await select(refused)
+    expect(again.isError).toBe(true)
+    expect(texts(again).join('\n')).toContain('APP_ACCESS_DENIED')
+    expect(refused.elicitations).toHaveLength(1)
+  })
+
+  it('cancels the running program on reset, answers after it has settled, and runs a queued program in the fresh environment', async () => {
+    // The native operation takes 200 ms to acknowledge cancellation, so the cancelled program stays in flight that long.
+    const { native, run, client } = await setup({ cancellationAcknowledgementMs: 200 })
+    const ready = await run('globalThis.generation = "first"; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); inspect(process.pid)')
+    const pid = lastJson(ready) as number
+    const held = native.holdNextClick()
+    const running = run('await win.click("0")')
+    await held
+    // Queued behind the running program, before the reset arrives.
+    const queued = run('inspect(JSON.stringify({ generation: globalThis.generation ?? null, pid: process.pid }))')
+    const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
+    // The reset answered after the cancelled program's native operation had acknowledged the cancellation.
+    expect(native.events).toEqual(['native-cancelled', 'cancellation-acknowledged'])
+    expect(reset.isError).not.toBe(true)
+    const cancelled = await running
+    expect(cancelled.isError).toBe(true)
+    expect(texts(cancelled).join('\n')).toContain('tool call aborted')
+    const fresh = lastJson(await queued) as { generation: null; pid: number }
+    expect(fresh.generation).toBeNull()
+    expect(fresh.pid).not.toBe(pid)
+    expect(() => process.kill(pid, 0)).toThrow()
+    // Nothing closed the Agent's native connection.
+    expect(native.events).not.toContain('native-close')
+    expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
+  })
+
+  it('holds a program that arrives during a reset until the previous process has exited', async () => {
+    const { run, client } = await setup()
+    await run('globalThis.kept = 1; inspect("ready")')
+    // The runtime rejects a program for an Agent whose previous process is still exiting.
+    const [reset, program] = await Promise.all([
+      client.callTool({ name: 'cua_reset', arguments: {} }),
+      run('inspect(JSON.stringify({ kept: globalThis.kept ?? null }))'),
+    ])
+    expect(reset.isError).not.toBe(true)
+    expect(program.isError).not.toBe(true)
+    expect(lastJson(program)).toEqual({ kept: null })
+  })
+
+  it('ends a program that cannot be interrupted on reset without waiting for the runtime to stop it', async () => {
+    // A cancelled program gets a minute to settle before the runtime stops its process; releasing the environment
+    // ends that wait, so this reset settles long before it.
+    const { ctx, run, client, adapter } = await setup({ stopGraceMs: 60_000 })
+    const observed: PromiseWithResolvers<void> = Promise.withResolvers()
+    ctx.on('session/event', (candidate, event) => {
+      if (candidate === adapter.agent.session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-mcp-1') observed.resolve()
+    })
+    // The program enters its loop as soon as the nested call's result reaches it, before any later message.
+    const looping = run('globalThis.kept = 1; await cua.getCapabilities(); while (true) {}')
+    await observed.promise
+    const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
+    expect(reset.isError).not.toBe(true)
+    const cancelled = await looping
+    expect(cancelled.isError).toBe(true)
+    expect(texts(cancelled).join('\n')).toContain('tool call aborted')
+    expect(lastJson(await run('inspect(JSON.stringify({ kept: globalThis.kept ?? null }))'))).toEqual({ kept: null })
   })
 
   it('cancels an in-flight program and waits for its nested call to settle before a disposed Agent releases anything', async () => {

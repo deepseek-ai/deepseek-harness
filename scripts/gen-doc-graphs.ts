@@ -271,7 +271,7 @@ const SERVICE_ROLES: ServiceRole[] = [
   {
     key: 'cuaPrograms', pkg: 'cua', title: 'Computer Use program environments',
     mode: 'core', consumers: ['cua-mcp'],
-    note: 'The provider owns the retained cua_run_code runtime; a host without a model resets one Agent environment and reads the configured screenshot request target through it.',
+    note: 'The provider owns the retained cua_run_code runtime; a host without a model releases one Agent\'s environment and reads the configured screenshot request target through it.',
   },
   {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',

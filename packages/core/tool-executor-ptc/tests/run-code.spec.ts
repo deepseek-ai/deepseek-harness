@@ -12,7 +12,7 @@ import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import ToolRuntime, { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createRunCodeTool, createRunCodeToolHandle, RunCodeConfig, type RunCodeToolHandle } from '../src/run-code.ts'
+import { createRunCodeTool, RunCodeConfig } from '../src/run-code.ts'
 
 class ControlledRuntime extends PtcRuntime {
   readonly language = 'typescript'
@@ -58,16 +58,13 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
   const session = ctx.sessions.create(brandString<SessionId>('private-program'))
   session.append('turn/start', { turn: 1 })
   const agent = { ctx: agentContext, id: session.id, session } as Agent
-  let handle: RunCodeToolHandle | undefined
   const fiber = await ctx.plugin(Object.assign((owner: Context) => {
-    handle = createRunCodeToolHandle(owner, {
+    owner.tools.register(createRunCodeTool(owner, {
       name: 'cua_run_code', description: 'Run computer operations through cua.',
       runtime, tools: [definition],
       ...limits === undefined ? {} : { limits },
-    })
-    owner.tools.register(handle.definition)
+    }))
   }, { inject: ['tools'] }))
-  if (handle === undefined) throw new Error('program tool factory did not run')
   const execute = async (args: Record<string, unknown> = {}, name = 'cua_run_code') => {
     const signal = new AbortController().signal
     const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal })
@@ -78,7 +75,7 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
       })
     } finally { toolSet.dispose() }
   }
-  return { ctx, runtime, agent, agentContext, session, fiber, execute, handle }
+  return { ctx, runtime, agent, agentContext, session, fiber, execute }
 }
 
 describe('registered program tool factory', () => {
@@ -235,46 +232,6 @@ describe('registered program tool factory', () => {
       await running
       await disposing
     }
-  })
-
-  it('resets one Agent environment through the handle, cancelling its program before admitting the next', async () => {
-    const entered = Promise.withResolvers<undefined>()
-    const { runtime, agent, session, execute, handle } = await setup(privateTool())
-    const release = vi.spyOn(runtime, 'release')
-    let programs = 0
-    runtime.behavior = async (request) => {
-      programs += 1
-      if (programs > 1) return { output: [{ type: 'text', text: `program ${programs}` }] }
-      entered.resolve(undefined)
-      await new Promise<void>((resolve) => { request.signal?.addEventListener('abort', () => { resolve() }, { once: true }) })
-      return { output: [], error: { kind: 'abort', message: 'runtime cancelled' } }
-    }
-    const running = execute()
-    await entered.promise
-    await handle.reset(agent)
-    expect(release).toHaveBeenCalledExactlyOnceWith(agent)
-    expect((await running).results[0]?.result).toMatchObject({ isError: true, error: { info: { code: 'CODE_RUN_FAILED' } } })
-    expect((await execute()).results[0]?.result).toMatchObject({ isError: false })
-    expect(session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch-start')).toHaveLength(0)
-    await expect(handle.reset(agent)).resolves.toBeUndefined()
-    expect(release).toHaveBeenCalledTimes(2)
-  })
-
-  it('reports unsupported and failed resets as CODE_RESET_FAILED and blocks programs until a reset succeeds', async () => {
-    const { runtime, agent, execute, handle } = await setup(privateTool())
-    const release = vi.spyOn(runtime, 'release').mockRejectedValueOnce(new Error('process refused to exit'))
-    await expect(handle.reset(agent)).rejects.toMatchObject({
-      name: 'CodeResetFailedError', code: 'CODE_RESET_FAILED', message: expect.stringContaining('process refused to exit') as string,
-    })
-    const blocked = (await execute()).results[0]?.result
-    expect(blocked).toMatchObject({ isError: true, error: { info: { code: 'CODE_RUN_FAILED' } } })
-    expect(JSON.stringify(blocked?.content)).toContain('Program environment unavailable')
-    await expect(handle.reset(agent)).resolves.toBeUndefined()
-    expect(release).toHaveBeenCalledTimes(2)
-    expect((await execute()).results[0]?.result).toMatchObject({ isError: false })
-    vi.spyOn(runtime, 'retainsState', 'get').mockReturnValue(false)
-    await expect(handle.reset(agent)).rejects.toMatchObject({ code: 'CODE_RESET_FAILED', message: expect.stringContaining('does not retain') as string })
-    expect(release).toHaveBeenCalledTimes(2)
   })
 
   it('applies configurable call allowances using the registered tool name', async () => {

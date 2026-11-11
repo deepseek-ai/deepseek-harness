@@ -34,8 +34,9 @@ export interface CuaMcpServer {
   /** The connection's Agent: owner of the program environment, native connection, and session grants. */
   readonly agent: Agent
   /**
-   * Close the protocol connection, let in-flight calls settle, and dispose the connection's Agent, which
-   * releases its program environment, native connections, and session-scoped application grants.
+   * Close the protocol connection, let a reset in progress and in-flight calls settle, and dispose the
+   * connection's Agent, which releases its program environment, native connections, and session-scoped
+   * application grants.
    * @returns After the Agent and its retained resources are released.
    */
   dispose(): Promise<void>
@@ -138,7 +139,10 @@ function projectProgramTool(definition: ToolDefinition): Tool {
  * being listed. `cua_get_api_reference` returns the provider's `cua` guidance for the Agent and keeps no state.
  * `cua_run_code` calls pass their arguments to the ordinary tool executor unchanged, one at a time in arrival
  * order, each as the Agent's maintenance activity: argument validation is answered by DSH, and disposing the Agent
- * cancels the running call and waits for it to settle. `cua_reset` bypasses the queue and cancels the running program.
+ * cancels the running call and waits for it to settle. `cua_reset` bypasses the queue: it cancels the running program,
+ * releases the Agent's program environment through `ctx.cuaPrograms`, answers after the cancelled program has settled,
+ * and holds back programs that arrive meanwhile; the Agent, its native connection, and its application grants stay,
+ * and the next program starts a fresh process. Concurrent resets share one release.
  * Consent questions of that Agent are answered by the configured mode. A call the executor cannot settle,
  * including a cancelled one, fails as a protocol error.
  * @param ctx - Profile context with Agents, presets, tools, the system prompt, and the attachment store.
@@ -182,6 +186,8 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     queue = next.catch(() => undefined)
     return next
   }
+  /** The reset in progress; concurrent `cua_reset` calls share it, and programs wait for it. */
+  let resetting: Promise<CallToolResult> | undefined
   /** The provider's `cua` guidance for this Agent. It holds no connection state, so any conversation can read it at any time. */
   const apiReference = async (): Promise<CallToolResult> => {
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
@@ -194,6 +200,8 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
       return failure(`Program sandbox escalation is not available through cua-mcp: remove ${escalation.join(' and ')}. `
         + 'The launch-time DSH_PERMISSION_MODE selects the file sandbox of program processes.')
     }
+    // The program runtime rejects a run while the Agent's previous process is still exiting.
+    while (resetting !== undefined) await resetting
     // The call is the Agent's maintenance activity: Agent disposal cancels it and waits for it, with its nested
     // calls, to settle before the Agent's scope and Session close.
     const batch = await agent.runMaintenance(maintenance => ctx.agents.withInitiator(agent, () => ctx.tools.execute({
@@ -209,16 +217,27 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
       attachments: ctx.attachments, target: image => programs?.screenshotRequestTarget(image),
     }, signal)
   }
-  const resetEnvironment = async (): Promise<CallToolResult> => {
+  const resetEnvironment = (): CallToolResult | Promise<CallToolResult> => {
     const programs = ctx.get('cuaPrograms')
     if (programs === undefined) return failure(NO_PROVIDER)
-    try {
-      await programs.reset(agent)
-    } catch (error) {
-      return failure(error instanceof Error ? error.message : String(error))
-    }
-    return text('Program environment cleared. Application access and native connections are retained; '
-      + 'the next cua_run_code call starts a fresh environment.')
+    resetting ??= (async () => {
+      // The running program is cancelled wherever its call stands; releasing its environment then ends the process
+      // without the runtime's wait for the program to yield.
+      agent.cancel({ kind: 'user' }, { keepInbox: true })
+      let outcome: CallToolResult
+      try {
+        await programs.release(agent)
+        outcome = text('Program environment cleared: variables, imports, and application and window objects from earlier calls '
+          + 'are gone. Application access granted earlier still applies; select applications again with cua.getApp.')
+      } catch (error) {
+        outcome = failure(`Program environment reset failed: ${error instanceof Error ? error.message : String(error)}. `
+          + 'Call cua_reset again before running another program.')
+      }
+      // The cancelled program answers before the reset does.
+      await agent.whenIdle()
+      return outcome
+    })().finally(() => { resetting = undefined })
+    return resetting
   }
 
   server.setRequestHandler('tools/list', () => {
@@ -242,6 +261,7 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
       try {
         await server.close()
       } finally {
+        await resetting
         await queue
         await handle.dispose()
       }

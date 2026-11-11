@@ -982,11 +982,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
     methods: [
       {
-        signature: 'reset(agent: Agent): Promise<void>',
-        description: 'Release one Agent\'s retained program environment. Active programs of that Agent are cancelled, new programs wait for cleanup, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global; application grants, native connections, and the desktop applications themselves are unaffected. Resolves when no environment exists.',
+        signature: 'release(agent: Agent): Promise<void>',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
         parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
-        returns: 'Completion after the process and its nested-call cleanup settle.',
-        throws: ['CodeResetFailedError when cleanup fails; programs stay blocked until a later reset succeeds.'],
+        returns: 'Completion after the process has exited and its output has drained.',
+        throws: ['When the process cleanup fails.'],
       },
       {
         signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',

@@ -91,8 +91,9 @@ it('gives every other composed preset a program tool without changing the shared
   expect(ctx.tools.get('cua_run_code', uncomposed.agent)).toBeUndefined()
   expect(ctx.tools.get('cua', uncomposed.agent)).toBeUndefined()
   expect(ctx.get('ptcRuntime')).toMatchObject(shared)
-  // The host reset entry lives with the dedicated runtime and leaves with the provider.
-  await expect(ctx.get('cuaPrograms')?.reset(uncomposed.agent)).resolves.toBeUndefined()
+  // The program service lives with the dedicated runtime and leaves with the provider; an Agent without an
+  // environment has nothing to release.
+  await expect(ctx.get('cuaPrograms')?.release(uncomposed.agent)).resolves.toBeUndefined()
   const image = { attachmentId: 'sha256:' + 'b'.repeat(64), mediaType: 'image/png', bytes: 1, width: 400, height: 200 } as const
   expect(ctx.get('cuaPrograms')?.screenshotRequestTarget(image as never)).toBeUndefined()
   await mounted.dispose()
