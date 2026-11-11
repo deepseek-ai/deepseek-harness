@@ -35,10 +35,10 @@ DSH 的所有公开 API 都处于预稳定（pre-stable）阶段：根目录 `AG
 声明 Service Definition 的包在现有的 `package.json` `dsh` 声明中登记 seam 版本，该声明由[公开包 manifest](../../implemented/architecture/2026-09-10-public-package-manifest.zh.md) 决策负责。一个包可以声明多个 seam，因此该成员是列表：
 
 ```json
-{ "dsh": { "manifestVersion": 1, "apis": [{ "name": "agent", "version": "1.0.0" }] } }
+{ "dsh": { "apis": [{ "name": "agent", "version": "1.0.0" }] } }
 ```
 
-成员名称，以及是否需要新的 `manifestVersion`，尚未确定。按该决策的要求，报告生成器和兼容检查各自校验自己读取的成员。
+新成员是可选的，不改变 `manifestVersion`；成员名称尚未确定。按该决策的要求，报告生成器和兼容检查各自校验自己读取的成员。
 
 ### stable 覆盖的范围
 
@@ -79,7 +79,7 @@ stable 签名可以引用其他 seam 的类型，例如 `SessionId` 或 `Scoped`
 
 ### 待决问题
 
-- `dsh.apis` 和 `dsh.requires` 成员的名称，以及是否需要新的 `manifestVersion`。
+- `dsh.apis` 和 `dsh.requires` 成员的名称。
 - DSH 1.0 之前按时间计算的弃用期长度。
 - Python SDK 方法、SDK JSON-RPC 协议和 `cordis.yml` 配置字段是否纳入同一套级别，以及协议是否需要独立版本。
 - 报告生成方式：API Extractor，还是基于 [scripts/verify-export-jsdoc.ts](../../../../scripts/verify-export-jsdoc.ts) 的导出遍历和 [scripts/jsdoc.ts](../../../../scripts/jsdoc.ts) 的标签解析生成的转储。

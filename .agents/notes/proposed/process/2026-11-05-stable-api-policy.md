@@ -35,10 +35,10 @@ Each capability seam has its own API version, independent of the lockstep packag
 The package that declares a Service Definition records its seam version in the existing `package.json` `dsh` declaration, owned by the [public package manifest](../../implemented/architecture/2026-09-10-public-package-manifest.md) decision. One package can declare several seams, so the member is a list:
 
 ```json
-{ "dsh": { "manifestVersion": 1, "apis": [{ "name": "agent", "version": "1.0.0" }] } }
+{ "dsh": { "apis": [{ "name": "agent", "version": "1.0.0" }] } }
 ```
 
-The member names, and whether they require a new `manifestVersion`, are not settled. As that decision requires, the report generator and the compatibility check each validate the members they read.
+The new members are optional and do not change `manifestVersion`; their names are not settled. As that decision requires, the report generator and the compatibility check each validate the members they read.
 
 ### What stable covers
 
@@ -79,7 +79,7 @@ Serving an old major seam version to old plugins is deferred. It becomes worthwh
 
 ### Open questions
 
-- Names of the `dsh.apis` and `dsh.requires` members, and whether they require a new `manifestVersion`.
+- Names of the `dsh.apis` and `dsh.requires` members.
 - Length of the time-based deprecation period before DSH 1.0.
 - Whether the Python SDK methods, the SDK JSON-RPC protocol, and `cordis.yml` config fields join the same levels, and whether the protocol needs its own version.
 - Report generator: API Extractor or a dump built on the export walker in [scripts/verify-export-jsdoc.ts](../../../../scripts/verify-export-jsdoc.ts) and the tag parser in [scripts/jsdoc.ts](../../../../scripts/jsdoc.ts).
