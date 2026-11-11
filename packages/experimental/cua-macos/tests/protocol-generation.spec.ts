@@ -21,6 +21,23 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'invalid', method: 'setValue', params: target })).toBe(false)
   })
 
+  it('admits shared pointer modifier names for native input validation', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    const requests = [
+      { method: 'click', params: { appHandle: 'app', snapshotId: 'snapshot', elementId: '0' } },
+      { method: 'click', params: { appHandle: 'app', windowId: '1', x: 1, y: 2 } },
+      { method: 'drag', params: { appHandle: 'app', windowId: '1', fromX: 1, fromY: 2, toX: 3, toY: 4, durationMs: 100, steps: 2 } },
+    ]
+    for (const { method, params } of requests) {
+      for (const modifier of ['command', 'control', 'ctrl', 'option', 'alt', 'shift', 'win', 'fn']) {
+        expect(validate({ id: 'modifiers', method, params: { ...params, modifiers: [modifier] } })).toBe(true)
+      }
+      for (const modifier of ['unknown', 7]) {
+        expect(validate({ id: 'modifiers', method, params: { ...params, modifiers: [modifier] } })).toBe(false)
+      }
+    }
+  })
+
   it('enforces macOS tree budgets at native admission', () => {
     const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
     const read = (maxElements: number, maxDepth: number) => ({

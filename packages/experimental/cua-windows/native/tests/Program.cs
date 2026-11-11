@@ -101,7 +101,13 @@ Check(Offset("EndHTML") == html.Length - 1, "CF_HTML excludes the terminating NU
 
 Check(KeyChord.Parse("ctrl++", []).Key == "+", "Plus key remains a key after chord parsing");
 Check(KeyChord.Parse("+", []).Modifiers.Length == 0, "Bare plus has no modifier");
-Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["control"]), "Equivalent modifiers deduplicate");
+Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["ctrl"]), "Equivalent modifiers deduplicate");
+Check(KeyChord.Parse("Alt+a", ["alt"]).Modifiers.SequenceEqual(["alt"]), "Alt normalizes and deduplicates");
+Check(KeyChord.Parse("Win+a", ["win"]).Modifiers.SequenceEqual(["win"]), "Win normalizes and deduplicates");
+Check(KeyChord.Parse("a", ["WIN", "ctrl", "control"]).Modifiers.SequenceEqual(["win", "ctrl"]), "Win combines with deduplicated Ctrl aliases");
+Check(KeyChord.Parse("a", ["SHIFT", "Ctrl", "ALT"]).Modifiers.SequenceEqual(["shift", "ctrl", "alt"]), "Windows modifier names normalize without changing order");
+Refuses(() => KeyChord.Parse("unknown+a", []), "INVALID_ARGUMENT");
+Refuses(() => KeyChord.Parse("a", ["unknown"]), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
 Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
 

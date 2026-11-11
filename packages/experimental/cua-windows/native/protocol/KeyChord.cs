@@ -15,11 +15,11 @@ public sealed record KeyChord(string Key, string[] Modifiers)
 
     public static string NormalizeModifier(string value) => value.ToLowerInvariant() switch
     {
-        "control" or "ctrl" => "control",
+        "ctrl" or "control" => "ctrl",
         "shift" => "shift",
-        "option" or "alt" => "option",
-        "command" or "cmd" or "meta" or "win" or "windows" => "command",
-        "fn" => throw new NativeFailure("UNSUPPORTED", "Windows has no general Fn-key injection; use an available application action"),
+        "alt" => "alt",
+        "win" => "win",
+        "fn" => throw new NativeFailure("UNSUPPORTED", "Fn is typically handled by keyboard firmware rather than exposed as a distinct key in the Windows input layer"),
         _ => throw new NativeFailure("INVALID_ARGUMENT", "Unknown key modifier"),
     };
 }

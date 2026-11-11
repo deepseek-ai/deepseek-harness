@@ -163,7 +163,7 @@ internal sealed class ClipboardPaste
         try
         {
             await context.Sta.Invoke(() => transaction.Begin(), context.Cancellation);
-            Input.Press(app, window, "v", ["control"], context);
+            Input.Press(app, window, "v", ["ctrl"], context);
             try { await transaction.Consumed.Task.WaitAsync(TimeSpan.FromMilliseconds(readTimeoutMs), context.Cancellation); }
             catch (TimeoutException)
             {
