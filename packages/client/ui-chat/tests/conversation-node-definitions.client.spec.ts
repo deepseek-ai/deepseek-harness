@@ -13,7 +13,8 @@ import {
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
@@ -174,7 +175,7 @@ function appendAssistantChunk(value: ConversationNodeAssembler, seq: number, chu
     type: 'transient',
     event: {
       type: 'assistant/live-chunk', seq, time: 1_700_000_000_000 + seq,
-      data: { attemptId: LlmAttemptId('assistant-visibility'), turn: 1, step: 1, chunk },
+      data: { attemptId: brandString<LlmAttemptId>('assistant-visibility'), turn: 1, step: 1, chunk },
     },
   })
   value.flush()
@@ -1229,7 +1230,7 @@ describe('built-in conversation node Definitions', () => {
     appendAssistantChunk(value, 10, { type: 'block-start', index: 0, blockType: 'image' })
     expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('visible')
     appendAssistantChunk(value, 11, {
-      type: 'tool-call-delta', index: 0, id: ToolCallId('visibility-tool'), name: 'read', argumentsDelta: '',
+      type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('visibility-tool'), name: 'read', argumentsDelta: '',
     })
     expect(node(snapshot(value), 'assistant-step')?.visibility).toBe('hidden')
     appendAssistantChunk(value, 12, { type: 'block-start', index: 0, blockType: 'image' })
@@ -1430,7 +1431,7 @@ describe('built-in conversation node Definitions', () => {
     { outcome: 'abandoned', startLoaded: true },
     { outcome: 'abandoned', startLoaded: false },
   ])('retains the Assistant key after $outcome retirement (startLoaded=$startLoaded)', ({ outcome, startLoaded }) => {
-    const attemptId = LlmAttemptId('retired-chat-attempt')
+    const attemptId = brandString<LlmAttemptId>('retired-chat-attempt')
     const chunk = { type: 'text-delta' as const, index: 0, text: 'Discarded reply' }
     const stream = new AssistantStreamAccumulator()
     stream.push({ time: 1_030, chunk })
@@ -1479,7 +1480,7 @@ describe('built-in conversation node Definitions', () => {
       event: {
         type: 'assistant/live-chunk', seq: 4.5, time: 1_050,
         data: {
-          attemptId: LlmAttemptId('replacement-chat-attempt'), turn: 1, step: 1,
+          attemptId: brandString<LlmAttemptId>('replacement-chat-attempt'), turn: 1, step: 1,
           chunk: { type: 'text-delta', index: 0, text: 'Replacement reply' },
         },
       },
@@ -1492,7 +1493,7 @@ describe('built-in conversation node Definitions', () => {
   })
 
   it('omits first-token metrics after live settlement and after reopening the same history', () => {
-    const attemptId = LlmAttemptId('settled-chat-timing')
+    const attemptId = brandString<LlmAttemptId>('settled-chat-timing')
     const starts = [
       at(1, 'turn/start', { turn: 1 }, { time: 1_000 }),
       at(2, 'step/start', { turn: 1, step: 1 }, { time: 1_010 }),

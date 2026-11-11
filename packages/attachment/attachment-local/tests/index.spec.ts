@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -41,7 +42,7 @@ describe('local attachment service', () => {
     })
     expect(service.imageCompressionConcurrency).toBe(DEFAULT_IMAGE_COMPRESSION_CONCURRENCY)
     const ref = {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
       mediaType: 'image/png' as const,
       bytes: 1,
       width: 1,
@@ -53,7 +54,7 @@ describe('local attachment service', () => {
       'aa',
       'a'.repeat(64),
     ))
-    expect(() => service.imageHostPath({ ...ref, attachmentId: AttachmentId('invalid') }))
+    expect(() => service.imageHostPath({ ...ref, attachmentId: brandString<AttachmentId>('invalid') }))
       .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }))
   })
 

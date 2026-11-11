@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ForgeFailure, ForgeProvider, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
+import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
@@ -16,6 +16,7 @@ import {
   rejectionOf, repository, scratch, sendPrompt, shellTurn, snapshot, startStep, startTurn,
 } from './harness.ts'
 import type { Bench, BenchOptions, Follower } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -694,7 +695,7 @@ describe('forgePanel change request diffs', () => {
     await expect(paths()).resolves.toEqual(['src/a.ts'])
     opened.provider.patches.set(7, PATCH.replaceAll('src/a.ts', 'src/b.ts'))
     await expect(paths()).resolves.toEqual(['src/a.ts'])
-    const other = opened.ctx.sessions.create(SessionId('forge-panel-other'), { meta: { cwd: repo } })
+    const other = opened.ctx.sessions.create(brandString<SessionId>('forge-panel-other'), { meta: { cwd: repo } })
     opened.ctx.forgeSession.track(other, pullUrl(7))
     await expect(paths(other)).resolves.toEqual(['src/a.ts'])
     expect(opened.provider.diffs).toEqual([7, 7])
@@ -1697,7 +1698,7 @@ describe('forgePanel leaving a worktree', () => {
     const opened = await open(repo, {}, { worktrees: true })
     await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/no-worktree' })
     const created = await startInWorktree(opened)
-    const unloaded = opened.ctx.sessions.create(SessionId('forge-panel-unloaded'), { meta: { cwd: created.path } })
+    const unloaded = opened.ctx.sessions.create(brandString<SessionId>('forge-panel-unloaded'), { meta: { cwd: created.path } })
     recordWorktree(unloaded, created)
     const release = occupy(opened)
 

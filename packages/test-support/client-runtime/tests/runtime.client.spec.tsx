@@ -1,4 +1,5 @@
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 // @vitest-environment jsdom
 /**
  * SlotTestRuntime behavior: root declaration + rendering, session
@@ -742,7 +743,7 @@ describe('fixture session face', () => {
     const bare = runtime.sessions.behavior('s1')
     expect(() => bare.prompt()).toThrow(/prompt is not stubbed/)
     expect(() => bare.readAttachment({
-      attachmentId: AttachmentId('att-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>('att-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
     })).toThrow(/readAttachment is not stubbed/)
     expect(() => bare.updateQueue()).toThrow(/updateQueue is not stubbed/)
     expect(() => bare.cancel()).toThrow(/cancel is not stubbed/)

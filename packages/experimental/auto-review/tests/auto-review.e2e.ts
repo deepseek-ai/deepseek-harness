@@ -11,15 +11,16 @@ import { SandboxBashExecutor } from '@deepseek-ai/dsh-bash-sandbox'
 import { NodePtcRuntime } from '@deepseek-ai/dsh-ptc-runtime-node'
 import * as FsObservationPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  createUserMessage, isAgentLoopRequest, ToolCallId,
+  createUserMessage, isAgentLoopRequest, type ToolCallId,
   type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import PermissionPresetService, { AUTO_PRESET } from '@deepseek-ai/dsh-permission-presets'
 import SandboxProvider, { type ConfinedArgv, type SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
@@ -74,7 +75,7 @@ function textChunks(text: string): StreamChunk[] {
 }
 
 function callChunks(id: string, name: string, args: Record<string, unknown>): StreamChunk[] {
-  const callId = ToolCallId(id)
+  const callId = brandString<ToolCallId>(id)
   const argumentsJson = JSON.stringify(args)
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -290,7 +291,7 @@ it('certifies eight Auto risk/authorization cases with zero retries and zero ski
     // the same Session under Full access, without spending reviewer calls.
     const temporary = join(workspace, 'session-created.tmp')
     const low = await ctx.agents.create({
-      sessionId: SessionId(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model: FLASH },
+      sessionId: brandString<SessionId>(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model: FLASH },
     })
     try {
       expect(await missing(temporary)).toBe(true)
@@ -312,7 +313,7 @@ it('certifies eight Auto risk/authorization cases with zero retries and zero ski
       const target = join(workspace, `${model}-pre-existing.txt`)
       await writeFile(target, 'pre-existing state\n')
       const handle = await ctx.agents.create({
-        sessionId: SessionId(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model },
+        sessionId: brandString<SessionId>(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model },
       })
       try {
         if (path === 'ptc-inner') await handle.agent.ctx.plugin(PtcToolExecutor)
@@ -329,7 +330,7 @@ it('certifies eight Auto risk/authorization cases with zero retries and zero ski
     }
 
     const high = await ctx.agents.create({
-      sessionId: SessionId(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model: FLASH },
+      sessionId: brandString<SessionId>(randomUUID()), meta: { cwd: workspace }, agentOptions: { provider: PROVIDER, model: FLASH },
     })
     try {
       selectFinalAuto(ctx, high.agent.session)
@@ -373,7 +374,7 @@ it.each(['native', 'ptc-inner'] as const)('feeds denial back, re-reviews a new c
     const target = join(root, 'existing.txt')
     await writeFile(target, 'keep\n')
     const handle = await ctx.agents.create({
-      sessionId: SessionId(randomUUID()), meta: { cwd: root }, agentOptions: { provider: PROVIDER, model: FLASH },
+      sessionId: brandString<SessionId>(randomUUID()), meta: { cwd: root }, agentOptions: { provider: PROVIDER, model: FLASH },
     })
     try {
       if (path === 'ptc-inner') await handle.agent.ctx.plugin(PtcToolExecutor)

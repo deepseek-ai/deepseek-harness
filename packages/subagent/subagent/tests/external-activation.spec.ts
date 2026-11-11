@@ -4,13 +4,14 @@ import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import type { SubagentStartRequest, SubagentCapabilities, SubagentResult, SubagentRun } from '../src/types.ts'
 import { externalTestParent } from './external-activation-helpers.ts'
 import { subagentManager } from './manager-internals.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const capabilities: SubagentCapabilities = {
   agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false,
@@ -41,7 +42,7 @@ function execution() {
   const cleanup = Promise.withResolvers<undefined>()
   const cleaning = Promise.withResolvers<undefined>()
   const dispose = vi.fn(() => { cleaning.resolve(undefined); return cleanup.promise })
-  const run: SubagentRun = { id: SessionId('external-task'), result: result.promise, dispose }
+  const run: SubagentRun = { id: brandString<SessionId>('external-task'), result: result.promise, dispose }
   return { result, cleanup, cleaning, dispose, run }
 }
 
@@ -88,7 +89,7 @@ describe('external subagent activations', () => {
         signal.addEventListener('abort', () => { backend.result.resolve({ output: [], stopReason: 'aborted' }) }, { once: true })
         return backend.run
       })
-      const session = fixture.ctx.sessions.create(SessionId('publication-parent'))
+      const session = fixture.ctx.sessions.create(brandString<SessionId>('publication-parent'))
       const parent = { ...fixture.parent, id: session.id, session }
       const detachParent = fixture.ctx.agents.enter(parent)
       let detachReplacement: (() => void) | undefined
@@ -204,7 +205,7 @@ describe('external subagent activations', () => {
     const result = Promise.withResolvers<SubagentResult>()
     const dispose = vi.fn(async () => { result.resolve({ output: [], stopReason: 'aborted' }) })
     const fixture = await setup(async () => ({
-      id: SessionId('dispose-settled'), result: result.promise, dispose,
+      id: brandString<SessionId>('dispose-settled'), result: result.promise, dispose,
     }))
     const activation = await fixture.start()
     await activation.dispose()
@@ -374,7 +375,7 @@ it('refuses a reserved Session id for an external provider before dispatch', asy
   const start = vi.fn()
   const fixture = await setup(start)
   await expect(fixture.ctx.subagents.startActivation({
-    provider: 'external', childId: SessionId('reserved'), label: 'External', delivery: 'parent',
+    provider: 'external', childId: brandString<SessionId>('reserved'), label: 'External', delivery: 'parent',
     signal: fixture.controller.signal, parent: fixture.parent, prompt: [],
   })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
   expect(start).not.toHaveBeenCalled()

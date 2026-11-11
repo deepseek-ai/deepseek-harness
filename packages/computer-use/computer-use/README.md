@@ -31,7 +31,7 @@ Mount the service once beside the chosen provider in a Cordis composition:
 - name: '@deepseek-ai/dsh-computer-use'
 ```
 
-The service has no configuration. Provider plugins inject `computerUse` and call `ctx.computerUse.register(ComputerUseProviderName(name))`; the brand is exported from `@deepseek-ai/dsh-computer-use/brand`. The returned effect disposer releases that registration.
+The service has no configuration. Provider plugins inject `computerUse` and call `ctx.computerUse.register(brandString<ComputerUseProviderName>(name))`, using `brandString` from `@deepseek-ai/dsh-brand` and the type from `@deepseek-ai/dsh-computer-use/brand`. The returned effect disposer releases that registration.
 
 Providers stop admitting tool calls, close their resources, and await owned work before releasing the registration. `ctx.computerUse.providerName` reports the registered name until release.
 

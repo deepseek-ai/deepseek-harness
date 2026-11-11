@@ -36,7 +36,8 @@ import type {
   TokenUsage,
   ToolUpdate,
 } from '@deepseek-ai/dsh-llm'
-import { LlmAdapter, LlmError, ReasoningEffortId, expandAssistantStream, offloadedImageText, requestImageHandleText, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, LlmError, type ReasoningEffortId, expandAssistantStream, offloadedImageText, requestImageHandleText, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
 const PACKED_CHUNK_ROW_TYPES = new Set(['text-chunks', 'reasoning-chunks', 'tool-call-chunks'])
@@ -918,10 +919,10 @@ class ReplayAdapter extends LlmAdapter {
         ? {}
         : {
           reasoning: {
-            efforts: configuredModel.reasoningEfforts.map(id => ({ id: ReasoningEffortId(id), name: id })),
+            efforts: configuredModel.reasoningEfforts.map(id => ({ id: brandString<ReasoningEffortId>(id), name: id })),
             ...configuredModel.defaultReasoningEffort === undefined
               ? {}
-              : { defaultEffort: ReasoningEffortId(configuredModel.defaultReasoningEffort) },
+              : { defaultEffort: brandString<ReasoningEffortId>(configuredModel.defaultReasoningEffort) },
           },
         },
     })

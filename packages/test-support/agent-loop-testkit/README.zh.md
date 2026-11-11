@@ -35,7 +35,8 @@ kind: "package-library"
 
 ```ts
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import {
   mountAgentLoopTestDependencies,
   mountAgentLoopTestHarness,
@@ -46,7 +47,7 @@ const ctx = new Context()
 await mountAgentLoopTestDependencies(ctx)
 // Register the test adapter and any load-order-sensitive plugins here.
 const harness = await mountAgentLoopTestHarness(ctx)
-const agent = await harness.create(SessionId('test-agent'))
+const agent = await harness.create(brandString<SessionId>('test-agent'))
 declare const message: UserMessage
 
 agent.inbox.append('next-turn', message)

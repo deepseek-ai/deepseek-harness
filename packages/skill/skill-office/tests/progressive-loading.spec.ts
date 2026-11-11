@@ -7,7 +7,7 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -17,6 +17,7 @@ import * as ToolSkill from '../../tool-skill/src/index.ts'
 import * as SkillOffice from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { expectNoRenderContext } from './fixtures/real-office.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 afterEach(async () => { for (const ctx of contexts.splice(0)) await ctx.fiber.dispose() })
@@ -53,7 +54,7 @@ async function setup(mode: 'native' | 'ptc', names: string[]) {
     textResponse('Done.'), textResponse('Continued.'), textResponse('Fork continued.'),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('progressive-office'), agentOptions: { provider: 'mock', model: 'model' } })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('progressive-office'), agentOptions: { provider: 'mock', model: 'model' } })
   return { ctx, agent, adapter }
 }
 
@@ -83,9 +84,9 @@ it.each(['native', 'ptc'] as const)('loads the router and authoring body in %s; 
     expect(request).not.toMatch(/fragment rectangles/)
   }
   const seed = agent.session.snapshotEvents()
-  const { agent: resumed } = await ctx.agents.create({ sessionId: SessionId('resumed-office'), agentOptions: { provider: 'mock', model: 'model' }, seed })
+  const { agent: resumed } = await ctx.agents.create({ sessionId: brandString<SessionId>('resumed-office'), agentOptions: { provider: 'mock', model: 'model' }, seed })
   await send(resumed)
-  const { agent: forked } = await ctx.agents.create({ sessionId: SessionId('forked-office'), agentOptions: { provider: 'mock', model: 'model' }, seed, meta: { parentSession: agent.id } })
+  const { agent: forked } = await ctx.agents.create({ sessionId: brandString<SessionId>('forked-office'), agentOptions: { provider: 'mock', model: 'model' }, seed, meta: { parentSession: agent.id } })
   await send(forked)
   for (const request of adapter.requests.slice(3)) {
     const text = JSON.stringify(request)

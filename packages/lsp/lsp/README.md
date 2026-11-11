@@ -86,7 +86,7 @@ This section explains the design decisions behind the seam and where the code re
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Lsp` service, `registerProvider`/`query`, `finalExtension`, `LspError` codes |
 | [`src/types.ts`](src/types.ts) | Seam vocabulary: request, result, provider, and service contracts |
-| [`src/brand.ts`](src/brand.ts) | `LspProviderId` branded-id type and factory |
+| [`src/brand.ts`](src/brand.ts) | `LspProviderId` branded-id type |
 
 ### Registration and selection lifecycle
 

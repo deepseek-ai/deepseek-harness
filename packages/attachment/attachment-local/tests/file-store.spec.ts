@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   fileLeafName, readFileStreamVerbatim, saveFileStreamVerbatim, saveFileVerbatim, storedFilePath,
@@ -75,7 +76,7 @@ describe('saveFileVerbatim', () => {
     const data = Uint8Array.from([0, 1, 2, 250, 251, 252])
     const ref = await saveFileVerbatim(root, { data, name: 'blob.bin' })
     expect(ref).toEqual({
-      attachmentId: AttachmentId(`sha256:${sha256(data)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${sha256(data)}`),
       name: 'blob.bin',
       bytes: data.byteLength,
     })
@@ -161,7 +162,7 @@ describe('saveFileStreamVerbatim', () => {
     })
     const expected = Uint8Array.of(0, 1, 2, 250, 251, 252)
     expect(ref).toEqual({
-      attachmentId: AttachmentId(`sha256:${sha256(expected)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${sha256(expected)}`),
       name: 'large.bin',
       bytes: expected.byteLength,
     })
@@ -210,7 +211,7 @@ describe('readFileStreamVerbatim', () => {
   it('rejects invalid, missing, and unreadable references with storage codes', async () => {
     const root = await makeRoot()
     const ref: FileAttachmentRef = {
-      attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`),
       name: 'missing.bin',
       bytes: 1,
     }
@@ -263,11 +264,11 @@ describe('readFileStreamVerbatim', () => {
 describe('storedFilePath', () => {
   it('rejects malformed digests and unsanitized names before deriving a path', () => {
     const good: FileAttachmentRef = {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
       name: 'ok.txt',
       bytes: 1,
     }
-    expect(() => storedFilePath('/root', { ...good, attachmentId: AttachmentId('sha256:short') }))
+    expect(() => storedFilePath('/root', { ...good, attachmentId: brandString<AttachmentId>('sha256:short') }))
       .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }) as Error)
     expect(() => storedFilePath('/root', { ...good, name: '../escape.txt' }))
       .toThrow(expect.objectContaining({ code: 'INVALID_ATTACHMENT_REF' }) as Error)

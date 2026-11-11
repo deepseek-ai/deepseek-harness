@@ -7,7 +7,7 @@ import './fonts-dom.client.ts'
 import type { PaneId, SidebarRightTabActions, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import { CHANGES_KIND, changesAddress, type ChangesParams, type ChangesSource } from '../src/client/changes-address.ts'
@@ -34,9 +34,10 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge/types'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 import { reviewComment, reviewThread } from './thread-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 const TAB = 'tab-changes' as TabId
 const URL7 = 'https://github.com/octo/demo/pull/7'
 const HEAD = 'a'.repeat(40)

@@ -4,7 +4,8 @@ import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { ChatViewport } from '../src/client/chat/use-chat-viewport.ts'
 import type { ProcessGroupData } from '../src/client/contract/process-groups.ts'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
-import { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { GlobalStandardProps, PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -2119,7 +2120,7 @@ describe('ChatView', () => {
 
   it('keeps pending file mentions non-interactive until admission enables the reference injector', () => {
     const pending: InboxState['next-step'][number] = {
-      id: MessageId('pending-file-mention'), role: 'user', source: { kind: 'user' },
+      id: brandString<MessageId>('pending-file-mention'), role: 'user', source: { kind: 'user' },
       content: [{ type: 'text', text: 'Read @src/review.ts' }],
     }
     const h = makeHarness({}, { testInbox: { 'next-turn': [], 'next-step': [pending] }, running: true })

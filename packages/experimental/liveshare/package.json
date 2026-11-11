@@ -65,7 +65,6 @@
     "@deepseek-ai/dsh-experimental-liveshare-protocol": "workspace:*",
     "@deepseek-ai/dsh-http-proxy": "workspace:*",
     "@deepseek-ai/dsh-official-bundles": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "undici": "8.11.2",
@@ -77,6 +76,7 @@
     "@deepseek-ai/dsh-scope": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-agent": "workspace:*",

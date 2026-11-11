@@ -5,11 +5,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonRpcTransportPeer } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const questions = [{ id: 'format', question: 'Which format?', options: [{ label: 'CSV' }, { label: 'JSON' }] }]
 const answer = { answers: [{ id: 'format', selected: ['CSV'], custom: 'include a header' }] }
@@ -32,7 +33,7 @@ async function fixture(request: JsonRpcTransportPeer['request'], hostQuestions =
   await server.initialize({ cwd: root, provider: 'mock', model: 'mock', capabilities: { userQuestions: hostQuestions } })
   await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'start' }] })
   await server.wait({ sessionId: 'main' })
-  const agent = ctx.agents.get(SessionId('main'))!
+  const agent = ctx.agents.get(brandString<SessionId>('main'))!
   return { ctx, server, transport, agent }
 }
 
@@ -55,7 +56,7 @@ it('keeps native answerers when the SDK host did not advertise question support'
 
 it('does not forward questions belonging to another runtime root', async () => {
   const f = await fixture(async () => answer)
-  const foreign = await f.ctx.agents.create({ sessionId: SessionId('foreign'), agentOptions: { provider: 'mock', model: 'mock' } })
+  const foreign = await f.ctx.agents.create({ sessionId: brandString<SessionId>('foreign'), agentOptions: { provider: 'mock', model: 'mock' } })
   try {
     await expect(f.ctx.userQuestions.ask({ agent: foreign.agent, questions })).rejects.toMatchObject({ code: 'NO_PROVIDER' })
     expect(f.transport.request).not.toHaveBeenCalled()

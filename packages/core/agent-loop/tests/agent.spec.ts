@@ -8,10 +8,11 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -42,7 +43,7 @@ describe('Agent', () => {
   it('idle inject() durably stages context without opening a turn', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     agent.inject(createUserMessage({ content: [{ type: 'text', text: 'context' }], source: { kind: 'p' } }))
 
@@ -54,7 +55,7 @@ describe('Agent', () => {
 
   it('inject() preserves an unknown producer source', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     const source = { kind: 'unknown-producer' } as unknown as MessageSource
     agent.inject(createUserMessage({ content: [{ type: 'text', text: 'empty plugin source' }], source }))
@@ -66,7 +67,7 @@ describe('Agent', () => {
 
   it('emits exact inserted, claimed, and discarded inbox messages', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
-    const agent = await ctx.agentLoop.create(SessionId('inbox-events'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('inbox-events'), { provider: 'mock', model: 'mock' })
     const inserted: unknown[] = []
     const claimed: unknown[] = []
     const discarded: unknown[] = []
@@ -104,7 +105,7 @@ describe('Agent', () => {
 
   it('idle inject() rejects invalid input before enqueue', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     expect(() => {
       agent.inject(createUserMessage({ content: [{ type: 'text', text: 'x', bad: 1n } as never], source: { kind: 'p' } }))
@@ -115,7 +116,7 @@ describe('Agent', () => {
   it('steer() while idle becomes a woken prompt turn', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     agent.steer(createUserMessage({ content: [{ type: 'text', text: 'steer idle' }], source: { kind: 'test' } }))
     await agent.whenIdle()
@@ -126,7 +127,7 @@ describe('Agent', () => {
 
   it('emits one running and idle transition for one completed turn', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     const statuses: string[] = []
     ctx.on('agent/status', ({ agent: subject, status }) => {
       if (subject === agent) statuses.push(status)
@@ -140,7 +141,7 @@ describe('Agent', () => {
 
   it('whenIdle() resolves immediately without active work', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     await agent.whenIdle()
 
@@ -149,7 +150,7 @@ describe('Agent', () => {
 
   it('whenIdle() waits for active work until explicit cancellation', async () => {
     const ctx = await harness(new MockAdapter(['hang']))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'queued')
     let settled = false
@@ -165,7 +166,7 @@ describe('Agent', () => {
   it('contains a throwing status listener on both transitions', async () => {
     const ctx = await harness(new MockAdapter([textResponse('ok')]))
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     ctx.on('agent/status', ({ status }) => {
       throw new Error(`bad ${status} listener`)
     })

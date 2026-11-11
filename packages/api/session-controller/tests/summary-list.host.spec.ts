@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-preset-registry'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionFollowFrame } from '@deepseek-ai/dsh-api-session-controller/types'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import {

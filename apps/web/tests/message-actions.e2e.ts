@@ -10,12 +10,13 @@ import { zstdCompressSync } from 'node:zlib'
 import type { Browser, Page, Request as BrowserRequest } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, parseSeedFixture, realizeSeedFixture, renderSeedFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { openSettings, newEnglishPage, pinBrowserClock, pinHostClock, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/message-actions', import.meta.url))
 // Borrowed read-only: this scenario needs any settled user+assistant pair, not
@@ -439,7 +440,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
 
   it.skipIf(MODE === 'record')('forks an unopened current-format Session from its sidebar row', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/current-cold-fork'))
-    const id = SessionId('message-actions-current-cold')
+    const id = brandString<SessionId>('message-actions-current-cold')
     await seedSession(scaffold, completedTailFixture(await readFile(SEED, 'utf8')), id)
     const warningStart = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
@@ -459,7 +460,7 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
 
   it.skipIf(MODE === 'record')('guides only a migration-required sidebar fork to opening its source', async () => {
     onTestFailed(() => saveFailureShot(page, 'screenshots/non-migrating-session-reads/migration-required-fork'))
-    const id = SessionId('message-actions-needs-migration')
+    const id = brandString<SessionId>('message-actions-needs-migration')
     const [header, ...events] = realizeSeedFixture(scaffold, await readFile(SEED, 'utf8'), id).trimEnd().split('\n')
       .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
     expect(header?.version).toBe(3)

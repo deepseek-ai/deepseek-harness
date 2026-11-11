@@ -148,7 +148,7 @@ describe('Assembled viewer page global configuration privacy', () => {
     await waitFor(() => { expect(document.querySelector('[data-sample="bash"]')).not.toBeNull() }, { timeout: 30_000 })
 
     const context = input.context()
-    expect(context.get('connection')?.isLoopback).toBe(authority === 'loopback')
+    expect((context.get('connection') as ConnectionHandle | undefined)?.isLoopback).toBe(authority === 'loopback')
     expect(context.get('remote')?.$host.isLoopback).toBe(authority === 'loopback')
     const transport = Reflect.get(globalThis, '__DSH_TRANSPORT__') as { readonly ownsHost?: boolean }
     expect(transport.ownsHost).toBeUndefined()

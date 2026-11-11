@@ -4,12 +4,13 @@ import { Context } from '@deepseek-ai/cordis'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 import SubagentRuntime, { type ResolvedSubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as scripted from './scripted-provider.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A minimal parent; the scripted provider only reads its id. */
 function fakeParent(id = 'parent-1'): Agent {
-  return { id: SessionId(id) } as Agent
+  return { id: brandString<SessionId>(id) } as Agent
 }
 
 function baseRequest(over: Partial<ResolvedSubagentStartRequest> = {}): ResolvedSubagentStartRequest {

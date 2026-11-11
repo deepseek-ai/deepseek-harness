@@ -1,7 +1,7 @@
 import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -9,6 +9,7 @@ import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const request: PtcRunRequest = { program: '1', bindings: [], stateOwner: {} }
 async function setup(config: Config = {}) {
@@ -23,7 +24,7 @@ const bound: PtcRunRequest = { ...request, bindings: [{ global: 'tools', functio
 
 it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when its Session policy changes before process launch', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('policy-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('policy-admission'))
   const policy = h.ctx.sandboxPolicy.resolve({ session })
   expect(policy.mode).toBe('danger-full-access')
   h.receive((message) => {
@@ -48,7 +49,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when i
 
 it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider %s call when the standing mode is unchanged', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('temporary-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('temporary-admission'))
   setSandboxMode(session, 'read-only')
   const standing = h.ctx.sandboxPolicy.resolve({ session })
   h.receive((message) => {
@@ -69,7 +70,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider 
 
 it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled when policy changes back during earlier cleanup', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('waiting-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('waiting-admission'))
   const booted = Promise.withResolvers<undefined>()
   const cleaning = Promise.withResolvers<undefined>()
   const cleanup = Promise.withResolvers<boolean>()
@@ -101,7 +102,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
 
 it.each(['persistent-in-memory', 'per-call'] as const)('rejects admission when %s unloads during earlier policy cleanup', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('unloading-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('unloading-admission'))
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   h.onBoot(() => {
     if (executionMode === 'persistent-in-memory') h.complete({})
