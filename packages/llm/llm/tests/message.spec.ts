@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
+import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import {
   ToolCallId,
   boundContextSummary,
@@ -11,6 +12,46 @@ import {
   freezeMessage,
   MessageId,
 } from '@deepseek-ai/dsh-llm'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+
+describe('extractTextContent', () => {
+  it('preserves whitespace and empty text blocks while omitting non-text blocks', () => {
+    const message = createUserMessage({
+      source: { kind: 'test' },
+      content: [
+        { type: 'text', text: ' \talpha\n' },
+        { type: 'reasoning', text: 'private reasoning' },
+        { type: 'image', attachment: {
+          attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+          mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+        } },
+        { type: 'tool-call', id: ToolCallId('call'), name: 'tool', arguments: '{}' },
+        { type: 'text', text: '' },
+        { type: 'tool-removal', toolName: 'removed' },
+        { type: 'text', text: 'β \r\n' },
+      ],
+    })
+    expect(extractTextContent(message.content)).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, undefined)).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, {})).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: '' })).toBe(' \talpha\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: '\n' })).toBe(' \talpha\n\n\nβ \r\n')
+    expect(extractTextContent(message.content, { separator: ' ' })).toBe(' \talpha\n  β \r\n')
+    expect(extractTextContent(message.content, { separator: '::' })).toBe(' \talpha\n::::β \r\n')
+    expect(Object.isFrozen(message.content)).toBe(true)
+    expect(message.content[0]).toEqual({ type: 'text', text: ' \talpha\n' })
+  })
+
+  it('returns empty text when there are no text blocks and keeps separators between empty text blocks', () => {
+    expect(extractTextContent([])).toBe('')
+    expect(extractTextContent([{ type: 'reasoning', text: 'not plain text' }], { separator: '\n' })).toBe('')
+    expect(extractTextContent([
+      { type: 'text', text: '' },
+      { type: 'reasoning', text: 'ignored' },
+      { type: 'text', text: '' },
+    ], { separator: '\n' })).toBe('\n')
+  })
+})
 
 describe('message construction', () => {
   it('detaches and freezes developer tool names without copying their definitions', () => {

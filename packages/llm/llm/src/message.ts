@@ -1,4 +1,4 @@
-/** Message value types, identity, and immutable construction helpers. */
+/** Message value types, content text extraction, identity, and immutable construction helpers. */
 
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -304,4 +304,17 @@ export function createToolResultMessage(input: ToolResultMessageInput): ToolResu
     content: input.content,
     isError: input.isError,
   })
+}
+
+/**
+ * Extract and join only text blocks in content order, preserving their whitespace.
+ * Non-text blocks contribute neither text nor separators; content is not modified.
+ * Import from `@deepseek-ai/dsh-llm/message` in Host and browser code.
+ * @param content - source blocks to read in their existing order.
+ * @param options - optional text extraction settings.
+ * @param options.separator - text inserted between text blocks; defaults to an empty string.
+ * @returns joined text, or an empty string when no text blocks are present.
+ */
+export function extractTextContent(content: readonly ContentBlock[], options?: { separator?: string }): string {
+  return content.filter(block => block.type === 'text').map(block => block.text).join(options?.separator ?? '')
 }

@@ -1,5 +1,7 @@
 /** Projection that folds shell results and binding records into one Session's change request bindings, and shows clients the bindings. */
 
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
+
 import { z } from 'zod'
 import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
@@ -105,7 +107,7 @@ function applyResult(state: ForgeChangeRequestsState, result: SessionEventMap['t
   if (pending === undefined) return state
   const rest = state.pending.filter(entry => entry !== pending)
   if (result.message.isError === true) return { ...state, pending: rest }
-  const text = result.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+  const text = extractTextContent(result.message.content, { separator: '\n' })
   const printed = pending.urls === 'created' ? changeRequestUrls(text) : ownChangeRequestUrls(text)
   return {
     pending: rest,
