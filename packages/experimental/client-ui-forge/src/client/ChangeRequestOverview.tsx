@@ -17,11 +17,10 @@ import type {
   BranchUpdateMethod, BranchUpdateRequest, ChangeRequestCheck, ChangeRequestIssue, ChangeRequestReviewer, ChangeRequestSnapshot,
   ForgeRerunRequest, ForgeReviewerCandidate, ReviewVerdict,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgePanelChangeRequest } from '../types.ts'
 import { formatDuration } from './format.ts'
 import { CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
-import { checkCounts, checkDuration } from './status.ts'
+import { checkCounts, checkDuration, type ChangeRequestEntry } from './status.ts'
 import { searchFieldKeyDown } from './menu-search.ts'
 import css from './ForgeTab.module.css'
 import overview from './ChangeRequestOverview.module.css'
@@ -35,7 +34,7 @@ const SEARCH_DELAY_MS = 150
 const AVATARS = 3
 
 /** Requests reviews of a change request from more reviewers; settles once the outcome is reported. */
-type RequestReviews = (entry: ForgePanelChangeRequest, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]) => Promise<void>
+type RequestReviews = (entry: ChangeRequestEntry, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[]) => Promise<void>
 
 /** Lists the accounts a review of the change request at `url` can be requested from. */
 type ListCandidates = (url: string, query: string, signal: AbortSignal) => Promise<readonly ForgeReviewerCandidate[]>
@@ -43,13 +42,13 @@ type ListCandidates = (url: string, query: string, signal: AbortSignal) => Promi
 /** Overview actions of a card; a surface without a Session binding omits them. */
 export interface OverviewActions {
   /** Rerun the failed checks; settles once the outcome is reported. */
-  readonly rerunChecks?: ((entry: ForgePanelChangeRequest, request: ForgeRerunRequest) => Promise<void>) | undefined
+  readonly rerunChecks?: ((entry: ChangeRequestEntry, request: ForgeRerunRequest) => Promise<void>) | undefined
   /** Request reviews from more reviewers; settles once the outcome is reported. */
   readonly requestReviews?: RequestReviews | undefined
   /** List accounts a review can be requested from; rejects with the host's reason. */
   readonly reviewerCandidates?: ListCandidates | undefined
   /** Bring the base branch's new commits into the head branch; settles once the outcome is reported. */
-  readonly updateBranch?: ((entry: ForgePanelChangeRequest, request: BranchUpdateRequest) => Promise<void>) | undefined
+  readonly updateBranch?: ((entry: ChangeRequestEntry, request: BranchUpdateRequest) => Promise<void>) | undefined
 }
 
 /** One action at a time per control: it stays disabled until the previous action settles. */
@@ -140,7 +139,7 @@ type CheckRead = { readonly kind: 'idle' | 'loading' }
 
 /** Props of the checks row. */
 export interface ChecksRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly openLink: (url: string) => void
   /** Load complete check details independently of polling; cancellation follows the open menu. */
@@ -283,7 +282,7 @@ function Avatar({ url, login, size = 20 }: { readonly url: string | null; readon
 
 /** Props of the review row. */
 export interface ReviewRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   /** The aggregate review outcome. */
   readonly value: string
@@ -480,7 +479,7 @@ function ReviewerSearch({ url, list, choose, t }: {
 
 /** Props of the merge row. */
 export interface MergeRowProps {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   /** Glyph of the row. */
   readonly icon: ReactNode

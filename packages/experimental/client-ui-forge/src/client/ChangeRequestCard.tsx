@@ -16,13 +16,12 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   ChangeRequestSnapshot, CheckState, ChecksRollup, ForgeFailure, MergeMethod, MergeRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import type { ForgePanelChangeRequest } from '../types.ts'
 import { ChecksRow, IssuesRow, MergeRow, ReviewRow, RowParts, ThreadGlyph, type OverviewActions } from './ChangeRequestOverview.tsx'
 import { formatAgo } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
-import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
+import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf, type ChangeRequestEntry } from './status.ts'
 import css from './ForgeTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -39,15 +38,15 @@ export interface ChangeRequestActions extends OverviewActions {
   /** Read the status again after a failed read. */
   readonly retry: () => void
   /** Remove the change request from its Session. */
-  readonly remove?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  readonly remove?: ((entry: ChangeRequestEntry) => void) | undefined
   /** Mark a draft ready for review; settles once the outcome is reported. */
-  readonly markReady?: ((entry: ForgePanelChangeRequest) => Promise<void>) | undefined
+  readonly markReady?: ((entry: ChangeRequestEntry) => Promise<void>) | undefined
   /** Merge the change request as `request` describes; settles once the outcome is reported. */
-  readonly merge?: ((entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>) | undefined
+  readonly merge?: ((entry: ChangeRequestEntry, request: MergeRequest) => Promise<void>) | undefined
   /** Load complete check details independently of polling; cancellation follows the open list. */
   readonly readChecks?: ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
   /** Open the changes view of the change request. */
-  readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  readonly viewChanges?: ((entry: ChangeRequestEntry) => void) | undefined
   /** Draw the icon buttons plugins add to the card's head through `forge.change-request.card.actions`. */
   readonly renderActions?: ((owner: ForgeChangeRequestCardActionsProps) => ReactNode) | undefined
 }
@@ -55,7 +54,7 @@ export interface ChangeRequestActions extends OverviewActions {
 /** Props of one change request card. */
 export interface ChangeRequestCardProps {
   /** Change request with its latest snapshot and polling result. */
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   /** Whether the details show. */
   readonly expanded: boolean
   /** Show or hide the details. */
@@ -100,7 +99,7 @@ function threadCount(snapshot: ChangeRequestSnapshot, locale: string): string {
   return snapshot.threadsTruncated ? `${count}+` : count
 }
 
-function failureOf(entry: ForgePanelChangeRequest): ForgeFailure | undefined {
+function failureOf(entry: ChangeRequestEntry): ForgeFailure | undefined {
   return entry.update !== null && 'failure' in entry.update ? entry.update.failure : undefined
 }
 
@@ -118,7 +117,7 @@ function DiffSize({ snapshot, locale }: { readonly snapshot: ChangeRequestSnapsh
  * serves the change request.
  */
 function ChangesRow({ entry, snapshot, name, actions, locale, t }: {
-  readonly entry: ForgePanelChangeRequest
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly actions: ChangeRequestActions
@@ -273,12 +272,22 @@ function MergeMenu({ snapshot, name, usual, busy, onMerge, t }: {
   )
 }
 
-/** The footer with the action of an open change request: mark a draft ready, or merge one the host would merge now. */
-function Primary({ entry, snapshot, name, actions, t }: {
-  readonly entry: ForgePanelChangeRequest
+/**
+ * Render the action of an open change request: mark a draft ready, or merge one the host would merge now.
+ * @param props.entry - the change request.
+ * @param props.snapshot - its latest snapshot.
+ * @param props.name - how menus name it.
+ * @param props.actions - the actions the surface offers.
+ * @param props.className - class of the wrapper, the card footer's by default.
+ * @param props.t - forge panel copy.
+ * @returns the action, or null when none applies or the surface does not offer it.
+ */
+export function ChangeRequestPrimary({ entry, snapshot, name, actions, className = css.footer, t }: {
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly actions: ChangeRequestActions
+  readonly className?: string | undefined
   readonly t: Translate
 }): ReactNode {
   // One request at a time: the action stays disabled until the previous one settles.
@@ -292,7 +301,7 @@ function Primary({ entry, snapshot, name, actions, t }: {
   if (snapshot.draft) {
     if (markReady === undefined) return null
     return (
-      <div className={css.footer}>
+      <div className={className}>
         <Button size="sm" variant="outline" className={css.primaryAction} disabled={busy} onClick={() => { run(() => markReady(entry)) }}>
           {t('change.markReady')}
         </Button>
@@ -302,7 +311,7 @@ function Primary({ entry, snapshot, name, actions, t }: {
   const [usual] = snapshot.mergeMethods
   if (!snapshot.mergeReady || usual === undefined || merge === undefined) return null
   return (
-    <div className={css.footer}>
+    <div className={className}>
       <MergeMenu
         snapshot={snapshot}
         name={name}
@@ -315,8 +324,20 @@ function Primary({ entry, snapshot, name, actions, t }: {
   )
 }
 
-function Details({ entry, snapshot, name, now, actions, locale, t }: {
-  readonly entry: ForgePanelChangeRequest
+/**
+ * Render the facts of a change request one row each: the merged or closed state, or the checks, review, and merge
+ * state; the changed lines; and the linked issues.
+ * @param props.entry - the change request.
+ * @param props.snapshot - its latest snapshot.
+ * @param props.name - how rows name it.
+ * @param props.now - current epoch milliseconds for relative times.
+ * @param props.actions - the actions the surface offers.
+ * @param props.locale - active UI language for numeric formatting.
+ * @param props.t - forge panel copy.
+ * @returns the rows.
+ */
+export function ChangeRequestDetails({ entry, snapshot, name, now, actions, locale, t }: {
+  readonly entry: ChangeRequestEntry
   readonly snapshot: ChangeRequestSnapshot
   readonly name: string
   readonly now: number
@@ -436,9 +457,9 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
         </div>
       )}
       {expanded && snapshot !== null && (
-        <Details entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
+        <ChangeRequestDetails entry={entry} snapshot={snapshot} name={name} now={now} actions={actions} locale={locale} t={t} />
       )}
-      {expanded && snapshot !== null && <Primary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
+      {expanded && snapshot !== null && <ChangeRequestPrimary entry={entry} snapshot={snapshot} name={name} actions={actions} t={t} />}
     </li>
   )
 }

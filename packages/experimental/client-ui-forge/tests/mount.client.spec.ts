@@ -232,6 +232,17 @@ async function base() {
   const worktreeForm = stubConfigForm<WorktreeSettingsFields>()
   ctx.provide('configForms', { get: (name: string) => { expect(name).toBe(WORKTREE_NS); return worktreeForm.scope } } as never)
   ctx.provide('sidebarRight', sidebarRight)
+  const remoteAccess = {
+    whenAccess: vi.fn((_action: string, callback: () => Iterable<() => unknown>) => {
+      const disposers = [...callback()]
+      return () => { for (const dispose of disposers.reverse()) void dispose() }
+    }),
+  }
+  ctx.provide('remoteAccess', remoteAccess as never)
+  const workspaces = { list: { getSnapshot: vi.fn(() => ({ items: [] as { workspaceId: string; path: string; updatedAt: string }[] })) } }
+  ctx.provide('workspaces', workspaces as never)
+  const uiWorkspace = { connectWorkspace: vi.fn(async (id: string) => await Promise.resolve(`blank-${id}` as SessionId)), openSession: vi.fn() }
+  ctx.provide('uiWorkspace', uiWorkspace as never)
   await ctx.plugin(SlotRegistry)
   ctx.slots.register({
     name: 'root',
@@ -247,11 +258,14 @@ async function base() {
       'sidebar.session.row.trailing': { kind: 'list', scope: 'root', inline: true },
       'sidebar.session.row.hover': { kind: 'list', scope: 'root' },
       'plugins.row.config': { kind: 'keyed', scope: 'root' },
+      'main': { kind: 'keyed', scope: 'root' },
+      'sidebar.panellist': { kind: 'list', scope: 'root' },
+      'sidebar.panellist.trailing': { kind: 'list', scope: 'root' },
     },
   } as never, () => null)
   return {
     ctx, remote, unmount, streams, stateStreams, extensionStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions,
-    scopes, worktreeForm,
+    scopes, worktreeForm, remoteAccess, workspaces, uiWorkspace,
   }
 }
 
@@ -323,7 +337,9 @@ describe('mountForgePanel registration', () => {
   })
 
   it('declares the browser services it needs', () => {
-    expect(inject).toEqual(['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms'])
+    expect(inject).toEqual([
+      'remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace',
+    ])
   })
 
   it('registers the tab types, their bodies and titles, the header button, the worktree option and card, and the toast', async () => {
@@ -934,7 +950,7 @@ describe('mountForgePanel changes view', () => {
       const lifetime = new AbortController()
       lifetime.abort()
       vi.spyOn(Storage.prototype, 'removeItem').mockImplementationOnce(() => { throw new Error('storage denied') })
-      expect(f.changes(S1).reviewQueue({ id: 'closed' as TabId, signal: lifetime.signal }).getSnapshot().comments).toEqual([])
+      expect(f.changes(S1).reviewQueue({ id: 'closed', signal: lifetime.signal }).getSnapshot().comments).toEqual([])
       expect(f.notice()).toMatchObject({ key: 'review.saveFailed' })
     } finally { await f.dispose() }
   })

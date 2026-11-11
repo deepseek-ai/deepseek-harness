@@ -96,6 +96,7 @@ async function bench(renderQuote = false) {
       const id = await connectWorkspace()
       replaceMain(id, beforeOpen)
     },
+    connectWorkspace: async () => await connectWorkspace(),
     openSession,
   } as never)
   const sessionFake = sessionFakeFor()
@@ -695,6 +696,24 @@ describe('Conversation inject API', () => {
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry me')
     await vi.waitFor(() => { expect(targetUpload).toHaveBeenCalledOnce() })
     expect(b.inputApi(other).state.getSnapshot().attachmentIds).toHaveLength(1)
+    await b.runtime.dispose()
+  })
+
+  it('reports the blank of a picked Workspace to an embedding owner, which retains it, and moves the draft without opening it', async () => {
+    const b = await bench()
+    const resident = b.residentApi(ROOT)
+    b.inputApi(ROOT).actions.setDraft('review this')
+    const other = 'other-2' as SessionId
+    await b.runtime.sessions.add({ id: other, session: {} })
+    b.connectWorkspace.mockResolvedValueOnce(other)
+    const held: SessionReference[] = []
+    const report = vi.fn((id: SessionId) => { held.push(b.runtime.sessions.retain(id, { source: 'mainView' })) })
+    await resident.selectWorkspace('workspace-3' as WorkspaceId, report)
+    expect(report).toHaveBeenCalledWith(other)
+    expect(b.opened).not.toHaveBeenCalledWith(other)
+    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
+    expect(b.inputApi(other).state.getSnapshot().draft).toBe('review this')
+    for (const reference of held) reference.release()
     await b.runtime.dispose()
   })
 

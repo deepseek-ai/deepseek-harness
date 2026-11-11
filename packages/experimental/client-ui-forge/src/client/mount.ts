@@ -18,12 +18,13 @@ import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/type
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgePanelChangeRequest,
+  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState,
 } from '../types.ts'
 import { AnnotationView } from './annotations.ts'
 import { ForgeChangesService } from './changes-service.ts'
 import type {} from './slots.ts'
 import { ReviewQueue } from './review-queue.ts'
+import { registerReviewPage } from './review-mount.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { formatThreadQuote, threadQuoteSummary } from './review-threads.ts'
@@ -42,14 +43,14 @@ import { SessionRowForge } from './SessionRowForge.tsx'
 import {
   createNoticeSource, createPanelSource, createStreamSource, createVisibilitySource, foldStates, type PanelSource, type VisibilitySource,
 } from './source.ts'
-import { numberOf } from './status.ts'
+import { numberOf, type ChangeRequestEntry } from './status.ts'
 import { WorktreeProgress, type WorktreeProgressInjected } from './WorktreeProgress.tsx'
 import { WorktreeSettings } from './WorktreeSettings.tsx'
 import { WorktreeSettingsForm, type WorktreeSettings as WorktreeSettingsFields } from './worktree-settings-form.ts'
 import { WorktreeToggle, type WorktreeToggleInjected } from './WorktreeToggle.tsx'
 
 /** Services required before the Remote contribution mounts. */
-export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms']
+export const inject = ['remote', 'slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions', 'configForms', 'remoteAccess', 'workspaces', 'uiWorkspace']
 
 /** The worktree row of the Forge bundle, whose Plugins page carries the archive cleanup switch. */
 export const WORKTREE_ROW_KEY = '@deepseek-ai/dsh-experimental-forge-bundle#worktree'
@@ -198,15 +199,15 @@ function registerUi(ctx: Context): void {
     quoteInInput(sessionId, /(?:^|\n)(?:> )?## Review Thread (\d+)/g, index => formatThreadQuote(thread, url, index),
       threadQuoteSummary(thread, range))
   /** How toasts name a change request: its number, else its title, else its URL. */
-  const nameOf = (entry: ForgePanelChangeRequest): string => {
+  const nameOf = (entry: ChangeRequestEntry): string => {
     const number = numberOf(entry)
     return number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number })
   }
   /** Tell the reader that the code host may have applied an action it did not confirm, which they should check there. */
-  const reportUnknown = (entry: ForgePanelChangeRequest): void => {
+  const reportUnknown = (entry: ChangeRequestEntry): void => {
     notices.report('toast.actionUnknown', { params: { name: nameOf(entry) } })
   }
-  const remove = (sessionId: SessionId, entry: ForgePanelChangeRequest): void => {
+  const remove = (sessionId: SessionId, entry: ChangeRequestEntry): void => {
     void ctx.remote.forgePanel.dismiss(sessionId, entry.url).then((result) => {
       if (!settled(result, 'toast.removeFailed')) return
       notices.report('toast.removed', {
@@ -453,6 +454,9 @@ function registerUi(ctx: Context): void {
   ctx.slots.inject('sidebar.session.row.hover', () => ctx.slots.register({
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
+  registerReviewPage(ctx, {
+    notices, settled, nameOf, openLink, copyText, copyPath, locale,
+  })
   const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
   ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')
   ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
