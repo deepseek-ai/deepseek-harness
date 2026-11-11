@@ -17,7 +17,7 @@ export async function apply(ctx, config) {
   installCua(ctx, config, {
     helperPath: process.execPath,
     createChannel() { throw new Error('This prompt fixture does not perform native operations') },
-    guidance: GUIDANCE,
+    getGuidance: () => GUIDANCE,
     capabilities: { platform: 'macos', methods: [], appLevelAccessibility: false, keyboard: [], browser: false, coordinateSpace: 'screenshot-pixels' },
     permissionParameters() { throw new Error('This prompt fixture does not request native permissions') },
   })

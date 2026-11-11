@@ -10,7 +10,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { QueueAction } from '@deepseek-ai/dsh-api-session-controller/types'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { UserTextFacts } from '../index.ts'
 import { NS } from '../locales.ts'
 import css from './QueueDock.module.css'

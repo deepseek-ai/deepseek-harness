@@ -6,9 +6,10 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestSessions } from '@deepseek-ai/dsh-client-test-runtime'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import * as plugin from '../src/client/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture() {
   const ctx = new Context()
@@ -49,14 +50,14 @@ describe('Quote browser plugin', () => {
     expect(conversation.interactions.dispatch(sessionId, gesture)).toBe('quote')
     expect(conversation.interactions.dispatch(sessionId, { ...gesture, trigger: 'contextmenu' })).toBeNull()
     expect(conversation.interactions.dispatch(sessionId, { ...gesture, readText: () => null })).toBeNull()
-    expect(conversation.interactions.dispatch(SessionId('absent'), gesture)).toBeNull()
+    expect(conversation.interactions.dispatch(brandString<SessionId>('absent'), gesture)).toBeNull()
     expect(gesture.preventDefault).not.toHaveBeenCalled()
 
     await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.removed = true })
     expect(conversation.interactions.dispatch(sessionId, gesture)).toBeNull()
     await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.removed = false })
     const child: NonNullable<SessionSnapshot['subagent']> = {
-      address: { parentSessionId: SessionId('parent'), childSessionId: sessionId, mode: 'continuable' },
+      address: { parentSessionId: brandString<SessionId>('parent'), childSessionId: sessionId, mode: 'continuable' },
     }
     await sessions.updateSessionSnapshot(sessionId, (draft) => { draft.subagent = child })
     expect(conversation.interactions.dispatch(sessionId, gesture)).toBe('quote')

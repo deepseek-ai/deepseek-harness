@@ -486,6 +486,22 @@ Host Remote file reads and workspace directory observations over the composed fi
 @Remote async list(workspaceFileScope: WorkspaceFileScope, path: string, signal: AbortSignal): Promise<WorkspaceDirectoryListing>
 
 /**
+ * Search files and their inferred ancestor directories with packaged ripgrep.
+ * Native ignore rules apply unless disabled; VCS metadata, symlinks and empty
+ * directories are absent. Within the bounded set of listed files, matches
+ * sort by depth, then workspace-relative path.
+ * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.
+ * @param request - the query, literal exclusions, and hidden/ignore switches.
+ * @param signal - caller cancellation, forwarded to the subprocess; rejection preserves its reason.
+ * @returns matches capped by search.maxResults; incomplete marks excess rg files or exit 2.
+ * @throws RemoteError `gateway/bad-request`: the query is blank.
+ * @throws RemoteError `workspace-file/not-found`: the workspace root does not exist.
+ * @throws RemoteError `workspace-file/not-directory`: the workspace root is not a directory.
+ * @throws RemoteError `workspace-file/search-failed`: subprocess is missing, rg cannot launch or execute, or the search times out.
+ */
+@Remote async search( workspaceFileScope: WorkspaceFileScope, request: WorkspaceFileSearchRequest, signal: AbortSignal, ): Promise<WorkspaceFileSearchResult>
+
+/**
  * Watch one file or a directory's direct entries in the Session's filesystem.
  * Files use the backend's read authority; directories remain workspace-scoped.
  * @param workspaceFileScope - header-derived workspace root for the Session identity on the wire.

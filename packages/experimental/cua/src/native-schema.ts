@@ -13,16 +13,20 @@ function variants(schema: Schema): Schema[] { return schema.anyOf ?? schema.oneO
 
 /**
  * Derive native request schemas and admission fields from the shared operation definitions.
- * @param permissionFields Platform-specific parameters for user-facing permission controls.
+ * @param platformFields Additional native protocol fields accepted by the provider.
+ * @param privateOperations Additional provider-only request schemas.
  * @returns Native field and enum tables and the complete wire schema.
  */
-export function nativeProtocol(permissionFields: Partial<Record<'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {}): {
+export function nativeProtocol(
+  platformFields: Partial<Record<z.infer<typeof Request>['method'] | 'requestPermission' | 'openPermissionSettings', z.ZodObject>> = {},
+  privateOperations: readonly z.ZodObject[] = [],
+): {
   fields: Map<string, Set<string>>
   enums: Map<string, Map<string, Set<string>>>
   json: string
 } {
-  const resources = new Map(Object.entries({ ...NativeResourceParameters, ...permissionFields }))
-  const schemas = [...Request.options, ...NativeOnlyOperations]
+  const resources = new Map(Object.entries({ ...NativeResourceParameters, ...platformFields }))
+  const schemas = [...Request.options, ...NativeOnlyOperations, ...privateOperations]
     .map(schema => z.toJSONSchema(schema))
   const fields = new Map<string, Set<string>>()
   const enums = new Map<string, Map<string, Set<string>>>()
@@ -74,7 +78,7 @@ export function nativeProtocol(permissionFields: Partial<Record<'requestPermissi
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $comment: 'Generated from the shared CUA operation schema. Do not edit.',
     title: 'dsh-cua native request',
-    description: 'Host resource fields and private continuations are not model tool parameters. App handles and snapshots belong to one helper; coordinates use window-local native units.',
+    description: 'The Host resolves resource limits before dispatch. Private continuations are available only to the Host. App handles and snapshots belong to one helper; coordinates use window-local native units.',
     oneOf: schemas,
   }, null, 2) + '\n' }
 }

@@ -14,10 +14,11 @@ import { existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, parse } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { FsError, FsTargetKey } from '@deepseek-ai/dsh-fs'
+import { FsError, type FsTargetKey } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import { SandboxedFileSystem } from '@deepseek-ai/dsh-fs-sandbox'
@@ -94,8 +95,8 @@ describe('workspace-write containment', () => {
 
   it('applies session grants to writes and edits until their plugin unloads', async ({ onTestFinished }) => {
     onTestFinished(() => ctx.fiber.dispose())
-    const first = Session.create(SessionId('memory-first'))
-    const second = Session.create(SessionId('memory-second'))
+    const first = Session.create(brandString<SessionId>('memory-first'))
+    const second = Session.create(brandString<SessionId>('memory-second'))
     const path = join(outside, 'memory.txt')
     const write = async (session: Session, content: string) => fs.writeText(
       await target(path), content, undefined, undefined, ctx.sandboxPolicy.resolve({ session }),
@@ -219,7 +220,7 @@ describe('workspace-write containment', () => {
     // displayPath (now inside) AND delegates with that fresh target, so the byte
     // lands inside and the stale outside path is never written.
     const insidePath = join(workspace, 'landed.txt')
-    const staleTarget: FsTarget = { displayPath: insidePath, targetKey: FsTargetKey(join(outside, 'escaped.txt')) }
+    const staleTarget: FsTarget = { displayPath: insidePath, targetKey: brandString<FsTargetKey>(join(outside, 'escaped.txt')) }
     await fs.writeText(staleTarget, 'inside')
     expect(await readFile(insidePath, 'utf8')).toBe('inside')
     expect(existsSync(join(outside, 'escaped.txt'))).toBe(false)

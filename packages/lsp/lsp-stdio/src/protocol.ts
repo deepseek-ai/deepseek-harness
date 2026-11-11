@@ -73,8 +73,3 @@ export interface WireServerCapabilities {
   readonly implementationProvider?: WireProviderCapability
   readonly hoverProvider?: WireProviderCapability
 }
-
-/** The `initialize` result envelope. */
-export interface WireInitializeResult {
-  readonly capabilities: WireServerCapabilities
-}

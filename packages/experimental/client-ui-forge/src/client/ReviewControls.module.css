@@ -1,0 +1,162 @@
+/* Review controls of the changes toolbar. The segmented radio group of the lens and the thread list's filter draws the
+   track and raised indicator of the shared segmented control at the toolbar's 28px control height and 12px text, with
+   each segment's count after its label. */
+.segmented {
+  box-sizing: border-box;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 2px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.segment {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.segment[aria-checked='true'] {
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+  color: var(--dsw-alias-label-primary);
+}
+
+@media (hover: hover) {
+  .segment:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+  }
+}
+
+.segment:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.segment:focus-visible {
+  outline: var(--dsw-focus-ring-width) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
+  outline-offset: -2px;
+}
+
+.segmentLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.count {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menuRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 120px;
+}
+
+.trigger {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 6px 0 8px;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+@media (hover: hover) {
+  .trigger:hover {
+    background: var(--dsw-alias-interactive-bg-hover);
+  }
+}
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.switchLabel {
+  user-select: none;
+}
+
+.progress {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.progressForm {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* A narrow toolbar shows this form in place of the label. */
+.progressForm[data-forge-progress='compact'] {
+  display: none;
+}
+
+/* The ring starts at twelve o’clock and fills clockwise with the viewed share. */
+.ring {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+}
+
+.ringTrack,
+.ringFill {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.ringTrack {
+  stroke: var(--dsw-alias-border-l3);
+}
+
+.ringFill {
+  stroke: var(--dsw-alias-state-success-primary);
+}

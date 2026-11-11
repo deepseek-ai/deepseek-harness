@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-09-cua-program-tool.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-09-cua-program-tool.md
+/agent-note-cua-programs-outside-the-ptc-preset:
+  en: a283f005c51274e7
+  zh: 1f697efb2dbac3ba
+/agent-note-cua-programs-outside-the-ptc-preset/problem:
+  en: 87ce83e36a6ab68e
+  zh: 8aa98dc7dae03c41
+/agent-note-cua-programs-outside-the-ptc-preset/decision:
+  en: 13e079e19b5f2d6d
+  zh: 2ce9b6aa981162d7
+/agent-note-cua-programs-outside-the-ptc-preset/alternatives-considered:
+  en: b5d8e00cbe4b53ae
+  zh: 4ef81611150a8d75
+/agent-note-cua-programs-outside-the-ptc-preset/consequences:
+  en: 22f25d54373ba06b
+  zh: ee335578caaf1ab3

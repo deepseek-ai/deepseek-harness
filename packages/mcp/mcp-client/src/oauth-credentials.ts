@@ -52,7 +52,7 @@ export function oauthRecord(payload: McpOAuthGrant | z.infer<typeof ClientRecord
  * @returns a diagnostic safe to expose in status and tool results.
  */
 export function safeOAuthError(error: unknown): McpLocalError {
-  return oauthFailure(error) ?? (error instanceof McpLocalError ? error : new McpLocalError('MCP OAuth request failed'))
+  return oauthFailure(error) ?? (error instanceof McpLocalError ? error : new McpLocalError('MCP OAuth request failed', 'MCP_OAUTH_FAILED'))
 }
 
 /**
@@ -63,7 +63,7 @@ export function safeOAuthError(error: unknown): McpLocalError {
 export function assertOAuthUrl(value: string | URL): void {
   const url = new URL(value)
   if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) {
-    throw new McpLocalError('MCP OAuth requires HTTPS except for loopback HTTP')
+    throw new McpLocalError('MCP OAuth requires HTTPS except for loopback HTTP', 'MCP_OAUTH_FAILED')
   }
 }
 
@@ -95,7 +95,7 @@ export class McpOAuthCredentials {
 
   private store() {
     const store = this.ctx.get('credentials')
-    if (store === undefined) throw new McpLocalError('MCP OAuth requires a credentials provider')
+    if (store === undefined) throw new McpLocalError('MCP OAuth requires a credentials provider', 'MCP_CREDENTIALS_UNAVAILABLE')
     return store
   }
 
@@ -136,7 +136,7 @@ export class McpOAuthCredentials {
     await this.store().modifyRecord(key, (current) => {
       signal.throwIfAborted()
       if (current !== undefined && (current.kind !== 'grant' || !ClientRecordSchema.safeParse(current.payload).success)) {
-        throw new McpLocalError('MCP OAuth client record is incompatible')
+        throw new McpLocalError('MCP OAuth client record is incompatible', 'MCP_OAUTH_FAILED')
       }
       return Promise.resolve(oauthRecord({ version: 1, type: 'mcp-oauth-client', issuer, information }))
     })
@@ -228,7 +228,7 @@ export class McpOAuthCredentials {
         onUnauthorized: async ({ response }) => {
           try {
             const request = requests.get(response)
-            if (request === undefined) throw new McpLocalError('MCP OAuth response has no credential binding')
+            if (request === undefined) throw new McpLocalError('MCP OAuth response has no credential binding', 'MCP_OAUTH_FAILED')
             await this.refresh(bound, request.token, request.signal)
           } catch (error) { throw safeOAuthError(error) }
         },
@@ -239,7 +239,7 @@ export class McpOAuthCredentials {
           await current()
           const requestSignal = AbortSignal.any([signal, ...init?.signal ? [init.signal] : []])
           const authorization = new Headers(init?.headers).get('authorization')
-          if (!authorization?.startsWith('Bearer ')) throw new McpLocalError('MCP OAuth request has no bearer token')
+          if (!authorization?.startsWith('Bearer ')) throw new McpLocalError('MCP OAuth request has no bearer token', 'MCP_OAUTH_FAILED')
           const response = await send(url, { ...init, signal: requestSignal, redirect: 'error' })
           requests.set(response, { token: authorization.slice(7), signal: requestSignal })
           return response

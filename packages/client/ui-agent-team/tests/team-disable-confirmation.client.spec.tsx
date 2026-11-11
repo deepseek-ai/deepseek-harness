@@ -2,17 +2,18 @@
 
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import {
   TeamDisableConfirmation, type TeamDisableConfirmationProps, type TeamDisableRequest,
 } from '../src/client/TeamDisableConfirmation.tsx'
 import { zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
-const ORIGINAL = SessionId('original-session')
-const REPLACEMENT = SessionId('replacement-session')
+const ORIGINAL = brandString<SessionId>('original-session')
+const REPLACEMENT = brandString<SessionId>('replacement-session')
 
 function props(
   request: TeamDisableRequest | null = { sessionId: ORIGINAL },

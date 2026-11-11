@@ -1,12 +1,13 @@
 /** Protocol-independent model capabilities and reasoning choices. */
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import type { LlmModelBadge, LlmModelInfo, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekCatalogModel, DeepSeekConnectionOptions } from './types.ts'
 
-const OFF_REASONING_EFFORT = ReasoningEffortId('off')
-const LOW_REASONING_EFFORT = ReasoningEffortId('low')
-const HIGH_REASONING_EFFORT = ReasoningEffortId('high')
-const MAX_REASONING_EFFORT = ReasoningEffortId('max')
+const OFF_REASONING_EFFORT = brandString<ReasoningEffortId>('off')
+const LOW_REASONING_EFFORT = brandString<ReasoningEffortId>('low')
+const HIGH_REASONING_EFFORT = brandString<ReasoningEffortId>('high')
+const MAX_REASONING_EFFORT = brandString<ReasoningEffortId>('max')
 const REASONING_EFFORTS = [
   {
     id: OFF_REASONING_EFFORT,

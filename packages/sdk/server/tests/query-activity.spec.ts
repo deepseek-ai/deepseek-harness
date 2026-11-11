@@ -2,14 +2,16 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { AttachmentId, type AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import CommandRuntime, { CommandDefinitionId, type CommandDefinition } from '@deepseek-ai/dsh-commands'
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import CommandRuntime, { type CommandDefinitionId, type CommandDefinition } from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
 import * as GoalDriver from '@deepseek-ai/dsh-goal-round-driver'
 import * as GoalCommand from '@deepseek-ai/dsh-command-goal'
 import PlanMode from '@deepseek-ai/dsh-plan-mode'
 import { createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
@@ -60,10 +62,10 @@ async function setup(model = new MockAdapter([]), goal = false) {
   })
   onTestFinished(async () => { try { await server.shutdown() } finally { await ctx.fiber.dispose() } })
   await server.initialize({ cwd: process.cwd(), provider: 'query-activity', model: 'model' })
-  const sessionId = SessionId('query-activity')
+  const sessionId = brandString<SessionId>('query-activity')
   const run = (text: string) => server.query({ sessionId, contentBlocks: [{ type: 'text', text }] })
   const register = (handler: CommandDefinition['handler']) => ctx.commands.register({
-    name: 'plan', definitionId: CommandDefinitionId('@deepseek-ai/dsh-plan-mode'), description: 'Plan', handler,
+    name: 'plan', definitionId: brandString<CommandDefinitionId>('@deepseek-ai/dsh-plan-mode'), description: 'Plan', handler,
   })
   return { ctx, server, loop, goals, notices, completed: completed.promise, run, register, sessionId, model }
 }
@@ -268,7 +270,7 @@ describe('SDK query activity completion', () => {
     const model = new GatedModel([textResponse('reference reply')])
     const h = await setup(model, true)
     const store: Pick<AttachmentStore, 'saveImages'> = {
-      saveImages: async () => [{ attachmentId: AttachmentId('reference'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 }],
+      saveImages: async () => [{ attachmentId: brandString<AttachmentId>('reference'), mediaType: 'image/png', bytes: 1, width: 1, height: 1 }],
     }
     h.ctx.provide('attachments', store as AttachmentStore)
     await h.server.getWorkingDirectory({ sessionId: h.sessionId })
@@ -347,7 +349,7 @@ describe('SDK query activity completion', () => {
     const running = h.run('/plan task')
     await entered.promise
     const other = await h.ctx.agents.create({
-      sessionId: SessionId('outside-sdk'), meta: { cwd: process.cwd() },
+      sessionId: brandString<SessionId>('outside-sdk'), meta: { cwd: process.cwd() },
       agentOptions: { provider: 'query-activity', model: 'model' },
     })
     await other.dispose()
@@ -411,7 +413,7 @@ describe('SDK query activity completion', () => {
     const entered = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     h.ctx.commands.register({
-      name: 'start-goal', definitionId: CommandDefinitionId('@deepseek-ai/dsh-command-goal'), description: 'Start goal',
+      name: 'start-goal', definitionId: brandString<CommandDefinitionId>('@deepseek-ai/dsh-command-goal'), description: 'Start goal',
       handler: async ({ agent }) => {
         h.ctx.goals.create(agent, { objective: 'work' })
         entered.resolve(undefined)

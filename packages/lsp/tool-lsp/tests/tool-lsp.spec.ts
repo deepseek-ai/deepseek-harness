@@ -7,10 +7,11 @@ import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import Lsp, { LspProviderId, type LspProvider, type LspProviderQuery, type LspQueryResult } from '@deepseek-ai/dsh-lsp'
+import Lsp, { LspError, type LspProviderId, type LspProvider, type LspProviderQuery, type LspQueryResult } from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import { DEFAULT_LSP_TOOL_TIMEOUT_MS, LSP_PROMPT_TEXT } from '@deepseek-ai/dsh-tool-lsp'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A scripted provider recording queries; `respond` yields the result or throws. */
 function stubProvider(
@@ -19,7 +20,7 @@ function stubProvider(
 ): LspProvider & { seen: LspProviderQuery[] } {
   const seen: LspProviderQuery[] = []
   return {
-    id: LspProviderId('stub'),
+    id: brandString<LspProviderId>('stub'),
     extensionToLanguage,
     seen,
     query(request) {
@@ -196,27 +197,50 @@ describe('tool-lsp execution', () => {
     const { ctx } = await mount(stubProvider(() => okLocations))
     const result = await call(ctx, { operation: 'goToDefinition', file_path: 'a.ts', line: 1, character: 1 }, null)
     expect(result.isError).toBe(true)
-    expect(result.error?.info?.code).toBe('LSP_WORKSPACE_REQUIRED')
+    expect(result.error?.info).toEqual({ name: 'LspError', code: 'LSP_WORKSPACE_REQUIRED' })
   })
 
   it('surfaces a structured LSP_UNAVAILABLE when no provider handles the file', async () => {
     const { ctx } = await mount(stubProvider(() => okLocations, { '.py': 'python' }))
     const result = await call(ctx, { operation: 'goToDefinition', file_path: 'a.ts', line: 1, character: 1 }, workspaceRoot)
     expect(result.isError).toBe(true)
-    expect(result.error?.info?.code).toBe('LSP_UNAVAILABLE')
+    expect(result.error?.info).toEqual({ name: 'LspError', code: 'LSP_UNAVAILABLE' })
   })
 
   it('returns a structured INVALID_ARGS on a bad operation', async () => {
     const { ctx } = await mount(stubProvider(() => okLocations))
     const result = await call(ctx, { operation: 'rename', file_path: 'a.ts', line: 1, character: 1 }, workspaceRoot)
     expect(result.isError).toBe(true)
-    expect(result.error?.info?.code).toBe('INVALID_ARGS')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  })
+
+  it.each([
+    ['a blank file_path', { file_path: '  ', line: 1, character: 1 }, 'file_path must be a non-empty string'],
+    ['a zero line', { file_path: 'a.ts', line: 0, character: 1 }, 'line must be a positive integer (one-based)'],
+    ['a fractional character', { file_path: 'a.ts', line: 1, character: 1.5 }, 'character must be a positive integer (one-based)'],
+  ])('returns a structured INVALID_ARGS for %s', async (_label, args, violation) => {
+    const provider = stubProvider(() => okLocations)
+    const { ctx } = await mount(provider)
+    const result = await call(ctx, { operation: 'hover', ...args }, workspaceRoot)
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+    expect(result.error?.message).toContain(violation)
+    expect(provider.seen).toHaveLength(0)
+  })
+
+  it('keeps a provider failure\'s name and code on the tool result', async () => {
+    const { ctx } = await mount(stubProvider(() => {
+      throw new LspError('language server exited', 'LSP_SERVER_EXITED')
+    }))
+    const result = await call(ctx, { operation: 'goToDefinition', file_path: 'a.ts', line: 1, character: 1 }, workspaceRoot)
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'LspError', code: 'LSP_SERVER_EXITED' })
   })
 
   it('forwards exec.signal to the seam query', async () => {
     const seen: (AbortSignal | undefined)[] = []
     const provider: LspProvider = {
-      id: LspProviderId('sig'),
+      id: brandString<LspProviderId>('sig'),
       extensionToLanguage: { '.ts': 'typescript' },
       query(_request, signal) {
         seen.push(signal)

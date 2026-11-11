@@ -59,7 +59,7 @@ def cases():
     for method in ("typeText", "pressKey", "paste"):
         identifier = "window-keyboard-" + method
         argument = {"key": "Return"} if method == "pressKey" else {"text": "do not dispatch"}
-        result.append((request(identifier, method, {"appHandle": "never-selected", "windowId": 1, **argument}),
+        result.append((request(identifier, method, {"appHandle": "never-selected", "windowId": "1", **argument}),
                        identifier, "INVALID_ARGUMENT", "macOS keyboard input follows application focus; use the App object"))
     for index in range(24):
         identifier = f"ordered-{index:02d}"

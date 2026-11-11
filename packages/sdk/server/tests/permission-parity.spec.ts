@@ -11,13 +11,14 @@ import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import PermissionPresetService from '@deepseek-ai/dsh-permission-presets'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import ShellExecutor from '@deepseek-ai/dsh-shell'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { ApprovalService } from '@deepseek-ai/dsh-user-approval'
 import { expect, it } from 'vitest'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** The model never executes tools; only the shell's declared confinement is needed. */
 class UnusedShell extends ShellExecutor {
@@ -64,7 +65,7 @@ class PermissionModel extends LlmAdapter {
 async function switchAndContinue(path: 'sdk' | 'native', cwd: string) {
   const ctx = new Context()
   let server: HarnessSdkJsonRpcServer | undefined
-  const sessionId = SessionId('permission-parity')
+  const sessionId = brandString<SessionId>('permission-parity')
   const events: SessionEvent[] = []
   try {
     await mountAgentLoopTestDependencies(ctx, { workingDirectory: true })
@@ -134,7 +135,7 @@ async function switchAndContinue(path: 'sdk' | 'native', cwd: string) {
     await server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: 'Continue the original task without tools.' }] })
     await server.wait({ sessionId })
     await server.getWorkingDirectory({ sessionId: 'permission-fresh' })
-    const fresh = ctx.agents.get(SessionId('permission-fresh'))
+    const fresh = ctx.agents.get(brandString<SessionId>('permission-fresh'))
     if (fresh === undefined) throw new Error('The second Session was not created')
     expect(ctx.permissionPresets.current(fresh.session)).toBe('danger-full-access')
     const defaults = {
