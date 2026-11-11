@@ -51,19 +51,18 @@ const REMOTE_CODES: Readonly<Record<ToolRemoteCode, PluginMarketErrorCode>> = {
 }
 
 /**
- * Convert a market failure for the tool registry. A `HarnessError` keeps its
- * identity; an in-process market `RemoteError` with one of the codes `search`
- * and `entry` reject with keeps its message and becomes the matching code with
- * the Remote failure as `cause`; anything else is `PLUGIN_MARKET_FAILED`.
+ * Convert a market failure for the tool registry. A market `RemoteError` with
+ * one of the codes `search` and `entry` reject with keeps its message and
+ * becomes the matching code with the Remote failure as `cause`; any other
+ * `HarnessError` keeps its identity; anything else is `PLUGIN_MARKET_FAILED`.
  * @param error - the rejection of a market service call.
  * @returns the failure to throw from the tool body.
  */
 export function pluginMarketToolError(error: unknown): HarnessError {
-  if (error instanceof HarnessError) return error
-  if (!(error instanceof Error)) return new PluginMarketError(String(error), 'PLUGIN_MARKET_FAILED', { cause: error })
-  const remoteCode = (error as { code?: unknown }).code
-  const code = typeof remoteCode === 'string' && Object.hasOwn(REMOTE_CODES, remoteCode)
-    ? REMOTE_CODES[remoteCode as ToolRemoteCode]
-    : 'PLUGIN_MARKET_FAILED'
-  return new PluginMarketError(error.message, code, { cause: error })
+  if (error instanceof HarnessError) {
+    if (!Object.hasOwn(REMOTE_CODES, error.code)) return error
+    return new PluginMarketError(error.message, REMOTE_CODES[error.code as ToolRemoteCode], { cause: error })
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  return new PluginMarketError(message, 'PLUGIN_MARKET_FAILED', { cause: error })
 }
