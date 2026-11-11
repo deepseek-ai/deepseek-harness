@@ -183,7 +183,9 @@ function isAbort(error: unknown): boolean {
  *
  * Rules: a platform code wins over the HTTP status; `published` is `'no'` when the platform answered with a code or
  * a 4xx (it definitively rejected the request) and `'unknown'` for a 5xx or a transport failure, whose request may
- * have reached the platform; a network failure and a 5xx are `retryable`, a cancellation is `fatal`.
+ * have reached the platform; a network failure and a 5xx are `retryable`; a cancellation is `fatal` and its
+ * `published` is `'unknown'`, because the request may already have been written and answered — only a `published`
+ * the thrown error itself carries overrides that.
  *
  * @param error - the thrown value.
  * @returns the classified error; an already classified `PlatformError` passes through.
@@ -191,9 +193,11 @@ function isAbort(error: unknown): boolean {
 export function classify(error: unknown): PlatformError {
   if (PlatformError.is(error)) return error
 
-  // A cancellation must never become a retry, however it was wrapped on its way here.
+  // A cancellation must never become a retry, however it was wrapped on its way here. It does not prove the request
+  // never left, so its publication stays unknown unless the thrown error records a verdict of its own.
   if (isAbort(error) || isAbort((error as { cause?: unknown } | undefined)?.cause)) {
-    return new PlatformError('fatal', 'the request was cancelled', { published: 'no', cause: error })
+    const published = (error as { published?: 'no' | 'unknown' } | undefined)?.published
+    return new PlatformError('fatal', 'the request was cancelled', { published: published ?? 'unknown', cause: error })
   }
 
   if (LarkApiError.is(error)) {

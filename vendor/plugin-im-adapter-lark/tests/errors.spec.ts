@@ -133,11 +133,18 @@ describe('Lark error classification', () => {
     expect(classify(undefined).message).toBe('Lark request failed')
   })
 
-  it('never turns a cancellation into a retry', () => {
+  it('never turns a cancellation into a retry and leaves its publication unknown', () => {
     const abort = new DOMException('The operation was aborted', 'AbortError')
-    expect(classify(abort)).toMatchObject({ kind: 'fatal', published: 'no' })
-    // A cancellation wrapped by the transport is still a cancellation.
-    expect(classify(new LarkApiError('wrapped', { cause: abort })).kind).toBe('fatal')
+    // Nothing in this path proves the request never left: it may have been written and answered before the cancel.
+    expect(classify(abort)).toMatchObject({ kind: 'fatal', published: 'unknown' })
+    // A cancellation wrapped by the transport is still a cancellation, with the same unknown publication.
+    expect(classify(new LarkApiError('wrapped', { cause: abort }))).toMatchObject({
+      kind: 'fatal', published: 'unknown',
+    })
+    // Only a verdict the thrown error carries itself is kept.
+    expect(classify(new LarkApiError('wrapped', { published: 'no', cause: abort }))).toMatchObject({
+      kind: 'fatal', published: 'no',
+    })
   })
 
   it('passes an already classified error through', () => {

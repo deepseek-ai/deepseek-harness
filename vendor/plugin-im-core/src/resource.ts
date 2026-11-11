@@ -68,6 +68,21 @@ export function resourceCacheKey(adapterId: string, scope: string, kind: Resourc
   return `${adapterId}|${scope}|${kind}|${digest}`
 }
 
+/**
+ * Whether a src names bytes of this host rather than a remote resource: the file behind a `file:` URL can change
+ * without its URL changing, so a platform key resolved for it does not describe the next publication.
+ * @param src - the source of one resource reference.
+ * @returns true for a `file:` src.
+ */
+export function isMutableSource(src: string): boolean {
+  try {
+    return new URL(src).protocol === 'file:'
+  } catch {
+    // Not a URL at all: the adapter's upload decides what it is, and its cache key is whatever the src spells.
+    return false
+  }
+}
+
 export interface MemoryResourceCacheOptions {
   /** LRU bound (entries). */
   max?: number
@@ -239,6 +254,13 @@ export async function prepare<D>(drafts: readonly D[], options: PrepareOptions):
       for (const ref of unseen) {
         const scope = adapter.resourceScope(target, ref.kind)
         const key = resourceCacheKey(adapter.id, scope, ref.kind, ref.src)
+        // A `file:` src names bytes this host can change between two publications, and a platform key usually has no
+        // expiry: caching it would publish the old content for the new path forever. It is still deduplicated within
+        // this call by `inflight`.
+        if (isMutableSource(ref.src)) {
+          tasks.push({ ref, scope, key })
+          continue
+        }
         const hit = cache.get(key)
         if (hit) {
           resolved.set(ref, hit)
@@ -256,7 +278,7 @@ export async function prepare<D>(drafts: readonly D[], options: PrepareOptions):
           if (!value || typeof value.key !== 'string') {
             throw new TypeError(`adapter ${adapter.id} resolved no key for ${task.ref.kind} "${task.ref.src}"`)
           }
-          cache.set(task.key, value)
+          if (!isMutableSource(task.ref.src)) cache.set(task.key, value)
           return value
         })()
         inflight.set(task.key, pending)

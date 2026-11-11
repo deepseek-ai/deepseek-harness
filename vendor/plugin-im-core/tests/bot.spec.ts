@@ -342,6 +342,23 @@ describe('bot.send', () => {
     expect((first.handle.parts[0]!.id)).not.toBe(second.handle.parts[0]!.id)
   })
 
+  it('uploads a file: source again for every send, because the bytes behind the path may change', async () => {
+    const { adapter, bot } = await setup()
+    const content = message(h('img', { src: 'file:///work/1.png' }))
+    await bot.send(target, content)
+    await bot.send(target, content)
+    expect(adapter.ops.filter(op => op.op === 'upload').length).toBe(2)
+  })
+
+  it('reports a failure of the prepare stage as unpublished, because no request was made', async () => {
+    const { adapter, bot } = await setup()
+    // The upload is part of the pipeline, before the first `sendPayload`: the platform published nothing.
+    adapter.fail('upload', new Error('the upload was refused'))
+    await expect(bot.send(target, message(h('img', { src: 'https://a.test/1.png' }))))
+      .rejects.toMatchObject({ published: 'no', message: expect.stringContaining('the upload was refused') })
+    expect(adapter.ops.filter(op => op.op === 'sendPayload')).toHaveLength(0)
+  })
+
   it('rejects content that renders nothing', async () => {
     const { bot } = await setup()
     await expect(bot.send(target, message())).rejects.toMatchObject({ kind: 'invalid' })

@@ -281,8 +281,34 @@ export abstract class Bot<C = unknown> {
    * @returns the published handle and the render report.
    */
   async send(target: Target, content: Fragment, options: SendOptions = {}): Promise<SendResult> {
-    const frame = await this.pipeline(target, content, options)
+    let frame: PipelineFrame
+    try {
+      frame = await this.pipeline(target, content, options)
+    } catch (error) {
+      throw this.unpublished(error)
+    }
     return this.publish(target, frame, options)
+  }
+
+  /**
+   * One failure raised before any platform request: the pipeline rendered, fetched and uploaded, but no message left
+   * for the platform, so the error reports that nothing was published instead of an unknown outcome.
+   *
+   * @param error - whatever the pipeline raised.
+   * @returns the error to throw: a render refusal keeps its own type, everything else is classified and marked as
+   *   unpublished; an already classified refusal passes through.
+   */
+  private unpublished(error: unknown): unknown {
+    // `StrictRenderError` carries the report the caller reports; `partial` needs published parts, which cannot exist yet.
+    if (error instanceof StrictRenderError || error instanceof PartialSendError) return error
+    const cause = this.classifyError(error)
+    if (cause.published === 'no') return cause
+    return new PlatformError(cause.kind, cause.message, {
+      published: 'no',
+      ...cause.code === undefined ? {} : { code: cause.code },
+      ...cause.retryAfterMs === undefined ? {} : { retryAfterMs: cause.retryAfterMs },
+      cause,
+    })
   }
 
   /**

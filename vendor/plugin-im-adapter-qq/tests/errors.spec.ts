@@ -115,11 +115,18 @@ describe('classify fallbacks', () => {
     expect(error.message).toMatch(/socket hang up/)
   })
 
-  it('never retries a cancellation, even when wrapped', () => {
+  it('never retries a cancellation, and leaves its publication unknown', () => {
     const abort = Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })
     expect(classify(abort).kind).toBe('fatal')
-    expect(classify(abort).published).toBe('no')
-    expect(classify(new QqApiError('wrapped', { cause: abort })).kind).toBe('fatal')
+    // Nothing in this path proves the request never left: it may have been written and answered before the cancel.
+    expect(classify(abort).published).toBe('unknown')
+    expect(classify(new QqApiError('wrapped', { cause: abort }))).toMatchObject({
+      kind: 'fatal', published: 'unknown',
+    })
+    // Only a verdict the thrown error carries itself is kept.
+    expect(classify(new QqApiError('wrapped', { published: 'no', cause: abort }))).toMatchObject({
+      kind: 'fatal', published: 'no',
+    })
   })
 
   it('passes an already classified PlatformError through unchanged', () => {
