@@ -30,7 +30,7 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 | [Cua Driver MCP](../../packages/experimental/computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 连接已安装的 `cua-driver` 可执行文件 |
 | [Cua Driver 原生](../../packages/experimental/computer-use-cua-driver-native/README.zh.md) | 随 npm 依赖安装的平台原生运行时 |
 
-两个 Cua Driver 提供方公开各自的上游工具目录。共享服务只注册名称，并拒绝任何第二个提供方，包括使用相同名称的另一个实例。服务不包含通用桌面操作方法或模型控制的选择器。
+两个 Cua Driver 提供方都是公开发布到 npm 的实验性包。显式挂载其中一个即可使用它的上游工具目录。共享服务只注册名称，并拒绝任何第二个提供方，包括使用相同名称的另一个实例。服务不包含通用桌面操作方法或模型控制的选择器。
 
 ## 生命周期和桌面共享
 
