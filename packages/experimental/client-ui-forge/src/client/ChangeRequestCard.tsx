@@ -21,6 +21,7 @@ import { ChecksRow, IssuesRow, MergeRow, ReviewRow, RowParts, ThreadGlyph, type 
 import { formatAgo } from './format.ts'
 import { ChangeRequestGlyph, CheckGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
+import type { ForgeChangeRequestCardActionsProps } from './slots.ts'
 import { ciSummary, flagOf, numberOf, TONE_LABEL, toneOf } from './status.ts'
 import css from './ForgeTab.module.css'
 
@@ -47,6 +48,8 @@ export interface ChangeRequestActions extends OverviewActions {
   readonly readChecks?: ((url: string, headSha: string, signal: AbortSignal) => Promise<ChangeRequestSnapshot>) | undefined
   /** Open the changes view of the change request. */
   readonly viewChanges?: ((entry: ForgePanelChangeRequest) => void) | undefined
+  /** Draw the icon buttons plugins add to the card's head through `forge.change-request.card.actions`. */
+  readonly renderActions?: ((owner: ForgeChangeRequestCardActionsProps) => ReactNode) | undefined
 }
 
 /** Props of one change request card. */
@@ -395,6 +398,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
             </div>
           )}
         </div>
+        {actions.renderActions?.({ url: entry.url, ref: entry.ref, headSha: snapshot?.headSha ?? null, state: snapshot?.state ?? null })}
         <Tooltip label={t('change.view')} side="top">
           <button type="button" className={css.iconButton} aria-label={t('change.view')} onClick={() => { actions.openLink(url) }}>
             <IconRightUpOutlineRegular size={14} />

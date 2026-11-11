@@ -6,10 +6,11 @@ import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { launchWebScaffold, seedSession, watchConsole, type WebScaffold } from './scaffold.ts'
 import { saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const GIF = Buffer.from('R0lGODdhMAAgAIEAAEtu5gAAAAAAAAAAACwAAAAAMAAgAEAIQQABCBxIsKDBgwgTKlzIsKHDhxAjSpxIsaLFixgzatzIsaPHjyBDihxJsqTJkyhTqlzJsqXLlzBjypxJs6bNmQEBADs=', 'base64')
 async function menuLabels(menu: Locator): Promise<string[]> {
@@ -20,7 +21,7 @@ async function menuLabels(menu: Locator): Promise<string[]> {
   }))
 }
 function fixture(title: string): string {
-  const session = Session.create(SessionId('context-menus-source'))
+  const session = Session.create(brandString<SessionId>('context-menus-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Show the output.' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
   session.append('session/title', { title, messageSeqs: [user.seq], source: { kind: 'fallback' } })

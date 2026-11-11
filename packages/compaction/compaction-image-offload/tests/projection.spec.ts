@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createAssistantMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createAssistantMessage, createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ImageBlock } from '@deepseek-ai/dsh-llm'
-import { deriveEventMessage, foldSurface, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, foldSurface, Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import { imageOffloadProjection } from '../src/projection.ts'
 
@@ -31,7 +32,7 @@ function marked(session: Session): boolean[] {
 
 describe('durable image selections', () => {
   it('preserves message identity, original data, and previously derived snapshots', () => {
-    const session = createSession(SessionId('images'))
+    const session = createSession(brandString<SessionId>('images'))
     const source = input(session, [
       { type: 'text', text: 'before' }, image,
       image, { type: 'text', text: 'after' },
@@ -61,18 +62,18 @@ describe('durable image selections', () => {
   })
 
   it('reconstructs the same selections through pure folding, resume, restore, and fork', () => {
-    const session = createSession(SessionId('source'))
+    const session = createSession(brandString<SessionId>('source'))
     const source = input(session)
     const before = session.snapshotEvents()
     session.append('image/offload', { targets: [{ seq: source.seq, imageIndexes: [0] }] })
     const events = session.snapshotEvents()
     const fold = foldSurface(events, [imageOffloadProjection])
     expect(deriveEventMessage(source, fold.projectedMessages)).toEqual(session.deriveMessages()[0])
-    expect(marked(createSession(SessionId('before'), before))).toEqual([false, false])
-    expect(marked(createSession(SessionId('resume'), events))).toEqual([true, false])
+    expect(marked(createSession(brandString<SessionId>('before'), before))).toEqual([false, false])
+    expect(marked(createSession(brandString<SessionId>('resume'), events))).toEqual([true, false])
     const restored = Session.fromRestore(session.id, events, session.header, SessionLogOffset(0), 'shared-frozen', [imageOffloadProjection])
     expect(marked(restored)).toEqual([true, false])
-    const childId = SessionId('child')
+    const childId = brandString<SessionId>('child')
     const child = createSession(childId, events, {
       ...session.header, id: childId, parentSession: session.id, isSeeded: true,
     }, SessionLogOffset(events.length))
@@ -83,10 +84,10 @@ describe('durable image selections', () => {
   })
 
   it('counts all images in a tool result without changing its call identity', () => {
-    const session = createSession(SessionId('tool'))
+    const session = createSession(brandString<SessionId>('tool'))
     const source = session.append('tool/result', {
       turn: 1, step: 1,
-      message: createToolResultMessage({ callId: ToolCallId('shot'), isError: false, content: [image, image] }),
+      message: createToolResultMessage({ callId: brandString<ToolCallId>('shot'), isError: false, content: [image, image] }),
     }, { surfaceOp: 'append' })
     session.append('image/offload', { targets: [{ seq: source.seq, imageIndexes: [1] }] })
     expect(marked(session)).toEqual([false, true])
@@ -108,12 +109,12 @@ describe('durable image selections', () => {
     { targets: [{ seq: 1, imageIndexes: [0] }] },
     { targets: [{ seq: 0, imageIndexes: [0] }, { seq: 0, imageIndexes: [1] }] },
   ])('rejects malformed selections at append and replay without partial application: %j', (data) => {
-    const session = createSession(SessionId('invalid'))
+    const session = createSession(brandString<SessionId>('invalid'))
     input(session)
     const events = session.snapshotEvents()
     const candidate = { type: 'image/offload', seq: SessionSeq(1), time: 0, data } as SessionEvent
     expect(() => session.append('image/offload', data as SessionEventMap['image/offload'])).toThrow(/image\/offload/)
-    expect(() => createSession(SessionId('seed'), [...events, candidate])).toThrow(/image\/offload/)
+    expect(() => createSession(brandString<SessionId>('seed'), [...events, candidate])).toThrow(/image\/offload/)
     expect(() => foldSurface([...events, candidate], [imageOffloadProjection])).toThrow(/image\/offload/)
     expect(session.snapshotEvents()).toEqual(events)
     expect(marked(session)).toEqual([false, false])
@@ -123,7 +124,7 @@ describe('durable image selections', () => {
   })
 
   it('rejects repeated offloads and shadowed or assistant targets', () => {
-    const session = createSession(SessionId('invalid-targets'))
+    const session = createSession(brandString<SessionId>('invalid-targets'))
     const source = input(session)
     session.append('image/offload', { targets: [{ seq: source.seq, imageIndexes: [0] }] })
     expect(() => session.append('image/offload', { targets: [{ seq: source.seq, imageIndexes: [0] }] })).toThrow(/already offloaded/)

@@ -16,6 +16,9 @@
     },
     {
       "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../attachment/attachment"
     }
   ]
 }

@@ -242,19 +242,26 @@ describe.skipIf(process.platform === 'win32')('shared native Unix connection', (
     } finally { connect.mockRestore() }
   })
 
-  it.each(['protocol', 'identity', 'json', 'utf8', 'oversized', 'refusal', 'refusal-retry-code'] as const)('rejects %s handshakes before writing operations', async (kind) => {
-    const f = await fixture({ ready: (socket, ready) => {
-      if (kind === 'protocol') socket.write(String(ready).replace('"protocol":1', '"protocol":2'))
-      else if (kind === 'identity') socket.write(String(ready).replace(/"runtimeKey":"[^"]*"/, '"runtimeKey":"other"'))
-      else if (kind === 'json') socket.write('{broken}\n')
-      else if (kind === 'utf8') socket.write(Buffer.from([0xff, 10]))
-      else if (kind === 'oversized') socket.write('x'.repeat(8193))
-      else if (kind === 'refusal') socket.write('{"type":"error","code":"CONFIG_REFUSED","message":"invalid limits"}\n')
-      else socket.write('{"type":"error","code":"NATIVE_EOF","message":"explicit refusal"}\n')
-    } })
+  const pidField = `"pid":${process.pid},`
+  const invalidHandshakes: [string, (frame: string) => string | Buffer, string?][] = [
+    ['protocol', frame => frame.replace('"protocol":1', '"protocol":2')],
+    ['identity', frame => frame.replace(/"runtimeKey":"[^"]*"/, '"runtimeKey":"other"')],
+    ['missing PID', frame => frame.replace(pidField, '')],
+    ['zero PID', frame => frame.replace(pidField, '"pid":0,')],
+    ['fractional PID', frame => frame.replace(pidField, '"pid":1.5,')],
+    ['string PID', frame => frame.replace(pidField, '"pid":"1",')],
+    ['unknown field', frame => frame.replace('{', '{"extra":true,')],
+    ['json', () => '{broken}\n'],
+    ['utf8', () => Buffer.from([0xff, 10])],
+    ['oversized', () => 'x'.repeat(8193)],
+    ['refusal', () => '{"type":"error","code":"CONFIG_REFUSED","message":"invalid limits"}\n', 'CONFIG_REFUSED'],
+    ['refusal-retry-code', () => '{"type":"error","code":"NATIVE_EOF","message":"explicit refusal"}\n', 'NATIVE_EOF'],
+  ]
+  it.each(invalidHandshakes)('rejects %s handshakes before writing operations', async (_kind, reply, code = 'NATIVE_PROTOCOL') => {
+    const f = await fixture({ ready: (socket, ready) => { socket.write(reply(ready.toString())) } })
     const channel = f.open()
     const failedWrite = expect(write(channel, 'never\n')).rejects.toBeInstanceOf(Error)
-    await expect(channel.done).rejects.toMatchObject({ code: kind === 'refusal' ? 'CONFIG_REFUSED' : kind === 'refusal-retry-code' ? 'NATIVE_EOF' : 'NATIVE_PROTOCOL' })
+    await expect(channel.done).rejects.toMatchObject({ code })
     await failedWrite
     await channel.waitForClose()
     expect(f.operations).toHaveLength(0)

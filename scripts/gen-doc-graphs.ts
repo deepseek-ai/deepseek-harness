@@ -809,7 +809,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'ptc-runtime',
     title: 'PTC execution seam',
     mode: 'seam',
-    implementations: ['ptc-runtime-node', 'experimental-ptc-runtime-python'],
+    implementations: ['ptc-runtime-node'],
     consumers: ['tool-executor-ptc', 'workflow-ptc'],
     note: 'Runs programs against host-provided async bindings; tool-executor-ptc owns PTC presentation and workflow-ptc owns workflow orchestration.',
   },

@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { FiberState } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-experimental-worktree'
 import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge'
 import { chromium } from 'playwright'
@@ -94,7 +95,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   const created = { path: join(repository, '.agents/worktrees/gui-opt-in'), baseCommit: (await git('rev-parse', 'HEAD')).stdout.trim() }
   const result = await scaffold.ctx.tools.execute({
     agent, signal: new AbortController().signal,
-    calls: [{ type: 'tool-call', id: ToolCallId('gui-opt-in'), name: 'create_worktree', arguments: JSON.stringify({ name: 'gui-opt-in' }) }],
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('gui-opt-in'), name: 'create_worktree', arguments: JSON.stringify({ name: 'gui-opt-in' }) }],
   })
   expect(result.results[0]?.result.isError).not.toBe(true)
   expect(result.results[0]?.result.value).toEqual({ ...created, branch: 'gui-opt-in', repositoryRoot: repository })

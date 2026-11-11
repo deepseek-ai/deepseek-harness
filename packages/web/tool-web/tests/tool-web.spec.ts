@@ -6,10 +6,11 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent, ModelSelection } from '@deepseek-ai/dsh-agent'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import TurndownService from 'turndown'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ResolvedToolSet, type ToolExecutionInput, type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import type { WebFetchProvider, WebSearchProvider, WebSearchResult } from '@deepseek-ai/dsh-web'
 import * as ToolWeb from '@deepseek-ai/dsh-tool-web'
@@ -77,10 +78,10 @@ async function mountTools(opts: {
   if (opts.search) ctx.web.registerSearchProvider(opts.search)
   if (opts.fetchProvider) ctx.web.registerFetchProvider(opts.fetchProvider)
   const fiber = await ctx.plugin(ToolWeb, opts.config ?? {})
-  const agent = { id: SessionId('tool-web') } as Agent
+  const agent = { id: brandString<SessionId>('tool-web') } as Agent
   await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
   let counter = 0
-  const call = (name: string, args: unknown) => executeInStep(ctx, agent, { signal: testToolSignal, callId: ToolCallId(`call-${++counter}`), name, arguments: args })
+  const call = (name: string, args: unknown) => executeInStep(ctx, agent, { signal: testToolSignal, callId: brandString<ToolCallId>(`call-${++counter}`), name, arguments: args })
   return { ctx, agent, fiber, call }
 }
 
@@ -493,9 +494,9 @@ describe('tool-web registration', () => {
     expect(names).toContain('web_search')
     expect(names).toContain('web_fetch')
     const toolSet = await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: ToolCallId('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('search-safe'), name: 'web_search', arguments: { queries: ['q'] } }))
       .toEqual({ kind: 'parallel' })
-    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: ToolCallId('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
+    expect(new ToolExecutionPipeline(ctx).executionMode({ agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('fetch-safe'), name: 'web_fetch', arguments: { url: 'https://a.test' } }))
       .toEqual({ kind: 'parallel' })
     await fiber.dispose()
     expect(ctx.tools.schemas().map(s => s.name)).not.toContain('web_search')
@@ -792,7 +793,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
     const controller = new AbortController()
-    const out = await executeInStep(ctx, agent, { callId: ToolCallId('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
+    const out = await executeInStep(ctx, agent, { callId: brandString<ToolCallId>('fetch-1'), name: 'web_fetch', arguments: { url: 'https://a.test' }, signal: controller.signal })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -819,7 +820,7 @@ describe('tool-web execution through the real registry', () => {
       },
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { fetchProvider: 'stub-fetch' }, fetchProvider })
-    const out = await executeInStep(ctx, agent, { signal: testToolSignal, callId: ToolCallId('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
+    const out = await executeInStep(ctx, agent, { signal: testToolSignal, callId: brandString<ToolCallId>('fetch-2'), name: 'web_fetch', arguments: { url: 'https://a.test' } })
     expect(out.isError).toBe(false)
     expect(out.value).toEqual({
       url: 'https://a.test',
@@ -841,7 +842,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    await executeInStep(ctx, agent, { callId: ToolCallId('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
+    await executeInStep(ctx, agent, { callId: brandString<ToolCallId>('search-1'), name: 'web_search', arguments: { queries: ['q'] }, signal: controller.signal })
     expect(seen.signal).toBe(controller.signal)
     await fiber.dispose()
   })
@@ -860,7 +861,7 @@ describe('tool-web execution through the real registry', () => {
     }
     const { ctx, agent, fiber } = await mountTools({ webConfig: { searchProvider: 'stub-search' }, search: provider })
     const controller = new AbortController()
-    const pending = executeInStep(ctx, agent, { callId: ToolCallId('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
+    const pending = executeInStep(ctx, agent, { callId: brandString<ToolCallId>('search-multi-1'), name: 'web_search', arguments: { queries: ['one', 'two'] }, signal: controller.signal })
     await vi.waitFor(() => { expect(signals).toHaveLength(2) })
     expect(signals[0]).toBe(signals[1])
     expect(signals[0]).not.toBe(controller.signal)
@@ -1203,7 +1204,7 @@ describe('web tool admission per model step', () => {
     for (const provider of setup.providers) ctx.web.registerSearchProvider(provider)
     for (const provider of setup.fetchProviders ?? []) ctx.web.registerFetchProvider(provider)
     const fiber = await ctx.plugin(ToolWeb, {})
-    const agent = { id: SessionId('web-search-admission') } as Agent
+    const agent = { id: brandString<SessionId>('web-search-admission') } as Agent
     await ctx.plugin(Object.assign((inner: Context) => { createScope(inner, agent) }, { inject: ['tools'] }))
     const selection: ModelSelection = { provider: setup.route ?? 'deepseek-official', model: 'deepseek-v4-flash' }
     const step = async (): Promise<{ toolSet: ResolvedToolSet; tools: string[]; prompt: string }> => {
@@ -1256,7 +1257,7 @@ describe('web tool admission per model step', () => {
     const { ctx, agent, step } = await compose({ providers: [routeProvider('deepseek', ['deepseek-account'], [], searched)] })
     const { toolSet } = await step()
     const result = await executeToolFixture(ctx, {
-      agent, toolSet, signal: testToolSignal, callId: ToolCallId('withheld-search'), name: 'web_search', arguments: { queries: ['q'] },
+      agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('withheld-search'), name: 'web_search', arguments: { queries: ['q'] },
     })
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
     expect(searched).toEqual([])
@@ -1303,7 +1304,7 @@ describe('web tool admission per model step', () => {
     })
     const { toolSet } = await step()
     const result = await executeToolFixture(ctx, {
-      agent, toolSet, signal: testToolSignal, callId: ToolCallId('withheld-fetch'), name: 'web_fetch', arguments: { url: 'https://a.test' },
+      agent, toolSet, signal: testToolSignal, callId: brandString<ToolCallId>('withheld-fetch'), name: 'web_fetch', arguments: { url: 'https://a.test' },
     })
     expect(result.error?.info?.code).toBe('UNKNOWN_TOOL')
     expect(fetched).toEqual([])

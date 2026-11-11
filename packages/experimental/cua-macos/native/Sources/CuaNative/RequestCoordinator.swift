@@ -166,7 +166,7 @@ import Darwin
         let params = try RequestParameters(request)
         try cancellation.check()
         if request.method == "screenshot" { try capture.requireAvailable() }
-        let requiresCatalog = ["getApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
+        let requiresCatalog = ["getApp", "launchApp", "listApps", "findApps", "typeText", "pressKey", "sendKeyEvent", "click"].contains(request.method)
         let catalog = requiresCatalog ? ApplicationCatalog.snapshot() : ApplicationCatalogSnapshot(applications: [], frontPID: nil)
         let result: JSONValue
         if request.method == "permissionStatus" {
@@ -193,7 +193,7 @@ import Darwin
             var installed: InstalledApplication?
             if request.method == "getApp" {
                 let selector = try params.string("selector")
-                if !catalog.applications.contains(where: { $0.matches(selector) }) && Int32(selector) == nil {
+                if !catalog.selectableApplications.contains(where: { $0.matches(selector) }) && Int32(selector) == nil {
                     installed = try ApplicationDiscovery.applications(matching: selector, exact: true, limit: 1,
                                                                        cancellation: cancellation).first
                 }
@@ -224,7 +224,7 @@ import Darwin
                 result = AXWorker.actionResult
             case .launch(let plan):
                 let pid = try await ApplicationDiscovery.launch(plan.application, cancellation: cancellation)
-                result = try await worker.finishLaunch(plan, pid: pid)
+                result = try await worker.finishLaunch(plan, pid: pid, catalog: ApplicationCatalog.snapshot())
             }
         }
         return result
