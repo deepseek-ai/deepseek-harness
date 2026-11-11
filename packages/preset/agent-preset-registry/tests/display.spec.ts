@@ -4,7 +4,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { presetDisplayText, type BuiltInPresetCopyKey } from '../src/display.ts'
+import { presetDisplayText } from '../src/display.ts'
+import type { BuiltInPresetCopyKey } from '../src/types.ts'
 
 const t = (key: BuiltInPresetCopyKey): string => `t:${key}`
 

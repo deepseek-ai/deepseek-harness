@@ -7,7 +7,7 @@
  */
 
 import { notifySubscribers } from '@deepseek-ai/dsh-client-store'
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
+import type { JobId } from '@deepseek-ai/dsh-jobs/types'
 import type { JobView } from '@deepseek-ai/dsh-jobs/view'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { JobFollowFrame } from '../types.ts'

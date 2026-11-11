@@ -1,7 +1,7 @@
 /** Model-call fixtures preserve raw JSON input and reject incomplete execution. */
 import { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools, { type ToolExecutor } from '@deepseek-ai/dsh-tools'
 import { expect, it, onTestFinished } from 'vitest'
