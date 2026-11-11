@@ -6,9 +6,11 @@
  */
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
-import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from 'lexical'
+import type { LexicalEditor } from 'lexical'
+import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, createEditor } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
 import { registerComposerKeymap } from '../src/client/input/editor/keymap.ts'
+import { $createQuoteNode, QuoteNode } from '../src/client/input/editor/QuoteNode.tsx'
 
 describe('keymap keydown routing', () => {
   it('clears composition presentation on root swaps and unregisters pending callbacks', async () => {
@@ -140,5 +142,90 @@ describe('keymap keydown routing', () => {
     // Shift+Tab is the menu's exit key, never its settle key.
     fireEvent.keyDown(root, { key: 'Tab', keyCode: 9, shiftKey: true })
     expect(arbitrate).toHaveBeenLastCalledWith('tabBack', false)
+  })
+
+  describe('Home and End', () => {
+    function lineBoundaryBench(platform: string) {
+      const descriptor = Object.getOwnPropertyDescriptor(navigator, 'platform')
+      Object.defineProperty(navigator, 'platform', { configurable: true, value: platform })
+      // jsdom has no Selection.modify; the browser performs the caret movement.
+      const modify = vi.fn()
+      Object.defineProperty(Selection.prototype, 'modify', { configurable: true, value: modify })
+      onTestFinished(() => {
+        if (descriptor === undefined) Reflect.deleteProperty(navigator, 'platform')
+        else Object.defineProperty(navigator, 'platform', descriptor)
+        Reflect.deleteProperty(Selection.prototype, 'modify')
+      })
+      const editor = createEditor({ namespace: 'line-boundary', nodes: [QuoteNode], onError: (error) => { throw error } })
+      const root = document.createElement('div')
+      root.contentEditable = 'true'
+      document.body.appendChild(root)
+      onTestFinished(() => { editor.setRootElement(null); root.remove() })
+      editor.setRootElement(root)
+      onTestFinished(registerPlainText(editor))
+      onTestFinished(registerComposerKeymap(editor, {
+        arbitrate: () => 'pass', space: () => false, dismissPopup: () => {}, canSubmit: () => true,
+        submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
+      }))
+      return { editor, root, modify }
+    }
+
+    /** A draft line that starts with a quote, with both carets before the quote. */
+    function caretBeforeLeadingQuote(editor: LexicalEditor, root: HTMLElement): void {
+      editor.update(() => {
+        const paragraph = $createParagraphNode()
+        paragraph.append($createQuoteNode('quoted source', { remove: 'Remove quote' }), $createTextNode(' follow-up'))
+        $getRoot().append(paragraph)
+        paragraph.select(0, 0)
+      }, { discrete: true })
+      document.getSelection()!.collapse(root.firstChild, 0)
+    }
+
+    const caret = (editor: LexicalEditor): string | null => editor.read(() => {
+      const selection = $getSelection()
+      if (!$isRangeSelection(selection) || !selection.isCollapsed()) return null
+      const node = selection.focus.getNode()
+      return `${selection.focus.type === 'element' ? node.getType() : node.getTextContent()}@${String(selection.focus.offset)}`
+    })
+
+    it.each([
+      { key: 'Home', shiftKey: false, alter: 'move', direction: 'backward' },
+      { key: 'End', shiftKey: false, alter: 'move', direction: 'forward' },
+      { key: 'Home', shiftKey: true, alter: 'extend', direction: 'backward' },
+      { key: 'End', shiftKey: true, alter: 'extend', direction: 'forward' },
+    ])('moves to the line boundary on Apple platforms: $key, shift $shiftKey', ({ key, shiftKey, alter, direction }) => {
+      const { root, modify } = lineBoundaryBench('MacIntel')
+      expect(fireEvent.keyDown(root, { key, shiftKey })).toBe(false) // default prevented: no document scroll
+      expect(modify).toHaveBeenCalledExactlyOnceWith(alter, direction, 'lineboundary')
+    })
+
+    it.each([
+      { platform: 'Win32', init: { key: 'Home' } },
+      { platform: 'MacIntel', init: { key: 'End', metaKey: true } },
+      { platform: 'MacIntel', init: { key: 'Home', ctrlKey: true } },
+      { platform: 'MacIntel', init: { key: 'End', altKey: true } },
+      { platform: 'MacIntel', init: { key: 'Home', keyCode: 229 } },
+      { platform: 'MacIntel', init: { key: 'ArrowLeft' } },
+    ])('leaves $init on $platform to the browser', ({ platform, init }) => {
+      const { root, modify } = lineBoundaryBench(platform)
+      expect(fireEvent.keyDown(root, init)).toBe(true)
+      expect(modify).not.toHaveBeenCalled()
+    })
+
+    it('moves End from before a line-leading quote to the end of its hard line', () => {
+      const { editor, root, modify } = lineBoundaryBench('MacIntel')
+      caretBeforeLeadingQuote(editor, root)
+      expect(fireEvent.keyDown(root, { key: 'End' })).toBe(false)
+      expect(modify).not.toHaveBeenCalled()
+      expect(caret(editor)).toBe('paragraph@2')
+    })
+
+    it('extends Shift+End from before a line-leading quote through the browser', () => {
+      const { editor, root, modify } = lineBoundaryBench('MacIntel')
+      caretBeforeLeadingQuote(editor, root)
+      expect(fireEvent.keyDown(root, { key: 'End', shiftKey: true })).toBe(false)
+      expect(modify).toHaveBeenCalledExactlyOnceWith('extend', 'forward', 'lineboundary')
+      expect(caret(editor)).toBe('paragraph@0')
+    })
   })
 })
