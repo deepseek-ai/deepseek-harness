@@ -142,8 +142,6 @@ function moveBeforeQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
 
 /** Move from immediately before a quote to the end of its hard line. */
 function movePastQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
-  if (!isApplePlatform() || event.key !== 'ArrowRight' || !event.metaKey
-    || event.ctrlKey || event.altKey || event.shiftKey) return false
   const quote = adjacentQuote(editor, false)
   if (quote === null) return false
   const block = quote.getParent()
@@ -164,6 +162,32 @@ function movePastQuote(editor: LexicalEditor, event: KeyboardEvent): boolean {
   }
   event.preventDefault()
   block.select(lineEnd, lineEnd)
+  return true
+}
+
+/**
+ * Move the caret to the start or end of its visual line for Home or End, with
+ * Shift extending the selection. Apple key bindings map Home and End to
+ * scrolling the document, which in the composer scrolls the conversation
+ * instead of moving the caret; other platforms already move to the line
+ * boundary. End immediately before a quote takes Cmd+Right's path to the end
+ * of the quote's hard line, because the browser's line-boundary movement
+ * stops before a quote that starts a line. Returns false and leaves the key
+ * to the browser for any other key, on other platforms, with Ctrl, Cmd, or
+ * Alt held, during IME composition, and when the editor has no root element
+ * or its document has no selection.
+ */
+function moveToLineBoundary(editor: LexicalEditor, event: KeyboardEvent, recentlyComposing: () => boolean): boolean {
+  if (event.key !== 'Home' && event.key !== 'End') return false
+  if (!isApplePlatform() || event.ctrlKey || event.metaKey || event.altKey
+    || isComposingEvent(event, recentlyComposing)) return false
+  if (event.key === 'End' && !event.shiftKey && movePastQuote(editor, event)) return true
+  const root = editor.getRootElement()
+  if (root === null) return false
+  const selection = root.ownerDocument.getSelection()
+  if (selection === null) return false
+  event.preventDefault()
+  selection.modify(event.shiftKey ? 'extend' : 'move', event.key === 'Home' ? 'backward' : 'forward', 'lineboundary')
   return true
 }
 
@@ -218,12 +242,17 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       syncComposition()
     }),
     editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (moveToLineBoundary(editor, event, recentlyComposing)) return true
       if (!isApplePlatform() || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return false
       const key = event.key.toLowerCase()
       if (key === 'a') return moveBeforeQuote(editor, event)
       return false
     }, COMMAND_PRIORITY_CRITICAL),
-    editor.registerCommand(MOVE_TO_END, event => movePastQuote(editor, event), COMMAND_PRIORITY_CRITICAL),
+    editor.registerCommand(MOVE_TO_END, (event) => {
+      if (!isApplePlatform() || event.key !== 'ArrowRight' || !event.metaKey
+        || event.ctrlKey || event.altKey || event.shiftKey) return false
+      return movePastQuote(editor, event)
+    }, COMMAND_PRIORITY_CRITICAL),
     editor.registerUpdateListener(syncComposition),
     editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),

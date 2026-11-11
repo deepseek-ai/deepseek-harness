@@ -17,16 +17,18 @@
 //
 // Zero model calls: a fresh workspace's blank session already carries a live
 // composer, and the scenario only types into it. A stray stream would fail loud
-// with NO_ADAPTER.
+// with NO_ADAPTER. The Home and End case types into a seeded long chat instead,
+// whose conversation scrollport can move.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
-  assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, watchConsole,
+  assertFixtureInventory, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
+import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/composer-draft-scroll', import.meta.url))
@@ -50,10 +52,37 @@ const DRAFT_ROWS = Array.from({ length: DRAFT_LINES }, (_unused, index) => {
   if (index === DRAFT_LINES - 1) return LAST_MARKER
   return `draft line ${String(index + 1).padStart(2, '0')}`
 })
+/** A seeded chat long enough that its conversation scrollport scrolls. */
+const HISTORY = createChatScrollFixture({ markerPrefix: 'COMPOSER_HOME_END', title: 'Composer Home and End', turns: 8 })
+/** Two lines separated by a line break, far shorter than the wrap width on every platform. */
+const LINE_ROWS = ['first line of the draft', 'second line of the draft'] as const
 
 /** The live composer surface. */
 function surface(page: Page): ReturnType<Page['locator']> {
   return page.locator('[data-composer-input][contenteditable="true"]').first()
+}
+
+/**
+ * Read the draft as plain text.
+ * @param page - the page under test.
+ * @returns the draft with each paragraph boundary and line break as `\n`.
+ */
+function draftText(page: Page): Promise<string> {
+  return surface(page).evaluate(element => Array.from(element.children, block =>
+    Array.from(block.childNodes, node => node.nodeName === 'BR' ? '\n' : node.textContent ?? '').join('')).join('\n'))
+}
+
+/**
+ * Measure the conversation scrollport that holds the composer.
+ * @param page - the page under test.
+ * @returns its scroll offset and whether its content overflows it.
+ */
+function conversationScroll(page: Page): Promise<{ top: number; scrollable: boolean }> {
+  return surface(page).evaluate((element) => {
+    const scroller = element.closest<HTMLElement>('[data-conversation-scroll]')
+    if (scroller === null) throw new Error('the composer surface is not inside a conversation scrollport')
+    return { top: scroller.scrollTop, scrollable: scroller.scrollHeight > scroller.clientHeight }
+  })
 }
 
 /**
@@ -196,6 +225,7 @@ describe('web e2e: composer draft scrolling', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
+    await seedSession(scaffold, HISTORY.log, 'composer-draft-scroll-home-end')
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
@@ -324,6 +354,44 @@ describe('web e2e: composer draft scrolling', () => {
     await compareOrRefreshGolden(GEOMETRY_EXPECTED, renderGeometry(top, bottom, trailingNewline, pasted), MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('Home and End move the caret to its line ends without scrolling a long conversation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-composer-draft-scroll-home-end'))
+    // macOS key bindings map Home and End to scrolling the document, which in
+    // the composer scrolled the conversation instead of moving the caret.
+    // Other platforms move the caret natively, so the case holds everywhere.
+    await page.getByRole('button', { name: 'Search sessions' }).click()
+    await page.getByRole('textbox', { name: 'Search session names', exact: true }).fill(HISTORY.markers.user(1))
+    const result = page.getByRole('tree', { name: 'Search results' }).getByRole('treeitem')
+    await expect.poll(() => result.count(), { timeout: 60_000 }).toBe(1)
+    await result.click()
+    await page.getByText(HISTORY.markers.assistant(HISTORY.turns), { exact: false }).last().waitFor()
+    // A line break rather than wrapping keeps both line ends independent of font metrics.
+    await typeDraft(page, LINE_ROWS)
+    const [first, second] = LINE_ROWS
+    for (let index = 0; index < Math.floor(second.length / 2); index++) await page.keyboard.press('ArrowLeft')
+    // Measure only once the opened chat holds one offset across two reads.
+    let previous: number | undefined
+    await expect.poll(async () => {
+      const { top } = await conversationScroll(page)
+      const still = top === previous
+      previous = top
+      return still
+    }, { interval: 250, timeout: 10_000 }).toBe(true)
+    const before = await conversationScroll(page)
+    // Vacuity guard: the conversation must be able to scroll toward its top.
+    expect(before.scrollable).toBe(true)
+    expect(before.top).toBeGreaterThan(0)
+    await page.keyboard.press('Home')
+    await page.keyboard.insertText('[')
+    await expect.poll(() => draftText(page)).toBe(`${first}\n[${second}`)
+    expect((await conversationScroll(page)).top).toBe(before.top)
+    await page.keyboard.press('End')
+    await page.keyboard.insertText(']')
+    await expect.poll(() => draftText(page)).toBe(`${first}\n[${second}]`)
+    expect((await conversationScroll(page)).top).toBe(before.top)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
 
   it('commits exactly the fixtures it reads', async () => {
     // Zero model calls, so the scenario records no session fixture: the geometry
