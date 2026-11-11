@@ -1,11 +1,12 @@
 /**
  * The file tree's view state, one record per right-Sidebar pane: which
- * directories are expanded, what each loaded level contains, and how the
- * navigator is shown. A Slot-standard exclusive store (one instance per
- * Session) keyed by pane, so every file tab of a pane draws the same tree;
- * the face decides when a pane's record is forgotten (`FilesInjected.attach`).
- * Beside it live pure reads shared by the face and the drawings: path keys,
- * where a tab's file sits in the listed tree, and the navigator's geometry.
+ * directories are expanded, what each loaded level contains, how the
+ * navigator is shown, and the pane's search. A Slot-standard exclusive store
+ * (one instance per Session) keyed by pane, so every file tab of a pane draws
+ * the same tree; the face decides when a pane's record is forgotten
+ * (`FilesInjected.attach`). Beside it live pure reads shared by the face and
+ * the drawings: path keys, where a tab's file sits in the listed tree, and the
+ * navigator's geometry.
  */
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
@@ -98,7 +99,50 @@ export interface FilesTreeState {
   expanded: string[]
 }
 
-/** One pane's navigator: whether and how wide it is shown, and its tree once started. */
+/**
+ * One settled search, as the pane draws it instead of the tree: the matches,
+ * or why the Host could not search.
+ */
+export type FilesSearchResult =
+  | {
+    readonly kind: 'found'
+    /** The trimmed query the search answered, which the rows highlight. */
+    readonly query: string
+    /** The matches as a tree; its `expanded` is the search's own and starts with every level. */
+    readonly tree: FilesTreeState
+    /** How many entries the search returned. */
+    readonly count: number
+    /** More entries matched than the Host returns, so only its first `count` are drawn. */
+    readonly truncated: boolean
+    /**
+     * Part of the workspace was not searched: the Host's search passed its file
+     * limit, or a directory could not be read.
+     */
+    readonly incomplete: boolean
+    /** Whether the search was asked to leave out hidden entries; it does not say that any were. */
+    readonly hiddenLeftOut: boolean
+    /** Whether the search was given at least one enabled exclusion rule; it does not say that a rule matched. */
+    readonly excluded: boolean
+    /** Whether the search was asked to respect ignore files; it does not say that one ignored anything. */
+    readonly ignored: boolean
+  }
+  | {
+    readonly kind: 'failed'
+    /** The trimmed query the failed search asked for. */
+    readonly query: string
+    /** Why the Host could not search. */
+    readonly failure: RemoteFailure
+  }
+
+/** One pane's search while its query is not blank. */
+export interface FilesSearchState {
+  /** A search is running; the last settled result stays drawn until its answer replaces it. */
+  readonly pending: boolean
+  /** The last settled search; `undefined` until the pane's first search settles. */
+  readonly result: FilesSearchResult | undefined
+}
+
+/** One pane's navigator: whether and how wide it is shown, its tree once started, and its search. */
 export interface FilesPaneState {
   /**
    * Whether a preview's navigator is shown; `undefined`, hidden, until the
@@ -109,6 +153,12 @@ export interface FilesPaneState {
   width: number
   /** The tree, listed once the navigator is first shown. */
   tree: FilesTreeState | undefined
+  /** The search field's text, as typed; not persisted. */
+  query: string
+  /** Whether the files page draws its search bar; hiding it retains the query and results. */
+  searchBarOpen: boolean
+  /** The pane's search, which the navigator draws instead of the tree; `undefined` while the query is blank. */
+  search: FilesSearchState | undefined
 }
 
 /** Every pane's navigator, keyed by pane id. */
@@ -216,7 +266,7 @@ function underRoot(path: string, root: string): string | undefined {
  * @returns the pane's record.
  */
 function pane(state: FilesState, paneId: PaneId): FilesPaneState {
-  state.byPane[paneId] ??= { open: undefined, width: DEFAULT_NAVIGATOR_WIDTH, tree: undefined }
+  state.byPane[paneId] ??= { open: undefined, width: DEFAULT_NAVIGATOR_WIDTH, tree: undefined, query: '', searchBarOpen: false, search: undefined }
   return state.byPane[paneId]
 }
 
@@ -242,8 +292,13 @@ type FilesActions = {
   failed: (draft: FilesState, paneId: PaneId, path: string, failure: RemoteFailure) => void
   toggled: (draft: FilesState, paneId: PaneId, path: string) => void
   shown: (draft: FilesState, paneId: PaneId, open: boolean) => void
+  searchBarShown: (draft: FilesState, paneId: PaneId, open: boolean) => void
   resized: (draft: FilesState, paneId: PaneId, width: number) => void
   forget: (draft: FilesState, paneId: PaneId) => void
+  queried: (draft: FilesState, paneId: PaneId, query: string) => void
+  searching: (draft: FilesState, paneId: PaneId) => void
+  searched: (draft: FilesState, paneId: PaneId, result: FilesSearchResult) => void
+  searchToggled: (draft: FilesState, paneId: PaneId, path: string) => void
 }
 
 /**
@@ -345,6 +400,13 @@ export function createFilesStore(): EngineStoreHandle<FilesState, FilesActions> 
        */
       shown: (d, paneId: PaneId, open: boolean) => { pane(d, paneId).open = open },
       /**
+       * Show or hide the files page's search bar without changing its search.
+       * @param d - draft state.
+       * @param paneId - the pane being drawn.
+       * @param open - whether the search bar is shown.
+       */
+      searchBarShown: (d, paneId: PaneId, open: boolean) => { pane(d, paneId).searchBarOpen = open },
+      /**
        * Record one pane's navigator width preference.
        * @param d - draft state.
        * @param paneId - the pane being drawn.
@@ -358,6 +420,55 @@ export function createFilesStore(): EngineStoreHandle<FilesState, FilesActions> 
        */
       forget: (d, paneId: PaneId) => {
         d.byPane = Object.fromEntries(Object.entries(d.byPane).filter(([id]) => id !== paneId))
+      },
+      /**
+       * Record the search field's text. A blank query ends the search, and the
+       * pane draws its tree again; otherwise the last result stays drawn until
+       * the next is recorded.
+       * @param d - draft state.
+       * @param paneId - the pane being drawn.
+       * @param query - the text as typed.
+       */
+      queried: (d, paneId: PaneId, query: string) => {
+        const state = pane(d, paneId)
+        state.query = query
+        if (query.trim() === '') state.search = undefined
+      },
+      /**
+       * Record that a search started, keeping the last result drawn; ignored while the query is blank.
+       * @param d - draft state.
+       * @param paneId - the pane being drawn.
+       */
+      searching: (d, paneId: PaneId) => {
+        const state = d.byPane[paneId]
+        const result = state?.search?.result
+        if (state !== undefined && state.query.trim() !== '') {
+          state.search = { pending: true, result: result?.kind === 'failed' ? undefined : result }
+        }
+      },
+      /**
+       * Record a search's result, ending the pending search; ignored while the query is blank.
+       * @param d - draft state.
+       * @param paneId - the pane being drawn.
+       * @param result - what the search found, or why it failed.
+       */
+      searched: (d, paneId: PaneId, result: FilesSearchResult) => {
+        const state = d.byPane[paneId]
+        if (state !== undefined && state.query.trim() !== '') state.search = { pending: false, result }
+      },
+      /**
+       * Open a collapsed directory of the search's tree, or collapse an open
+       * one; the listed tree's expansion stays as it was.
+       * @param d - draft state.
+       * @param paneId - the pane being drawn.
+       * @param path - absolute directory path.
+       */
+      searchToggled: (d, paneId: PaneId, path: string) => {
+        const result = d.byPane[paneId]?.search?.result
+        if (result?.kind !== 'found') return
+        const at = result.tree.expanded.indexOf(path)
+        if (at >= 0) result.tree.expanded.splice(at, 1)
+        else result.tree.expanded.push(path)
       },
     },
   })

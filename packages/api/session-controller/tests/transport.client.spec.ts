@@ -6,7 +6,8 @@ import {
 } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { streamHandle } from '@deepseek-ai/dsh-remote-mock'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, RemoteStreamHandle } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -297,7 +298,7 @@ describe('Session Client stream adapters', () => {
     }
   })
   it('opts into assistant notifications and publishes the reconnect baseline plus live frame', async () => {
-    const attemptId = LlmAttemptId('transport-attempt')
+    const attemptId = brandString<LlmAttemptId>('transport-attempt')
     const baseline: SessionAssistantStreamBaseline = {
       revision: 2,
       activeAttempt: {
@@ -368,7 +369,7 @@ describe('Session Client stream adapters', () => {
   it('rejects an Assistant frame that arrives before the opening baseline', async () => {
     const remote = new ScriptedSessionRemote([{
       frames: [assistantFrame({
-        type: 'start', attemptId: LlmAttemptId('pre-opening-attempt'),
+        type: 'start', attemptId: brandString<LlmAttemptId>('pre-opening-attempt'),
         revision: 1, startedAfterSeq: -1, turn: 1, step: 1,
       })],
     }], [])
@@ -389,7 +390,7 @@ describe('Session Client stream adapters', () => {
   })
 
   it('rebaselines after a transient assistant revision gap without advancing the durable cursor', async () => {
-    const attemptId = LlmAttemptId('gapped-attempt')
+    const attemptId = brandString<LlmAttemptId>('gapped-attempt')
     const start: SessionAssistantStreamFrame = {
       type: 'start', attemptId, revision: 1, startedAfterSeq: -1,
       turn: 1, step: 1,
@@ -440,7 +441,7 @@ describe('Session Client stream adapters', () => {
   })
 
   it('rebaselines when a replacement Agent lifecycle restarts at revision one', async () => {
-    const attemptId = LlmAttemptId('replacement-lifecycle-attempt')
+    const attemptId = brandString<LlmAttemptId>('replacement-lifecycle-attempt')
     const previous: SessionAssistantStreamBaseline = {
       revision: 2,
       activeAttempt: {

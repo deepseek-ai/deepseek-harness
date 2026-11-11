@@ -11,7 +11,7 @@
 import { type ChildProcess, type SpawnOptions, spawn, spawnSync } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { setTimeout as sleepMs } from 'node:timers/promises'
-import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
+import { scrubbedParentEnv, SubprocessError } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type {
   SubprocessCollect,
@@ -172,11 +172,14 @@ export function validateSubprocessSpec(spec: SubprocessSpawnSpec): void {
     } catch {
       // Arbitrary caller-owned reasons cannot escape the stable Error boundary.
     }
-    throw new Error(`aborted before spawn: ${reason}`)
+    // Named as a cancellation so the tool registry classifies it as the caller's abort.
+    const error = new Error(`aborted before spawn: ${reason}`)
+    error.name = 'AbortError'
+    throw error
   }
   const [program] = spec.argv
   if (program === undefined || program.length === 0) {
-    throw new Error('invalid argv: expected a non-empty program name at argv[0]')
+    throw new SubprocessError('invalid argv: expected a non-empty program name at argv[0]', 'SUBPROCESS_INVALID_ARGV')
   }
 }
 

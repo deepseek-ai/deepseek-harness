@@ -2,7 +2,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import { existsSync, writeFileSync } from 'node:fs'
 import { setTimeout } from 'node:timers/promises'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
+import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 /**
  * Scripted model for the CHILD runtime: validates either the routed success
@@ -16,7 +18,7 @@ class RouteEchoAdapter extends LlmAdapter {
       id: model,
       name: model,
       reasoning: {
-        efforts: [{ id: ReasoningEffortId('max'), name: 'Maximum' }],
+        efforts: [{ id: brandString<ReasoningEffortId>('max'), name: 'Maximum' }],
       },
     })
   }

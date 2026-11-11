@@ -1,0 +1,10 @@
+version: 1
+scenario: ptc-inspect-image-error
+profile: headless
+composition: ptc-image
+recording: authored
+header:
+  class: ptc-image
+platform: posix
+workspace:
+  final: true

@@ -1,11 +1,12 @@
 /** Successful Session translations survive remounts and restarts without another provider query. */
-import { pluginRecordOf, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { pluginRecordOf, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import type { ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationStorage } from '../src/storage.ts'
 import type { TranslationIdentity } from '../src/types.ts'
 import { storageFixture, storageReply } from './storage-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: Array<() => Promise<void>> = []
 afterEach(async () => {
@@ -47,7 +48,7 @@ describe('durable translation results', () => {
   it('persists request before dispatch and result before return through the existing live writer', async () => {
     let atDispatch: readonly SessionEvent[] = []
     const b = await storageFixture(cleanups, { async reply(call, response) {
-      atDispatch = await b.readEvents(SessionId('stored-translation'))
+      atDispatch = await b.readEvents(brandString<SessionId>('stored-translation'))
       storageReply(call, response)
     } })
     const original = await b.createSession()
@@ -86,7 +87,7 @@ describe('durable translation results', () => {
       if (call.text === 'Held source') { entered.resolve(undefined); await release.promise }
       storageReply(call, response)
     } })
-    const firstSession = await b.createSession(SessionId('first-session')), secondSession = await b.createSession(SessionId('second-session'))
+    const firstSession = await b.createSession(brandString<SessionId>('first-session')), secondSession = await b.createSession(brandString<SessionId>('second-session'))
     const pending = b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'Held source', targetLanguage: 'zh', sessionId: firstSession.id }))
     try {
       await entered.promise
@@ -183,7 +184,7 @@ describe('durable translation results', () => {
 
 describe('translation storage guards', () => {
   it.each([false, true])('refuses uncached inactive Sessions with live store=%s before external I/O or writes', async (withSessions) => {
-    const b = await storageFixture(cleanups, { withSessions }), original = await b.createSession(SessionId('inactive'), false)
+    const b = await storageFixture(cleanups, { withSessions }), original = await b.createSession(brandString<SessionId>('inactive'), false)
     const opened = vi.spyOn(b.ctx.sessionPersistence, 'open')
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_INACTIVE' })
@@ -194,10 +195,10 @@ describe('translation storage guards', () => {
   })
   it('refuses missing storage or a missing Session before external I/O', async () => {
     const absent = await storageFixture(cleanups, { withPersistence: false })
-    await expect(absent.ctx.translator.translate(absent.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: SessionId('missing') })))
+    await expect(absent.ctx.translator.translate(absent.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: brandString<SessionId>('missing') })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
     const b = await storageFixture(cleanups)
-    await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: SessionId('missing') })))
+    await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: brandString<SessionId>('missing') })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })
     expect([...absent.requests, ...b.requests]).toEqual([])
   })
@@ -222,7 +223,7 @@ describe('translation storage guards', () => {
     ['result negative zero', 'plugin:translator/result', { requestSeq: -0, text: 'orphan' }],
     ['result non-text', 'plugin:translator/result', { requestSeq: 0, text: 1 }],
   ] as const)('refuses persisted %s before provider dispatch', async (_kind, type, data) => {
-    const b = await storageFixture(cleanups), original = await b.createSession(SessionId('malformed'), false)
+    const b = await storageFixture(cleanups), original = await b.createSession(brandString<SessionId>('malformed'), false)
     let record = JSON.stringify({ type, data, seq: original.events.length, time: Date.now(), ignorable: true })
     if (_kind === 'result negative zero') record = record.replace('"requestSeq":0', '"requestSeq":-0')
     await writeFile(original.file, Buffer.concat([original.bytes, Buffer.from(record + '\n')]))

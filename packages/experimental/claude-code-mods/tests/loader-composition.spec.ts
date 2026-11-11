@@ -15,13 +15,14 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as ClaudeCodeMods from '../src/index.ts'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Keep workspace imports in Vitest's source graph even when the config has a package scope.
 vi.mock('@deepseek-ai/cordis-plugin-loader/src/resolve.ts', () => ({ createResolve: () => undefined }))
@@ -81,7 +82,7 @@ it('loads from cordis.yml, counts the model\'s tool calls, and answers /tally th
     name: 'echo', description: 'echo', parameters: { command: { type: 'string' } },
     async execute(args) { return [{ type: 'text', text: `ran ${args.command}` }] },
   }))
-  const agent = await context.agentLoop.create(SessionId('composed'), { provider: 'mock', model: 'mock' })
+  const agent = await context.agentLoop.create(brandString<SessionId>('composed'), { provider: 'mock', model: 'mock' })
   expect(context.commands.list(agent).map(command => command.name)).toEqual(['tally'])
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'list the files here' }], source: { kind: 'user' } }))
   await agent.whenIdle()

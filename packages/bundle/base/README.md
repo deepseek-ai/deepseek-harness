@@ -53,6 +53,8 @@ Both `subagent` and `subagent_fork` create managed children and return the child
 
 The bundle also mounts [Agent Teams](../../team/agent-team/README.md) and its task tools. Team mode defaults off per root Session; the root conversation’s **Use Agent Teams** menu switch enables collaboration for that tree without changing the profile.
 
+The `tool-subagent-control` row sets `interrupt: false`, so ordinary subagents and Team mode omit `interrupt_agent`. Set `config.interrupt: true` on that row in a later patch to enable it. The plugin itself still defaults to `true`.
+
 The built-in `working_directory` tool changes the directory for subsequent operations while existing processes and write permissions remain independent. Current directory information appears in user context. Default file editing uses `read`, `write`, and `edit`. The `str_replace_editor` tool remains available as an explicit opt-in. To add it to a base-backed profile, put this entry in the profile, home, or invocation patch:
 
 ```yaml

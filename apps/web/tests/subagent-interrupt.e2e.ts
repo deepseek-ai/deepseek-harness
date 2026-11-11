@@ -11,9 +11,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SessionId as sessionId, type SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId as sessionId, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
 import { launchWebScaffold, readPersistedEvents, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const MODE = webSnapshotMode()
 const INITIAL = 'Explain event sourcing in one sentence.'
@@ -104,7 +105,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByUser over the 
       cwd: scaffold.workspaceCwd,
     })
     if (!created.ok) throw new Error(`session.create failed: ${created.error.code}`)
-    parentId = sessionId(created.value.sessionId)
+    parentId = brandString<sessionId>(created.value.sessionId)
     const parent = scaffold.ctx.agents.get(parentId)
     if (parent === undefined) throw new Error('created parent session did not publish a live Agent')
 

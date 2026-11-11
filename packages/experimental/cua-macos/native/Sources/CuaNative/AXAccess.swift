@@ -208,14 +208,41 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "read writability of \(name)") }
         return value
     }
+    /// Observation keeps unsupported writability unknown; mutation callers use strict writable checks.
+    static func observationWritability(role: String, probe: (String, Bool) throws -> Bool?) rethrows -> (value: Bool?, selection: Bool?) {
+        let value = AXTextNode.valueRoles.contains(role) ? try probe("AXValue", true) : nil
+        let selection = AXTextNode.textRoles.contains(role) ? try probe("AXSelectedTextRange", true) : nil
+        return (value, selection)
+    }
     func requireEnabled(_ element: AXUIElement) throws {
         if try boolean(element, "AXEnabled") == false { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility element is disabled") }
     }
     func perform(_ element: AXUIElement, _ action: String) throws {
         try requireEnabled(element)
-        try prepare(element)
-        let error = AXUIElementPerformAction(element, action as CFString)
-        guard error == .success else { throw failure(error, "perform \(action)") }
+        func dispatch() throws -> AXError {
+            try prepare(element)
+            return AXUIElementPerformAction(element, action as CFString)
+        }
+        let result: AXError
+        if action == "AXZoomWindow" {
+            let role = try? string(element, "AXRole")
+            let window = role == "AXWindow" ? element : try? self.element(element, "AXWindow")
+            result = try Self.performZoom(readSize: {
+                guard let window else { return nil }
+                return Self.dimensions(try? self.attribute(window, "AXSize"))
+            }, dispatch: dispatch)
+        } else {
+            result = try dispatch()
+        }
+        guard result == .success else { throw failure(result, "perform \(action)") }
+    }
+    /// Dispatch once. Only an observed resize of the same window can override attributeUnsupported.
+    static func performZoom(readSize: () -> CGSize?, dispatch: () throws -> AXError) rethrows -> AXError {
+        let before = readSize()
+        let result = try dispatch()
+        guard result == .attributeUnsupported, let before, before.width > 0, before.height > 0,
+              let after = readSize(), after.width > 0, after.height > 0, before != after else { return result }
+        return .success
     }
     func setAttribute(_ element: AXUIElement, _ attributeName: String, _ value: JSONValue?, expectedRole: String? = nil) throws {
         guard let value, value != .null else {
@@ -419,6 +446,10 @@ final class AXAccess {
     }
     /// Resolve an exact AX window or sheet without enabling accessibility or traversing its controls.
     func windowBounds(_ id: UInt32, owner: ProcessIdentity) throws -> WindowBounds? {
+        guard let node = try windowElement(id, owner: owner) else { return nil }
+        return try bounds(node)
+    }
+    func windowElement(_ id: UInt32, owner: ProcessIdentity) throws -> AXUIElement? {
         let app = AXUIElementCreateApplication(owner.pid)
         var windows = try children(app, "AXWindows")
         if let focused = try element(app, "AXFocusedWindow"), !windows.contains(where: { CFEqual($0, focused) }) {
@@ -427,23 +458,26 @@ final class AXAccess {
         for window in windows {
             let role = try string(window, "AXRole")
             guard role == "AXWindow" || role == "AXSheet" else { continue }
-            if try windowID(window) == id { return try bounds(window) }
+            if try windowID(window) == id { return window }
             for sheet in try children(window) where try string(sheet, "AXRole") == "AXSheet" {
-                if try windowID(sheet) == id { return try bounds(sheet) }
+                if try windowID(sheet) == id { return sheet }
             }
         }
         return nil
     }
     private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
-        guard let position, let size else { return nil }
-        guard CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
-        let positionValue = unsafeDowncast(position, to: AXValue.self)
-        let sizeValue = unsafeDowncast(size, to: AXValue.self)
+        guard let position, CFGetTypeID(position) == AXValueGetTypeID(), let dimensions = Self.dimensions(size) else { return nil }
         var point = CGPoint.zero
-        var dimensions = CGSize.zero
-        guard AXValueGetValue(positionValue, .cgPoint, &point), AXValueGetValue(sizeValue, .cgSize, &dimensions),
-              point.x.isFinite, point.y.isFinite, dimensions.width.isFinite, dimensions.height.isFinite else { return nil }
+        guard AXValueGetValue(unsafeDowncast(position, to: AXValue.self), .cgPoint, &point),
+              point.x.isFinite, point.y.isFinite else { return nil }
         return WindowBounds(x: point.x, y: point.y, width: dimensions.width, height: dimensions.height)
+    }
+    private static func dimensions(_ size: CFTypeRef?) -> CGSize? {
+        guard let size, CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+        var dimensions = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(size, to: AXValue.self), .cgSize, &dimensions),
+              dimensions.width.isFinite, dimensions.height.isFinite else { return nil }
+        return dimensions
     }
     private func controlValue(_ raw: CFTypeRef?) -> String? {
         guard let value = raw else { return nil }
@@ -566,12 +600,16 @@ final class AXAccess {
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        func walk(_ element: AXUIElement, level: Int, depth: Int) throws {
+        var pending = roots.reversed().map { (element: $0, level: 0, depth: 0) }
+        func enqueueChildren(_ children: [AXUIElement], level: Int, depth: Int) {
+            for child in children.reversed() { pending.append((child, level, depth)) }
+        }
+        while let (element, level, depth) = pending.popLast() {
             try cancellation.check()
             let hash = CFHash(element)
-            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { return }
-            guard count < maxElements else { elementLimitReached = true; return }
-            guard depth <= maxDepth else { depthLimitReached = true; return }
+            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
+            guard count < maxElements else { elementLimitReached = true; break }
+            guard depth <= maxDepth else { depthLimitReached = true; continue }
             visited[hash, default: []].append(element)
             count += 1
             let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
@@ -582,10 +620,11 @@ final class AXAccess {
             let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
             let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
-            let valueWritable = AXTextNode.valueRoles.contains(role) ? try writable(element, "AXValue") : nil
+            let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
+            let valueWritable = writability.value
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = AXTextNode.textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : nil
+            let selectionWritable = writability.selection
             let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
             let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
             let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")
@@ -605,8 +644,8 @@ final class AXAccess {
                                   identifier: identifier, url: url, focused: focused, expanded: expanded)
             node.validateSelection()
             if node.transparent || (!addressable && !node.hasMeaning && role != "AXWindow" && role != "AXSheet") {
-                for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level, depth: depth + 1) }
-                return
+                enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level, depth: depth + 1)
+                continue
             }
             let index: Int? = addressable ? indexed.count : nil
             if let index { indexed[index] = element }
@@ -629,17 +668,16 @@ final class AXAccess {
                     "selectedRange": node.selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
                 ]))
             }
-            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; return }
-            for child in try childValues(observed("AXChildren"), attribute: "AXChildren") { try walk(child, level: level + 1, depth: depth + 1) }
+            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; continue }
+            enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level + 1, depth: depth + 1)
         }
-        for root in roots { try walk(root, level: 0, depth: 0) }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         let truncated = elementLimitReached || depthLimitReached
         if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
     }
 
-    func enclosingWindow(_ element: AXUIElement, owner: ProcessIdentity) throws -> WindowInfo {
+    func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {
         var current: AXUIElement? = element
         var visited: [AXUIElement] = []
         for _ in 0..<100 {
@@ -648,12 +686,37 @@ final class AXAccess {
             visited.append(node)
             let role = try string(node, "AXRole")
             if role == "AXWindow" || role == "AXSheet", let id = try windowID(node) {
-                return try WindowGeometry.resolve(owner: owner, windowID: id) { try bounds(node) }
+                return (node, id)
             }
             current = try self.element(node, "AXParent")
         }
-        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Element has no app-owned window or sheet; refresh getAccessibilityTree")
+        throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Pointer input requires an enclosing window or sheet. For a menu item’s default action, use app.invoke(id)")
     }
+    /// A system file panel renders in its host window but receives input in the panel service's window.
+    func filePanelRecipient(_ node: AXUIElement, owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> (process: ProcessIdentity, windowID: UInt32)? {
+        guard ["open-panel", "save-panel"].contains(try string(node, "AXIdentifier") ?? "") else { return nil }
+        guard let hostID = try windowID(node) else { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has no window ID") }
+        _ = try NativePlatform.ownedWindow(owner.pid, hostID)
+        var recipient: (ProcessIdentity, UInt32)?
+        for child in try children(node) {
+            guard let id = try windowID(child), let window = NativePlatform.windows(allLayers: true).first(where: { $0.windowID == id }), window.pid != owner.pid else { continue }
+            guard catalog.application(window.pid)?.bundleID == "com.apple.appkit.xpc.openAndSavePanelService" else {
+                throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel refers to an unsupported remote process")
+            }
+            let process = try NativePlatform.identity(window.pid)
+            if let old = recipient, old.0 != process || old.1 != id { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has ambiguous remote recipients") }
+            recipient = (process, id)
+        }
+        guard let (process, id) = recipient else { throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel has no ready input recipient") }
+        var focus = try element(AXUIElementCreateApplication(process.pid), "AXFocusedWindow")
+        for _ in 0..<100 {
+            guard let focused = focus else { break }
+            if try windowID(focused) == id { try NativePlatform.verify(process); return (process, id) }
+            focus = try element(focused, "AXParent")
+        }
+        throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel focus changed; observe fresh state")
+    }
+
     func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")
         var visited: [AXUIElement] = []
@@ -661,28 +724,7 @@ final class AXAccess {
             guard let node = current else { return owner }
             if visited.contains(where: { CFEqual($0, node) }) { break }
             visited.append(node)
-            if ["open-panel", "save-panel"].contains(try string(node, "AXIdentifier") ?? "") {
-                guard let hostID = try windowID(node) else { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has no window ID") }
-                _ = try NativePlatform.ownedWindow(owner.pid, hostID)
-                var recipient: (ProcessIdentity, UInt32)?
-                for child in try children(node) {
-                    guard let id = try windowID(child), let window = NativePlatform.windows(allLayers: true).first(where: { $0.windowID == id }), window.pid != owner.pid else { continue }
-                    guard catalog.application(window.pid)?.bundleID == "com.apple.appkit.xpc.openAndSavePanelService" else {
-                        throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel refers to an unsupported remote process")
-                    }
-                    let process = try NativePlatform.identity(window.pid)
-                    if let old = recipient, old.0 != process || old.1 != id { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has ambiguous remote recipients") }
-                    recipient = (process, id)
-                }
-                guard let (process, id) = recipient else { throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel has no ready input recipient") }
-                var focus = try element(AXUIElementCreateApplication(process.pid), "AXFocusedWindow")
-                for _ in 0..<100 {
-                    guard let focused = focus else { break }
-                    if try windowID(focused) == id { try NativePlatform.verify(process); return process }
-                    focus = try element(focused, "AXParent")
-                }
-                throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel focus changed; observe fresh state")
-            }
+            if let panel = try filePanelRecipient(node, owner: owner, catalog: catalog) { return panel.process }
             current = try element(node, "AXParent")
         }
         throw NativeFailure(code: "PANEL_NOT_READY", message: "Focused accessibility ancestry exceeds the traversal limit")

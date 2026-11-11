@@ -8,10 +8,11 @@ import { describe, expect, it, vi } from 'vitest'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory, { type Config as WorkingDirectoryConfig } from '@deepseek-ai/dsh-working-directory'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import * as WorkingDirectoryTool from '@deepseek-ai/dsh-tool-working-directory'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture(config?: (root: string) => WorkingDirectoryConfig) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-working-directory-')))
@@ -22,7 +23,7 @@ async function fixture(config?: (root: string) => WorkingDirectoryConfig) {
     const directoryFiber = ctx.plugin(WorkingDirectory, config?.(root) ?? {})
     await directoryFiber
     const harness = await mountAgentLoopTestHarness(ctx)
-    const agent = await harness.create(SessionId('directory-owner'), {}, { cwd: root })
+    const agent = await harness.create(brandString<SessionId>('directory-owner'), {}, { cwd: root })
     return {
       ctx, root, agent, harness, directoryFiber,
       async [Symbol.asyncDispose]() {
@@ -42,7 +43,7 @@ describe('Session working directories', () => {
     await using f = await fixture()
     const child = join(f.root, 'child')
     await mkdir(child)
-    const sibling = await f.harness.create(SessionId('sibling'), {}, { cwd: f.root })
+    const sibling = await f.harness.create(brandString<SessionId>('sibling'), {}, { cwd: f.root })
     await expect(f.ctx.workingDirectory.set(f.agent, 'child')).resolves.toBe(child)
     expect(f.ctx.workingDirectory.get(f.agent.session)).toBe(child)
     expect(f.ctx.workingDirectory.get(sibling.session)).toBe(f.root)
@@ -62,7 +63,7 @@ describe('Session working directories', () => {
     const child = join(f.root, 'child')
     await mkdir(child)
     await f.ctx.workingDirectory.set(f.agent, child)
-    const restored = f.ctx.sessions.create(SessionId('restored'), {
+    const restored = f.ctx.sessions.create(brandString<SessionId>('restored'), {
       meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents(),
     })
     expect(f.ctx.workingDirectory.get(restored)).toBe(child)
@@ -72,11 +73,11 @@ describe('Session working directories', () => {
     await using f = await fixture()
     const directory = join(f.root, 'moved')
     await mkdir(directory)
-    const withoutOrigin = f.ctx.sessions.create(SessionId('wire-without-origin'))
+    const withoutOrigin = f.ctx.sessions.create(brandString<SessionId>('wire-without-origin'))
     expect(f.ctx.sessionProjections.snapshot(withoutOrigin).values.workingDirectory).toBeNull()
     expect(f.ctx.sessionProjections.snapshot(f.agent.session).values.workingDirectory).toBe(f.root)
     await f.ctx.workingDirectory.set(f.agent, directory)
-    const restored = f.ctx.sessions.create(SessionId('wire-restored'), {
+    const restored = f.ctx.sessions.create(brandString<SessionId>('wire-restored'), {
       meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents(),
     })
     expect(f.ctx.agents.get(restored.id)).toBeUndefined()
@@ -112,9 +113,14 @@ describe('Session working directories', () => {
     await using f = await fixture()
     const origin = join(f.root, 'original')
     await mkdir(origin)
-    const agent = await f.harness.create(SessionId('removed-origin'), {}, { cwd: origin })
+    const agent = await f.harness.create(brandString<SessionId>('removed-origin'), {}, { cwd: origin })
     await rm(origin, { recursive: true })
     await expect(f.ctx.workingDirectory.ensure(agent)).rejects.toThrow('directory does not exist')
+    await expect(f.ctx.workingDirectory.ensure(agent)).rejects.toMatchObject({
+      name: 'WorkingDirectoryError',
+      code: 'WORKING_DIRECTORY_UNAVAILABLE',
+      message: expect.stringContaining('is also unavailable') as string,
+    })
     await expect(f.ctx.workingDirectory.set(agent, f.root)).resolves.toBe(f.root)
   })
 
@@ -122,7 +128,9 @@ describe('Session working directories', () => {
     await using f = await fixture()
     await writeFile(join(f.root, 'file'), '')
     await expect(f.ctx.workingDirectory.set(f.agent, 'file')).rejects.toThrow('directory does not exist')
+    await expect(f.ctx.workingDirectory.set(f.agent, 'file')).rejects.toMatchObject({ name: 'WorkingDirectoryError', code: 'WORKING_DIRECTORY_NOT_FOUND' })
     await expect(f.ctx.workingDirectory.set(f.agent, '')).rejects.toThrow('cd must not be empty')
+    await expect(f.ctx.workingDirectory.set(f.agent, '')).rejects.toMatchObject({ name: 'WorkingDirectoryError', code: 'WORKING_DIRECTORY_INVALID' })
     const controller = new AbortController()
     controller.abort(new Error('cancelled directory change'))
     await expect(f.ctx.workingDirectory.set(f.agent, f.root, controller.signal)).rejects.toThrow('cancelled directory change')
@@ -151,7 +159,7 @@ describe('Session working directories', () => {
 
   it('uses and records the configured launch fallback for a Session without origin metadata', async () => {
     await using f = await fixture()
-    const agent = await f.harness.create(SessionId('without-origin'))
+    const agent = await f.harness.create(brandString<SessionId>('without-origin'))
     const fallback = f.ctx.workingDirectory.defaultDirectory
     await expect(f.ctx.workingDirectory.ensure(agent)).resolves.toBe(fallback)
     expect(agent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
@@ -165,7 +173,7 @@ describe('Session working directories', () => {
 
   it('recovers a Session without origin metadata to its configured default', async () => {
     await using f = await fixture(root => ({ defaultDirectory: root }))
-    const agent = await f.harness.create(SessionId('fallback-recovery'))
+    const agent = await f.harness.create(brandString<SessionId>('fallback-recovery'))
     const temporary = join(f.root, 'temporary')
     await mkdir(temporary)
     await f.ctx.workingDirectory.set(agent, temporary)
@@ -277,6 +285,7 @@ describe('Session working directories', () => {
       expect(f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change')).toEqual([])
       expect(f.harness.claim(f.agent, 'next-step', 1)).toEqual([])
       await expect(directories.ensure(f.agent)).rejects.toThrow('working-directory service disposed')
+      await expect(directories.ensure(f.agent)).rejects.toMatchObject({ name: 'WorkingDirectoryError', code: 'WORKING_DIRECTORY_UNAVAILABLE' })
       expect(probe).toHaveBeenCalledOnce()
     } finally {
       release.resolve(undefined)
@@ -325,7 +334,7 @@ describe('Session working directories', () => {
       expect(f.ctx.workingDirectory.get(f.agent.session)).toBe(child)
       expect(warn).toHaveBeenCalledWith(`working-directory: committed ${JSON.stringify(child)}, but could not queue its notice: Error: inbox unavailable`)
       const restored = await f.ctx.agents.create({
-        sessionId: SessionId('notice-failure-restored'),
+        sessionId: brandString<SessionId>('notice-failure-restored'),
         seed: f.agent.session.snapshotEvents(),
         meta: { cwd: f.root },
       })
@@ -347,12 +356,23 @@ describe('Session working directories', () => {
     const fiber = f.ctx.plugin(WorkingDirectoryTool)
     await fiber
     const execute = (arguments_: { cd?: string }, withAgent = true) => executeToolFixture(f.ctx, {
-      name: 'working_directory', callId: ToolCallId('directory-call'), arguments: arguments_,
+      name: 'working_directory', callId: brandString<ToolCallId>('directory-call'), arguments: arguments_,
       signal: new AbortController().signal, ...withAgent ? { agent: f.agent } : {},
     })
     expect(await execute({})).toMatchObject({ value: { cwd: f.root }, isError: false })
     expect(await execute({ cd: 'child' })).toMatchObject({ value: { cwd: join(f.root, 'child') }, isError: false })
-    expect(await execute({}, false)).toMatchObject({ isError: true })
+    expect(await execute({}, false)).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
+    })
+    expect(await execute({ cd: '' })).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    })
+    expect(await execute({ cd: 'missing' })).toMatchObject({
+      isError: true,
+      error: { info: { name: 'WorkingDirectoryError', code: 'WORKING_DIRECTORY_NOT_FOUND' } },
+    })
     await fiber.dispose()
     expect(f.ctx.tools.schemas().some(tool => tool.name === 'working_directory')).toBe(false)
   })

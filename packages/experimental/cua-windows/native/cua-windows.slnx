@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="desktop-tests/DesktopFixture.csproj" />
+  <Project Path="protocol/CuaProtocol.csproj" />
+  <Project Path="tests/Protocol.Tests.csproj" />
+  <Project Path="entry/CuaWindows.csproj" />
+</Solution>

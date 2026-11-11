@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -16,6 +16,7 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const dirs: string[] = []
 afterEach(async () => { for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true }) })
@@ -53,7 +54,7 @@ async function mount(order: 'backend-first' | 'loop-first'): Promise<{ ctx: Cont
 describe.each(['backend-first', 'loop-first'] as const)('root shutdown drain (%s)', (order) => {
   it('persists buffered turn events without an explicit flush before dispose', async () => {
     const { ctx, root } = await mount(order)
-    const sessionId = SessionId('shutdown-drain')
+    const sessionId = brandString<SessionId>('shutdown-drain')
     const handle = await ctx.agents.create({ sessionId, agentOptions: { provider: 'mock', model: 'mock' } })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'q' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, handle.agent)
