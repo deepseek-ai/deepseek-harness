@@ -26,7 +26,7 @@ import { createProcessDeepSeekHarness } from '../../../sdk/client/src/api.ts'
 import type { RuntimeProcessOptions } from '../../../sdk/client/src/launch.ts'
 import type { DeepSeekHarnessOptions } from '@deepseek-ai/dsh-sdk-client'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import * as sdk from '../src/index.ts'
 import {
   DEFAULT_DISPOSE_EOF_GRACE_MS,

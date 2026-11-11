@@ -14,7 +14,7 @@ import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
 import type { Context } from '@deepseek-ai/cordis'
 import { expect, it, onTestFinished } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { defineTool, type ToolExecutor } from '@deepseek-ai/dsh-tools'
 import { agentOn, declare, harness } from './harness.ts'
 

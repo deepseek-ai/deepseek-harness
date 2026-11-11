@@ -15,7 +15,7 @@ import type {
   WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult, WorkflowRun,
   WorkflowStartRequest,
 } from '@deepseek-ai/dsh-workflow'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { JobId } from '@deepseek-ai/dsh-jobs'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'

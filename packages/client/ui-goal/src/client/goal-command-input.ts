@@ -1,6 +1,5 @@
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
-import type {} from '@deepseek-ai/dsh-commands/types'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import type {
   ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
