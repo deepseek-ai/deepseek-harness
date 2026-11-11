@@ -32,12 +32,7 @@ Review comments capture the file, side, range, complete hunk, and reviewed head 
 
 ## Deferred
 
-A left-navigation review page next to Plugins and Scheduled tasks, listing the user's pull requests or merge requests on the selected provider, is deferred. It attaches without changing this package's Session surfaces:
-
-- **Provider capability** — an optional `ForgeProvider` method such as `listForViewer(host, filter, signal)` returns change request references; GitHub implements it with `gh search prs --author @me` or the GraphQL `viewer`, and the registry aggregates enabled providers.
-- **Remote** — a stream like `follow` that is keyed by provider and filter instead of a Session and polls through the same `ctx.forge.watch`.
-- **Client** — a `sidebar.panellist` entry with a `main` page in this package, as `ui-schedule` does, rendering `ChangeRequestCard`, which takes a change request, its snapshot, and optional actions.
-- **Settings** — provider choice and hosts on the bundle's configuration page.
+The left-navigation review page this section deferred is implemented as the [code review page](2026-11-11-forge-review-page.md); its lists come from an optional provider capability and its page reads change requests by URL, so this package's Session surfaces did not change.
 
 The changes view offers no scope for one commit or for the last turn yet; both would be further `ForgeLocalScope` kinds read through `localDiff`.
 

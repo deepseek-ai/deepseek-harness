@@ -1355,6 +1355,12 @@ interface ForgeLocalChanges {
 }
 ```
 
+### 代码评审页
+
+[代码评审页](../../packages/experimental/client-ui-forge/README.zh.md#use-this-package)按 URL 读取变更请求，而不经过会话绑定。它的 `forgePanel` 方法（`reviewLists`、`reviewCount`、`reviewChangeRequest`、`reviewDescription`，以及与会话绑定版本对应的各个 `review*` 读取与操作）用 `ForgeService.changeRequestFromUrl` 解析 URL，没有提供方能处理时以 `forgePanel/unrecognized-url` 失败；它们不指向任何会话资源，因此只有可以使用 Host 代码托管凭据的调用方能访问。一个列表中心只在列表流或计数流存在时读取[登录用户的列表](#viewer-lists-and-descriptions)：同一仓库范围的流共用一个读取器，它每隔 `reviewListIntervalMs` 读取每个主机的每个列表，各主机并行、同一主机的列表依次读取；某主机拒绝当前用户或触发限流时，本轮不再读取它的其余列表；连续失败的轮次按 `reviewMaxBackoffMs` 为上限退避。计数每隔 `reviewCountIntervalMs` 读取一次，全部仓库范围的列表读取也会更新它。`reviewLists` 流式返回 `ForgeReviewFrame`，含每个主机的列表、最近一次成功读取的条目以及最近一次读取的失败；`reviewCount` 流式返回 `ForgeReviewCountFrame`；`reviewChangeRequest` 为显示中的变更请求流式返回 `ForgeReviewChangeRequest`，该变更请求在其流存在期间经 `ForgeService.watch` 轮询。
+
+对话标签在 `connectWorkspace` 解析出的空白会话中开始，并用 `reviewStage` 记录该变更请求；Host 只在内存中保存这个选择，等该会话的下一条消息进入收件箱时再绑定，因此未使用的空白会话保持未绑定。
+
 <a id="extension-api"></a>
 
 ## 扩展 API
@@ -1830,6 +1836,232 @@ Serves the forge panel. Following a Session inspects the checkout of its current
  * @throws when the Host lacks the Session query, projection cache, storage, or Session store service.
  */
 @Remote({ mode: 'stream' }) async *changeRequestStates(signal: AbortSignal): AsyncIterable<ForgeChangeRequestStatesFrame>
+
+/**
+ * Stream the review page's lists of the signed-in user's open change requests on every host a provider lists them on:
+ * the lists read so far first, then a frame after each read settles. Readers of one repository scope share one
+ * reader, which reads every `reviewListIntervalMs` while some stream lasts and backs off after failed rounds up to
+ * `reviewMaxBackoffMs`; nothing is read while no stream lasts. The stream ends when `signal` aborts or the Remote stops.
+ * @param repository - one repository to list in, or null for every repository the user can read.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ */
+@Remote({ mode: 'stream' }) async *reviewLists( repository: { readonly owner: string; readonly name: string } | null, signal: AbortSignal, ): AsyncIterable<ForgeReviewFrame>
+
+/**
+ * Stream the number of open change requests that ask the signed-in user for a review, summed over the hosts read:
+ * the latest count first, then each change. It is read every `reviewCountIntervalMs` while some stream lasts, and a
+ * list stream of every repository updates it as well. The stream ends when `signal` aborts or the Remote stops.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ */
+@Remote({ mode: 'stream' }) async *reviewCount(signal: AbortSignal): AsyncIterable<ForgeReviewCountFrame>
+
+/**
+ * Read every streamed review page list and the count again at once.
+ * @param signal - request cancellation.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewRefresh(signal: AbortSignal): Promise<void>
+
+/**
+ * Poll one change request the review page shows at once; its stream reports the result.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewPoll(url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Stream one change request the review page shows in full: its latest polling result first, then each later result
+ * and each review change `forge/review-changed` announces for it. The change request is polled through `ctx.forge`
+ * while the stream lasts. Review page reads and actions name a change request by URL and need no Session binding, so
+ * only callers that may use the Host's code host credentials reach them.
+ * @param url - web URL of the change request.
+ * @param signal - ends the stream.
+ * @returns frames, each complete.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote({ mode: 'stream' }) async *reviewChangeRequest(url: string, signal: AbortSignal): AsyncIterable<ForgeReviewChangeRequest>
+
+/**
+ * Read the description and labels of a change request for the review page.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the description.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/description-failed` with the
+ * host's reason when the host does not provide it.
+ */
+@Remote async reviewDescription(url: string, signal: AbortSignal): Promise<ChangeRequestDescription>
+
+/**
+ * Read every check of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit whose checks the page shows.
+ * @param signal - request cancellation.
+ * @returns the snapshot with every check.
+ * @throws as {@link ForgePanelController.changeRequestChecks} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewChecks(url: string, headSha: string, signal: AbortSignal): Promise<ChangeRequestSnapshot>
+
+/**
+ * Read the review threads of a change request the review page shows, at the head of its latest status.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit the page shows.
+ * @param fresh - whether to read from the host even when threads at this head and update time are kept.
+ * @param signal - request cancellation.
+ * @returns the threads at `headSha`.
+ * @throws as {@link ForgePanelController.changeRequestReview} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewThreads(url: string, headSha: string, fresh: boolean, signal: AbortSignal): Promise<ForgeReviewData>
+
+/**
+ * Write to the review threads or the pending review of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param write - the write and the head commit the user saw.
+ * @param signal - request cancellation.
+ * @returns whether the host took the write, as {@link ForgePanelController.changeRequestReviewWrite} does.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid write.
+ */
+@Remote async reviewThreadWrite(url: string, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>
+
+/**
+ * Publish a line comment or a completed review on a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - reviewed head, ranges, plain text, and explicit review decision.
+ * @param signal - request cancellation.
+ * @returns confirmed publication or a typed failure, as {@link ForgePanelController.submitReview} does.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; an error for an invalid review.
+ */
+@Remote async reviewSubmit(url: string, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>
+
+/**
+ * Read the changes of a change request the review page shows, or of consecutive commits of it.
+ * @param url - web URL of the change request.
+ * @param commits - consecutive commits of the change request, or null for all of it.
+ * @param signal - request cancellation.
+ * @returns the files and the commit they end at, without a local checkout count.
+ * @throws as {@link ForgePanelController.changeRequestDiff} does, with `forgePanel/unrecognized-url` in place of
+ * `forgePanel/not-bound`.
+ */
+@Remote async reviewDiff(url: string, commits: ForgeCommitRange | null, signal: AbortSignal): Promise<ForgeChangeRequestDiff>
+
+/**
+ * List the commits of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @returns the commits, or null when the provider does not read commits.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-failed` when the host does
+ * not list them.
+ */
+@Remote async reviewCommits(url: string, signal: AbortSignal): Promise<ForgeCommitList | null>
+
+/**
+ * Read one file of a change request's repository at a commit for the review page.
+ * @param url - web URL of the change request.
+ * @param commit - commit object name.
+ * @param path - path relative to the repository root.
+ * @param signal - request cancellation.
+ * @returns the text.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/diff-too-large` or
+ * `forgePanel/diff-failed` when the host does not provide the file.
+ */
+@Remote async reviewText(url: string, commit: string, path: string, signal: AbortSignal): Promise<string>
+
+/**
+ * Read the signed-in user's viewed marks on the files of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param headSha - head commit of the shown diff.
+ * @param signal - request cancellation.
+ * @returns the marks, or null when the provider keeps no viewed marks.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head` or
+ * `forgePanel/viewed-failed` as {@link ForgePanelController.changeRequestViewed} does.
+ */
+@Remote async reviewViewed(url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>
+
+/**
+ * Set or clear the signed-in user's viewed mark on one file of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - the file, its mark, and the head commit of the shown diff.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; the action errors of
+ * {@link ForgePanelController.setFileViewed}.
+ */
+@Remote async reviewSetViewed(url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void>
+
+/**
+ * Mark a draft change request the review page shows ready for review.
+ * @param url - web URL of the change request.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or
+ * `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewMarkReady(url: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Merge a change request the review page shows while its head is still `headSha`.
+ * @param url - web URL of the change request.
+ * @param method - how the commits enter the base branch.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewMerge(url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Rerun the failed checks of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param request - the head commit whose checks the user saw.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewRerunChecks(url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void>
+
+/**
+ * Request reviews of a change request the review page shows from more reviewers.
+ * @param url - web URL of the change request.
+ * @param reviewers - the reviewers to ask, by kind and login.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/action-failed` or
+ * `forgePanel/action-unknown` with the host's reason; an error without reviewers.
+ */
+@Remote async reviewRequestReviews(url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal): Promise<void>
+
+/**
+ * List accounts a review of a change request the review page shows can be requested from.
+ * @param url - web URL of the change request.
+ * @param query - text the login or name contains; empty for the host's suggestions.
+ * @param signal - request cancellation.
+ * @returns the accounts, the host's suggestions first.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/reviewers-failed` when the host
+ * does not list them.
+ */
+@Remote async reviewReviewerCandidates(url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]>
+
+/**
+ * Bring the base branch's new commits into the head branch of a change request the review page shows.
+ * @param url - web URL of the change request.
+ * @param method - merge or rebase.
+ * @param headSha - head commit the user confirmed.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL; `forgePanel/stale-head`,
+ * `forgePanel/action-failed`, or `forgePanel/action-unknown` with the host's reason.
+ */
+@Remote async reviewUpdateBranch(url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Remember the change request a review conversation's draft quotes, or forget it with null. When the Session's next
+ * message enters its inbox, the change request is bound to the Session with a `track` record before the turn starts;
+ * a Session that already started is bound at its next message. The choice lives in memory until then.
+ * @param session - the Session whose draft quotes the change request.
+ * @param url - web URL of the change request, or null.
+ * @param signal - request cancellation.
+ * @throws `forgePanel/unrecognized-url` when no provider serves the URL.
+ */
+@Remote // oxlint-disable-next-line typescript/require-await -- async keeps a refused or cancelled request a rejection, as Remote callers expect async reviewStage(session: Session, url: string | null, signal: AbortSignal): Promise<void>
 
 /**
  * Read or await the worktree service's archive cleanup of the Session's checkout.

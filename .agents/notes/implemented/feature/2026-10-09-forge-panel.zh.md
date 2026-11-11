@@ -32,12 +32,7 @@ Session 所在的 worktree 可能在 Session 之外被删除。每次检查都�
 
 ## Deferred
 
-在左侧导航“插件”“自动化任务”旁边新增代码审查页、列出用户在所选提供方上的 pull request 或 merge request，这项工作推迟。它的接入不需要改动本包面向 Session 的界面：
-
-- **提供方能力**——`ForgeProvider` 增加一个可选方法，例如 `listForViewer(host, filter, signal)`，返回变更请求引用；GitHub 用 `gh search prs --author @me` 或 GraphQL `viewer` 实现，注册表汇总已启用的提供方。
-- **Remote**——一条类似 `follow` 的流，以提供方与筛选条件而不是 Session 为键，通过同一个 `ctx.forge.watch` 轮询。
-- **客户端**——在本包中以 `sidebar.panellist` 条目加一个 `main` 页面实现（与 `ui-schedule` 相同），渲染接收变更请求、其快照与可选操作的 `ChangeRequestCard`。
-- **设置**——在套件的配置页中选择提供方与主机。
+本节曾暂缓的左侧导航代码审查页已实现为[代码评审页](2026-11-11-forge-review-page.zh.md)；它的列表来自可选的提供方能力，页面按 URL 读取变更请求，因此本包的会话界面没有改变。
 
 变更视图目前还没有单个提交与上一轮的范围；两者将是经 `localDiff` 读取的更多 `ForgeLocalScope` 种类。
 

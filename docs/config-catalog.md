@@ -1133,7 +1133,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:483`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:539`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1188,6 +1188,14 @@ export interface Config {
   maxCachedLensBytes?: number
   /** Most line annotations a changes view shows in one file, across every annotation source. */
   maxAnnotationsPerFile?: number
+  /** Milliseconds between two reads of the review page's lists while the page is open. */
+  reviewListIntervalMs?: number
+  /** Milliseconds between two reads of the review page's navigation count while it is shown. */
+  reviewCountIntervalMs?: number
+  /** Largest delay in milliseconds between two reads of the review page's lists or count after consecutive failures. */
+  reviewMaxBackoffMs?: number
+  /** Most change requests one review page list shows, capped by each provider's own limit. */
+  reviewPageSize?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
