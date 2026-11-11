@@ -47,17 +47,20 @@ export function observeReferences(ctx: Context, timeoutMs: number, record: (sess
   ctx.inject(['tools', 'shell', 'shellEnv'], (scope) => {
     const lifetime = new AbortController()
     const tasks = new Set<Promise<void>>()
-    /** Lookups of settled program calls, keyed by the token of the call that encloses them. */
+    /**
+     * Lookups of settled program calls, keyed by the token of the call that
+     * encloses them. The tools pipeline publishes `tools/result` for every
+     * execution it completes, error and cancellation included, so an enclosing
+     * call takes its entries when it settles; scope disposal drops the rest.
+     */
     const queued = new Map<ToolExecutionToken, Lookup[]>()
     scope.effect(() => async () => {
       lifetime.abort()
       await Promise.allSettled(tasks)
     }, 'forge-session: stop reference lookups')
     scope.on('tools/result', (exec, result) => {
-      const lookups = queued.get(exec.token) ?? []
+      const lookups = [...queued.get(exec.token) ?? [], ...prepare(exec, result)]
       queued.delete(exec.token)
-      const own = prepare(exec, result)
-      if (own !== undefined) lookups.push(own)
       if (lookups.length === 0) return
       if (exec.parent !== undefined) {
         queued.set(exec.parent, [...queued.get(exec.parent) ?? [], ...lookups])
@@ -68,15 +71,21 @@ export function observeReferences(ctx: Context, timeoutMs: number, record: (sess
       void task.then(() => tasks.delete(task))
     })
 
-    function prepare(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): Lookup | undefined {
-      if (exec.name !== 'bash' || exec.agent === undefined || result.isError) return undefined
+    /**
+     * List the lookups one settled call needs, in command order: none unless
+     * it is a completed foreground Bash call of an Agent whose output prints
+     * no URL of its own change request.
+     */
+    function prepare(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>): Lookup[] {
+      if (exec.name !== 'bash' || exec.agent === undefined || result.isError) return []
       const argumentsResult = shellArguments.safeParse(exec.arguments)
       const shell = completedShell.safeParse(result.value)
-      if (!argumentsResult.success || !shell.success) return undefined
+      if (!argumentsResult.success || !shell.success) return []
       const printed = result.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-      if (ownChangeRequestUrls(printed).length > 0) return undefined
-      const [command] = ghReferences(argumentsResult.data.command).flatMap(reference => reference.lookup === null ? [] : [reference.lookup])
-      return command === undefined ? undefined : { exec, session: exec.agent.session, command, cwd: shell.data.cwd }
+      if (ownChangeRequestUrls(printed).length > 0) return []
+      const session = exec.agent.session
+      return ghReferences(argumentsResult.data.command)
+        .flatMap(reference => reference.lookup === null ? [] : [{ exec, session, command: reference.lookup, cwd: shell.data.cwd }])
     }
 
     /** Run lookups in call order; a failed lookup is logged and does not stop the next one. */

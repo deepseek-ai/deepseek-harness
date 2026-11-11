@@ -21,6 +21,9 @@
       "path": "../forge"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../core/session"
     },
     {

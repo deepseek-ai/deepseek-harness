@@ -1,6 +1,7 @@
 /** Projection that folds shell results, program shell dispatches, and binding records into one Session's change request bindings. */
 
 import { z } from 'zod'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -123,7 +124,7 @@ function applyDispatch(state: ForgeChangeRequestsState, dispatch: SessionEventMa
 }
 
 /** Text blocks of a rendered shell result, joined by newlines. */
-function textOf(content: Readonly<SessionEventMap['tool/ptc-dispatch']['content']>): string {
+function textOf(content: readonly ContentBlock[]): string {
   return content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
 }
 
