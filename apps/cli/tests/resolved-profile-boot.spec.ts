@@ -10,8 +10,8 @@ import {
   PluginPackages, type Profile,
 } from '@deepseek-ai/dsh-app-boot'
 import { installProxyFromEnvironment } from '@deepseek-ai/dsh-http-proxy'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runProfile } from '../src/profile-boot.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runProfile, userAgentProfile } from '../src/profile-boot.ts'
 
 vi.mock('@deepseek-ai/dsh-app-boot', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@deepseek-ai/dsh-app-boot')>()
@@ -25,6 +25,8 @@ vi.mock('@deepseek-ai/dsh-app-boot', async (importOriginal) => {
 vi.mock('@deepseek-ai/dsh-http-proxy', () => ({ installProxyFromEnvironment: vi.fn() }))
 
 const homes: string[] = []
+// runProfile writes the suffix into process.env; stubbing first lets afterEach restore it.
+beforeEach(() => { vi.stubEnv('DSH_USER_AGENT_SUFFIX', undefined) })
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -171,5 +173,42 @@ describe('runProfile with an application-owned profile', () => {
       await ctx.fiber.dispose()
       process.exitCode = oldExitCode
     }
+  })
+})
+
+describe('profile User-Agent suffix', () => {
+  it.each([
+    ['web', 'web'],
+    ['sdk-minimal', 'sdk-minimal'],
+    ['my web/v2', 'my%20web%2Fv2'],
+    ['工作', '%E5%B7%A5%E4%BD%9C'],
+    ['a(b)%', 'a%28b%29%25'],
+  ])('encodes %j as %j', (name, encoded) => {
+    expect(userAgentProfile(name)).toBe(encoded)
+  })
+
+  it('names the profile before any plugin loads', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'dsh-profile-user-agent-'))
+    homes.push(home)
+    mkdirSync(join(home, 'runtime'))
+    writeFileSync(join(home, 'runtime/package.json'), '{"name":"test-runtime","version":"1.0.0"}')
+    writeFileSync(join(home, 'package.json'), '{"name":"test-bundle","version":"1.0.0"}')
+    vi.stubEnv('DSH_HOME', home)
+    vi.spyOn(process, 'on').mockReturnValue(process)
+    vi.mocked(installProxyFromEnvironment).mockResolvedValue(async () => {})
+    const failure = new Error('stop after observing the environment')
+    let seen: string | undefined
+    vi.mocked(boot).mockImplementation(() => {
+      seen = process.env.DSH_USER_AGENT_SUFFIX
+      return Promise.reject(failure)
+    })
+    const profile: Profile = { skippedBundles: [],
+      name: 'my web', dir: home, patchPath: join(home, 'cordis.patch.yml'), patches: [], layers: [],
+    }
+    await expect(runProfile({
+      environment: createLaunchEnvironmentSnapshot([]), profile: 'my web', patchFiles: [], args: [],
+      resolvedProfile: { profile, installAnchor: join(home, 'runtime/package.json') },
+    })).rejects.toBe(failure)
+    expect(seen).toBe('dsh-profile/my%20web')
   })
 })
