@@ -45,6 +45,9 @@ importers:
       '@deepseek-ai/dsh-cua-bundle':
         specifier: workspace:*
         version: link:packages/experimental/cua-bundle
+      '@deepseek-ai/dsh-cua-macos':
+        specifier: workspace:*
+        version: link:packages/experimental/cua-macos
       '@deepseek-ai/dsh-cua-windows':
         specifier: workspace:*
         version: link:packages/experimental/cua-windows
@@ -69,9 +72,6 @@ importers:
       '@deepseek-ai/dsh-experimental-computer-use-cua-driver-native':
         specifier: workspace:*
         version: link:packages/experimental/computer-use-cua-driver-native
-      '@deepseek-ai/dsh-experimental-cua-macos':
-        specifier: workspace:*
-        version: link:packages/experimental/cua-macos
       '@deepseek-ai/dsh-experimental-forge':
         specifier: workspace:*
         version: link:packages/experimental/forge
@@ -10067,12 +10067,12 @@ importers:
         specifier: ^4.2.0
         version: 4.3.2
     optionalDependencies:
+      '@deepseek-ai/dsh-cua-macos':
+        specifier: workspace:*
+        version: link:../cua-macos
       '@deepseek-ai/dsh-cua-windows':
         specifier: workspace:*
         version: link:../cua-windows
-      '@deepseek-ai/dsh-experimental-cua-macos':
-        specifier: workspace:*
-        version: link:../cua-macos
 
   packages/experimental/cua-macos:
     dependencies:

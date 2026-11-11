@@ -886,6 +886,38 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-credentials-local -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-macos -->
+<a id="deepseek-aidsh-cua-macos"></a>
+
+## `@deepseek-ai/dsh-cua-macos`
+
+- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+- `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
+- `source`: [`packages/experimental/cua-macos/src/index.ts:34`](../packages/experimental/cua-macos/src/index.ts)
+
+```ts config-catalog
+/** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
+export interface Config extends CuaConfig {
+  /** Interval in milliseconds between permission and position checks while the native guide is open. */
+  permissionPollIntervalMs: number
+  /**
+   * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
+   * an object selects an existing certificate in an explicitly configured keychain.
+   * Installed packages and `helperPath` keep their own signature.
+   */
+  sourceSigning: SourceSigning
+}
+
+/** Signature selected for source builds; certificates are created and unlocked by the developer. */
+export type SourceSigning = 'ad-hoc' | {
+  /** Existing codesign certificate name or SHA-1 fingerprint, without a leading dash or whitespace. */
+  identity: string
+  /** Absolute keychain path. */
+  keychain: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-macos -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
 <a id="deepseek-aidsh-cua-windows"></a>
 
@@ -1183,38 +1215,6 @@ export interface Config {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp -->
-
-<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
-<a id="deepseek-aidsh-experimental-cua-macos"></a>
-
-## `@deepseek-ai/dsh-experimental-cua-macos`
-
-- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
-- `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
-- `source`: [`packages/experimental/cua-macos/src/index.ts:34`](../packages/experimental/cua-macos/src/index.ts)
-
-```ts config-catalog
-/** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
-export interface Config extends CuaConfig {
-  /** Interval in milliseconds between permission and position checks while the native guide is open. */
-  permissionPollIntervalMs: number
-  /**
-   * Source-build signing: `ad-hoc` (default) binds grants to the code hash;
-   * an object selects an existing certificate in an explicitly configured keychain.
-   * Installed packages and `helperPath` keep their own signature.
-   */
-  sourceSigning: SourceSigning
-}
-
-/** Signature selected for source builds; certificates are created and unlocked by the developer. */
-export type SourceSigning = 'ad-hoc' | {
-  /** Existing codesign certificate name or SHA-1 fingerprint, without a leading dash or whitespace. */
-  identity: string
-  /** Absolute keychain path. */
-  keychain: string
-}
-```
-<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-cua-macos -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-forge -->
 <a id="deepseek-aidsh-experimental-forge"></a>

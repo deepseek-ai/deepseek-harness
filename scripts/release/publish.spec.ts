@@ -317,7 +317,7 @@ describe('release publication channels', () => {
 
 it('verifies helper sources from the repository root when publication is invoked from a subdirectory', async () => {
   const fixture = packedRelease(['1.0.0'])
-  vi.mocked(packedIdentity).mockReturnValue({ name: '@deepseek-ai/dsh-experimental-cua-macos', version: '1.0.0' })
+  vi.mocked(packedIdentity).mockReturnValue({ name: '@deepseek-ai/dsh-cua-macos', version: '1.0.0' })
   vi.mocked(verifyCuaHelperTarball).mockResolvedValue(undefined)
   registry()
   const root = resolve(import.meta.dirname, '../..')

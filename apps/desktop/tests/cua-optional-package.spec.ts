@@ -9,7 +9,7 @@ import { expect, it, onTestFinished } from 'vitest'
 import { pnpmCommand } from '../../../scripts/release/process.ts'
 
 const repository = resolve(import.meta.dirname, '../../..')
-const providerName = '@deepseek-ai/dsh-experimental-cua-macos'
+const providerName = '@deepseek-ai/dsh-cua-macos'
 const windowsProvider = '@deepseek-ai/dsh-cua-windows'
 const bundleName = '@deepseek-ai/dsh-cua-bundle'
 const readManifest = async (path: string): Promise<Record<string, unknown>> =>

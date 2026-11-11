@@ -26,7 +26,7 @@ it.skipIf(process.platform !== 'darwin').each([
   try {
     const patch = join(directory, 'native-fixture.yml')
     // Permission inspection fails against this non-helper executable; activation still permits dismissing setup.
-    await writeFile(patch, JSON.stringify([{ id: 'cua', config: { helperPath: process.execPath } }]))
+    await writeFile(patch, JSON.stringify([{ id: 'cua-macos', config: { helperPath: process.execPath } }]))
     const defaults = join(directory, 'script-defaults')
     if (script) {
       await mkdir(defaults)
