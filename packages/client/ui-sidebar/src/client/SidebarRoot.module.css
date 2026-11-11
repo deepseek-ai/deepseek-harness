@@ -661,6 +661,43 @@
   outline-offset: -2px;
 }
 
+/* A panel's trailing content: at the row's trailing edge, where the unpin action shows instead while the row is
+   hovered or focused, and over the icon's top trailing corner on the collapsed rail. It never takes pointer input. */
+.panelTrailing {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  display: inline-flex;
+  align-items: center;
+  transform: translateY(-50%);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.panelTrailing:empty {
+  display: none;
+}
+
+.collapsed .panelTrailing {
+  right: 5px;
+  top: 5px;
+  transform: none;
+}
+
+@media (hover: hover) {
+  .panelEntry:has(.panelUnpin):hover .panelTrailing,
+  .panelEntry:has(.panelUnpin):has(:focus-visible) .panelTrailing { visibility: hidden; }
+}
+
+/* Without hover the unpin action shows continuously, so the trailing content sits beside it and the title yields room. */
+@media (hover: none) {
+  .panelEntry:has(.panelUnpin) .panelTrailing { right: 38px; }
+  .panelEntryWide:has(.panelUnpin):has(.panelTrailing:not(:empty)) .panelRow { padding-right: 72px; }
+}
+
 @media (hover: hover) {
   .panelUnpin { opacity: 0; }
   .panelEntry:hover { background-color: var(--dsw-alias-interactive-bg-hover); }
