@@ -3,10 +3,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import z from 'zod'
-import { CliAccountRuntime, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
+import { CliAccountRuntime, exitFailure, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { parseJson } from './cli.ts'
-import { commandFailure } from './diagnostic.ts'
 import type { FeishuAccountState, FeishuAppId, FeishuOperationFailure, FeishuOperationKind, FeishuPhase } from './types.ts'
 
 const NotConfigured = z.object({ ok: z.literal(false), error: z.object({ subtype: z.literal('not_configured') }) })
@@ -42,7 +41,7 @@ export class FeishuAccount extends CliAccountRuntime<FeishuAccountState, FeishuO
       check: 'check',
       cancellable: ['configuring', 'authorizing'],
       authorizationHosts: ['feishu.cn', 'larksuite.com'],
-      classify: commandFailure,
+      classify: exitFailure,
     })
   }
 

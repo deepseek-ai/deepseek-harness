@@ -76,12 +76,10 @@ function appNotes(appId: FeishuAppId): ConnectorAccountNote[] {
   }]
 }
 
-/** The last failed operation's guidance, with its command, exit code, and the CLI's classified error. */
+/** The last failed operation's guidance, with its command and exit code. */
 function failureOf(result: FeishuState['result']): { failure?: ConnectorAccountFailure } {
   if (result?.outcome !== 'failed') return {}
-  const failure = result.failure
-  const classified = failure === undefined ? [] : [failure.type, failure.subtype].filter(item => item !== undefined)
-  const details = failure === undefined ? [] : [...failureDetails(failure), ...classified]
+  const details = result.failure === undefined ? [] : failureDetails(result.failure)
   return { failure: { text: text(result.kind === 'link-app' ? 'failed.linkApp' : 'failed'), ...details.length === 0 ? {} : { details } } }
 }
 

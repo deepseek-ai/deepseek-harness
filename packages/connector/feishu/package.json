@@ -30,6 +30,7 @@
     "docs",
     "lib/index.js",
     "cordis.patch.yml",
+    "skills",
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
@@ -44,6 +45,7 @@
   "dependencies": {
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-cli-account": "workspace:*",
+    "@deepseek-ai/dsh-skill-filesystem": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "@larksuite/cli": "1.0.97",

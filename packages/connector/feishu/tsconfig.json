@@ -21,6 +21,9 @@
       "path": "../../util/values"
     },
     {
+      "path": "../../skill/skill-filesystem"
+    },
+    {
       "path": "../../skill/skill"
     },
     {

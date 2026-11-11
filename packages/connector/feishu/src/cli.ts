@@ -1,9 +1,9 @@
-/** Managed lark-cli location and JSON commands. */
+/** Managed lark-cli location and the JSON output of its commands. */
 
 import { accessSync, constants } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { executableFileName, type CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
 
 /** The name lark-cli's guides run it by. */
 export const PROGRAM = 'lark-cli'
@@ -24,37 +24,17 @@ export function resolveCliExecutable(binDir: string | undefined): string {
   return program
 }
 
-function commandLine(args: readonly string[]): string {
-  return [PROGRAM, ...args].join(' ')
-}
-
 /**
- * Parse one command's JSON stdout.
+ * Parse one command's JSON output.
  * @param args - the command's native arguments, for the error message.
- * @param stdout - the complete stdout.
+ * @param output - the complete stream the command wrote the JSON to.
  * @returns unvalidated JSON for the caller to check.
- * @throws when stdout is not JSON.
+ * @throws when the output is not JSON.
  */
-export function parseJson(args: readonly string[], stdout: string): unknown {
+export function parseJson(args: readonly string[], output: string): unknown {
   try {
-    return JSON.parse(stdout)
+    return JSON.parse(output)
   } catch (error) {
-    throw new Error(`${commandLine(args)} returned invalid JSON`, { cause: error })
+    throw new Error(`${[PROGRAM, ...args].join(' ')} returned invalid JSON`, { cause: error })
   }
-}
-
-/**
- * Run one command and parse its JSON stdout.
- * @param cli - the plugin's lark-cli executor.
- * @param args - native arguments without the executable.
- * @param signal - the caller's lifetime.
- * @returns unvalidated JSON for the caller to check.
- * @throws when the command fails, exits nonzero, or prints invalid JSON.
- */
-export async function runJson(cli: CliCommandExecutor, args: readonly string[], signal: AbortSignal): Promise<unknown> {
-  const result = await cli.run(args, signal)
-  if (result.exitCode !== 0) {
-    throw new Error(`${commandLine(args)} exited with ${String(result.exitCode)}${result.stderr.trim() === '' ? '' : `: ${result.stderr.trim()}`}`)
-  }
-  return parseJson(args, result.stdout)
 }

@@ -1,47 +1,33 @@
-import { Context } from '@deepseek-ai/cordis'
-import { CliCommandExecutor } from '@deepseek-ai/dsh-cli-account'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseJson, PROGRAM, runJson } from '../src/cli.ts'
-import { ScriptedSubprocess, type CliReply } from './harness.ts'
+import { constants } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { executableFileName } from '@deepseek-ai/dsh-cli-account'
+import { parseJson, resolveCliExecutable } from '../src/cli.ts'
 
-const EXECUTABLE = '/fixture/bin/lark-cli'
+const fs = vi.hoisted(() => ({ accessSync: vi.fn() }))
+vi.mock('node:fs', async importOriginal => ({ ...await importOriginal<typeof import('node:fs')>(), accessSync: fs.accessSync }))
 
-describe('lark-cli JSON commands', () => {
-  let ctx: Context
-  let subprocess: ScriptedSubprocess
+const PACKAGE_BIN = join(dirname(fileURLToPath(import.meta.resolve('@larksuite/cli/package.json'))), 'bin')
+const FILE = executableFileName('lark-cli')
 
-  beforeEach(async () => {
-    ctx = new Context()
-    await ctx.plugin(ScriptedSubprocess)
-    subprocess = ctx.subprocess as ScriptedSubprocess
-  })
+beforeEach(() => {
+  fs.accessSync.mockReset()
+})
 
-  afterEach(async () => {
-    await ctx.fiber.dispose()
-  })
+it('defaults to the executable in the installed @larksuite/cli bin directory', () => {
+  expect(resolveCliExecutable(undefined)).toBe(join(PACKAGE_BIN, FILE))
+  expect(fs.accessSync).toHaveBeenCalledWith(join(PACKAGE_BIN, FILE), constants.X_OK)
+})
 
-  const json = (reply: CliReply) => {
-    subprocess.respond = (process) => { process.reply(reply) }
-    const cli = new CliCommandExecutor(ctx.subprocess, { program: PROGRAM, executable: EXECUTABLE, commandTimeoutMs: 5_000 })
-    return runJson(cli, ['skills', 'list', '--json'], AbortSignal.timeout(5_000))
-  }
+it('accepts a configured directory and names the missing executable with the install remedy', () => {
+  expect(resolveCliExecutable('/opt/lark/bin')).toBe(join('/opt/lark/bin', FILE))
+  fs.accessSync.mockImplementation(() => { throw new Error('EACCES') })
+  expect(() => resolveCliExecutable(PACKAGE_BIN))
+    .toThrow(`feishu: ${join(PACKAGE_BIN, FILE)} is not executable; approve the @larksuite/cli install script or set binDir`)
+})
 
-  it('runs lark-cli and parses its stdout', async () => {
-    await expect(json({ stdout: '{"ok":\ntrue}\n' })).resolves.toEqual({ ok: true })
-    expect(subprocess.lookups.map(lookup => lookup.command)).toEqual([EXECUTABLE])
-    expect(subprocess.processes[0]?.spec.argv).toEqual([EXECUTABLE, 'skills', 'list', '--json'])
-  })
-
-  it.each([
-    [{ exitCode: 2, stderr: ' {"ok":false} \n' }, 'lark-cli skills list --json exited with 2: {"ok":false}'],
-    [{ exitCode: 1 }, /^lark-cli skills list --json exited with 1$/u],
-    [{ stdout: 'not json' }, 'lark-cli skills list --json returned invalid JSON'],
-  ])('names the command that failed %#', async (reply, message) => {
-    await expect(json(reply)).rejects.toThrow(message)
-  })
-
-  it('parses JSON a caller read from another stream', () => {
-    expect(parseJson(['auth', 'status'], '{"ok":false}')).toEqual({ ok: false })
-    expect(() => parseJson(['auth', 'status'], '')).toThrow('lark-cli auth status returned invalid JSON')
-  })
+it('parses a command\'s JSON output and names the command whose output is not JSON', () => {
+  expect(parseJson(['auth', 'status'], '{"ok":false}')).toEqual({ ok: false })
+  expect(() => parseJson(['auth', 'status'], '')).toThrow('lark-cli auth status returned invalid JSON')
 })

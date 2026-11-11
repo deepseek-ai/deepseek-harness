@@ -7612,6 +7612,9 @@ importers:
       '@deepseek-ai/dsh-cli-account':
         specifier: workspace:*
         version: link:../cli-account
+      '@deepseek-ai/dsh-skill-filesystem':
+        specifier: workspace:*
+        version: link:../../skill/skill-filesystem
       '@deepseek-ai/dsh-util-values':
         specifier: workspace:*
         version: link:../../util/values

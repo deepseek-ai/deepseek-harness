@@ -73,13 +73,13 @@ it('retries an unconfirmed sign-in by checking again', () => {
   expect(shown.buttons).toMatchObject([{ label: say('action.retry'), command: CHECK }])
 })
 
-it('reports app-link recovery with the command, exit code, and the CLI\'s classified error', () => {
+it('reports app-link recovery with the command and exit code', () => {
   let shown = presentAccount({
     ...UNCONFIGURED,
-    result: { id: OP, kind: 'link-app', outcome: 'failed', failure: { command: 'config-init', exitCode: 1, type: 'internal', subtype: 'sdk_error' } },
+    result: { id: OP, kind: 'link-app', outcome: 'failed', failure: { command: 'config-init', exitCode: 1 } },
   })
   expect(labels(shown)).toEqual([zh['action.linkApp']])
-  expect(shown.failure).toMatchObject({ text: say('failed.linkApp'), details: ['config-init', 'exit 1', 'internal', 'sdk_error'] })
+  expect(shown.failure).toMatchObject({ text: say('failed.linkApp'), details: ['config-init', 'exit 1'] })
 
   shown = presentAccount({ ...SIGNED_OUT, result: { id: OP, kind: 'link-app', outcome: 'failed', failure: { command: 'auth-status', exitCode: null } } })
   expect(labels(shown)).toEqual([zh['action.signIn']])

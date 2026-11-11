@@ -33,7 +33,6 @@ const visited = (name, done) => {
 }
 const line = (value) => { process.stdout.write(JSON.stringify(value) + '\\n') }
 switch (process.argv.slice(2).join(' ')) {
-  case 'skills list --json': line({ ok: true, skills: [] }); break
   case 'auth status --verify --json':
     if (!state.app) {
       process.stderr.write(JSON.stringify({ ok: false, error: { type: 'config', subtype: 'not_configured' } }))
@@ -119,7 +118,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: Feishu plugin connection
     await section.getByRole('button', { name: '关联飞书应用', exact: true }).click()
     await section.getByRole('alert').waitFor({ timeout: 20_000 })
     expect(await section.getAttribute('data-connector-account')).toBe('disconnected')
-    expect(await section.getByRole('alert').innerText()).toContain('internal · sdk_error')
+    expect(await section.getByRole('alert').innerText()).toContain('config-init · exit 5')
     expect(await section.getByRole('alert').innerText()).toContain('已有应用')
     expect(await section.innerText()).not.toContain('fixture-secret')
     expect(await section.innerText()).not.toContain('fixture-code')

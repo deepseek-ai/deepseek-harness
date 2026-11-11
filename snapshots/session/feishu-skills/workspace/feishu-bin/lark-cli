@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Offline lark-cli stand-in serving its guide catalog and one guide with the CLI's stderr reading tip.
+// Offline lark-cli stand-in serving one guide with the CLI's stderr reading tip.
 const replies = {
-  'skills list --json': { ok: true, skills: [{ name: 'lark-doc', description: 'Read and edit Feishu documents.', version: '1.0.0' }] },
   'skills read lark-doc': '---\nname: lark-doc\ndescription: Read and edit Feishu documents.\n---\n\n# docs\n\nRead references/lark-doc-fetch.md before fetching a document.',
 }
 const tips = {

@@ -1561,7 +1561,7 @@ export interface Config {
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
-- `source`: [`packages/connector/feishu/src/index.ts:29`](../packages/connector/feishu/src/index.ts)
+- `source`: [`packages/connector/feishu/src/index.ts:33`](../packages/connector/feishu/src/index.ts)
 
 ```ts config-catalog
 /** Where lark-cli is and how long a command that does not wait for the user may run. */

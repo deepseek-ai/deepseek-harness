@@ -118,11 +118,11 @@ describe('FeishuAccount', () => {
 
     const result = await settled(account.start('link-app'))
     expect(result).toMatchObject({ account: { state: 'unconfigured' }, result: {
-      outcome: 'failed', failure: { command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error' },
+      outcome: 'failed', failure: { command: 'config-init', exitCode: 5 },
     } })
     expect(errors()).toEqual([['feishu: account operation failed: %o', {
       id: result.result?.id, kind: 'link-app', phase: 'configuring',
-      command: 'config-init', exitCode: 5, type: 'internal', subtype: 'sdk_error',
+      command: 'config-init', exitCode: 5,
     }]])
     expect(JSON.stringify({ result, errors: errors() })).not.toContain(sensitive)
     expect(commands()).toEqual([STATUS, 'config init --new'])
@@ -133,7 +133,7 @@ describe('FeishuAccount', () => {
     script[STATUS] = [{ exitCode: 5, stderr: '{"ok":false,"error":{"type":"internal","subtype":"storage"}}' }]
 
     expect(await settled(account.start('link-app'))).toMatchObject({ result: {
-      outcome: 'failed', failure: { command: 'auth-status', exitCode: 5, type: 'internal', subtype: 'storage' },
+      outcome: 'failed', failure: { command: 'auth-status', exitCode: 5 },
     } })
   })
 

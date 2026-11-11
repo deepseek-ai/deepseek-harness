@@ -55,7 +55,7 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 | `sign-out` | 用户确认后运行 `auth logout --json`，同时退出用户自己终端里的登录，然后重新检查 |
 | 取消 | 在应用配置或登录期间取消操作并等待其命令退出；其他步骤会被忽略 |
 
-检查运行 `auth status --verify --json`。只有 CLI 报告用户可用且已被服务端核实时，账号才是 `connected`；用户缺失、未配置或需要刷新时为 `signed-out`；没有应用时为 `unconfigured`；其他情况为 `unverified`，例如核实时无法连到服务端。除 `unconfigured` 外，每种状态都带有已配置的 `appId`。`config init` 打印的链接和 `auth login` 报告的设备授权链接，只有是 `feishu.cn` 或 `larksuite.com` 上的 HTTPS 地址时才会提供。登录后仍有申请的权限未被授予时（`auth login` 以退出码 3 结束并把它们列为缺失），登录仍算成功；之后需要这些权限的命令会报告缺少哪些。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令、观察到的退出码和已识别的 CLI 错误类别；原生消息、路径和授权数据均不保留。飞书网页显示成功不代表本地凭据已保存。运行 DSH 的进程需要能访问 CLI 配置和系统凭据存储；`DSH_HOME` 不会迁移这两者。
+检查运行 `auth status --verify --json`。只有 CLI 报告用户可用且已被服务端核实时，账号才是 `connected`；用户缺失、未配置或需要刷新时为 `signed-out`；没有应用时为 `unconfigured`；其他情况为 `unverified`，例如核实时无法连到服务端。除 `unconfigured` 外，每种状态都带有已配置的 `appId`。`config init` 打印的链接和 `auth login` 报告的设备授权链接，只有是 `feishu.cn` 或 `larksuite.com` 上的 HTTPS 地址时才会提供。登录后仍有申请的权限未被授予时（`auth login` 以退出码 3 结束并把它们列为缺失），登录仍算成功；之后需要这些权限的命令会报告缺少哪些。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；原生消息、路径和授权数据均不保留。飞书网页显示成功不代表本地凭据已保存。运行 DSH 的进程需要能访问 CLI 配置和系统凭据存储；`DSH_HOME` 不会迁移这两者。
 
 ### 配置
 
@@ -76,9 +76,9 @@ pnpm 会拦截 `@larksuite/cli` 的安装脚本，该脚本负责下载并校验
 <details>
 <summary>实现内部机制——点击展开</summary>
 
-[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并注册 skill 提供方。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析其命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并通过 [`src/diagnostic.ts`](src/diagnostic.ts) 对失败分类。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
+[`cordis.patch.yml`](cordis.patch.yml) 在 profile 其他层之后把本包作为 `feishu` 行插入，插件页以本包名作为账号区块的 key。[`src/index.ts`](src/index.ts) 是一个函数插件。它检查 `binDir/lark-cli`（Windows 上为 `lark-cli.exe`）是否可执行，在运行时上下文中把这个路径告诉模型，并挂载包内的 skill 根目录。[`src/cli.ts`](src/cli.ts) 定位 `lark-cli` 并解析账号命令的 JSON 输出。[CLI 账号库](../cli-account/README.zh.md)注册这条运行时上下文，按同一路径运行每条命令，并一次执行一个账号操作。[`src/account.ts`](src/account.ts) 在该运行时上实现飞书的命令，从命令输出行中读取配置与登录链接，并以退出码报告失败的命令。[`src/presentation.ts`](src/presentation.ts) 用 [`src/locales.ts`](src/locales.ts) 中的文案，把每个视图映射为注册表提供的区块。释放时取消进行中的操作，中止正在运行的命令，并在这些进程退出后完成。
 
-[`src/skills.ts`](src/skills.ts) 列出 `feishu` skill 时不运行 CLI。每次加载运行 `lark-cli skills list --json`，依次放入 DSH 指引、由每个子指南名称与描述组成的索引，以及打开子指南及其引用文件的说明；目录读取失败时本次加载失败，下次加载会重新读取目录。子指南内嵌在二进制中，因此 skill 的资源基址是 opaque 类型。
+[`skills/feishu/SKILL.md`](skills/feishu/SKILL.md) 是本包携带的唯一 skill：DSH 指引、`lark-cli` 1.0.97 内嵌的 28 个子指南的索引，以及打开它们的方法。插件把 `skills/` 作为名为 `feishu` 的 [skill 文件系统](../../skill/skill-filesystem/README.zh.md)提供方的内置根目录挂载且不监听，因此目录列出入口、加载返回该文件时都不运行 CLI。子指南留在二进制中，agent 用 `lark-cli skills read` 读取。
 
 </details>
 
@@ -122,35 +122,11 @@ Feishu (飞书) and Lark through the bundled lark-cli: documents and wiki, Base,
 
 #### 模型看到什么
 
-`skill` 工具结果依次包含下方 DSH 指引、`## Guides` 索引（`lark-cli skills list --json` 报告的每个子指南各占一行 `` `name`: description ``），以及下方的打开说明。其资源描述为 `Embedded lark-cli guides; open them with the skills read command given in the loaded skill.`
-
-##### DSH 指引
-
-```markdown
-# Feishu in DSH
-
-Call this integration the Feishu plugin (飞书插件 in Chinese) in user-facing replies. Run `lark-cli` in the Host Shell by the absolute path that the current runtime context gives for it, not by name; DSH installs the version this plugin pins. It uses the default lark-cli configuration and sign-in shared with the user's own terminal, so do not remove, switch, or sign out of apps or profiles unless the user asks.
-
-When a command reports a missing app configuration or sign-in, first ask the user to connect Feishu on the Feishu plugin page in Plugins. Open the lark-shared guide and run its setup and auth flow yourself only when the user asks to finish it in this conversation. Never ask for or print app secrets or tokens.
-
-Commands that save sign-in state, such as `auth login --device-code` and `config init`, write outside the workspace and use up their one-time authorization even when the save is denied: on the first attempt, set the Shell tool's `sandbox_permissions` to the narrowest mode that can write outside the workspace, with a `justification`. Run other commands in the existing sandbox and set `sandbox_permissions` only when a credential, lock, log, or cache write is denied.
-
-Do not install another lark-cli or run `lark-cli update`.
-```
-
-##### 打开说明
-
-```markdown
-## Opening a guide
-
-These guides belong to lark-cli and are not skills: open one with `lark-cli skills read <name>` in the Host Shell, not with the skill tool.
-
-Read a file that a guide references, such as `references/...`, with `lark-cli skills read <name> <relative-path>`. Read a reference to another guide, such as `../lark-foo/...`, with the same command without the leading `../`: `lark-cli skills read lark-foo/...`.
-```
+`feishu` 的 `skill` 工具结果约 6,700 个字符：DSH 指引、为 `lark-cli` 1.0.97 内嵌的 28 个子指南各给一行并附路由规则的索引，以及打开子指南的方法。DSH 指引告诉 agent 按当前运行时上下文给出的绝对路径运行 `lark-cli`，在自己运行 CLI 的配置与登录流程之前先请用户到插件页连接飞书，并为保存登录状态的命令设置最窄的 `sandbox_permissions`。打开说明告诉 agent 子指南不是 skill，子指南及其引用的文件都用 `lark-cli skills read` 读取。入口的资源基址是它自己的目录，其中只有入口文件。
 
 #### Token 影响
 
-每次加载把固定指引、索引与打开说明加入保留的工具历史。对 `lark-cli` 1.0.97 而言，索引列出 28 个子指南，工具结果约 8,000 个字符。agent 通过 `lark-cli` 读取的子指南及其引用文件作为普通 Shell 输出返回。
+每次加载把入口正文加入保留的工具历史。agent 通过 `lark-cli` 读取的子指南及其引用文件作为普通 Shell 输出返回。
 
 #### KV Cache 影响
 
@@ -190,6 +166,7 @@ Feishu CLI: run `lark-cli` by its absolute path with the call operator, & '<binD
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `lark-cli` 的命令都会因为那里没有这个路径而失败。
 - 插件使用 CLI 的默认配置。在 DSH 中登录或退出会影响用户自己的终端，没有 DSH 私有账号或账号选择器。插件不提供解绑操作；关闭插件会保留配置与登录。
 - 登录从 `lark-cli auth login --json` 的事件中读取设备授权链接和完成结果；CLI 版本改变这些事件时，连接以可重试的结果失败。
+- 入口的子指南索引对应 `lark-cli` 1.0.97；固定到另一个 `@larksuite/cli` 版本时，需要对照该版本的 `lark-cli skills list` 检查索引。
 - 在文件沙箱下，普通命令中的 token 刷新可能被拒绝，此时需要单条命令审批。
 
 <a id="dev-note"></a>
