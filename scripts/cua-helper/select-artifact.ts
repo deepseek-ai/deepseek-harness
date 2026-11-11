@@ -65,9 +65,10 @@ export async function selectCuaHelperArtifact(repository: string, runId: string,
     const jobName = workflow === 'cua-helper-package-macos.yml' ? 'package' : 'cua-helper-macos / package'
     const jobs = rows(await api(`${base}/runs/${candidate}/jobs?filter=all&per_page=100`, true), 'jobs')
       .filter(job => job.name === jobName)
+    if (jobs.length === 0) return `this run contains no ${jobName} job. Select a run that built the macOS helper`
     const attempts = jobs.map(job => Number(id(job.run_attempt)))
     assert(attempts.every(value => value <= Number(attempt)), 'CUA reuse: run advanced during selection; retry with the same run ID')
-    const producerAttempt = Math.max(0, ...attempts)
+    const producerAttempt = Math.max(...attempts)
     const producers = jobs.filter(job => job.run_attempt === producerAttempt)
     if (producers.length !== 1 || producers[0]?.conclusion !== 'success') return `the last executed ${jobName} job did not succeed`
     const name = `cua-helper-macos-${candidate}-${producerAttempt}-${buildKey}`
