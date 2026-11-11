@@ -15,14 +15,15 @@ import z from '@deepseek-ai/schemastery'
 import { boundContextSummary, createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed, MessageId } from '@deepseek-ai/dsh-llm'
 import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
 import type { JobEvent, JobView, JobRead } from '@deepseek-ai/dsh-jobs'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent'
 import { publicJob, renderModelDelta, statusLine } from './render.ts'
 import type { PublicJobSnapshot } from './render.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'tool-jobs': { kind: 'tool-jobs' } & ContextFormed
@@ -208,9 +209,9 @@ function visibleOutputLimit(ctx: Context, exec: ToolExecution): number | undefin
 /** Validate the non-empty constraint that ParameterSchemaSpec cannot express. */
 function validateJobId(value: string): JobId {
   if (value.length === 0) {
-    throw new Error(`invalid job_id: expected a non-empty string, got ${JSON.stringify(value)}`)
+    throw new ToolArgsError([`invalid job_id: expected a non-empty string, got ${JSON.stringify(value)}`])
   }
-  return JobId(value)
+  return brandString<JobId>(value)
 }
 
 /** Pending presentation shared by the three generic job controls. */
@@ -457,6 +458,9 @@ export function apply(ctx: Context, config: Config): void {
     },
     async execute(args, exec) {
       const id = validateJobId(args.job_id)
+      if (args.timeout_ms !== undefined && (!Number.isFinite(args.timeout_ms) || args.timeout_ms <= 0)) {
+        throw new ToolArgsError([`invalid timeout_ms: expected a positive number of milliseconds, got ${JSON.stringify(args.timeout_ms)}`])
+      }
       const jobs = ctx.jobs
       const agent = exec.agent
       // A wait this execution ends on next-step input claims the read that
@@ -509,7 +513,11 @@ export function apply(ctx: Context, config: Config): void {
             // An input released this wait, so the read below carries the
             // current state; a cancellation leaves no consumer for that read,
             // and the claim's release delivers the settlement it withheld.
-            if (exec.signal.aborted) throw new Error('wait aborted')
+            if (exec.signal.aborted) {
+              const aborted = new Error('wait aborted')
+              aborted.name = 'AbortError'
+              throw aborted
+            }
           } finally {
             unsubscribe()
           }
@@ -541,6 +549,8 @@ export function apply(ctx: Context, config: Config): void {
     name: 'job_list',
     description: 'List your background jobs (running and finished) with their ids, kinds, and statuses.',
     parameters: {},
+    // Listing reads a status snapshot and consumes no output cursor or completion notice.
+    isConcurrencySafe: () => true,
     output: {
       schema: { type: 'array', items: PUBLIC_JOB_SCHEMA },
       render: (_args, jobs) => [{

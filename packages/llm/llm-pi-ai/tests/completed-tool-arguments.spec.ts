@@ -6,11 +6,12 @@ import LlmRuntime, { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { resolveProfiles } from '../src/config.ts'
 import { memoryAuth } from './auth-double.ts'
 import { anthropicFrame, anthropicMessageStart, closeMockServers, mockServer } from './mock-server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(closeMockServers)
 
@@ -175,7 +176,7 @@ describe('completed tool-call arguments through the public runtime', () => {
       isConcurrencySafe: () => true,
       async execute() { executions++; return [{ type: 'text', text: 'counted' }] },
     })))
-    const agent = await loop.create(SessionId('malformed-parallel'), { provider: 'fixture', model: 'm' })
+    const agent = await loop.create(brandString<SessionId>('malformed-parallel'), { provider: 'fixture', model: 'm' })
     const idle = new Promise<void>((resolve) => {
       const dispose = ctx.on('agent/status', ({ agent: subject, status }) => {
         if (subject === agent && status === 'idle') { dispose(); resolve() }

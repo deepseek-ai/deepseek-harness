@@ -42,6 +42,9 @@
       "path": "../../llm/llm"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../typert/protocol"
     }
   ]

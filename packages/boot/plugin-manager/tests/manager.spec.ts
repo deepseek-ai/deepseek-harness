@@ -2522,3 +2522,27 @@ it('refuses an update whose target does not match where the copy was installed f
   expect(view).not.toHaveBeenCalled()
   expect(readFileSync(join(dir, 'package.json'), 'utf8')).toBe(before)
 })
+
+it('reports profile read, lock, and disposal failures with error codes', async () => {
+  const { ctx, manager, dir } = await fixture('startup', false, undefined, { lockWaitMs: 0 })
+  const manifest = join(dir, 'package.json')
+  const saved = readFileSync(manifest, 'utf8')
+  writeFileSync(manifest, '{')
+  const unreadable = Promise.resolve().then(() => manager.listBundles())
+  await expect(unreadable).rejects.toMatchObject({ name: 'PluginManagerError', code: 'PLUGIN_MANAGER_PROFILE_READ_FAILED' })
+  await expect(unreadable).rejects.toHaveProperty('cause', expect.any(SyntaxError))
+  writeFileSync(manifest, saved)
+
+  writeFileSync(`${manifest}.lock`, `${process.pid}\n`)
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toMatchObject({
+    name: 'FileLockError', code: 'FILE_LOCK_TIMEOUT',
+  })
+  rmSync(`${manifest}.lock`)
+
+  const entry = [...ctx.loader.entries()].find(candidate => candidate.options.name === 'cordis:manager')
+  await entry?.fiber?.dispose()
+  await expect(manager.setBundleEnabled('extra', false)).rejects.toMatchObject({
+    name: 'PluginManagerError', code: 'PLUGIN_MANAGER_UNAVAILABLE',
+  })
+  expect(readFileSync(manifest, 'utf8')).toBe(saved)
+})

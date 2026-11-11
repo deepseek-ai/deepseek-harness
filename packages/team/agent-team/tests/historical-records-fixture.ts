@@ -1,8 +1,9 @@
 /** Exercise task writes after retired Team records through the headless profile. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { TeamId, TeamMessageId } from '../src/types.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TeamId, TeamMessageId } from '../src/types.ts'
 
 /** Services used to append historical records and exercise the task board. */
 export const inject = ['agentTeams']
@@ -14,9 +15,9 @@ export const inject = ['agentTeams']
 export function apply(ctx: Context): void {
   ctx.on('agent/created', async ({ agent }) => {
     if (agent.session.header.parentSession !== undefined) return
-    const teamId = TeamId(agent.id)
-    const childId = SessionId('historical-worker')
-    const messageId = TeamMessageId('historical-message')
+    const teamId = brandString<TeamId>(agent.id)
+    const childId = brandString<SessionId>('historical-worker')
+    const messageId = brandString<TeamMessageId>('historical-message')
     agent.session.append('team/member', { version: 2, teamId, member: {
       id: childId, name: 'old-worker', description: 'retired teammate',
       provider: 'spawn', context: 'fresh', phase: 'active',

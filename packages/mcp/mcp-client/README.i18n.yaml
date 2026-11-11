@@ -30,8 +30,8 @@
   en: 213d2d67088beccc
   zh: 1e3ff5454c937f11
 /deepseek-ai-dsh-mcp-client/use-this-package/runtime-templates-and-credentials:
-  en: 255e8f48e5981b52
-  zh: 7b4ad77794c6b7fc
+  en: fd04dfbe231924e4
+  zh: ace0b0786bf16d0f
 /deepseek-ai-dsh-mcp-client/understand-the-implementation:
   en: d33ddd080880b3f5
   zh: 64328f5239c26752
@@ -45,8 +45,8 @@
   en: 1793a89464c70cec
   zh: fcf7b9c2eb343ce3
 /deepseek-ai-dsh-mcp-client/understand-the-implementation/tool-execution-internals:
-  en: bb161208cc002746
-  zh: 3ab0588ca71effe5
+  en: c0abd2f870cfeb65
+  zh: 15b7ba2564dace9a
 /deepseek-ai-dsh-mcp-client/understand-the-implementation/environment-scrubbing-stdio:
   en: fef482a6f8cc789f
   zh: 08f4c594ec83b4a1

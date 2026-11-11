@@ -162,7 +162,31 @@ interface LspService {
 }
 ```
 
-`LspProviderId` 是该 seam 的品牌化 id（来自 [dsh-brand](../../packages/util/brand) 的 `Branded<'LspProviderId'>`）；`LspError` 扩展 `HarnessError`，提供 `LSP_INVALID_PROVIDER`、`LSP_CONFLICT`、`LSP_UNAVAILABLE`、`LSP_DISPOSED`、`LSP_UNSUPPORTED_OPERATION` 和 `LSP_MALFORMED_RESPONSE` 等稳定错误码，调用方应按错误码路由，而不是解析 `message`。
+`LspProviderId` 是该 seam 的品牌化 id（来自 [dsh-brand](../../packages/util/brand) 的 `Branded<'LspProviderId'>`）；`LspError` 扩展 `HarnessError`，提供[失败](#failures)一节列出的稳定错误码，调用方应按错误码路由，而不是解析 `message`。
+
+<a id="failures"></a>
+## 失败
+
+`lsp` 工具调用的每个预期失败都是 `HarnessError`，工具结果会把它的 `name` 和 `code` 保留在 `error.info` 中。`LspError` 把 `name` 设为 `LspError`；由于提供方和消费方会添加错误码，它的 `code` 保持开放，消费方须容忍未知错误码。无效的工具参数以 `ToolArgsError` `INVALID_ARGS` 失败，调用方取消以 `AbortError` 失败。工作区与源文件读取保留文件系统提供方的 `FsError` 错误码，例如 `FS_NOT_FOUND`、`FS_NOT_REGULAR_FILE` 或 `FS_NOT_TEXT`，并在其消息前加上 LSP 操作对象；stdio 提供方对非目录工作区使用 `FS_NOT_DIRECTORY`，对超过 `maxDocumentBytes` 的源文件使用 `FS_TOO_LARGE`。如果带错误码的查询失败后服务器拆除也失败，错误保留查询失败的 `name` 和 `code`，并把拆除失败追加到消息中；不带错误码的查询失败（例如取消）与拆除失败一起以 `AggregateError` 呈现，不带 `error.info`。
+
+| 错误码 | 抛出方 | 含义 | 消费方操作 |
+|---|---|---|---|
+| `LSP_INVALID_PROVIDER` | Seam | 注册的 id 或语言 id 为空、没有扩展名，或扩展名无效 | 修正注册 |
+| `LSP_CONFLICT` | Seam | 提供方 id 或某个扩展名已被注册 | 移除重复注册 |
+| `LSP_UNAVAILABLE` | Seam | 没有提供方处理该文件扩展名 | 查询受支持的文件，或添加提供方 |
+| `LSP_WORKSPACE_REQUIRED` | `lsp` 工具 | 调用没有 Agent Session 工作区 | 从 Agent Session 调用该工具 |
+| `LSP_DISPOSED` | 提供方 | 提供方或其服务器实例已被释放 | 在提供方重新挂载后重试 |
+| `LSP_UNSUPPORTED_OPERATION` | 提供方 | 服务器不支持该操作或临时打开／关闭同步 | 选择其他操作或服务器 |
+| `LSP_MALFORMED_RESPONSE` | 提供方 | 服务器的 `initialize` 或查询结果违反协议 | 报告服务器缺陷 |
+| `LSP_FILE_OUTSIDE_WORKSPACE` | stdio 提供方 | 源文件解析到规范工作区之外 | 查询工作区内的文件 |
+| `LSP_UNSUPPORTED_ENCODING` | stdio 提供方 | 服务器协商了 UTF-16 以外的位置编码 | 使用支持 UTF-16 的服务器 |
+| `LSP_SPAWN_FAILED` | stdio 提供方 | 子进程提供方未能启动或运行服务器；提供方的 `HarnessError` 则保留其自身的 `name` 和 `code` | 修正服务器命令或安装 |
+| `LSP_SERVER_EXITED` | stdio 提供方 | 服务器已退出或关闭了 stdin；进程退出时消息携带保留的 stderr 尾部 | 稍后重试；反复出现时检查 stderr 尾部 |
+| `LSP_PROTOCOL_ERROR` | stdio 提供方 | 服务器输出破坏了基础协议分帧或 JSON | 报告服务器缺陷 |
+| `LSP_MESSAGE_TOO_LARGE` | stdio 提供方 | 某条服务器消息超过 `maxMessageBytes` | 缩小查询范围或调大 `maxMessageBytes` |
+| `LSP_SERVER_ERROR` | stdio 提供方 | 服务器以 JSON-RPC 错误应答；消息携带其数字错误码与文本 | 按服务器消息处理 |
+
+传输失败（`LSP_SPAWN_FAILED`、`LSP_SERVER_EXITED`、`LSP_PROTOCOL_ERROR` 或 `LSP_MESSAGE_TOO_LARGE`）后，如果失败的进程干净地完成拆除，stdio 提供方会在新进程上把只读查询重试一次。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

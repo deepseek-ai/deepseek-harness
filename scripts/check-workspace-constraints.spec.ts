@@ -365,6 +365,23 @@ describe('package payload constraints', () => {
     } })).toContainEqual(expect.stringContaining('exports["./pipeline"] must expose'))
   })
 
+  it('publishes the reusable program factory and its shared implementation', () => {
+    const dir = 'packages/core/tool-executor-ptc'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    for (const omitted of ['lib/run-code.js', 'lib/_chunks/*.js']) {
+      expect(checkWorkspaceManifest({ dir, manifest: {
+        ...manifest, files: manifest.files!.filter(file => file !== omitted),
+      } })).toContainEqual(expect.stringContaining('package.json files must be'))
+    }
+    expect(checkWorkspaceManifest({ dir, manifest: {
+      ...manifest, exports: {
+        ...manifest.exports,
+        './run-code': { types: './lib/types/run-code.d.ts', default: './lib/index.js' },
+      },
+    } })).toContainEqual(expect.stringContaining('exports["./run-code"] must expose'))
+  })
+
   it('publishes the directory of each locale detail document after the locale resources', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-detail-files-'))
     onTestFinished(() => { rmSync(dir, { recursive: true, force: true }) })

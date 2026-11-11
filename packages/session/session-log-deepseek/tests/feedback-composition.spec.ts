@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import MessageFeedback from '@deepseek-ai/dsh-message-feedback'
 import { recordFeedback } from '@deepseek-ai/dsh-command-feedback'
@@ -16,6 +16,7 @@ import DeepSeekLlmApiExtensions from '@deepseek-ai/dsh-deepseek-llm-api-extensio
 import { startMockLlmServer, type MockLlmServer, type MockLlmServerOptions } from '@deepseek-ai/dsh-llm-mock-server'
 import * as SessionLogDeepSeek from '../src/index.ts'
 import type { DeepSeekSessionLogExtension } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 let root: string | undefined
 let ctx: Context | undefined
@@ -80,7 +81,7 @@ async function boot(
 
 it('uploads freeform feedback and message put/edit/delete through the unchanged provider route', async () => {
   const { ctx, server } = await boot({ enabled: true }, { sequence: ['invalid_request', 'success', 'success'] })
-  const session = ctx.sessions.create(SessionId('feedback-upload'))
+  const session = ctx.sessions.create(brandString<SessionId>('feedback-upload'))
   const handle = await ctx.sessionPersistence.create(session.header)
   try {
     const user = createUserMessage({ content: [{ type: 'text', text: 'Question' }], source: { kind: 'user' } })
@@ -152,7 +153,7 @@ it('uploads freeform feedback and message put/edit/delete through the unchanged 
 it('drains a Session log above the configured maxBytes across consecutive routed requests', async () => {
   const maxBytes = 4096
   const { ctx, server } = await boot({ enabled: true, maxBytes }, { sequence: ['success'], repeatLast: true })
-  const session = ctx.sessions.create(SessionId('bounded-upload'))
+  const session = ctx.sessions.create(brandString<SessionId>('bounded-upload'))
   const handle = await ctx.sessionPersistence.create(session.header)
   try {
     session.append('turn/start', { turn: 1 })
@@ -180,7 +181,7 @@ it('drains a Session log above the configured maxBytes across consecutive routed
 
 it('changes API log upload on the next request without replacing the plugin fiber', async () => {
   const { ctx, server } = await boot({ enabled: true }, { sequence: ['success'], repeatLast: true })
-  const session = ctx.sessions.create(SessionId('live-upload-setting'))
+  const session = ctx.sessions.create(brandString<SessionId>('live-upload-setting'))
   session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'Hello' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
   const entry = [...ctx.loader.entries()].find(entry => entry.options.name === '@deepseek-ai/dsh-session-log-deepseek')!
   const fiber = entry.fiber

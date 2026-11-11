@@ -26,7 +26,7 @@ import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
@@ -39,6 +39,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/markdown-wide-table', import.meta.url))
 const GEOMETRY_EXPECTED = fileURLToPath(
@@ -113,7 +114,7 @@ function tablesMarkdown(): string {
 
 /** Build one closed session fixture carrying the tables. */
 function wideTableFixture(): string {
-  const session = Session.create(SessionId('markdown-wide-table-source'))
+  const session = Session.create(brandString<SessionId>('markdown-wide-table-source'))
   const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({

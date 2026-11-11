@@ -7,9 +7,10 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { type SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 
 /** Minimal concrete backend: records the last request, returns a fixed ref. */
@@ -19,7 +20,7 @@ class StubStore extends SpillStore {
   async saveText(input: SaveTextSpill): Promise<SpillRef> {
     this.last = input
     return {
-      locator: SpillLocator(`/stub/${input.suggestedName}`),
+      locator: brandString<SpillLocator>(`/stub/${input.suggestedName}`),
       bytes: Buffer.byteLength(input.content, 'utf8'),
       retrievalHint: 'Use the stub reader.',
     }
@@ -28,8 +29,8 @@ class StubStore extends SpillStore {
 
 function request(content: string): SaveTextSpill {
   return {
-    owner: { sessionId: SessionId('s1') },
-    source: { kind: 'tool', toolName: 'web_fetch', callId: ToolCallId('c1'), label: 'result' },
+    owner: { sessionId: brandString<SessionId>('s1') },
+    source: { kind: 'tool', toolName: 'web_fetch', callId: brandString<ToolCallId>('c1'), label: 'result' },
     suggestedName: 'web_fetch.txt',
     content,
   }

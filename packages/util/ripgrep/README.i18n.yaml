@@ -1,0 +1,37 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/util/ripgrep/README.md
+/:
+  en: bc82952963b17d8c
+  zh: 675b139ebabdc650
+/deepseek-ai-dsh-util-ripgrep:
+  en: b04d02f7de33360d
+  zh: 1cfe8f875568591b
+/deepseek-ai-dsh-util-ripgrep/summary:
+  en: bb3d7c655f3adebc
+  zh: bffe6ea95d686080
+/deepseek-ai-dsh-util-ripgrep/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-util-ripgrep/use-this-package:
+  en: 53799d1dd3fc2137
+  zh: da69fc599badb99d
+/deepseek-ai-dsh-util-ripgrep/understand-the-implementation:
+  en: b0b0e642476cd3a3
+  zh: fa265461d2dabe03
+/deepseek-ai-dsh-util-ripgrep/further-exploration:
+  en: a95949bcc607ac71
+  zh: da783fcb920b894f
+/deepseek-ai-dsh-util-ripgrep/model-experience:
+  en: 9df66fc6f8d80d3e
+  zh: cf37a67237e3c082
+/deepseek-ai-dsh-util-ripgrep/model-experience/kv-cache-effect:
+  en: 3b134ccd04fc3436
+  zh: 46c862e01cb4b9be
+/deepseek-ai-dsh-util-ripgrep/known-limitations-and-deferred-work:
+  en: 1bfaa2f90e3c339b
+  zh: da09b60f225fcdf6
+/deepseek-ai-dsh-util-ripgrep/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createAssistantMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord, Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createAssistantMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { appendPluginRecord, Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { forgeChangeRequestsProjection } from '../src/projection.ts'
 import type { ForgeChangeRequestsState } from '../src/index.ts'
-import { pullUrl, pushOutput, shellTurn } from './fixtures.ts'
+import { programTurn, pullUrl, pushOutput, shellTurn } from './fixtures.ts'
 
 const { apply, init, stateSchema } = forgeChangeRequestsProjection
 
@@ -20,7 +21,7 @@ function created(number: number): string {
 
 describe('forgeChangeRequests projection', () => {
   it('shows clients every binding, hidden ones included, and keeps that view while only pending calls and pushes change', () => {
-    const session = Session.create(SessionId('client-view'))
+    const session = Session.create(brandString<SessionId>('client-view'))
     const { view, viewSchema } = forgeChangeRequestsProjection.wire
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'track', url: pullUrl(2) })
@@ -41,7 +42,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('starts empty and keeps the state reference for unrelated events', () => {
-    const session = Session.create(SessionId('unrelated'))
+    const session = Session.create(brandString<SessionId>('unrelated'))
     shellTurn(session, [
       { callId: 'list', command: 'ls', output: 'README.md' },
       { callId: 'read', command: 'gh pr create', output: created(1), tool: 'read' },
@@ -56,7 +57,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('binds every pull request URL a create result prints, once', () => {
-    const session = Session.create(SessionId('create'))
+    const session = Session.create(brandString<SessionId>('create'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: `${created(1)}${pullUrl(1)}/files\n${pullUrl(2)}` }])
     shellTurn(session, [{ callId: 'again', command: 'gh pr create --fill', output: created(1).replace('https', 'http') }])
 
@@ -67,7 +68,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('binds from pwsh calls and from results with a nonzero exit marker', () => {
-    const session = Session.create(SessionId('pwsh'))
+    const session = Session.create(brandString<SessionId>('pwsh'))
     shellTurn(session, [{
       callId: 'exists',
       command: 'gh pr create --fill',
@@ -79,7 +80,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('binds nothing from failed tool executions or from output of other commands', () => {
-    const session = Session.create(SessionId('failed'))
+    const session = Session.create(brandString<SessionId>('failed'))
     shellTurn(session, [
       { callId: 'failed', command: 'gh pr create --fill', output: created(1), isError: true },
       { callId: 'list', command: 'gh pr list --json url', output: pullUrl(2) },
@@ -89,7 +90,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('reads evidence only from text blocks and ignores shell calls without a command', () => {
-    const session = Session.create(SessionId('blocks'))
+    const session = Session.create(brandString<SessionId>('blocks'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: 'placeholder' }])
     const events = session.snapshotEvents()
     const index = events.findIndex(event => event.type === 'tool/result')
@@ -103,7 +104,7 @@ describe('forgeChangeRequests projection', () => {
       data: {
         ...result.data,
         message: createToolResultMessage({
-          callId: ToolCallId('create'),
+          callId: brandString<ToolCallId>('create'),
           content: [{ type: 'reasoning', text: pullUrl(9) }, { type: 'text', text: pullUrl(6) }],
           isError: false,
         }),
@@ -115,7 +116,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('records pushed branches with the reporting result sequence number and moves a repeated push last', () => {
-    const session = Session.create(SessionId('push'))
+    const session = Session.create(brandString<SessionId>('push'))
     shellTurn(session, [{ callId: 'one', command: 'git push -u origin feat', output: pushOutput('feat') }])
     shellTurn(session, [{ callId: 'two', command: 'git push -u origin other', output: pushOutput('other') }])
     shellTurn(session, [{ callId: 'three', command: 'git push', output: pushOutput('feat') }])
@@ -128,7 +129,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('reads both kinds of evidence from one command and nothing from push output of a create command', () => {
-    const session = Session.create(SessionId('both'))
+    const session = Session.create(brandString<SessionId>('both'))
     shellTurn(session, [
       { callId: 'both', command: 'git push -u origin feat && gh pr create --fill', output: `${pushOutput('feat')}\n${pullUrl(3)}` },
       { callId: 'create', command: 'gh pr create --fill', output: pushOutput('ignored') },
@@ -141,7 +142,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('binds the change request a view, edit, or checkout names or prints as its own, and no other links', () => {
-    const session = Session.create(SessionId('referenced'))
+    const session = Session.create(brandString<SessionId>('referenced'))
     shellTurn(session, [
       { callId: 'view', command: 'gh pr view 7', output: ['title:\tAdd it', `url:\t${pullUrl(7)}`, '--', `Stacked on ${pullUrl(8)}`].join('\n') },
       { callId: 'json', command: 'gh pr view 6 --json number,url,body', output: JSON.stringify({ number: 6, url: pullUrl(6), body: `see ${pullUrl(8)}` }) },
@@ -158,7 +159,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('keeps a dismissed change request hidden from later references, binds as created alongside a create, and binds nothing from a failed execution', () => {
-    const session = Session.create(SessionId('referenced-rules'))
+    const session = Session.create(brandString<SessionId>('referenced-rules'))
     shellTurn(session, [{ callId: 'view', command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(1) })
     shellTurn(session, [
@@ -175,7 +176,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('binds a numbered PR in an explicit host repository when JSON omits the URL', () => {
-    const session = Session.create(SessionId('numbered-reference'))
+    const session = Session.create(brandString<SessionId>('numbered-reference'))
     shellTurn(session, [{
       callId: 'view',
       command: 'gh pr view 5960 --repo fake.test/octo/demo --json number,title,body 2>&1 | head -200',
@@ -185,14 +186,14 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('folds only the first result of a call and drops calls without results at turn end', () => {
-    const session = Session.create(SessionId('pending'))
+    const session = Session.create(brandString<SessionId>('pending'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
     const result = session.snapshotEvents().find(event => event.type === 'tool/result')
     if (result?.type !== 'tool/result') throw new Error('missing result')
     const replayed = {
       ...result,
       seq: SessionSeq(result.seq + 100),
-      data: { ...result.data, message: createToolResultMessage({ callId: ToolCallId('create'), content: [{ type: 'text', text: pullUrl(2) }], isError: false }) },
+      data: { ...result.data, message: createToolResultMessage({ callId: brandString<ToolCallId>('create'), content: [{ type: 'text', text: pullUrl(2) }], isError: false }) },
     }
     const state = fold(session)
     expect(apply(state, replayed)).toBe(state)
@@ -204,11 +205,11 @@ describe('forgeChangeRequests projection', () => {
       step: 1,
       stream: [],
       message: createAssistantMessage({
-        content: [{ type: 'tool-call', id: ToolCallId('orphan'), name: 'bash', arguments: '{"command":"git push"}' }],
+        content: [{ type: 'tool-call', id: brandString<ToolCallId>('orphan'), name: 'bash', arguments: '{"command":"git push"}' }],
         source: { provider: 'fixture', model: 'fixture' },
       }),
     }, { surfaceOp: 'append' })
-    session.append('tool/call', { turn: 2, step: 1, callId: ToolCallId('orphan'), name: 'bash', arguments: '{"command":"git push"}' })
+    session.append('tool/call', { turn: 2, step: 1, callId: brandString<ToolCallId>('orphan'), name: 'bash', arguments: '{"command":"git push"}' })
     const open = fold(session)
     expect(open.pending).toEqual([{ callId: 'orphan', urls: null, pushes: true, named: [] }])
 
@@ -223,7 +224,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('applies discover, track, and dismiss records by URL identity', () => {
-    const session = Session.create(SessionId('records'))
+    const session = Session.create(brandString<SessionId>('records'))
     shellTurn(session, [{ callId: 'create', command: 'gh pr create --fill', output: created(1) }])
     const record = (action: 'track' | 'dismiss' | 'discover', url: string) => {
       appendPluginRecord(session, 'plugin:forge-session/binding', { action, url })
@@ -245,8 +246,78 @@ describe('forgeChangeRequests projection', () => {
     ])
   })
 
+  it('binds shell calls inside a PTC program by the rules of direct calls, from both shells and despite a failed program', () => {
+    const session = Session.create(brandString<SessionId>('program'))
+    programTurn(session, 'program', [
+      { command: 'gh pr create --fill', output: created(1) },
+      { command: 'gh pr view 7', output: ['title:\tAdd it', `url:\t${pullUrl(7)}`, '--', `Stacked on ${pullUrl(8)}`].join('\n') },
+      { command: 'gh pr edit 4 --add-label bug', output: `${pullUrl(4)}\n`, tool: 'pwsh' },
+      { command: `gh pr checkout ${pullUrl(5)}`, output: "Switched to branch 'feat'" },
+      { command: 'gh pr view 6 --repo fake.test/octo/demo --json number', output: '{"number":6}' },
+      { command: 'gh pr view 3 --repo octo/demo --json number,url', output: JSON.stringify({ number: 3, url: pullUrl(3) }) },
+    ], true)
+
+    expect(fold(session)).toEqual({
+      pending: [],
+      bindings: [
+        { url: pullUrl(1), origin: 'created', dismissed: false },
+        { url: pullUrl(7), origin: 'referenced', dismissed: false },
+        { url: pullUrl(4), origin: 'referenced', dismissed: false },
+        { url: pullUrl(5), origin: 'referenced', dismissed: false },
+        { url: pullUrl(6), origin: 'referenced', dismissed: false },
+        { url: pullUrl(3), origin: 'referenced', dismissed: false },
+      ],
+      pushes: [],
+    })
+  })
+
+  it('records branches a program pushes with the dispatch sequence number', () => {
+    const session = Session.create(brandString<SessionId>('program-push'))
+    programTurn(session, 'program', [
+      { command: 'git push -u origin feat', output: pushOutput('feat') },
+      { command: 'git push -u origin other', output: pushOutput('other') },
+    ])
+    const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.seq)
+
+    expect(fold(session).pushes).toEqual([
+      { remote: 'fake.test:octo/demo.git', branch: 'feat', seq: dispatches[0] },
+      { remote: 'fake.test:octo/demo.git', branch: 'other', seq: dispatches[1] },
+    ])
+  })
+
+  it('keeps the state reference for program dispatches that fail, carry no evidence, or run other tools', () => {
+    const session = Session.create(brandString<SessionId>('program-unrelated'))
+    programTurn(session, 'program', [
+      { command: 'gh pr create --fill', output: created(1), isError: true },
+      { command: `gh pr checkout ${pullUrl(9)}`, output: 'boom', isError: true },
+      { command: 'git push', output: pushOutput('feat'), isError: true },
+      { command: 'gh pr create --fill', output: created(2), tool: 'read' },
+      { command: 'ls', output: pullUrl(3) },
+      { command: 'gh pr list --json url', output: pullUrl(3) },
+      { command: 'gh pr view 9 --repo octo/demo --json number', output: '{"number":9}' },
+      { command: '', output: created(4), arguments: { cmd: 'gh pr create' } },
+      { command: '', output: created(4), arguments: 'gh pr create' },
+      { command: '', output: created(4), arguments: null },
+    ])
+    const state = fold(session)
+
+    expect(state).toEqual({ pending: [], bindings: [], pushes: [] })
+    for (const event of session.snapshotEvents()) expect(apply(state, event)).toBe(state)
+  })
+
+  it('keeps a dismissed binding hidden when a program references it again', () => {
+    const session = Session.create(brandString<SessionId>('program-dismissed'))
+    programTurn(session, 'first', [{ command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
+    appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(1) })
+    const dismissed = fold(session)
+    programTurn(session, 'second', [{ command: `gh pr view ${pullUrl(1)}`, output: `url:\t${pullUrl(1)}` }])
+
+    expect(fold(session)).toEqual(dismissed)
+    expect(dismissed.bindings).toEqual([{ url: pullUrl(1), origin: 'referenced', dismissed: true }])
+  })
+
   it('round-trips state through JSON and rejects malformed state', () => {
-    const session = Session.create(SessionId('schema'))
+    const session = Session.create(brandString<SessionId>('schema'))
     shellTurn(session, [{ callId: 'push', command: 'git push', output: pushOutput('feat') }])
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'track', url: pullUrl(1) })
     const state = fold(session)
@@ -257,7 +328,7 @@ describe('forgeChangeRequests projection', () => {
   })
 
   it('replays confirmed references without restoring hidden bindings or changing their first origin', () => {
-    const session = Session.create(SessionId('confirmed-reference'))
+    const session = Session.create(brandString<SessionId>('confirmed-reference'))
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(9) })
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'dismiss', url: pullUrl(9) })
     appendPluginRecord(session, 'plugin:forge-session/binding', { action: 'reference', url: pullUrl(9) })

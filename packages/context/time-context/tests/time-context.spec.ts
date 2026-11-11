@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { createUserMessage, ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -47,7 +48,7 @@ async function mount(config: Config = {}) {
 
 function sessionAgent(session: Session, id = 'agent'): Agent {
   const agent: Agent = {
-    id: SessionId(id),
+    id: brandString<SessionId>(id),
     options: {},
     session,
     model: unsupportedModel(),
@@ -124,7 +125,7 @@ function toolCallResponse(): StreamChunk[] {
     {
       type: 'block-end',
       index: 0,
-      block: { type: 'tool-call', id: ToolCallId('tick-1'), name: 'tick', arguments: '{}' },
+      block: { type: 'tool-call', id: brandString<ToolCallId>('tick-1'), name: 'tick', arguments: '{}' },
     },
     { type: 'finish', reason: { kind: 'tool-calls' } },
   ]
@@ -165,7 +166,7 @@ function requestText(request: GenerateOptions): string {
 describe('durable step context', () => {
   it('records turn, step, zoned time, and the preceding model-visible message baseline', async () => {
     const { ctx } = await mount({ timeZone: 'Asia/Shanghai' })
-    const session = Session.create(SessionId('first'))
+    const session = Session.create(brandString<SessionId>('first'))
     openMessageTurn(session, 1, 'Asia/Shanghai')
     vi.setSystemTime(BASE + 90_061_000)
 
@@ -197,7 +198,7 @@ describe('durable step context', () => {
 
   it('reports an unavailable first-step baseline when no model-visible message precedes it', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('unavailable'))
+    const session = Session.create(brandString<SessionId>('unavailable'))
     session.append('turn/start', { turn: 1 })
 
     await fire(ctx, sessionAgent(session), 1, 1)
@@ -209,7 +210,7 @@ describe('durable step context', () => {
 
   it('uses the preceding durable step-context timestamp after step one with zero interval', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 0 })
-    const session = Session.create(SessionId('later-step'))
+    const session = Session.create(brandString<SessionId>('later-step'))
     const agent = sessionAgent(session)
     openMessageTurn(session, 3)
     await fire(ctx, agent, 3, 1)
@@ -226,7 +227,7 @@ describe('durable step context', () => {
 
   it('formats in one browser zone and falls back when steering supplies mixed zones', async () => {
     const { ctx } = await mount({ timeZone: 'UTC' })
-    const resolved = Session.create(SessionId('browser-zone-resolved'))
+    const resolved = Session.create(brandString<SessionId>('browser-zone-resolved'))
     openMessageTurn(resolved, 1, 'America/New_York')
     await fire(ctx, sessionAgent(resolved), 1, 1)
     expect(contextTexts(resolved)[0]).toContain(
@@ -235,7 +236,7 @@ describe('durable step context', () => {
       + 'Interpret otherwise-unqualified dates and times in this zone.',
     )
 
-    const mixed = Session.create(SessionId('browser-zone-mixed'))
+    const mixed = Session.create(brandString<SessionId>('browser-zone-mixed'))
     openMessageTurn(mixed, 1, 'Asia/Shanghai')
     mixed.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'steering from another browser' }],
@@ -255,7 +256,7 @@ describe('durable step context', () => {
 
   it('reports an unavailable later-step baseline at the matching turn boundary', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('later-step-boundary'))
+    const session = Session.create(brandString<SessionId>('later-step-boundary'))
     openMessageTurn(session, 4)
 
     await fire(ctx, sessionAgent(session), 4, 2)
@@ -267,7 +268,7 @@ describe('durable step context', () => {
 
   it('reports an unavailable later-step baseline when event lookup is exhausted', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('later-step-exhausted'))
+    const session = Session.create(brandString<SessionId>('later-step-exhausted'))
 
     await fire(ctx, sessionAgent(session), 1, 2)
 
@@ -278,7 +279,7 @@ describe('durable step context', () => {
 
   it('injects after backward wall-clock movement and clamps elapsed time to zero', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 60_000 })
-    const session = Session.create(SessionId('backward'))
+    const session = Session.create(brandString<SessionId>('backward'))
     const agent = sessionAgent(session)
     openMessageTurn(session, 1)
     await fire(ctx, agent, 1, 1)
@@ -295,7 +296,7 @@ describe('durable step context', () => {
     ['explicit interval', { refreshIntervalMs: 1_000 }, 1_000],
   ] as const)('uses a shadowed durable injection after resume at the exact %s threshold', async (_label, config, interval) => {
     const { ctx } = await mount(config)
-    const original = Session.create(SessionId('seed-source'))
+    const original = Session.create(brandString<SessionId>('seed-source'))
     openMessageTurn(original, 1)
     await fire(ctx, sessionAgent(original), 1, 1)
     const user = original.snapshotEvents().find(event => event.type === 'user/message' && event.data.source.kind === 'user')
@@ -311,7 +312,7 @@ describe('durable step context', () => {
     original.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     expect(JSON.stringify(original.deriveMessages())).not.toContain('Time sampled while preparing')
 
-    const resumed = Session.create(SessionId('resumed'), original.snapshotEvents())
+    const resumed = Session.create(brandString<SessionId>('resumed'), original.snapshotEvents())
     const resumedAgent = sessionAgent(resumed)
     vi.setSystemTime(BASE + interval - 1)
     openMessageTurn(resumed, 2)
@@ -333,7 +334,7 @@ describe('durable step context', () => {
 
   it('applies a positive interval across turns without sharing state between sessions', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 1_000 })
-    const first = Session.create(SessionId('interval-first'))
+    const first = Session.create(brandString<SessionId>('interval-first'))
     const firstAgent = sessionAgent(first, 'first-agent')
     openMessageTurn(first, 1)
     await fire(ctx, firstAgent, 1, 1)
@@ -344,7 +345,7 @@ describe('durable step context', () => {
     const beforeSkip = first.snapshotEvents().length
     await fire(ctx, firstAgent, 2, 1)
 
-    const independent = Session.create(SessionId('interval-independent'))
+    const independent = Session.create(brandString<SessionId>('interval-independent'))
     openMessageTurn(independent, 1)
     await fire(ctx, sessionAgent(independent, 'independent-agent'), 1, 1)
 
@@ -355,7 +356,7 @@ describe('durable step context', () => {
 
   it('skips an already-aborted prompt submission', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('ordering'))
+    const session = Session.create(brandString<SessionId>('ordering'))
     const agent = sessionAgent(session)
     openMessageTurn(session, 1)
 
@@ -373,7 +374,7 @@ describe('configuration and lifecycle', () => {
     process.env['TZ'] = 'Asia/Shanghai'
     const { ctx } = await mount()
     process.env['TZ'] = 'America/New_York'
-    const session = Session.create(SessionId('system-zone'))
+    const session = Session.create(brandString<SessionId>('system-zone'))
     openMessageTurn(session, 1)
 
     await fire(ctx, sessionAgent(session), 1, 1)
@@ -409,7 +410,7 @@ describe('configuration and lifecycle', () => {
 
   it('removes its listener when the plugin fiber disposes', async () => {
     const { ctx, fiber } = await mount()
-    const session = Session.create(SessionId('dispose'))
+    const session = Session.create(brandString<SessionId>('dispose'))
     const agent = sessionAgent(session)
     openMessageTurn(session, 1)
     await fire(ctx, agent, 1, 1)
@@ -425,7 +426,7 @@ describe('time-context projection fold edges', () => {
   it('restores browser zones from a JSON checkpoint and suffix without reading the prefix', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 0 })
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(SessionId('browser-checkpoint'))
+    const session = Session.create(brandString<SessionId>('browser-checkpoint'))
     openMessageTurn(session, 1, 'Asia/Shanghai')
     const cut = session.seq
     const rows = structuredClone(ctx.sessionProjections.checkpoint(session))
@@ -439,7 +440,7 @@ describe('time-context projection fold edges', () => {
     const restored = ctx.sessionProjections.restore(jsonRows, suffix, cut, session.header, session.inheritedEventCount)
     expect(restored.checkpoint.timeContext).toEqual(ctx.sessionProjections.checkpoint(session).timeContext)
 
-    const cold = Session.create(SessionId('browser-cold'), events)
+    const cold = Session.create(brandString<SessionId>('browser-cold'), events)
     const lookup = vi.spyOn(cold, 'eventAt')
     const snapshot = vi.spyOn(cold, 'snapshotEvents')
     const own = vi.spyOn(cold, 'ownEvents')
@@ -458,7 +459,7 @@ describe('time-context projection fold edges', () => {
   it('rebuilds an old checkpoint from the full journal and freezes the unit on unload', async () => {
     const { ctx, fiber } = await mount()
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(SessionId('browser-old-row'))
+    const session = Session.create(brandString<SessionId>('browser-old-row'))
     openMessageTurn(session, 1, 'Asia/Shanghai')
     const rows = ctx.sessionProjections.checkpoint(session)
     const oldRows = {
@@ -469,7 +470,7 @@ describe('time-context projection fold edges', () => {
         val: { lastMessageTime: BASE, lastInjectionTime: null, lastTurnInjectionTime: null },
       },
     }
-    const cold = Session.create(SessionId('browser-old-cold'), session.snapshotEvents())
+    const cold = Session.create(brandString<SessionId>('browser-old-cold'), session.snapshotEvents())
     ctx.sessionProjections.hydrate(cold, oldRows, cold.snapshotEvents(), SessionLogOffset(0))
     expect(ctx.sessionProjections.checkpoint(cold).timeContext).toEqual({
       ver: 3, seq: cold.seq - 1, val: rows.timeContext!.val,
@@ -479,13 +480,13 @@ describe('time-context projection fold edges', () => {
     openMessageTurn(cold, 2, 'UTC')
     // The released unit keeps the hydrated row and folds no event after the unload.
     expect(ctx.sessionProjections.checkpoint(cold)).toHaveProperty('timeContext', row)
-    expect(ctx.sessionProjections.checkpoint(Session.create(SessionId('browser-after-unload')))).not.toHaveProperty('timeContext')
+    expect(ctx.sessionProjections.checkpoint(Session.create(brandString<SessionId>('browser-after-unload')))).not.toHaveProperty('timeContext')
   })
 
   it('retains reported invalid zones without validating rejected or throttled requests', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 1000 })
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(SessionId('browser-refusal-timing'))
+    const session = Session.create(brandString<SessionId>('browser-refusal-timing'))
     const agent = sessionAgent(session)
     openMessageTurn(session, 1, 'UTC')
     await fire(ctx, agent, 1, 1)
@@ -511,7 +512,7 @@ describe('time-context projection fold edges', () => {
   it('keeps the historical requested-turn fallback and resets distinct zones on the next turn', async () => {
     const { ctx } = await mount({ refreshIntervalMs: 0 })
     onTestFinished(() => ctx.fiber.dispose())
-    const session = Session.create(SessionId('browser-historical-turn'))
+    const session = Session.create(brandString<SessionId>('browser-historical-turn'))
     session.append('user/message', createUserMessage({
       content: [],
       source: { kind: 'user', rpcId: 'before-turn', clientTimeZone: 'Europe/London' } as never,
@@ -537,7 +538,7 @@ describe('time-context projection fold edges', () => {
 
   it('clears the open-turn injection time at the next turn start', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('same-turn'))
+    const session = Session.create(brandString<SessionId>('same-turn'))
     session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'reading' }],
@@ -553,7 +554,7 @@ describe('time-context projection fold edges', () => {
 
   it('keeps the open-turn injection time null when turn/end arrives first', async () => {
     const { ctx } = await mount()
-    const session = Session.create(SessionId('end-without-start'))
+    const session = Session.create(brandString<SessionId>('end-without-start'))
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     expect(ctx.sessionProjections.checkpoint(session).timeContext?.val).toMatchObject({
       lastTurnInjectionTime: null,
@@ -573,7 +574,7 @@ describe('real agent-loop request history', () => {
       subject.cancel({ kind: 'user' })
       return next()
     })
-    const agent = await ctx.agentLoop.create(SessionId(`late-${mode}`), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>(`late-${mode}`), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'start' }], source: { kind: 'user' } }))
     await agent.whenIdle()
@@ -596,7 +597,7 @@ describe('real agent-loop request history', () => {
         return [{ type: 'text' as const, text: 'advanced' }]
       },
     }))
-    const agent = await ctx.agentLoop.create(SessionId('loop'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('loop'), { provider: 'mock', model: 'mock' })
 
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'start' }], source: { kind: 'user' } }))
     await agent.whenIdle()
@@ -649,7 +650,7 @@ describe('real Loader export path', () => {
     await ctx.plugin(AgentRegistry)
     const plugin = loader.unwrapExports(timeContext) as Parameters<Context['plugin']>[0]
     await ctx.plugin(plugin)
-    const session = Session.create(SessionId('loader'))
+    const session = Session.create(brandString<SessionId>('loader'))
     openMessageTurn(session, 1)
     await fire(ctx, sessionAgent(session), 1, 1)
     expect(contextTexts(session)[0]).toContain('Time sampled while preparing turn 1, step 1:')
