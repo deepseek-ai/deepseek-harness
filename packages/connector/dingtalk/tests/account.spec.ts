@@ -19,7 +19,7 @@ const LOGIN = 'auth login --no-browser --format json'
 const LOGOUT = 'auth logout --profile corp-fixture:user-fixture'
 const LOGIN_LINK = 'https://login.dingtalk.com/oauth2/auth?client_id=fixture-client&state=fixture-state'
 /** `binDir` and `skillsDir` download nothing, so the release prefix is never requested. */
-const CONFIG = { commandTimeoutMs: 5_000, releaseUrls: ['https://releases.invalid/download'] }
+const CONFIG = { commandTimeoutMs: 5_000, releaseUrls: ['https://releases.invalid/download'], releaseTimeoutMs: 5_000 }
 
 const status = (fields: Record<string, unknown>): CliReply => ({ stdout: `${JSON.stringify({ success: true, ...fields }, null, 2)}\n` })
 const CONNECTED = status({ authenticated: true, user_name: '测试用户', corp_name: '测试组织', corp_id: 'corp-fixture', user_id: 'user-fixture' })
@@ -114,7 +114,7 @@ describe('DingtalkAccount', () => {
     }]])
   })
 
-  it('installs dws and its skills in their own non-cancellable step before the first command', async () => {
+  it('installs dws and its skills in their own step before the first command', async () => {
     let installed = false
     const download = Promise.withResolvers<undefined>()
     release.installed = () => installed
@@ -122,14 +122,31 @@ describe('DingtalkAccount', () => {
     script[STATUS] = [SIGNED_OUT]
 
     const id = account.start('check')
-    await vi.waitFor(() => { expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: false }) })
-    await account.cancel(id)
+    await vi.waitFor(() => { expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true }) })
     expect(commands()).toEqual([])
     download.resolve(undefined)
 
     expect(await settled(id)).toEqual({ account: { state: 'signed-out' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(account.snapshot().operation).toBeUndefined()
     expect(release.install).toHaveBeenCalledOnce()
     expect(commands()).toEqual([STATUS])
+  })
+
+  it('cancels a download, which leaves dws not installed and runs no command', async () => {
+    release.installed = () => false
+    release.install = vi.fn((signal: AbortSignal) => new Promise<void>((_resolve, reject) => {
+      signal.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+    }))
+
+    const id = account.start('check')
+    await vi.waitFor(() => { expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'downloading', cancellable: true }) })
+    const cancelling = account.cancel(id)
+    expect(account.snapshot().operation).toEqual({ id, kind: 'check', phase: 'cancelling', cancellable: false })
+    await cancelling
+
+    expect(account.snapshot()).toEqual({ account: { state: 'not-installed' }, result: { id, kind: 'check', outcome: 'cancelled' } })
+    expect(commands()).toEqual([])
+    expect(errors()).toEqual([])
   })
 
   it('reports a download that did not finish without running a command', async () => {

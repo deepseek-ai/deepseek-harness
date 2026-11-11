@@ -16,7 +16,7 @@ import { DWS_RELEASE } from '../src/release.ts'
 import { createBinDir, createSkillsDir, ScriptedSubprocess } from './harness.ts'
 
 /** `binDir` and `skillsDir` download nothing, so the release prefix is never requested. */
-const CONFIG = { commandTimeoutMs: 5_000, releaseUrls: ['https://releases.invalid/download'] }
+const CONFIG = { commandTimeoutMs: 5_000, releaseUrls: ['https://releases.invalid/download'], releaseTimeoutMs: 5_000 }
 
 describe('DingTalk plugin', () => {
   let ctx: Context
@@ -121,5 +121,18 @@ describe('DingTalk plugin', () => {
     await fiber.dispose()
 
     expect(registry.withdrawn).toHaveBeenCalledOnce()
+  })
+
+  it('defaults to the official release sources with a five-minute limit per source, and accepts only whole positive limits', () => {
+    expect(Dingtalk.Config()).toMatchObject({
+      releaseUrls: [
+        'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
+        'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
+      ],
+      releaseTimeoutMs: 300_000,
+    })
+    expect(Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1 }).releaseTimeoutMs).toBe(1)
+    expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 0 })).toThrow()
+    expect(() => Dingtalk.Config({ ...CONFIG, releaseTimeoutMs: 1500.5 })).toThrow()
   })
 })

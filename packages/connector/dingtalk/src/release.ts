@@ -66,6 +66,8 @@ export interface DwsReleaseOptions {
   readonly skillsDir?: string | undefined
   /** Release download prefixes tried in order; each serves `v<version>/<asset name>`. */
   readonly releaseUrls: readonly string[]
+  /** How long one prefix may take to deliver an asset before the next one is tried. */
+  readonly releaseTimeoutMs: number
 }
 
 /** Locates dws and the `dingtalk` skill, and installs from the pinned release whichever is missing. */
@@ -85,8 +87,8 @@ export class DwsRelease {
 
   /**
    * Publish the skill root at once when the upstream skills are already present, so the first skill catalog lists it.
-   * @param options - the configured directories and download prefixes.
-   * @param logger - receives one warning for each download source that fails.
+   * @param options - the configured directories, download prefixes, and the time one prefix may take.
+   * @param logger - receives one warning for each download source that fails or does not deliver in time.
    * @param release - the release to install; defaults to {@link DWS_RELEASE}.
    * @throws when `binDir` holds no executable `dws`, `skillsDir` is not a directory, the release has no archive for this
    *   platform, or the skill root cannot be written.
@@ -127,9 +129,10 @@ export class DwsRelease {
 
   /**
    * Download whichever of the executable archive and the skills archive is missing, verify its size and digest, extract it
-   * beside its cache directory, and publish it there by rename; then publish the skill root. A directory that another
-   * process published first is kept.
-   * @param signal - aborts the downloads and the publishes.
+   * beside its cache directory, and publish it there by rename; then publish the skill root. A prefix that does not
+   * deliver an asset within `releaseTimeoutMs` is skipped for the next one. A directory that another process published
+   * first is kept.
+   * @param signal - aborts the downloads and the publishes without trying another prefix.
    * @returns after `dws` is executable in `directory` and the skill root is published.
    * @throws when `binDir` or `skillsDir` lost its content, every source of an archive fails, or the executable archive holds
    *   no `dws`.
@@ -205,7 +208,7 @@ export class DwsRelease {
     for (const base of this.options.releaseUrls) {
       const url = `${base.replace(/\/+$/u, '')}/v${this.release.version}/${archive.name}`
       try {
-        return await this.fetchArchive(url, archive, signal)
+        return await this.fetchArchive(url, archive, AbortSignal.any([signal, AbortSignal.timeout(this.options.releaseTimeoutMs)]))
       } catch (error) {
         signal.throwIfAborted()
         failure = error

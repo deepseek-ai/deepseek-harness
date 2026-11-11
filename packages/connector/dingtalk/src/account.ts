@@ -63,7 +63,7 @@ export class DingtalkAccount extends CliAccountRuntime<
       logger,
       account: { state: 'unchecked' },
       check: 'check',
-      cancellable: ['authorizing'],
+      cancellable: ['downloading', 'authorizing'],
       authorizationHosts: ['login.dingtalk.com'],
       classify: exitFailure,
     })
@@ -108,7 +108,10 @@ export class DingtalkAccount extends CliAccountRuntime<
     await this.check(control, signal)
   }
 
-  /** Install dws and its skills while either is missing, then read the current account, publish it, and return it. */
+  /**
+   * Install dws and its skills while either is missing, a step the page may cancel, then read the current account,
+   * publish it, and return it.
+   */
   private async check(control: Control, signal: AbortSignal): Promise<DingtalkAccountState> {
     if (!this.release.installed()) {
       control.stage('downloading')

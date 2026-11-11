@@ -29,6 +29,7 @@ export const COPY: ConnectorAccountCopy = {
 const CHECK = { kind: 'start', operation: 'check' } as const
 const SIGN_IN = { kind: 'start', operation: 'sign-in' } as const
 const SIGN_OUT = { kind: 'start', operation: 'sign-out' } as const
+const CANCEL: ConnectorAccountButton = { label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' }
 /* jscpd:ignore-end */
 
 type Operation = NonNullable<DingtalkState['operation']>
@@ -45,7 +46,7 @@ function presentOperation(operation: Operation): ConnectorAccountDisplay {
   const authorizing = step(operation) === 'step.authorizing' && operation.authorizationUrl !== undefined
   const buttons: ConnectorAccountButton[] = []
   if (authorizing) buttons.push({ label: text('action.open'), command: { kind: 'open' }, variant: 'primary' })
-  if (operation.cancellable) buttons.push({ label: text('action.cancel'), command: { kind: 'cancel' }, variant: 'ghost' })
+  if (operation.cancellable) buttons.push(CANCEL)
   return {
     phase: 'connecting', status: text(step(operation)), badge: text('badge.connecting'), buttons, notes: [],
     ...authorizing ? { detail: text('detail.authorizing') } : {},
@@ -68,7 +69,10 @@ function connectedDetail(account: Extract<Account, { readonly state: 'connected'
 export function presentAccount(view: DingtalkState): ConnectorAccountDisplay {
   const { account, operation } = view
   if (operation?.kind === 'check') {
-    return { phase: 'checking', status: text(operation.phase === 'downloading' ? 'step.downloading' : 'status.checking'), buttons: [], notes: [] }
+    return {
+      phase: 'checking', status: text(operation.phase === 'downloading' ? 'step.downloading' : 'status.checking'),
+      buttons: operation.cancellable ? [CANCEL] : [], notes: [],
+    }
   }
   if (operation !== undefined) return presentOperation(operation)
   const failed = view.result?.outcome === 'failed' ? view.result : undefined

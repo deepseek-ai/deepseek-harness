@@ -23,11 +23,12 @@ const labels = (display: ConnectorAccountDisplay): (string | undefined)[] => dis
 const SIGNED_OUT: DingtalkState = { account: { state: 'signed-out' } }
 const CONNECTED: DingtalkState = { account: { state: 'connected', userName: '测试用户', corpName: '测试组织' } }
 
-it('shows the dws download, then offers the next step while signing in', () => {
-  let shown = presentAccount({ account: { state: 'unchecked' }, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: false } })
-  expect(shown).toMatchObject({ phase: 'checking', status: say('step.downloading'), buttons: [] })
+it('shows the dws download with its cancel, then offers the next step while signing in', () => {
+  let shown = presentAccount({ account: { state: 'unchecked' }, operation: { id: OP, kind: 'check', phase: 'downloading', cancellable: true } })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('step.downloading') })
+  expect(shown.buttons.map(button => button.command)).toEqual([{ kind: 'cancel' }])
   shown = presentAccount({ account: { state: 'unchecked' }, operation: { id: OP, kind: 'check', phase: 'checking', cancellable: false } })
-  expect(shown).toMatchObject({ phase: 'checking', status: say('status.checking') })
+  expect(shown).toMatchObject({ phase: 'checking', status: say('status.checking'), buttons: [] })
   expect(presentAccount({ account: { state: 'unchecked' } })).toMatchObject({ phase: 'checking', status: say('status.checking'), buttons: [] })
 
   shown = presentAccount(SIGNED_OUT)

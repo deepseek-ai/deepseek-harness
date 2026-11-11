@@ -924,15 +924,17 @@ export interface Config {
 
 - `inject`: `skills` · `subprocess` · `systemPrompt`
 - `refs`: [`CliAccountConfig`](../packages/connector/cli-account/src/index.ts)
-- `source`: [`packages/connector/dingtalk/src/index.ts:32`](../packages/connector/dingtalk/src/index.ts)
+- `source`: [`packages/connector/dingtalk/src/index.ts:33`](../packages/connector/dingtalk/src/index.ts)
 
 ```ts config-catalog
-/** Where dws and its skills come from and how long a command that does not wait for the user may run. */
+/** Where dws and its skills come from, how long one download may take, and how long a command that does not wait for the user may run. */
 export interface Config extends CliAccountConfig {
   /** Directory holding the upstream skills laid out as `multi/` in the release's `dws-skills.zip`; when set, they are not downloaded. */
   skillsDir?: string
   /** Release download prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>`. */
   releaseUrls: string[]
+  /** How long one prefix may take to deliver an asset before the next one is tried. */
+  releaseTimeoutMs: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-dingtalk -->

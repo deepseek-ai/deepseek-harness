@@ -48,6 +48,8 @@ const PLATFORM = `${process.platform}-${process.arch}`
 /** The executable's file name in archives and directories: `dws`, or `dws.exe` on Windows. */
 const DWS = executableFileName('dws')
 const VERSION = '9.9.9'
+/** Long enough for every fixture download; the timeout case sets its own. */
+const TIMEOUT_MS = 5_000
 const ASSET = 'dws-fixture.tar.gz'
 const SKILLS = 'dws-skills.zip'
 const ENTRY = fileURLToPath(new URL('../skills/dingtalk/SKILL.md', import.meta.url))
@@ -131,17 +133,17 @@ const WARN_LEVEL = 2
 const logger = () => ctx.intercept('logger', { level: WARN_LEVEL }).logger
 /** A release that downloads only its executable archive. */
 const executableRelease = (archive: Buffer, releaseUrls: string[]) =>
-  new DwsRelease({ skillsDir, releaseUrls }, logger(), manifest(archive, Buffer.alloc(0)))
+  new DwsRelease({ skillsDir, releaseUrls, releaseTimeoutMs: TIMEOUT_MS }, logger(), manifest(archive, Buffer.alloc(0)))
 /** A release that downloads only its skills archive. */
 const skillsRelease = (skills: Buffer, releaseUrls: string[]) =>
-  new DwsRelease({ binDir, releaseUrls }, logger(), manifest(Buffer.alloc(0), skills))
+  new DwsRelease({ binDir, releaseUrls, releaseTimeoutMs: TIMEOUT_MS }, logger(), manifest(Buffer.alloc(0), skills))
 
 describe('the dws and skill locations', () => {
   it('accepts a configured executable and names its missing executable with the remedy', async () => {
-    const configured = new DwsRelease({ binDir, skillsDir, releaseUrls: [] }, ctx.logger)
+    const configured = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(configured.directory).toBe(binDir)
     expect(configured.installed()).toBe(true)
-    expect(() => new DwsRelease({ binDir: home, skillsDir, releaseUrls: [] }, ctx.logger))
+    expect(() => new DwsRelease({ binDir: home, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger))
       .toThrow(`dingtalk: ${join(home, DWS)} is not executable; set binDir to a directory containing an executable ${DWS}`)
 
     await rm(join(binDir, DWS))
@@ -150,12 +152,12 @@ describe('the dws and skill locations', () => {
 
   it('names a platform the release has no archive for', () => {
     const unsupported = { ...manifest(Buffer.alloc(0), Buffer.alloc(0)), archives: {} }
-    expect(() => new DwsRelease({ releaseUrls: [base] }, ctx.logger, unsupported))
+    expect(() => new DwsRelease({ releaseUrls: [base], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger, unsupported))
       .toThrow(`dingtalk: dws ${VERSION} has no release archive for ${PLATFORM}; set binDir`)
   })
 
   it.runIf(DWS_RELEASE.archives[PLATFORM] !== undefined)('writes nothing at load while the managed dws and skills are missing', async () => {
-    const managed = new DwsRelease({ releaseUrls: [base] }, ctx.logger)
+    const managed = new DwsRelease({ releaseUrls: [base], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(managed.directory).toBe(join(cache(), `dws-${DWS_RELEASE.version}-${PLATFORM}`))
     expect(managed.skillRoot).toMatch(/[\\/]cache[\\/]dingtalk[\\/]skill-[0-9a-f]{16}$/u)
     expect(managed.installed()).toBe(false)
@@ -163,17 +165,18 @@ describe('the dws and skill locations', () => {
   })
 
   it('publishes the skill root at load from configured skills, one root per entry and skills directory', async () => {
-    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [] }, ctx.logger)
+    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(managed.installed()).toBe(true)
     expect(await readFile(join(managed.skillRoot, 'dingtalk', 'SKILL.md'))).toEqual(await readFile(ENTRY))
     expect(await readlink(join(managed.skillRoot, 'dingtalk', 'guides'))).toBe(skillsDir)
     expect(await readFile(join(managed.skillRoot, 'dingtalk', 'guides', 'dingtalk-shared', 'SKILL.md'), 'utf8')).toContain('# Fixture guide')
 
     const relativeDir = relative(process.cwd(), skillsDir)
-    expect(new DwsRelease({ binDir, skillsDir: relativeDir, releaseUrls: [] }, ctx.logger).skillRoot).toBe(managed.skillRoot)
+    const relocated = new DwsRelease({ binDir, skillsDir: relativeDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
+    expect(relocated.skillRoot).toBe(managed.skillRoot)
     const otherDir = await createSkillsDir()
     onTestFinished(() => rm(otherDir, { recursive: true, force: true }))
-    const other = new DwsRelease({ binDir, skillsDir: otherDir, releaseUrls: [] }, ctx.logger)
+    const other = new DwsRelease({ binDir, skillsDir: otherDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(await readlink(join(other.skillRoot, 'dingtalk', 'guides'))).toBe(otherDir)
     expect(await cached()).toEqual([basename(managed.skillRoot), basename(other.skillRoot)].toSorted())
   })
@@ -182,12 +185,12 @@ describe('the dws and skill locations', () => {
     const file = join(home, 'file')
     await writeFile(file, '')
     for (const missing of [join(home, 'missing'), file]) {
-      expect(() => new DwsRelease({ binDir, skillsDir: missing, releaseUrls: [] }, ctx.logger))
+      expect(() => new DwsRelease({ binDir, skillsDir: missing, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger))
         .toThrow(`dingtalk: skillsDir ${missing} is not a directory; set it to the extracted multi directory of dws-skills.zip`)
     }
 
     const removed = await createSkillsDir()
-    const managed = new DwsRelease({ binDir, skillsDir: removed, releaseUrls: [] }, ctx.logger)
+    const managed = new DwsRelease({ binDir, skillsDir: removed, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     expect(managed.installed()).toBe(true)
     await rm(removed, { recursive: true })
     expect(managed.installed()).toBe(false)
@@ -195,7 +198,7 @@ describe('the dws and skill locations', () => {
   })
 
   it('republishes a skill root that lost its entry', async () => {
-    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [] }, ctx.logger)
+    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     await rm(join(managed.skillRoot, 'dingtalk', 'SKILL.md'))
     expect(managed.installed()).toBe(false)
 
@@ -206,7 +209,7 @@ describe('the dws and skill locations', () => {
   })
 
   it('keeps a skill root another process published while this one was renaming, and reports a failed publish', async () => {
-    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [] }, ctx.logger)
+    const managed = new DwsRelease({ binDir, skillsDir, releaseUrls: [], releaseTimeoutMs: TIMEOUT_MS }, ctx.logger)
     await rm(managed.skillRoot, { recursive: true })
     renameHook.beforeSync = () => {
       mkdirSync(join(managed.skillRoot, 'dingtalk'), { recursive: true })
@@ -234,6 +237,22 @@ describe('installing the pinned executable', () => {
     expect(managed.installed()).toBe(true)
     expect(await readFile(join(managed.directory, DWS), 'utf8')).toBe('#!/bin/sh\necho fixture\n')
     expect(await cached()).toEqual([`dws-${VERSION}-${PLATFORM}`, basename(managed.skillRoot)].toSorted())
+    expect(warnings()).toEqual([`dingtalk: downloading ${ASSET} from ${base} failed`])
+  })
+
+  it('tries the next source once one has not delivered the archive within the timeout', async () => {
+    const archive = await pack({ [DWS]: 'fixture' })
+    const stalled: ServerResponse[] = []
+    routes[asset('stalled')] = (response) => { stalled.push(response) }
+    routes[asset('mirror')] = serve(archive)
+    onTestFinished(() => { for (const response of stalled) response.destroy() })
+    const sources = [`${base}/stalled`, `${base}/mirror`]
+    const managed = new DwsRelease({ skillsDir, releaseUrls: sources, releaseTimeoutMs: 50 }, logger(), manifest(archive, Buffer.alloc(0)))
+
+    await managed.install(signal())
+
+    expect(managed.installed()).toBe(true)
+    expect(stalled).toHaveLength(1)
     expect(warnings()).toEqual([`dingtalk: downloading ${ASSET} from ${base} failed`])
   })
 
@@ -324,9 +343,10 @@ describe('installing the pinned executable', () => {
 
 describe('installing a zip release archive, the Windows form', () => {
   const ZIP = 'dws-fixture.zip'
-  const zipRelease = (archive: Buffer, releaseUrls: string[]) => new DwsRelease({ skillsDir, releaseUrls }, logger(), {
-    version: VERSION, archives: { [PLATFORM]: pinned(ZIP, archive) }, skills: pinned(SKILLS, Buffer.alloc(0)),
-  })
+  const zipRelease = (archive: Buffer, releaseUrls: string[]) => new DwsRelease(
+    { skillsDir, releaseUrls, releaseTimeoutMs: TIMEOUT_MS }, logger(),
+    { version: VERSION, archives: { [PLATFORM]: pinned(ZIP, archive) }, skills: pinned(SKILLS, Buffer.alloc(0)) },
+  )
 
   it('publishes the executable at the archive root and leaves the other files', async () => {
     const archive = zip({ [DWS]: strToU8('zipped'), 'README.md': strToU8('readme') })

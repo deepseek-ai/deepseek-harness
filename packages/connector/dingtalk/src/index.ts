@@ -11,6 +11,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { CliAccountConfig, CliCommandExecutor, executableFileName, registerCliPathContext } from '@deepseek-ai/dsh-cli-account'
 import * as SkillFilesystem from '@deepseek-ai/dsh-skill-filesystem'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type {} from '@deepseek-ai/dsh-client-ui-connector-account'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-subprocess'
@@ -28,12 +29,14 @@ export const name = 'dingtalk'
 /** Services the CLI, its skill, and its runtime context need. */
 export const inject = ['skills', 'subprocess', 'systemPrompt']
 
-/** Where dws and its skills come from and how long a command that does not wait for the user may run. */
+/** Where dws and its skills come from, how long one download may take, and how long a command that does not wait for the user may run. */
 export interface Config extends CliAccountConfig {
   /** Directory holding the upstream skills laid out as `multi/` in the release's `dws-skills.zip`; when set, they are not downloaded. */
   skillsDir?: string
   /** Release download prefixes tried in order for what `binDir` and `skillsDir` do not provide; each serves `v<version>/<asset name>`. */
   releaseUrls: string[]
+  /** How long one prefix may take to deliver an asset before the next one is tried. */
+  releaseTimeoutMs: number
 }
 
 /** Validates {@link Config}. */
@@ -45,6 +48,7 @@ export const Config: z<Config> = z.intersect([
       'https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/releases/download',
       'https://gitee.com/dingtalk-real-ai/dingtalk-workspace-cli/releases/download',
     ]),
+    releaseTimeoutMs: z.natural().min(1).max(MAX_TIMER_DELAY_MS).default(300_000),
   }),
 ])
 

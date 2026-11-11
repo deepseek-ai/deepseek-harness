@@ -30,6 +30,9 @@
       "path": "../../util/home-paths"
     },
     {
+      "path": "../../util/timeout"
+    },
+    {
       "path": "../cli-account"
     },
     {
