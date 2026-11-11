@@ -124,7 +124,7 @@ Remote 路由提供 `create`、`list`、`catalog`、`view`、`history`、`edit`�
 <a id="saved-delivery-records"></a>
 ## 已保存投递记录
 
-回执记录 `scheduledAt`、`deliveredAt`、`messageId` 和 `targetSessionId`；它确认持久 Session 收件箱写入，而非模型完成。已保存记录还可含不可变的已发送 `prompt`。旧回执缺少目标 id 时，在任何重新指定目标的编辑之前使用已解析的可复用目标，因此后续目标不会重写其历史。 回执既没有显式目的地也没有已知复用目标时，拒绝解码；新默认预留不能证明历史目的地。
+回执记录 `scheduledAt`、`deliveredAt`、`messageId` 和 `targetSessionId`；它确认持久 Session 收件箱写入，而非模型完成。定时投递的回执 `scheduledAt` 是所投递发生时点的目标时间。手动与 source 投递的该字段是在目标解析后、入队前采样的时间，而非任务已存发生时点。`deliveredAt` 在 Session 持久化确认后采样。已保存记录还可含不可变的已发送 `prompt`。旧回执缺少目标 id 时，在任何重新指定目标的编辑之前使用已解析的可复用目标，因此后续目标不会重写其历史。 回执既没有显式目的地也没有已知复用目标时，拒绝解码；新默认预留不能证明历史目的地。
 
 新任务从已知的空历史开始。旧行没有 `deliveryHistory` 时，暴露其最新回执（如有），并设置 `earlierRecordsUnavailable: true`；不会编造丢失的历史或指令快照。省略的 `earlierRecordsPruned` 读为 false。消息 id 重复，或最新保存记录与 `lastDelivery` 不一致，均拒绝解码。
 
@@ -135,7 +135,7 @@ Remote 路由提供 `create`、`list`、`catalog`、`view`、`history`、`edit`�
 
 一个 Host 定时器驱动活动任务。运行时与管理写入共用一个 FIFO。已有和预留 Session 通过 `schedule/resolve-agent` 解析，由嵌入环境拥有激活，已注入的 Web 控制器作为后备。复用 Session 的任务占用执行槽，直到目标 Agent 空闲；期间发生的时点会合并。`new` 目标允许多个执行并行。到期且投向相同已有 Session 的重复记录共享一条消息；`after` 和 `at` 单独投递。
 
-定时与手动投递均遵守单任务 60 秒最小间隔。`newSessionIntervalSeconds` 可为 `new` 目标提高间隔，最多一周。已存后继时点保持间隔时，下界从上次发生时点计算；否则从上次确认计算，因此投递延迟不会移动规则锚点。读取仅在适用时暴露 `executionActive` 和 `deliveryFloorEndsAt`。
+定时、手动与 source 投递共用单任务 60 秒最小间隔。`newSessionIntervalSeconds` 可为 `new` 目标提高间隔，最多一周。任务已存发生时点保持间隔时，下界从最新回执的 `scheduledAt` 计算；否则从上次确认计算，因此投递延迟不会改变重复计划。手动或 source 投递可以延迟下一次定时投递，但不改变其已存发生时点。读取仅在适用时暴露 `executionActive` 和 `deliveryFloorEndsAt`。
 
 Session 收件箱持久化先于任务回执写入，因此两份存储之间崩溃可能重复投递。Host 必须运行。指向某 Session 的活动任务会参与其归档准入；归档停止操作会删除这些活动任务。
 

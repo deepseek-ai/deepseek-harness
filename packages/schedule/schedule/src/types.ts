@@ -395,7 +395,10 @@ export type ScheduleTargetRequest =
 
 /** Durable Session inbox delivery acknowledgment, not model execution completion. */
 export interface ScheduleDeliveryReceipt {
-  /** Canonical UTC target of the delivered occurrence. */
+  /**
+   * Canonical UTC occurrence target for timed delivery, or the time sampled after target resolution and before
+   * enqueue for manual and source delivery; those deliveries do not change the task's scheduled occurrence.
+   */
   readonly scheduledAt: string
   /** Canonical UTC time sampled after Session persistence acknowledged delivery. */
   readonly deliveredAt: string

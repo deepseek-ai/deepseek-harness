@@ -91,6 +91,7 @@ it('delivers source input beside the stored prompt and commits a receipt without
       record: initial.record, status: 'active',
       lastDelivery: {
         messageId: test.agent.followup.mock.calls[0]![0].id,
+        scheduledAt: '2026-09-16T00:00:00.000Z',
         targetSessionId: TARGET, deliveredAt: '2026-09-16T00:00:00.000Z',
       },
       deliveryHistory: { records: [expect.objectContaining({ prompt: 'Inspect the build' })] },
@@ -121,6 +122,35 @@ it('shares the minimum delivery interval with manual execution', async () => {
   await test.service.run({ id: ID })
   await expect(test.source.publish(INPUT)).rejects.toMatchObject(rejected('SOURCE_TASK_BUSY'))
   expect(test.agent.followup).toHaveBeenCalledOnce()
+})
+
+it('defers a timed occurrence thirty seconds after source delivery until their shared sixty-second interval ends', async () => {
+  const record = createAfterScheduleRecord(ID, 'Inspect the build', 30, Date.now(), 'Build check')
+  const test = await setup(boundTask(TARGET, record))
+  await test.source.publish(INPUT)
+  expect(taskTable(test.ctx).get(ID)).toMatchObject({
+    record: { scheduledAt: '2026-09-16T00:00:30.000Z' }, status: 'active',
+    lastDelivery: { scheduledAt: '2026-09-16T00:00:00.000Z', deliveredAt: '2026-09-16T00:00:00.000Z' },
+  })
+
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  expect(taskTable(test.ctx).get(ID)).toMatchObject({ record, status: 'active' })
+  await vi.advanceTimersByTimeAsync(29_999)
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(test.agent.followup).toHaveBeenCalledTimes(2)
+  expect(taskTable(test.ctx).get(ID)).toMatchObject({
+    record, status: 'ended',
+    lastDelivery: { scheduledAt: '2026-09-16T00:00:30.000Z', deliveredAt: '2026-09-16T00:01:00.000Z' },
+  })
+  expect(test.agent.followup.mock.calls[1]![0].content).toEqual([{ type: 'text', text: [
+    '[SCHEDULE REMINDER]',
+    'This is a scheduled message from the user',
+    'schedule_id_json: "source-task"',
+    'occurrence_at: 2026-09-16T00:00:30.000Z',
+    'reminder_prompt_json: "Inspect the build"',
+  ].join('\n') }])
 })
 
 it('keeps the execution slot while the target Agent is busy beyond the minimum interval', async () => {

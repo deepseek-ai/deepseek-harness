@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 
-const driver = fileURLToPath(new URL('./fixtures/loader/driver.ts', import.meta.url))
-const configPath = fileURLToPath(new URL('./fixtures/loader/cordis.yml', import.meta.url))
-const tsconfigPath = fileURLToPath(new URL('../../../../tsconfig.base.json', import.meta.url))
-const expectedPath = new URL('./expected/source-input.txt', import.meta.url)
+const driver = fileURLToPath(new URL('../fixtures/loader/driver.ts', import.meta.url))
+const configPath = fileURLToPath(new URL('../fixtures/loader/cordis.yml', import.meta.url))
+const tsconfigPath = fileURLToPath(new URL('../../../../../tsconfig.base.json', import.meta.url))
+const expectedPath = new URL('./source-input.txt', import.meta.url)
 
 describe('source instances through app boot and Loader', () => {
   it('combines typed observations into logged task input and releases the Loader-owned subscriptions', async () => {

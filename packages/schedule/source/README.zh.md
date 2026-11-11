@@ -44,7 +44,7 @@ await first.dispose()
 await second.dispose()
 ```
 
-需要投递到任务时，在 `@deepseek-ai/dsh-schedule` 之前挂载 `@deepseek-ai/dsh-source`，并保留 Schedule 正常使用的存储与 Session 依赖。组合插件注入 `automationTasks`，对 `AutomationSource<AutomationCandidate>` 调用 `ctx.automationTasks.connect(source, taskId)`。任务服务接收 `{ text }` 输出；中间 source 可以使用任意具有类型约束的输出。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
+需要投递到任务时，同时挂载 `@deepseek-ai/dsh-source` 和 `@deepseek-ai/dsh-schedule`，并保留 Schedule 正常使用的存储与 Session 依赖。组合插件注入 `automationTasks` 及其任务服务（这里的接收者使用 `schedule`），对 `AutomationSource<AutomationCandidate>` 调用 `ctx.automationTasks.connect(source, taskId)`。任务服务接收 `{ text }` 输出；中间 source 可以使用任意具有类型约束的输出。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
 
 组合插件通过 `ctx.effect()` 拥有 source 和连接。在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
 
@@ -97,4 +97,5 @@ source 订阅不会改变请求前缀。任务投递通过接收服务追加输�
 
 - source 实例、连接和中间状态仅存在于进程内。插件必须明确拥有需要持久化的观测状态，并在重启后重建组合。
 - 组合通过代码完成。本包不提供 source 编辑器、持久化依赖图、内置观测实现或通用轮询与重试策略。
+- source 的所有者在发布之前限制观测大小与输出速率。本 API 完整保留候选文本，不做截断，也不设置包级大小上限。
 - Schedule 的 source 接收者只接受已存在的活动任务，并保留其时间规则。这种连接不替换已存储的时间模型，也不创建纯事件任务。

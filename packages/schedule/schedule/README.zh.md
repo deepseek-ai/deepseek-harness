@@ -185,6 +185,8 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 
 挂载 `automationTasks` 时，Schedule 向 [`dsh-source`](../source/README.zh.md) 注册异步任务接收者。source 连接为已有活动任务提供额外文本。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
 
+source、手动与定时投递共用单任务准入：复用目标共用执行槽，所有目标共用各自的最小投递间隔。因此，source 投递可能延迟后续到期投递，但不改变任务存储的 `scheduledAt`。`new_once` 目标的首次 source 投递可以在原定时发生时点之前创建预留 Session；确认后，后续投递复用该 Session。`new` 目标每次 source 投递创建一个 Session，创建时间也可能早于原定时发生时点。
+
 任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝，执行占用或最小间隔拒绝准入时以 `SOURCE_TASK_BUSY` 拒绝。目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；接收者和 source 路由器都不自动重试。移除接收者立即停止新输入，并在关闭存储之前排空已接受的投递。连接和中间 source 状态不存入任务记录。
 
 </details>

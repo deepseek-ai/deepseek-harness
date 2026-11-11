@@ -180,7 +180,7 @@ export class ScheduleRuntime {
       }
       const target = await this.resolveTarget(task)
       if (this.stopping) throw new Error('Schedule runtime is stopping')
-      // Sample the occurrence after Session restoration, which can take longer than one recurrence interval.
+      // Sample after Session restoration, which can take longer than one delivery interval.
       const occurrenceAt = new Date(Date.now()).toISOString()
       const held = task.target.kind !== 'new' ? [id] : []
       const reminder = renderReminderFraming({ ...task.record, scheduledAt: occurrenceAt })

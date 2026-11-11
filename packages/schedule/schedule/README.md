@@ -185,6 +185,8 @@ History stays with the task and is pruned only on append. Missing old history ke
 
 When `automationTasks` is mounted, Schedule registers an asynchronous task receiver with [`dsh-source`](../source/README.md). A source connection supplies additional text for an existing active task. Schedule checks status and admission inside the same FIFO as management, then uses the existing target, Session flush, and receipt commit. The stored instruction, timing, and active status remain unchanged; source input is not a timed occurrence and does not advance or end the task.
 
+Source, manual, and timed deliveries share per-task admission: reused targets share an execution slot, and every target shares its minimum delivery interval. A source delivery can therefore delay an upcoming timed delivery without changing the task's stored `scheduledAt`. The first source delivery to a `new_once` target can create its reserved Session before the timed occurrence; after acknowledgment, later deliveries reuse that Session. A `new` target creates a Session for each source delivery, which can also occur before the timed occurrence.
+
 Missing tasks reject with `SOURCE_TASK_UNAVAILABLE`, paused or ended tasks with `SOURCE_TASK_INACTIVE`, and execution or interval admission with `SOURCE_TASK_BUSY`. Target and persistence failures propagate to the source. Session and task commits are separate, so a failure can follow inbox acceptance; neither this receiver nor the source router retries automatically. Receiver removal stops new input and drains accepted deliveries before storage closes. Connections and intermediate source state are not stored in task rows.
 
 </details>

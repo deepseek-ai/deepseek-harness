@@ -44,7 +44,7 @@ await first.dispose()
 await second.dispose()
 ```
 
-For task delivery, mount `@deepseek-ai/dsh-source` before `@deepseek-ai/dsh-schedule`, with Schedule's normal storage and Session dependencies. A composing plugin injects `automationTasks` and calls `ctx.automationTasks.connect(source, taskId)` for an `AutomationSource<AutomationCandidate>`. The task service receives `{ text }` output; intermediate sources can use any typed output instead. One source can connect to several tasks, and several sources can connect to the same task.
+For task delivery, mount both `@deepseek-ai/dsh-source` and `@deepseek-ai/dsh-schedule`, with Schedule's normal storage and Session dependencies. A composing plugin injects `automationTasks` and its task service (`schedule` for this receiver), then calls `ctx.automationTasks.connect(source, taskId)` for an `AutomationSource<AutomationCandidate>`. The task service receives `{ text }` output; intermediate sources can use any typed output instead. One source can connect to several tasks, and several sources can connect to the same task.
 
 The composing plugin owns its sources and connections through `ctx.effect()`. Stop and drain producers before releasing dependent sources or task storage. A composite source disconnects its own upstream subscriptions; it does not dispose borrowed upstream instances. A receiver must not await its own connection's disposal from inside that receiver, because disposal waits for the call to return.
 
@@ -97,4 +97,5 @@ Source subscriptions do not change request prefixes. Task delivery appends input
 
 - Source instances, connections, and intermediate state are process-local. A plugin must explicitly own any durable observation state and reconstruct its composition after restart.
 - Composition is programmatic. This package supplies no source editor, persisted dependency graph, built-in observation provider, or generic polling/retry policy.
+- Source owners bound observation size and output rate before publishing. This API preserves candidate text without truncation or a package-level size limit.
 - Schedule's source receiver accepts active existing tasks and preserves their timing. This connection does not replace the stored timing model or create event-only tasks.

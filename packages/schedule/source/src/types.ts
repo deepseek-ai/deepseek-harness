@@ -22,7 +22,7 @@ export interface SourceConnection {
 
 /** Content produced by a source for delivery to an automation task. */
 export interface AutomationCandidate {
-  /** Additional input accompanying the task's stored instruction. */
+  /** Additional input accompanying the stored instruction; the producer owns size limits, and delivery does not truncate it. */
   readonly text: string
 }
 

@@ -15,6 +15,7 @@ const ctx = await boot('source-composition', resolveConfigPath(configPath, undef
 let observedInput = ''
 let taskId = ''
 let receiptMessageId = ''
+let receiptScheduledAt = ''
 try {
   const world = ctx.get('sourceComposition')
   assert.ok(world, 'Loader must publish the composed source fixture')
@@ -32,13 +33,18 @@ try {
   assert.deepEqual(beforePair.records, [])
   assert.equal(world.adapter.requests.length, 0, 'one input cannot produce a composite delivery')
 
+  const deliveryStartedAt = Date.now()
   await world.right.sample('tests failed\n"review" \\ observed')
+  const deliveryFinishedAt = Date.now()
   const history = await schedule.history({ id: world.task.id, limit: 10 })
   assert.ok('records' in history)
   assert.equal(history.records.length, 1)
   const receipt = history.records[0]
   assert.ok(receipt)
   receiptMessageId = receipt.messageId
+  receiptScheduledAt = receipt.scheduledAt
+  assert.ok(Date.parse(receiptScheduledAt) >= deliveryStartedAt, 'source receipt uses the current delivery sample')
+  assert.ok(Date.parse(receiptScheduledAt) <= deliveryFinishedAt, 'source receipt cannot use the future timed occurrence')
   assert.equal(receipt.targetSessionId, world.agent.id)
 
   // The receipt identifies accepted input; whole-agent idle bounds the subsequent request observation.
@@ -101,6 +107,7 @@ try {
     assert.equal(task.record.scheduledAt, '2099-01-01T00:00:00.000Z')
     assert.equal(task.status, 'active')
     assert.equal(task.lastDelivery?.messageId, receiptMessageId)
+    assert.equal(task.lastDelivery?.scheduledAt, receiptScheduledAt)
     assert.equal(task.deliveryHistory.records.length, 1)
   } finally {
     await unit.close()
