@@ -1,18 +1,19 @@
 /** Controlled source and engine completions exercise admission and shared content ownership. */
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ConversionQueue, type QueueRequest } from '../src/queue.ts'
-import { Config, OfficeSourceKey, OfficeKitGeneration, type OfficeKitRequest } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { Config, type OfficeSourceKey, type OfficeKitGeneration, type OfficeKitRequest } from '../src/index.ts'
 
 const output = { kind: 'pdf' as const, pdf: new Uint8Array([37, 80, 68, 70]), missingFonts: ['Font'] }
 function source(key: string, byte = 1, priority: OfficeKitRequest['priority'] = 'foreground') {
   const read = vi.fn<OfficeKitRequest['source']['read']>().mockResolvedValue({ bytes: new Uint8Array([byte]), version: 'v1' })
   const request = { extension: 'docx', priority, operation: { kind: 'pdf' as const },
-    source: { key: OfficeSourceKey(key), version: 'v1', bytes: 1, read } } satisfies QueueRequest
+    source: { key: brandString<OfficeSourceKey>(key), version: 'v1', bytes: 1, read } } satisfies QueueRequest
   return { read, request }
 }
 function harness(config: Partial<Config> = {}) {
   const convert = vi.fn<ConstructorParameters<typeof ConversionQueue>[2]>().mockResolvedValue(output)
-  const queue = new ConversionQueue(Config(config), OfficeKitGeneration('test'), convert)
+  const queue = new ConversionQueue(Config(config), brandString<OfficeKitGeneration>('test'), convert)
   onTestFinished(() => queue.dispose())
   return { queue, convert }
 }
@@ -336,7 +337,7 @@ it('separates Office extensions and converter generations in content identity', 
   const h = harness(), a = source('a')
   const first = await h.queue.read(a.request)
   const otherFormat = await h.queue.read({ ...a.request, extension: 'pptx' })
-  const other = new ConversionQueue(Config({}), OfficeKitGeneration('replacement'), h.convert)
+  const other = new ConversionQueue(Config({}), brandString<OfficeKitGeneration>('replacement'), h.convert)
   onTestFinished(() => other.dispose())
   const replacement = await other.read(a.request)
   expect(first.cacheKey).not.toBe(otherFormat.cacheKey)

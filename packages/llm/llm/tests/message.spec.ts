@@ -1,7 +1,8 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  ToolCallId,
+  type ToolCallId,
   boundContextSummary,
   CONTEXT_SUMMARY_MAX_CHARS,
   createAssistantMessage,
@@ -10,7 +11,7 @@ import {
   createToolResultMessage,
   createUserMessage,
   freezeMessage,
-  MessageId,
+  type MessageId,
 } from '@deepseek-ai/dsh-llm'
 import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 
@@ -22,10 +23,10 @@ describe('extractTextContent', () => {
         { type: 'text', text: ' \talpha\n' },
         { type: 'reasoning', text: 'private reasoning' },
         { type: 'image', attachment: {
-          attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+          attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
           mediaType: 'image/png', bytes: 1, width: 1, height: 1,
         } },
-        { type: 'tool-call', id: ToolCallId('call'), name: 'tool', arguments: '{}' },
+        { type: 'tool-call', id: brandString<ToolCallId>('call'), name: 'tool', arguments: '{}' },
         { type: 'text', text: '' },
         { type: 'tool-removal', toolName: 'removed' },
         { type: 'text', text: 'β \r\n' },
@@ -107,7 +108,7 @@ describe('message construction', () => {
   })
 
   it('freezes an existing identity without minting a replacement', () => {
-    const id = MessageId('existing')
+    const id = brandString<MessageId>('existing')
     const input = {
       id,
       role: 'assistant' as const,
@@ -148,7 +149,7 @@ describe('message construction', () => {
   })
 
   it('couples tool-result content and its cited call seq to one call identity', () => {
-    const callId = ToolCallId('call-1')
+    const callId = brandString<ToolCallId>('call-1')
     const message = createToolResultMessage({
       callId,
       content: [{ type: 'text', text: 'result' }],

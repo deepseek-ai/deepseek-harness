@@ -1,4 +1,4 @@
-name: Package CUA helper · macOS
+name: Package CUA helper · macOS · arm64 + x64
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
       reuse:
         type: boolean
         default: false
-      cua_run_id:
+      cua_macos_run_id:
         type: string
         default: ''
       preset:
@@ -75,7 +75,7 @@ jobs:
         id: retained
         env:
           GH_TOKEN: ${{ github.token }}
-          CUA_RUN_ID: ${{ inputs.cua_run_id }}
+          CUA_MACOS_RUN_ID: ${{ inputs.cua_macos_run_id }}
           CUA_BUILD_KEY: ${{ steps.build-inputs.outputs.build-key }}
         run: node scripts/cua-helper/select-artifact.ts
       - uses: pnpm/action-setup@v5.0.0
@@ -96,7 +96,7 @@ jobs:
         if: steps.retained.outputs.artifact-id == ''
         id: upload
         with:
-          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.build-inputs.outputs.build-key }}
+          name: cua-helper-macos-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.build-inputs.outputs.build-key }}
           path: dist/cua-helper/*
           if-no-files-found: error
           compression-level: 0

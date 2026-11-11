@@ -1,4 +1,5 @@
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 // @vitest-environment jsdom
 /**
  * SlotTestRuntime behavior: root declaration + rendering, session
@@ -17,7 +18,7 @@ import { createScope, type SessionReference } from '@deepseek-ai/dsh-api-session
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
-  PropsRenderSlots, SessionStandardProps, SlotRendererHost,
+  GlobalStandardProps, PropsRenderSlots, SessionStandardProps, SlotRendererHost,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 
@@ -742,7 +743,7 @@ describe('fixture session face', () => {
     const bare = runtime.sessions.behavior('s1')
     expect(() => bare.prompt()).toThrow(/prompt is not stubbed/)
     expect(() => bare.readAttachment({
-      attachmentId: AttachmentId('att-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>('att-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
     })).toThrow(/readAttachment is not stubbed/)
     expect(() => bare.updateQueue()).toThrow(/updateQueue is not stubbed/)
     expect(() => bare.cancel()).toThrow(/cancel is not stubbed/)
@@ -787,6 +788,25 @@ describe('fixture session face', () => {
     expect(view.container.textContent).toContain('todos:1')
     // A never-subscribed key sets without listeners (the empty-notify arm).
     session.projections.set('untouched', 1)
+    await runtime.dispose()
+  })
+
+  it('publishes running status through the real ui-session-status root hook', async () => {
+    const reference = createSnapshotStore<SessionReference | undefined>(undefined)
+    const runtime = await runtimeWithFrame(reference)
+    runtime.slots.register({ name: 'trt.chat' }, (props: SessionStandardProps & GlobalStandardProps) => (
+      <span>running:{props.useSessionStatus(status => String(status.get(props.sessionId)?.running))}</span>
+    ))
+    const view = runtime.renderRoot()
+    await runtime.sessions.add({ id: 's1' })
+    using bound = runtime.sessions.retain('s1' as SessionId)
+    await bound.ready
+    act(() => { reference.set(bound) })
+    expect(view.container.textContent).toContain('running:false')
+
+    act(() => { runtime.remote.emit('api-session/status', ['s1', true]) })
+    expect(view.container.textContent).toContain('running:true')
+    expect(runtime.ctx.uiSession.sessionStatus.getSnapshot().get('s1' as SessionId)?.running).toBe(true)
     await runtime.dispose()
   })
 

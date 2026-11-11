@@ -424,6 +424,7 @@ function sharedHygieneGates(): Gate[] {
     pnpmScript('no-bare-dispatcher', 'verify-no-bare-dispatcher', { label: 'proxy-aware dispatchers' }),
     pnpmScript('plugin-record-callers', 'verify-plugin-record-callers', { label: 'plugin record callers' }),
     pnpmScript('no-unknown-casts', 'verify-no-unknown-casts', { label: 'no new unknown casts' }),
+    pnpmScript('empty-catch', 'verify-empty-catch', { label: 'no new silent catches' }),
     pnpmScript('no-top-level-await', 'verify-no-top-level-await', { label: 'no module-scope await' }),
     pnpmScript('plugin-entry-exports', 'verify-plugin-entry-exports', { label: 'plugin entry exports' }),
   ]
@@ -942,6 +943,7 @@ function builtBinSmokeGate(needs: string[] = ['build']): Gate {
     'packages/ptc-runtime/ptc-runtime-node/tests/built-lib.e2e.ts',
     'packages/session/session-persistence-jsonl/tests/built-migration-worker.e2e.ts',
     'packages/lsp/lsp-stdio/tests/built-lib.e2e.ts',
+    'packages/experimental/browser-use-stagehand-native/tests/built-attachment.e2e.ts',
   ], {
     label: 'built-bin smoke',
     needs,

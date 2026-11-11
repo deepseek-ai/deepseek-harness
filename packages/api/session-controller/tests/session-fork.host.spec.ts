@@ -8,10 +8,11 @@ import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-ag
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { type ToolCallId, createMessage, createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionPersistenceRevision, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -114,7 +115,7 @@ describe('sessions.fork', () => {
       await detach()
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:cold-source'),
+        revision: brandString<SessionPersistenceRevision>('test:cold-source'),
         ...status === undefined ? {} : { formatStatus: status },
       }
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
@@ -145,7 +146,7 @@ describe('sessions.fork', () => {
       const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:requires-migration'),
+        revision: brandString<SessionPersistenceRevision>('test:requires-migration'),
         formatStatus: 'migration-required',
       }
       const stat = vi.fn(async () => snapshot)
@@ -193,7 +194,7 @@ describe('sessions.fork', () => {
       const source = ctx.sessions.prepare(sourceId, { meta: { cwd: '/proj' } })
       const snapshot: SessionPersistenceSnapshot = {
         header: source.header,
-        revision: SessionPersistenceRevision('test:attaching-source'),
+        revision: brandString<SessionPersistenceRevision>('test:attaching-source'),
         formatStatus: 'migration-required',
       }
       const entered = Promise.withResolvers<undefined>()
@@ -565,7 +566,7 @@ describe('sessions.fork', () => {
   it('repairs a cold open-step cut without resuming its Agent', async () => {
     const ctx = await composed()
     const sourceId = sid('session-cold-mid-turn')
-    const callId = ToolCallId('cold-dangling')
+    const callId = brandString<ToolCallId>('cold-dangling')
     const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: sourceId, createdAt: 1, cwd: '/proj', isSeeded: false }
     const events = [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
@@ -648,7 +649,7 @@ describe('sessions.fork', () => {
         config: {
           provider: 'inherited-provider',
           model: 'inherited-model',
-          reasoningEffort: ReasoningEffortId('high'),
+          reasoningEffort: brandString<ReasoningEffortId>('high'),
         },
       },
       reason: 'initial',

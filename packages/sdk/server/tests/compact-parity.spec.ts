@@ -12,10 +12,11 @@ import * as CommandCompact from '@deepseek-ai/dsh-command-compact'
 import BasicCompactionEngine from '@deepseek-ai/dsh-compaction-basic'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const HISTORY = 'Preserve the migration requirement: keep the existing public file format and validate the result. '.repeat(80)
 const SUMMARY = 'Keep the existing public file format and validate the migration.'
@@ -79,7 +80,7 @@ async function compactAndContinue(path: 'sdk' | 'native', cwd: string) {
       notify: () => {},
     })
     await server.initialize({ cwd, provider: 'compact-parity', model: 'compact-parity' })
-    const sessionId = SessionId('main')
+    const sessionId = brandString<SessionId>('main')
     await server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: HISTORY }] })
     await server.wait({ sessionId })
     const agent = ctx.agents.get(sessionId)

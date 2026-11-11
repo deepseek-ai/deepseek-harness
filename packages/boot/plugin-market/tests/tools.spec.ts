@@ -4,7 +4,8 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context, Service } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import PluginMarket from '../src/index.ts'
 import * as tool from '../src/tools.ts'
@@ -37,7 +38,7 @@ async function fixture() {
   await ctx.plugin(NativeToolExecutor)
   const fiber = await ctx.plugin(tool)
   const call = async (args: unknown, signal = new AbortController().signal) => {
-    const result = await executeToolFixture(ctx, { name: 'plugin_market', arguments: args, callId: ToolCallId('market-call'), signal })
+    const result = await executeToolFixture(ctx, { name: 'plugin_market', arguments: args, callId: brandString<ToolCallId>('market-call'), signal })
     return { ...result, json: typeof result.value === 'string' ? JSON.parse(result.value) as Record<string, unknown> : undefined }
   }
   return { ctx, call, fiber }

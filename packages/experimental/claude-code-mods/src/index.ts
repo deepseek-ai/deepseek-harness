@@ -16,8 +16,9 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
-import { type AssistantMessage, type ContentBlock, type TokenUsage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { AssistantMessage, ContentBlock, TokenUsage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
@@ -226,7 +227,7 @@ export class ClaudeCodeMods extends TypertRemoteService {
     const modCommands = new Set<string>()
     const modTools = new Set<string>()
     const report = (line: string): void => { ctx.logger.warn(`claude-code-mods: ${line}`) }
-    const agentOf = (sessionId: string): Agent | undefined => ctx.get('agents')?.get(SessionId(sessionId))
+    const agentOf = (sessionId: string): Agent | undefined => ctx.get('agents')?.get(brandString<SessionId>(sessionId))
     const detached = new DetachedRuns(report)
     const surfaces = new SurfaceTable({
       columns: bandColumns,

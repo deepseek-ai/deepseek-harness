@@ -4,7 +4,7 @@ import { Blob as NodeBlob } from 'node:buffer'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import type { ContextMenus, ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
@@ -15,8 +15,9 @@ import { OpenInAppController } from '../src/client/controller.ts'
 import { registerFileMenus } from '@deepseek-ai/dsh-client-ui-file-actions/src/client/context-menus.tsx'
 import { registerContextMenus } from '../src/client/context-menus.tsx'
 import type { OpenInAppToastSource } from '../src/client/open-toast.tsx'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const sessionId = SessionId('menu-actions')
+const sessionId = brandString<SessionId>('menu-actions')
 type Applications = readonly SessionWorkspacePathApplication[]
 /** Let settled Remote answers finish their queued continuations. */
 const settle = () => new Promise<void>((resolve) => { setTimeout(resolve, 0) })
@@ -119,7 +120,7 @@ it('routes file actions through an explicit host, the line, native association a
   await expect(source.read!(new AbortController().signal)).rejects.toThrow('Original file unavailable')
   await h.choose(file, 'file-actions.file/saveAs')
   await vi.waitFor(() => { expect(h.notify).toHaveBeenCalledWith('menu.saved', true, expect.objectContaining({ label: 'menu.reveal' })) })
-  const simple = { kind: 'file', value: { sessionId: SessionId('absent'), path: '/file.unknown' } } as const
+  const simple = { kind: 'file', value: { sessionId: brandString<SessionId>('absent'), path: '/file.unknown' } } as const
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const menu = await h.resolve(simple)
   // The Host's empty answer arrives within the first-answer wait, so the row opens disabled.
@@ -128,12 +129,12 @@ it('routes file actions through an explicit host, the line, native association a
   expect(menu.source.getSnapshot().filter(item => item.id.startsWith('file-actions.')).map(item => item.id))
     .toEqual(['file-actions.file/saveAs'])
   menu.select('open-in-app.file/sidebar')
-  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'sidebar' })
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(brandString<SessionId>('absent'), expect.any(String), { destination: 'sidebar' })
   h.remote.session.workspacePathApplications.mockResolvedValueOnce({ ok: true, value: [] })
   const floating = await h.resolve(simple)
   expect(floating.source.getSnapshot().find(item => item.id.endsWith('/open'))?.disabled).toBe(true)
   floating.select('open-in-app.file/float')
-  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(SessionId('absent'), expect.any(String), { destination: 'float' })
+  expect(h.sidebar.openResourceIn).toHaveBeenLastCalledWith(brandString<SessionId>('absent'), expect.any(String), { destination: 'float' })
 })
 
 it('names the application when the first answer of a file type arrives within the wait', async () => {
@@ -415,7 +416,7 @@ it('offers only folder reveal and path copy, retaining the captured directory', 
   const unavailable = await h.resolve(target)
   expect(unavailable.source.getSnapshot()[0]?.disabled).toBe(true)
   expect(unavailable.source.getSnapshot()[1]?.disabled).not.toBe(true)
-  await h.choose({ kind: 'directory', value: { sessionId: SessionId('absent'), path: '/absolute' } }, 'open-in-app.directory/copyPath')
+  await h.choose({ kind: 'directory', value: { sessionId: brandString<SessionId>('absent'), path: '/absolute' } }, 'open-in-app.directory/copyPath')
   expect(h.writeText).toHaveBeenLastCalledWith('/absolute')
 })
 

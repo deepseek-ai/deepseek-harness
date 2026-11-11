@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   acknowledgeReloadConnectionLoss, launchWebScaffold, seedSession, watchConsole, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // The seed is another scenario's committed fixture, reused read-only: this
 // spec needs any one cold Session row, not new recorded content.
@@ -83,7 +84,7 @@ describe('web e2e: archived sessions are restored from the sidebar filter', () =
     await seededRow.click()
     await expect.poll(() => seededRow.getAttribute('aria-selected'), { timeout: 10_000 }).toBe('true')
     const { title } = await scaffold.ctx.sessionController.rename({
-      sessionId: SessionId(SEED_ID), title: `Unarchive target ${SEED_ID}`,
+      sessionId: brandString<SessionId>(SEED_ID), title: `Unarchive target ${SEED_ID}`,
     })
     const sessionRow = page.getByRole('treeitem').filter({ has: page.getByText(title, { exact: true }) })
     await expect.poll(() => sessionRow.count(), { timeout: 10_000 }).toBe(1)
@@ -97,9 +98,9 @@ describe('web e2e: archived sessions are restored from the sidebar filter', () =
     await expect.poll(() => page.getByText('Ungrouped', { exact: true }).count(), { timeout: 10_000 }).toBe(0)
     // Durable on the host: the registry-global set carries the id while the
     // Session log itself stays in persistence untouched.
-    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([SessionId(SEED_ID)])
+    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([brandString<SessionId>(SEED_ID)])
     expect((await scaffold.ctx.sessionPersistence.list()).map(snapshot => snapshot.header.id))
-      .toContain(SessionId(SEED_ID))
+      .toContain(brandString<SessionId>(SEED_ID))
 
     await page.getByRole('button', { name: 'View options' }).click()
     await page.getByRole('menuitem', { name: 'All conversations (show archived)', exact: true }).click()

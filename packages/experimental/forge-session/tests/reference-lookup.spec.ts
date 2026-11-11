@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import ShellExecutor from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
@@ -65,11 +66,11 @@ async function fixture() {
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(ShellEnv, { dshHome: process.cwd() })
   await ctx.plugin(LookupShell)
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('reference-observer') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('reference-observer') })
   const controller = new AbortController()
   const exec: ToolExecution = {
     name: 'bash', agent,
-    callId: ToolCallId('reference'), rootCallId: ToolCallId('reference'), token: Symbol('reference') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('reference'), rootCallId: brandString<ToolCallId>('reference'), token: Symbol('reference') as ToolExecutionToken,
     arguments: { command: 'gh pr view 9 -R octo/demo --json number' }, signal: controller.signal,
   }
   const result: ToolExecutionResult = {

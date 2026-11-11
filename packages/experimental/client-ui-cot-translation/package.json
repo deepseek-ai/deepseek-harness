@@ -64,6 +64,7 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-settings": "workspace:*",
     "@deepseek-ai/dsh-experimental-translator": "workspace:*",

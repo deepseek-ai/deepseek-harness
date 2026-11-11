@@ -8,12 +8,13 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import { ShellEnvRegistry } from '@deepseek-ai/dsh-shell-env'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const testToolSignal = new AbortController().signal
 
@@ -23,8 +24,8 @@ function execution(sessionId?: string): ToolExecution {
   return {
     signal: testToolSignal,
     token: Symbol('bash-env-test') as ToolExecution['token'],
-    callId: ToolCallId('bash-env-call'),
-    rootCallId: ToolCallId('bash-env-call'),
+    callId: brandString<ToolCallId>('bash-env-call'),
+    rootCallId: brandString<ToolCallId>('bash-env-call'),
     name: 'bash',
     arguments: { command: 'true' },
     ...(sessionId === undefined

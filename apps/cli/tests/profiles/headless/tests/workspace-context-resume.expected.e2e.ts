@@ -18,7 +18,7 @@ import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-l
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
   SessionSeq,
   type SessionEvent,
   type SessionHeader,
@@ -28,6 +28,7 @@ import { logPath } from '../../../../../../packages/session/session-persistence-
 import { renderAgentInstructions } from '@deepseek-ai/dsh-agent-instructions'
 import { resolveConfig, workspaceBaselineIdentity } from '@deepseek-ai/dsh-agent-instructions/src/config.ts'
 import { describe, expect, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), 'expected/workspace-context-resume/offline-edit')
 const replayFixture = join(fixtureDir, 'replay.jsonl')
@@ -37,7 +38,7 @@ const precedenceExpected = join(dirname(fixtureDir), 'precedence-change/session.
 const configPath = fileURLToPath(new URL('../workspace-context-resume-snapshot.patch.yml', import.meta.url))
 const binScript = fileURLToPath(new URL('../../../../../../packages/test-support/loader-smoke/tests/fixtures/headless-driver.ts', import.meta.url))
 const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', import.meta.url))
-const sessionId = SessionId('workspace-context-resume')
+const sessionId = brandString<SessionId>('workspace-context-resume')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 const oldInstruction = 'Old workspace instruction.'
 const newInstruction = 'New workspace instruction after offline edit.'

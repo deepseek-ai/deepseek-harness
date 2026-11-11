@@ -6,8 +6,9 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-agent-team'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -193,7 +194,7 @@ describe('web e2e: agent teamwork panel', () => {
     const agent = scaffold.ctx.agents.list()[0]!
     expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
     expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
-    const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
+    const other = await scaffold.ctx.agents.create({ sessionId: brandString<SessionId>('other-team-mode'), agentOptions: agent.options })
     expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
     await other.dispose()
     const beforeReload = tripwire.warnings.length
@@ -268,7 +269,7 @@ describe('web e2e: agent teamwork panel', () => {
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
     const agent = scaffold.ctx.agents.list()[0]!
-    const memberId = SessionId('team-panel-researcher')
+    const memberId = brandString<SessionId>('team-panel-researcher')
     agent.session.append('subagent/catalog', {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: RESEARCHER_DESCRIPTION,
@@ -913,12 +914,12 @@ it.each(RECEIPT_LOCALES)('toggles teamwork in $language without command records 
 
     // Historical receipts are read-only fixtures, not invocations of a registered command.
     for (const args of [' on', ' off']) {
-      const commandId = CommandId(`historical-team-${args.trim()}`)
+      const commandId = brandString<CommandId>(`historical-team-${args.trim()}`)
       agent.session.append('command/run', { commandId, name: 'team', args, source: { kind: 'user' } })
       agent.session.append('command/done', { commandId, kind: 'success', text: 'Team mode saved.' })
     }
     agent.session.append('command/run', {
-      commandId: CommandId('historical-team-pending'), name: 'team', args: ' on', source: { kind: 'user' },
+      commandId: brandString<CommandId>('historical-team-pending'), name: 'team', args: ' on', source: { kind: 'user' },
     })
     await scaffold.ctx.sessions.flush(agent.session)
     const historicalCommands = commandEvents()
@@ -938,7 +939,7 @@ it.each(RECEIPT_LOCALES)('renders historical Team failures in $language without 
   await withTeamReceiptPage(locale, async (page, scaffold, tripwire) => {
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Team failure fixture has no Agent')
-    const commandId = CommandId('historical-team-error')
+    const commandId = brandString<CommandId>('historical-team-error')
     agent.session.append('command/run', { commandId, name: 'team', args: ' invalid', source: { kind: 'user' } })
     agent.session.append('command/done', { commandId, kind: 'error', text: 'Use /team on or /team off.' })
     await scaffold.ctx.sessions.flush(agent.session)

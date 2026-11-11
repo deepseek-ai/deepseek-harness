@@ -217,6 +217,7 @@
     "apps/web/tests/produced-file-mentions.e2e.ts",
     "apps/web/tests/context-menus.e2e.ts",
     "apps/web/tests/subagent-conversation.e2e.ts",
+    "apps/web/tests/subagent-fork-divider.e2e.ts",
     "apps/web/tests/subagent-summary.e2e.ts",
     "apps/web/tests/subagent-result-notice.e2e.ts",
     "apps/web/tests/composer-paste-routing.e2e.ts",

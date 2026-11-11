@@ -22,7 +22,6 @@
   "files": ["lib/index.js", "lib/types/**/*.js", "lib/types/**/*.d.ts", "lib/types/**/*.d.ts.map", "lib/**/*.js.map", "src"],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },

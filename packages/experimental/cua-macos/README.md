@@ -3,7 +3,7 @@ description: "Inspect and operate native macOS applications through scoped app a
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-cua-macos
+# @deepseek-ai/dsh-cua-macos
 
 English | [中文](README.zh.md)
 
@@ -43,10 +43,10 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 The dump command checks profile composition without a model request. For a real task, replace `--dump-config` with a prompt and configure the profile’s model credentials. The overlay mounts the computer-use registry and this provider; remove an existing competing provider before using it. The helper needs Accessibility permission for AX/input and Screen Recording permission for capture; use the Computer Use permission page to open System Settings and add the helper. Source builds use the bundle filename `DSH Computer Use Dev.app` and declare `DSH Computer Use Dev` in Info.plist; select the development entry when granting access. `getCapabilities` returns the provider’s declared capabilities with observed permissions and session lock state. Locked or unavailable desktop sessions reject UI observations and input before dispatch; the user must unlock macOS before resuming. `listApps` and `cua.getState` list running applications. `findApps(query)` searches standard macOS application directories by name, bundle ID or absolute path. `getApp` selects a unique name, bundle ID, path or running PID, obtains application consent, and launches a stopped app in the background when needed. A stopped application’s bundle identifier and executable path are read from disk before approval and rechecked before and after launch; applications without a bundle identifier use their canonical executable path for reusable consent. When a selector resolves to an installation, `getApp` matches its executable path to running processes, regardless of their localized names. If launch is needed, macOS opens that installation and can reuse a process started during approval. The helper waits for launch to complete before reporting the running state. A post-launch verification failure expires the pending handle but can leave the process running; inspect running applications before selecting a fresh handle. The returned object does not read AX or activate the app. Launch cancellation may leave the application running. Model guidance starts with background observation and input, without activation during initialization or before each action. For hidden or minimized windows, try `app.show()` or `window.show()` and read fresh state. This requests unhide and unminimize without activation, raising or switching Spaces; app-level restoration selects the focused, main or sole AX window. The result names the selected `windowId`, or null when no window was selected, and reports `foregroundChanged` by comparing the front app and top window before and after the request. Null means foreground evidence was unavailable; later focus changes remain possible. If restoration fails or the window remains unusable, explain the needed foreground step, call `app.activate()` or an observed window’s advertised `AXRaise` action, then observe again. Necessary foreground access takes priority over preserving focus. Applications may change focus after input; background delivery does not guarantee an undisturbed user session.
 
-Source builds default to `sourceSigning: ad-hoc`, without creating certificates or keychains. Changed binaries can require new permission grants. To reduce repeated grants during rebuilds and across worktrees, select an existing certificate and its absolute keychain path in the DSH home’s `cordis.patch.yml`; `cua` is the entry ID loading `@deepseek-ai/dsh-experimental-cua-macos`:
+Source builds default to `sourceSigning: ad-hoc`, without creating certificates or keychains. Changed binaries can require new permission grants. To reduce repeated grants during rebuilds and across worktrees, select an existing certificate and its absolute keychain path in the DSH home’s `cordis.patch.yml`; `cua-macos` is the entry ID loading `@deepseek-ai/dsh-cua-macos`:
 
 ```yaml
-- id: cua
+- id: cua-macos
   config:
     sourceSigning:
       identity: "<certificate SHA-1 fingerprint>"
@@ -78,7 +78,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 | `dragDurationMs` / `dragSteps` | `400` / `20` | Duration and movement segments for a drag. |
 | `textEventIntervalMs` | `0.25` | Delay after each Unicode down/up event, from 0 to 999 ms. Keystroke timing is independent. |
 
-The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-experimental-cua-macos) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. `getApp` returns the `appHandle` used by every app-targeted operation, and `app.getWindow(windowId)` returns the object that owns screenshots and pointer input.
+The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-cua-macos) lists all fields. Native tool calls use `{method, params}`; the complete method-specific schema is exposed to the model. `getApp` returns the `appHandle` used by every app-targeted operation, and `app.getWindow(windowId)` returns the object that owns screenshots and pointer input.
 
 `pressKey(key, modifiers?)` presses and releases one key. For shortcuts, pass held modifiers separately, as in `pressKey('a', ['command'])`. Pressing a modifier itself, as in `pressKey('shift')`, sets its flag on press and clears it on release. A single `+` or `plus` sends Shift+=. The macOS helper accepts `command`/`cmd`, `shift`, `option`/`alt`, `control`/`ctrl`, and `fn`, and maps them to their physical keys. Key names are platform-defined; keypad names (`KP_0` through `KP_9`, `KP_Enter`, and keypad operators) retain their physical key codes. `typeText` sends literal text, including its line breaks and tabs. Use the App object's `pressKey` for a short press.
 

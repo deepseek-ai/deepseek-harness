@@ -1,7 +1,8 @@
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, SessionSeq, type SessionEventInput } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionSeq, type SessionEventInput } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function message(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -9,7 +10,7 @@ function message(text: string) {
 
 describe('multiple Session appends', () => {
   it('rejects sparse arrays before changing the log or surface', () => {
-    const session = Session.create(SessionId('sparse-append'))
+    const session = Session.create(brandString<SessionId>('sparse-append'))
     const inputs = new Array<SessionEventInput>(3)
     inputs[0] = ['turn/start', { turn: 1 }]
     inputs[2] = ['user/message', message('last'), { surfaceOp: 'append' }]
@@ -19,7 +20,7 @@ describe('multiple Session appends', () => {
   })
 
   it('reads only surface metadata from event options', () => {
-    const session = Session.create(SessionId('options-append'))
+    const session = Session.create(brandString<SessionId>('options-append'))
     const old = session.append('user/message', message('old'), { surfaceOp: 'append' })
     const next = message('new')
     const events = session.append([['user/message', next, old]])
@@ -28,7 +29,7 @@ describe('multiple Session appends', () => {
   })
 
   it('leaves the log unchanged for empty input and accepts a single array member', () => {
-    const session = Session.create(SessionId('empty-append'))
+    const session = Session.create(brandString<SessionId>('empty-append'))
     expect(session.append([])).toEqual([])
     expect(session.seq).toBe(0)
     const events = session.append([['turn/start', { turn: 1 }]])
@@ -37,7 +38,7 @@ describe('multiple Session appends', () => {
   })
 
   it('accepts both call forms through an append wrapper', () => {
-    const session = Session.create(SessionId('wrapped-append'))
+    const session = Session.create(brandString<SessionId>('wrapped-append'))
     const append = new Proxy(session.append.bind(session), {
       apply: (target, receiver, args): unknown => Reflect.apply(target, receiver, args),
     })
@@ -50,7 +51,7 @@ describe('multiple Session appends', () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(SessionStore)
-    const session = ctx.sessions.create(SessionId('observed-append'))
+    const session = ctx.sessions.create(brandString<SessionId>('observed-append'))
     const observed: number[] = []
     ctx.on('session/event', (current, event) => {
       if (current !== session) return
@@ -70,7 +71,7 @@ describe('multiple Session appends', () => {
   })
 
   it('replaces an earlier member in the same append', () => {
-    const session = Session.create(SessionId('replace-append'))
+    const session = Session.create(brandString<SessionId>('replace-append'))
     const nodes = session.surface.nodes
     const replacement = message('replacement')
     session.append([
@@ -82,7 +83,7 @@ describe('multiple Session appends', () => {
   })
 
   it('rejects non-JSON data before publishing any member', () => {
-    const session = Session.create(SessionId('non-json-append'))
+    const session = Session.create(brandString<SessionId>('non-json-append'))
     expect(() => session.append([
       ['turn/start', { turn: 1 }],
       ['turn/start', { turn: Number.NaN }],
@@ -91,7 +92,7 @@ describe('multiple Session appends', () => {
   })
 
   it('assigns consecutive sequences after a candidate getter appends an event', () => {
-    const session = Session.create(SessionId('getter-append'))
+    const session = Session.create(brandString<SessionId>('getter-append'))
     const events = session.append([
       ['turn/start', {
         get turn() {
@@ -109,7 +110,7 @@ describe('multiple Session appends', () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(SessionStore)
-    const session = ctx.sessions.create(SessionId('reentrant-batch'))
+    const session = ctx.sessions.create(brandString<SessionId>('reentrant-batch'))
     const observed: number[] = []
     const warnings: string[] = []
     ctx.logger.warn = (warning: unknown) => { warnings.push(String(warning)) }
@@ -134,7 +135,7 @@ describe('multiple Session appends', () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(SessionStore)
-    const session = ctx.sessions.prepare(SessionId('detached-append'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('detached-append'))
     const detach = ctx.sessions.enter(session)
     ctx.sessions.announce(session)
     const observed: number[] = []
@@ -152,7 +153,7 @@ describe('multiple Session appends', () => {
   })
 
   it('folds preceding single appends before admitting an array', () => {
-    const session = Session.create(SessionId('mixed-append'))
+    const session = Session.create(brandString<SessionId>('mixed-append'))
     session.append('user/message', message('before'), { surfaceOp: 'append' })
     expect(session.surface.contentGeneration).toBe(0)
     session.append([['user/message', message('after'), { surfaceOp: 'append' }]])
@@ -161,7 +162,7 @@ describe('multiple Session appends', () => {
   })
 
   it('publishes a complete group with its final surface', () => {
-    const session = Session.create(SessionId('batch'))
+    const session = Session.create(brandString<SessionId>('batch'))
     const events = session.append([
       ['turn/start', { turn: 1 }],
       ['user/message', message('hello'), { surfaceOp: 'append' }],
@@ -172,7 +173,7 @@ describe('multiple Session appends', () => {
   })
 
   it('retains the committed log and surface when a later candidate is invalid', () => {
-    const session = Session.create(SessionId('rejected-batch'))
+    const session = Session.create(brandString<SessionId>('rejected-batch'))
     session.append('user/message', message('before'), { surfaceOp: 'append' })
     const before = session.deriveMessages()
     expect(() => session.append([
@@ -188,7 +189,7 @@ describe('multiple Session appends', () => {
     const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
     await ctx.plugin(SessionStore)
-    const session = ctx.sessions.create(SessionId('veto-batch'))
+    const session = ctx.sessions.create(brandString<SessionId>('veto-batch'))
     const observed: number[] = []
     ctx.on('session/event', (current, event) => {
       if (current === session) observed.push(event.seq)
