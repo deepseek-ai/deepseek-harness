@@ -1,8 +1,9 @@
 /** Server behavior beyond the fixture desktop: registry projection, the reference tool, unknown tools, creation and reset failures. */
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { CuaPrograms } from '@deepseek-ai/dsh-cua'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolBatchInput, ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import type { AskUserQuestionItem } from '@deepseek-ai/dsh-user-questions'
 import { Client, InMemoryTransport, type CallToolResult } from '@modelcontextprotocol/client'
@@ -62,7 +63,7 @@ function fixture(options: SetupOptions = {}) {
   // The Agent runs a maintenance task at once and cancels it through this controller, as its disposal does.
   const maintenance = new AbortController()
   const members: Pick<Agent, 'id' | 'ctx' | 'runMaintenance'> = {
-    id: SessionId('cua-mcp-fake'), ctx: new Context(), runMaintenance: task => task(maintenance.signal),
+    id: brandString<SessionId>('cua-mcp-fake'), ctx: new Context(), runMaintenance: task => task(maintenance.signal),
   }
   const runMaintenance = vi.spyOn(members, 'runMaintenance')
   const agent = members as Agent
@@ -248,7 +249,7 @@ describe('Computer Use MCP server', () => {
     const { ctx, agent, elicitations } = await setup({ elicitation: true })
     const next = vi.fn(async () => ({ answers: [] }))
     expect(await ctx.waterfall('user-questions/request', { questions: [approval] }, next)).toEqual({ answers: [] })
-    expect(await ctx.waterfall('user-questions/request', { questions: [approval], agent: { id: SessionId('other') } as Agent }, next)).toEqual({ answers: [] })
+    expect(await ctx.waterfall('user-questions/request', { questions: [approval], agent: { id: brandString<SessionId>('other') } as Agent }, next)).toEqual({ answers: [] })
     expect(next).toHaveBeenCalledTimes(2)
     const answer = await ctx.waterfall('user-questions/request', { questions: [approval], agent }, next)
     expect(answer).toEqual({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })

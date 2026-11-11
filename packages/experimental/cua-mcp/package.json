@@ -51,6 +51,7 @@
     "@deepseek-ai/dsh-agent-preset": "workspace:*",
     "@deepseek-ai/dsh-agent-preset-registry": "workspace:*",
     "@deepseek-ai/dsh-attachment-local": "workspace:*",
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-cmdline": "workspace:*",
     "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-cua": "workspace:*",
@@ -76,7 +77,7 @@
     "commander": "^15.0.0"
   },
   "optionalDependencies": {
-    "@deepseek-ai/dsh-experimental-cua-macos": "workspace:*",
+    "@deepseek-ai/dsh-cua-macos": "workspace:*",
     "@deepseek-ai/dsh-cua-windows": "workspace:*"
   },
   "devDependencies": {
@@ -85,7 +86,6 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-attachment": "workspace:*",
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
     "@modelcontextprotocol/client": "2.2.0",

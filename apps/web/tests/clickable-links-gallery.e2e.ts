@@ -21,8 +21,9 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
@@ -210,7 +211,7 @@ const CALLS: GalleryCall[] = [
  *   the tripwire stays clean; the varying origin is tokenized in the golden).
  */
 function galleryFixture(imageUrl: string): string {
-  const session = Session.create(SessionId('clickable-links-gallery-source'))
+  const session = Session.create(brandString<SessionId>('clickable-links-gallery-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: text('Assemble the link gallery: write the report and styles, inspect the sources, and summarize.'),
@@ -224,7 +225,7 @@ function galleryFixture(imageUrl: string): string {
   session.append('step/start', { turn: 1, step: 1 })
   const calls = CALLS.map((call, index) => ({
     ...call,
-    callId: ToolCallId(`gallery-${String(index)}`),
+    callId: brandString<ToolCallId>(`gallery-${String(index)}`),
     argsJson: JSON.stringify(call.args),
   }))
   session.append('assistant/message', {

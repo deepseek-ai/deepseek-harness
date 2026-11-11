@@ -5,10 +5,11 @@ import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import ApprovalService, { type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -44,7 +45,7 @@ async function fixture(mode: 'read-only' | 'workspace-write' | 'danger-full-acce
   const fiber = await ctx.plugin(tool)
   const call = (args: unknown, agent?: Agent, signal = new AbortController().signal) => executeToolFixture(ctx, { name: 'plugin_manager', arguments: args,
     ...agent === undefined ? {} : { agent },
-    callId: ToolCallId('manager-call'), signal })
+    callId: brandString<ToolCallId>('manager-call'), signal })
   return { ctx, manager, call, fiber }
 }
 
@@ -121,7 +122,7 @@ it('exposes an absent Official bundle installation target without display metada
 
 it('checks the calling session on each execution, including after permission is revoked', async () => {
   const { call, manager } = await fixture()
-  const id = SessionId('manager-permissions')
+  const id = brandString<SessionId>('manager-permissions')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   const agent = { session } as unknown as Agent
   setSandboxMode(session, 'workspace-write')
@@ -135,7 +136,7 @@ it('checks the calling session on each execution, including after permission is 
 })
 
 function activeAgent(): Agent {
-  const id = SessionId('manager-approval')
+  const id = brandString<SessionId>('manager-approval')
   const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false })
   session.append('turn/start', { turn: 1 })
   return { session } as unknown as Agent

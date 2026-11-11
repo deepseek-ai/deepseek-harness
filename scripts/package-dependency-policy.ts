@@ -52,7 +52,6 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
  */
 const SAFE_HOST_DEPENDENCY_EXPORTS = {
   '@deepseek-ai/dsh-atomic-write': ['withFileLock', 'writeFileAtomic'],
-  '@deepseek-ai/dsh-computer-use/brand': ['ComputerUseProviderName'],
   '@deepseek-ai/dsh-credentials': ['credentialKey'],
   '@deepseek-ai/dsh-deque': ['Deque'],
   // Builds a dispatcher from the resolved proxy policy; the caller owns and closes it.
@@ -66,9 +65,6 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
   // The shipped profile templates are plain data; a consumer reads their bundle names only.
   '@deepseek-ai/dsh-official-bundles': ['PROFILE_TEMPLATES'],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
-  '@deepseek-ai/dsh-session': ['SessionId'],
-  // Pure arithmetic over caller-owned dimensions.
-  '@deepseek-ai/dsh-attachment': ['longEdgeDimensions'],
   '@deepseek-ai/dsh-session-format': ['sessionFormatLogFilename'],
   '@deepseek-ai/dsh-storage-domain': ['defineDomain'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
@@ -84,8 +80,9 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   // CUA mounts the installed provider and shares executor error classes with PTC.
   '@deepseek-ai/dsh-ptc-runtime-node': ['default'],
   '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeToolHandle'],
-  // CUA checks UserQuestionError and preserves AttachmentError from image admission.
-  '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
+  // CUA checks UserQuestionError and preserves AttachmentError from image admission; longEdgeDimensions is pure
+  // arithmetic that rides the same peer.
+  '@deepseek-ai/dsh-attachment': ['admitEncodedImages', 'longEdgeDimensions'],
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
   // The tool registry and every subclass rely on `instanceof` against one HarnessError class.
   '@deepseek-ai/dsh-error': ['HarnessError'],

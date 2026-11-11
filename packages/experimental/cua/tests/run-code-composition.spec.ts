@@ -12,12 +12,12 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { createUserMessage, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -30,6 +30,7 @@ import { z } from 'zod'
 import { createNativeFixture, png } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const programs = [
   'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })); inspect(screenshot)',
@@ -51,7 +52,7 @@ class ProgramModel extends LlmAdapter {
     this.requests.push(options)
     if (code !== undefined) {
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId(`cua-program-${this.requests.length}`),
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>(`cua-program-${this.requests.length}`),
         name: 'cua_run_code', arguments: JSON.stringify({ code, description: 'Inspect and increment the fixture counter' }) } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
       return
@@ -128,7 +129,7 @@ async function setup(programs: readonly string[], platform = 'macos', selectorPi
   for (const entry of ctx.loader.entries()) await entry.fiber?.await()
   const model = new ProgramModel(programs)
   ctx.llm.registerAdapter(['cua-fixture'], model)
-  const handle = await ctx.agents.create({ sessionId: SessionId('cua-standard-composition'), meta: { cwd: directory },
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-standard-composition'), meta: { cwd: directory },
     agentOptions: { provider: 'cua-fixture', model: 'vision' },
     setup: async (owner) => { await ctx.agentPresets.mount(owner, 'standard') },
   })

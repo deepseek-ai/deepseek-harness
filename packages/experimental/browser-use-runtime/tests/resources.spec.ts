@@ -3,9 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionResources } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 
@@ -16,7 +17,7 @@ async function fixture() {
   await ctx.plugin(AgentRegistry)
   async function owner(id: string) {
     const fiber = ctx.plugin(() => {})
-    const session = Session.create(SessionId(id))
+    const session = Session.create(brandString<SessionId>(id))
     const agent: Agent = {
       id: session.id, session, ctx: fiber.ctx, options: {}, status: 'idle',
       model: unsupportedModel(),

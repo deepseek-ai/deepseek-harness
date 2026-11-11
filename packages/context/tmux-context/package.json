@@ -43,6 +43,7 @@
     "@deepseek-ai/dsh-session-projection": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-agent-loop-testkit": "workspace:*",
     "@deepseek-ai/dsh-shell": "workspace:*",

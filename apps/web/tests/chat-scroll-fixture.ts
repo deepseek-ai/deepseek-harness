@@ -2,8 +2,9 @@
 // generated through Session so pagination exercises the same event shapes as
 // persisted conversations, while unique markers identify semantic rows
 // without depending on CSS-module names or virtualizer DOM positions.
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
-  ToolCallId,
+  type ToolCallId,
   createAssistantMessage,
   createSystemMessage,
   createToolResultMessage,
@@ -12,7 +13,7 @@ import {
 import {
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
 } from '@deepseek-ai/dsh-session'
 // Carries the session/title event declaration into this fixture builder.
 import type {} from '@deepseek-ai/dsh-session-title'
@@ -114,7 +115,7 @@ function appendToolStep(
 ): void {
   const calls = [1, 2].map((index) => {
     const marker = markers.tool(turn, index)
-    const callId = ToolCallId(`chat-scroll-${suffix(turn)}-${String(index)}`)
+    const callId = brandString<ToolCallId>(`chat-scroll-${suffix(turn)}-${String(index)}`)
     const args = JSON.stringify({
       command: `printf '${marker}\\n'`,
       description: marker,
@@ -190,7 +191,7 @@ function fixtureLog(session: Session): string {
 export function createChatScrollFixture(options: ChatScrollFixtureOptions): ChatScrollFixture {
   const turns = options.turns ?? DEFAULT_TURNS
   const markers = markerHelpers(options.markerPrefix)
-  const session = Session.create(SessionId(`chat-scroll-${options.markerPrefix.toLowerCase()}-template`))
+  const session = Session.create(brandString<SessionId>(`chat-scroll-${options.markerPrefix.toLowerCase()}-template`))
 
   for (let turn = 1; turn <= turns; turn += 1) {
     session.append('turn/start', {

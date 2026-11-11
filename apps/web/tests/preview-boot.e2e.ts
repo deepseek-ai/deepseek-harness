@@ -202,6 +202,7 @@ function requireVfsAssets(): PreviewAssets {
     version: PREVIEW_FIXTURE_MANIFEST_VERSION,
     defaultFixture: fixtures[0]?.id ?? null,
     fixtures,
+    links: [],
   }
   writeAsset(`preview/${PREVIEW_FIXTURE_MANIFEST_FILE}`, `${JSON.stringify(fixtureManifest, null, 2)}\n`)
   return { overrides, manifest, cleanup: () => { rmSync(directory, { recursive: true, force: true }) } }

@@ -16,8 +16,9 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -120,7 +121,7 @@ beforeEach(async () => {
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(ToolFs)
 
-  const key = standInAgent(SessionId(session), root)
+  const key = standInAgent(brandString<SessionId>(session), root)
   let minted: Scope | undefined
   await ctx.plugin(Object.assign(
     (inner: Context) => { minted = createScope(inner, key) },
@@ -146,7 +147,7 @@ function call(name: string, args: unknown) {
   calls += 1
   return executeOneTool(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`tier-${String(calls)}`),
+    callId: brandString<ToolCallId>(`tier-${String(calls)}`),
     name,
     arguments: args,
     agent: shared,

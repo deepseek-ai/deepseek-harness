@@ -12,7 +12,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime, { applyChildComposition } from '@deepseek-ai/dsh-subagent'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -21,6 +21,7 @@ import * as tool from '../src/index.ts'
 import { SubagentPresetSelection } from '../src/preset-selection.ts'
 import { mountScriptedProvider, type Config as ProviderConfig } from './scripted-provider.ts'
 import { callSubagent, text } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -98,6 +99,7 @@ describe('spawn preset selection', () => {
     const forced = await callSubagent(ctx, { ...args, agent_preset: 'writer' })
     expect(forced.isError).toBe(true)
     expect(text(forced)).toContain('selection is disabled')
+    expect(forced.error?.info).toEqual({ name: 'SubagentError', code: 'PRESET_SELECTION_DISABLED' })
     expect(onStart).toHaveBeenCalledTimes(1)
   })
 
@@ -134,8 +136,13 @@ describe('spawn preset selection', () => {
 
   it('rejects forced selection at the model JSON resolver', () => {
     const selection = new SubagentPresetSelection({ allowedAgentPresets: ['writer'] })
-    expect(() => selection.resolve({ agent_preset: 'unlisted' })).toThrow(/must be one of/)
-    expect(() => selection.resolve({ agent_preset: 1 })).toThrow(/must be one of/)
+    for (const agent_preset of ['unlisted', 1]) {
+      expect(() => selection.resolve({ agent_preset })).toThrow(expect.objectContaining({
+        name: 'SubagentError',
+        code: 'PRESET_NOT_ALLOWED',
+        message: 'agent_preset must be one of: writer',
+      }))
+    }
   })
 
   it('requires the preset service when selection is configured', async () => {
@@ -151,11 +158,12 @@ describe('spawn preset selection', () => {
     const { ctx, provider } = await setup(config)
     await provider.dispose()
     await mountSpawn(ctx, 'custom-spawn')
-    const parent = await ctx.agents.create({ sessionId: SessionId('missing-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('missing-child-preset') })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('Unknown agent preset: absent')
+    expect(result.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/not-found' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -168,11 +176,12 @@ describe('spawn preset selection', () => {
     await ctx.agentPresets.register({
       id: 'reviewer', plugins: [{ name: 'cordis:missing-plugin' }],
     })
-    const parent = await ctx.agents.create({ sessionId: SessionId('broken-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('broken-child-preset') })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, args, { agent: parent.agent })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('missing-plugin')
+    expect(result.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/invalid' })
     expect(ctx.agents.list()).toEqual([parent.agent])
     expect(ctx.sessions.list()).toEqual(sessions)
   })
@@ -187,7 +196,7 @@ describe('spawn preset selection', () => {
       }],
     })
     const handle = await ctx.agents.create({
-      sessionId: SessionId('self-selecting-preset'),
+      sessionId: brandString<SessionId>('self-selecting-preset'),
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'self') },
     })
     const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'self_delegate')
@@ -211,7 +220,7 @@ describe('spawn preset selection', () => {
     for (const id of [first, second]) {
       const other = id === 'alpha' ? 'beta' : 'alpha'
       const handle = await ctx.agents.create({
-        sessionId: SessionId(`mutually-selecting-${id}`),
+        sessionId: brandString<SessionId>(`mutually-selecting-${id}`),
         setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, id) },
       })
       const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'peer_delegate')
@@ -231,7 +240,7 @@ describe('spawn preset selection', () => {
       }))
     }
     const create = (id: string, preset: string) => ctx.agents.create({
-      sessionId: SessionId(id),
+      sessionId: brandString<SessionId>(id),
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, preset) },
     })
     const [standard, moving] = await Promise.all([
@@ -276,7 +285,7 @@ describe('spawn preset selection', () => {
     const adapter = new MockAdapter([textResponse('Ready.')])
     ctx.llm.registerAdapter(['mock'], adapter)
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('switch-ready'),
+      sessionId: brandString<SessionId>('switch-ready'),
       agentOptions: { provider: 'mock', model: 'mock' },
       setup: async (owner) => { await ctx.agentPresets.mount(owner, 'planning') },
     })
@@ -302,13 +311,13 @@ describe('spawn preset selection', () => {
         name: 'cordis:subagentTool', config: { provider: 'custom-spawn', agentPreset: 'reviewer' },
       }] })
       const create = (id: string) => ctx.agents.create({
-        sessionId: SessionId(id),
+        sessionId: brandString<SessionId>(id),
         setup: async (owner) => { await ctx.agentPresets.mount(owner, 'delegating') },
       })
       const parent = await create('restricted-parent')
       const peer = await create('unrestricted-peer')
       const subject = mode === 'agent restriction' ? parent : await ctx.agents.create({
-        sessionId: SessionId('restricted-child'),
+        sessionId: brandString<SessionId>('restricted-child'),
         setup: owner => applyChildComposition(owner, parent.agent, {
           ...mode === 'selected historical filter' ? { agentPreset: 'delegating' } : {},
           toolFilter: { deny: ['subagent'] },
@@ -347,7 +356,7 @@ describe('spawn preset selection', () => {
     expect(definition).toBeDefined()
     await lease[Symbol.asyncDispose]()
     const handle = await ctx.agents.create({
-      sessionId: SessionId('retry-preset'),
+      sessionId: brandString<SessionId>('retry-preset'),
       agentOptions: { provider: 'mock', model: 'mock' },
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
     })
@@ -357,6 +366,7 @@ describe('spawn preset selection', () => {
     const failed = await callSubagent(ctx, args, { agent: handle.agent })
     expect(failed.isError).toBe(true)
     expect(text(failed)).toContain('Unknown agent preset: later')
+    expect(failed.error?.info).toEqual({ name: 'RemoteError', code: 'agent-preset/not-found' })
 
     await ctx.agentPresets.register({ id: 'later', plugins: [] })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('reviewed')]))

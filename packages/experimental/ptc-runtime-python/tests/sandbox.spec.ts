@@ -7,12 +7,13 @@ import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ConfinedArgv, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Config } from '../src/index.ts'
 import { PythonPtcRuntime } from '../src/index.ts'
 import { createRuntimeContext } from './setup.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Probe the provider independently so a Python launch regression cannot skip confinement tests. */
 const sandboxUsable = await (async () => {
@@ -92,7 +93,7 @@ describe('Python file sandbox', () => {
 
   it('forwards a complete explicit policy and defaults cwd to its workspace', async () => {
     const { ctx, runtime, root } = await setup()
-    const selected = { mode: 'workspace-write' as const, workspaceRoot: root, sessionId: SessionId('python-policy-test') }
+    const selected = { mode: 'workspace-write' as const, workspaceRoot: root, sessionId: brandString<SessionId>('python-policy-test') }
     const wrap = vi.spyOn(ctx.sandbox, 'confine').mockImplementation(async argv => confinement(argv))
     const spec = runtime.resolve({ program: 'import os\nreturn os.getcwd()', bindings: [], sandboxPolicy: selected })
     expect(spec.sandboxPolicy).toBe(selected)

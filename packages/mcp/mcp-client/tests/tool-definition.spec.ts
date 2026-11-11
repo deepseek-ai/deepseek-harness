@@ -1,7 +1,8 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -32,7 +33,7 @@ describe('MCP result callback adaptation', () => {
       }))
       const signal = new AbortController().signal
       const result = await executeToolFixture(ctx, {
-        name: 'native_window', callId: ToolCallId('window-call'), arguments: { window: 7 }, signal,
+        name: 'native_window', callId: brandString<ToolCallId>('window-call'), arguments: { window: 7 }, signal,
       })
       expect(call).toHaveBeenCalledWith({ window: 7 }, execution)
       expect(execution?.signal).toBe(signal)
@@ -57,7 +58,7 @@ describe('MCP result callback adaptation', () => {
           inputSchema: { type: 'object' }, call: async () => invalid,
         }))
         const result = await executeToolFixture(ctx, {
-          name: 'invalid_result', callId: ToolCallId('invalid-call'), arguments: {},
+          name: 'invalid_result', callId: brandString<ToolCallId>('invalid-call'), arguments: {},
           signal: new AbortController().signal,
         })
         expect(result.isError).toBe(true)

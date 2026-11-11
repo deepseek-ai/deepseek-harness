@@ -8,9 +8,10 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -72,7 +73,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     // Opening the session drives the Host's ordinary Agent resolution; the
     // job owner must be that exact live instance, never a second one.
     // `expect.poll` is test-scoped, so this hook polls by hand.
-    agent = await liveAgent(scaffold, SessionId(SEED_ID))
+    agent = await liveAgent(scaffold, brandString<SessionId>(SEED_ID))
   }, 120_000)
 
   afterAll(async () => {
@@ -90,7 +91,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
 
     const started = await executeToolFixture(scaffold.ctx, {
       signal: new AbortController().signal,
-      callId: ToolCallId('background-job-list-e2e'),
+      callId: brandString<ToolCallId>('background-job-list-e2e'),
       name: 'bash',
       arguments: { command: COMMAND, description: 'Hold a background slot open', run_in_background: true },
       agent,
@@ -98,7 +99,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     const reported = started.content.map(block => block.type === 'text' ? block.text : '').join('')
     const matched = /\bbash-[0-9a-f]{16}\b/.exec(reported)
     if (matched === null) throw new Error(`background bash reported no job id: ${reported}`)
-    const jobId = JobId(matched[0])
+    const jobId = brandString<JobId>(matched[0])
 
     await trigger.waitFor({ timeout: 15_000 })
     expect(await trigger.locator('[data-state="ongoing"]').count()).toBe(1)

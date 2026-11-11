@@ -2,10 +2,10 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage, ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import { PtcRuntime, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { NativeToolExecutor } from '@deepseek-ai/dsh-tool-executor-native'
@@ -55,7 +55,7 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
   ctx.tools.setExecutor(new NativeToolExecutor(ctx))
   await runtimeContext.plugin(ControlledRuntime)
   const runtime = runtimeContext.ptcRuntime as ControlledRuntime
-  const session = ctx.sessions.create(SessionId('private-program'))
+  const session = ctx.sessions.create(brandString<SessionId>('private-program'))
   session.append('turn/start', { turn: 1 })
   const agent = { ctx: agentContext, id: session.id, session } as Agent
   let handle: RunCodeToolHandle | undefined
@@ -73,7 +73,7 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
     const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'test', model: 'test' }, signal })
     try {
       return await ctx.tools.execute({
-        calls: [{ type: 'tool-call', id: ToolCallId('program'), name, arguments: JSON.stringify({ code: 'await cua.inspect()', description: 'Inspect the current computer', ...args }) }],
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>('program'), name, arguments: JSON.stringify({ code: 'await cua.inspect()', description: 'Inspect the current computer', ...args }) }],
         agent, toolSet, signal,
       })
     } finally { toolSet.dispose() }

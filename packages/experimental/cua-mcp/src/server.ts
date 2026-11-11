@@ -5,10 +5,11 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-cua'
 import { CUA_PROMPT_SECTION_NAME } from '@deepseek-ai/dsh-cua/guidance'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { Server, specTypeSchemas, type CallToolResult, type Tool } from '@modelcontextprotocol/server'
@@ -148,7 +149,7 @@ function projectProgramTool(definition: ToolDefinition): Tool {
 export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOptions): Promise<CuaMcpServer> {
   const manifest = createRequire(import.meta.url)('../package.json') as { version: string }
   const handle = await ctx.agents.create({
-    sessionId: SessionId(`cua-mcp-${randomUUID()}`),
+    sessionId: brandString<SessionId>(`cua-mcp-${randomUUID()}`),
     meta: { cwd: options.cwd, agentPreset: ctx.agentPresets.defaultId },
     setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx) },
   })
@@ -196,7 +197,9 @@ export async function createCuaMcpServer(ctx: Context, options: CuaMcpServerOpti
     // The call is the Agent's maintenance activity: Agent disposal cancels it and waits for it, with its nested
     // calls, to settle before the Agent's scope and Session close.
     const batch = await agent.runMaintenance(maintenance => ctx.agents.withInitiator(agent, () => ctx.tools.execute({
-      calls: [{ type: 'tool-call', id: ToolCallId(`cua-mcp-${String(++calls)}`), name: PROGRAM_TOOL, arguments: JSON.stringify(args) }],
+      calls: [{
+        type: 'tool-call', id: brandString<ToolCallId>(`cua-mcp-${String(++calls)}`), name: PROGRAM_TOOL, arguments: JSON.stringify(args),
+      }],
       agent, signal: AbortSignal.any([signal, maintenance]),
     })))
     const outcome = batch.results[0]

@@ -7,7 +7,8 @@
 
 import { describe, expect, onTestFinished, vi } from 'vitest'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
@@ -900,7 +901,7 @@ describe('prompt and cancel errors', () => {
 
   it('sends the complete image reference and decodes the gateway response', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
-    const attachment = { attachmentId: AttachmentId('attachment-1'), mediaType: 'image/png' as const,
+    const attachment = { attachmentId: brandString<AttachmentId>('attachment-1'), mediaType: 'image/png' as const,
       bytes: 1, width: 1, height: 1, name: 'picture.png', originalDimensions: { width: 2, height: 2 } }
     const result = await session.readAttachment(attachment)
     expect(result).toEqual({
@@ -920,7 +921,7 @@ describe('prompt and cancel errors', () => {
     const failure = new RemoteError('gateway/internal', 'attachment unavailable', {})
     mock.remote.session.attachment.mockResolvedValueOnce(err(failure))
     await expect(session.readAttachment({
-      attachmentId: AttachmentId('missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>('missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
     })).resolves.toMatchObject({ ok: false, error: failure })
   })
 

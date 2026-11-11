@@ -31,7 +31,7 @@ kind: "package-reference"
 
 模型提交三个参数外加一个开关：`meta`（必需的身份数据：`name`、`description`，以及可选的 `whenToUse` 与 `phases`）、`script`（必需的纯 JavaScript 脚本体——不含 `export const meta` 语句；其参数描述携带脚本体规则，工具描述携带钩子约定）、`args`（可选 JSON 对象，作为全局变量 `args` 向脚本公开；裸列表应包装到字段中，使协议 schema 如实表达形态），以及 `run_in_background`（可选；仅在 `enableRunInBackground` 生效时存在）。
 
-前台成功返回包络 `{ kind: 'foreground', runId, agentsStarted, result }`，向模型渲染为 `workflow "<name>" completed (<count> agent<optional-s>).`，后接 `Return value:` 与美化打印的 JSON。无法启动的工作流——脚本解析或 meta 校验失败——返回模型可以修正的错误。取消与执行失败返回 `Error: workflow run was cancelled` 或 `Error: workflow run failed: <error>`；部分输出绝不会被报告为成功。
+前台成功返回包络 `{ kind: 'foreground', runId, agentsStarted, result }`，向模型渲染为 `workflow "<name>" completed (<count> agent<optional-s>).`，后接 `Return value:` 与美化打印的 JSON。无法启动的工作流——脚本解析或 meta 校验失败——返回模型可以修正的错误。取消调用方步骤时返回工具运行时的 `AbortError` `ABORTED` 结果；其他取消与执行失败返回 `Error: workflow run was cancelled`（`WorkflowError` `CANCELLED`）或 `Error: workflow run failed: <error>`（`WorkflowError`，code 为结束运行的致命 code，如 `AGENT_CAP`，没有时为 `RUN_FAILED`）；部分输出绝不会被报告为成功。
 
 ### 运行期间的预期
 
@@ -67,7 +67,7 @@ kind: "package-reference"
 
 ### 运行生命周期
 
-`execute` 启动运行，并在 `try/finally` 内等待 `run.result`；该结构总会对运行执行 dispose。`exec.signal` 会桥接到 `run.cancel()`，包括启动前已经中止的情况。非 `completed` 结束原因会映射为报告原因的 `isError` 结果；完成时渲染 `{ kind, runId, agentsStarted, result }`，Native 渲染器只会在 `maxResultChars` 处截断该投影。
+`execute` 启动运行，并在 `try/finally` 内等待 `run.result`；该结构总会对运行执行 dispose。`exec.signal` 会桥接到 `run.cancel()`，包括启动前已经中止的情况。非 `completed` 结束原因会映射为报告原因的 `isError` 结果：`exec.signal` 已中止时重新抛出调用方的中止原因，否则抛出 `WorkflowError`；完成时渲染 `{ kind, runId, agentsStarted, result }`，Native 渲染器只会在 `maxResultChars` 处截断该投影。
 
 ### 后台生命周期
 
@@ -150,7 +150,7 @@ Use the <toolName> tool ONLY when the user explicitly asks for a workflow or for
 
 #### 模型看到什么
 
-由模型编写的完整脚本、元数据与 args 会保留在 assistant 工具调用中。前台成功结果精确为 `workflow "<name>" completed (<count> agent<optional-s>).`、换行、`Return value:`、换行，以及美化打印且依赖数据的 JSON；达到上限时，会在新行添加 `… [truncated: <omitted> more characters]`。后台受理结果精确为 `workflow "<name>" started in the background as job <jobId>. Its return value arrives with the completion notice; check on it with job_output, stop it with job_kill.`，同样渲染的值稍后经任务完成播报与 `job_output` 抵达模型。失败结果精确为 `Error: workflow run was cancelled`（可以追加后缀 ` (<error>)`）、`Error: workflow run failed: <error-or-unknown error>` 或防御性的 `Error: workflow run ended abnormally (<reason>)`；没有所属 agent 的调用变为 `Error: workflow tool requires a calling agent (exec.agent was undefined)`。中间子 agent 消息会被省略。
+由模型编写的完整脚本、元数据与 args 会保留在 assistant 工具调用中。前台成功结果精确为 `workflow "<name>" completed (<count> agent<optional-s>).`、换行、`Return value:`、换行，以及美化打印且依赖数据的 JSON；达到上限时，会在新行添加 `… [truncated: <omitted> more characters]`。后台受理结果精确为 `workflow "<name>" started in the background as job <jobId>. Its return value arrives with the completion notice; check on it with job_output, stop it with job_kill.`，同样渲染的值稍后经任务完成播报与 `job_output` 抵达模型。调用方中止后的失败渲染中止原因；其他失败结果精确为 `Error: workflow run was cancelled`（可以追加后缀 ` (<error>)`）、`Error: workflow run failed: <error-or-unknown error>` 或防御性的 `Error: workflow run ended abnormally (<reason>)`；没有所属 agent 的调用变为 `Error: workflow tool requires a calling agent (exec.agent was undefined)`（`ToolContextUnavailableError`）。中间子 agent 消息会被省略。
 
 #### Token 影响
 

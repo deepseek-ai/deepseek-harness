@@ -7,7 +7,7 @@ import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import UserQuestions, { type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, installCuaAccess } from '../src/access.ts'
@@ -15,6 +15,7 @@ import type { CuaApplicationGrant } from '../src/access-types.ts'
 import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient, NativeError } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -50,7 +51,7 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   await mountAgentLoopTestDependencies(ctx)
   await mountAgentLoopTestHarness(ctx)
   if (options.questions !== false) await ctx.plugin(UserQuestions)
-  const owner = await ctx.agents.create({ sessionId: SessionId('cua-access-test') })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-access-test') })
   const answer = vi.fn<() => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
@@ -203,7 +204,7 @@ it('does not open a replacement control connection after provider disposal begin
 
 it('isolates other tasks and applications while revoking and forgetting one decision', async () => {
   const f = await setup()
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('another-cua-task') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('another-cua-task') })
   const otherClient = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   const other = { ...identity, id: 'b'.repeat(64) as typeof identity.id }
   const otherHandle = 'other-app' as CuaAppHandle
@@ -231,7 +232,7 @@ it('isolates other tasks and applications while revoking and forgetting one deci
 it('removes a grant whose save is already pending when another task revokes the application', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('cua-concurrent-save') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-concurrent-save') })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   const release: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -333,7 +334,7 @@ it('does not let a stale revoked task invalidate another task after a saved gran
   await f.ctx.cuaAccess.revoke(identity.id)
   const { persistable: _persistable, ...grant } = identity
   await f.save([grant])
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('cua-restored-grant') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-restored-grant') })
   const replacement = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(owner.agent, replacement, handle, identity, signal)
   await expect(f.access.run(f.client, handle, signal, async () => 'stale')).rejects.toThrow('APP_ACCESS_REVOKED')
@@ -434,7 +435,7 @@ it('omits session-only grants from the permission page and retains their access 
   const other = { ...identity, id: 'b'.repeat(64) as typeof identity.id, name: 'Another application', executablePath: '/Applications/Other.app' }
   await f.access.select(f.agent, f.client, 'other-application' as CuaAppHandle, other, signal)
   expect((await f.ctx.cuaAccess.applications())).toEqual({ allowedApps: [], blockedApps: [], persistentAvailable: true })
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('cua-always-allow') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-always-allow') })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Always allow'] }] })
   await f.access.select(owner.agent, client, handle, identity, signal)

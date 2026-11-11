@@ -8,8 +8,9 @@
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SubagentSettledMessageSource } from '@deepseek-ai/dsh-subagent'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage } from './support.ts'
@@ -111,7 +112,7 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         source: { kind: 'user' },
       }), { surfaceOp: 'append' })
       for (let step = 1; step <= TOOL_STEPS; step += 1) {
-        const callId = ToolCallId(`notice-wake-${String(step)}`)
+        const callId = brandString<ToolCallId>(`notice-wake-${String(step)}`)
         const args = JSON.stringify({ command: `diagnose ${String(step)}`, description: `Diagnostic ${String(step)}` })
         session.append('assistant/message', {
           stream: [],
@@ -171,7 +172,7 @@ describe('web e2e: notice Turn after a long Detailed Turn', () => {
         form: 'notice',
         summary: 'Background subagent finished.',
         stopReason: 'completed',
-        senderSessionId: SessionId('notice-wake-child'),
+        senderSessionId: brandString<SessionId>('notice-wake-child'),
       }
       const notice = createUserMessage({
         content: [{ type: 'text', text: 'Background subagent notice-wake-child finished.' }],

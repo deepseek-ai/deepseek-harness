@@ -34,7 +34,7 @@ describe('cua-mcp bundle', () => {
     expect(manifest.icon).toBe('./icon.svg')
     expect(manifest.exports).toHaveProperty('./locale/*.json')
     expect(manifest.dsh.bundle).toEqual({ patch: './cordis.patch.yml' })
-    expect(Object.keys(manifest.optionalDependencies)).toEqual(['@deepseek-ai/dsh-experimental-cua-macos', '@deepseek-ai/dsh-cua-windows'])
+    expect(Object.keys(manifest.optionalDependencies)).toEqual(['@deepseek-ai/dsh-cua-macos', '@deepseek-ai/dsh-cua-windows'])
     expect(readdirSync(resolve(root, 'locale')).sort()).toEqual(['de.json', 'en.json', 'es.json', 'fr.json', 'ja.json', 'pt.json', 'ru.json', 'zh.json'])
   })
 
@@ -83,7 +83,7 @@ describe('cua-mcp bundle', () => {
 
   it('mounts one native provider per Host, each with a fixed screenshot target and the PTC raw-tool preset', () => {
     const providers = { darwin: row('cua-mcp-provider'), win32: row('cua-mcp-provider-windows') }
-    expect(providers.darwin?.name).toBe('@deepseek-ai/dsh-experimental-cua-macos')
+    expect(providers.darwin?.name).toBe('@deepseek-ai/dsh-cua-macos')
     expect(providers.win32?.name).toBe('@deepseek-ai/dsh-cua-windows')
     for (const [host, provider] of Object.entries(providers)) {
       expect(provider?.config).toEqual({ agentPreset: 'ptc', screenshotTarget: { longEdge: 2048, maxBytes: 2_097_152 } })

@@ -121,6 +121,7 @@
     "@deepseek-ai/dsh-experimental-forge-bundle": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-skill-badge": "workspace:*",
     "@deepseek-ai/dsh-webhook-github": "workspace:*",
     "@deepseek-ai/dsh-webhook": "workspace:*",

@@ -3,18 +3,25 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import ScheduleService, {
-  DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MAX_TITLE_LENGTH, REQUIRED_TITLE_MESSAGE, ScheduleId, ScheduleInputError,
-  createAfterScheduleRecord, formatScheduleLocalTime,
+  DEFAULT_LIST_LIMIT,
+  MAX_LIST_LIMIT,
+  MAX_TITLE_LENGTH,
+  REQUIRED_TITLE_MESSAGE,
+  ScheduleInputError,
+  createAfterScheduleRecord,
+  formatScheduleLocalTime,
 } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { ScheduleCatalogEntry, ScheduleRecord } from '@deepseek-ai/dsh-schedule'
 import * as ToolSchedule from '../src/index.ts'
 import { agentFor, boundTask, harness, mountToolSchedule, PromptRuntime, seedTasks } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const TOOL_NAMES = ['schedule_create', 'schedule_edit', 'schedule_list', 'schedule_view']
 const AUTHORIZATION = 'Only create or modify scheduled tasks at the user\'s explicit request; '
@@ -23,7 +30,7 @@ const NOW = '2026-09-16T00:00:00.000Z'
 const DAILY = 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY'
 const TASK = { title: 'Queue check', prompt: 'Check the queue', rrule: DAILY, target: 'this_session' }
 const RECORD_FIELDS = {
-  id: ScheduleId('typed-task'), title: 'Typed task', prompt: 'Do the task', scheduledAt: '2026-09-16T01:00:00.000Z',
+  id: brandString<ScheduleId>('typed-task'), title: 'Typed task', prompt: 'Do the task', scheduledAt: '2026-09-16T01:00:00.000Z',
 }
 const CALLS = [
   ['schedule_create', TASK],
@@ -63,7 +70,7 @@ async function setupWithPreset() {
 
 async function execute(test: Setup, name: string, args: unknown, agent: Agent = test.agent) {
   return await executeToolFixture(test.ctx, {
-    callId: ToolCallId('schedule-call'), signal: new AbortController().signal, name, arguments: args, agent,
+    callId: brandString<ToolCallId>('schedule-call'), signal: new AbortController().signal, name, arguments: args, agent,
   })
 }
 
@@ -79,7 +86,7 @@ async function executeBody(test: Setup, name: string, args: unknown, signal: Abo
   const definition = test.ctx.tools.get(name, test.agent)
   if (definition === undefined) throw new Error('missing Schedule tool')
   return await definition.execute(args, {
-    callId: ToolCallId('body-call'), rootCallId: ToolCallId('body-call'), token: Symbol('test-body') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('body-call'), rootCallId: brandString<ToolCallId>('body-call'), token: Symbol('test-body') as ToolExecutionToken,
     name, arguments: args, agent: test.agent, signal, deferContext() {}, concludeTurn() {},
   })
 }
@@ -98,7 +105,7 @@ function reported<T extends ScheduleCatalogEntry>(task: T) {
 
 /** Read one stored task as the tools report it. */
 async function stored(test: Setup, id: string) {
-  const task = await test.service.view({ id: ScheduleId(id) })
+  const task = await test.service.view({ id: brandString<ScheduleId>(id) })
   if ('code' in task) throw new Error('the task is not stored')
   return reported(task)
 }
@@ -115,8 +122,8 @@ async function createTask(test: Setup, args: Record<string, unknown> = {}) {
 async function createOther(test: Setup) {
   return reported(await test.service.create({
     title: 'Other session', prompt: 'Check from elsewhere', timing: { kind: 'rrule', rrule: 'DTSTART:20260916T003000Z\nRRULE:FREQ=DAILY' },
-    target: { kind: 'session', sessionId: SessionId('other-session') },
-  }, SessionId('other-session')))
+    target: { kind: 'session', sessionId: brandString<SessionId>('other-session') },
+  }, brandString<SessionId>('other-session')))
 }
 
 describe('Schedule model tools', () => {
@@ -213,7 +220,7 @@ describe('Schedule model tools', () => {
     await test.ctx.plugin(ToolSchedule)
     for (const [name, args] of CALLS) {
       const result = await executeToolFixture(test.ctx, {
-        callId: ToolCallId('agentless-call'), signal: new AbortController().signal, name, arguments: args,
+        callId: brandString<ToolCallId>('agentless-call'), signal: new AbortController().signal, name, arguments: args,
       })
       expect(result.isError).toBe(false)
       expect(result.value).toEqual(INTERNAL_ERROR)
@@ -228,10 +235,26 @@ describe('Schedule model tools', () => {
     await mountToolSchedule(test.ctx, child)
     for (const [name, args] of CALLS) {
       const result = await executeToolFixture(test.ctx, {
-        callId: ToolCallId('child-call'), signal: new AbortController().signal, name, arguments: args, agent: child,
+        callId: brandString<ToolCallId>('child-call'), signal: new AbortController().signal, name, arguments: args, agent: child,
       })
       expect(result.isError).toBe(false)
       expect(result.value).toEqual({ code: 'subagent_session', message: 'A delegated subagent cannot use scheduled tasks.' })
+    }
+    expect((await test.service.list({})).total).toBe(0)
+  })
+
+  it('fails with the coded depth error when the caller carries an invalid runtime delegation depth', async () => {
+    const test = await harness(); tests.push(test)
+    const caller = { ...agentFor(test.ctx, 'invalid-depth'), options: { subagentDepth: -1 } }
+    await test.ctx.agents.register(caller)
+    await mountToolSchedule(test.ctx, caller)
+    for (const [name, args] of CALLS) {
+      const result = await executeToolFixture(test.ctx, {
+        callId: brandString<ToolCallId>('invalid-depth-call'), signal: new AbortController().signal, name, arguments: args, agent: caller,
+      })
+      expect(result.isError).toBe(true)
+      expect(result.content).toEqual([{ type: 'text', text: 'Error: agent subagentDepth must be a non-negative safe integer' }])
+      expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'INVALID_DEPTH' })
     }
     expect((await test.service.list({})).total).toBe(0)
   })
@@ -510,10 +533,10 @@ describe('Schedule model tools', () => {
   })
 
   it('requires a future RRULE to resume an ended one-shot task', async () => {
-    const id = ScheduleId('ended-task')
+    const id = brandString<ScheduleId>('ended-task')
     const rule = createAfterScheduleRecord(id, 'Ended prompt', 1, Date.parse('2026-09-15T00:00:00.000Z'), 'Ended')
     const test = await setup({
-      beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(SessionId('original'), rule, { status: 'ended' })]),
+      beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(brandString<SessionId>('original'), rule, { status: 'ended' })]),
     })
     expect(await call(test, 'schedule_view', { id })).toMatchObject({
       status: 'ended', kind: 'after', scheduledAt: '2026-09-15T00:00:01.000Z',
@@ -536,7 +559,7 @@ describe('Schedule model tools', () => {
   ] satisfies ScheduleRecord[])(
     'returns authoritative $kind timing fields in view, list, and edit', async (rule) => {
       const { id } = rule
-      const test = await setup({ beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(SessionId('original'), rule)]) })
+      const test = await setup({ beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(brandString<SessionId>('original'), rule)]) })
       expect(await test.service.view({ id })).toMatchObject(rule)
       expect(await call(test, 'schedule_view', { id })).toMatchObject(rule)
       expect(await call(test, 'schedule_list', {})).toMatchObject({ items: [rule] })

@@ -116,7 +116,7 @@
     # lack, so each row is disabled off its own Host.
     # Screenshots target a fixed request image because no model route exists here.
     - id: cua-mcp-provider
-      name: '@deepseek-ai/dsh-experimental-cua-macos'
+      name: '@deepseek-ai/dsh-cua-macos'
       disabled: !!js process.platform !== 'darwin'
       config:
         agentPreset: ptc

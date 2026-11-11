@@ -11,9 +11,10 @@ import Subprocess from '@deepseek-ai/dsh-subprocess'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { CuaConfig, installCua } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const programPrompt = 'Fixture CUA program guidance\n\nAX read defaults: maxElements=2000, maxDepth=25.\n\nMaximum click holdMs: 5000 ms.'
 
@@ -53,7 +54,7 @@ async function setup(presetIds = ['standard', 'ptc'], withSandbox = true) {
     } })
   }
   const create = (id: string, preset: string) => ctx.agents.create({
-    sessionId: SessionId(id), setup: async (owner) => { await ctx.agentPresets.mount(owner, preset) },
+    sessionId: brandString<SessionId>(id), setup: async (owner) => { await ctx.agentPresets.mount(owner, preset) },
   })
   return { ctx, create }
 }
@@ -86,7 +87,7 @@ it('gives every other composed preset a program tool without changing the shared
     await handle.dispose()
     expect(ctx.tools.get('cua_run_code', handle.agent)).toBeUndefined()
   }
-  const uncomposed = await ctx.agents.create({ sessionId: SessionId('cua-uncomposed') })
+  const uncomposed = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-uncomposed') })
   expect(ctx.tools.get('cua_run_code', uncomposed.agent)).toBeUndefined()
   expect(ctx.tools.get('cua', uncomposed.agent)).toBeUndefined()
   expect(ctx.get('ptcRuntime')).toMatchObject(shared)
@@ -370,7 +371,7 @@ it('ignores unloaded Session selections and reports a failed live scope update',
   const warn = vi.spyOn(mounted.ctx.logger, 'warn').mockImplementation(() => {})
   const lookup = vi.spyOn(ctx.agentPresets, 'composedPreset')
   onTestFinished(() => { lookup.mockRestore(); warn.mockRestore() })
-  ctx.emit('agent-preset/selected', SessionId('unloaded'), 'ptc')
+  ctx.emit('agent-preset/selected', brandString<SessionId>('unloaded'), 'ptc')
   expect(lookup).not.toHaveBeenCalled()
   lookup.mockImplementationOnce(() => { throw new Error('Preset lookup failed during reload') })
   ctx.emit('agent-preset/selected', handle.agent.id, 'ptc')

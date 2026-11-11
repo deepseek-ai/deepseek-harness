@@ -79,6 +79,7 @@ kind: "package-group"
 | [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
 | [CUA](cua/README.zh.md) | 应用与窗口对象、授权执行和权限控件。 | `ctx.cuaAccess` |
 | [macOS CUA](cua-macos/README.zh.md) | Swift 原生执行与平台组件准备。 | `ctx.computerUse` |
+| [Windows CUA](cua-windows/README.zh.md) | 通过 Windows UI Automation 操作应用与窗口。 | `ctx.computerUse` |
 | [`cua-bundle`](cua-bundle/README.zh.md) | 面向 PTC 会话、默认关闭的 Computer Use 开关 | — |
 | [`cua-mcp`](cua-mcp/README.zh.md) | 由 `cua-mcp` profile 向外部 agent harness 提供的 Computer Use MCP stdio 服务器 | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |

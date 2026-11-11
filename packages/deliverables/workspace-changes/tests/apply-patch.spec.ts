@@ -7,8 +7,9 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import { FsError } from '@deepseek-ai/dsh-fs'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
-import { ToolCallId, createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
@@ -54,13 +55,13 @@ async function boot(environment: string) {
   await ctx.plugin(FsPolicy)
   await ctx.plugin(ToolFs, { applyPatch: true })
   await ctx.plugin(WorkspaceChanges)
-  const session = ctx.sessions.create(SessionId('patch-review'), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>('patch-review'), { meta: { cwd } })
   const signal = new AbortController().signal
   let callNumber = 0
   let observations = 0
   ctx.on('fs/observed', () => { observations++ })
   async function execute(name: string, args: Record<string, string>) {
-    const callId = ToolCallId(`patch-review-${++callNumber}`)
+    const callId = brandString<ToolCallId>(`patch-review-${++callNumber}`)
     const serialized = JSON.stringify(args)
     session.append('assistant/message', {
       stream: [], turn: 1, step: 1,
