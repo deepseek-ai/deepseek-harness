@@ -7,7 +7,7 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
-Providers install the app/window object API with `installCua`; callers connect through `connectCua`. The `cua` API discovers applications, and `CuaApp` objects activate the selected application and enumerate its windows. `CuaApp` and `CuaWindow` both extend `CuaSurface`; explicit window objects own screenshots and pointer input. The macOS provider supplies native execution for this interface.
+Providers install the app/window object API with `installCua`; callers connect through `connectCua`. The `cua` API discovers applications, and `CuaApp` objects activate the selected application and enumerate its windows. `CuaApp` and `CuaWindow` both extend `CuaSurface`; explicit window objects own screenshots and pointer input. The macOS and Windows providers execute native operations on their respective platforms.
 
 ## Summary
 
@@ -29,7 +29,7 @@ Application consent supplies English, Chinese, and Japanese display text from `s
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the [macOS provider](../cua-macos/README.md) to enable native operations on macOS. External PTC hosts import `connectCua` from `@deepseek-ai/dsh-cua/bridge` and supply the current `tools.cua` binding. Source compositions and native preparation belong to the provider.
+Mount the [macOS provider](../cua-macos/README.md) or the [Windows provider](../cua-windows/README.md) to enable native operations on that platform. External PTC hosts import `connectCua` from `@deepseek-ai/dsh-cua/bridge` and supply the current `tools.cua` binding. Source compositions and native preparation belong to the provider.
 
 `cua_run_code` runs TypeScript as scoped REPL statements in a separate persistent Node environment for each Agent. The global `cua` object is available before the program starts; `tools` contains only `cua`. Call ordinary tools directly outside the program. Use top-level `await` and `inspect(...values)` to display selected text and screenshots; top-level `return` is invalid. The tool accepts the same timeout and sandbox controls as `run_code`. A restarted runtime automatically recreates `cua`, but other variables and selected application objects must be created again.
 

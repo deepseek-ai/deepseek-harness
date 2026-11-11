@@ -14,7 +14,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { managerState, subagentManager } from './manager-internals.ts'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
@@ -23,6 +23,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION, snapshotSubagentDescriptor } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/activation-presets')
 const contexts: Context[] = []
@@ -64,7 +65,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0] = [tex
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
   const handle = await ctx.agents.create({
-    sessionId: SessionId('parent'),
+    sessionId: brandString<SessionId>('parent'),
     meta: { agentPreset: 'coding' },
     agentOptions: { provider: 'mock', model: 'mock' },
     setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'coding') },
@@ -240,7 +241,7 @@ describe('continuable child presets', () => {
   it.each([undefined, 'coding'])('restores historical children from their own header preset %s', async (agentPreset) => {
     const { ctx, parent, adapter } = await setup()
     parkParent(ctx, parent)
-    const childId = SessionId('historical-child')
+    const childId = brandString<SessionId>('historical-child')
     const historical = await ctx.agents.create({
       sessionId: childId,
       meta: {

@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -12,6 +12,7 @@ import type { SubagentActivation, SubagentResult } from '@deepseek-ai/dsh-subage
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent } from './setup.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const completed: PtcRunResult = { output: [], value: { value: null, stopReason: 'completed', agentsStarted: 0 } }
 type HostBindings = Record<string, PtcBindingFunction>
@@ -44,7 +45,7 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
     capabilities: { agentOptions: true, agentPreset: false, outputSchema: true, depthLimit: false },
     inheritsParentContext: false,
     start: async () => ({
-      id: SessionId('host-child'),
+      id: brandString<SessionId>('host-child'),
       result: Promise.resolve({ output: [], stopReason: 'completed' }),
       dispose: () => Promise.resolve(),
     }),
@@ -196,7 +197,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     const activation = vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('ready-child'), name: 'ready-child',
+      childId: brandString<SessionId>('ready-child'), name: 'ready-child',
       result: Promise.resolve({ output: [], structured: { answer: 42 }, stopReason: 'completed' }),
       dispose: () => { disposing.resolve(undefined); return released.promise },
     })
@@ -274,7 +275,7 @@ describe('workflow runtime outcomes', () => {
       return publication.promise
     })
     const child: SubagentActivation = {
-      childId: SessionId('late-child'), name: 'late-child',
+      childId: brandString<SessionId>('late-child'), name: 'late-child',
       result: Promise.resolve({ output: [], stopReason: 'aborted' }),
       dispose: disposed,
     }
@@ -302,7 +303,7 @@ describe('workflow runtime outcomes', () => {
       return completed
     })
     vi.spyOn(ctx.subagents, 'startActivation').mockResolvedValue({
-      childId: SessionId('output-pending'), name: 'output-pending', result: childResult.promise, dispose: disposed,
+      childId: brandString<SessionId>('output-pending'), name: 'output-pending', result: childResult.promise, dispose: disposed,
     })
     const handle = start()
     let settled = false

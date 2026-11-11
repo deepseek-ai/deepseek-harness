@@ -10,13 +10,14 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { PresentedFile } from '../src/types.ts'
 import * as Present from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: Array<() => Promise<unknown>> = []
 let callNumber = 0
@@ -26,7 +27,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
-  const id = SessionId(`present-owner-${++callNumber}`)
+  const id = brandString<SessionId>(`present-owner-${++callNumber}`)
   let scope: Scope
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, ...cwd === undefined ? {} : { cwd }, isSeeded: false,
@@ -70,7 +71,7 @@ async function setup() {
   const owner = await agent(ctx, root)
   owner.session.append('turn/start', { turn: 1 })
   const execute = (files: unknown) => executeToolFixture(ctx, {
-    signal: new AbortController().signal, callId: ToolCallId(`call-${++callNumber}`),
+    signal: new AbortController().signal, callId: brandString<ToolCallId>(`call-${++callNumber}`),
     name: 'present', arguments: { files }, agent: owner,
   })
   return { ctx, owner, root, fiber, execute }
@@ -172,7 +173,7 @@ it('validates deployment limits before registering the tool', async () => {
 
 it('requires an agent, an open turn, and a workspace', async () => {
   const { ctx, owner, execute } = await setup()
-  const detached = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: ToolCallId('detached'), name: 'present', arguments: { files: [{ path: 'a' }] } })
+  const detached = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: brandString<ToolCallId>('detached'), name: 'present', arguments: { files: [{ path: 'a' }] } })
   const contextUnavailable = { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
   expect(detached.isError).toBe(true)
   expect(detached.error?.info).toEqual(contextUnavailable)
@@ -182,7 +183,7 @@ it('requires an agent, an open turn, and a workspace', async () => {
   expect(closed.error?.info).toEqual(contextUnavailable)
   const noWorkspace = await agent(ctx, undefined)
   noWorkspace.session.append('turn/start', { turn: 1 })
-  const absent = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: ToolCallId('no-workspace'), name: 'present', arguments: { files: [{ path: 'a' }] }, agent: noWorkspace })
+  const absent = await executeToolFixture(ctx, { signal: new AbortController().signal, callId: brandString<ToolCallId>('no-workspace'), name: 'present', arguments: { files: [{ path: 'a' }] }, agent: noWorkspace })
   expect(absent.isError).toBe(true)
 })
 

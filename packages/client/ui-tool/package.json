@@ -47,6 +47,7 @@
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-spill-policy": "workspace:*",
     "@deepseek-ai/dsh-fs-patch": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",

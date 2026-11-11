@@ -6,8 +6,7 @@
  * The seam itself lives in `@deepseek-ai/dsh-compaction`, which re-exports these
  * contracts; this module is a pure type/value/predicate outlet (no cordis
  * imports, no module augmentation) so client and wire programs can name the
- * checkpoint source without loading the host plugin's Context merges — the
- * `dsh-commands/brand` shape.
+ * checkpoint source without loading the host plugin's Context merges.
  *
  * @module @deepseek-ai/dsh-compaction/checkpoint
  */

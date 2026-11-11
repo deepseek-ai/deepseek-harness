@@ -8,7 +8,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertPositiveFinite,
   assertUsableCwd,
@@ -16,6 +16,7 @@ import {
   settleRunResult,
   subprocessRunHandle,
 } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 describe('NO_START_CAPABILITIES', () => {
   it('advertises nothing and is frozen (shared by every out-of-process backend)', () => {
@@ -149,7 +150,7 @@ describe('subprocessRunHandle', () => {
     const requestCancel = vi.fn()
     const teardown = vi.fn(() => Promise.resolve())
     const run = subprocessRunHandle({
-      id: SessionId('run-1'),
+      id: brandString<SessionId>('run-1'),
       result: Promise.resolve({ output: [], stopReason: 'completed' }),
       signal: controller.signal,
       onAbort,

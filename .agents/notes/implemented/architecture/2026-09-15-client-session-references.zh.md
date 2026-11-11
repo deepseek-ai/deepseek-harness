@@ -21,7 +21,8 @@ Client Session 对象、Agent 作用域的 Client Context、引用、使用方�
 | 所有者 | 职责 |
 | --- | --- |
 | Client Session Controller | 目录、活跃代、引用、来源计数、binding、历史窗口与既有 Session 控制状态 |
-| `ui-session` | 显式 Session Provider 集成与统一 UI 状态来源 |
+| `ui-session` | 显式 Session Provider 集成与有效待处理交互来源 |
+| `ui-session-status` | 统一 UI 状态来源 |
 | 视图或操作 | 自己的引用、目标、来源标识与释放时机 |
 | Workspace UI | 主区域目标与引用、导航、持久目标及创建流程 |
 | UI 组合边界 | 将所有者提供的引用交给一个明确的 `SessionProvider` |
@@ -89,7 +90,7 @@ Controller 将来源计数与每个活跃代的引用共同管理。每个来源
 
 ### 统一的 UI Session 状态
 
-`ui-session` 拥有不依赖 React 的 `sessionStatus` 来源，通过标准 `useSessionStatus` 钩子公开。快照按 Session 身份索引，为每个已知 Session 提供一条 UI 状态记录。它组合下列独立事实，不将它们压缩成互斥的单一阶段：
+`ui-session-status` 拥有不依赖 React 的 `uiSession.sessionStatus` 服务，以 `ctx.uiSession.sessionStatus` 读取，并通过标准 `useSessionStatus` 钩子公开。快照按 Session 身份索引，为每个已知 Session 提供一条 UI 状态记录。它组合下列独立事实，不将它们压缩成互斥的单一阶段：
 
 | 字段 | 取值 | 含义与所有者 |
 | --- | --- | --- |
@@ -99,7 +100,7 @@ Controller 将来源计数与每个活跃代的引用共同管理。每个来源
 
 来源计数以 `SessionListState.byId[id].retainedBy` 为准；UI 状态读取它以执行确认策略，不维护另一套引用注册表。标题、Workspace 关联、历史、队列和投影数据保留在各自的既有所有者中。
 
-待处理领域保留 `SessionPendingInteractionMap`、请求身份、优先级、发布清理函数与卸载委托。统一状态包含同一个有效请求对象，不复制请求，也不创建第二套待处理注册表。Workspace 状态指示器与 Conversation composer 选择读取 `useSessionStatus`，不再分别读取 `useSessionPendingInteraction` 和 `useCompletedSessionIds` 钩子。
+待处理领域在 `ui-session` 中保留 `SessionPendingInteractionMap`、请求身份、优先级、发布清理函数与卸载委托，`ui-session` 以只读的 `ctx.uiSession.pendingInteractions` 发布每个 Session 的有效请求。统一状态包含同一个有效请求对象，不复制请求，也不创建第二套待处理注册表。Workspace 状态指示器与 Conversation composer 选择读取 `useSessionStatus`，不再分别读取 `useSessionPendingInteraction` 和 `useCompletedSessionIds` 钩子。
 
 完成跟踪订阅已有 `api-session/status` 事件，避免 running 到 idle 的变化在合批目录快照中丢失。Host 列表行（`ids`）建立初始与重连的 running 基线；目录合成行与 retained 行保留独立观察到的状态。pending 状态下的空目录不能证明 Session 已消失。更新规则如下：
 

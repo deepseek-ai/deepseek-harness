@@ -36,6 +36,9 @@
     "@deepseek-ai/dsh-compaction": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~"
   },
+  "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*"
+  },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:~",
     "@deepseek-ai/cordis-plugin-loader": "workspace:~",

@@ -48,6 +48,7 @@
     "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-agent": "workspace:*",
     "@deepseek-ai/dsh-file-reference": "workspace:*",
     "@deepseek-ai/dsh-system-prompt": "workspace:*",

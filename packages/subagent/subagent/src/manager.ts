@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import { type ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
@@ -36,7 +36,7 @@ import type { LifecycleEmitter } from './lifecycle.ts'
 import { ROOT_AGENT_NAME, SiblingNameReservations, agentAddress, joinAgentPath, parentAgentPath } from './names.ts'
 import type { SiblingNameReservation } from './names.ts'
 import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
-import { SubagentRunId } from './types.ts'
+import type { SubagentRunId } from './types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentMemberNames, SubagentStartRequest, SubagentRun,
@@ -878,7 +878,7 @@ export class SubagentManager {
     const activation: Activation = {
       releaseSlot,
       childId,
-      runId: SubagentRunId(randomUUID()),
+      runId: brandString<SubagentRunId>(randomUUID()),
       provider,
       ...resource,
       root,
@@ -1242,7 +1242,7 @@ export class SubagentManager {
             ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
             ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
             ...descriptor.agentReasoningEffort !== undefined
-              ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
+              ? { reasoningEffort: brandString<ReasoningEffortId>(descriptor.agentReasoningEffort) }
               : {},
           },
           composition: {

@@ -7,9 +7,10 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { SessionAttachmentValue } from '@deepseek-ai/dsh-api-session-controller'
-import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -57,7 +58,7 @@ describe('minimal agent preset', () => {
       text: 'THIS TEXT MUST NOT REACH THE MODEL.',
     })
     agentHandle = await scaffold.ctx.agents.create({
-      sessionId: SessionId('minimal-preset-smoke'),
+      sessionId: brandString<SessionId>('minimal-preset-smoke'),
       meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
@@ -105,14 +106,14 @@ describe('minimal agent preset', () => {
     const signal = new AbortController().signal
     await executeToolFixture(scaffold.ctx, {
       signal,
-      callId: ToolCallId('minimal-bash-state-setup'),
+      callId: brandString<ToolCallId>('minimal-bash-state-setup'),
       name: 'bash',
       arguments: { command: `cd ${JSON.stringify(stateDir)} && export DSH_MINIMAL_STATE=PERSISTED` },
       agent: agentHandle.agent,
     })
     const bash = await executeToolFixture(scaffold.ctx, {
       signal,
-      callId: ToolCallId('minimal-bash-state-read'),
+      callId: brandString<ToolCallId>('minimal-bash-state-read'),
       name: 'bash',
       arguments: { command: 'printf \'%s:%s\n\' "$DSH_MINIMAL_STATE" "$PWD"' },
       agent: agentHandle.agent,
@@ -226,7 +227,7 @@ describe('minimal manual compaction', () => {
       yield* next()
     })
     handle = await scaffold.ctx.agents.create({
-      sessionId: SessionId('minimal-compact-smoke'),
+      sessionId: brandString<SessionId>('minimal-compact-smoke'),
       meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
@@ -370,7 +371,7 @@ describe('minimal image reading', () => {
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64',
     ))
     handle = await scaffold.ctx.agents.create({
-      sessionId: SessionId('minimal-image-smoke'),
+      sessionId: brandString<SessionId>('minimal-image-smoke'),
       meta: { cwd: scaffold.workspaceCwd, agentPreset: 'minimal' },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp' },
       setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx, 'minimal').then(() => undefined),
@@ -420,7 +421,7 @@ describe('minimal image reading', () => {
   it.skipIf(MODE === 'record')('reads image bytes and preserves the supplied reference with another Session as the gateway scope', async () => {
     const image = handle.agent.session.deriveMessages().flatMap(message => message.content).find(block => block.type === 'image')
     if (image?.type !== 'image') throw new Error('minimal read_image produced no durable image')
-    const unrelated = await scaffold.ctx.agents.create({ sessionId: SessionId('minimal-image-unrelated') })
+    const unrelated = await scaffold.ctx.agents.create({ sessionId: brandString<SessionId>('minimal-image-unrelated') })
     try {
       expect(unrelated.agent.session.deriveMessages().flatMap(message => message.content).some(block => block.type === 'image')).toBe(false)
       const read = async (attachment: unknown, rpcId: string) => {
@@ -473,7 +474,7 @@ describe('minimal image reading', () => {
     // User-only interrupted turns move the recorded image beyond the 50-message initial page without inventing model output.
     const laterTurns = Array.from({ length: 52 }, (_, index) =>
       interruptedTurn(index + 2, `Later image-history message ${index + 2}`))
-    const historicalId = SessionId('minimal-image-cold')
+    const historicalId = brandString<SessionId>('minimal-image-cold')
     await seedSession(scaffold, `${recorded}${laterTurns[0]}\n`, historicalId, 'minimal')
     expect(scaffold.ctx.agents.get(historicalId)).toBeUndefined()
     page = await openSession(historicalId)
@@ -500,7 +501,7 @@ describe('minimal image reading', () => {
     const body = await response.json() as { result: { ok: boolean; value?: { sessionId: string } } }
     expect(body.result.ok).toBe(true)
     if (body.result.value === undefined) throw new Error('image fork did not return a Session ID')
-    page = await openSession(SessionId(body.result.value.sessionId))
+    page = await openSession(brandString<SessionId>(body.result.value.sessionId))
     card = await imageCard(page)
     await expect.poll(() => card.locator('img').first().evaluate(img => img instanceof HTMLImageElement && img.naturalWidth)).toBe(1)
   })

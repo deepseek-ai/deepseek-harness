@@ -3,7 +3,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   assertFixtureInventory,
@@ -16,6 +16,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/markdown-cjk-strong', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/markdown-cjk-strong/ui.expected.md', import.meta.url))
@@ -35,7 +36,7 @@ const CASES = [
 
 /** Build one settled assistant reply covering CJK-adjacent strong punctuation boundaries. */
 function markdownFixture(): string {
-  const session = Session.create(SessionId('markdown-cjk-strong-source'))
+  const session = Session.create(brandString<SessionId>('markdown-cjk-strong-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Render adjacent CJK strong emphasis.' }],

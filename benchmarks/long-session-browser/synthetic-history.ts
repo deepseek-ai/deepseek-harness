@@ -1,8 +1,9 @@
 /** Synthetic current-generation history and paced reply for browser measurements. */
-import { createAssistantMessage, createSystemMessage, createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createAssistantMessage, createSystemMessage, createUserMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 
 /** Closed turns in the browser history workload. */
@@ -23,7 +24,7 @@ export const PACE_MS = 32
  * @returns Current Session JSONL accepted by the shared Web seeder.
  */
 export function syntheticHistory(): string {
-  const session = Session.create(SessionId(SESSION_ID))
+  const session = Session.create(brandString<SessionId>(SESSION_ID))
   for (let turn = 1; turn <= HISTORY_TURNS; turn++) {
     session.append('turn/start', { turn })
     session.append('step/start', { turn, step: 1 })
@@ -35,7 +36,7 @@ export function syntheticHistory(): string {
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     if (turn === 1) session.append('session/title', { title: TITLE, messageSeqs: [user.seq], source: { kind: 'fallback' } })
-    const callId = ToolCallId('synthetic-tool-' + String(turn))
+    const callId = brandString<ToolCallId>('synthetic-tool-' + String(turn))
     const tool = turn % 6 === 0
     const code = turn % 12 === 0
       ? '\n\n```ts\n' + Array.from({ length: 60 }, (_, i) => 'const value' + String(i) + ' = ' + String(i)).join('\n') + '\n```'

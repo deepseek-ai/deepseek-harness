@@ -2,6 +2,7 @@
 import { EventEmitter } from 'node:events'
 import { createServer, request as httpRequest } from 'node:http'
 import { Readable } from 'node:stream'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import type { AddressInfo } from 'node:net'
@@ -11,7 +12,7 @@ import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { IndexInjection, WebServer, WebRoute, WebUpgradeRoute } from '@deepseek-ai/dsh-host-webserver'
 import {
   API_PATH,
-  RpcId,
+  type RpcId,
   apply,
   inject,
   type ClientRequest,
@@ -457,7 +458,7 @@ describe('connection node half', () => {
 
     const request: ClientRequest = {
       type: 'client-request',
-      rpcId: RpcId('rpc-dedicated'),
+      rpcId: brandString<RpcId>('rpc-dedicated'),
       method: 'goals/create',
       payload: { args: { agentId: 'agent-1' } },
     }
@@ -515,7 +516,7 @@ describe('connection node half', () => {
     const route = routes.find(candidate => candidate.path === API_PATH)!
     const request: ClientRequest = {
       type: 'client-request',
-      rpcId: RpcId('rpc-shared'),
+      rpcId: brandString<RpcId>('rpc-shared'),
       method: 'goals/create',
       payload: { args: { agentId: 'agent-1' } },
     }
@@ -588,7 +589,7 @@ describe('connection node half', () => {
     const route = routes.find(candidate => candidate.path === API_PATH)!
     const request: ClientRequest = {
       type: 'client-request',
-      rpcId: RpcId('rpc-peer'),
+      rpcId: brandString<RpcId>('rpc-peer'),
       method: 'goals/create',
       payload: { args: {} },
     }

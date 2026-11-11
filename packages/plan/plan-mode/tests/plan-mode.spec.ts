@@ -4,12 +4,14 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { Session, SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService, {
@@ -51,11 +53,11 @@ async function agentWithSession(
 ): Promise<Agent & { session: Session }> {
   // A live store session when a store is mounted (the command executor logs
   // lifecycle events through it); bare otherwise (fold/tool-only benches).
-  const session = Session.create(SessionId(id), undefined, owner === undefined ? undefined : {
-    version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 0, isSeeded: false, origin: 'subagent', parentSession: owner.id,
+  const session = Session.create(brandString<SessionId>(id), undefined, owner === undefined ? undefined : {
+    version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), createdAt: 0, isSeeded: false, origin: 'subagent', parentSession: owner.id,
   })
   const agent = {
-    id: SessionId(id),
+    id: brandString<SessionId>(id),
     session,
     options: {},
     inject(message: UserMessage) {
@@ -183,7 +185,7 @@ function expectPlanPtcSdkBindings(sdk: string): void {
 let callCounter = 0
 function execute(ctx: Context, name: string, agent?: Agent) {
   return executeToolFixture(ctx, {
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: {},
     signal: new AbortController().signal,
@@ -216,7 +218,7 @@ describe('resolveConfig', () => {
 
 describe('foldPlanMode', () => {
   it('folds an empty log to inactive and takes the last plan/mode otherwise', () => {
-    const session = Session.create(SessionId('fold'))
+    const session = Session.create(brandString<SessionId>('fold'))
     expect(foldPlanMode(session.snapshotEvents())).toBe(false)
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
@@ -225,7 +227,7 @@ describe('foldPlanMode', () => {
   })
 
   it('folds a prefix when `end` is given', () => {
-    const session = Session.create(SessionId('fold-prefix'))
+    const session = Session.create(brandString<SessionId>('fold-prefix'))
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
     expect(foldPlanMode(session.snapshotEvents(), 1)).toBe(true)
@@ -802,7 +804,7 @@ describe('exit_plan_mode', () => {
     const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal })
     return executeToolFixture(ctx, {
       ...toolSet === undefined ? {} : { toolSet },
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan },
       signal: new AbortController().signal,
@@ -840,7 +842,7 @@ describe('exit_plan_mode', () => {
     const exit = ctx.tools.get(EXIT_PLAN_MODE)
     expect(exit).toBeDefined()
     const exec: ToolRunContext = {
-      callId: ToolCallId('direct-exit'), rootCallId: ToolCallId('direct-exit'), name: EXIT_PLAN_MODE,
+      callId: brandString<ToolCallId>('direct-exit'), rootCallId: brandString<ToolCallId>('direct-exit'), name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' }, token: Symbol('direct-exit') as ToolExecutionToken, signal: testToolSignal,
       deferContext() {}, concludeTurn() {},
     }
@@ -967,7 +969,7 @@ describe('exit_plan_mode', () => {
 
     const result = await executeModelToolFixture(ctx, {
       toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: RUN_CODE_NAME,
       arguments: { code: `return await tools.${EXIT_PLAN_MODE}({ plan: ${JSON.stringify(plan)} })`, description: 'Submit the plan for review' },
       signal: new AbortController().signal,
@@ -1120,7 +1122,7 @@ describe('exit_plan_mode', () => {
     const controller = new AbortController()
     const result = await executeToolFixture(ctx, {
       toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' },
       agent,

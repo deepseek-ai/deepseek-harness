@@ -108,7 +108,8 @@ hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的�
 
 | 可用范围 | Props | Owner |
 |---|---|---|
-| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessions`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessionStatus` | `ui-session-status` |
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |

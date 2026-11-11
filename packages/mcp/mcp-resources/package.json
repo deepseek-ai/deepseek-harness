@@ -39,6 +39,7 @@
     "@deepseek-ai/dsh-tools": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",

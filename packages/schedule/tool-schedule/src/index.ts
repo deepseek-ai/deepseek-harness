@@ -18,13 +18,19 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import {
-  DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, ScheduleId, ScheduleInputError,
+  DEFAULT_LIST_LIMIT,
+  MAX_LIST_LIMIT,
+  MAX_TITLE_LENGTH,
+  MIN_EVERY_INTERVAL_SECONDS,
+  ScheduleInputError,
   formatScheduleLocalTime,
 } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type {
   InternalScheduleError, ScheduleEditRequest, ScheduleTargetRequest, ScheduleToolError,
   ScheduleCatalogEntry, ScheduleDeliveryReceipt, ScheduleRecord, SubagentSessionError,
 } from '@deepseek-ai/dsh-schedule'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Plugin name registered with the Loader. */
 export const name = 'tool-schedule'
@@ -425,7 +431,7 @@ function registerScheduleTools(ctx: Context): void {
     // Host task reads activate no target Session.
     isConcurrencySafe: () => true,
     execute(args, exec) {
-      return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: ScheduleId(args.id) })
+      return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: brandString<ScheduleId>(args.id) })
         .then(result => 'kind' in result ? modelTask(result) : result))
     },
     presentCall: args => present('View scheduled task', 'read', args.id),
@@ -459,7 +465,7 @@ function registerScheduleTools(ctx: Context): void {
     output: { schema: EDIT_OUTPUT_SCHEMA, render: renderValue },
     execute(args, exec) {
       return runForCaller(exec, EDIT_ERRORS, (agent) => {
-        const id = ScheduleId(args.id)
+        const id = brandString<ScheduleId>(args.id)
         const expected = args.expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt: args.expectedUpdatedAt }
         let request: ScheduleEditRequest
         if (args.action === 'delete') {

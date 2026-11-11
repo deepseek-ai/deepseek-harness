@@ -15,7 +15,7 @@ import type {
   ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ActionToast } from '../src/client/ActionToast.tsx'
@@ -44,10 +44,11 @@ import type {
   ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-forge', descriptors: [] }
-const S1 = SessionId('s1')
-const S2 = SessionId('s2')
+const S1 = brandString<SessionId>('s1')
+const S2 = brandString<SessionId>('s2')
 const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
 const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }

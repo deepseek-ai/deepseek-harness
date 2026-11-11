@@ -15,17 +15,18 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { PostToolDecision, ToolExecution, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
-import { SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
+import { type SpillLocator, SpillStore } from '@deepseek-ai/dsh-spill'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import * as SpillPolicy from '@deepseek-ai/dsh-spill-policy'
 import NodeRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
@@ -54,7 +55,7 @@ async function mountRuntime(ctx: Context, config: NodeRuntimeConfig = {}): Promi
 }
 
 function observedAgent(ctx: Context, id: string, observe: (type: string, data: unknown) => void) {
-  const session = ctx.sessions.create(SessionId(id), { meta: { cwd: process.cwd() } })
+  const session = ctx.sessions.create(brandString<SessionId>(id), { meta: { cwd: process.cwd() } })
   ctx.on('session/event', (owner, event) => { if (owner === session) observe(event.type, event.data) })
   return { ctx, session }
 }
@@ -73,7 +74,7 @@ class StubStore extends SpillStore {
     await this.gate?.()
     this.saves.push(input)
     return {
-      locator: SpillLocator(`/spill/${input.suggestedName}`),
+      locator: brandString<SpillLocator>(`/spill/${input.suggestedName}`),
       bytes: Buffer.byteLength(input.content, 'utf8'),
       retrievalHint: 'Use the stub retrieval path.',
     }
@@ -93,8 +94,8 @@ function textTool(name: string, text: string) {
 /** A minimal exec carrying a session header id (the spill owner). */
 function exec(name: string, session = 's1'): ToolExecution {
   // Only agent.session.header.id is read by the policy; a structural stub suffices.
-  const agent = { session: { header: { id: SessionId(session) } } }
-  return { callId: ToolCallId(`call-${name}`), name, arguments: {}, agent, signal: testToolSignal } as ToolExecution
+  const agent = { session: { header: { id: brandString<SessionId>(session) } } }
+  return { callId: brandString<ToolCallId>(`call-${name}`), name, arguments: {}, agent, signal: testToolSignal } as ToolExecution
 }
 
 /**
@@ -237,7 +238,7 @@ describe('outer PTC mode failure capture', () => {
 
     const result = await executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('code-output-limit'),
+      callId: brandString<ToolCallId>('code-output-limit'),
       name: 'run_code',
       arguments: {
         code: 'inspect("HEAD-" + "x".repeat(300)); inspect("TAIL-" + "y".repeat(300)); return "unreachable";',
@@ -284,7 +285,7 @@ describe('the durable dispatch-log arm', () => {
     for (const tool of extraTools) ctx.tools.register(tool)
     const result = await executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('parent-1'),
+      callId: brandString<ToolCallId>('parent-1'),
       name: 'run_code',
       arguments: { code: program, description: 'Drive dispatch-log spilling' },
       agent: agent as never,
@@ -366,7 +367,7 @@ describe('the durable dispatch-log arm', () => {
     ctx.tools.register(textTool('small_read', 'tiny'))
     const runPromise = executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('parent-3'),
+      callId: brandString<ToolCallId>('parent-3'),
       name: 'run_code',
       arguments: {
         // Both program values remain available while the durable spill is blocked.
@@ -429,7 +430,7 @@ describe('the durable dispatch-log arm', () => {
       && (event.data as { subCallId: string }).subCallId.endsWith(`:ptc:${n}`))
     const runPromise = executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('parent-bound'),
+      callId: brandString<ToolCallId>('parent-bound'),
       name: 'run_code',
       arguments: {
         // Queue all requests before waiting so the third is available to the bounded lane.
@@ -476,7 +477,7 @@ describe('the durable dispatch-log arm', () => {
     ctx.tools.register(textTool('huge_read', 'H'.repeat(2_000)))
     const result = await executeModelToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('parent-2'),
+      callId: brandString<ToolCallId>('parent-2'),
       name: 'run_code',
       arguments: { code: 'return (await tools.huge_read({}))[0].text.length', description: 'Fail the spill backend' },
       agent: agent as never,
@@ -528,7 +529,7 @@ describe('best-effort fallback', () => {
     const { ctx, spill } = await setup({ maxInlineTokens: 10 })
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     ctx.tools.register(textTool('big', 'x'.repeat(1000)))
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c'), name: 'big', arguments: {} })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c'), name: 'big', arguments: {} })
     expect(textOf(result.content)).toBe('x'.repeat(1000))
     expect(spill?.saves).toHaveLength(0)
     expect(warn).toHaveBeenCalled()
