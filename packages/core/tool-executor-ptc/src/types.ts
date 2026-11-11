@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-tool-executor-ptc/types
  */
 
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 

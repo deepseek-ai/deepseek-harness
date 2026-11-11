@@ -157,8 +157,9 @@ describe('SDK subagent routing and diagnostics through the production profile', 
           expect(results[0]!.data.message.isError).toBe(true)
           expect(results[0]!.data.message.content).toEqual([{
             type: 'text',
-            text: 'Error: child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields',
+            text: 'Error: invalid arguments: child LLM `reasoning_effort` requires both `provider` and `model`; supply both or omit all three fields',
           }])
+          expect(results[0]!.data.error).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
           expect(events.some(event => event.type === 'subagent/catalog')).toBe(false)
           expect(existsSync(join(child.childHome, 'sessions'))).toBe(false)
         },

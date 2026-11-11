@@ -81,7 +81,7 @@ const output = handle.collected.stdout?.readFrom(0)
 
 ### 可能出错的地方
 
-无法解析可执行文件时，服务会明确报出稳定的错误。从未启动成功的 spawn 会让 `done` reject；从未运行过的进程没有任何缓冲输出。提供方无法证明所选范围为空时，`waitForExit()` 也会 reject；提供方 fallback 可能无法拥有逃离其进程组或已观察会话的后代。当传输拥有自己的 spawn（SDK 客户端、MCP）时，请绕开本服务并直接导入 `scrubbedParentEnv`，让环境策略保持单一来源。
+带 code 的失败都是 `SubprocessError`，其 `code` 属于 `SUBPROCESS_ERROR_CODES`：argv 为空是 `SUBPROCESS_INVALID_ARGV`，可执行文件查找未命中是 `SubprocessExecutableNotFoundError`（`SUBPROCESS_EXECUTABLE_NOT_FOUND`），提供方私有 runner 失败或通道损坏是 `SUBPROCESS_RUNNER_FAILED` 或 `SUBPROCESS_RUNNER_IPC_FAILED`，终端实现无法加载是 `SUBPROCESS_PTY_UNAVAILABLE`。在已 abort 的 signal 上请求 spawn 会抛出名为 `AbortError` 的错误。从未启动成功的 spawn 会让 `done` 以平台原始错误 reject，便于消费者检查 errno 字段；把该 reject 报告为自身失败的消费者用 `subprocessSpawnFailure()` 转换：带字符串 errno `code` 的错误中，`ENOENT` 得到 `SUBPROCESS_SPAWN_NOT_FOUND`，其余 errno 得到 `SUBPROCESS_SPAWN_FAILED`；其他值原样返回。从未运行过的进程没有任何缓冲输出。提供方无法证明所选范围为空时，`waitForExit()` 也会 reject；提供方 fallback 可能无法拥有逃离其进程组或已观察会话的后代。当传输拥有自己的 spawn（SDK 客户端、MCP）时，请绕开本服务并直接导入 `scrubbedParentEnv`，让环境策略保持单一来源。
 
 -----
 
@@ -103,6 +103,7 @@ const output = handle.collected.stdout?.readFrom(0)
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `SubprocessRuntime`、`ctx.subprocess` 注册、共享的 `scrubbedParentEnv` 清除 |
 | [`src/types.ts`](src/types.ts) | 词汇：spawn spec、stdio 模式、句柄、读取器、结果、`DSH_*` 命名空间 |
+| [`src/error.ts`](src/error.ts) | `SubprocessError`、其封闭 code 列表与 spawn reject 分类 |
 
 ### 数据模型与流程
 

@@ -3,7 +3,8 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import { parsePatch } from '@deepseek-ai/dsh-fs-patch'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -75,11 +76,11 @@ describe('source guards', () => {
     }
     const missing = await file('missing')
     await expect(run(missing)).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
-    await expect(run(missing, { version: FsVersion('old') })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    await expect(run(missing, { version: brandString<FsVersion>('old') })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
     await mkdir(join(root, 'directory'))
     await expect(run(await fs.resolve('directory'))).rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
     const source = await file('a', 'old\n')
-    await expect(run(source, { version: FsVersion('stale') })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    await expect(run(source, { version: brandString<FsVersion>('stale') })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
     expect(await bytes('a')).toBe('old\n')
     expect(await bytes('destination')).toBe('untouched')
   })
@@ -160,8 +161,8 @@ describe('moveFile', () => {
     const destination = await file('b', 'destination')
     await expect(fs.moveFile(source, await fs.resolve('./a'), {})).rejects.toMatchObject({ code: 'FS_SAME_TARGET' })
     await expect(fs.moveFile(source, destination, { expectedDestination: { kind: 'createIfAbsent' } })).rejects.toMatchObject({ code: 'FS_NOT_OBSERVED' })
-    await expect(fs.moveFile(source, destination, { expectedDestination: { kind: 'replaceIfVersion', version: FsVersion('stale') } })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
-    await expect(fs.moveFile(source, await file('absent'), { expectedDestination: { kind: 'replaceIfVersion', version: FsVersion('stale') } })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    await expect(fs.moveFile(source, destination, { expectedDestination: { kind: 'replaceIfVersion', version: brandString<FsVersion>('stale') } })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
+    await expect(fs.moveFile(source, await file('absent'), { expectedDestination: { kind: 'replaceIfVersion', version: brandString<FsVersion>('stale') } })).rejects.toMatchObject({ code: 'FS_STALE_VERSION' })
     await mkdir(join(root, 'directory'))
     await expect(fs.moveFile(source, await fs.resolve('directory'), {})).rejects.toMatchObject({ code: 'FS_NOT_REGULAR_FILE' })
     await expect(fs.moveFile(source, destination, { hunks: hunks('missing') })).rejects.toMatchObject({ code: 'FS_PATCH_MISMATCH' })

@@ -4,8 +4,8 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { unsupportedModel, provideWorkingDirectoryFixture, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
@@ -22,6 +22,7 @@ import type {
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 let callNumber = 0
@@ -32,7 +33,7 @@ afterEach(async () => {
 })
 
 async function agent(ctx: Context, cwd: string | undefined): Promise<Agent> {
-  const id = SessionId(`persistent-bash-owner-${callNumber}`)
+  const id = brandString<SessionId>(`persistent-bash-owner-${callNumber}`)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION,
@@ -73,7 +74,7 @@ function call(
 ) {
   return executeToolFixture(ctx, {
     signal,
-    callId: ToolCallId(`persistent-bash-${++callNumber}`),
+    callId: brandString<ToolCallId>(`persistent-bash-${++callNumber}`),
     name: 'bash',
     arguments: { command },
     ...owner === undefined ? {} : { agent: owner },
@@ -694,7 +695,10 @@ describe('tool-bash-persistent', () => {
     'fails initialization and closes the unusable shell for %s',
     async (mode) => {
       const { ctx, owner, stub } = await setup({ backendType: 'stub' }, mode)
-      expect((await call(ctx, owner, 'pwd')).isError).toBe(true)
+      expect(await call(ctx, owner, 'pwd')).toMatchObject({
+        isError: true,
+        error: { info: { name: 'TerminalError', code: 'INIT_REJECTED' } },
+      })
       expect(stub.sessions[0]?.closed).toContain('persistent bash initialization failed')
     },
   )
@@ -752,8 +756,13 @@ describe('tool-bash-persistent', () => {
 
   it('rejects invalid config and invalid calls', async () => {
     const { ctx, owner, stub } = await setup()
-    expect((await call(ctx, undefined, 'pwd')).isError).toBe(true)
-    expect(text(await call(ctx, owner, ' '))).toContain('command must be a non-empty string')
+    expect(await call(ctx, undefined, 'pwd')).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
+    })
+    const blank = await call(ctx, owner, ' ')
+    expect(text(blank)).toContain('command must be a non-empty string')
+    expect(blank).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
 
     const controller = new AbortController()
     controller.abort(new Error('caller stopped'))

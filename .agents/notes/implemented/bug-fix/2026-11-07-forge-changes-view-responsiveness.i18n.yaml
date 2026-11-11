@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-07-forge-changes-view-responsiveness.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-07-forge-changes-view-responsiveness.md
+/agent-note-forge-changes-view-responsiveness:
+  en: e809ffea0d880a4b
+  zh: 6725e6a9bd1c3bd1
+/agent-note-forge-changes-view-responsiveness/problem:
+  en: 77fab27f3d4a4a59
+  zh: 46e0fa8b9ef978a7
+/agent-note-forge-changes-view-responsiveness/decision:
+  en: 40550cf129ab4c0c
+  zh: 2e9a3597d03ce185
+/agent-note-forge-changes-view-responsiveness/alternatives-considered:
+  en: c9833999164e8b67
+  zh: 9459a95f307db854
+/agent-note-forge-changes-view-responsiveness/consequences:
+  en: 2d74147e306ed174
+  zh: f1369020f27f92c0

@@ -311,7 +311,7 @@ Retry configuration resolves before route registration into an immutable discrim
 
 ## `AppIdentity` — app attribution
 
-The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values.
+The static public application identity every adapter sends to providers ([`packages/llm/llm/src/attribution.ts`](../../packages/llm/llm/src/attribution.ts)). `attributionHeaders(identity?)` maps it to the standard `User-Agent` header only; OpenRouter-specific app attribution headers are intentionally not supported by this contract. The default `APP_IDENTITY` sources its version from the package manifest; every field is a public product fact - no secrets, paths, session ids, or per-user identifiers, and nothing per-request may influence the values. `APP_IDENTITY.suffix` reads `DSH_USER_AGENT_SUFFIX` on each use, and `userAgent()` appends it after the comment; a value that is not an RFC 9110 product token fails the request. The `dsh` launcher sets it to `dsh-profile/<profile>` before any plugin loads, percent-encoding profile-name bytes outside `tchar` and `%` itself, so Desktop sends `deepseek-harness/<version> (+<url>) dsh-profile/desktop` and a profile named `my web` sends `dsh-profile/my%20web`. A dsh subagent child reports its own profile, because child processes do not inherit `DSH_*` variables.
 
 ```ts type-equiv
 /**
@@ -328,6 +328,8 @@ interface AppIdentity {
   version: string
   /** Repository home URL of the app, used as the `User-Agent` comment. */
   url: string
+  /** RFC 9110 product token appended after the comment, such as `dsh-profile/web`. */
+  suffix?: string | undefined
 }
 ```
 

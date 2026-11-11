@@ -64,7 +64,7 @@ Lifecycle facts are appended synchronously at the registration or settlement com
 
 ### What can go wrong
 
-Starting work fails without a controller that serves the owner — loading `dsh-tool-jobs` attaches one, and `start()` otherwise refuses with a message naming it. A producer cancel that returns without settling `done` stays indistinguishable from a slow stop and can stall teardown while holding one capacity slot. Live registry records disappear when the harness process exits; persisted lifecycle events remain.
+Starting work fails without a controller that serves the owner — loading `dsh-tool-jobs` attaches one, and `start()` otherwise refuses with a message naming it. Refusals are `JobError` instances: `JOB_CONTROLLER_UNAVAILABLE`, `JOB_LIMIT_REACHED`, `JOB_OWNER_NOT_LIVE`, `JOB_NOT_FOUND`, and `JOB_FOREIGN_SESSION`; an owned registration without the agent registry throws `JOB_OWNER_REGISTRY_UNAVAILABLE`. A wait whose signal aborts rejects with an error named `AbortError`. A producer cancel that returns without settling `done` stays indistinguishable from a slow stop and can stall teardown while holding one capacity slot. Live registry records disappear when the harness process exits; persisted lifecycle events remain.
 
 -----
 

@@ -414,6 +414,22 @@ describe('restoring removed worktrees', () => {
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
   })
 
+  it('finds the stale registration when the worktree listing exceeds maxOutputBytes', async () => {
+    const root = await repo()
+    ctx = await harness(root, { maxOutputBytes: 1_024 })
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await ctx.workingDirectory.set(agent, root)
+    for (let index = 0; index < 8; index++) await git(root, 'worktree', 'add', '--detach', join(root, '.agents/worktrees', `extra-${index}`))
+    expect((await git(root, 'worktree', 'list', '--porcelain', '-z')).length).toBeGreaterThan(1_024)
+    await rm(created.path, { recursive: true, force: true })
+
+    expect(await ctx.worktrees.restore(agent, created)).toEqual({ path: created.path, branchRecreated: false })
+
+    expect(await git(created.path, 'symbolic-ref', '--short', 'HEAD')).toBe('topic')
+    expect(await registered(root)).toContain(gitPath(created.path))
+  })
+
   it('creates a deleted branch again at its base commit, without the commits it had gained', async () => {
     const root = await repo()
     ctx = await harness(root)

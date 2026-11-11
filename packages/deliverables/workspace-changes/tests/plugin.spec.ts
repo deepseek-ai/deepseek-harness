@@ -5,11 +5,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, type Session } from '@deepseek-ai/dsh-session'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as WorkspaceChanges from '../src/index.ts'
 import { changes, endTurn, git, mutate, scratchDir, settle, startTurn, toolCall } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => {
@@ -61,7 +62,7 @@ describe('workspace-changes in a repository', () => {
     await writeFile(join(cwd, 'u.txt'), 'user untracked\n')
     const { ctx } = await boot()
     const repositoryObjects = looseObjects(cwd)
-    const session = ctx.sessions.create(SessionId('repo'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('repo'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
 
@@ -107,7 +108,7 @@ describe('workspace-changes in a repository', () => {
     const seq = events[0]!.seq
     expect(ctx.workspaceChanges.summary(session.id, seq)).toBe(recorded)
     expect(ctx.workspaceChanges.summary(session.id, seq + 1)).toBeUndefined()
-    expect(ctx.workspaceChanges.summary(SessionId('elsewhere'), seq)).toBeUndefined()
+    expect(ctx.workspaceChanges.summary(brandString<SessionId>('elsewhere'), seq)).toBeUndefined()
     ctx.emit('session/disposed', session)
     expect(ctx.workspaceChanges.summary(session.id, seq)).toBeUndefined()
   })
@@ -117,7 +118,7 @@ describe('workspace-changes in a repository', () => {
     await writeFile(join(cwd, 'long.txt'), `${'0123456789'.repeat(10)}\n`)
     git(cwd, 'add', '-A'); git(cwd, 'commit', '-q', '-m', 'long')
     const { ctx } = await boot({ maxFileBytes: 64 })
-    const session = ctx.sessions.create(SessionId('compare'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('compare'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await writeFile(join(cwd, 'a.txt'), 'l1\nl2 model\nl3\n')
@@ -152,7 +153,7 @@ describe('workspace-changes in a repository', () => {
     expect(await diff(6)).toMatchObject({ kind: 'text', path: 'new.txt', before: false, after: true, hunks: [{ lines: ['+n1'] }] })
     expect(await diff(7)).toBeUndefined()
     expect(await ctx.workspaceChanges.diff(session.id, seq + 1, 0, signal)).toBeUndefined()
-    expect(await ctx.workspaceChanges.diff(SessionId('elsewhere'), seq, 0, signal)).toBeUndefined()
+    expect(await ctx.workspaceChanges.diff(brandString<SessionId>('elsewhere'), seq, 0, signal)).toBeUndefined()
     // A caller's abort fails the read while the Session lives; disposal under a running read answers undefined.
     const aborted = AbortSignal.abort()
     await expect(ctx.workspaceChanges.diff(session.id, seq, 0, aborted)).rejects.toThrow()
@@ -168,7 +169,7 @@ describe('workspace-changes in a repository', () => {
     const cwd = join(root, 'gone')
     const { ctx } = await boot()
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-    const session = ctx.sessions.create(SessionId('gone'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('gone'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await mutate(ctx, session, 1, 'write', { file_path: 'w.txt', content: 'w\n' }, 'w.txt', () => Promise.resolve())
@@ -185,7 +186,7 @@ describe('workspace-changes in a repository', () => {
     const outside = await mkdtemp(join(homedir(), '.dsh-workspace-changes-test-'))
     cleanups.push(() => rm(outside, { recursive: true, force: true }))
     const { ctx } = await boot()
-    const session = ctx.sessions.create(SessionId('nested'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('nested'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await writeFile(join(root, 'a.txt'), 'changed\n')
@@ -206,7 +207,7 @@ describe('workspace-changes in a repository', () => {
   it('records inside the turn when the agent stops, and again after turn/end only when tools settled later', async () => {
     const cwd = await repository()
     const { ctx } = await boot()
-    const session = ctx.sessions.create(SessionId('stopping'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('stopping'), { meta: { cwd } })
     const agent = { session } as never
     startTurn(session, 1)
     await ctx.serial('agent/turn-stopping', { agent, turn: 1, signal })
@@ -246,7 +247,7 @@ describe('workspace-changes in a repository', () => {
   it('keeps an interrupted turn’s record when the next turn starts before it settles', async () => {
     const cwd = await repository()
     const { ctx } = await boot()
-    const session = ctx.sessions.create(SessionId('interleaved'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('interleaved'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await writeFile(join(cwd, 'one.txt'), '1\n')
@@ -264,7 +265,7 @@ describe('workspace-changes in a repository', () => {
   it('caps the file list while reporting the complete count', async () => {
     const cwd = await repository()
     const { ctx } = await boot({ maxFiles: 2 })
-    const session = ctx.sessions.create(SessionId('capped'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('capped'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     for (const name of ['c.txt', 'd.txt', 'e.txt']) await writeFile(join(cwd, name), `${name}\n`)
@@ -283,7 +284,7 @@ describe('workspace-changes in a repository', () => {
     const { ctx } = await boot()
     vi.spyOn(ctx.subprocess, 'resolveExecutable').mockResolvedValue(join(cwd, 'missing-git'))
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-    const session = ctx.sessions.create(SessionId('warn'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('warn'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await writeFile(join(cwd, 'x.txt'), 'x\n')
@@ -307,7 +308,7 @@ describe('workspace-changes in a repository', () => {
     git(sub, 'add', '-A'); git(sub, 'commit', '-q', '-m', 'inner')
     git(cwd, 'add', 'sub'); git(cwd, 'commit', '-q', '-m', 'gitlink')
     const { ctx } = await boot()
-    const session = ctx.sessions.create(SessionId('gitlink'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('gitlink'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await mutate(ctx, session, 1, 'edit', { file_path: 'sub/inner.txt', old_string: 'inner', new_string: 'inner\nedited' },
@@ -339,7 +340,7 @@ describe('workspace-changes without a repository', () => {
     cleanups.push(() => rm(outside, { recursive: true, force: true }))
     const { ctx } = await boot()
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-    const session = ctx.sessions.create(SessionId('plain'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('plain'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await mutate(ctx, session, 1, 'write', { file_path: 'existing.txt', content: 'after\nmore\n' }, 'existing.txt', () => writeFile(join(cwd, 'existing.txt'), 'after\nmore\n'))
@@ -392,7 +393,7 @@ describe('workspace-changes without a repository', () => {
     await writeFile(join(cwd, 'mixed.dat'), Uint8Array.of(65, 0, 66))
     await mkdir(join(cwd, 'already-dir'))
     const { ctx } = await boot({ maxFileBytes: 16 })
-    const session = ctx.sessions.create(SessionId('bounds'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('bounds'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     await mutate(ctx, session, 1, 'write', { file_path: 'grows.txt', content: 'x' }, 'grows.txt', () => writeFile(join(cwd, 'grows.txt'), 'x'.repeat(17)))
@@ -433,7 +434,7 @@ describe('workspace-changes without a repository', () => {
   it('drops a disposed session’s recorder and starts afresh on its next turn', async () => {
     const cwd = await repository()
     const { ctx, fiber } = await boot()
-    const session = ctx.sessions.create(SessionId('disposed'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('disposed'), { meta: { cwd } })
     startTurn(session, 1)
     await settle(ctx, session)
     ctx.emit('session/disposed', session)
@@ -464,9 +465,9 @@ describe('workspace-changes without a repository', () => {
     const cwd = await repository()
     const { ctx } = await boot()
     const sessions = [
-      ctx.sessions.create(SessionId('child'), { meta: { cwd, delegationDepth: 1 } }),
-      ctx.sessions.create(SessionId('origin'), { meta: { cwd, origin: 'subagent' } }),
-      ctx.sessions.create(SessionId('nowhere')),
+      ctx.sessions.create(brandString<SessionId>('child'), { meta: { cwd, delegationDepth: 1 } }),
+      ctx.sessions.create(brandString<SessionId>('origin'), { meta: { cwd, origin: 'subagent' } }),
+      ctx.sessions.create(brandString<SessionId>('nowhere')),
     ]
     for (const session of sessions) {
       startTurn(session, 1)
@@ -487,7 +488,7 @@ describe('workspace-changes without git', () => {
     const { ctx } = await boot()
     vi.spyOn(ctx.subprocess, 'resolveExecutable').mockRejectedValue(new Error('git: not found'))
     const info = vi.spyOn(ctx.logger, 'info').mockImplementation(() => undefined)
-    const session = ctx.sessions.create(SessionId('nogit'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('nogit'), { meta: { cwd } })
     for (const turn of [1, 2]) {
       startTurn(session, turn)
       await settle(ctx, session)
@@ -523,7 +524,7 @@ describe('workspace-changes without git', () => {
         spec.argv[0] === '/usr/bin/xcode-select' ? { done: probe.done } as never : real(spec))
       const info = vi.spyOn(ctx.logger, 'info').mockImplementation(() => undefined)
       vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-      const session = ctx.sessions.create(SessionId('stub'), { meta: { cwd } })
+      const session = ctx.sessions.create(brandString<SessionId>('stub'), { meta: { cwd } })
       startTurn(session, 1)
       await settle(ctx, session)
       expect(spawn.mock.calls.some(call => call[0].argv[0] === '/usr/bin/xcode-select')).toBe(probe.executable === undefined)

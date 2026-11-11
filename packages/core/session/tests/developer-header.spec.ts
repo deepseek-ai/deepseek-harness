@@ -2,17 +2,18 @@
 import { describe, expect, it } from 'vitest'
 import { createDeveloperMessage } from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
 import { foldSurface } from '../src/surface.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const first: ToolSchema = { name: 'search', description: 'First', parameters: { type: 'object' } }
 const second: ToolSchema = { name: 'search', description: 'Second', parameters: { properties: { query: { type: 'string' } } } }
 const addition = () => createDeveloperMessage({ source: { kind: 'test' }, content: [{ type: 'tool-addition', toolName: 'search' }] })
 
 function opened(tools: ToolSchema[] = [first]) {
-  const session = Session.create(SessionId('developer-header'))
+  const session = Session.create(brandString<SessionId>('developer-header'))
   session.append('turn/start', { turn: 1 })
   session.append('step/start', { turn: 1, step: 1 })
   const headerSeq = session.append('request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools } }).seq
@@ -20,6 +21,28 @@ function opened(tools: ToolSchema[] = [first]) {
 }
 
 describe('developer request-header references', () => {
+  it('resolves a tool addition against an earlier header in the same batch', () => {
+    const session = Session.create(brandString<SessionId>('batch-developer-header'))
+    const message = addition()
+    session.append([
+      ['request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [first] } }],
+      ['developer/message', { turn: 1, step: 1, headerSeq: SessionSeq(0), message }, { surfaceOp: 'append' }],
+    ])
+    expect(session.seq).toBe(2)
+    expect(session.deriveMessages()).toEqual([message])
+    expect(foldSurface(session.snapshotEvents()).nodes).toEqual([1])
+  })
+
+  it.each([1, 2])('rejects a non-earlier batch header reference %s without committing a prefix', (reference) => {
+    const session = Session.create(brandString<SessionId>('invalid-batch-developer-header'))
+    expect(() => session.append([
+      ['request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [first] } }],
+      ['developer/message', { turn: 1, step: 1, headerSeq: SessionSeq(reference), message: addition() }, { surfaceOp: 'append' }],
+    ])).toThrow('earlier request/header')
+    expect(session.seq).toBe(0)
+    expect(session.surface.nodes).toEqual([])
+  })
+
   it('keeps an older header binding through compound changes, replacement, restore, and fork', () => {
     const { session, headerSeq } = opened([first, { name: 'other', description: 'Other', parameters: {} }])
     session.append('request/header', { reason: 'change', header: { config: { provider: 'test', model: 'test' }, tools: [second] } })
@@ -38,7 +61,7 @@ describe('developer request-header references', () => {
     expect(foldSurface(events).nodes).toEqual([replacement.seq])
     const restored = Session.fromRestore(session.id, events, session.header, SessionLogOffset(0), 'shared-frozen')
     expect(restored.deriveMessages()).toEqual([replacement.data.message])
-    const childId = SessionId('developer-header-child')
+    const childId = brandString<SessionId>('developer-header-child')
     const child = Session.create(childId, buildForkSeed(events, replacement.seq), {
       ...session.header, id: childId, parentSession: session.id, isSeeded: true,
     }, SessionLogOffset(replacement.seq + 1))
@@ -62,7 +85,7 @@ describe('developer request-header references', () => {
   })
 
   it('refuses an addition bound to a tool-less header', () => {
-    const session = Session.create(SessionId('without-tools'))
+    const session = Session.create(brandString<SessionId>('without-tools'))
     const headerSeq = session.append('request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test' } } }).seq
     expect(() => session.append('developer/message', { turn: 1, step: 1, headerSeq, message: addition() }, { surfaceOp: 'append' }))
       .toThrow('exactly one tool')
@@ -93,7 +116,7 @@ describe('developer request-header references', () => {
       { ...source, data: { reason: 'initial', header: { config: { provider: 'test', model: 'test' }, tools: [tool] } } },
       { type: 'developer/message', seq: 3, time: 4, surfaceOp: 'append', data: { turn: 1, step: 1, headerSeq, message: addition() } },
     ])) as SessionEvent[]
-    expect(() => Session.create(SessionId('incomplete-tool'), events)).toThrow(/complete tool definition|deferLoading/)
+    expect(() => Session.create(brandString<SessionId>('incomplete-tool'), events)).toThrow(/complete tool definition|deferLoading/)
   })
 
   it('applies the same binding check to imported events and full-log surface folds', () => {
@@ -103,7 +126,7 @@ describe('developer request-header references', () => {
       data: { turn: 1, step: 1, headerSeq: SessionSeq(0), message: addition() },
     }
     const events = [...session.snapshotEvents(), invalid]
-    expect(() => Session.create(SessionId('bad-import'), events)).toThrow('earlier request/header')
+    expect(() => Session.create(brandString<SessionId>('bad-import'), events)).toThrow('earlier request/header')
     expect(() => foldSurface(events)).toThrow('earlier request/header')
   })
 })

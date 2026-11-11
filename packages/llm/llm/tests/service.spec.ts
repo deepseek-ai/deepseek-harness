@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import LlmRuntime, {
   errorChain,
   GenerateOptions,
@@ -9,8 +10,8 @@ import LlmRuntime, {
   isQuotaExceededError,
   LlmAdapter,
   LlmError,
-  ProviderRequestId,
-  ReasoningEffortId,
+  type ProviderRequestId,
+  type ReasoningEffortId,
   resolveRetryPolicy,
   StreamChunk,
   createMessage,
@@ -291,7 +292,7 @@ describe('LlmRuntime', () => {
 
   it('projects file blocks through every host-path availability outcome', async () => {
     const attachment = {
-      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'ab'.repeat(32)}`),
       name: 'notes.txt',
       bytes: 3,
     }
@@ -501,7 +502,7 @@ describe('LlmRuntime', () => {
     const failure = new LlmError('provider busy', 'RATE_LIMIT', {
       status: 429,
       providerRetryAfterMs: 1_500,
-      requestId: ProviderRequestId('req-7'),
+      requestId: brandString<ProviderRequestId>('req-7'),
     })
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
@@ -522,7 +523,7 @@ describe('LlmRuntime', () => {
           code: 'RATE_LIMIT',
           status: 429,
           providerRetryAfterMs: 1_500,
-          requestId: ProviderRequestId('req-7'),
+          requestId: brandString<ProviderRequestId>('req-7'),
         },
       },
     })
@@ -801,10 +802,10 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     const source = {
       efforts: [
-        { id: ReasoningEffortId('standard'), name: 'Standard' },
-        { id: ReasoningEffortId('ultra'), name: 'Ultra', description: 'Largest budget' },
+        { id: brandString<ReasoningEffortId>('standard'), name: 'Standard' },
+        { id: brandString<ReasoningEffortId>('ultra'), name: 'Ultra', description: 'Largest budget' },
       ],
-      defaultEffort: ReasoningEffortId('standard'),
+      defaultEffort: brandString<ReasoningEffortId>('standard'),
     }
     ctx.llm.registerAdapter(['route'], new CatalogAdapter(
       { id: 'route', name: 'Route' },
@@ -813,7 +814,7 @@ describe('LlmRuntime', () => {
       {
         model: source,
         providerDefault: {
-          efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
+          efforts: [{ id: brandString<ReasoningEffortId>('standard'), name: 'Standard' }],
         },
       },
     ))
@@ -825,9 +826,9 @@ describe('LlmRuntime', () => {
     await expect(ctx.llm.resolveCallConfig({ provider: 'route', model: 'model' })).resolves.toEqual({
       provider: 'route',
       model: 'model',
-      reasoningEffort: ReasoningEffortId('standard'),
+      reasoningEffort: brandString<ReasoningEffortId>('standard'),
     })
-    const explicit = { provider: 'route', model: 'model', reasoningEffort: ReasoningEffortId('ultra') }
+    const explicit = { provider: 'route', model: 'model', reasoningEffort: brandString<ReasoningEffortId>('ultra') }
     await expect(ctx.llm.resolveCallConfig(explicit)).resolves.toBe(explicit)
     const providerDefault = { provider: 'route', model: 'providerDefault' }
     await expect(ctx.llm.resolveCallConfig(providerDefault)).resolves.toBe(providerDefault)
@@ -904,18 +905,18 @@ describe('LlmRuntime', () => {
       { id: 'route', name: 'Route' },
       [],
       {},
-      { model: { efforts: [{ id: ReasoningEffortId('ultra'), name: 'Ultra' }] } },
+      { model: { efforts: [{ id: brandString<ReasoningEffortId>('ultra'), name: 'Ultra' }] } },
     ))
 
     await expect(ctx.llm.resolveCallConfig({
       provider: 'route',
       model: 'model',
-      reasoningEffort: ReasoningEffortId('standard'),
+      reasoningEffort: brandString<ReasoningEffortId>('standard'),
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
     await expect(ctx.llm.resolveCallConfig({
       provider: 'route',
       model: 'plain',
-      reasoningEffort: ReasoningEffortId('standard'),
+      reasoningEffort: brandString<ReasoningEffortId>('standard'),
     })).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
   })
 
@@ -925,8 +926,8 @@ describe('LlmRuntime', () => {
     const adapter = new class extends RecordingAdapter {
       override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
         const reasoning: LlmModelReasoningInfo = {
-          efforts: [{ id: ReasoningEffortId('standard'), name: 'Standard' }],
-          defaultEffort: ReasoningEffortId('standard'),
+          efforts: [{ id: brandString<ReasoningEffortId>('standard'), name: 'Standard' }],
+          defaultEffort: brandString<ReasoningEffortId>('standard'),
         }
         return Promise.resolve({
           provider,
@@ -948,7 +949,7 @@ describe('LlmRuntime', () => {
       messages: [],
     })) { /* drain */ }
 
-    expect(adapter.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('standard'))
+    expect(adapter.lastOptions?.reasoningEffort).toBe(brandString<ReasoningEffortId>('standard'))
     disposeRouting()
 
     const frozenRequest: GenerateOptions = Object.freeze({
@@ -957,7 +958,7 @@ describe('LlmRuntime', () => {
       messages: [],
     })
     for await (const _chunk of ctx.llm.stream(frozenRequest)) { /* drain */ }
-    expect(adapter.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('standard'))
+    expect(adapter.lastOptions?.reasoningEffort).toBe(brandString<ReasoningEffortId>('standard'))
     expect(Object.isFrozen(adapter.lastOptions)).toBe(true)
   })
 
@@ -995,12 +996,12 @@ describe('LlmRuntime', () => {
     const second = new RecordingAdapter(SCRIPT)
     ctx.llm.registerAdapter(['route'], second)
     reasoning.resolve({
-      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
-      defaultEffort: ReasoningEffortId('high'),
+      efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+      defaultEffort: brandString<ReasoningEffortId>('high'),
     })
     await draining
 
-    expect(first.lastOptions?.reasoningEffort).toBe(ReasoningEffortId('high'))
+    expect(first.lastOptions?.reasoningEffort).toBe(brandString<ReasoningEffortId>('high'))
     expect(second.lastOptions).toBeUndefined()
   })
 
@@ -1013,8 +1014,8 @@ describe('LlmRuntime', () => {
       {},
       {
         model: {
-          efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
-          defaultEffort: ReasoningEffortId('high'),
+          efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+          defaultEffort: brandString<ReasoningEffortId>('high'),
         },
       },
     )
@@ -1055,7 +1056,7 @@ describe('LlmRuntime', () => {
 
   it.each([
     [undefined, 'high', { reasoningEffort: true }],
-    [ReasoningEffortId('minimum'), 'minimum', {}],
+    [brandString<ReasoningEffortId>('minimum'), 'minimum', {}],
   ])('preserves concrete reasoning selection %s during preparation', async (selection, expected, defaults) => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
@@ -1064,8 +1065,8 @@ describe('LlmRuntime', () => {
         return Promise.resolve({
           provider, id: model, name: model,
           reasoning: {
-            efforts: ['low', 'minimum', 'high'].map(id => ({ id: ReasoningEffortId(id), name: id })),
-            defaultEffort: ReasoningEffortId('high'),
+            efforts: ['low', 'minimum', 'high'].map(id => ({ id: brandString<ReasoningEffortId>(id), name: id })),
+            defaultEffort: brandString<ReasoningEffortId>('high'),
           },
         })
       }
@@ -1087,8 +1088,8 @@ describe('LlmRuntime', () => {
     const metadata: LlmResolvedModelInfo = {
       provider: 'route', id: 'model', name: 'Model', defaultMaxTokens: 8_192,
       reasoning: {
-        efforts: ['low', 'high'].map(id => ({ id: ReasoningEffortId(id), name: id })),
-        defaultEffort: ReasoningEffortId('high'),
+        efforts: ['low', 'high'].map(id => ({ id: brandString<ReasoningEffortId>(id), name: id })),
+        defaultEffort: brandString<ReasoningEffortId>('high'),
       },
     }
     const adapter = new class extends RecordingAdapter {
@@ -1133,16 +1134,16 @@ describe('LlmRuntime', () => {
     await ctx.plugin(LlmRuntime)
     ctx.llm.registerAdapter(['route'], new CatalogAdapter(
       { id: 'route', name: 'Route' }, [], {},
-      { model: { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }], defaultEffort: ReasoningEffortId('high') } },
+      { model: { efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }], defaultEffort: brandString<ReasoningEffortId>('high') } },
       { model: 8_192 },
     ))
     const prepared = await ctx.llm.prepareCall({
-      provider: 'route', model: 'model', reasoningEffort: ReasoningEffortId('unsupported'), maxTokens: 64,
+      provider: 'route', model: 'model', reasoningEffort: brandString<ReasoningEffortId>('unsupported'), maxTokens: 64,
     }, undefined, () => ({}))
     expect(prepared.config).toEqual({ provider: 'route', model: 'model', reasoningEffort: 'high', maxTokens: 8_192 })
     expect(prepared.adapterDefaults).toEqual({ reasoningEffort: true, maxTokens: true })
     const explicit = await ctx.llm.prepareCall({ provider: 'route', model: 'model' }, undefined, () => ({
-      reasoningEffort: ReasoningEffortId('high'), maxTokens: 8_192,
+      reasoningEffort: brandString<ReasoningEffortId>('high'), maxTokens: 8_192,
     }))
     expect(explicit.adapterDefaults).toEqual({})
   })
@@ -1157,7 +1158,7 @@ describe('LlmRuntime', () => {
       throw failure
     })).rejects.toBe(failure)
     await expect(ctx.llm.prepareCall({ provider: 'route', model: 'model' }, undefined, () => ({
-      reasoningEffort: ReasoningEffortId('unsupported'),
+      reasoningEffort: brandString<ReasoningEffortId>('unsupported'),
     }))).rejects.toMatchObject({ code: 'UNSUPPORTED_REASONING_EFFORT' })
     expect(adapter.lastOptions).toBeUndefined()
   })
@@ -1214,10 +1215,10 @@ describe('LlmRuntime', () => {
           description: 'Resolved model',
           context: source,
           reasoning: model === 'no-default'
-            ? { efforts: [{ id: ReasoningEffortId('high'), name: 'High' }] }
+            ? { efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }] }
             : {
-              efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
-              defaultEffort: ReasoningEffortId('high'),
+              efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }],
+              defaultEffort: brandString<ReasoningEffortId>('high'),
             },
         })
       }
@@ -1226,7 +1227,7 @@ describe('LlmRuntime', () => {
 
     const prepared = await ctx.llm.prepareCall({ provider: 'route', model: 'model' })
     source.contextWindow = 64_000
-    expect(prepared.config.reasoningEffort).toBe(ReasoningEffortId('high'))
+    expect(prepared.config.reasoningEffort).toBe(brandString<ReasoningEffortId>('high'))
     expect(prepared.context).toEqual({ contextWindow: 128_000 })
     expect(Object.isFrozen(prepared.context)).toBe(true)
     for await (const _chunk of prepared.stream({
@@ -1253,7 +1254,7 @@ describe('LlmRuntime', () => {
           model: {
             provider, id: model, name: model, inputModalities: ['text'] as const,
             reasoning: {
-              efforts: [{ id: ReasoningEffortId(captured), name: captured }],
+              efforts: [{ id: brandString<ReasoningEffortId>(captured), name: captured }],
             },
           },
           stream: (options: GenerateOptions) => {
@@ -1292,7 +1293,7 @@ describe('LlmRuntime', () => {
     }(SCRIPT)
     ctx.llm.registerAdapter(['route'], adapter)
     const attachment = {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
       mediaType: 'image/png' as const,
       bytes: 3,
       width: 1,
@@ -1601,7 +1602,7 @@ describe('LlmRuntime', () => {
     expect(() => new LlmError('busy', 'RATE_LIMIT', { status: 42 })).toThrow(/status/)
     expect(() => new LlmError('busy', 'RATE_LIMIT', { providerRetryAfterMs: Number.NaN }))
       .toThrow(/providerRetryAfterMs/)
-    expect(() => new LlmError('busy', 'RATE_LIMIT', { requestId: ProviderRequestId('') })).toThrow(/requestId/)
+    expect(() => new LlmError('busy', 'RATE_LIMIT', { requestId: brandString<ProviderRequestId>('') })).toThrow(/requestId/)
     expect(() => new LlmError(1 as never, 'RATE_LIMIT')).toThrow(/message/)
     expect(() => new LlmError('busy', 1 as never)).toThrow(/code/)
     expect(() => new LlmError('busy', 'RATE_LIMIT', { requestId: 1 as never })).toThrow(/requestId/)
@@ -1714,7 +1715,7 @@ it('delegates image coordinate projections and preserves images for adapters wit
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   try {
-    const image = { attachmentId: AttachmentId('sha256:' + 'a'.repeat(64)), mediaType: 'image/png' as const, bytes: 200, width: 640, height: 480 }
+    const image = { attachmentId: brandString<AttachmentId>('sha256:' + 'a'.repeat(64)), mediaType: 'image/png' as const, bytes: 200, width: 640, height: 480 }
     ctx.llm.registerAdapter(['identity'], new ScriptedAdapter([]))
     expect(ctx.llm.imageRequestTarget('identity', 'vision', image)).toEqual({ width: 640, height: 480, maxBytes: 200 })
     class ResizingAdapter extends ScriptedAdapter {

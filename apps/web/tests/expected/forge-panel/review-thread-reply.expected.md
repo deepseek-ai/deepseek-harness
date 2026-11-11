@@ -1,0 +1,16 @@
+- region "R2":
+  - text: R2 · 在 aaaaaaa 上 lin 2 小时前
+  - button "lin 的评论操作"
+  - paragraph:
+    - text: Why
+    - strong: two
+    - text: "?"
+  - text: octo 2 小时前 作者
+  - paragraph: It reads better.
+  - textbox "回复…": 已改为字符串
+  - button "取消"
+  - button "回复"
+  - button "回复选项"
+  - button "添加到输入框"
+  - button "在 GitHub 中查看"
+  - button "解决讨论"

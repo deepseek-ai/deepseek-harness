@@ -63,11 +63,11 @@ kind: "package-reference"
 
 ### 被拒绝的调用与升权
 
-受限调用被拒绝时，操作会报告指明模式的拒绝标记——`[sandbox: file access denied under <mode> mode]`——组合声明升权能力时还会给出升权提示。模型可以用 `sandbox_permissions`（足以放行的最窄更宽模式）加 `justification` 重试一次完全相同的调用；审批服务为操作取得同意。请求保留审计原因，同时从 `src/locales.ts` 提供英文、中文和日文展示文案，模型给出的理由保持原样。缺失的译文遵循语言服务的回退链，最终回退到英文；请求方负责自己的展示译文。更宽的模式需要审批，且只作用于该次调用。重复指定调用的生效模式无需审批即可成功；更窄的目标仍然无效。
+受限调用被拒绝时，操作会报告指明模式的拒绝标记——`[sandbox: file access denied under <mode> mode]`——组合声明升权能力时还会给出升权提示。模型可以用 `sandbox_permissions`（足以放行的最窄更宽模式）加 `justification` 重试一次完全相同的调用；审批服务为操作取得同意。请求保留审计原因，同时从 `src/locales.ts` 提供英文、中文和日文展示文案，模型给出的理由保持原样。缺失的译文遵循语言服务的回退链，最终回退到英文；请求方负责自己的展示译文。更宽的模式需要审批，且只作用于该次调用。重复指定调用的生效模式无需审批即可成功；更窄的目标仍然无效。未取得授权的升权会在任何命令运行前抛出 `SandboxEscalationError`：字段未配对、理由为空或目标并非严格更宽时为 `SANDBOX_ESCALATION_INVALID_ARGUMENT`；组合中没有受限执行器、审批服务、调用方 Agent 或审批通道时为 `SANDBOX_ESCALATION_UNAVAILABLE`；用户拒绝时为 `SANDBOX_ESCALATION_REJECTED`；审批请求未作决定即结束时为 `SANDBOX_ESCALATION_CANCELLED`。若调用本身已被取消，则改为传播该调用的取消。
 
 ### 故障关闭行为
 
-没有后端能强制执行所请求的模式时，调用以 `SANDBOX_UNAVAILABLE` 失败，而不是不受限制地运行；错误文本会指明缺失的平台 runner。启动后失败的后端还会报告结构化的 runner 失败签名，因此损坏的沙箱可以与命令失败区分开。
+没有后端能强制执行所请求的模式时，调用以 `SANDBOX_UNAVAILABLE` 失败，而不是不受限制地运行；错误文本会指明缺失的平台 runner。启动后失败的后端还会报告结构化的 runner 失败签名，因此损坏的沙箱可以与命令失败区分开。提供方无法为可强制执行的模式准备主机状态（例如 Windows ACL 授权或私有临时目录）时，以 `SandboxPreparationError` 拒绝：`SANDBOX_PREPARATION_FAILED` 以平台错误作为 `cause`，`SANDBOX_INVALID_TEMP_ROOT` 表示主机临时根目录位于工作区内。
 
 -----
 

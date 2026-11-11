@@ -1,10 +1,9 @@
 /**
  * The `files` page: a file browser with no file chosen yet.
  *
- * Its header spans the page: the workspace root's path, the tree's reload and
- * the directory actions, in the order a preview's header ends with its own
- * reload and file actions. The pane's navigator fills the page below it and
- * stays shown, so the page draws no toggle; picking a file leaves this page as
+ * Its header spans the page: the workspace root's path, the tree's reload,
+ * the search-bar toggle, and the directory actions. The pane's navigator fills the page below it and
+ * stays shown, so the page draws no navigator toggle; picking a file leaves this page as
  * it is and opens the file where the right Sidebar places it by default
  * (`FileNavigator`).
  */
@@ -15,7 +14,7 @@ import type {
   InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  IconPauseOutlineRegular, IconPlayOutlineRegular, IconRefreshOutlineRegular, PathLabel, Tooltip,
+  IconPauseOutlineRegular, IconPlayOutlineRegular, IconRefreshOutlineRegular, IconSearchOutlineRegular, PathLabel, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { FilesInjected } from './face.ts'
 import type {} from './FileNavigator.tsx'
@@ -38,7 +37,10 @@ export type FilesBodyProps =
  * @returns the header above the pane's navigator, or the workspace line.
  */
 export function FilesBody(props: FilesBodyProps): ReactNode {
-  const { useTabInfo, sessionId, useSessions, useStore, refresh, setAutoRefresh, renderSlot, renderFactorySlot, t, useContextMenu } = props
+  const {
+    useTabInfo, sessionId, useSessions, useStore, actions, refresh, focus, placeBeside,
+    setAutoRefresh, renderSlot, renderFactorySlot, t, useContextMenu,
+  } = props
   const { tab, panel } = useTabInfo()
   const { getTriggerProps } = useContextMenu()
   const onOpen = useCallback((address: string): void => {
@@ -55,6 +57,8 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
     const tree = store.byPane[panel.id]?.tree
     return tree?.root === cwd ? tree?.autoRefresh : undefined
   })
+  const searchBarOpen = useStore(store => store.byPane[panel.id]?.searchBarOpen) === true
+  useEffect(() => cwd === undefined ? undefined : placeBeside(tab.id), [cwd, placeBeside, tab.id])
 
   if (cwd === undefined) {
     return (
@@ -90,9 +94,26 @@ export function FilesBody(props: FilesBodyProps): ReactNode {
             <IconRefreshOutlineRegular />
           </button>
         </Tooltip>
+        <Tooltip label={t('search.placeholder')} side="bottom" delayMs={500}>
+          <button
+            type="button"
+            className={css.tool}
+            aria-label={t('search.placeholder')}
+            aria-expanded={searchBarOpen}
+            data-files-search-toggle
+            onClick={(event) => {
+              if (searchBarOpen) {
+                event.currentTarget.focus()
+                actions.searchBarShown(panel.id, false)
+              } else focus(panel.id)
+            }}
+          >
+            <IconSearchOutlineRegular />
+          </button>
+        </Tooltip>
         {renderSlot('sidebar.right.tab.files.actions', { absolutePath: cwd })}
       </div>
-      <div className={css.content} data-files-content>{navigator}</div>
+      <div className={css.content} data-files-content data-files-navigator-row>{navigator}</div>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeBaseBranch, ForgeBaseBranches } from '../types.ts'
 import type { NS } from './locales.ts'
+import { searchFieldKeyDown } from './menu-search.ts'
 import css from './BaseMenu.module.css'
 
 /** Milliseconds between the last keystroke of a search and the listing it reads. */
@@ -169,12 +170,7 @@ export function BaseMenu({ chosen, label, missing, visible, list, choose, t }: B
           <Input ref={search} className={clsx(css.searchInput)} icon={<IconSearchOutlineRegular size={14} />} value={query}
             aria-label={t('diff.base.search')} placeholder={t('diff.base.search')}
             onChange={(event) => { setQuery(event.target.value) }}
-            onKeyDown={(event) => {
-              if (['Home', 'End', 'ArrowLeft', 'ArrowRight'].includes(event.key)) event.stopPropagation()
-              if (event.key !== 'Enter' || event.nativeEvent.isComposing || first === undefined) return
-              event.preventDefault()
-              pick(first.base)
-            }} />
+            onKeyDown={(event) => { searchFieldKeyDown(event, first === undefined ? undefined : () => { pick(first.base) }) }} />
         </div>
         <div className={css.rows}>{body}</div>
         <div className={css.note}>{t('diff.base.note')}</div>
