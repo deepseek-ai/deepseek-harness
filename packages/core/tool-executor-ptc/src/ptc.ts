@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { PtcDispatchLog } from './runtime-types.ts'
 import { symbols, type Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
+import { extractTextContent } from '@deepseek-ai/dsh-llm/message'
 import { createUserMessage, HarnessError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 
 import type { ContentBlock, ToolCallId, ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -704,7 +705,7 @@ export function createRunCodeTransport(
             if (first !== undefined && images.length === 1) return programImage(first.attachment)
             if (outcome.imageRemoved) {
               throw new Error('Image output was removed by a tool output policy.\n'
-                + outcome.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+                + extractTextContent(outcome.content, { separator: '\n' }))
             }
             if (name === 'read_image' || images.length > 1) throw new Error('Image-producing tools must return exactly one image')
           }
