@@ -236,7 +236,7 @@ describe('Schedule model tools', () => {
     expect((await test.service.list({})).total).toBe(0)
   })
 
-  it('answers internal_error when the caller carries an invalid runtime delegation depth', async () => {
+  it('fails with the coded depth error when the caller carries an invalid runtime delegation depth', async () => {
     const test = await harness(); tests.push(test)
     const caller = { ...agentFor(test.ctx, 'invalid-depth'), options: { subagentDepth: -1 } }
     await test.ctx.agents.register(caller)
@@ -245,8 +245,9 @@ describe('Schedule model tools', () => {
       const result = await executeToolFixture(test.ctx, {
         callId: ToolCallId('invalid-depth-call'), signal: new AbortController().signal, name, arguments: args, agent: caller,
       })
-      expect(result.isError).toBe(false)
-      expect(result.value).toEqual(INTERNAL_ERROR)
+      expect(result.isError).toBe(true)
+      expect(result.content).toEqual([{ type: 'text', text: 'Error: agent subagentDepth must be a non-negative safe integer' }])
+      expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'INVALID_DEPTH' })
     }
     expect((await test.service.list({})).total).toBe(0)
   })
