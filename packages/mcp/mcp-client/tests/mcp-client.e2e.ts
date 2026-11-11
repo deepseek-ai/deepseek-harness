@@ -175,6 +175,7 @@ describe('fixture server — controlled scenarios', () => {
     })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ type: 'text' })
+    expect(result.error?.info).toEqual({ name: 'McpToolError', code: 'MCP_TOOL_ERROR' })
   })
 
   it('executes image() → ordered durable image content', async () => {

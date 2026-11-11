@@ -323,6 +323,7 @@ describe.each([
       await entered.promise
       await expect(run('1')).rejects.toThrow('concurrent runs')
       await expect(run('const =')).rejects.toThrow('concurrent runs')
+      await expect(run('1')).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_CONFLICT' })
       expect((await run('2', { stateOwner: {} })).value).toBe(2)
     } finally { proceed.resolve(null) }
     expect((await pending).value).toBeNull()
