@@ -88,10 +88,10 @@ it('inlines discovery, restoration, and mouse-move return records', () => {
   expect(COMMON_GUIDANCE).toContain('bounds: { x: number, y: number, width: number, height: number }, isOnScreen: boolean, onCurrentSpace: boolean | null')
 })
 
-it('defines every non-builtin type name used in method signatures', () => {
+it('documents shared types while leaving Modifier members platform-defined', () => {
   const signatures = COMMON_GUIDANCE.split('\n').filter(line => line.startsWith('- ')).map(line => line.split(' — ')[0]).join('\n')
   const names = signatures.replace(/'[^']*'/g, '').match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? []
-  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JsonValue', 'Window'])
+  expect([...new Set(names)].sort()).toEqual(['ActionResult', 'App', 'Image', 'JsonValue', 'Modifier', 'Window'])
   expect(COMMON_GUIDANCE).toContain('ActionResult = { dispatched: boolean, foregroundChanged?: boolean | null }')
   expect(COMMON_GUIDANCE).toContain('JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue }')
   expect(COMMON_GUIDANCE).toContain('App is the application object with readonly app.appHandle: string (opaque) and the methods listed below for app level')
@@ -99,13 +99,18 @@ it('defines every non-builtin type name used in method signatures', () => {
   expect(COMMON_GUIDANCE).toContain('Signatures show resolved return values after await')
 })
 
-it('documents pointer modifiers and platform-defined keyboard names', () => {
+it('references Modifier without defining its members in shared guidance', () => {
   const lines = COMMON_GUIDANCE.split('\n')
-  for (const name of ['click', 'drag']) {
-    expect(lines.find(line => line.startsWith(`- ${name}(`))).toContain("modifiers?: ('command' | 'control' | 'option' | 'shift' | 'fn')[]")
+  for (const name of ['click', 'drag', 'pressKey']) {
+    const entry = lines.find(line => line.startsWith(`- ${name}(`))
+    expect(entry).toContain('modifiers?: Modifier[]')
+    expect(entry).not.toContain('members of Modifier')
   }
-  expect(COMMON_GUIDANCE).toContain('pressKey(key: string, modifiers?: string[])')
-  expect(COMMON_GUIDANCE).toContain('Key and modifier names are platform-defined strings')
+  expect(PLATFORM_GUIDANCE).toContain('Supported modifiers: command, control, option, shift, fn.')
+  expect(COMMON_GUIDANCE).toContain('\n\nThe available members of Modifier depend on the platform; see the platform guidance.\n\n')
+  expect(COMMON_GUIDANCE).not.toMatch(/(?:type|enum) Modifier\b|Modifier\s*=/)
+  expect(COMMON_GUIDANCE).not.toContain('Supported modifiers:')
+  expect(COMMON_GUIDANCE).toContain('Key names are platform-defined strings')
 })
 
 it('states platform-dependent levels without qualifying grouped method names', () => {
