@@ -371,7 +371,12 @@ describe('experimental Inspector real Worker', () => {
   })
 
   it('cancels Client Runtime work when the Worker deadline expires', async () => {
-    inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: 20 })
+    // The evaluation that must still succeed after the timeout shares this
+    // deadline, so the deadline needs headroom above one Client Runtime round
+    // trip under instrumented CI load. The never-settling promise below makes
+    // the deadline fire regardless of its value.
+    const deadlineMs = 1_000
+    inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: deadlineMs })
     client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Timeout Client' })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     await cdp.call('Runtime.enable')
@@ -382,7 +387,7 @@ describe('experimental Inspector real Worker', () => {
       contextId,
       awaitPromise: true,
     })
-    expect(timedOut.error?.message).toContain('timed out after 20ms')
+    expect(timedOut.error?.message).toContain(`timed out after ${String(deadlineMs)}ms`)
     expect((await cdp.call('Runtime.evaluate', {
       expression: '42',
       contextId,
