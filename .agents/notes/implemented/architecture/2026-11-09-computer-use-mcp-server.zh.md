@@ -18,7 +18,7 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 授权有两种模式。`DSH_CUA_CONSENT=allow` 以批准标签为本会话回答连接 Agent 的每个审批问题。默认的 `elicit` 把每个问题作为表单 elicitation 转发给客户端，枚举即问题的选项标签。不新增任何 Session 事件：训练侧只消费 MCP 工具结果，接入 harness 的 transcript 记录调用；DSH 保留嵌套的 `tool/ptc-dispatch` 事件以供诊断。
 
-组合列出自己的依赖闭包（25 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行。`cua-mcp` 不是启动必需条目，无法激活的行由启动器在 stderr 上报告：提供方行未激活时列表里没有 `cua_run_code`，前端未激活时不提供任何服务。客户端配置项由 README 给出，而不是由程序生成。
+组合列出自己的依赖闭包（26 行），而不是叠在 `dsh-base` 之上：不加载任何模型适配器、提示侧工具、遥测或会话管理行。`cua-mcp` 不是启动必需条目，无法激活的行由启动器在 stderr 上报告：提供方行未激活时列表里没有 `cua_run_code`，前端未激活时不提供任何服务。客户端配置项由 README 给出，而不是由程序生成。
 
 ## 考虑过的替代方案
 
@@ -48,4 +48,4 @@ Computer Use 的训练数据应来自多个 agent harness，而不只是 DSH 会
 
 ## 后果
 
-每个安装都携带该组合包及其可选的 macOS 提供方依赖；`verify-default-product-isolation` 让它留在默认模板之外。把组合包叠在 `dsh-base` 之上的 profile 会出现重复的行 id，不受支持；Web 插件页通过 `HIDDEN_BUNDLES` 隐藏该组合包，而 Host 清单仍把它报告为可选组合包。没有提供方的 Host 列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述、服务器说明与参考文本由 profile 的期望输出测试固定；程序工具的描述和参考随已安装的 CUA 包变化。模型只有调用 `cua_get_api_reference` 才能得到参考，因此不放行该工具的客户端，其模型只有执行规则可用。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。
+每个安装都携带该组合包；macOS 与 Windows 两个原生提供方是它的可选依赖，各由一行挂载，且只在对应的 Host 上加载，`verify-default-product-isolation` 让该组合包留在默认模板之外。把组合包叠在 `dsh-base` 之上的 profile 会出现重复的行 id，不受支持；Web 插件页通过 `HIDDEN_BUNDLES` 隐藏该组合包，而 Host 清单仍把它报告为可选组合包。没有提供方的 Host 列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方，调用 `cua_run_code` 以 `unknown tool` 失败。客户端会在进程退出、`cua_reset` 或 Agent 销毁时看到状态丢失并重新创建对象。授权 elicitation 依赖 2025 版 MCP 请求模型；使用 2026-07-28 修订版的客户端改用 `allow`。工具描述、服务器说明与参考文本由 profile 的期望输出测试固定；程序工具的描述和参考随已安装的 CUA 包变化。模型只有调用 `cua_get_api_reference` 才能得到参考，因此不放行该工具的客户端，其模型只有执行规则可用。提供方描述超过 4,096 个字符时，Claude Code 的模型只看到被截断的部分。

@@ -1,5 +1,8 @@
-# Replace the macOS provider with the recorded desktop fixture so the profile serves on every Host.
+# Replace both native providers with the recorded desktop fixture so the profile serves on every Host.
 - id: cua-mcp-provider
+  disabled: true
+
+- id: cua-mcp-provider-windows
   disabled: true
 
 - insert:

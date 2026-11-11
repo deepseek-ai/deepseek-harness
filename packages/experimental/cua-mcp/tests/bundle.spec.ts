@@ -28,13 +28,13 @@ const inserted = patches.flatMap(patch => patch.insert ?? [])
 const row = (id: string) => inserted.find(entry => entry.id === id)
 
 describe('cua-mcp bundle', () => {
-  it('publishes an unprefixed experimental bundle whose patch is its only declaration and only macOS serves', () => {
+  it('publishes an unprefixed experimental bundle whose patch is its only declaration, with both native providers optional', () => {
     expect(manifest.name).toBe('@deepseek-ai/dsh-cua-mcp')
     expect(manifest.publishConfig.access).toBe('public')
     expect(manifest.icon).toBe('./icon.svg')
     expect(manifest.exports).toHaveProperty('./locale/*.json')
     expect(manifest.dsh.bundle).toEqual({ patch: './cordis.patch.yml' })
-    expect(Object.keys(manifest.optionalDependencies)).toEqual(['@deepseek-ai/dsh-experimental-cua-macos'])
+    expect(Object.keys(manifest.optionalDependencies)).toEqual(['@deepseek-ai/dsh-experimental-cua-macos', '@deepseek-ai/dsh-cua-windows'])
     expect(readdirSync(resolve(root, 'locale')).sort()).toEqual(['de.json', 'en.json', 'es.json', 'fr.json', 'ja.json', 'pt.json', 'ru.json', 'zh.json'])
   })
 
@@ -45,7 +45,7 @@ describe('cua-mcp bundle', () => {
       'storage', 'storage-json', 'storage-domain',
       'subprocess', 'sandbox', 'sandbox-policy', 'approval', 'fs-sandbox',
       'tools', 'tool-executor-native', 'system-prompt', 'user-questions', 'llm', 'agent', 'agent-loop',
-      'cua-mcp-presets', 'cua-mcp-preset', 'cua-mcp-computer-use', 'cua-mcp-provider', 'cua-mcp',
+      'cua-mcp-presets', 'cua-mcp-preset', 'cua-mcp-computer-use', 'cua-mcp-provider', 'cua-mcp-provider-windows', 'cua-mcp',
     ])
     // The llm hub carries no adapter row, so no model request can leave this profile.
     expect(inserted.map(entry => entry.name).filter(name => /llm|telemetry|otel|web|subagent|compaction|skill|plugin-manager/.test(name)))
@@ -81,11 +81,16 @@ describe('cua-mcp bundle', () => {
     }
   })
 
-  it('mounts the macOS provider only on Darwin, with a fixed screenshot target and the PTC raw-tool preset', () => {
-    const provider = row('cua-mcp-provider')
-    expect(provider?.config).toEqual({ agentPreset: 'ptc', screenshotTarget: { longEdge: 2048, maxBytes: 2_097_152 } })
-    for (const platform of ['darwin', 'linux', 'win32']) {
-      expect(Boolean(interpolate({ process: { platform } }, provider?.disabled))).toBe(platform !== 'darwin')
+  it('mounts one native provider per Host, each with a fixed screenshot target and the PTC raw-tool preset', () => {
+    const providers = { darwin: row('cua-mcp-provider'), win32: row('cua-mcp-provider-windows') }
+    expect(providers.darwin?.name).toBe('@deepseek-ai/dsh-experimental-cua-macos')
+    expect(providers.win32?.name).toBe('@deepseek-ai/dsh-cua-windows')
+    for (const [host, provider] of Object.entries(providers)) {
+      expect(provider?.config).toEqual({ agentPreset: 'ptc', screenshotTarget: { longEdge: 2048, maxBytes: 2_097_152 } })
+      // Each row loads on its own Host only: elsewhere its optional provider package can be absent.
+      for (const platform of ['darwin', 'linux', 'win32']) {
+        expect(Boolean(interpolate({ process: { platform } }, provider?.disabled))).toBe(platform !== host)
+      }
     }
   })
 

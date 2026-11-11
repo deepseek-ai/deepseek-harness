@@ -67,11 +67,27 @@ output_token_limit = 25000
 claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
 ```
 
-Other clients take the same `command`, `args`, and `env` under `mcpServers`. The Claude Code and `dsh-mcp-client` entries were exercised against a real desktop; the Codex entry follows the Codex configuration reference and the `.mcp.json` of its bundled Computer Use plugin and was not exercised here. As of 2026-11-10, Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
+Other clients take the same `command`, `args`, and `env` under `mcpServers`. The Claude Code and `dsh-mcp-client` entries were exercised against a real macOS desktop; the Codex entry follows the Codex configuration reference and the `.mcp.json` of its bundled Computer Use plugin and was not exercised here, and no client has driven a Windows desktop through this profile. As of 2026-11-10, Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
 
 A client that allows tools by name must allow all three: without `cua_get_api_reference` its model has no `cua` API reference. Give the server a Harness home that no profile with uncompressed Session logs shares: this profile writes zstd-compressed logs under `sessions`, and a profile that sets `compression: none`, such as `sdk-minimal`, fails Session queries on a directory that holds them.
 
-On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. This profile has no permission page, so grant both in System Settings → Privacy & Security by adding the helper application: a source checkout prepares `DSH Computer Use Dev.app` under the macOS provider package's `native/.build/prepared/<arch>/<build>/` directory, where `current.json` names the selected build; an installed package ships `DSH Computer Use.app`. Until both are granted, `await cua.getCapabilities()` reports the missing flags and application operations fail; a locked desktop fails them with `SESSION_LOCKED`. On other Hosts the profile starts without a provider: the listing carries `cua_get_api_reference` and `cua_reset`, each of which returns an error naming the missing provider, and a `cua_run_code` call fails as `unknown tool`.
+On macOS the profile prepares the signed Computer Use helper on first start and needs Accessibility and Screen Recording permissions for it; the [macOS provider](../cua-macos/README.md) owns that setup. This profile has no permission page, so grant both in System Settings → Privacy & Security by adding the helper application: a source checkout prepares `DSH Computer Use Dev.app` under the macOS provider package's `native/.build/prepared/<arch>/<build>/` directory, where `current.json` names the selected build; an installed package ships `DSH Computer Use.app`. Until both are granted, `await cua.getCapabilities()` reports the missing flags and application operations fail; a locked desktop fails them with `SESSION_LOCKED`.
+
+On native Windows the profile mounts the [Windows provider](../cua-windows/README.md), which owns helper setup: a source checkout builds the helper with the .NET 10 SDK on PATH, and an npm installation ships none. For such an installation, name the helper with `helperPath` on the `cua-mcp-provider-windows` row in the profile's `cordis.patch.yml`: the absolute path of `dsh-cua-windows.exe`, from the extracted standalone ZIP on x64 or a matching build on ARM64. A patch replaces the row's whole config, so restate the bundle's fields:
+
+```yaml
+- id: cua-mcp-provider-windows
+  config:
+    agentPreset: ptc
+    screenshotTarget:
+      longEdge: 2048
+      maxBytes: 2097152
+    helperPath: 'C:\absolute\path\to\dsh-cua-windows.exe'
+```
+
+That provider does not launch applications and offers no `Always allow` grant: open the application before a program selects it, and under `elicit` every connection asks for consent again. The profile does not mount it under WSL.
+
+On other Hosts the profile starts without a provider: the listing carries `cua_get_api_reference` and `cua_reset`, each of which returns an error naming the missing provider, and a `cua_run_code` call fails as `unknown tool`. A provider row that fails to activate, such as the Windows row without a helper, leaves the same listing, and the launcher names the failure on stderr.
 
 ### What you get
 
@@ -95,7 +111,7 @@ Configure the `cua-mcp` row in the profile's `cordis.patch.yml`; the bundle patc
 | `consent` | `elicit` | `allow` grants application and pointer consent for this session without a human; `elicit` forwards each request to the MCP client. |
 | `workspace` | `cua-mcp/workspace` under the Harness home | Absolute directory the connection's Agent works in. Programs start there and it is their `workspace-write` root. Startup creates it when missing; a relative path or a directory that cannot be created is reported on stderr and ends the process with exit code 1. |
 
-The patch also mounts the provider with `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` because no model route selects a request image here, and `agentPreset: ptc` with an empty `cua-mcp` preset so the connection's Agent receives `cua_run_code` and no other model-facing rows. Override those rows by id in the profile patch. The `sandbox-policy` row's `workspaceRoot` resolves the same directory as `workspace`; a program's root is its Agent's working directory, so that field covers only calls without a Session.
+The patch also mounts the Host's native provider, row `cua-mcp-provider` on macOS and row `cua-mcp-provider-windows` on native Windows, with `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` because no model route selects a request image here, and `agentPreset: ptc` with an empty `cua-mcp` preset so the connection's Agent receives `cua_run_code` and no other model-facing rows. Override those rows by id in the profile patch; an override replaces the row's whole config, so restate the fields it keeps. The `sandbox-policy` row's `workspaceRoot` resolves the same directory as `workspace`; a program's root is its Agent's working directory, so that field covers only calls without a Session.
 
 -----
 
@@ -105,7 +121,7 @@ The patch also mounts the provider with `screenshotTarget: { longEdge: 2048, max
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, the macOS provider row disabled off Darwin, and this frontend. A profile manifest that lists this bundle alone selects the composition; the launcher loads it from the installation without a template. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and after the launcher commits readiness creates the workspace and connects the official MCP server to a stdio transport. `cua-mcp` is not a required startup entry: the launcher reports an inactive row on stderr instead of stopping the profile.
+The [patch](cordis.patch.yml) composes the whole profile over the empty root: sessions with JSONL persistence and projections, attachments, storage for application grants, the subprocess, sandbox, approval, and filesystem seams program processes run under, tools with the native executor, the system prompt, user questions, the llm hub without an adapter, the Agent registry with the agent-loop factory, the preset registry with the empty default preset, the `computer-use` registry, one native provider row per Host, macOS on Darwin and Windows on native Windows, and this frontend. A profile manifest that lists this bundle alone selects the composition; the launcher loads it from the installation without a template. The frontend parses the invocation with `parseCmdline`, binds stdin EOF to the launcher's bounded shutdown, and after the launcher commits readiness creates the workspace and connects the official MCP server to a stdio transport. `cua-mcp` is not a required startup entry: the launcher reports an inactive row on stderr instead of stopping the profile.
 
 [`server.ts`](src/server.ts) serves the three tools through the protocol server's low-level `tools/list` and `tools/call` handlers: the listing projects the Agent's `cua_run_code` registration, checked against the protocol's tool type, between the two tools that file defines. The connection's Agent mounts the registry's default preset and records the workspace as its working directory, which the sandbox policy resolves as the `workspace-write` root of its programs. `cua_get_api_reference` reads the provider's prompt section for that Agent through `ctx.systemPrompt.assemble` and keeps no state. A `cua_run_code` call runs through `ctx.tools.execute` inside `ctx.agents.withInitiator` with the Agent and the request signal and no model step, so the Session log carries nested `tool/ptc-dispatch` events but no root `tool/call`; [`projection.ts`](src/projection.ts) renders the result and its deferred screenshot contexts, reading each image through `ctx.cuaPrograms.screenshotRequestTarget`. `cua_reset` calls `ctx.cuaPrograms.reset`. [`consent.ts`](src/consent.ts) is the `user-questions/request` answerer for that Agent. A `cua_run_code` call runs as the Agent's maintenance activity, so an Agent disposed while a call is in flight cancels the call and waits for it and its nested calls to settle before it releases its native connection and closes its Session.
 
@@ -118,6 +134,7 @@ The [patch](cordis.patch.yml) composes the whole profile over the empty root: se
 
 - [Shared CUA package](../cua/README.md) — the object API, consent rules, and `cua_run_code`.
 - [macOS provider](../cua-macos/README.md) — helper preparation, permissions, and platform guidance.
+- [Windows provider](../cua-windows/README.md) — helper setup, interaction rules, and platform limits.
 - [Computer use](../../../docs/subsystems/computer-use.md) and [MCP](../../../docs/subsystems/mcp.md) — subsystem references.
 - [Profile composition](../../boot/app-boot/README.md) — bundle layers and patch lifetimes.
 - [Decision record](../../../.agents/notes/implemented/architecture/2026-11-09-computer-use-mcp-server.md) — why the server runs inside a profile and owns one Agent per connection.
@@ -145,7 +162,8 @@ The tool catalog and instructions are stable for one installation. The reference
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Only macOS Hosts have a provider in this profile: the patch does not mount the [Windows provider](../cua-windows/README.md). Other Hosts list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
+- macOS and native Windows Hosts have a provider. Other Hosts, WSL included, list `cua_get_api_reference` and `cua_reset`, which both name the missing provider; a `cua_run_code` call fails as `unknown tool`.
+- On Windows the [provider's limits](../cua-windows/README.md#known-limitations-and-deferred-work) apply through MCP: it does not launch applications, grants no `Always allow`, and an npm installation needs `helperPath`.
 - Elicitation uses the 2025 MCP request model; a client that negotiates the 2026-07-28 revision receives an error for consent requests and should use `DSH_CUA_CONSENT=allow`.
 - Program sandbox escalation and the raw `cua` tool are not exposed; `DSH_PERMISSION_MODE` selects the launch-time file sandbox of program processes, and the workspace is its `workspace-write` root.
 - The `cua` API reference reaches a model only when it calls `cua_get_api_reference`. The server cannot observe a new conversation on an existing connection or a compacted context, so the instructions and the tool description carry that request; a client that withholds the tool leaves its model with the execution rules alone.

@@ -10271,6 +10271,9 @@ importers:
         specifier: ^4.3.2
         version: 4.3.2
     optionalDependencies:
+      '@deepseek-ai/dsh-cua-windows':
+        specifier: workspace:*
+        version: link:../cua-windows
       '@deepseek-ai/dsh-experimental-cua-macos':
         specifier: workspace:*
         version: link:../cua-macos

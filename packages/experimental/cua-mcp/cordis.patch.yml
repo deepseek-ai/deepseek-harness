@@ -111,10 +111,22 @@
     - id: cua-mcp-computer-use
       name: '@deepseek-ai/dsh-computer-use'
 
+    # One native provider per Host: macOS, and native Windows (not WSL). Both
+    # are optional dependencies that an installation on another platform can
+    # lack, so each row is disabled off its own Host.
     # Screenshots target a fixed request image because no model route exists here.
     - id: cua-mcp-provider
       name: '@deepseek-ai/dsh-experimental-cua-macos'
       disabled: !!js process.platform !== 'darwin'
+      config:
+        agentPreset: ptc
+        screenshotTarget:
+          longEdge: 2048
+          maxBytes: 2097152
+
+    - id: cua-mcp-provider-windows
+      name: '@deepseek-ai/dsh-cua-windows'
+      disabled: !!js process.platform !== 'win32'
       config:
         agentPreset: ptc
         screenshotTarget:

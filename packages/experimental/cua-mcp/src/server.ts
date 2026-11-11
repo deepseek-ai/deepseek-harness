@@ -96,7 +96,7 @@ const INSTRUCTIONS = 'DeepSeek Harness Computer Use: observe and operate desktop
   + 'consent before it proceeds. Call cua_reset to discard program state.'
 
 const NO_PROVIDER = 'Computer Use is not available on this Host: the cua-mcp profile has no active CUA provider. '
-  + 'Run the server on a supported macOS Host.'
+  + 'Providers exist for macOS and native Windows; on those Hosts the server\'s stderr names why the provider did not start.'
 
 function text(value: string): CallToolResult {
   return { content: [{ type: 'text', text: value }] }

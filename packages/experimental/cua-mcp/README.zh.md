@@ -67,11 +67,27 @@ output_token_limit = 25000
 claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
 ```
 
-其他客户端在 `mcpServers` 下使用同样的 `command`、`args` 与 `env`。Claude Code 与 `dsh-mcp-client` 两条配置经真实桌面验证；Codex 配置按 Codex 配置参考及其自带 Computer Use 插件的 `.mcp.json` 给出，未在此实测。截至 2026-11-10，Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
+其他客户端在 `mcpServers` 下使用同样的 `command`、`args` 与 `env`。Claude Code 与 `dsh-mcp-client` 两条配置经真实 macOS 桌面验证；Codex 配置按 Codex 配置参考及其自带 Computer Use 插件的 `.mcp.json` 给出，未在此实测，也没有客户端经本 profile 操作过 Windows 桌面。截至 2026-11-10，Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
 
 按名称放行工具的客户端必须放行全部三个：缺少 `cua_get_api_reference` 时，它的模型拿不到 `cua` API 参考。服务器使用的 Harness home 不要与采用未压缩 Session 日志的 profile 共用：本 profile 在 `sessions` 下写入 zstd 压缩的日志，设置了 `compression: none` 的 profile（例如 `sdk-minimal`）在含有这些日志的目录上查询 Session 会失败。
 
-在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。本 profile 没有权限页面，因此要在「系统设置 → 隐私与安全性」中添加 helper 应用来授予这两项权限：源码检出在 macOS 提供方包的 `native/.build/prepared/<arch>/<build>/` 目录下准备 `DSH Computer Use Dev.app`，其中 `current.json` 记录当前选中的构建；已安装的包附带 `DSH Computer Use.app`。两项权限都授予之前，`await cua.getCapabilities()` 会报告缺失的标志，应用操作会失败；桌面处于锁定状态时这些操作以 `SESSION_LOCKED` 失败。在其他 Host 上 profile 没有提供方也能启动：列表有 `cua_get_api_reference` 与 `cua_reset`，二者都返回指出缺少提供方的错误，调用 `cua_run_code` 以 `unknown tool` 失败。
+在 macOS 上，profile 首次启动时准备已签名的 Computer Use helper，并需要为其授予辅助功能与屏幕录制权限；[macOS 提供方](../cua-macos/README.zh.md)负责这部分设置。本 profile 没有权限页面，因此要在「系统设置 → 隐私与安全性」中添加 helper 应用来授予这两项权限：源码检出在 macOS 提供方包的 `native/.build/prepared/<arch>/<build>/` 目录下准备 `DSH Computer Use Dev.app`，其中 `current.json` 记录当前选中的构建；已安装的包附带 `DSH Computer Use.app`。两项权限都授予之前，`await cua.getCapabilities()` 会报告缺失的标志，应用操作会失败；桌面处于锁定状态时这些操作以 `SESSION_LOCKED` 失败。
+
+在原生 Windows 上，profile 挂载 [Windows 提供方](../cua-windows/README.zh.md)，helper 的准备由它负责：源码检出用 PATH 上的 .NET 10 SDK 构建 helper；npm 安装不附带 helper。此时要在 profile 的 `cordis.patch.yml` 中用 `cua-mcp-provider-windows` 行的 `helperPath` 指明 helper：即 `dsh-cua-windows.exe` 的绝对路径，x64 取自解压后的独立 ZIP，ARM64 取自对应架构的构建。patch 会替换该行的整个 config，因此要重述组合包的字段：
+
+```yaml
+- id: cua-mcp-provider-windows
+  config:
+    agentPreset: ptc
+    screenshotTarget:
+      longEdge: 2048
+      maxBytes: 2097152
+    helperPath: 'C:\absolute\path\to\dsh-cua-windows.exe'
+```
+
+该提供方不启动应用，也不提供 `Always allow` 授权：程序选中应用之前要先打开它，在 `elicit` 模式下每个连接都会重新询问授权。profile 不在 WSL 下挂载它。
+
+在其他 Host 上 profile 没有提供方也能启动：列表有 `cua_get_api_reference` 与 `cua_reset`，二者都返回指出缺少提供方的错误，调用 `cua_run_code` 以 `unknown tool` 失败。提供方行无法激活时（例如 Windows 行缺少 helper）列表相同，启动器会在 stderr 上指出失败原因。
 
 ### 你会得到什么
 
@@ -95,7 +111,7 @@ claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","
 | `consent` | `elicit` | `allow` 在无人值守下为本会话放行应用与指针授权；`elicit` 把每个请求转发给 MCP 客户端。 |
 | `workspace` | Harness home 下的 `cua-mcp/workspace` | 连接的 Agent 工作所在的绝对目录。程序在其中启动，它也是程序的 `workspace-write` 根。启动时在目录不存在时创建它；路径为相对路径或目录无法创建时，在 stderr 报告并以退出码 1 结束。 |
 
-patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提供方，因为这里没有模型路由来选择请求图片；并以 `agentPreset: ptc` 搭配空的 `cua-mcp` preset，使连接的 Agent 只获得 `cua_run_code` 而没有其他面向模型的行。可在 profile patch 中按 id 覆盖这些行。`sandbox-policy` 行的 `workspaceRoot` 与 `workspace` 解析为同一目录；程序的根是其 Agent 的工作目录，因此该字段只作用于没有 Session 的调用。
+patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载该 Host 的原生提供方（macOS 上是 `cua-mcp-provider` 行，原生 Windows 上是 `cua-mcp-provider-windows` 行），因为这里没有模型路由来选择请求图片；并以 `agentPreset: ptc` 搭配空的 `cua-mcp` preset，使连接的 Agent 只获得 `cua_run_code` 而没有其他面向模型的行。可在 profile patch 中按 id 覆盖这些行；覆盖会替换该行的整个 config，因此要重述需要保留的字段。`sandbox-policy` 行的 `workspaceRoot` 与 `workspace` 解析为同一目录；程序的根是其 Agent 的工作目录，因此该字段只作用于没有 Session 的调用。
 
 -----
 
@@ -105,7 +121,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 <details>
 <summary>实现细节 — 点击展开</summary>
 
-[patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、在非 Darwin 上禁用的 macOS 提供方行，以及本前端。只列出本组合包的 profile manifest 选中这套组合；启动器不经模板直接从安装中加载它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后创建工作区、把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 不是启动必需条目：行无法激活时启动器在 stderr 上报告，而不是停止 profile。
+[patch](cordis.patch.yml) 在空根上组成整个 profile：带 JSONL 持久化与投影的会话、附件、保存应用授权的存储、程序进程所依赖的子进程、沙箱、审批与文件系统 seam、带原生执行器的工具、系统提示、用户提问、不挂适配器的 llm hub、带 agent-loop 工厂的 Agent 注册表、带空默认 preset 的 preset 注册表、`computer-use` 注册表、每种 Host 一行的原生提供方（Darwin 上是 macOS，原生 Windows 上是 Windows），以及本前端。只列出本组合包的 profile manifest 选中这套组合；启动器不经模板直接从安装中加载它。前端用 `parseCmdline` 解析调用，把 stdin EOF 绑定到启动器的有界关闭，并在启动器提交就绪后创建工作区、把官方 MCP 服务器连接到 stdio 传输。`cua-mcp` 不是启动必需条目：行无法激活时启动器在 stderr 上报告，而不是停止 profile。
 
 [`server.ts`](src/server.ts) 通过协议服务器的低层 `tools/list` 与 `tools/call` handler 提供三个工具：列表把该 Agent 的 `cua_run_code` 注册项按协议的工具类型校验后投影出来，排在该文件定义的两个工具之间。连接的 Agent 挂载注册表的默认 preset，并把工作区记录为自己的工作目录，沙箱策略据此解析其程序的 `workspace-write` 根。`cua_get_api_reference` 通过 `ctx.systemPrompt.assemble` 读取提供方为该 Agent 注册的提示段，不保存任何状态。`cua_run_code` 调用在 `ctx.agents.withInitiator` 内带着 Agent 和请求 signal、不经模型步骤地通过 `ctx.tools.execute` 运行，因此 Session 日志只有嵌套的 `tool/ptc-dispatch` 事件而没有根 `tool/call`；[`projection.ts`](src/projection.ts) 渲染结果及其延后的截图上下文，并通过 `ctx.cuaPrograms.screenshotRequestTarget` 读取每张图片。`cua_reset` 调用 `ctx.cuaPrograms.reset`。[`consent.ts`](src/consent.ts) 是该 Agent 的 `user-questions/request` 应答者。`cua_run_code` 调用作为该 Agent 的维护活动运行，因此 Agent 在调用进行中被销毁时会取消该调用，等它及其嵌套调用结算之后才释放本机连接并关闭 Session。
 
@@ -118,6 +134,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 - [共享 CUA 包](../cua/README.zh.md) — 对象 API、授权规则与 `cua_run_code`。
 - [macOS 提供方](../cua-macos/README.zh.md) — helper 准备、权限与平台指引。
+- [Windows 提供方](../cua-windows/README.zh.md) — helper 设置、交互规则与平台限制。
 - [计算机操作](../../../docs/subsystems/computer-use.zh.md)与 [MCP](../../../docs/subsystems/mcp.zh.md) — 子系统参考。
 - [profile 组合](../../boot/app-boot/README.zh.md) — 组合包层与 patch 生命周期。
 - [决策记录](../../../.agents/notes/implemented/architecture/2026-11-09-computer-use-mcp-server.zh.md) — 服务器为何运行在 profile 内并为每个连接持有一个 Agent。
@@ -145,7 +162,8 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 本 profile 中只有 macOS Host 有提供方：patch 没有挂载 [Windows 提供方](../cua-windows/README.zh.md)。其他 Host 列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
+- macOS 与原生 Windows Host 有提供方。其他 Host（包括 WSL）列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
+- 在 Windows 上，[提供方的限制](../cua-windows/README.zh.md#known-limitations-and-deferred-work)经 MCP 同样适用：它不启动应用，不提供 `Always allow` 授权，npm 安装需要配置 `helperPath`。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。
 - 不暴露程序沙箱提权和原始 `cua` 工具；`DSH_PERMISSION_MODE` 选择程序进程启动时的文件沙箱，工作区是它的 `workspace-write` 根。
 - `cua` API 参考只有在模型调用 `cua_get_api_reference` 时才到达模型。服务器观察不到既有连接上的新对话，也观察不到上下文压缩，因此由服务器说明和工具描述提出这一要求；不放行该工具的客户端，其模型只有执行规则可用。
