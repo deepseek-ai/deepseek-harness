@@ -93,19 +93,12 @@
 }
 
 .changeTitle {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
+  min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-weight: 500;
   line-height: 20px;
   text-decoration: none;
-  overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.change:not([data-expanded]) .changeTitle {
-  -webkit-line-clamp: 1;
 }
 
 @media (hover: hover) {

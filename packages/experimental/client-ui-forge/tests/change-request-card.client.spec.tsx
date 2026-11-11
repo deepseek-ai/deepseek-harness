@@ -118,6 +118,27 @@ describe('ChangeRequestCard head', () => {
     expect(b.onToggle).not.toHaveBeenCalled()
   })
 
+  it('crawls a title the card clips while the pointer rests on the card head, expanded or not', () => {
+    for (const expanded of [false, true]) {
+      const b = card(entry(7, snapshot(7)), { expanded })
+      const text = b.title.firstElementChild
+      if (!(text instanceof HTMLElement)) throw new Error('no title text')
+      expect(text.textContent).toBe('Change 7')
+      Object.defineProperty(text, 'scrollWidth', { value: 240, configurable: true })
+      Object.defineProperty(text, 'clientWidth', { value: 120, configurable: true })
+      vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+      try {
+        fireEvent.pointerEnter(b.head)
+        expect([text.scrollLeft, text.hasAttribute('data-scrolled')]).toEqual([120, true])
+        fireEvent.pointerLeave(b.head)
+        expect([text.scrollLeft, text.hasAttribute('data-scrolled')]).toEqual([0, false])
+      } finally {
+        vi.unstubAllGlobals()
+      }
+      cleanup()
+    }
+  })
+
   it('toggles from the chevron, while the number line stays plain text', () => {
     const b = card(entry(7, snapshot(7)))
     expect(b.item.hasAttribute('data-expanded')).toBe(false)

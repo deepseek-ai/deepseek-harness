@@ -1,17 +1,18 @@
 /**
- * One change request as a card: its title links to the host, a one-line
+ * One change request as a card: its one-line title links to the host and
+ * crawls into view while the pointer rests on the card's head, a one-line
  * summary shows while collapsed, and while expanded one row per fact (checks,
  * review, merge state, the changed lines, which open its changes, and the
  * linked issues) above the merge action. Opening, copying, viewing changes,
  * marking a draft ready, and removing live in the card's actions menu.
  */
 
-import { useId, useState, type ReactNode } from 'react'
+import { useId, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   Button, IconCheckCircleOutlineRegular, IconChevronDownOutlineRegular, IconCloseOutlineRegular, IconCopyOutlineRegular,
-  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, Menu,
-  MenuItemButton, StateDot, Tooltip,
+  IconEllipsisOutlineRegular, IconFilesDiffOutlineRegular, IconRightUpOutlineRegular, IconTriangleRightFillRegular, MarqueeText, Menu,
+  MenuItemButton, StateDot, Tooltip, useHoverMarquee,
   type MenuEntry, type MenuItem,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -430,13 +431,15 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
   const notice = entry.ref === null ? 'change.unserved' : failure === undefined ? undefined : FAILURE[failure.code]
   const tone = toneOf(snapshot)
   const name = number === null ? snapshot?.title ?? url : t('change.number', { number })
+  const titleRef = useRef<HTMLSpanElement>(null)
+  const marquee = useHoverMarquee(titleRef)
   // A notice replaces the collapsed summary, so a failed read never shows its stale status beside it.
   const meta = expanded
     ? snapshot === null ? null : <Target snapshot={snapshot} t={t} />
     : notice === undefined ? <Summary snapshot={snapshot} now={now} t={t} /> : null
   return (
     <li className={css.change} data-forge-change={entry.url} data-expanded={expanded ? '' : undefined}>
-      <div className={css.changeHead}>
+      <div className={css.changeHead} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
         <ChangeRequestGlyph tone={tone} size={16} label={t('change.stateAria', { state: t(TONE_LABEL[tone]) })} />
         <div className={css.headText}>
           <a
@@ -449,7 +452,7 @@ export function ChangeRequestCard({ entry, expanded, onToggle, now, actions, loc
               actions.openLink(url)
             }}
           >
-            {snapshot?.title ?? url.replace(/^https?:\/\//i, '')}
+            <MarqueeText ref={titleRef}>{snapshot?.title ?? url.replace(/^https?:\/\//i, '')}</MarqueeText>
           </a>
           {(number !== null || meta !== null) && (
             <div className={css.meta}>
