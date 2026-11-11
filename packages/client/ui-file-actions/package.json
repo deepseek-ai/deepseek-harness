@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-file-actions",
   "description": "Original-file saving and image clipboard actions for Web and Desktop",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },

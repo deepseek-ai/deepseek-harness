@@ -1225,7 +1225,7 @@ class GuidancePtcRuntime extends PtcRuntime {
 
   readonly language = 'typescript'
   readonly isolation = 'fake'
-  run() { return Promise.resolve({ logs: [] }) }
+  run() { return Promise.resolve({ output: [] }) }
 }
 
 describe('scope-aware PTC guidance', () => {

@@ -29,6 +29,7 @@ import { FileLabel } from './FileLabel.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import type { ViewedState } from './viewed-files.ts'
 import type { SectionReach } from './section-reach.ts'
+import type { SourcedAnnotation } from './annotations.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -65,6 +66,12 @@ export interface DiffFileHandlers {
   readonly nextThread: (path: string) => void
   /** Tells each expanded section when it comes within reach of the scrollport, which draws its lines. */
   readonly reach: SectionReach
+  /** Draw the content of one line annotation through its source's `forge.diff.line.annotation` entry. */
+  readonly annotation: (path: string, item: SourcedAnnotation) => ReactNode
+  /** Draw the plugin rows of a file's menu through `forge.changes.file.menu`. */
+  readonly fileMenu: (file: ForgeDiffFile, dismiss: () => void) => ReactNode
+  /** Show the hunks the chosen lens folds in a file. */
+  readonly unfold: (path: string) => void
 }
 
 /** Props of one file section. */
@@ -103,6 +110,12 @@ export interface DiffFileProps {
   readonly threads?: FileThreads | undefined
   /** Whether the section draws its lines at once, as the target of a thread jump, whose card must exist to be centered. */
   readonly drawNow?: boolean | undefined
+  /** Line annotations of the file in stacking order, or undefined for none; the view keeps their identity. */
+  readonly annotations?: readonly SourcedAnnotation[] | undefined
+  /** Most annotations the file shows, the rest counted below them, or undefined to show none while the limit is unknown. */
+  readonly annotationLimit?: number | undefined
+  /** Indexes of the hunks the chosen lens folds with the lens's title, or undefined for none; the view keeps their identity. */
+  readonly folded?: { readonly hunks: ReadonlySet<number>; readonly lens: string } | undefined
   /** Actions shared by every section of the view. */
   readonly handlers: DiffFileHandlers
   /** Forge panel copy. */
@@ -135,6 +148,7 @@ type SideSpans = ReadonlyMap<number, readonly HighlightSpan[]> | undefined
 /** A segment ready to draw: collapsed lines, or rows with the tokens of each side. */
 type Prepared =
   | { readonly kind: 'gap'; readonly index: number; readonly count: number | null }
+  | { readonly kind: 'folded'; readonly hunks: readonly number[] }
   | { readonly kind: 'rows'; readonly rows: readonly DiffRow[]; readonly old: SideSpans; readonly new: SideSpans }
 
 /** Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. */
@@ -180,13 +194,66 @@ function rangeKey(item: ReviewSelection): string {
   return `${item.comment.side}${item.comment.startLine}-${item.comment.endLine}`
 }
 
+/** A file's annotations as it shows them: on lines, on the whole file, written on an earlier change, and how many the limit leaves out. */
+interface FileAnnotations {
+  readonly lines: readonly SourcedAnnotation[]
+  readonly file: readonly SourcedAnnotation[]
+  readonly outdated: readonly SourcedAnnotation[]
+  readonly hidden: number
+}
+
+const NO_ANNOTATIONS: FileAnnotations = { lines: [], file: [], outdated: [], hidden: 0 }
+
+/** Group the first `limit` annotations of a file by where they show; none show while the limit is unknown. */
+function groupAnnotations(
+  file: ForgeDiffFile, items: readonly SourcedAnnotation[] | undefined, limit: number | undefined,
+): FileAnnotations {
+  if (items === undefined || items.length === 0 || limit === undefined) return NO_ANNOTATIONS
+  const lines: SourcedAnnotation[] = []
+  const whole: SourcedAnnotation[] = []
+  const outdated: SourcedAnnotation[] = []
+  for (const item of items.slice(0, limit)) {
+    const { place, digest } = item.annotation
+    if (digest !== undefined && digest !== file.digest) outdated.push(item)
+    else if (place === 'file') whole.push(item)
+    else lines.push(item)
+  }
+  return { lines, file: whole, outdated, hidden: Math.max(0, items.length - limit) }
+}
+
+/** Whether a line of one side falls in one of the hunks. */
+function inHunks(file: ForgeDiffFile, hunks: readonly number[], side: 'L' | 'R', line: number): boolean {
+  return hunks.some((index) => {
+    const hunk = file.hunks[index]
+    /* v8 ignore next -- folded indexes name hunks of the file */
+    if (hunk === undefined) return false
+    const start = side === 'L' ? hunk.oldStart : hunk.newStart
+    return line >= start && line < start + (side === 'L' ? hunk.oldLines : hunk.newLines)
+  })
+}
+
+/** The saved comments and plugin annotations the lines of a file place. */
+interface LinesNotes {
+  readonly comments: FileReviewState
+  readonly annotations: readonly SourcedAnnotation[]
+}
+
+/** One annotation's frame, which holds the content its source's slot entry draws. */
+function Annotation({ path, item, handlers }: {
+  readonly path: string
+  readonly item: SourcedAnnotation
+  readonly handlers: DiffFileHandlers
+}): ReactNode {
+  return <div className={css.annotation} data-forge-annotation={`${item.source}/${item.annotation.key}`}>{handlers.annotation(path, item)}</div>
+}
+
 function pairKind(pair: SplitRow): 'context' | 'change' {
   return pair.left !== null && pair.left.kind === 'context' ? 'context' : 'change'
 }
 
 /** The hunks of one file with their collapsed and expanded unchanged lines. */
-function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, threads, t }: Pick<DiffFileProps,
-  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 't'> & { readonly comments: FileReviewState }): ReactNode {
+function Lines({ file, text, open, handlers, split, wrap, review, visible, comments, threads, folded, annotations, t }: Pick<DiffFileProps,
+  'file' | 'text' | 'open' | 'handlers' | 'split' | 'wrap' | 'review' | 'visible' | 'threads' | 'folded' | 't'> & LinesNotes): ReactNode {
   const lines = typeof text === 'object' ? text : undefined
   const columns = split && file.additions > 0 && file.deletions > 0
   const singleSide = file.status === 'added' ? 'R' : file.status === 'deleted' ? 'L' : null
@@ -194,6 +261,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   for (const hunk of file.hunks) maximum = Math.max(maximum, hunk.oldStart + hunk.oldLines - 1, hunk.newStart + hunk.newLines - 1)
   const style: CSSProperties & { '--forge-number-width': string } = { '--forge-number-width': `calc(${Math.max(2, String(maximum).length)}ch + 12px)` }
   const highlighter = useCodeHighlighter(languageForPath(file.path))
+  const foldLens = folded === undefined ? '' : folded.lens
   const [selection, setSelection] = useState<ReviewSelection | null>(null)
   // Mirrors `selection` for the release of a hover-plus drag, whose listener outlives the render that chose the range.
   const chosen = useRef<ReviewSelection | null>(null)
@@ -271,9 +339,19 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       window.removeEventListener('pointercancel', finish)
     }
   }, [selecting, nativeSelection])
-  const prepared = useMemo(() => segmentsOf(file, lines, open).map((segment): Prepared => segment.kind === 'gap'
+  // A hunk that holds an open comment form or a comment saved in this browser stays drawn: folding it would move the form,
+  // which loses its text, and show the saved comment as written on lines the diff no longer has.
+  const foldHunks = useMemo(() => {
+    if (folded === undefined) return undefined
+    const holds = (index: number): boolean => editors.some(item => inHunks(file, [index], item.comment.side, item.comment.endLine))
+      || (review !== undefined && comments.threads.some(thread => reviewMatches(thread.selection, review.source, file)
+        && inHunks(file, [index], thread.selection.comment.side, thread.selection.comment.endLine)))
+    return new Set([...folded.hunks].filter(index => !holds(index)))
+  }, [folded, editors, review, comments.threads, file])
+  const prepared = useMemo(() => segmentsOf(file, lines, open, foldHunks).map((segment): Prepared => segment.kind !== 'rows'
     ? segment
-    : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }), [file, lines, open, highlighter])
+    : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }),
+  [file, lines, open, foldHunks, highlighter])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
     /* v8 ignore next -- the line buttons and hover pluses that choose a range draw only with review actions */
@@ -366,6 +444,16 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
   const unplaced = new Set(threads === undefined ? [] : threads.lines.map(item => ({ ...item, actions: threads.actions })))
   const threadCard = (item: LineThread & { readonly actions: ThreadActions }): ReactNode =>
     <ThreadCard key={`thread-${item.thread.id}`} thread={item.thread} place={item.place} actions={item.actions} t={t} />
+  // Plugin annotations follow the host threads on the row of their last line, or the collapsed or folded lines that hold it.
+  const unplacedNotes = new Set(annotations)
+  const annotationOf = (item: SourcedAnnotation): ReactNode =>
+    <Annotation key={`annotation-${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />
+  const lastLine = (item: SourcedAnnotation): { readonly side: 'L' | 'R'; readonly line: number } => {
+    const place = item.annotation.place
+    /* v8 ignore next -- only line annotations reach the lines */
+    if (place === 'file') return { side: 'R', line: 0 }
+    return { side: place.side, line: place.endLine }
+  }
   // The editors, the saved comments, then the host threads whose ranges end on this side's line.
   const commentsAt = (side: 'L' | 'R', line: number | null): ReactNode[] => {
     const nodes: ReactNode[] = []
@@ -387,6 +475,12 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       if (item.place.side !== side || item.place.endLine !== line) continue
       nodes.push(threadCard(item))
       unplaced.delete(item)
+    }
+    for (const item of unplacedNotes) {
+      const at = lastLine(item)
+      if (at.side !== side || at.line !== line) continue
+      nodes.push(annotationOf(item))
+      unplacedNotes.delete(item)
     }
     return nodes
   }
@@ -418,6 +512,30 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
         rows.push(threadCard(item))
         unplaced.delete(item)
       }
+      for (const item of unplacedNotes) {
+        const at = lastLine(item)
+        if (gapOf(file, at.side, at.line) !== segment.index) continue
+        rows.push(annotationOf(item))
+        unplacedNotes.delete(item)
+      }
+    } else if (segment.kind === 'folded') {
+      rows.push(<button key={`folded-${segment.hunks.join(',')}`} type="button" className={clsx(css.gap, css.lensFold)}
+        data-forge-lens-fold={segment.hunks.join(',')} onClick={() => { handlers.unfold(file.path) }}>
+        <IconChevronsUpDownOutlineRegular size={12} />
+        <span className={css.lensFoldText}>{t('filterLens.folded', { count: String(segment.hunks.length), lens: foldLens })}</span>
+        <span className={css.lensFoldAction}>{t('filterLens.unfold')}</span>
+      </button>)
+      for (const item of unplaced) {
+        if (!inHunks(file, segment.hunks, item.place.side, item.place.endLine)) continue
+        rows.push(threadCard(item))
+        unplaced.delete(item)
+      }
+      for (const item of unplacedNotes) {
+        const place = lastLine(item)
+        if (!inHunks(file, segment.hunks, place.side, place.line)) continue
+        rows.push(annotationOf(item))
+        unplacedNotes.delete(item)
+      }
     } else if (columns) {
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
@@ -447,6 +565,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     }
   }
   for (const item of unplaced) rows.push(threadCard(item))
+  for (const item of unplacedNotes) rows.push(annotationOf(item))
   return <div ref={root} className={css.code} style={style} data-single-side={singleSide ?? undefined} data-split={columns ? '' : undefined} data-wrap={wrap ? '' : undefined}
     data-review={review === undefined ? undefined : ''}
     data-native-side={nativeSide ?? undefined}
@@ -471,13 +590,16 @@ function drawsLines(file: ForgeDiffFile, large: boolean, revealed: boolean): boo
 }
 
 /** The file's lines or the note that replaces them, with its saved comments; host threads on lines follow when no lines show. */
-function Content(props: DiffFileProps): ReactNode {
-  const { file, large, revealed, handlers, review, threads, t } = props
+function Content(props: DiffFileProps & { readonly notes: FileAnnotations }): ReactNode {
+  const { file, large, revealed, handlers, review, threads, notes, t } = props
   const comments = useFileReview(review, file.path)
   const records = review === undefined ? null : comments.threads.map(thread => <ReviewThread key={thread.key} thread={thread}
     actions={review} locked={comments.locked} outdated={!reviewMatches(thread.selection, review.source, file)} t={t} />)
-  const lineThreads = threads?.lines.map(item => <ThreadCard key={item.thread.id} thread={item.thread} place={item.place}
-    actions={threads.actions} t={t} />)
+  const lineThreads = <>
+    {threads?.lines.map(item =>
+      <ThreadCard key={item.thread.id} thread={item.thread} place={item.place} actions={threads.actions} t={t} />)}
+    {notes.lines.map(item => <Annotation key={`${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />)}
+  </>
   if (file.binary) return <><p className={css.fileNote}>{t('diff.binary')}</p>{records}{lineThreads}</>
   if (file.oversized) return <><p className={css.fileNote}>{t('diff.fileTooLarge')}</p>{records}{lineThreads}</>
   if (file.hunks.length === 0) return <>{records}{lineThreads}</>
@@ -490,16 +612,27 @@ function Content(props: DiffFileProps): ReactNode {
       </button>{records}{lineThreads}</>
     )
   }
-  return <Lines {...props} comments={comments} />
+  return <Lines {...props} comments={comments} annotations={notes.lines} />
 }
 
 /** Host threads on the whole file, the lines, then the host threads that later commits made outdated. */
 function Body(props: DiffFileProps): ReactNode {
-  const { threads, t } = props
+  const { file, threads, handlers, t } = props
+  const notes = groupAnnotations(file, props.annotations, props.annotationLimit)
+  const frame = (item: SourcedAnnotation): ReactNode =>
+    <Annotation key={`${item.source}-${item.annotation.key}`} path={file.path} item={item} handlers={handlers} />
   return <>
     {threads?.file.map(thread => <ThreadCard key={thread.id} thread={thread} place={{ kind: 'file' }} actions={threads.actions} t={t} />)}
-    <Content {...props} />
+    {notes.file.map(frame)}
+    <Content {...props} notes={notes} />
     {threads !== undefined && <OutdatedThreads threads={threads.outdated} actions={threads.actions} t={t} />}
+    {notes.outdated.length > 0 && (
+      <div className={css.outdatedAnnotations} data-forge-outdated-annotations="">
+        <div className={css.outdatedAnnotationsTitle}>{t('annotation.outdated', { count: String(notes.outdated.length) })}</div>
+        {notes.outdated.map(frame)}
+      </div>
+    )}
+    {notes.hidden > 0 && <p className={css.fileNote} data-forge-hidden-annotations="">{t('annotation.hidden', { count: String(notes.hidden) })}</p>}
   </>
 }
 
@@ -543,6 +676,7 @@ function FileMenu({ name, file, handlers, t }: {
           {t(action.label)}
         </MenuItemButton>
       ))}
+      {menuOpen && <div className={css.menuPlugins}>{handlers.fileMenu(file, () => { setMenuOpen(false) })}</div>}
     </Menu>
   )
 }

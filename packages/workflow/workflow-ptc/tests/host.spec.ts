@@ -13,7 +13,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import PtcWorkflowEngine from '../src/index.ts'
 import { fakeParent } from './setup.ts'
 
-const completed: PtcRunResult = { logs: [], value: { value: null, stopReason: 'completed', agentsStarted: 0 } }
+const completed: PtcRunResult = { output: [], value: { value: null, stopReason: 'completed', agentsStarted: 0 } }
 type HostBindings = Record<string, PtcBindingFunction>
 
 class ControlledRuntime extends PtcRuntime {
@@ -230,7 +230,7 @@ describe('workflow runtime outcomes', () => {
     [{ stopReason: 'completed', agentsStarted: 0 }, 'missing its value'],
     [{ value: null, stopReason: 'error', agentsStarted: 0, error: 5 }, 'error must be a string'],
   ] as const)('maps an invalid terminal result %j to a workflow error', async (value, message) => {
-    const { start } = await setup(() => Promise.resolve({ logs: [], value }))
+    const { start } = await setup(() => Promise.resolve({ output: [], value }))
     const handle = start()
     try {
       const result = await handle.result

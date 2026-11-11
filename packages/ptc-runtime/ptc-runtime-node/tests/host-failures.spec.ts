@@ -78,7 +78,7 @@ describe('Node runtime host failures', () => {
     const h = await setup({}, 'read-only')
     vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
     h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
-    expect(await h.start()).toEqual({ logs: [], value: 42, sandbox: { mode: 'read-only', denied: false, enforcement: 'partial' } })
+    expect(await h.start()).toEqual({ output: [], value: 42, sandbox: { mode: 'read-only', denied: false, enforcement: 'partial' } })
   })
 
   it.each([['EACCES: blocked', true], ['EPERM: unrelated dialect', false]] as const)('uses only the selected denial dialect for %s', async (message, denied) => {
@@ -218,7 +218,7 @@ describe('Node runtime host failures', () => {
     expect((await h.start(request, NO_INITIAL_FRAME)).error).toEqual({ kind: 'worker-exit', message: 'runner connection broken; control channel failed: control transport closed' })
   })
 
-  it.each<Config>([{}, { executionMode: 'persistent-in-memory' },
+  it.each<Config>([{}, { executionMode: 'persistent-in-memory', replScoped: false },
     { executionMode: 'vm-script' }, { executionMode: 'vm-script', scriptPersistence: true },
   ])('reports control loss and awaits process cleanup in %j', async (config) => {
     const h = await setup(config)
@@ -396,7 +396,7 @@ describe('Node runtime host failures', () => {
     })
     const result = await h.start()
     expect(result.error?.kind).toBe('output-limit')
-    expect(result.logs).toEqual(['retained'])
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['retained'])
   })
 
   it.each([undefined, { kind: 'exception', message: 'program failed' }] as const)('bounds incomplete raw output after completion with %j', async (failure) => {
@@ -429,9 +429,9 @@ describe('Node runtime host failures', () => {
     })
     const result = await h.start()
     expect(result.error).toBeUndefined()
-    expect(result.logs.filter(text => text === '\uFEFF')).toHaveLength(2)
-    expect(result.logs.filter(text => text === '€')).toHaveLength(2)
-    expect(result.logs.filter(text => text === '�')).toHaveLength(2)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(text => text === '\uFEFF')).toHaveLength(2)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(text => text === '€')).toHaveLength(2)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).filter(text => text === '�')).toHaveLength(2)
   })
 
   it('keeps the fitting native-output prefix and ignores later overflow chunks', async () => {
@@ -444,8 +444,8 @@ describe('Node runtime host failures', () => {
     h.onBoot(() => { h.stdout.write('x'.repeat(1024)) })
     const result = await h.start()
     expect(result.error?.kind).toBe('output-limit')
-    expect(result.logs.join('')).toMatch(/^x+$/)
-    expect(Buffer.byteLength(JSON.stringify(result.logs))).toBeLessThanOrEqual(256)
+    expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toMatch(/^x+$/)
+    expect(Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text)))).toBeLessThanOrEqual(256)
   })
 
   it.each(['stdout', 'stderr'] as const)('reports a broken raw %s pipe', async (name) => {

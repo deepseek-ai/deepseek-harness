@@ -22,6 +22,7 @@ import type {
   ConversationViewNode, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { GlobalStandardProps, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import type { ChatFileMentions, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate, stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
@@ -39,6 +40,38 @@ import { apply, inject } from '../src/client/index.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+
+const unusedStandardHook = (): never => { throw new Error('isolated deliverables fixture does not consume this framework hook') }
+const standardProps: GlobalStandardProps & Omit<SessionStandardProps, 'sessionId'> = {
+  useSession: unusedStandardHook,
+  useProjection: unusedStandardHook,
+  useAccess: unusedStandardHook,
+  useRemoteAccess: unusedStandardHook,
+  useSessionAccess: unusedStandardHook,
+  useWorkspaceAccess: unusedStandardHook,
+  useConversation: unusedStandardHook,
+  useInput: unusedStandardHook,
+  useChat: unusedStandardHook,
+  useTrajectory: unusedStandardHook,
+  usePanelInfo: unusedStandardHook,
+  useSessions: unusedStandardHook,
+  useSessionStatus: unusedStandardHook,
+  useSessionRetainInfo: unusedStandardHook,
+  useResource: unusedStandardHook,
+  useWorkspaces: unusedStandardHook,
+  useContextMenu: contextMenuHook(),
+  inputActions: {
+    insertQuote: () => false,
+    captureInsertion: unusedStandardHook,
+    insertText: unusedStandardHook,
+    setDraft: unusedStandardHook,
+    persistDraft: unusedStandardHook,
+    addAttachments: unusedStandardHook,
+    removeAttachment: unusedStandardHook,
+    pruneAttachments: unusedStandardHook,
+    submit: unusedStandardHook,
+  },
+}
 
 function openProps(controller = new PresentedOpenController(), summaries = new ChangesSummaryStore()) {
   controller.host.set({ name: 'desktop', available: true, fileManager: 'finder' })
@@ -926,7 +959,7 @@ describe('plugin registration', () => {
     }
     expect(preview.mock.calls).toEqual(Array.from({ length: 4 }, () => ['out/report.docx']))
     expect(fetcher).not.toHaveBeenCalled()
-    const face = entry!.inject!(SessionId('child-session') as never) as unknown as DeliverablesInjected
+    const face: DeliverablesInjected = entry!.inject!(SessionId('child-session') as never) as Record<string, unknown> & DeliverablesInjected
     fetcher.mockResolvedValueOnce(Response.json({ name: 'desktop', available: true, fileManager: 'finder' }))
     await face.reloadPresentedHost()
     expect(face.hooks.presentedHost.getSnapshot()).toMatchObject({ name: 'desktop' })
@@ -944,7 +977,7 @@ describe('plugin registration', () => {
     face.openChangesReview({ sessionId: SessionId('child-session'), seq: 5, turn: 3 }, 1)
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
-    const tabFace = tabEntry!.inject!(SessionId('child-session') as never) as unknown as ReviewInjected
+    const tabFace: ReviewInjected = tabEntry!.inject!(SessionId('child-session') as never) as Record<string, unknown> & ReviewInjected
     fetcher.mockResolvedValueOnce(Response.json({ turn: 3, files: [], total: 0, added: 0, deleted: 0 }))
     await tabFace.loadChangesSummary(SessionId('child-session'), 6)
     expect(tabFace.hooks.changesSummary.getSnapshot()['api/changes.summary?sessionId=child-session&seq=6']).toEqual({ turn: 3, files: [], total: 0, added: 0, deleted: 0 })
@@ -1146,7 +1179,13 @@ it('loads desktop information once the tail renders and not again while it is kn
 
 it('contributes file artifacts to the tail list only for turns with deliveries', () => {
   const owner = tailOwner(undefined, 3)
-  const props = { ...openProps(), ...owner, sessionId: SessionId('session'), t: makeTranslate(en) } as unknown as Parameters<typeof DeliverablesTail>[0]
+  const props: Parameters<typeof DeliverablesTail>[0] = {
+    ...standardProps,
+    ...openProps(),
+    ...owner,
+    sessionId: SessionId('session'),
+    t: makeTranslate(en),
+  }
   const view = render(<DeliverablesTail {...props} />)
   expect(view.container.innerHTML).toBe('')
   const withFile = tailOwner({ produced: [], presented: [{ path: 'report.md', seq: 2, index: 0 }] }, 3)

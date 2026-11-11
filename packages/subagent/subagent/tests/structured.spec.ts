@@ -34,7 +34,7 @@ interface PtcRunRequestLike {
 
 interface SetupOptions {
   toolMode?: ('native' | 'ptc')
-  codeRun?: (request: PtcRunRequestLike) => Promise<{ logs: never[]; value?: unknown }>
+  codeRun?: (request: PtcRunRequestLike) => Promise<{ output: never[]; value?: unknown }>
 }
 
 const SCHEMA: ObjectJsonSchema = {
@@ -57,7 +57,7 @@ async function setup(script: Script, options: SetupOptions = {}) {
       language: 'typescript',
       isolation: 'test',
       resolve: (request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest) => ({ ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: 120_000 }),
-      run: options.codeRun ?? (() => Promise.resolve({ logs: [] })),
+      run: options.codeRun ?? (() => Promise.resolve({ output: [] })),
     } as never)
   }
   await mountLocalActivations(ctx)
@@ -158,7 +158,7 @@ describe('in-process structured output', () => {
         const capture = request.bindings.at(0)?.functions[STRUCTURED_OUTPUT_TOOL]
         if (capture === undefined) throw new Error('structured_output binding missing')
         await capture({ answer: 42 })
-        return { logs: [], value: 'captured' }
+        return { output: [], value: 'captured' }
       },
     })
     const entered = Promise.withResolvers<undefined>()
@@ -597,7 +597,7 @@ describe('in-process structured output', () => {
         const capture = request.bindings.at(0)?.functions[STRUCTURED_OUTPUT_TOOL]
         if (!capture) throw new Error('structured_output binding missing')
         await capture({ answer: 12 })
-        return { logs: [], value: 'captured' }
+        return { output: [], value: 'captured' }
       },
     })
     const run = await startTestActivation(ctx, 'spawn', structuredRequest(parent))
@@ -626,7 +626,7 @@ describe('in-process structured output', () => {
         if (!capture) throw new Error('structured_output binding missing')
         await capture({ answer: 12 })
         return {
-          logs: [],
+          output: [],
           error: { kind: 'runtime', message: 'boom after capture' },
         } as never
       },
@@ -654,7 +654,7 @@ describe('in-process structured output', () => {
         const capture = request.bindings.at(0)?.functions[STRUCTURED_OUTPUT_TOOL]
         if (!capture) throw new Error('structured_output binding missing')
         await capture({ answer: 12 })
-        return { logs: [], value: 'captured' }
+        return { output: [], value: 'captured' }
       },
     })
     ctx.on('tools/post-execute', (exec, _result, next) => exec.name === RUN_CODE_NAME

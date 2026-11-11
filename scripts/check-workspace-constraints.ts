@@ -185,11 +185,13 @@ export function readWorkspaceManifests(repositoryRoot: string): WorkspaceManifes
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // Tools entry points share error classes and invocation stages through runtime chunks.
   '@deepseek-ai/dsh-tools': ['lib/pipeline.js', 'lib/shared-*.js'],
+  '@deepseek-ai/dsh-tool-executor-ptc': ['lib/run-code.js', 'lib/_chunks/*.js'],
   // The embedded OAR implementation retains its upstream license.
   '@deepseek-ai/dsh-experimental-subagent-oar': ['LICENSE-OAR'],
   // CUA publishes its client API and attributed native source for local macOS builds.
   '@deepseek-ai/dsh-cua': ['lib/remote-types.js', 'lib/api.js', 'lib/bridge.js', 'lib/native-client.js', 'lib/protocol.js', 'lib/config.js', 'lib/native-schema.js', 'lib/native-build.js', 'lib/guidance.js'],
   '@deepseek-ai/dsh-experimental-cua-macos': ['native/bin', 'cua-helper.json', 'native/Package.swift', 'native/Info.plist', 'native/DSHComputerUse.icns', 'native/build_app.py', 'native/Sources', 'native/tests/swift', 'native/tests/test_swift.py', 'native/LICENSE.cua-driver', 'native/LICENSE.computer-use-icon', 'native/upstream.json', 'native/README.md', 'native/README.zh.md', 'native/protocol.schema.json'],
+  '@deepseek-ai/dsh-cua-windows': ['native/bin'],
   '@deepseek-ai/dsh-webhook-github': ['examples/github-review/cordis.yml', 'examples/github-review/github-ready-review-rule.mjs'],
   // Liveshare publishes its built Relay gateway entry and the shared runtime
   // chunk that entry imports. Its `./types` export is a type-only module, so
@@ -604,6 +606,10 @@ export function checkWorkspaceManifest({ dir, manifest }: WorkspaceManifest): st
     if (manifest.name === '@deepseek-ai/dsh-tools'
       && !hasExportPair(manifest, './pipeline', './lib/types/pipeline.d.ts', './lib/pipeline.js')) {
       errors.push(`${label}: exports["./pipeline"] must expose lib/types/pipeline.d.ts and lib/pipeline.js`)
+    }
+    if (manifest.name === '@deepseek-ai/dsh-tool-executor-ptc'
+      && !hasExportPair(manifest, './run-code', './lib/types/run-code.d.ts', './lib/run-code.js')) {
+      errors.push(`${label}: exports["./run-code"] must expose lib/types/run-code.d.ts and lib/run-code.js`)
     }
     const expectedFiles = expectedDshPackageFiles(manifest, detailDocumentFiles(join(root, dir)))
     if (!sameStringList(manifest.files, expectedFiles)) {

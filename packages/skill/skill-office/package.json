@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-office",
   "description": "Bundled Word, PowerPoint, and Excel workflows and Office operation guidance",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },

@@ -290,6 +290,7 @@ export class PtcWorkflowRun implements WorkflowRun {
           'function-body': PROGRAM,
           repl: `await (async () => {\n${PROGRAM}\n})()`,
           script: `(async () => {\n${PROGRAM}\n})()`,
+          'scoped-repl': `await (async () => {\n${PROGRAM}\n})()`,
         }[this.runtime.programFormat],
         bindings: [{ global: 'workflowHost', functions: this.bindings() }],
         cwd,

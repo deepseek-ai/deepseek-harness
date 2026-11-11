@@ -26,7 +26,7 @@ class SkillProgram extends PtcRuntime {
   readonly isolation = 'fixture'
   resolve(request: PtcRunRequest): PtcRunSpec { return { ...request, cwd: process.cwd(), timeoutMs: 120_000 } }
   async run(request: PtcRunSpec) {
-    return { logs: [], value: await request.bindings[0]!.functions.skill!({ name: request.program }) }
+    return { output: [{ type: 'text' as const, text: JSON.stringify(await request.bindings[0]!.functions.skill!({ name: request.program })) }] }
   }
 }
 

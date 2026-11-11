@@ -85,9 +85,10 @@ class ProgramFixture extends PtcRuntime {
   }
 
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
-    expect(request.program).toBe('return await tools.echo({ value: "ptc" })')
+    expect(request.program).toBe('inspect(await tools.echo({ value: "ptc" }))')
     const value = await request.bindings[0]!.functions.echo!({ value: 'ptc' })
-    return { logs: [], value }
+    if (typeof value !== 'string') throw new Error('expected a string echo result')
+    return { output: [{ type: 'text', text: value }] }
   }
 }
 
@@ -140,7 +141,7 @@ it.each([true, false])('loads cordis.yml executor presets with runtime availabil
   })).toMatchObject({ isError: false, value: 'echo:native' })
   expect(await executeModelToolFixture(ctx, {
     agent: ptc, name: 'run_code', callId: ToolCallId('program'), signal,
-    arguments: { code: 'return await tools.echo({ value: "ptc" })', description: 'Echo through the program' },
+    arguments: { code: 'inspect(await tools.echo({ value: "ptc" }))', description: 'Echo through the program' },
   })).toMatchObject({ isError: false, content: [{ type: 'text', text: 'echo:ptc' }] })
   expect(ptc.session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')).toMatchObject({
     data: { name: 'echo', isError: false, content: [{ type: 'text', text: 'echo:ptc' }] },

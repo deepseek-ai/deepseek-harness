@@ -1168,13 +1168,15 @@ describe('Session', () => {
         'detached',
       )).toThrow(/not a plain JSON record/)
     }
-    expect(() => Session.create(SessionId('header-invalid'), undefined, {
+    const nonJsonHeader: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('header-invalid'),
       createdAt: 123,
       isSeeded: false,
-      parentSession: 1n,
-    } as unknown as SessionHeader)).toThrow(/not losslessly JSON-serializable/)
+    }
+    Reflect.set(nonJsonHeader, 'parentSession', 1n)
+    expect(() => Session.create(SessionId('header-invalid'), undefined, nonJsonHeader))
+      .toThrow(/not losslessly JSON-serializable/)
     expect(() => Session.create(SessionId('header-invalid'), undefined, {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('other'),

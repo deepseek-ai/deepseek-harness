@@ -66,6 +66,8 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
   const reportVisible = vi.fn<(visible: boolean) => void>()
   const createChangeRequest = vi.fn<() => void>()
   const openResource = vi.fn<SidebarRightTabActions['openResource']>()
+  // Draws nothing for the card's plugin slot.
+  const renderSlot = (() => null) as ForgeTabProps['renderSlot']
   const props: ForgeTabProps = {
     useTabInfo: () => tabInfo(useVisibility(current => current), openResource),
     sessionId: SESSION,
@@ -73,7 +75,7 @@ function tab(state: ForgePanelState | null, options: { disconnected?: boolean; v
     useHost: bindSnapshotSelector(host),
     useLocale: bindSnapshotSelector(createSnapshotStore<string>('en')),
     reconnect, refresh, remove, markReady, merge, readChecks, rerunChecks, requestReviews, reviewerCandidates, updateBranch, restore,
-    openLink, copyText, copyPath, reportVisible, createChangeRequest, t,
+    openLink, copyText, copyPath, reportVisible, createChangeRequest, renderSlot, t,
   }
   const view = render(<ForgeTab {...props} />)
   return {

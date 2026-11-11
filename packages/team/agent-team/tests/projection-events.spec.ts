@@ -400,18 +400,12 @@ describe('Agent Teams projection events', () => {
   })
 
   it('ignores malformed current-version records inherited from another Team', () => {
-    const inherited = {
-      ...event('team/task', {
-        version: 2,
-        teamId: TeamId('ancestor'),
-        task: task(),
-      }, SessionSeq(0)),
-      data: {
-        version: 2,
-        teamId: TeamId('ancestor'),
-        task: { ...task(), subject: 42 },
-      },
-    } as unknown as SessionEvent
+    const inherited = event('team/task', {
+      version: 2,
+      teamId: TeamId('ancestor'),
+      task: task(),
+    }, SessionSeq(0))
+    Reflect.set(inherited.data.task, 'subject', 42)
     expect(projectTeam(ROOT, [inherited]).tasks).toEqual([])
   })
 

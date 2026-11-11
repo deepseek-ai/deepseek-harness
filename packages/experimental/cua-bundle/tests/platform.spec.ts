@@ -6,7 +6,7 @@ import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 import { load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
 
-it.each(['darwin', 'win32', 'linux'])('loads the exported patch directly on %s and imports the native provider only on Darwin', async (platform) => {
+it.each(['darwin', 'win32', 'linux'])('loads the exported patch directly on %s and selects its native provider', async (platform) => {
   const patch = load(await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8'), {
     schema: entryListSchema,
   }) as { insert: EntryOptions[] }[]
@@ -28,6 +28,7 @@ it.each(['darwin', 'win32', 'linux'])('loads the exported patch directly on %s a
     expect(imports).toContain('@deepseek-ai/dsh-cua')
     expect(imports).toContain('@deepseek-ai/dsh-computer-use')
     expect(imports.includes('@deepseek-ai/dsh-experimental-cua-macos')).toBe(platform === 'darwin')
+    expect(imports.includes('@deepseek-ai/dsh-cua-windows')).toBe(platform === 'win32')
   } finally {
     await ctx.fiber.dispose()
     imported.mockRestore()

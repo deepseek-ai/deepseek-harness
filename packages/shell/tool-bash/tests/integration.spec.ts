@@ -116,7 +116,7 @@ describe('bash tool through the agent loop', () => {
           if (bash === undefined) throw new Error('missing bash binding')
           const value = await bash({ command: 'pwd', description: 'Print launch directory' })
           expect(value).toMatchObject({ cwd: selected, stdout: { text: `${selected}\n` } })
-          return { logs: [], value }
+          return { output: [], value }
         }
       }
       await ctx.plugin(BashBindingRuntime)

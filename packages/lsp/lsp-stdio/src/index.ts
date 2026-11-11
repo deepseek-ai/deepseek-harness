@@ -28,19 +28,6 @@ import { LspInstance } from './instance.ts'
 import type { ConnectionSpawner } from './connection.ts'
 import type { InstanceSpec } from './instance.ts'
 
-export { canonicalizeWorkspace, readHostSource } from './host.ts'
-export { encodeMessage, MessageDecoder } from './framing.ts'
-export {
-  negotiatePositionEncoding,
-  normalizeHover,
-  normalizeLocations,
-  requestMethod,
-  supportsOperation,
-  supportsTransientOpen,
-} from './translate.ts'
-export { LspInstance } from './instance.ts'
-export { LspConnection } from './connection.ts'
-
 /** Cordis plugin name for loader diagnostics. */
 export const name = 'lsp-stdio'
 

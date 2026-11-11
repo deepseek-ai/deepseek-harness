@@ -1,10 +1,16 @@
-/** Read replayable PTC source and language hints from recorded tool arguments and schemas. */
+/** Read program source and language hints from recorded tool arguments and schemas. */
 import type { TrajectoryCellProps } from './trajectory-record.ts'
 
-/** Recorded name of the programmatic tool-calling entry point. */
-export const PTC_TOOL_NAME = 'run_code'
+/**
+ * Identify tools supported by the trajectory code inspector.
+ * @param name - Recorded tool name, absent when the call is outside the loaded window.
+ * @returns Whether this tool executes a program shown by the code inspector.
+ */
+export function isProgramTool(name: string | undefined): boolean {
+  return name === 'run_code' || name === 'cua_run_code'
+}
 
-/** Validated source and original arguments for one recorded run_code call. */
+/** Validated source and original arguments for one recorded program call. */
 export interface CodeProgram {
   rawInput: string
   source: string
@@ -46,14 +52,14 @@ function recordedLanguage(schemaRaw: string | undefined): CodeProgram['language'
 }
 
 /**
- * Resolve a PTC program without guessing its language from source or current runtime settings.
+ * Resolve a program without guessing its language from source or current runtime settings.
  * Unknown explicit languages or conflicting recorded hints leave the source unhighlighted.
  * @param cell - Recorded tool arguments and the schema visible at call time.
  * @returns The program, or undefined for another tool or unsupported arguments.
  */
 export function codeProgram(cell: TrajectoryCellProps): CodeProgram | undefined {
   if (cell.kind !== 'tool' && cell.kind !== 'subtool') return undefined
-  if (cell.toolName !== PTC_TOOL_NAME || cell.inputDetail === undefined) return undefined
+  if (!isProgramTool(cell.toolName) || cell.inputDetail === undefined) return undefined
   const args = parseRecord(cell.inputDetail)
   if (typeof args?.code !== 'string') return undefined
   if (args.description !== undefined && typeof args.description !== 'string') return undefined

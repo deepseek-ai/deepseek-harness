@@ -405,6 +405,15 @@ export type ForgeReviewWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: 'unsupported' | 'stale' | 'failed' | 'unknown'; readonly message: string }
 
+/**
+ * One review change the host accepted, which `forge/review-changed` announces: a write to the threads or the pending
+ * review, a submitted review, or a viewed mark. Each names the head commit the change was made against.
+ */
+export type ForgeReviewChange =
+  | { readonly kind: 'write'; readonly write: ForgeReviewWrite['kind']; readonly headSha: string }
+  | { readonly kind: 'submit'; readonly headSha: string }
+  | { readonly kind: 'viewed'; readonly path: string; readonly viewed: boolean; readonly headSha: string }
+
 /** Result of a review submission; unknown outcomes must be checked on the host before another submission. */
 export type ForgeReviewResult =
   | { readonly ok: true; readonly url: string }
@@ -544,6 +553,12 @@ export interface ForgeProvider {
    * with `a/` and `b/` path prefixes. Both are full object names; `head` descends from `base`.
    */
   compare?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
+  /**
+   * Find the merge base of commits `base` and `head` in the change request's repository, as a full object name: the
+   * commit whose files the old side of a change request's diff shows. Omission declares that the provider cannot name
+   * it, so readers of the old side get `unsupported`.
+   */
+  mergeBase?(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>
   /**
    * Read the signed-in user's viewed marks on the change request's files at head commit `headSha`. The marks are
    * returned only when the read names `headSha` as the head; once the head is another commit, the read resolves to a

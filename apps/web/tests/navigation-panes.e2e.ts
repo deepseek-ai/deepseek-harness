@@ -796,7 +796,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     const callId = ToolCallId('long-ptc-result')
     const call = agent.session.append('tool/call', {
       turn: 3, step: 1, callId, name: 'run_code',
-      arguments: JSON.stringify({ code: 'console.log("PTC output")', description: 'Long program output' }),
+      arguments: JSON.stringify({ code: 'inspect("PTC output")', description: 'Long program output' }),
     })
     await page.getByRole('tab', { name: 'Trajectory' }).click()
     await page.locator('tr[data-kind="tool"]').filter({ hasText: 'Long program output' }).click()

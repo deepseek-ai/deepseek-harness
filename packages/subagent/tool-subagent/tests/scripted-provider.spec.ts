@@ -9,7 +9,7 @@ import * as scripted from './scripted-provider.ts'
 
 /** A minimal parent; the scripted provider only reads its id. */
 function fakeParent(id = 'parent-1'): Agent {
-  return { id: SessionId(id) } as unknown as Agent
+  return { id: SessionId(id) } as Agent
 }
 
 function baseRequest(over: Partial<ResolvedSubagentStartRequest> = {}): ResolvedSubagentStartRequest {
