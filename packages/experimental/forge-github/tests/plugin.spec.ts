@@ -56,6 +56,8 @@ describe('forge-github plugin', () => {
     [{ maxOutputBytes: 1.5 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
     [{ maxOutputBytes: 0 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
     [{ maxOutputBytes: Number.MAX_SAFE_INTEGER + 1 }, 'forge-github: maxOutputBytes must be a positive safe integer'],
+    [{ maxBatchSize: 0 }, 'forge-github: maxBatchSize must be a positive safe integer'],
+    [{ maxBatchSize: 2.5 }, 'forge-github: maxBatchSize must be a positive safe integer'],
     [{ maxCommits: 0 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxCommits: 2.5 }, 'forge-github: maxCommits must be a positive safe integer'],
     [{ maxReviewThreads: 0 }, 'forge-github: maxReviewThreads must be a positive safe integer'],
@@ -70,5 +72,9 @@ describe('forge-github plugin', () => {
     const context = await forge()
     await context.plugin(ForgeGitHub, { maxOutputBytes: 2_147_483_648 })
     expect(context.forge.repositoryFromRemote('https://github.com/octo/demo.git')).toBeDefined()
+  })
+
+  it('reads eight pull requests per status document by default', () => {
+    expect(ForgeGitHub.Config({})).toMatchObject({ maxBatchSize: 8 })
   })
 })

@@ -16,7 +16,7 @@ import {
   actionsRunOf, CHECKS_QUERY, hasGraphqlFields, HEAD_QUERY, mapCheckPageResponse, mapHeadResponse, mapPullRequestCommitsResponse,
   mapSnapshotResponse, mapThreadPageResponse, PULL_REQUEST_COMMITS_QUERY, snapshotQuery, THREADS_QUERY,
 } from './graphql.ts'
-import type { PageResult, SnapshotPages } from './graphql.ts'
+import type { PageResult, SnapshotPages, SnapshotQuery } from './graphql.ts'
 import { checkedRepository, isCommit, parsePullRequestUrl, parseRemoteUrl } from './urls.ts'
 import { submitGitHubReview } from './review.ts'
 import { readViewed, writeViewed } from './viewed.ts'
@@ -38,12 +38,14 @@ const TOO_LARGE = /\btoo_large\b/
 /** HTTP status GitHub answers when it refuses to render a diff over its limits. */
 const NOT_ACCEPTABLE = '406'
 
-/** Bounds on what one read retains or counts. */
+/** Bounds on what one read retains or counts, and on the pull requests one status document reads. */
 export interface GitHubLimits {
   /** Maximum combined JSON bytes retained by an explicit check read or a review read. */
   readonly maxOutputBytes: number
   /** Most review threads counted per pull request in one status read, and read in one review read. */
   readonly maxReviewThreads: number
+  /** Most pull requests one status GraphQL document reads. */
+  readonly maxBatchSize: number
   /** Most commits one commit listing returns. */
   readonly maxCommits: number
   /** Most files whose viewed marks one read lists. */
@@ -86,8 +88,8 @@ export class GitHubProvider implements ForgeProvider {
   /**
    * @param gh - runner that executes `gh` on the host.
    * @param hosts - host names this provider serves, such as `github.com` and Enterprise hosts.
-   * @param limits - bounds on retained check and review bytes, counted and read review threads, listed commits, and listed
-   * viewed files.
+   * @param limits - bounds on retained check and review bytes, counted and read review threads, pull requests per status
+   * document, listed commits, and listed viewed files.
    */
   constructor(private readonly gh: GhRunner, hosts: readonly string[], private readonly limits: GitHubLimits) {
     this.hosts = new Set(hosts.map(host => host.toLowerCase()))
@@ -135,14 +137,9 @@ export class GitHubProvider implements ForgeProvider {
   async fetchChecks(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure> {
     const failure = this.hostFailure(ref.repository.host)
     if (failure !== undefined) return failure
-    try {
-      const results = await this.fetchHost(ref.repository.host, [ref], signal, true)
-      // oxlint-disable-next-line typescript/no-non-null-assertion -- fetchHost returns one result for each requested ref.
-      return results.get(changeRequestKey(ref))!
-    } catch (error) {
-      if (signal.aborted) throw signal.reason
-      return processFailure(error)
-    }
+    const results = await this.fetchHost(ref.repository.host, [ref], signal, true)
+    // oxlint-disable-next-line typescript/no-non-null-assertion -- fetchHost returns one result for each requested ref.
+    return results.get(changeRequestKey(ref))!
   }
 
   async findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]> {
@@ -440,13 +437,60 @@ export class GitHubProvider implements ForgeProvider {
     }
   }
 
+  /**
+   * Read the status of change requests on one host in GraphQL documents of at most `maxBatchSize` of them, one after
+   * another. A document whose `gh` run cannot start, times out, or prints over its limit fails only its own change
+   * requests.
+   * @param host - host every reference names.
+   * @param refs - change requests to read.
+   * @param signal - cancellation of the whole read.
+   * @param completeChecks - whether to follow every check page, for a detail read.
+   * @returns one result for each change request in `refs`.
+   * @throws with `signal.reason` once cancelled, without requesting another document; before any request when a
+   * reference cannot be inlined; and on an unexpected runner defect.
+   */
   private async fetchHost(
     host: string,
     refs: readonly ChangeRequestRef[],
     signal: AbortSignal,
     completeChecks = false,
   ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
-    const query = snapshotQuery(refs, this.limits.maxReviewThreads)
+    const { maxBatchSize, maxReviewThreads } = this.limits
+    const queries: SnapshotQuery[] = []
+    for (let start = 0; start < refs.length; start += maxBatchSize) {
+      queries.push(snapshotQuery(refs.slice(start, start + maxBatchSize), maxReviewThreads))
+    }
+    const results = new Map<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>()
+    for (const query of queries) {
+      signal.throwIfAborted()
+      let snapshots: ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>
+      try {
+        snapshots = await this.fetchDocument(host, query, signal, completeChecks)
+      } catch (error) {
+        if (signal.aborted) throw signal.reason
+        snapshots = failAll(query, processFailure(error))
+      }
+      for (const [key, result] of snapshots) results.set(key, result)
+    }
+    return results
+  }
+
+  /**
+   * Read one status document and the continuation pages of its change requests.
+   * @param host - host the document reads from.
+   * @param query - the document and its alias targets.
+   * @param signal - cancellation of the read.
+   * @param completeChecks - whether to follow every check page within one `maxOutputBytes` budget.
+   * @returns one result for each alias target.
+   * @throws what the runner throws for the document request, and cancellation or an unexpected defect during a
+   * continuation page.
+   */
+  private async fetchDocument(
+    host: string,
+    query: SnapshotQuery,
+    signal: AbortSignal,
+    completeChecks: boolean,
+  ): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>> {
     const output = await this.gh(['api', 'graphql', '--hostname', host, '-f', `query=${query.document}`], signal)
     const body = parseJson(output.stdout)
     // A complete check read retains every response it reads, so all of them share one byte budget.
@@ -469,13 +513,12 @@ export class GitHubProvider implements ForgeProvider {
     const threads: SnapshotPages['threads'] = async (id, cursor, first) => await continuation(
       ['-f', `query=${THREADS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`, '-F', `first=${first}`], mapThreadPageResponse)
     if (!completeChecks && hasGraphqlFields(body)) return await mapSnapshotResponse(body, query, { threads })
-    if (bytes > this.limits.maxOutputBytes) return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), tooLarge]))
+    if (bytes > this.limits.maxOutputBytes) return failAll(query, tooLarge)
     if (hasGraphqlFields(body)) {
       return await mapSnapshotResponse(body, query, { threads, checks: async (id, cursor) => await continuation(
         ['-f', `query=${CHECKS_QUERY}`, '-f', `id=${id}`, '-f', `cursor=${cursor}`], mapCheckPageResponse) })
     }
-    const failure = responseFailure(output, body)
-    return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
+    return failAll(query, responseFailure(output, body))
   }
 
   /**
@@ -495,6 +538,11 @@ export class GitHubProvider implements ForgeProvider {
       return processFailure(error)
     }
   }
+}
+
+/** The same failure for every alias target of a status document. */
+function failAll(query: SnapshotQuery, failure: ForgeFailure): Map<ChangeRequestKey, ForgeFailure> {
+  return new Map([...query.targets.values()].map(ref => [changeRequestKey(ref), failure] as const))
 }
 
 /**

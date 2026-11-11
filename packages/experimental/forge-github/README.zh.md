@@ -34,11 +34,13 @@ kind: "package-reference"
     hosts: [github.com, ghe.example.com]
 ```
 
-即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`maxOutputBytes`、`maxReviewThreads`、`maxCommits` 与 `maxViewedFiles` 必须是正安全整数；只有 `timeoutMs` 受运行时定时器上限约束。`ghCommand`、`hosts`、`timeoutMs`、`maxOutputBytes`、`maxReviewThreads`、`maxCommits` 与 `maxViewedFiles` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
+即使 Session 在其他执行环境中运行命令，提供方也以宿主进程的形式运行 `gh`。每个主机执行一次 `gh auth login --hostname <host>` 完成登录。子进程继承的宿主环境去掉了 `DSH_*` 变量以及名称包含 `KEY`、`PASSWORD`、`SECRET` 或 `TOKEN` 的变量，因此 `GH_TOKEN` 与 `GITHUB_TOKEN` 不会被转发，`gh` 使用自己的凭据存储。交互提示、更新提醒、分页器与颜色输出均被关闭。`maxOutputBytes`、`maxReviewThreads`、`maxBatchSize`、`maxCommits` 与 `maxViewedFiles` 必须是正安全整数；只有 `timeoutMs` 受运行时定时器上限约束。`ghCommand`、`hosts`、`timeoutMs`、`maxOutputBytes`、`maxReviewThreads`、`maxBatchSize`、`maxCommits` 与 `maxViewedFiles` 见[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-forge-github)。
 
 当主机在配置中时，提供方服务 `https`、`http`、`ssh`、`git` 形式的远端 URL，以及 `git@github.com:owner/name.git` 这类 scp 形式。HTTP(S) 远端在主机标识中保留自定义端口；SSH 和 Git 传输端口不计入主机标识。它服务 `https://<host>/<owner>/<name>/pull/<number>` 形式的 pull request URL，允许其后附带任意路径、查询或片段，并以去掉这些后缀的形式作为规范 URL。就绪探测运行 `gh auth status --hostname <host>`：退出码为 0 时为 `ready`，其他退出码为 `unauthenticated` 并带第一行诊断，`gh` 无法启动时为 `unavailable`。按 head 分支查找时，最多返回 20 个以该分支为 head 的打开状态 pull request，按创建时间从新到旧排列，不包含来自 fork 的 pull request；查找默认分支时返回空结果。
 
 轮询只返回 head 提交的前 100 条检查上下文，不追读后续页。预览不完整时设置 `checksTruncated` 并保留 GitHub 的汇总状态，局部计数不代表完整列表。`fetchChecks(ref, signal)` 仅按需读取指定 PR 的完整详情，后续页固定使用首次响应的 rollup。所有 JSON 响应（包括评审讨论分页）的 UTF-8 字节总量受 `maxOutputBytes` 限制，超出时返回 `too-large`。分页失败或游标不前进只使此次详情读取失败，保留轮询结果。同一应用、工作流、触发事件与检查名称的运行只保留运行 id 最新的一条；新的排队运行会替代旧的已完成运行。缺少数字数据库 id 的运行无法确定先后，因此按节点 id 保留。提交状态上下文按名称保留最新结果。完整列表从这些结果计算总体指示；未知上下文类型保留 GitHub 的汇总状态。
+
+一次状态读取把同一主机最多 `maxBatchSize`（默认 8）个 pull request 放进一个 GraphQL 文档，并逐个读取这些文档：读完一个文档及其评审讨论分页后，才请求下一个。以 deepseek-harness 的 pull request 实测，包含 30 个的文档收到 GitHub 的 HTTP 504，而每个包含 8 个的文档耗时 4.4 至 6.3 秒。某个文档的 `gh` 运行失败、超过 `timeoutMs` 或输出超过 `maxOutputBytes` 时，只有该文档内的 pull request 失败；响应中不带路径的 GraphQL 错误也只影响该文档内的 pull request。读取被取消后不再请求后续文档。
 
 每次状态读取按每页最多 100 个统计评审讨论，直到已统计 `maxReviewThreads`（默认 1,000）个为止；第一页之后每读一页多一次 GraphQL 查询。讨论更多的 pull request 设置 `threadsTruncated`，其 `unresolvedThreads` 只统计已读取的讨论。讨论分页失败或游标不前进时，该 pull request 的状态读取失败，同批其他 pull request 不受影响；不发布不完整的计数。
 
@@ -68,7 +70,7 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 <details>
 <summary>实现细节——点击展开</summary>
 
-一次读取按主机对引用分组，每个主机先发送一个 `gh api graphql` 查询。后续分页使用原汇总节点 id，因此 PR 的 head 变化不会让同一检查列表混入其他提交。查询内联经过校验的 owner、name 与编号，并为每个 pull request 设置别名，因此局部 GraphQL 错误只影响对应的别名。出现局部错误时 `gh` 以非零状态退出，但仍会输出完整响应；提供方先解析该响应，再检查退出码。
+一次读取按主机对引用分组，在第一次请求前为每 `maxBatchSize` 个引用构造一个 `gh api graphql` 查询，再依次发送。后续分页使用原汇总节点 id，因此 PR 的 head 变化不会让同一检查列表混入其他提交。查询内联经过校验的 owner、name 与编号，并为每个 pull request 设置别名，因此局部 GraphQL 错误只影响对应的别名。出现局部错误时 `gh` 以非零状态退出，但仍会输出完整响应；提供方先解析该响应，再检查退出码。
 
 | 源码 | 职责 |
 |---|---|
@@ -113,10 +115,10 @@ pull request 处于打开状态、不是草稿、GitHub 报告其合并状态为
 
 - **宿主需要 GitHub CLI**——必须安装 `gh` 并为每个已配置主机登录；环境变量中的令牌不会被转发。不在 `hosts` 中的主机永远不会被读取，包括配置变更后保留的引用。状态读取为这些引用返回 `unavailable`；head 查找会在启动 `gh` 前拒绝。
 - **评审讨论上限**——每次状态读取每个 pull request 最多统计、每次评审读取最多读取 `maxReviewThreads` 个评审讨论；超出时 `unresolvedThreads` 只是下限，由 `threadsTruncated` 标出，评审读取的结果标记为 `truncated`。
-- **批次时限**——评审讨论很多的 pull request 的续页会拉长其主机的轮询批次；批次超过 `ctx.forge` 的 `fetchTimeoutMs` 时，批次内每个 pull request 都报告 `unavailable`，而不只是讨论很多的那个。
+- **批次时限**——轮询批次的各个文档，以及评审讨论很多的 pull request 的续页，都在 `ctx.forge` 的同一个 `fetchTimeoutMs` 时限内运行；批次超过该时限时，批次内每个 pull request 都报告 `unavailable`，已读完的文档中的 pull request 也不例外。以每个文档 8 个计，读取 61 个 deepseek-harness pull request 耗时 38 秒，超过默认的 30 秒时限，因此同时到期的 pull request 约 40 个以内时能在默认时限内读完。
 - **基准分支被改写**——diff 从 head 与 GitHub 在 pull request 最后一次更新时记录的基准提交的合并基准开始。基准分支被强制推送后，该合并基准可能不同于 GitHub pull request 页面使用的合并基准，因此在 pull request 更新前，补丁可能多出或缺少提交。
 - **不发现 fork**——按 head 分支查找时，不包含 head 位于其他仓库的 pull request。
-- **速率限制**——每次轮询为每个主机消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。
+- **速率限制**——每次轮询为每个主机的每 `maxBatchSize` 个 pull request 消耗一次 GraphQL 查询，评审讨论每多一页（100 个）再消耗一次；完整检查读取时检查记录每多一页（100 条）再消耗一次；每次 diff 读取消耗一次 GraphQL 查询与一次 REST 请求；最新状态之后基准提交有变化时再多一次 REST 请求。这些都计入已登录账号的速率配额。每次评审读取每页 100 个讨论消耗一次 GraphQL 查询，单个讨论的评论每多一页（100 条）再消耗一次。每次评审写入消耗一次用于检查 head 的 GraphQL 查询和一个 mutation；开始待提交评审的待提交回复需要两个 mutation。
 - **不支持合并队列**——要求合并队列的基准分支会拒绝直接合并，提供方也不会把变更请求加入队列。
 
 <a id="dev-note"></a>
