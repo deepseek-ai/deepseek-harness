@@ -6,7 +6,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { AnnotationView } from '../src/client/annotations.ts'
 import { changesAddress, type ChangesTarget } from '../src/client/changes-address.ts'
@@ -22,7 +23,7 @@ import type { ForgeDiffHunk, ForgeExtensionState, ForgeLensFrame, ForgeLensId } 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 const target: ChangesTarget = { sessionId: SESSION, source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } }
 
 function service(mounted: SessionId | undefined = SESSION) {
@@ -59,7 +60,7 @@ describe('ForgeChangesService', () => {
     forge.open(target, { lens: 'fixture/exports' })
     forge.open(target)
     expect(openResource.mock.calls).toEqual([[address, { lens: 'fixture/exports' }], [address, undefined]])
-    expect(() => { service(SessionId('other')).forge.open(target) }).toThrow('forge-panel: Session s1 is not the Session the sidebar shows')
+    expect(() => { service(brandString<SessionId>('other')).forge.open(target) }).toThrow('forge-panel: Session s1 is not the Session the sidebar shows')
   })
 
   it('publishes lens descriptions by position, refuses a taken identity, and withdraws one when its plugin unloads', async () => {

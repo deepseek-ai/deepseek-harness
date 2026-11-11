@@ -12,9 +12,10 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   createAssistantMessage, createToolResultMessage, createUserMessage, LlmAdapter, LlmRuntime,
-  resolveImageAttachmentAccess, ToolCallId,
+  resolveImageAttachmentAccess, type ToolCallId,
 } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { deepSeekImageRequestPricing, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
@@ -24,7 +25,7 @@ import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import LocalSpillStore from '@deepseek-ai/dsh-spill-local'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
@@ -75,11 +76,11 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   }
   ctx.llm.registerAdapter(['vision'], new VisionRoute())
   await ctx.plugin(SpillPolicy, { maxInlineTokens })
-  const session = ctx.sessions.create(SessionId('recovery'), { meta: { cwd: root } })
+  const session = ctx.sessions.create(brandString<SessionId>('recovery'), { meta: { cwd: root } })
   const agent = { session, options: { provider: 'vision', model: MODEL }, ctx } as Agent
   let ordinal = 0
   const execute = (name: string, args: JsonValue = {}) => executeModelToolFixture(ctx, {
-    name, arguments: args, callId: ToolCallId(`recovery-${++ordinal}`), agent, signal: new AbortController().signal,
+    name, arguments: args, callId: brandString<ToolCallId>(`recovery-${++ordinal}`), agent, signal: new AbortController().signal,
   })
   const red = await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#ff0000' } }).png().toBuffer()
   const blue = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: '#0000ff' } }).png().toBuffer()
@@ -103,7 +104,7 @@ async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   const cost = (content: ContentBlock[]) => estimateContent(content.filter(block => block.type === 'text'))
     + pricing.priceImages(imagesOf(content)).reduce((sum, price) => sum + price.visualTokens + estimateContent([text(price.text)]), 0)
   const requestImages = async (content: ContentBlock[], contexts: UserMessage[] = []) => {
-    const callId = ToolCallId('visible-result')
+    const callId = brandString<ToolCallId>('visible-result')
     const history = [
       createUserMessage({ source: { kind: 'user' }, content: [text('Inspect the supplied images.')] }),
       createAssistantMessage({ source: { provider: 'vision', model: MODEL }, content: [

@@ -3,11 +3,12 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage, LlmError } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import { createSessionTestRemote } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup() {
   const ctx = new Context()
@@ -18,7 +19,7 @@ async function setup() {
   const adapter = new MockAdapter([fail, fail, textResponse('done')])
   ctx.effect(() => ctx.llm.registerAdapter(['mock'], adapter))
   const remote = await createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'mock', model: 'mock' }), cwd: '/workspace' })
-  const agent = await ctx.agentLoop.create(SessionId('empty-prompt'), { provider: 'mock', model: 'mock' })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('empty-prompt'), { provider: 'mock', model: 'mock' })
   const request = (id: string, mode: SessionPromptRequest['mode'] = 'queue'): SessionPromptRequest => ({
     sessionId: agent.id, requestId: id as SessionRequestId, content: [], mode,
   })

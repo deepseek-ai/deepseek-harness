@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url'
 import {
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
   SessionSeq,
   type SessionEvent,
@@ -17,16 +17,17 @@ import {
 import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import { scheduleDomain } from '@deepseek-ai/dsh-schedule'
 import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Root copied by the preview image's repository adapter. */
 export const VFS_EXAMPLE_ROOT = fileURLToPath(new URL('./fixtures/vfs-example', import.meta.url))
 
 /** Durable ids used by browser assertions and subagent parent links. */
 export const VFS_EXAMPLE_SESSION_IDS = {
-  main: SessionId('preview-showcase'),
-  oneShot: SessionId('preview-architecture-review'),
-  continuable: SessionId('preview-follow-up-builder'),
-  spacing: SessionId('preview-turn-spacing'),
+  main: brandString<SessionId>('preview-showcase'),
+  oneShot: brandString<SessionId>('preview-architecture-review'),
+  continuable: brandString<SessionId>('preview-follow-up-builder'),
+  spacing: brandString<SessionId>('preview-turn-spacing'),
 } as const
 
 /** Stable title rendered in the root Session list. */

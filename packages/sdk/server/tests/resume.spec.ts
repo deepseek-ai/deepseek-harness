@@ -5,8 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ReasoningEffortId, type LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId, LlmModelReasoningInfo } from '@deepseek-ai/dsh-llm'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { JsonRpcTransportPeer, SessionEventNotification } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -54,8 +55,8 @@ describe('SDK persisted session resume', () => {
     const root = await storageRoot()
     const { ctx, server } = await initialized(root)
     const child = await ctx.agents.create({
-      sessionId: SessionId('saved-child'),
-      meta: { origin: 'subagent', parentSession: SessionId('creator'), cwd: root },
+      sessionId: brandString<SessionId>('saved-child'),
+      meta: { origin: 'subagent', parentSession: brandString<SessionId>('creator'), cwd: root },
     })
     child.agent.session.append('turn/start', { turn: 1 })
     await ctx.sessions.flush(child.agent.session)
@@ -65,7 +66,7 @@ describe('SDK persisted session resume', () => {
       await expect(server.resume({ sessionId: 'saved-child' })).rejects.toThrow('resume its root session instead')
     }
     expect(resume).not.toHaveBeenCalled()
-    expect(ctx.agents.get(SessionId('saved-child'))).toBeUndefined()
+    expect(ctx.agents.get(brandString<SessionId>('saved-child'))).toBeUndefined()
     await expect(server.shutdown()).resolves.toEqual({})
   })
 
@@ -78,21 +79,21 @@ describe('SDK persisted session resume', () => {
     const first = await initialized(root)
     await first.server.prompt({ sessionId: 'saved-effort', contentBlocks: [{ type: 'text', text: 'remember' }] })
     await first.server.wait({ sessionId: 'saved-effort' })
-    first.ctx.agents.get(SessionId('saved-effort'))!.model.select({
-      provider: 'mock', model: 'mock', reasoningEffort: ReasoningEffortId('high'),
+    first.ctx.agents.get(brandString<SessionId>('saved-effort'))!.model.select({
+      provider: 'mock', model: 'mock', reasoningEffort: brandString<ReasoningEffortId>('high'),
     })
     await first.server.shutdown()
     await first.ctx.fiber.dispose()
 
     const second = await runtime(root, true, {
-      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }, { id: ReasoningEffortId('low'), name: 'Low' }],
+      efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }, { id: brandString<ReasoningEffortId>('low'), name: 'Low' }],
     })
     await second.server.initialize({
       cwd: root, provider: 'mock', model,
-      ...effort === undefined ? {} : { reasoningEffort: ReasoningEffortId(effort) },
+      ...effort === undefined ? {} : { reasoningEffort: brandString<ReasoningEffortId>(effort) },
     })
     await second.server.resume({ sessionId: 'saved-effort' })
-    expect(second.ctx.agents.get(SessionId('saved-effort'))!.model.current()).toEqual({
+    expect(second.ctx.agents.get(brandString<SessionId>('saved-effort'))!.model.current()).toEqual({
       provider: 'mock', model,
       ...expected === undefined ? {} : { reasoningEffort: expected },
     })
@@ -108,7 +109,7 @@ describe('SDK persisted session resume', () => {
 
     const { ctx, server, adapter } = await runtime(root)
     const fallback = vi.fn(async () => { throw new Error('must not activate through the Web controller') })
-    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    const restoring = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
     expect(ctx.agents.list()).toHaveLength(0)
     const actualOpen = ctx.sessionPersistence.open.bind(ctx.sessionPersistence)
     const opened = Promise.withResolvers<undefined>()
@@ -123,7 +124,7 @@ describe('SDK persisted session resume', () => {
       await server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'reminder-model', maxTokens: 1234 })
       await opened.promise
       const resuming = server.resume({ sessionId: 'saved' })
-      const anotherReminder = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+      const anotherReminder = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
       gate.resolve(undefined)
       const [agent, sameAgent] = await Promise.all([restoring, anotherReminder, resuming])
       expect(sameAgent).toBe(agent)
@@ -144,11 +145,11 @@ describe('SDK persisted session resume', () => {
   it('reuses an SDK-owned Session for reminders and releases failed reminder restoration for retry', async () => {
     const { ctx, server } = await initialized(await storageRoot())
     const fallback = vi.fn(async () => { throw new Error('unexpected fallback') })
-    const restore = () => ctx.waterfall('schedule/resolve-agent', SessionId('saved'), fallback)
+    const restore = () => ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), fallback)
     await expect(restore()).rejects.toThrow()
     await server.prompt({ sessionId: 'saved', contentBlocks: [{ type: 'text', text: 'create after failed reminder' }] })
     await server.wait({ sessionId: 'saved' })
-    const agent = ctx.agents.get(SessionId('saved'))
+    const agent = ctx.agents.get(brandString<SessionId>('saved'))
     await expect(restore()).resolves.toBe(agent)
     await expect(server.resume({ sessionId: 'saved' })).rejects.toThrow('already open')
     expect(fallback).not.toHaveBeenCalled()
@@ -156,7 +157,7 @@ describe('SDK persisted session resume', () => {
 
   it('releases a reminder waiting for initialization when the SDK shuts down', async () => {
     const { ctx, server } = await runtime(await storageRoot())
-    const restoring = ctx.waterfall('schedule/resolve-agent', SessionId('saved'), async () => {
+    const restoring = ctx.waterfall('schedule/resolve-agent', brandString<SessionId>('saved'), async () => {
       throw new Error('unexpected fallback')
     })
     const rejected = expect(restoring).rejects.toThrow('shutting down')
@@ -170,7 +171,7 @@ describe('SDK persisted session resume', () => {
     const first = await initialized(root)
     await first.server.prompt({ sessionId: 'saved-session', contentBlocks: [{ type: 'text', text: 'remember kiwi' }] })
     await first.server.wait({ sessionId: 'saved-session' })
-    const original = first.ctx.agents.get(SessionId('saved-session'))!.session.snapshotEvents()
+    const original = first.ctx.agents.get(brandString<SessionId>('saved-session'))!.session.snapshotEvents()
     await first.server.shutdown()
     await first.ctx.fiber.dispose()
 
@@ -178,7 +179,7 @@ describe('SDK persisted session resume', () => {
     await second.server.initialize({ cwd: tmpdir(), provider: 'mock', model: 'resumed-model', maxTokens: 123 })
     await expect(second.server.handleRequest('session/resume', { sessionId: 'saved-session' }))
       .resolves.toEqual({})
-    const restored = second.ctx.agents.get(SessionId('saved-session'))!.session
+    const restored = second.ctx.agents.get(brandString<SessionId>('saved-session'))!.session
     expect(restored.header.cwd).toBe(root)
     expect(restored.snapshotEvents().slice(0, original.length)).toEqual(original)
     expect(restored.snapshotEvents().slice(original.length)).toMatchObject([
@@ -209,7 +210,7 @@ describe('SDK persisted session resume', () => {
     await first.server.prompt({ sessionId: 'interrupted', contentBlocks: [{ type: 'text', text: 'first turn' }] })
     await first.server.wait({ sessionId: 'interrupted' })
     await first.server.shutdown()
-    const handle = await first.ctx.sessionPersistence.open(SessionId('interrupted'), 'write')
+    const handle = await first.ctx.sessionPersistence.open(brandString<SessionId>('interrupted'), 'write')
     try {
       const events = (await handle.read()).events
       const last = events.at(-1)!
@@ -224,7 +225,7 @@ describe('SDK persisted session resume', () => {
     await first.ctx.fiber.dispose()
     const second = await initialized(root)
     await second.server.resume({ sessionId: 'interrupted' })
-    const restored = second.ctx.agents.get(SessionId('interrupted'))!.session
+    const restored = second.ctx.agents.get(brandString<SessionId>('interrupted'))!.session
     expect(restored.snapshotEvents().filter(event => event.type === 'turn/end').at(-1)).toMatchObject({
       type: 'turn/end', data: { turn: 2, reason: { kind: 'interrupted' } },
     })
@@ -240,7 +241,7 @@ describe('SDK persisted session resume', () => {
     await expect(server.resume({ sessionId: 'missing' })).rejects.toThrow()
     await expect(server.resume({ sessionId: 'missing' })).rejects.toThrow()
     expect(ctx.agents.list()).toHaveLength(0)
-    expect(ctx.sessions.get(SessionId('missing'))).toBeUndefined()
+    expect(ctx.sessions.get(brandString<SessionId>('missing'))).toBeUndefined()
   })
 
   it('shares pending restoration with a prompt and rejects duplicate resume', async () => {

@@ -199,6 +199,7 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-client-ui-plugin-recommendations` | no | Official plugin card body with catalog text and enabling |
 | `@deepseek-ai/dsh-creation-recommendations` | no | Create persistent removable interface plugins from explicit conversation needs |
 | `@deepseek-ai/dsh-cua` | no | Shared Computer Use application objects, authorization, and logged tool execution |
+| `@deepseek-ai/dsh-cua-macos` | yes | macOS native provider for shared Computer Use application and window objects |
 | `@deepseek-ai/dsh-cua-windows` | yes | Windows C# computer use through shared application and window objects |
 | `@deepseek-ai/dsh-experimental-api-speech-to-text` | yes | Authenticated experimental speech transcription for browser clients |
 | `@deepseek-ai/dsh-experimental-auto-review` | no | Per-tool LLM authorization review for the DeepSeek Harness Auto permission preset |
@@ -213,7 +214,6 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | no | Record speech and insert editable text into the conversation draft |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp` | yes | Experimental computer use through an installed Cua Driver MCP executable |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | no | Experimental computer-use provider embedding the Cua Driver native npm SDK |
-| `@deepseek-ai/dsh-experimental-cua-macos` | yes | macOS native provider for shared Computer Use application and window objects |
 | `@deepseek-ai/dsh-experimental-forge` | yes | Provider-neutral change request registry with shared status polling |
 | `@deepseek-ai/dsh-experimental-forge-github` | yes | GitHub provider for the experimental forge registry, read through the GitHub CLI on the host |
 | `@deepseek-ai/dsh-experimental-forge-session` | yes | Binds change requests to the Session that created, pushed, or tracked them |

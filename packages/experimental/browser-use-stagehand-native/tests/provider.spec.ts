@@ -8,10 +8,11 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
-import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
-import { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
+import { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as Provider from '../src/index.ts'
 import { fixture, nativeModel, resetFixture } from './fixtures/stagehand.ts'
 
@@ -84,14 +85,14 @@ beforeEach(async () => {
   await ctx.plugin(BrowserUseRegistry)
   ctx.llm.registerAdapter(['fixture'], new IndependentSessionModel())
   const harness = await mountAgentLoopTestHarness(ctx)
-  first = await harness.create(SessionId('stagehand-first'), { provider: 'fixture', model: 'structured' })
-  second = await harness.create(SessionId('stagehand-second'), { provider: 'fixture', model: 'structured' })
+  first = await harness.create(brandString<SessionId>('stagehand-first'), { provider: 'fixture', model: 'structured' })
+  second = await harness.create(brandString<SessionId>('stagehand-second'), { provider: 'fixture', model: 'structured' })
 })
 
 afterEach(async () => { await ctx.fiber.dispose() })
 
 function execute(agent: Agent, suffix: string, args: unknown, signal = new AbortController().signal) {
-  return executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`test-${suffix}`), signal })
+  return executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: brandString<ToolCallId>(`test-${suffix}`), signal })
 }
 
 it('lazily launches distinct browsers and preserves each Session tab state', async () => {
@@ -149,9 +150,9 @@ it('uses its independent model for actions, observations, and a caller-selected 
 it('refuses unavailable tabs and calls without an exact live Agent', async () => {
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
   expect((await execute(first, 'navigate', { url: 'https://example.com', pageId: 'missing' })).isError).toBe(true)
-  expect((await executeToolFixture(ctx, { name: 'stagehand_tabs', arguments: { action: 'list' }, callId: ToolCallId('agentless'), signal: new AbortController().signal })).isError).toBe(true)
+  expect((await executeToolFixture(ctx, { name: 'stagehand_tabs', arguments: { action: 'list' }, callId: brandString<ToolCallId>('agentless'), signal: new AbortController().signal })).isError).toBe(true)
   ctx.tools.register({ name: 'unrelated', description: 'An independent tool.', parameters: { type: 'object' }, output: { schema: { type: 'boolean' }, render: () => [{ type: 'text', text: 'independent' }] }, execute: async () => true })
-  const unrelated = await executeToolFixture(ctx, { agent: first, name: 'unrelated', arguments: {}, callId: ToolCallId('unrelated'), signal: new AbortController().signal })
+  const unrelated = await executeToolFixture(ctx, { agent: first, name: 'unrelated', arguments: {}, callId: brandString<ToolCallId>('unrelated'), signal: new AbortController().signal })
   expect(unrelated.isError).toBe(false)
 })
 
@@ -182,7 +183,7 @@ it('holds the provider reservation until browser cleanup settles', async () => {
   try {
     await started.promise
     expect(ctx.tools.schemas()).toEqual([])
-    expect(() => ctx.browserUse.register(BrowserUseProviderName('other'))).toThrow('already registered')
+    expect(() => ctx.browserUse.register(brandString<BrowserUseProviderName>('other'))).toThrow('already registered')
   } finally {
     settle.resolve()
     await closing
@@ -286,13 +287,13 @@ it.each([false, true])('disposes a real AgentHandle while its screenshot waits, 
   fixture.browserClose = async () => { stopped.resolve() }
   class ScreenshotModel extends LlmAdapter {
     async * stream(): AsyncIterable<StreamChunk> {
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('blocked-screenshot'), name: 'stagehand_screenshot', arguments: '{}' } }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('blocked-screenshot'), name: 'stagehand_screenshot', arguments: '{}' } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
     }
   }
   ctx.llm.registerAdapter(['screenshot'], new ScreenshotModel())
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
-  const owner = await ctx.agents.create({ sessionId: SessionId('screenshot-disposal'), agentOptions: { provider: 'screenshot', model: 'fixture' } })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('screenshot-disposal'), agentOptions: { provider: 'screenshot', model: 'fixture' } })
   try {
     owner.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Take a screenshot.' }], source: { kind: 'user' } }))
     await entered.promise

@@ -1,9 +1,10 @@
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import LlmRuntime, { createUserMessage, LlmAdapter, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ReasoningEffortId, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService, { type SessionTitleProvider } from '@deepseek-ai/dsh-session-title'
 import * as providerPlugin from '@deepseek-ai/dsh-session-title-first-prompt-llm'
@@ -27,7 +28,7 @@ class RecordingAdapter extends LlmAdapter {
       name: model,
       ...efforts === undefined || floor === undefined
         ? {}
-        : { reasoning: { efforts: efforts.map(id => ({ id: ReasoningEffortId(id), name: id })) } },
+        : { reasoning: { efforts: efforts.map(id => ({ id: brandString<ReasoningEffortId>(id), name: id })) } },
     })
   }
 
@@ -104,7 +105,7 @@ function textOf(options: GenerateOptions | undefined): string {
 describe('first-prompt LLM title provider', () => {
   it('registers itself and always selects only the first eligible human message, including refresh', async () => {
     const { ctx, adapter } = await harness()
-    const session = ctx.sessions.create(SessionId('first-plugin'))
+    const session = ctx.sessions.create(brandString<SessionId>('first-plugin'))
     session.append('turn/start', { turn: 1 })
     const first = appendHumanPrompt(session, 'first input')
     await settle()
@@ -136,7 +137,7 @@ describe('first-prompt LLM title provider', () => {
 
   it('frames the first message as data and logs the exact system and input', async () => {
     const { ctx, adapter } = await harness()
-    const session = ctx.sessions.create(SessionId('first-logging'))
+    const session = ctx.sessions.create(brandString<SessionId>('first-logging'))
     const first = appendHumanPrompt(session, 'Room "quote" and 番茄')
 
     await ctx.sessionTitle.refresh(session)
@@ -162,12 +163,12 @@ describe('first-prompt LLM title provider', () => {
 
   it('selects the route least supported reasoning effort for its own model calls', async () => {
     const { ctx, adapter } = await harness(FIRST_TITLE_SCRIPT, ['low', 'high'])
-    const session = ctx.sessions.create(SessionId('first-floor-effort'))
+    const session = ctx.sessions.create(brandString<SessionId>('first-floor-effort'))
     appendHumanPrompt(session, 'first input')
 
     await ctx.sessionTitle.refresh(session)
 
-    expect(adapter.requests[0]?.reasoningEffort).toBe(ReasoningEffortId('low'))
+    expect(adapter.requests[0]?.reasoningEffort).toBe(brandString<ReasoningEffortId>('low'))
   })
 
   it.each([
@@ -184,7 +185,7 @@ describe('first-prompt LLM title provider', () => {
       ...deltas.map((text): StreamChunk => ({ type: 'text-delta', index: 0, text })),
       { type: 'finish', reason: { kind: 'stop' } },
     ])
-    const session = ctx.sessions.create(SessionId(`first-parse-${title}`))
+    const session = ctx.sessions.create(brandString<SessionId>(`first-parse-${title}`))
     appendHumanPrompt(session, 'first input')
 
     await ctx.sessionTitle.refresh(session)
@@ -198,7 +199,7 @@ describe('first-prompt LLM title provider', () => {
       { type: 'text-delta', index: 0, text: 'Title from text' },
       { type: 'finish', reason: { kind: 'tool-calls' } },
     ])
-    const toolCallsSession = toolCalls.ctx.sessions.create(SessionId('first-tool-calls-finish'))
+    const toolCallsSession = toolCalls.ctx.sessions.create(brandString<SessionId>('first-tool-calls-finish'))
     appendHumanPrompt(toolCallsSession, 'first input')
     await expect(toolCalls.ctx.sessionTitle.refresh(toolCallsSession)).rejects.toThrow(/output must contain text only/)
 
@@ -207,7 +208,7 @@ describe('first-prompt LLM title provider', () => {
       { type: 'text-delta', index: 0, text: 'Partial title' },
       { type: 'finish', reason: { kind: 'max-tokens' } },
     ])
-    const maxTokensSession = maxTokens.ctx.sessions.create(SessionId('first-max-tokens-finish'))
+    const maxTokensSession = maxTokens.ctx.sessions.create(brandString<SessionId>('first-max-tokens-finish'))
     appendHumanPrompt(maxTokensSession, 'first input')
     await expect(maxTokens.ctx.sessionTitle.refresh(maxTokensSession)).rejects.toThrow(/reached maxOutputTokens/)
   })
@@ -215,10 +216,10 @@ describe('first-prompt LLM title provider', () => {
   it('rejects tool-call blocks and a successful response with no text', async () => {
     const tool = await harness([
       { type: 'block-start', index: 0, blockType: 'tool-call' },
-      { type: 'tool-call-delta', index: 0, id: ToolCallId('title-tool'), name: 'unexpected', argumentsDelta: '{}' },
+      { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('title-tool'), name: 'unexpected', argumentsDelta: '{}' },
       { type: 'finish', reason: { kind: 'stop' } },
     ])
-    const toolSession = tool.ctx.sessions.create(SessionId('first-tool'))
+    const toolSession = tool.ctx.sessions.create(brandString<SessionId>('first-tool'))
     appendHumanPrompt(toolSession, 'first input')
     await expect(tool.ctx.sessionTitle.refresh(toolSession)).rejects.toThrow(/output must contain text only/)
 
@@ -227,7 +228,7 @@ describe('first-prompt LLM title provider', () => {
       { type: 'reasoning-delta', index: 0, text: 'no final title' },
       { type: 'finish', reason: { kind: 'stop' } },
     ])
-    const reasoningSession = reasoning.ctx.sessions.create(SessionId('first-reasoning'))
+    const reasoningSession = reasoning.ctx.sessions.create(brandString<SessionId>('first-reasoning'))
     appendHumanPrompt(reasoningSession, 'first input')
     await expect(reasoning.ctx.sessionTitle.refresh(reasoningSession)).rejects.toThrow(/produced no text/)
   })
@@ -261,7 +262,7 @@ describe('first-prompt LLM title provider', () => {
     }
     await ctx.plugin(providerPlugin, LLM_CONFIG)
     await expect(registered!.generate({
-      session: Session.create(SessionId('empty-first-provider')),
+      session: Session.create(brandString<SessionId>('empty-first-provider')),
       messages: [],
       signal: new AbortController().signal,
     })).rejects.toThrow(/requires one human message/)

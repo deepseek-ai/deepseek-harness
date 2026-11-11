@@ -6,15 +6,16 @@ import { execa } from 'execa'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import SessionStore, {
-  SessionId, TOOL_OUTCOME_UNKNOWN, interruptedTurnClosers,
+  type SessionId, TOOL_OUTCOME_UNKNOWN, interruptedTurnClosers,
   type SessionEvent,
 } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 const childScript = fileURLToPath(new URL('./fixtures/crash-child.ts', import.meta.url))
 const tsxLoader = fileURLToPath(import.meta.resolve('tsx'))
-const sessionId = SessionId('semantic-checkpoint-crash')
+const sessionId = brandString<SessionId>('semantic-checkpoint-crash')
 const roots: string[] = []
 const CHILD_FAILPOINT_TIMEOUT_MS = 30_000
 

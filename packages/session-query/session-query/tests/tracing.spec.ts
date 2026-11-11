@@ -1,13 +1,14 @@
 import { createUserMessage, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionEvent, SessionHeader, SessionId as SessionIdType } from '@deepseek-ai/dsh-session'
 import SessionPersistence, {
   SessionPersistenceNotFoundError,
-  SessionPersistenceRevision,
+  type SessionPersistenceRevision,
   SessionReadOnlyError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type {
@@ -33,7 +34,7 @@ function mutableHeader(value: SessionHeader): MutableSessionHeader {
 }
 
 function header(id: string, createdAt = 1, extra: Partial<SessionHeader> = {}): SessionHeader {
-  return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt, isSeeded: false, ...extra }
+  return { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), createdAt, isSeeded: false, ...extra }
 }
 
 function appendEvent(seq: number, sources?: readonly number[]): SessionEvent {
@@ -118,7 +119,7 @@ class TracePersistence extends SessionPersistence {
     if (entry === undefined) return Promise.resolve(undefined)
     return Promise.resolve({
       header: structuredClone(entry.meta),
-      revision: SessionPersistenceRevision(`events:${entry.events.length}`),
+      revision: brandString<SessionPersistenceRevision>(`events:${entry.events.length}`),
     })
   }
 
@@ -127,7 +128,7 @@ class TracePersistence extends SessionPersistence {
     if (TracePersistence.listFailure !== undefined) return Promise.reject(TracePersistence.listFailure)
     const result = [...TracePersistence.entries.values()].map(entry => ({
       header: structuredClone(entry.meta),
-      revision: SessionPersistenceRevision(`events:${entry.events.length}`),
+      revision: brandString<SessionPersistenceRevision>(`events:${entry.events.length}`),
     }))
     TracePersistence.afterList?.()
     return Promise.resolve(result)
@@ -197,19 +198,19 @@ function appendTraceEvents(session: Session): void {
 describe('session lineage tracing', () => {
   it('returns complete ancestry, deterministic descendant trees, and detached records', async () => {
     const ctx = await queryContext()
-    const root = ctx.sessions.create(SessionId('root'), { meta: { createdAt: 0 } })
-    const parent = ctx.sessions.create(SessionId('parent'), {
+    const root = ctx.sessions.create(brandString<SessionId>('root'), { meta: { createdAt: 0 } })
+    const parent = ctx.sessions.create(brandString<SessionId>('parent'), {
       meta: { createdAt: 1, parentSession: root.id },
     })
-    const target = ctx.sessions.create(SessionId('target'), {
+    const target = ctx.sessions.create(brandString<SessionId>('target'), {
       meta: { createdAt: 2, parentSession: parent.id },
     })
-    ctx.sessions.create(SessionId('b'), { meta: { createdAt: 4, parentSession: target.id } })
-    const childA = ctx.sessions.create(SessionId('a'), {
+    ctx.sessions.create(brandString<SessionId>('b'), { meta: { createdAt: 4, parentSession: target.id } })
+    const childA = ctx.sessions.create(brandString<SessionId>('a'), {
       meta: { createdAt: 4, parentSession: target.id },
     })
-    ctx.sessions.create(SessionId('older'), { meta: { createdAt: 3, parentSession: target.id } })
-    ctx.sessions.create(SessionId('grandchild'), {
+    ctx.sessions.create(brandString<SessionId>('older'), { meta: { createdAt: 3, parentSession: target.id } })
+    ctx.sessions.create(brandString<SessionId>('grandchild'), {
       meta: { createdAt: 5, parentSession: childA.id },
     })
 
@@ -219,9 +220,9 @@ describe('session lineage tracing', () => {
     expect(trace.ancestors.map(record => record.header.id)).toEqual([parent.id, root.id])
     expect(trace.root.header.id).toBe(root.id)
     expect(trace.descendants.map(node => node.session.header.id))
-      .toEqual([SessionId('older'), SessionId('a'), SessionId('b')])
+      .toEqual([brandString<SessionId>('older'), brandString<SessionId>('a'), brandString<SessionId>('b')])
     expect(trace.descendants[1]?.descendants.map(node => node.session.header.id))
-      .toEqual([SessionId('grandchild')])
+      .toEqual([brandString<SessionId>('grandchild')])
 
     mutableHeader(trace.target.header).createdAt = 99
     mutableHeader(trace.ancestors[0]!.header).createdAt = 99
@@ -235,9 +236,9 @@ describe('session lineage tracing', () => {
 
   it('represents root and unresolved-parent traces explicitly', async () => {
     const ctx = await queryContext()
-    const root = ctx.sessions.create(SessionId('root'), { meta: { createdAt: 1 } })
-    const partial = ctx.sessions.create(SessionId('partial'), {
-      meta: { createdAt: 2, parentSession: SessionId('outside') },
+    const root = ctx.sessions.create(brandString<SessionId>('root'), { meta: { createdAt: 1 } })
+    const partial = ctx.sessions.create(brandString<SessionId>('partial'), {
+      meta: { createdAt: 2, parentSession: brandString<SessionId>('outside') },
     })
 
     await expect(ctx.sessionQuery.traceSession(root.id)).resolves.toMatchObject({
@@ -247,23 +248,23 @@ describe('session lineage tracing', () => {
     })
     await expect(ctx.sessionQuery.traceSession(partial.id)).resolves.toMatchObject({
       complete: false,
-      unresolvedParentId: SessionId('outside'),
+      unresolvedParentId: brandString<SessionId>('outside'),
       ancestors: [],
     })
   })
 
   it('rejects target-connected cycles and missing targets', async () => {
     const ctx = await queryContext()
-    ctx.sessions.create(SessionId('a'), {
-      meta: { createdAt: 1, parentSession: SessionId('b') },
+    ctx.sessions.create(brandString<SessionId>('a'), {
+      meta: { createdAt: 1, parentSession: brandString<SessionId>('b') },
     })
-    ctx.sessions.create(SessionId('b'), {
-      meta: { createdAt: 2, parentSession: SessionId('a') },
+    ctx.sessions.create(brandString<SessionId>('b'), {
+      meta: { createdAt: 2, parentSession: brandString<SessionId>('a') },
     })
 
-    await expect(ctx.sessionQuery.traceSession(SessionId('a')))
+    await expect(ctx.sessionQuery.traceSession(brandString<SessionId>('a')))
       .rejects.toThrow(expectCode('SESSION_QUERY_INVALID_LINEAGE'))
-    await expect(ctx.sessionQuery.traceSession(SessionId('missing')))
+    await expect(ctx.sessionQuery.traceSession(brandString<SessionId>('missing')))
       .rejects.toThrow(expectCode('SESSION_QUERY_SESSION_NOT_FOUND'))
   })
 
@@ -287,10 +288,10 @@ describe('session lineage tracing', () => {
 
   it('constructs deeply nested descendants without consuming the JavaScript call stack', async () => {
     const ctx = await queryContext()
-    const root = ctx.sessions.create(SessionId('deep-0'), { meta: { createdAt: 0 } })
+    const root = ctx.sessions.create(brandString<SessionId>('deep-0'), { meta: { createdAt: 0 } })
     let parent = root
     for (let depth = 1; depth < 3_000; depth += 1) {
-      parent = ctx.sessions.create(SessionId(`deep-${depth}`), {
+      parent = ctx.sessions.create(brandString<SessionId>(`deep-${depth}`), {
         meta: { createdAt: depth, parentSession: parent.id },
       })
     }
@@ -300,7 +301,7 @@ describe('session lineage tracing', () => {
     let node = trace.descendants[0]
     for (let depth = 1; depth < 3_000; depth += 1) {
       if (node === undefined) throw new Error(`lineage ended before depth ${depth}`)
-      if (depth === 2_999) expect(node.session.header.id).toBe(SessionId('deep-2999'))
+      if (depth === 2_999) expect(node.session.header.id).toBe(brandString<SessionId>('deep-2999'))
       node = node.descendants[0]
     }
     expect(node).toBeUndefined()
@@ -310,7 +311,7 @@ describe('session lineage tracing', () => {
 describe('session event tracing', () => {
   it('returns direct replacement and cited source-event links in their contract order', async () => {
     const ctx = await queryContext()
-    const session = ctx.sessions.create(SessionId('trace'))
+    const session = ctx.sessions.create(brandString<SessionId>('trace'))
     appendTraceEvents(session)
 
     const original = await ctx.sessionQuery.traceEvent({ sessionId: session.id, seq: SessionSeq(3) })
@@ -353,7 +354,7 @@ describe('session event tracing', () => {
 
   it('returns fresh trace arrays and target records', async () => {
     const ctx = await queryContext()
-    const session = ctx.sessions.create(SessionId('detached'))
+    const session = ctx.sessions.create(brandString<SessionId>('detached'))
     appendTraceEvents(session)
 
     const first = await ctx.sessionQuery.traceEvent({ sessionId: session.id, seq: SessionSeq(4) })

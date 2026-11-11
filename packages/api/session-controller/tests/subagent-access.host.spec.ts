@@ -7,7 +7,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
 import type { RemoteAccessBinding } from '@deepseek-ai/dsh-api-remote-access'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { PeerId, PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { createSessionTestController } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface PrincipalMap {
@@ -51,7 +52,7 @@ async function harness() {
   })
   const adapter = new MockAdapter(['hang'])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   const run = await ctx.subagents.startActivation({
     provider: 'test', label: 'access target', delivery: 'caller',
     parent, prompt: [{ type: 'text', text: 'hold' }],

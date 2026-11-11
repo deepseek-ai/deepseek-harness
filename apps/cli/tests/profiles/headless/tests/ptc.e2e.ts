@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createUserMessage, ToolCallId, HarnessError } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId, HarnessError } from '@deepseek-ai/dsh-llm'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -98,7 +99,7 @@ function runCode(
   agent?: Agent,
 ): Promise<ToolExecutionResult> {
   return executeModelToolFixture(harness, {
-    callId: ToolCallId(`keyless-code-${++keylessCall}`),
+    callId: brandString<ToolCallId>(`keyless-code-${++keylessCall}`),
     name: RUN_CODE_NAME,
     arguments: { code, description: 'Run the e2e program' },
     signal,
@@ -299,8 +300,8 @@ describe('PTC mode typed values: keyless real-process contracts', () => {
     await ctx.plugin(ToolCordis)
     const agent = {
       ctx,
-      id: SessionId('ptc-cordis'),
-      session: ctx.sessions.create(SessionId('ptc-cordis'), { meta: { cwd: process.cwd() } }),
+      id: brandString<SessionId>('ptc-cordis'),
+      session: ctx.sessions.create(brandString<SessionId>('ptc-cordis'), { meta: { cwd: process.cwd() } }),
     } as Agent
 
     const value = completion(await runCode(ctx, `
@@ -331,7 +332,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('PTC mode: real model writes a pr
   it('collapses the wire tool list to [run_code], bridges sub-calls, and returns curated output', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-ptc-e2e-'))
     ctx = await ptcModeHarness(workdir)
-    const agent = await ctx.agentLoop.create(SessionId('e2e-ptc'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, { cwd: workdir })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('e2e-ptc'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, { cwd: workdir })
 
     agent.followup(createUserMessage({
       content: [{
@@ -381,7 +382,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('PTC mode: real model writes a pr
     await writeFile(join(workdir, 'pkg/deep/task.txt'), 'Touch this file to discover the nested instructions.\n')
     ctx = await workspacePtcModeHarness()
     const handle = await ctx.agents.create({
-      sessionId: SessionId('e2e-ptc-workspace-session'),
+      sessionId: brandString<SessionId>('e2e-ptc-workspace-session'),
       meta: { cwd: workdir },
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     })

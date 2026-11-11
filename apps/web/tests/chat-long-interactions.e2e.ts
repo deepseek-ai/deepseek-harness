@@ -10,7 +10,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture } from './chat-scroll-fixture.ts'
 import {
   launchWebScaffold,
@@ -20,6 +20,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { conversationContextKey, expandOwningTurnProcess, loadEarlierChatPage, newEnglishPage, saveFailureShot } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const MODE = webSnapshotMode()
 const SESSION_ID = 'chat-long-interactions-e2e'
@@ -174,10 +175,10 @@ describe('web e2e: long Chat interaction contract', () => {
   it.skipIf(MODE === 'record')('keeps heterogeneous rows and their actions bound to exact semantic identities', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-chat-long-interactions'))
     await expect.poll(
-      () => scaffold.ctx.agents.get(SessionId(SESSION_ID)) !== undefined,
+      () => scaffold.ctx.agents.get(brandString<SessionId>(SESSION_ID)) !== undefined,
       { timeout: 10_000 },
     ).toBe(true)
-    const source = scaffold.ctx.agents.get(SessionId(SESSION_ID))
+    const source = scaffold.ctx.agents.get(brandString<SessionId>(SESSION_ID))
     if (source === undefined) throw new Error('seeded long-history agent is not attached')
 
     const toolUserMarker = FIXTURE.markers.user(TOOL_TURN)

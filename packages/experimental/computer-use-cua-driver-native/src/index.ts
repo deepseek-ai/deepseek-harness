@@ -5,7 +5,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
 import type { CuaDriver as NativeDriver } from '@trycua/cua-driver'
@@ -57,7 +58,7 @@ export async function apply(ctx: Context): Promise<void> {
   }, { global: true })
   let ready: Promise<void> = Promise.resolve()
   const dispose = ctx.effect(function* () {
-    yield ctx.computerUse.register(ComputerUseProviderName('cua-driver-native'))
+    yield ctx.computerUse.register(brandString<ComputerUseProviderName>('cua-driver-native'))
     yield async () => {
       lifetime.abort()
       // apply() reports startup failure; teardown still owns its native handle.

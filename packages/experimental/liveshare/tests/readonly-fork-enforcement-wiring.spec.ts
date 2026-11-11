@@ -13,9 +13,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import { FsTargetKey, FsVersion, type FsEditOutcome, type FsTarget, type FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import type { FsTargetKey, FsVersion, FsEditOutcome, FsTarget, FsWriteOutcome } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { PreToolDecision, ToolDefinition } from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   installForkEnforcement,
   installForkEnforcementForAgent,
@@ -115,19 +116,19 @@ const pathOf = (target: FsTarget): string => target.displayPath
 
 /** A host filesystem whose resolution knows one granted root. */
 const fs: ForkEnforcementFs = {
-  resolve: (path: string): Promise<FsTarget> => Promise.resolve({ targetKey: FsTargetKey(path), displayPath: path }),
+  resolve: (path: string): Promise<FsTarget> => Promise.resolve({ targetKey: brandString<FsTargetKey>(path), displayPath: path }),
   contains: (parent: FsTarget, candidate: FsTarget): boolean => pathOf(candidate).startsWith(pathOf(parent)),
   processPath: (target: FsTarget): string => pathOf(target),
   // The write the bounded write tool delegates to once containment holds; the fake writes the candidate itself.
   writeText: (): Promise<FsWriteOutcome> => Promise.resolve({
     operation: 'update' as const,
-    version: FsVersion('fake-next'),
+    version: brandString<FsVersion>('fake-next'),
     before: null,
     after: '',
   }),
   // The edit the bounded edit tool delegates to once containment holds.
   editText: (): Promise<FsEditOutcome> => Promise.resolve({
-    version: FsVersion('fake-edited'),
+    version: brandString<FsVersion>('fake-edited'),
     before: 'old',
     after: 'new',
   }),
@@ -304,9 +305,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks,
@@ -416,9 +417,9 @@ describe('fork enforcement wiring', () => {
       sessionId: 'session-shared',
       context: ctx,
       scope: childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId('session-shared') }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>('session-shared') }),
       fs,
       tools: { get: () => undefined },
       describe: describeTool,
@@ -447,9 +448,9 @@ describe('fork enforcement wiring', () => {
       sessionId: 'session-shared',
       context: ctx,
       scope: childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId('session-shared') }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>('session-shared') }),
       fs,
       tools: { get: () => readDefinition },
       describe: describeTool,
@@ -469,9 +470,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks: await registry(),
@@ -529,9 +530,9 @@ describe('fork enforcement wiring', () => {
       childSessionId: child,
       childContext: ctx,
       childScope,
-      grantedRoot: { targetKey: FsTargetKey(grantedRoot), displayPath: grantedRoot },
+      grantedRoot: { targetKey: brandString<FsTargetKey>(grantedRoot), displayPath: grantedRoot },
       cwd: grantedRoot,
-      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: SessionId(child) }),
+      resolvePolicy: () => ({ mode: 'workspace-write', workspaceRoot: grantedRoot, sessionId: brandString<SessionId>(child) }),
       fs,
       tools: trusted,
       forks,

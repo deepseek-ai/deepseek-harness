@@ -2327,7 +2327,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     methods: [
       {
-        signature: 'readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())',
+        signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
         description: 'Changes whenever engine, font, or conversion configuration is replaced.',
         parameters: [],
       },
