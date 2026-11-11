@@ -1,9 +1,7 @@
-/** Managed native compilation and immutable executable publication shared by platform providers. */
-import { constants } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { access, mkdir, readFile } from 'node:fs/promises'
+/** Managed native compilation and platform-owned executable resolution. */
+import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { withFileLock, writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
+import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { SubprocessOutcome, SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 
 /** Compiler invocation and lock shared by preparations using the same scratch files. */
@@ -16,14 +14,6 @@ interface NativeCompilerBuild {
   argv: string[]
   /** Compiler lock target; shared across outputs that write the same intermediate build files. */
   lockPath: string
-}
-
-/** Locations for publishing a standalone executable by content digest. */
-export interface NativeExecutableBuild extends NativeCompilerBuild {
-  outputPath: string
-  executablePath: string
-  retainedDirectory: string
-  binaryName: string
 }
 
 /**
@@ -45,20 +35,19 @@ export async function sourceNativePackage(packageRoot: string, directory: string
 }
 
 /**
- * Run the compiler under its build lock, then publish the binary or resolve the executable from the built application.
- * @param spec - Compiler and resource limits, with standalone binary paths or a callback reading the signed application receipt.
- * @returns Content-addressed runtime path after managed process cleanup.
+ * Run the compiler under its build lock, then resolve the platform-owned executable.
+ * @param spec - Compiler and resource limits, with a callback locating the built executable.
+ * @returns Platform executable path after managed process cleanup.
  */
 export async function buildNativeExecutable(
-  spec: NativeExecutableBuild | (NativeCompilerBuild & { resolveExecutable: () => Promise<string> }),
+  spec: NativeCompilerBuild & { resolveExecutable: () => Promise<string> },
 ): Promise<string> {
   spec.signal.throwIfAborted()
-  if ('executablePath' in spec) await mkdir(dirname(spec.executablePath), { recursive: true })
   await mkdir(dirname(spec.lockPath), { recursive: true })
   const signal = AbortSignal.any([spec.signal, AbortSignal.timeout(spec.timeoutMs)])
   return withFileLock(spec.lockPath, async () => {
     await compileNative(spec, signal)
-    return 'resolveExecutable' in spec ? spec.resolveExecutable() : publishExecutable(spec, signal)
+    return spec.resolveExecutable()
   }, { waitMs: spec.timeoutMs, signal })
 }
 
@@ -79,27 +68,4 @@ async function compileNative(spec: NativeCompilerBuild, signal: AbortSignal): Pr
     const diagnostics = `${handle.collected.stdout?.readFrom(0).text ?? ''}${handle.collected.stderr?.readFrom(0).text ?? ''}`
     throw new Error(`Computer Use native preparation failed (${String(outcome.exitCode)}, ${String(outcome.signal)}): ${diagnostics}`)
   }
-}
-
-async function publishExecutable(spec: NativeExecutableBuild, signal: AbortSignal): Promise<string> {
-  const executable = spec.executablePath
-  const built = await readFile(spec.outputPath)
-  let previous: Buffer | undefined
-  try { previous = await readFile(executable) } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-  signal.throwIfAborted()
-  if (!previous?.equals(built)) await writeFileAtomic(executable, built, { mode: 0o755 })
-  const digest = createHash('sha256').update(built).digest('hex')
-  const runtime = join(spec.retainedDirectory, digest, spec.binaryName)
-  await mkdir(dirname(runtime), { recursive: true })
-  let retained: Buffer | undefined
-  try { retained = await readFile(runtime) } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  }
-  if (retained && !retained.equals(built)) throw new Error('Computer Use retained executable does not match its content digest')
-  signal.throwIfAborted()
-  if (!retained) await writeFileAtomic(runtime, built, { mode: 0o755 })
-  await access(runtime, constants.X_OK)
-  return runtime
 }

@@ -7,10 +7,11 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { apply } from '../src/index.ts'
 import { internals } from '../src/runner-internals.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const originalInternals = { ...internals }
 let ctx: Context | undefined
@@ -62,11 +63,10 @@ describe('headless terminal failures', () => {
     test.ctx.on('agent/error', ({ error }) => { failures.push(error) })
     const waitForTreeWork = vi.fn().mockImplementationOnce((parent: Agent) => {
       const append = parent.session.append.bind(parent.session)
-      const failAppend: typeof parent.session.append = (type, data, ...intent) => {
+      vi.spyOn(parent.session, 'append').mockImplementation((type, data, ...intent) => {
         if (type === failedEvent) throw new Error(`summary ${failedEvent} unavailable`)
-        return append(type, data, ...intent)
-      }
-      vi.spyOn(parent.session, 'append').mockImplementation(failAppend)
+        return Reflect.apply(append, undefined, [type, data, ...intent]) as SessionEvent
+      })
       followup(parent)
       return Promise.resolve(true)
     }).mockResolvedValue(false)
@@ -110,14 +110,13 @@ describe('headless terminal failures', () => {
     const waitForTreeWork = vi.fn().mockImplementationOnce((parent: Agent) => {
       const append = parent.session.append.bind(parent.session)
       let failed = false
-      const failAppend: typeof parent.session.append = (type, data, ...intent) => {
+      vi.spyOn(parent.session, 'append').mockImplementation((type, data, ...intent) => {
         if (!failed && type === failedEvent) {
           failed = true
           throw new Error(`summary ${failedEvent} unavailable`)
         }
-        return append(type, data, ...intent)
-      }
-      vi.spyOn(parent.session, 'append').mockImplementation(failAppend)
+        return Reflect.apply(append, undefined, [type, data, ...intent]) as SessionEvent
+      })
       followup(parent)
       return Promise.resolve(true)
     }).mockImplementationOnce((parent: Agent) => {
@@ -136,7 +135,7 @@ describe('headless terminal failures', () => {
   it('ignores a different Agent failure during root completion', async () => {
     const test = await harness()
     const { agent: other } = await test.ctx.agents.create({
-      sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: brandString<SessionId>('other'), agentOptions: { provider: 'mock', model: 'mock' },
     })
     test.ctx.on('agent/pre-step', ({ agent }, next) => {
       if (agent === other) throw new Error('another Agent failed')

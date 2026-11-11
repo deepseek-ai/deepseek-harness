@@ -8,6 +8,7 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkflowErrorCode } from './index.ts'
 
 /** Identifies one workflow run. */
 export type WorkflowRunId = Branded<'WorkflowRunId'>
@@ -77,6 +78,11 @@ export interface WorkflowResult {
   /** The failure message (present iff `stopReason` is not `completed`). */
   error?: string
   /**
+   * The code of the fatal {@link WorkflowError} that ended an `error` run;
+   * absent when the script's own exception or the engine runtime ended it.
+   */
+  errorCode?: WorkflowErrorCode
+  /**
    * How many `agent()` calls the run accepted over its whole lifetime. On a
    * graceful settlement this is the script-side count (calls still queued for
    * a concurrency slot included); on a termination path (cancellation or
@@ -126,6 +132,8 @@ export interface WorkflowResultInfo {
   stopReason: WorkflowStopReason
   /** The failure message (present iff `stopReason` is not `completed`). */
   error?: string
+  /** The fatal code that ended an `error` run (see {@link WorkflowResult.errorCode}). */
+  errorCode?: WorkflowErrorCode
   /** How many `agent()` calls the run accepted (see {@link WorkflowResult.agentsStarted}). */
   agentsStarted: number
 }

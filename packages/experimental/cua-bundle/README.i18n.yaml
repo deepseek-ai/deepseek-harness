@@ -3,44 +3,44 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/cua-bundle/README.md
 /:
-  en: cc518dcd97629a96
-  zh: 465e999011282dc3
+  en: 0df5d6f2b9e2ac15
+  zh: d0a9bd1f4e172d25
 /deepseek-ai-dsh-cua-bundle:
   en: 9084fb48d0f6489c
   zh: ce692972d91cf663
 /deepseek-ai-dsh-cua-bundle/summary:
-  en: 0d93f44a8ce7404c
-  zh: 6a73ed42d0efc9ea
+  en: 1ce2746fdcf7af3a
+  zh: 5552393694e233b2
 /deepseek-ai-dsh-cua-bundle/table-of-contents:
   en: b563e4ec4727d0de
   zh: d0228da978238e05
 /deepseek-ai-dsh-cua-bundle/use-this-package:
-  en: 5c025a58990bb2eb
-  zh: c3d1280ccbdfe214
+  en: efdd20fb9ae2bdb6
+  zh: 5b573ae0136e8ade
 /deepseek-ai-dsh-cua-bundle/understand-the-implementation:
-  en: b1011db52cfc17cd
-  zh: 6fa8798fedc5c0b6
+  en: acb42fb7b181194b
+  zh: 6961f4cb732560e9
 /deepseek-ai-dsh-cua-bundle/further-exploration:
   en: 9f15d56b5b16e1ca
   zh: 75eb08e8828c8877
 /deepseek-ai-dsh-cua-bundle/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions:
-  en: e8f11f45b375771e
-  zh: e8f11f45b375771e
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/what-the-model-sees:
-  en: 591af735d1eb92f6
-  zh: 3632bffa33c77b28
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/token-effect:
-  en: e8de232e96220fe7
-  zh: 5c791307e2123667
-/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-in-ptc-sessions/kv-cache-effect:
-  en: 417c40acd93df532
-  zh: 69cc5cf7140c75a9
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-across-presets:
+  en: b59f3023a8494477
+  zh: 72f91459a6b94e0a
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-across-presets/what-the-model-sees:
+  en: 77980b01353c73e4
+  zh: 591a21158fc5d094
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-across-presets/token-effect:
+  en: dd5821cb31405880
+  zh: d3b529cee8233dbf
+/deepseek-ai-dsh-cua-bundle/model-experience/computer-use-across-presets/kv-cache-effect:
+  en: f818723a618d1917
+  zh: 362d5d51d05e56b1
 /deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work:
-  en: 559776e398bb7c47
-  zh: 27adfd2cacad1ee6
+  en: df1da8366cdabf92
+  zh: 62645b3f849357d6
 /deepseek-ai-dsh-cua-bundle/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: ce96645b3e75874e

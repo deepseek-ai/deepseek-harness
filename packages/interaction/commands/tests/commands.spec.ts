@@ -3,8 +3,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import CommandRuntime, { CommandDefinitionId, parseCommand, type CommandDefinition } from '@deepseek-ai/dsh-commands'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import CommandRuntime, { type CommandDefinitionId, parseCommand, type CommandDefinition } from '@deepseek-ai/dsh-commands'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 
 function command(name: string, text = `ran:${name}`): CommandDefinition {
@@ -24,7 +25,7 @@ async function mount(): Promise<Context> {
 
 /** Mint a scope whose key is a live agent (real session: the executor logs lifecycle events on it). */
 async function mintAgentScope(ctx: Context, name: string): Promise<{ scope: Scope; agent: Agent }> {
-  const session = ctx.sessions.create(SessionId(name))
+  const session = ctx.sessions.create(brandString<SessionId>(name))
   const agent = { id: session.id, session } as Agent
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) }, { inject: ['commands'] }))
@@ -58,7 +59,7 @@ describe('CommandRuntime', () => {
     const ctx = await mount()
     const { agent } = await mintAgentScope(ctx, 'a')
     const definition: CommandDefinition = {
-      definitionId: CommandDefinitionId('example/inspect'),
+      definitionId: brandString<CommandDefinitionId>('example/inspect'),
       name: 'inspect',
       description: 'Inspect state',
       input: { hint: '<target>' },
@@ -68,7 +69,7 @@ describe('CommandRuntime', () => {
 
     const listed = ctx.commands.list(agent)
     expect(listed).toEqual([{
-      definitionId: CommandDefinitionId('example/inspect'),
+      definitionId: brandString<CommandDefinitionId>('example/inspect'),
       name: 'inspect',
       description: 'Inspect state',
       input: { hint: '<target>' },
@@ -76,7 +77,7 @@ describe('CommandRuntime', () => {
     expect(Object.isFrozen(listed)).toBe(true)
     expect(Object.isFrozen(listed[0])).toBe(true)
     expect(Object.isFrozen(listed[0]?.input)).toBe(true)
-    expect(ctx.commands.find(agent, 'inspect')).toMatchObject({ name: 'inspect', definitionId: CommandDefinitionId('example/inspect') })
+    expect(ctx.commands.find(agent, 'inspect')).toMatchObject({ name: 'inspect', definitionId: brandString<CommandDefinitionId>('example/inspect') })
     expect(ctx.commands.find(agent, 'missing')).toBeUndefined()
   })
 
@@ -93,7 +94,7 @@ describe('CommandRuntime', () => {
     const ctx = await mount()
     const { scope, agent } = await mintAgentScope(ctx, 'a')
     const other = { id: 'other' as SessionId } as Agent
-    ctx.commands.register({ ...command('shared', 'global'), definitionId: CommandDefinitionId('example/shared') })
+    ctx.commands.register({ ...command('shared', 'global'), definitionId: brandString<CommandDefinitionId>('example/shared') })
     scope.ctx.commands.register(command('shared', 'scoped'))
 
     expect(ctx.commands.list(agent).map(item => item.name)).toEqual(['shared'])

@@ -2,7 +2,8 @@
 .root, .thread { box-sizing: border-box; width: calc(100% - 20px); max-width: 680px; margin: 10px; padding: 12px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-primary); font: var(--dsw-font-xs-13); font-family: Inter, var(--dsw-font-family); white-space: normal; }
 .root { background: var(--dsw-alias-bg-layer-2); border-radius: var(--dsw-radius-lg); }
 .root:focus-within { border-color: var(--dsw-alias-border-l4); }
-.root[data-split][data-side="R"], .thread[data-split][data-side="R"] { margin-inline-start: clamp(10px, calc(100% - 700px), calc(50% + 10px)); }
+/* Side by side, a comment fills its side's cell under the code instead of the row's width. */
+[data-forge-comments] > .root, [data-forge-comments] > .thread { width: auto; max-width: none; margin: 0; }
 .title { margin-bottom: 12px; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 /* Fixed-size textarea layout stays local during typing; native resizing can still change its outer height. */
 .input { display: block; box-sizing: border-box; width: 100%; height: 88px; min-height: 88px; contain: strict; padding: 10px 12px; resize: vertical; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: var(--dsw-radius-md); outline: none; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-primary); font: inherit; }

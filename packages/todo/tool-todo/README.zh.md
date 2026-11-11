@@ -135,7 +135,7 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 
 #### 模型看到什么
 
-每次 assistant 工具调用都会在参数中保留整个替换列表。成功时原样返回 `Updated todo list: <pending> pending, <inProgress> in progress, <completed> completed.`。稳定失败文本为 ``Error: invalid todo: `content` must be a non-empty string``、`Error: invalid todos: duplicate content "<content>"`、`Error: todo_write requires an owning agent session`，以及——仅在部署设置 `allowParallelInProgress: false` 时——`Error: invalid todos: at most one task may be in_progress (got <n>)`。完整的 `todo/write` 会话事件是 UI 与回放状态，而非第二条模型消息。
+每次 assistant 工具调用都会在参数中保留整个替换列表。成功时原样返回 `Updated todo list: <pending> pending, <inProgress> in progress, <completed> completed.`。稳定失败文本为 `Error: invalid arguments: todos[<i>].content must be a non-empty string`、`Error: invalid arguments: todos[<i>].content duplicates "<content>"`，以及——仅在部署设置 `allowParallelInProgress: false` 时——`Error: invalid arguments: at most one task may be in_progress (got <n>)`，均为 `ToolArgsError` `INVALID_ARGS`；另有 `ToolContextUnavailableError` `TOOL_CONTEXT_UNAVAILABLE` 的 `Error: todo_write requires an owning agent session`。完整的 `todo/write` 会话事件是 UI 与回放状态，而非第二条模型消息。
 
 #### Token 影响
 

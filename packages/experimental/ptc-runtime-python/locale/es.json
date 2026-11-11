@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Tiempo de ejecución de Python PTC",
-    "description": "Ejecute código de llamada de herramientas programáticas en subprocesos CPython."
-  }
-}

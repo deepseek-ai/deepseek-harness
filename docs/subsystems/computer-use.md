@@ -4,9 +4,9 @@ English | [中文](computer-use.zh.md)
 
 Computer use lets a model observe and operate the local desktop through a configured provider. The shared DSH capability is called **computer use**; **Cua Driver** names the upstream implementation.
 
-[Computer Use](../../packages/experimental/cua-bundle/README.md) provides an optional experimental switch for macOS CUA permission setup.
+[Computer Use](../../packages/experimental/cua-bundle/README.md) is an optional experimental bundle for macOS and Windows.
 
-The [`macOS CUA provider`](../../packages/experimental/cua-macos/README.md) uses the [shared CUA objects and executor](../../packages/experimental/cua/README.md), which enforce application consent through User Questions and profile configuration.
+Both native providers use the [shared CUA library](../../packages/experimental/cua/README.md#use-this-package) to check configured and saved application grants. When a decision is needed, the library asks the user through User Questions.
 
 The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit system requests, and application revocation. Its [permission page](../../packages/experimental/cua/README.md) projects these controls; app/window operations enforce the provider's consent policy before dispatch.
 
@@ -14,21 +14,23 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 |---|---|
 | `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
-| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `win32`, with helper process identity. macOS includes permission checks, parent identity and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status. |
+| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `windows`, with the helper’s name and path when available. macOS includes permission checks, numeric helper and parent PIDs, and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status, and omits the helper PID. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
 
 The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
 
 ## Choose a provider
 
-Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. Both Cua Driver providers are experimental public npm packages and require explicit activation.
+Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. The Computer Use bundle selects the native provider for the host platform. Custom compositions can also mount a provider directly.
 
 | Provider | Runtime |
 |---|---|
+| [macOS CUA](../../packages/experimental/cua-macos/README.md) | Swift helper using macOS Accessibility |
+| [Windows CUA](../../packages/experimental/cua-windows/README.md) | .NET helper using Windows UI Automation |
 | [Cua Driver MCP](../../packages/experimental/computer-use-cua-driver-mcp/README.md) | An already installed `cua-driver` executable connected through MCP |
 | [Cua Driver native](../../packages/experimental/computer-use-cua-driver-native/README.md) | The platform-native runtime installed with the npm dependency |
 
-Each provider supplies its upstream tool catalog. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
+The two Cua Driver providers are public experimental npm packages. Mount one explicitly to expose its upstream tool catalog. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
 
 ## Lifetime and desktop sharing
 

@@ -1,6 +1,6 @@
 /** Chat-owned Slot declarations and composed component props. */
 import type { RefObject } from 'react'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
@@ -347,7 +347,10 @@ export interface ChatViewInjected {
   /** Open one HTTP(S) message link at the selected destination, using an external tab if Sidebar Browser is unavailable. */
   openExternalLink: (url: string) => void
   openFile: (path: string, options?: OpenFileOptions) => Promise<void>
+  /** Prepare one older page without publishing it. */
   loadOlder: () => void
+  /** Consume the prepared page synchronously; false when none is ready. */
+  consumeOlder: () => boolean
   /** Jump loader: page history back through seq; resolves when the window covers it. */
   loadThrough: (seq: SessionSeq) => Promise<void>
   loadImage: MessageImageLoader

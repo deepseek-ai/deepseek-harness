@@ -8,7 +8,9 @@ import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { scheduleDomain } from '../src/storage.ts'
-import { ScheduleId, createAtScheduleRecord } from '../src/domain.ts'
+import { createAtScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -32,7 +34,7 @@ it('refuses an array-shaped tables map instead of opening an empty task catalog'
   const path = join(root, 'schedule.json')
   const task = {
     sessionId: 'session-1',
-    record: createAtScheduleRecord(ScheduleId('kept'), 'Keep me', '2099-01-01T00:00:00.000Z', 0, 'Keep me'),
+    record: createAtScheduleRecord(brandString<ScheduleId>('kept'), 'Keep me', '2099-01-01T00:00:00.000Z', 0, 'Keep me'),
     status: 'active',
   }
   // An array is `typeof 'object'`: an empty-domain read would let the first

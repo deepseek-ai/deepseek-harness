@@ -1,0 +1,45 @@
+- banner:
+  - navigation "Session hierarchy": Use cua_run_code to select test.fixture,
+  - text: Standard mode
+  - button "More actions"
+  - button "Open right sidebar"
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+  - button "More conversation views"
+- text: Use cua_run_code to select test.fixture, retain its application and window objects, click Increment, and capture the window. In a second call reuse those objects and a retained counter, increment again, and report the observed count and available program tools. {{clock}}
+- button "Copy"
+- status: Completed
+- button "Completed in {{duration}}" [expanded]
+- button "Called tools and ran code" [expanded]
+- button "Context injection runtime-context"
+- button "Context injection skill-catalog"
+- button "Context injection time-context"
+- button "Code Select and capture the fixture window" [expanded]
+- text: typescript
+- button "Wrap lines" [pressed]
+- button "Copy"
+- code: "globalThis.visits = 1; var app = await cua.getApp(\"test.fixture\"); var win = await app.getWindow('7'); await win.getAccessibilityTree(); await win.click(\"0\"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId })); inspect(screenshot)"
+- text: "OUT {\"visits\":1,\"bindings\":[\"cua\"],\"app\":\"fixture-app\",\"window\":\"7\"} sha256:999f1d1527ee7e79266f16add5430fff76b1225d742464a5b1ff1f02971bb8ee (1x1px, 90 bytes)"
+- button "Inspect"
+- button "Tool call cua · getCapabilities"
+- button "Tool call cua · getApp"
+- button "Tool call cua · getState"
+- button "Tool call cua · click"
+- button "Tool call cua · screenshot"
+- button "Code Reuse the retained application and window"
+- button "Tool call cua · getState"
+- button "Tool call cua · click"
+- button "Tool call cua · getState"
+- paragraph: "The retained application and window report Count: 2. The counter persisted across calls, and the program exposes only tools.cua. The screenshot was attached after the first call."
+- button "Copy"
+- button "Good response"
+- button "Bad response"
+- button "Branch into a new conversation"
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash-Vision-Exp, reasoning effort high": DeepSeek-V4-Flash-Vision-Exp high
+- button "Send message" [disabled]
+- button "1 turns 3 steps"

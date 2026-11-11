@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import SessionStore from '@deepseek-ai/dsh-session'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { localDragResource } from '../src/file-drag.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-host-drag-'))
@@ -17,7 +18,7 @@ async function fixture() {
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(SessionStore)
   ctx.provide('sandboxPolicy', { workspaceRoot: root } as never)
-  const id = SessionId('file-drag-test')
+  const id = brandString<SessionId>('file-drag-test')
   ctx.sessions.create(id, { meta: { cwd: root, origin: 'subagent' } })
   const path = join(root, '报告.pdf')
   const bytes = Buffer.from('%PDF-1.4\n原始内容\n%%EOF')

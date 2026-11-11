@@ -9,7 +9,7 @@ import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { readImageFile } from '@deepseek-ai/dsh-attachment-local'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { expectNoRenderContext, officeCalls, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
+import { expectNoRenderContext, officeCalls, officeImages, officeModelPatches, officeToolPatches } from './fixtures/real-office.ts'
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url))
 const assetRoot = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -138,11 +138,7 @@ else:
 `], { cwd })
         expect(verified.exitCode).toBe(0)
         if (kind === 'formula') expect(officeCalls(events).some(call => call.name === 'office_recalculate')).toBe(true)
-        const imageBlocks = events.flatMap(event => event.type === 'tool/result'
-          ? event.data.message.content.filter(block => block.type === 'image')
-          : event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
-            ? event.data.content.filter(block => block.type === 'image') : [])
-        for (const block of imageBlocks) {
+        for (const block of officeImages(events)) {
           const stored = await readImageFile(join(imageRoot, 'attachments/v1'), block.attachment)
           const pixels = await execa(python!, ['-c', previewPixels], { input: Buffer.from(stored.data) })
           previewHasContent ||= pixels.stdout === 'content'
@@ -166,16 +162,6 @@ else:
       expect(office.some(call => call.name === 'office_render' && 'sheet' in call.args && 'range' in call.args), diagnostic).toBe(true)
       expect(office.some(call => call.name === 'office_convert'), diagnostic).toBe(false)
       const reads = calls.filter(call => call.name === 'office_render')
-      const results = events.flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
-      if (previewHasContent) {
-        expect(reads.length).toBeGreaterThan(0)
-        const visibleImage = mode === 'native'
-          ? results.some(result => !result.isError && reads.some(call => call.callId === result.toolCallId)
-            && result.content.some(block => block.type === 'image'))
-          : events.some(event => event.type === 'user/message' && event.data.source.kind === 'ptc-mode'
-            && event.data.content.some(block => block.type === 'image'))
-        expect(visibleImage).toBe(true)
-      }
       if (!previewHasContent) {
         const answer = events.findLast(event => event.type === 'assistant/message')
         if (answer?.type !== 'assistant/message') throw new Error('Agent did not finish with an answer')

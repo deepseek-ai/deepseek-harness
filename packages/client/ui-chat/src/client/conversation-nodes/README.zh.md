@@ -269,7 +269,7 @@ description: "Chat 过程分组与活动摘要的明细业务规则。"
 | `write` | `write` |
 | `edit` | `edit`、`apply_patch` |
 | `commands` | `bash`、`pwsh`、`exec_command`、`write_stdin`，或以 `terminal_` 开头 |
-| `code` | `run_code` |
+| `code` | `run_code`、`cua_run_code` |
 | `webSearch` | `web_search` |
 | `webFetch` | `web_fetch` |
 | `subagents` | `subagent`，或以 `subagent_` 开头 |
@@ -290,7 +290,7 @@ Subagent 工具遵循普通分组边界，不会仅因委派任务就单独成�
 | 后台 subagent 的启动调用已返回工具结果，但子代理仍在运行 | 保留类别次数，但该调用不再参与运行中活动选择；子代理的执行不会维持父组的 subagent 活动状态。 |
 | 工具调用只记录在子 Session 中 | 不纳入父组计数或实时详情；只有实际附在本组成员 `subCalls` 中的调用才递归参与。 |
 
-`run_code` 根调用自身计一次 `code`，已记录的每个 PTC 子调用另按自己的类别计数。不会用叶子调用替代包装调用，也不会把子调用统一归为 `code`。各调用 id 不同时，`run_code → [read, bash, subagent_codex]` 得到 `code=1, read=1, commands=1, subagents=1`，同次数时按此顺序排列。外层 `run_code` 仍在运行时，组的实时类别可以由子调用决定。
+`run_code` 或 `cua_run_code` 根调用自身计一次 `code`，已记录的每个 PTC 子调用另按自己的类别计数。不会用叶子调用替代包装调用，也不会把子调用统一归为 `code`。各调用 id 不同时，`run_code → [read, bash, subagent_codex]` 得到 `code=1, read=1, commands=1, subagents=1`，同次数时按此顺序排列。外层 `run_code` 仍在运行时，组的实时类别可以由子调用决定。
 
 精确名称规则也意味着：记录为 `functions.read`、`mcp.read` 或 `Read` 的名称归 `tools`，`browser_inspect` 归 `search`。`terminal_*` 即使只检查或关闭终端，也按命令规则分类，除非先命中 `_inspect` 规则。
 

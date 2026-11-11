@@ -1,5 +1,5 @@
 ---
-description: "Workspace file service for the web GUI: bounded reads and target-scoped filesystem watches, plus directory listing inside the Session workspace root."
+description: "Workspace file service for the web GUI: bounded reads and target-scoped filesystem watches, plus directory listing and name or path search inside the Session workspace root."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to preview files readable through a Session's filesystem from the web client. It reads UTF-8 text by page, reads bounded byte windows or complete files, resolves related files from a base file's directory, and reports file metadata. Follow changes to a file or a directory's direct entries. File reads and watches may target paths outside the workspace; directory listing and watches remain workspace-scoped. The service exposes no mutation operation.
+Use this package to preview files readable through a Session's filesystem from the web client. It reads UTF-8 text by page, reads bounded byte windows or complete files, resolves related files from a base file's directory, and reports file metadata. Follow changes to a file or a directory's direct entries. Search the workspace for entries by name or relative path. File reads and watches may target paths outside the workspace; directory listing, search, and directory watches remain workspace-scoped. The service exposes no mutation operation.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Use this package to preview files readable through a Session's filesystem from t
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the package beside `dsh-fs`, `dsh-sandbox-policy`, the Session store, and the Typert Gateway; the bundle does so right after the Session Controller. Every method takes the Session identity on the wire, so a Client calls `remote.workspaceFiles.read(sessionId, path, range, signal)`, `stat(sessionId, path, signal)`, `readBytes(sessionId, path, options, signal)`, `list(sessionId, path, signal)`, or `changes(sessionId, path, signal)` and never names a root itself. The Host reads a live Session header or uses persistence `stat` for a cold Session; it does not activate an Agent, read the event body, or borrow a parent Session's root. Session persistence is optional for live reads, but without it a cold Session cannot resolve and the Gateway returns `gateway/lookup-not-found`.
+Mount the package beside `dsh-fs`, `dsh-sandbox-policy`, the Session store, and the Typert Gateway; the bundle does so right after the Session Controller. Every method takes the Session identity on the wire, so a Client calls `remote.workspaceFiles.read(sessionId, path, range, signal)`, `stat(sessionId, path, signal)`, `readBytes(sessionId, path, options, signal)`, `list(sessionId, path, signal)`, `search(sessionId, request, signal)`, or `changes(sessionId, path, signal)` and never names a root itself. The Host reads a live Session header or uses persistence `stat` for a cold Session; it does not activate an Agent, read the event body, or borrow a parent Session's root. Session persistence is optional for live reads, but without it a cold Session cannot resolve and the Gateway returns `gateway/lookup-not-found`.
 
 | Method | Returns | Purpose |
 |---|---|---|
@@ -33,6 +33,7 @@ Mount the package beside `dsh-fs`, `dsh-sandbox-policy`, the Session store, and 
 | `read(path, { offset?, limit? })` | `WorkspaceFileText` = stat + `{ offset, text, lines, eof }` | One window of lines from a UTF-8 text file; `lines` counts them, so one empty line and a page past the end read differently |
 | `readBytes(path, { range?, baseFile? })` | `WorkspaceFileBytes` = stat + `{ offset, data, eof }` | Complete file or bounded byte range as `Uint8Array`; optionally resolve from another file's directory |
 | `list(path)` | `WorkspaceDirectoryListing { path, entries, truncated }` | Direct children of one directory |
+| `search({ query, excludedPaths, includeHidden, respectGitignore })` | `WorkspaceFileSearchResult { matches, truncated, incomplete }` | Entries anywhere in the workspace whose name or relative path contains the query |
 | `changes(path)` | stream of `WorkspaceFileWatchFrame` | Subscription readiness, then invalidations of one file or a directory's direct entries |
 
 ### Addressing and paths
@@ -51,7 +52,16 @@ Pass the required options object as `{}` for a complete file under `maxFileBytes
 
 ### File-read and directory checks
 
-Every operation first uses `lstat` to reject a missing path or the wrong file kind; the file-reading operations also refuse a final symlink, even one pointing back inside the workspace. `list` instead follows a final link — a directory symlink on any platform, including a Windows junction — and requires it to resolve to a directory inside the workspace root, so a linked directory lists like its target; `changes` confines the watched directory the same way. File operations then resolve and read through the composed filesystem without an additional workspace-containment check. The configured page, window, complete-file, and listing caps still apply. Text pages additionally reject invalid UTF-8 and NUL bytes; byte reads do not decode content. An empty read or listing path is a `gateway/bad-request`.
+Every path-taking operation first uses `lstat` to reject a missing path or the wrong file kind; the file-reading operations also refuse a final symlink, even one pointing back inside the workspace. `list` instead follows a final link — a directory symlink on any platform, including a Windows junction — and requires it to resolve to a directory inside the workspace root, so a linked directory lists like its target; `changes` confines the watched directory the same way. File operations then resolve and read through the composed filesystem without an additional workspace-containment check. The configured page, window, complete-file, and listing caps still apply. Text pages additionally reject invalid UTF-8 and NUL bytes; byte reads do not decode content. An empty read or listing path is a `gateway/bad-request`.
+
+<a id="search"></a>
+### Search
+
+`search` trims `query` and refuses an empty result as `gateway/bad-request`. Queries without `/` match names; queries with `/` match `/`-joined workspace-relative paths. Both use case-insensitive substring matching. Matches include files and deduplicated ancestor directories inferred from those files; empty directories are absent. An `excludedPaths` value without `/` excludes that name at every depth; a value with `/` excludes the exact path rooted at the workspace. Glob metacharacters are literal. With `includeHidden` false, hidden files and directories are skipped; VCS metadata is always excluded.
+
+`respectGitignore` uses native ripgrep ignore rules, including its repository detection, nested and parent `.gitignore`, `.git/info/exclude`, global Git excludes and `.ignore`. Disabling it passes `--no-ignore`. The service does not parse Git configuration or apply `core.ignorecase` to ignore matching. `maxFileBytes` does not bound ignore files; read failures follow rg exit semantics.
+
+Each call obtains `subprocess` on demand and runs packaged `rg --files --sort=path`. It considers at most `search.maxEntries` listed files, sorts matches from that bounded set by depth then path, and keeps `search.maxResults`; extra matches set `truncated`. An additional file record detects overflow without contributing matches. Exceeding the file cap terminates rg and sets `incomplete`; rg exit 2 also returns partial results, while exit 1 means no results. File and directory links are neither returned nor followed. Cancellation reaches the subprocess and rejects with the signal reason after cleanup. Missing subprocess, launch/execution failure and timeout all fail with `workspace-file/search-failed`, with the cause explained in the message; no JS traversal fallback exists, and other file operations remain available.
 
 ### The change feed
 
@@ -65,6 +75,11 @@ Every operation first uses `lstat` to reject a missing path or the wrong file ki
 | `maxFileBytes` | `33554432` (32 MiB) | Inclusive complete-file cap for `readBytes` without `range`; larger files fail with `too-large` |
 | `maxLines` | `5000` | Default and largest page size in lines; a larger `limit` is refused |
 | `maxEntries` | `2000` | Cap on returned directory entries; the rest is dropped and reported cut |
+| `search.maxResults` | `512` | Returned match cap; additional matches set `truncated` |
+| `search.maxEntries` | `100000` | Cap on files considered from rg output; an extra file terminates the process and sets `incomplete` |
+| `search.graceMs` | `3000` | Process termination grace in milliseconds |
+| `search.timeoutMs` | `30000` | Search deadline in milliseconds; expiry rejects |
+| `search.stderrMaxBytes` | `65536` | Retained process stderr diagnostic byte cap |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-workspace-files) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -100,7 +115,8 @@ Complete-file reads delegate size enforcement to `fs.readBytes` and return raw b
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `WorkspaceFiles`: the `workspaceFiles` service and Remote namespace, `Config`, the gates, the page cutter, `read`, `readBytes`, `stat`, `list` |
+| [`src/index.ts`](src/index.ts) | `WorkspaceFiles`: the `workspaceFiles` service and Remote namespace, `Config`, the gates, the page cutter, `read`, `readBytes`, `stat`, `list`, `search` |
+| [`src/search.ts`](src/search.ts) | rg arguments, file-ancestor inference, sorting and bounded search |
 | [`src/changes.ts`](src/changes.ts) | `WorkspaceChangeFeed`: target watchers, matching `fs/observed` notifications, and one queue per generation |
 | [`src/types.ts`](src/types.ts) | Wire types and the `RemoteErrorDetailsMap` codes, published as `./types` for Client packages |
 | [`src/client/index.ts`](src/client/index.ts), [`provider.ts`](src/client/provider.ts), [`change-feed.ts`](src/client/change-feed.ts) | Browser plugin, file metadata, and per-target change feeds |
@@ -145,6 +161,7 @@ None; this package neither assembles nor sends a provider request.
 - **Reads are not transactional** — result metadata comes from stat before content is read; a concurrent write can make the reported version and returned contents differ.
 - **Unbounded generation queue** — a `changes` generation buffers operation observations and target invalidations until its consumer pulls; a stalled consumer grows Host memory for the life of the stream.
 - **`maxEntries` bounds the answer, not the listing** — `list` asks `ctx.fs.listDir` for every child and cuts the array afterwards, so a directory far above the cap still costs the Host the whole listing (on `fs-local`, one stat per child); bounding that work needs a limit on the filesystem seam's `listDir`.
+- **Search execution world** — each search starts rg without an index. The subprocess provider must execute the Host-packaged binary and share the filesystem workspace; otherwise search fails, including SSH profiles missing that path. The path prefix read before the file cap can omit shallower matches; `incomplete` reports that limitation.
 - **Dead feeds retain metadata** — after the Host ends `changes` or the stream fails terminally, open values retain their last state until reopened.
 
 <a id="dev-note"></a>

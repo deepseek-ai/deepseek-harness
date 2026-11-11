@@ -6,10 +6,11 @@ import { apply as resourcesApply, inject as resourcesInject } from '@deepseek-ai
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { UseSidebarRightTabInfo } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { documentTabInfoFactory } from '../src/client/document/contract.ts'
 import { apply, MARKDOWN_BODY_ID, markdownDefinition } from '../src/client/markdown/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const runtimes: SlotTestRuntime[] = []
 
@@ -44,7 +45,7 @@ describe('Markdown implementation registration', () => {
     runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
     locale.setLocale('en')
-    const sessionId = SessionId('markdown-registration')
+    const sessionId = brandString<SessionId>('markdown-registration')
     await runtime.sessions.add({ id: sessionId })
     const reference = runtime.sessions.retainFor(runtime.ctx, sessionId)
     await reference.ready

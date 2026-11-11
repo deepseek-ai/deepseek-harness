@@ -10,6 +10,7 @@ import { HarnessError } from '@deepseek-ai/dsh-error'
  * - `JOB_NOT_FOUND` — the job id names no listed job.
  * - `JOB_FOREIGN_SESSION` — the job belongs to another Session.
  * - `JOB_OWNER_NOT_LIVE` — the owning Agent is no longer live.
+ * - `JOB_OWNER_REGISTRY_UNAVAILABLE` — a job names an owner, but the composition has no Agent registry to resolve it.
  * - `JOB_LIMIT_REACHED` — the registry's configured job limit is reached.
  */
 export const JOB_ERROR_CODES = [
@@ -18,6 +19,7 @@ export const JOB_ERROR_CODES = [
   'JOB_NOT_FOUND',
   'JOB_FOREIGN_SESSION',
   'JOB_OWNER_NOT_LIVE',
+  'JOB_OWNER_REGISTRY_UNAVAILABLE',
   'JOB_LIMIT_REACHED',
 ] as const
 
