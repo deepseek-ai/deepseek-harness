@@ -9,13 +9,14 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type {
   ProjectionCheckpoint,
   ProjectionDefinition,
 } from '@deepseek-ai/dsh-session-projection'
 import type { SessionProjectionSummaryExcluded } from '@deepseek-ai/dsh-session-projection/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
@@ -148,7 +149,7 @@ describe('session projection summary keys', () => {
     try {
       await registry.register(keptUnit())
       await registry.register(excludedUnit())
-      const session = ctx.sessions.create(SessionId('summary-cached'), { meta: { cwd: '/workspace' } })
+      const session = ctx.sessions.create(brandString<SessionId>('summary-cached'), { meta: { cwd: '/workspace' } })
       session.append('turn/start', { turn: 1 })
 
       // The derived set is passed as a set: no key-list copy inside the read.
@@ -171,7 +172,7 @@ describe('session projection summary keys', () => {
     try {
       await registry.register(excludedUnit())
       await registry.register(excludedNullableUnit())
-      const session = ctx.sessions.create(SessionId('summary-empty'), { meta: { cwd: '/workspace' } })
+      const session = ctx.sessions.create(brandString<SessionId>('summary-empty'), { meta: { cwd: '/workspace' } })
       session.append('turn/start', { turn: 1 })
 
       expect([...registry.summaryKeys()]).toEqual([])
@@ -191,7 +192,7 @@ describe('session projection summary keys', () => {
     const { ctx, registry } = await mount()
     try {
       await registry.register(excludedNullableUnit())
-      const before = ctx.sessions.create(SessionId('summary-nullable'), { meta: { cwd: '/workspace' } })
+      const before = ctx.sessions.create(brandString<SessionId>('summary-nullable'), { meta: { cwd: '/workspace' } })
       expect(registry.snapshot(before).values['test/summary-excluded-nullable']).toBeNull()
     } finally {
       await ctx.fiber.dispose()
@@ -202,7 +203,7 @@ describe('session projection summary keys', () => {
     const { ctx, registry } = await mount()
     try {
       await registry.register(keptUnit())
-      const session = ctx.sessions.create(SessionId('summary-unmaterialized'), { meta: { cwd: '/workspace' } })
+      const session = ctx.sessions.create(brandString<SessionId>('summary-unmaterialized'), { meta: { cwd: '/workspace' } })
       // oxlint-disable-next-line typescript/no-deprecated -- This case pins the deprecated cached face itself.
       expect(registry.cachedSnapshot(session, registry.summaryKeys())?.values).toEqual({
         'test/summary-kept': null,

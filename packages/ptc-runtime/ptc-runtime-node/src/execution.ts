@@ -9,6 +9,7 @@ import type { ResolvedConfig } from './config.ts'
 import { validateBindings } from './bindings.ts'
 import type { PolicyProcesses } from './policy-processes.ts'
 import { ProgramWorker } from './worker.ts'
+import { quietRuntimeCall } from './environment.ts'
 
 /** Syntax, state retention and model guidance selected during provider construction. */
 export interface ExecutionMode {
@@ -79,9 +80,10 @@ class NodeExecution {
   /**
    * Evaluate in a temporary process or reuse an enabled state owner's process.
    * @param spec - Resolved request; concurrent calls for one owner are rejected.
+   * @param initialization - Type-erased source for new environments, or undefined when none is registered.
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
-  async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+  async run(spec: PtcRunSpec, initialization: string | undefined): Promise<PtcRunResult> {
     if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
     const bindings = validateBindings(spec)
@@ -102,12 +104,12 @@ class NodeExecution {
         ...spec.sandboxPolicy.additionalWritableRoots === undefined
           ? {}
           : { additionalWritableRoots: [...spec.sandboxPolicy.additionalWritableRoots] },
-      }, this.processes, this.mode, owner !== undefined)
+      }, this.processes, this.mode, owner !== undefined, initialization)
       this.workers.add(worker)
       if (owner !== undefined) this.owners.set(owner, worker)
     }
     try { return await worker.run(spec, bindings) } finally {
-      if (owner === undefined && worker.cleanupComplete) this.workers.delete(worker)
+      if (worker.cleanupComplete) this.workers.delete(worker)
     }
   }
 
@@ -125,26 +127,41 @@ class NodeExecution {
   }
 }
 
+/** Erase TypeScript syntax without printing Node's warning for the experimental stripping API, which the host itself uses. */
+function stripTypeScript(source: string): string {
+  return quietRuntimeCall(() => stripTypeScriptTypes(source))
+}
+
 const STRIP_PREFIX = 'async function __dsh_program__() {\n'
 const STRIP_SUFFIX = '\n}'
 const RETAINED_STATE_INSTRUCTIONS = 'Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, output overflow, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Do not redeclare existing let, const, or class names; reuse mutable bindings or choose new names. Await tools and cleanup before returning; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before returning; raw output belongs to the active evaluation.'
+/** Scoped REPL guidance; its output sentence is shared with the other modes. */
+function scopedReplMode(outputInstructions: string): ExecutionMode {
+  return {
+    format: 'scoped-repl',
+    retainsState: true,
+    executionInstructions: 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. ' + outputInstructions + ' The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. Variables, functions, and imported modules remain in memory for this Agent across calls. Each call starts with copies of the top-level bindings left by earlier calls and may declare any of those names again with any keyword. A new declaration applies to this and later calls; functions and still-running code from earlier calls keep the values they captured. Assigning to an earlier name without declaring it, even one declared with const, changes only the copy seen by this and later calls. A let, const, or class declaration cannot read the earlier value of its own name, so let total = total + 1 throws; assign to the name or use a new name instead. A var declaration of an earlier name starts from the earlier value. var declarations become top-level names of the call even inside blocks; other declarations inside blocks stay in their block. Assignments that earlier code makes later, such as from timers, are not visible to later calls; keep shared mutable state in objects. If a call fails before a let, const, class, or var declaration of an existing name finishes, later calls keep that name\'s earlier value. Use await import(...) for modules; require is unavailable, and relative specifiers resolve from the working directory of this environment\'s first call. Direct filesystem access follows the environment\'s launch-time sandbox policy; process.env starts empty. Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, output overflow, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before returning; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before returning; raw output belongs to the active evaluation.',
+    stripTypes: stripTypeScript,
+  }
+}
 
 function resolveMode(config: ResolvedConfig): ExecutionMode {
+  const outputInstructions = 'Use inspect(...values) to display output. Do not use console.'
   switch (config.executionMode) {
     case 'per-call': return {
       format: 'function-body',
       retainsState: false,
-      executionInstructions: 'The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. Emit output with console.log(...) or return a lossless JSON value. Only printed values and the returned value become program output. Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.',
+      executionInstructions: 'The program is the body of an async TypeScript function; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level await and return are supported. ' + outputInstructions + ' Each call runs in a fresh Node process. Node APIs are available through await import(...). Relative paths use the supplied working directory; process.env starts empty. Direct filesystem access follows this execution\'s sandbox policy.',
       stripTypes(program) {
-        const stripped = stripTypeScriptTypes(STRIP_PREFIX + program + STRIP_SUFFIX)
+        const stripped = stripTypeScript(STRIP_PREFIX + program + STRIP_SUFFIX)
         return stripped.slice(STRIP_PREFIX.length, stripped.length - STRIP_SUFFIX.length)
       },
     }
-    case 'persistent-in-memory': return {
+    case 'persistent-in-memory': return config.replScoped ? scopedReplMode(outputInstructions) : {
       format: 'repl',
       retainsState: true,
-      executionInstructions: 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. Only printed values and that final expression become program output. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows the environment\'s launch-time sandbox policy; process.env starts empty. ' + RETAINED_STATE_INSTRUCTIONS,
-      stripTypes: stripTypeScriptTypes,
+      executionInstructions: 'The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. ' + outputInstructions + ' Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows the environment\'s launch-time sandbox policy; process.env starts empty. ' + RETAINED_STATE_INSTRUCTIONS,
+      stripTypes: stripTypeScript,
     }
     case 'vm-script': {
       const lifetime = config.scriptPersistence
@@ -161,8 +178,8 @@ function resolveMode(config: ResolvedConfig): ExecutionMode {
       return {
         format: 'script',
         retainsState: config.scriptPersistence,
-        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Emit output with console.log(...) or a final lossless JSON expression. The final expression is awaited if it is a Promise. Only printed values and that final expression become program output. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. ' + filePolicy + ' ' + asynchronousFailure + ' Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
-        stripTypes: stripTypeScriptTypes,
+        executionInstructions: 'The program contains TypeScript script statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. ' + outputInstructions + ' The final expression is awaited if it is a Promise. ' + lifetime + ' Use await import(...) for modules. Relative paths use the supplied working directory. ' + filePolicy + ' ' + asynchronousFailure + ' Values from bindings and imports can belong to another realm; use Array.isArray for arrays and the supplied binding error classes for failures, because instanceof Array or Error may be false.' + recovery,
+        stripTypes: stripTypeScript,
       }
     }
     /* v8 ignore next -- Loader validates the closed execution-mode union before selection. */

@@ -6,7 +6,7 @@ import type { PtcProgramFormat } from '@deepseek-ai/dsh-ptc-runtime'
 import { RUN_CODE_NAME, ToolNotFoundError, projectToolSchema } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition, ToolExecutor, ToolModelInput, ToolPromptSection, ToolBatchInput, ToolBatchResult } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline, executeToolBatch, toolErrorMessage } from '@deepseek-ai/dsh-tools/pipeline'
-import { createRunCodeTool, requirePtcRuntime, type PtcSdkLanguage } from './ptc.ts'
+import { createRunCodeTransport, requirePtcRuntime, type PtcSdkLanguage } from './ptc.ts'
 import { renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'
 import { renderToolsSdkPy } from './py-types.ts'
 import { Config } from './config.ts'
@@ -87,7 +87,7 @@ export class PtcExecutor implements ToolExecutor {
 
   /** Keep the reserved transport outside registered capabilities and their restrictions. */
   private requirePtcTransport(): ToolDefinition {
-    this.ptcTransport ??= createRunCodeTool(this.ctx, this.pipeline, this.config, this.calls)
+    this.ptcTransport ??= createRunCodeTransport(this.ctx, this.pipeline, this.config, this.calls)
     return this.ptcTransport
   }
 }

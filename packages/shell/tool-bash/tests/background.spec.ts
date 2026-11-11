@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED } from '@deepseek-ai/dsh-tools'
@@ -25,6 +25,7 @@ import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import { processSources, ringDelta } from '../src/background.ts'
 import { renderPromoted } from '../src/render.ts'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Readiness polling stays on wall time while a test controls the execution deadline.
 const pollingTimeout = setTimeout
@@ -58,7 +59,7 @@ let callCounter = 0
 function call(ctx: Context, args: Record<string, unknown>) {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`background-call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`background-call-${++callCounter}`),
     name: 'bash',
     arguments: args,
   })
@@ -134,7 +135,7 @@ describe('background bash output', () => {
     await until(() => jobs.get(job!.id).status === 'killed' ? true : undefined)
     const read = text(await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-spawn-failure-read'),
+      callId: brandString<ToolCallId>('background-spawn-failure-read'),
       name: 'job_output',
       arguments: { job_id: String(job!.id) },
     }))
@@ -336,7 +337,7 @@ describe('foreground commands as jobs', () => {
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('background-call-aborted'),
+      callId: brandString<ToolCallId>('background-call-aborted'),
       name: 'bash',
       arguments: { command: 'sleep 30', description: 'test command' },
     })
@@ -368,7 +369,7 @@ describe('foreground commands as jobs', () => {
     const controller = new AbortController()
     const pending = executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('background-call-aborted-slow-kill'),
+      callId: brandString<ToolCallId>('background-call-aborted-slow-kill'),
       name: 'bash',
       arguments: { command: 'sleep 30', description: 'test command', timeoutMs: 100 },
     })
@@ -397,7 +398,7 @@ describe('foreground commands as jobs', () => {
 
   it('registers the job under the calling agent so it is fenced to its session', async () => {
     const ctx = await setup()
-    const ownerId = SessionId('promote-owner')
+    const ownerId = brandString<SessionId>('promote-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
@@ -419,7 +420,7 @@ describe('foreground commands as jobs', () => {
     ctx.agents.register(owner)
     const result = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-promote-owned'),
+      callId: brandString<ToolCallId>('background-promote-owned'),
       name: 'bash',
       arguments: { command: 'printf "held\\n"; sleep 30', description: 'test command', timeoutMs: 250 },
       agent: owner,
@@ -514,7 +515,7 @@ describe('renderPromoted', () => {
 describe('owned background output', () => {
   it('fences an owned background run under the owning session', async () => {
     const ctx = await setup()
-    const ownerId = SessionId('background-owner')
+    const ownerId = brandString<SessionId>('background-owner')
     const owner: Agent = {
       id: ownerId,
       options: {},
@@ -536,7 +537,7 @@ describe('owned background output', () => {
     ctx.agents.register(owner)
     await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('background-owned-1'),
+      callId: brandString<ToolCallId>('background-owned-1'),
       name: 'bash',
       arguments: { command: 'echo owned', description: 'test command', run_in_background: true },
       agent: owner,

@@ -4,7 +4,7 @@ import { useRef, type ReactNode } from 'react'
 import {
   Button, IconWarningTriangleOutlineRegular, MarqueeText, PanelRow, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ForgeReadiness, MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../types.ts'
@@ -12,6 +12,7 @@ import { ChangeRequestCard, type ChangeRequestActions } from './ChangeRequestCar
 import type { createChangeRequestsSectionStore } from './change-requests-store.ts'
 import type { NS } from './locales.ts'
 import { ReasonButton } from './ReasonButton.tsx'
+import type {} from './slots.ts'
 import type { PanelSnapshot } from './source.ts'
 import { defaultExpanded } from './status.ts'
 import css from './Forge.module.css'
@@ -55,6 +56,7 @@ export interface ChangeRequestsSectionInjected {
 /** Full props of the change requests section. */
 export type ChangeRequestsSectionProps =
   PropsRuntime<'conversation.session.panel.section'>
+  & Pick<PropsRenderSlots<'forge.change-request.card.actions'>, 'renderSlot'>
   & InjectFace<ChangeRequestsSectionInjected>
   & PropsStore<ReturnType<typeof createChangeRequestsSectionStore>>
   & PropsLocale<typeof NS>
@@ -140,7 +142,7 @@ function SignInRow({ need, copyText, t }: {
  */
 export function ChangeRequestsSection({
   usePanel, useLocale, dismissOverlay, refresh, remove, markReady, merge, readChecks,
-  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, viewChanges, useStore, actions: store, renderSlot, t,
 }: ChangeRequestsSectionProps): ReactNode {
   const snapshot = usePanel(current => current)
   const locale = useLocale(value => value)
@@ -156,6 +158,7 @@ export function ChangeRequestsSection({
       viewChanges(entry)
       dismissOverlay()
     },
+    renderActions: owner => renderSlot('forge.change-request.card.actions', owner),
   }
   const defaults = defaultExpanded(state.changeRequests)
   const expanded = (url: string): boolean => chosen[url] ?? defaults.has(url)

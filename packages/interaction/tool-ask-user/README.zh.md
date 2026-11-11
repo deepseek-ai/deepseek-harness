@@ -71,7 +71,7 @@ kind: "package-reference"
 
 ### 调用何时失败
 
-Legacy 调用和 `timeout: -1` 调用会等待回答或取消；没有 answerer 接受时返回错误。有限时长的 timed 调用若没有 answerer，则在到期后返回 pending。取消调用，或调用方不是确切的存活运行时根时，也会返回错误。存活的子 agent 会以 `DELEGATED_CALLER` 被拒绝，必须在最终结果中包含尚未解决的决定。
+Legacy 调用和 `timeout: -1` 调用会等待回答或取消；没有 answerer 接受时返回错误。有限时长的 timed 调用若没有 answerer，则在到期后返回 pending。取消调用，或调用方不是确切的存活运行时根时，也会返回错误。timed 调用以 `ToolArgsError` `INVALID_ARGS` 拒绝超出范围的 `timeout` 与重复的问题 id，以 `ToolContextUnavailableError` 拒绝缺少调用方 agent 的调用。存活的子 agent 会以 `DELEGATED_CALLER` 被拒绝，必须在最终结果中包含尚未解决的决定。
 
 -----
 

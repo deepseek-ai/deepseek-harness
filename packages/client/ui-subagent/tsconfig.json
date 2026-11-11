@@ -54,6 +54,9 @@
       "path": "../ui-session-panel"
     },
     {
+      "path": "../ui-session-status"
+    },
+    {
       "path": "../ui-sidebar-right"
     },
     {

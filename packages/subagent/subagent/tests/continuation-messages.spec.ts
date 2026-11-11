@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { createUserMessage, ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId, type ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createSettlementMessage } from '../src/continuation-messages.ts'
 
-const childId = SessionId('settled-child')
+const childId = brandString<SessionId>('settled-child')
 const childName = 'reviewer/checker'
 const summary = { type: 'text', text: `Background subagent ${childName} finished and will do no further work unless you send it more.` }
 const reasoning: ContentBlock = { type: 'reasoning', text: 'private child reasoning' }
-const toolCall: ContentBlock = { type: 'tool-call', id: ToolCallId('child-call'), name: 'read', arguments: '{}' }
+const toolCall: ContentBlock = { type: 'tool-call', id: brandString<ToolCallId>('child-call'), name: 'read', arguments: '{}' }
 
 describe('settlement attribution', () => {
   it.each(['completed', 'aborted', 'max-tokens', 'refusal', 'error'] as const)(

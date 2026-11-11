@@ -29,6 +29,8 @@ kind: "package-reference"
 
 ### 注册命令
 
+从 `@deepseek-ai/dsh-commands/brand` 以类型方式导入 `CommandDefinitionId` 和 `CommandId`。使用 `@deepseek-ai/dsh-brand` 的 `brandString<T>()` 为已准入的字符串添加品牌；它不验证或生成 id。
+
 插件通过 `ctx.commands.register()` 注册命令，提供小写名称、发现界面中的说明、可选的 `input` 提示和处理器。可选的品牌类型字段 `definitionId` 为适配器提供带插件命名空间的稳定定义标识，它独立于显示文案和每次执行的 `commandId`。有效描述符只携带被选中定义的标识，作用域覆盖不会继承被遮蔽注册项的标识。
 
 ```text

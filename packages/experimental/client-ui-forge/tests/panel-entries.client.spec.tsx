@@ -11,7 +11,8 @@ import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ContextMenuTarget } from '@deepseek-ai/dsh-client-ui-context-menu/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   ChangeRequestsActions, ChangeRequestsSection, type ChangeRequestsActionsProps, type ChangeRequestsSectionProps,
 } from '../src/client/ChangeRequestsSection.tsx'
@@ -27,7 +28,7 @@ import { created, entry, ready, removed, snapshot, worktree } from './client-fix
 afterEach(cleanup)
 
 const t = makeTranslate(en)
-const SESSION = SessionId('s1')
+const SESSION = brandString<SessionId>('s1')
 
 function panelStore(state: ForgePanelState | null, disconnected = false) {
   return createSnapshotStore<PanelSnapshot>({ state, disconnected })
@@ -49,6 +50,8 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     copyText: vi.fn<(text: string) => void>(),
     viewChanges: vi.fn<(entry: ForgePanelChangeRequest) => void>(),
     dismissOverlay: vi.fn<() => void>(),
+    // Plugins' card actions: a marker naming the change request it was drawn for.
+    renderSlot: vi.fn((_name: string, owner: { url: string }) => <span data-plugin-action={owner.url} />),
   }
   const props = {
     sessionId: SESSION,
@@ -61,7 +64,7 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     t,
   } as Pick<ChangeRequestsSectionProps,
     'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
-    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 't'> as ChangeRequestsSectionProps
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
 }
@@ -130,6 +133,20 @@ describe('ChangeRequestsSection', () => {
     const again = section(two, { store: one.store })
     expect(expansion(again.view)).toEqual([false, true])
     expect(expansion(section(ready({ changeRequests: [entry(1, snapshot(1))] })).view)).toEqual([true])
+  })
+
+  it('draws the actions plugins add to each card before its actions menu', () => {
+    const b = section(ready({ changeRequests: [entry(7, snapshot(7)), entry(8, null)] }))
+    expect(b.renderSlot).toHaveBeenCalledWith('forge.change-request.card.actions', {
+      url: 'https://github.com/octo/demo/pull/7', ref: entry(7, snapshot(7)).ref, headSha: snapshot(7).headSha, state: 'open',
+    })
+    expect(b.renderSlot).toHaveBeenCalledWith('forge.change-request.card.actions', expect.objectContaining({
+      url: 'https://github.com/octo/demo/pull/8', headSha: null, state: null,
+    }))
+    const card = b.view.container.querySelector('[data-forge-change="https://github.com/octo/demo/pull/7"]') as HTMLElement
+    const marker = card.querySelector('[data-plugin-action]') as HTMLElement
+    expect(marker.compareDocumentPosition(within(card).getByRole('button', { name: 'Actions for #7' })) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
   })
 
   it('wires the card menu, the changes row, and retry to the section actions', async () => {

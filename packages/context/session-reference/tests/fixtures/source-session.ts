@@ -2,7 +2,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 export const name = 'session-reference-source-fixture'
 export const inject = ['sessions']
@@ -12,7 +13,7 @@ export const inject = ['sessions']
  * @param ctx - fixture composition.
  */
 export function apply(ctx: Context): void {
-  const source = Session.create(SessionId('reference-source'))
+  const source = Session.create(brandString<SessionId>('reference-source'))
   source.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'EARLY_SOURCE_FACT\n' + 'Historical detail 界.\n'.repeat(30)
       + 'x'.repeat(4096) + 'GIANT_LINE_MIDDLE_FACT' + 'y'.repeat(4096) }],

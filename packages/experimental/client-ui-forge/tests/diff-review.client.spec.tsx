@@ -9,7 +9,12 @@ import { ReviewQueue } from '../src/client/review-queue.ts'
 import { SectionReach } from '../src/client/section-reach.ts'
 import { selectReviewLines } from '../src/client/review.ts'
 import type { ReviewActions } from '../src/client/ReviewComposer.tsx'
+import type { ForgeCommentActionsProps } from '../src/client/slots.ts'
 import type { ForgeDiffFile } from '../src/types.ts'
+import type { ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { SourcedAnnotation } from '../src/client/annotations.ts'
+import type { FileThreads, ThreadActions } from '../src/client/ReviewThreads.tsx'
+import { reviewThread } from './thread-fixtures.client.ts'
 
 const file: ForgeDiffFile = { path: 'a.txt', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest', additions: 3, deletions: 2,
   hunks: [{ oldStart: 2, oldLines: 3, newStart: 2, newLines: 4, lines: [' same', '-old first', '-old last', '+new first', '+new last', '+'] }] }
@@ -23,7 +28,7 @@ function mount(overrides: Partial<DiffFileProps> = {}) {
   const review: ReviewActions = { source, addToInput, records, onQuoted: (item) => { records.recordAgent(item) } }
   const handlers = {
     toggle: vi.fn(), reveal: vi.fn(), expand: vi.fn(), view: vi.fn(), actions: () => [], section: vi.fn(), nextThread: vi.fn(),
-    reach: new SectionReach(),
+    reach: new SectionReach(), annotation: vi.fn(() => null), fileMenu: vi.fn(() => null), unfold: vi.fn(),
   }
   const props: DiffFileProps = { file, visible: true, expanded: true, large: false, revealed: false,
     text: undefined, open: new Set(), split: true, wrap: true, badge: '', tooltip: 'a.txt',
@@ -341,4 +346,147 @@ it('labels the plus on the unified row that ends a right-side range', () => {
   expect(m.getByRole('button', { name: 'Add comment' })).toBeTruthy()
   expect(m.container.querySelector('[data-review-add="R4"]')).toBeNull()
   expect(m.container.querySelector('[data-review-add="R3"]')).not.toBeNull()
+})
+
+/** A plugin annotation on a range of one side, the whole file, or a change it was written on. */
+function annotation(key: string, place: SourcedAnnotation['annotation']['place'], digest?: string): SourcedAnnotation {
+  return { source: 'notes', annotation: { key, place, version: 1, ...digest === undefined ? {} : { digest } } }
+}
+
+/** File threads whose cards share inert actions. */
+function lineThreads(lines: FileThreads['lines']): FileThreads {
+  const actions: ThreadActions = {
+    author: null, addToInput: () => true, openLink: vi.fn(), readText: vi.fn(), inputFailed: vi.fn(), focused: null, writes: null,
+  }
+  return { lines, file: [], outdated: [], unresolved: lines.length, actions }
+}
+
+/** The annotation frames a section draws, in order. */
+function frames(container: HTMLElement): (string | null)[] {
+  return [...container.querySelectorAll('[data-forge-annotation]')].map(element => element.getAttribute('data-forge-annotation'))
+}
+
+it('draws plugin annotations after the comments of their last line, in the column of their side, through the handler', () => {
+  const m = mount({ annotationLimit: 10, annotations: [annotation('r4', { side: 'R', startLine: 3, endLine: 4 }), annotation('l3', { side: 'L', startLine: 3, endLine: 3 })] })
+  const rendered = vi.mocked(m.props.handlers.annotation)
+  expect(rendered.mock.calls.map(([path, item]) => `${path}:${item.annotation.key}`)).toEqual(['a.txt:l3', 'a.txt:r4'])
+  const notes = m.container.querySelector('[data-forge-annotation="notes/l3"]')!.closest('[data-forge-notes]')!
+  expect([...notes.children].findIndex(cell => cell.querySelector('[data-forge-annotation]') !== null)).toBe(0)
+  const right = m.container.querySelector('[data-forge-annotation="notes/r4"]')!.closest('[data-forge-notes]')!
+  expect([...right.children].findIndex(cell => cell.querySelector('[data-forge-annotation]') !== null)).toBe(1)
+
+  m.rerender(<DiffFile {...m.props} split={false} />)
+  expect(frames(m.container)).toEqual(['notes/l3', 'notes/r4'])
+})
+
+it('places annotations on the whole file first, on an earlier change in their own section, and counts those past the limit', () => {
+  const m = mount({
+    annotationLimit: 3,
+    annotations: [
+      annotation('file', 'file'), annotation('old', { side: 'R', startLine: 3, endLine: 3 }, 'other'), annotation('line', { side: 'R', startLine: 3, endLine: 3 }, 'digest'),
+      annotation('extra', { side: 'R', startLine: 4, endLine: 4 }),
+    ],
+  })
+  expect(frames(m.container)).toEqual(['notes/file', 'notes/line', 'notes/old'])
+  expect(m.container.querySelector('[data-forge-outdated-annotations]')!.textContent).toContain('Annotations on an earlier change · 1')
+  expect(m.container.querySelector('[data-forge-hidden-annotations]')!.textContent).toBe('1 more annotations in this file are not shown')
+  m.rerender(<DiffFile {...m.props} annotationLimit={undefined} />)
+  expect(frames(m.container)).toEqual([])
+})
+
+it('places annotations in the collapsed lines that hold them and after the lines when no row shows them', () => {
+  const m = mount({ annotationLimit: 10, annotations: [annotation('gap', { side: 'R', startLine: 1, endLine: 1 }), annotation('later', { side: 'R', startLine: 40, endLine: 40 })] })
+  const code = m.container.querySelector('[data-review]')!
+  const rows = [...code.children]
+  const gap = rows.findIndex(row => row.hasAttribute('data-forge-diff-gap'))
+  expect(rows[gap + 1]?.getAttribute('data-forge-annotation')).toBe('notes/gap')
+  expect(rows.at(-1)?.getAttribute('data-forge-annotation')).toBe('notes/later')
+
+  // A new file has no lines after its hunk, so an annotation past them follows the lines.
+  const added: ForgeDiffFile = { ...file, status: 'added', deletions: 0, additions: 2, hunks: [{ oldStart: 0, oldLines: 0, newStart: 1, newLines: 2, lines: ['+a', '+b'] }] }
+  m.rerender(<DiffFile {...m.props} file={added} annotations={[annotation('past', { side: 'R', startLine: 9, endLine: 9 })]} />)
+  expect([...m.container.querySelector('[data-review]')!.children].at(-1)?.getAttribute('data-forge-annotation')).toBe('notes/past')
+})
+
+it('folds the hunks a lens folds into one row that shows them, holding the threads and annotations on their lines', () => {
+  const two: ForgeDiffFile = { ...file, additions: 4, deletions: 3, hunks: [file.hunks[0]!, { oldStart: 10, oldLines: 1, newStart: 11, newLines: 2, lines: ['-o', '+n', '+m'] }] }
+  const thread = reviewThread({ path: 'a.txt' })
+  const m = mount({
+    file: two, folded: { hunks: new Set([1]), lens: 'Exports' }, annotationLimit: 10,
+    annotations: [
+      annotation('left', { side: 'L', startLine: 10, endLine: 10 }), annotation('right', { side: 'R', startLine: 12, endLine: 12 }),
+      annotation('kept', { side: 'R', startLine: 3, endLine: 3 }), annotation('end', { side: 'R', startLine: 40, endLine: 40 }),
+    ],
+    threads: lineThreads([
+      { thread, place: { kind: 'line', side: 'R', startLine: 11, endLine: 11 } },
+      { thread: reviewThread({ path: 'a.txt', id: 'thread-end' as ForgeThreadId }), place: { kind: 'line', side: 'R', startLine: 40, endLine: 40 } },
+    ]),
+  })
+  const fold = m.container.querySelector<HTMLElement>('[data-forge-lens-fold]')!
+  expect(fold.getAttribute('data-forge-lens-fold')).toBe('1')
+  expect(fold.textContent).toBe('1 changes unrelated to “Exports” foldedShow')
+  const rows = [...m.container.querySelector('[data-review]')!.children]
+  const at = rows.indexOf(fold)
+  expect(rows[at + 1]?.hasAttribute('data-forge-thread')).toBe(true)
+  expect(rows.slice(at + 2, at + 4).map(row => row.getAttribute('data-forge-annotation'))).toEqual(['notes/left', 'notes/right'])
+  expect(m.container.querySelector('[data-old-line="10"]')).toBeNull()
+  fireEvent.click(fold)
+  expect(m.props.handlers.unfold).toHaveBeenCalledWith('a.txt')
+})
+
+it('keeps a hunk with an open comment form or a comment saved in the browser drawn when a lens would fold it', () => {
+  const two: ForgeDiffFile = { ...file, additions: 4, deletions: 3, hunks: [file.hunks[0]!, { oldStart: 10, oldLines: 1, newStart: 11, newLines: 2, lines: ['-o', '+n', '+m'] }] }
+  const folded = { hunks: new Set([1]), lens: 'Exports' }
+  const m = mount({ file: two })
+  fireEvent.click(m.line('R12'))
+  fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+  fireEvent.change(m.getByRole('textbox'), { target: { value: 'half written' } })
+  m.rerender(<DiffFile {...m.props} file={two} folded={folded} />)
+  expect(m.container.querySelector('[data-forge-lens-fold]')).toBeNull()
+  expect((m.getByRole('textbox') as HTMLTextAreaElement).value).toBe('half written')
+
+  // Once the form became a saved comment, its hunk still stays drawn, with the comment on its line.
+  fireEvent.click(m.getByRole('button', { name: 'Add to input' }))
+  m.rerender(<DiffFile {...m.props} file={two} folded={folded} />)
+  expect(m.container.querySelector('[data-forge-lens-fold]')).toBeNull()
+  expect(m.code('R', 12)).toBeTruthy()
+  expect(m.container.querySelector('[data-forge-review-thread="agent"]')).not.toBeNull()
+
+  // Without either, the hunk folds.
+  localStorage.clear()
+  const fresh = mount({ file: two, folded })
+  expect(fresh.container.querySelector('[data-forge-lens-fold]')).not.toBeNull()
+})
+
+it('draws line annotations after a note that replaces the lines and lists the plugin rows of the file menu', () => {
+  const m = mount({ file: { ...file, binary: true, hunks: [] }, annotationLimit: 10, annotations: [annotation('bin', { side: 'R', startLine: 1, endLine: 1 })] })
+  expect(frames(m.container)).toEqual(['notes/bin'])
+  vi.mocked(m.props.handlers.fileMenu).mockImplementation((_file, dismiss) => <button type="button" role="menuitem" onClick={dismiss}>Pin a note</button>)
+  fireEvent.click(m.getByRole('button', { name: 'More actions for a.txt' }))
+  fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Pin a note' }))
+  expect(vi.mocked(m.props.handlers.fileMenu).mock.calls[0]?.[0]).toBe(m.props.file)
+  expect(within(document.body).queryByRole('menuitem', { name: 'Pin a note' })).toBeNull()
+})
+
+it('hands the comment text to a plugin action, keeping the form with the message it returns and closing it otherwise', async () => {
+  const owners: ForgeCommentActionsProps[] = []
+  const deliver = vi.fn<(body: string) => Promise<string | undefined>>().mockResolvedValueOnce('Not pinned').mockResolvedValueOnce(undefined)
+  const m = mount()
+  const review: ReviewActions = {
+    ...m.props.review!,
+    renderActions: (owner) => {
+      owners.push({ target: { sessionId: 's' as never, source: { kind: 'local' } }, ...owner })
+      return <button type="button" disabled={owner.empty || owner.busy} onClick={() => { owner.send(deliver) }}>Pin</button>
+    },
+  }
+  m.rerender(<DiffFile {...m.props} review={review} />)
+  fireEvent.click(m.line('R4'))
+  fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+  expect(owners.at(-1)).toMatchObject({ selection: { path: 'a.txt', side: 'R', startLine: 4, endLine: 4 }, empty: true, busy: false })
+  fireEvent.change(m.getByRole('textbox', { name: 'Leave a comment…' }), { target: { value: 'Pin me' } })
+  await act(async () => { fireEvent.click(m.getByRole('button', { name: 'Pin' })) })
+  expect(deliver).toHaveBeenCalledWith('Pin me')
+  expect(m.getByRole('alert').textContent).toBe('Not pinned')
+  await act(async () => { fireEvent.click(m.getByRole('button', { name: 'Pin' })) })
+  expect(m.queryByRole('region', { name: 'Comment on R4' })).toBeNull()
 })

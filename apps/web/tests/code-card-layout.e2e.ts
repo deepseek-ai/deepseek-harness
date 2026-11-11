@@ -2,8 +2,9 @@
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { launchWebScaffold, seedSession, watchConsole, type WebScaffold } from './scaffold.ts'
 import { expandTurnProcesses, newEnglishPage, saveFailureShot } from './support.ts'
@@ -28,13 +29,13 @@ function layoutFixture(): string {
     name: 'edit', args: { file_path: 'long.txt', old_string: oldText, new_string: newText },
     result: 'Edited long.txt', meta: { diffs: [{ path: 'long.txt', oldText, newText }] },
   })
-  const session = Session.create(SessionId('code-card-layout-source'))
+  const session = Session.create(brandString<SessionId>('code-card-layout-source'))
   session.append('turn/start', { turn: 1 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Inspect the source windows and edit the long lines.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('step/start', { turn: 1, step: 1 })
-  const namedCalls = calls.map((call, index) => ({ ...call, id: ToolCallId(`layout-${index}`), arguments: JSON.stringify(call.args) }))
+  const namedCalls = calls.map((call, index) => ({ ...call, id: brandString<ToolCallId>(`layout-${index}`), arguments: JSON.stringify(call.args) }))
   session.append('assistant/message', {
     stream: [], turn: 1, step: 1,
     message: createAssistantMessage({
