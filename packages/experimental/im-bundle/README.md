@@ -51,7 +51,7 @@ Set `DSH_FEISHU_APP_ID` and `DSH_FEISHU_APP_SECRET` in the environment, and crea
       cwd: /absolute/workspace
 ```
 
-The Feishu adapter row (`im-feishu`) configures connection settings and tenant capabilities. Outbound messages automatically use the mode (`card` or `post`) with the lowest degradation cost for the content, preferring `card` on a tie. `cardStreaming: true` enables CardKit streaming updates for `card` mode (`false` disables the card stream driver so streams use `post` mode instead); `callbacks: true` enables `card.action.trigger` events for card action buttons (such as the stop button); `allowAtAll: true` enables `@all` mentions when permitted by the tenant. Set `platform: lark` to use the international Lark OpenAPI domain instead of `feishu`.
+The Feishu adapter row (`im-feishu`) configures connection settings and tenant capabilities. Outbound messages automatically use the mode (`card` or `post`) with the lowest degradation cost for the content, preferring `card` on a tie. `cardStreaming: true` edits the card message in place as states stream (`false` buffers the states and sends one final `PATCH`, and a stream then uses `post` mode instead); `callbacks: true` enables `card.action.trigger` events for card action buttons (such as the stop button); leaving `allowAtAll` unset already declares `@all` mentions, and `allowAtAll: false` renders them as text for a tenant that forbids @all. Set `platform: lark` to use the international Lark OpenAPI domain instead of `feishu`.
 
 ```yaml
 - id: im-feishu

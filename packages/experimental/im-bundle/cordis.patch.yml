@@ -18,11 +18,12 @@
 
     # The Feishu / Lark long connection. There is no mode to configure: core
     # publishes each message in the mode that renders it with the fewest
-    # degradations (card before post on a tie). `cardStreaming` keeps the CardKit
-    # stream driver of the card mode, and `callbacks` accepts
-    # `card.action.trigger` so card buttons work. `allowAtAll` is left unset:
-    # `@所有人` stays unknown (and renders as its text fallback) until an
-    # operator sets `allowAtAll: true` for a tenant that permits it.
+    # degradations (card before post on a tie). `cardStreaming: true` edits the
+    # card message in place as states stream; with `false` the states are
+    # buffered and one final `PATCH` is sent, and a stream falls back to `post`
+    # mode. `callbacks` accepts `card.action.trigger` so card buttons work.
+    # Leaving `allowAtAll` unset already declares `@所有人` mentions; only an
+    # explicit `false` renders them as text, for a tenant that forbids @all.
     - id: im-feishu
       name: '@deepseek-ai/cordis-plugin-im-adapter-lark'
       config:

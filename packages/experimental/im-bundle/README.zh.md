@@ -51,7 +51,7 @@ kind: "package-bundle"
       cwd: /absolute/workspace
 ```
 
-飞书适配器条目（`im-feishu`）配置连接参数与租户权限。出站消息会自动根据内容在 `card` 和 `post` 模式中选择降级代价最低的模式（代价相同时优先使用 `card`）。`cardStreaming: true` 启用卡片模式的 CardKit 流式更新（设为 `false` 则停用卡片流式驱动，流式消息改用 `post` 模式）；`callbacks: true` 接收 `card.action.trigger` 卡片按钮回调（如停止按钮）；`allowAtAll: true` 在租户允许时开启 `@所有人`。国际版 Lark 可设置 `platform: lark`。
+飞书适配器条目（`im-feishu`）配置连接参数与租户权限。出站消息会自动根据内容在 `card` 和 `post` 模式中选择降级代价最低的模式（代价相同时优先使用 `card`）。`cardStreaming: true` 在状态流式发布时原地编辑同一条卡片消息（设为 `false` 则缓冲状态、结束时只发送一次 `PATCH`，流式消息改用 `post` 模式）；`callbacks: true` 接收 `card.action.trigger` 卡片按钮回调（如停止按钮）；`allowAtAll` 不设置即已声明 `@所有人` 提及，只有显式设为 `false` 时才降级为文本（用于禁止 @所有人 的租户）。国际版 Lark 可设置 `platform: lark`。
 
 ```yaml
 - id: im-feishu
