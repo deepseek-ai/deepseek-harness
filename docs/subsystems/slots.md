@@ -106,7 +106,8 @@ The shipped adapters add these standard props. They are available according to t
 
 | Availability | Props | Owner |
 |---|---|---|
-| every scope | `useSessions`, `useSessionStatus`, `useSessionRetainInfo`, `useSessionAccess` | `ui-session` |
+| every scope | `useSessions`, `useSessionRetainInfo`, `useSessionAccess` | `ui-session` |
+| every scope | `useSessionStatus` | `ui-session-status` |
 | every scope | `useWorkspaces`, `useWorkspaceAccess` | `ui-workspace` |
 | every scope | `useRemoteAccess` (the `global` resource) | `api-remote-access` |
 | every scope | `usePanelInfo` | `ui-layout` |
