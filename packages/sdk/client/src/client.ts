@@ -374,17 +374,8 @@ export class HarnessClient {
    * @param sessionId - target Session; an unknown id creates it.
    * @returns the absolute effective directory.
    */
-  async getWorkingDirectory(sessionId: string): Promise<string> {
-    return (await this.workingDirectoryRequest('session/working-directory/get', { sessionId })).cwd
-  }
-
-  /**
-   * Read the workspace root a Session's effective directory is in, recovering the directory if missing.
-   * @param sessionId - target Session; an unknown id creates it.
-   * @returns the absolute workspace root.
-   */
-  async getWorkspaceRoot(sessionId: string): Promise<string> {
-    return (await this.workingDirectoryRequest('session/working-directory/get', { sessionId })).root
+  getWorkingDirectory(sessionId: string): Promise<string> {
+    return this.workingDirectoryRequest('session/working-directory/get', { sessionId })
   }
 
   /**
@@ -393,16 +384,16 @@ export class HarnessClient {
    * @param path - absolute or Session-current-directory-relative path.
    * @returns the validated absolute directory.
    */
-  async setWorkingDirectory(sessionId: string, path: string): Promise<string> {
-    return (await this.workingDirectoryRequest('session/working-directory/set', { sessionId, path })).cwd
+  setWorkingDirectory(sessionId: string, path: string): Promise<string> {
+    return this.workingDirectoryRequest('session/working-directory/set', { sessionId, path })
   }
 
-  private async workingDirectoryRequest(method: string, params: object): Promise<{ cwd: string; root: string }> {
+  private async workingDirectoryRequest(method: string, params: object): Promise<string> {
     const result = await this.request(method, params)
-    if (!isRecord(result) || typeof result.cwd !== 'string' || typeof result.root !== 'string') {
+    if (!isRecord(result) || typeof result.cwd !== 'string') {
       throw new SdkProtocolError(`${method} returned no working directory: ${JSON.stringify(result)}`)
     }
-    return { cwd: result.cwd, root: result.root }
+    return result.cwd
   }
 
   /**

@@ -413,25 +413,23 @@ export class HarnessSdkJsonRpcServer {
   }
 
   /**
-   * Read a Session's effective directory and workspace root, recovering a missing directory to its origin.
+   * Read a Session's effective directory, recovering a missing directory to its origin.
    * @param params - target Session; an unknown id creates it.
-   * @returns the absolute effective directory and the root it is in.
+   * @returns the absolute effective directory.
    */
   async getWorkingDirectory(params: SessionWorkingDirectoryParams): Promise<SessionWorkingDirectoryResult> {
     const agent = await this.workingDirectoryAgent(params.sessionId)
-    const cwd = await this.ctx.workingDirectory.ensure(agent)
-    return { cwd, root: this.ctx.workingDirectory.rootOf(agent.session) }
+    return { cwd: await this.ctx.workingDirectory.ensure(agent) }
   }
 
   /**
    * Change a Session's directory and queue its model-visible transition.
    * @param params - target Session and absolute or current-directory-relative path.
-   * @returns the validated absolute directory and the root it is in; origin and permissions are unchanged.
+   * @returns the validated absolute directory; origin and permissions are unchanged.
    */
   async setWorkingDirectory(params: SessionWorkingDirectorySetParams): Promise<SessionWorkingDirectoryResult> {
     const agent = await this.workingDirectoryAgent(params.sessionId)
-    const cwd = await this.ctx.workingDirectory.set(agent, params.path)
-    return { cwd, root: this.ctx.workingDirectory.rootOf(agent.session) }
+    return { cwd: await this.ctx.workingDirectory.set(agent, params.path) }
   }
 
   private async workingDirectoryAgent(sessionId: string): Promise<Agent> {

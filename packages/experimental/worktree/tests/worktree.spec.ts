@@ -40,7 +40,6 @@ describe('creating and entering retained worktrees', () => {
     expect(result).toEqual({ path: join(root, '.agents/worktrees/topic'), branch: 'topic', baseCommit, repositoryRoot: root })
     expect(ctx.workingDirectory.get(agent.session)).toBe(result.path)
     expect(ctx.workingDirectory.rootOf(agent.session)).toBe(result.path)
-    expect(ctx.workingDirectory.anchorsOf(agent.session)).toEqual([root, result.path])
     const events = agent.session.snapshotEvents()
     const created = events.findIndex(event => pluginRecordOf(event)?.type === 'plugin:worktree/created')
     expect(created).toBeGreaterThan(events.findIndex(event => event.type === 'working-directory/change'))
@@ -53,10 +52,52 @@ describe('creating and entering retained worktrees', () => {
     expect(await contents(join(root, '.agents/worktrees/.gitignore'))).toBe('*\n')
     expect(await git(root, 'check-ignore', '.agents/worktrees/.gitignore')).toBe('.agents/worktrees/.gitignore')
 
-    await ctx.workingDirectory.set(agent, root)
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(result)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(ctx.workingDirectory.rootOf(agent.session)).toBe(root)
     expect(await git(root, 'rev-parse', 'topic')).toBe(baseCommit)
     expect(await contents(join(result.path, 'tracked.txt'))).toBe('initial\n')
+  })
+
+  it('exits a nested worktree to the worktree it was created in, then to the source checkout, and refuses outside one', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const outer = await ctx.worktrees.create(agent, { name: 'outer' })
+    const inner = await ctx.worktrees.create(agent, { name: 'inner' })
+    expect(inner.repositoryRoot).toBe(outer.path)
+
+    await expect(ctx.worktrees.exit(agent, new AbortController().signal)).resolves.toEqual(inner)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(outer.path)
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(outer)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+    await expect(ctx.worktrees.exit(agent)).rejects.toThrow(`no recorded worktree contains the working directory ${JSON.stringify(root)}`)
+    expect(existsSync(inner.path)).toBe(true)
+    expect(await git(root, 'rev-parse', '--verify', 'refs/heads/inner')).toBe(inner.baseCommit)
+  })
+
+  it('exits a worktree whose subdirectory a change without the workspace marker recorded', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await mkdir(join(created.path, 'src'))
+    agent.session.append('working-directory/change', { cwd: join(created.path, 'src') })
+    await expect(ctx.worktrees.exit(agent)).resolves.toEqual(created)
+    expect(ctx.workingDirectory.get(agent.session)).toBe(root)
+  })
+
+  it('rejects an exit cancelled before it starts, and every exit after service disposal, without changing the directory', async () => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    const created = await ctx.worktrees.create(agent, { name: 'topic' })
+    await expect(ctx.worktrees.exit(agent, AbortSignal.abort(new Error('caller left')))).rejects.toThrow('caller left')
+    expect(ctx.workingDirectory.get(agent.session)).toBe(created.path)
+    const worktrees = ctx.worktrees
+    await ctx.fiber.dispose()
+    ctx = undefined
+    await expect(worktrees.exit(agent)).rejects.toThrow('worktree service disposed')
   })
 
   it('reports the prepare stage, then the checkout stage, before each begins', async () => {
@@ -294,7 +335,7 @@ describe('creating and entering retained worktrees', () => {
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
     await ctx.workingDirectory.ensure(agent)
-    vi.spyOn(ctx.workingDirectory, 'relocate').mockRejectedValueOnce(new Error('directory publication failed'))
+    vi.spyOn(ctx.workingDirectory, 'set').mockRejectedValueOnce(new Error('directory publication failed'))
     await expect(ctx.worktrees.create(agent, { name: 'retained' })).rejects.toThrow('Any created checkout and branch are retained')
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await git(root, 'branch', '--list', 'retained')).toContain('retained')

@@ -2,15 +2,15 @@
 
 English | [中文](worktrees.zh.md)
 
-The experimental [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.md) service provides `ctx.worktrees`. Its [`create_worktree`](../../packages/experimental/tool-worktree/README.md) consumer creates a new Git branch and checkout, then relocates the Session into it through the [working-directory service](working-directory.md), which registers the checkout as a workspace anchor; as the longest anchor containing the new current directory it becomes the Session's workspace root. The [Change requests & worktrees bundle](../../packages/experimental/forge-bundle/README.md#use-this-package) loads both packages through the GUI plugin manager and ships switched off. Other profiles can select the [standalone worktree bundle](../../packages/experimental/tool-worktree/README.md#use-this-package) or mount the two packages explicitly.
+The experimental [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.md) service provides `ctx.worktrees`. Its [`create_worktree`](../../packages/experimental/tool-worktree/README.md) consumer creates a new Git branch and checkout, then selects it through the [working-directory service](working-directory.md). The [Change requests & worktrees bundle](../../packages/experimental/forge-bundle/README.md#use-this-package) loads both packages through the GUI plugin manager and ships switched off. Other profiles can select the [standalone worktree bundle](../../packages/experimental/tool-worktree/README.md#use-this-package) or mount the two packages explicitly.
 
 ## Creation and retention
 
 The calling Session's current directory selects the source repository. Creation pins the requested local commit, branch, or tag before allocating the checkout; omission selects `HEAD`. Each name must identify a new branch and an unused checkout path. The operation neither fetches missing objects nor copies staged, unstaged, untracked, or ignored files from the source checkout.
 
-The default destination is `<current checkout root>/.agents/worktrees/<name>`. `repositoryRoot` is the top-level directory of the caller’s current checkout; a linked checkout therefore contains its own pool. The service writes a `.gitignore` containing `*` and a trailing newline only when its allocation creates the configured pool directory. Existing files and ignore rules are preserved. The calling Session’s existing sandbox policy must permit writes to the destination and shared Git administration directory. Successful Git setup precedes the working-directory relocation.
+The default destination is `<current checkout root>/.agents/worktrees/<name>`. `repositoryRoot` is the top-level directory of the caller’s current checkout; a linked checkout therefore contains its own pool. The service writes a `.gitignore` containing `*` and a trailing newline only when its allocation creates the configured pool directory. Existing files and ignore rules are preserved. The calling Session’s existing sandbox policy must permit writes to the destination and shared Git administration directory. Successful Git setup precedes the working-directory change.
 
-Leaving through `working_directory({ cd: path })` retains the checkout and branch. Cancellation or failure can also retain partial artifacts; the error identifies their location. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
+`ctx.worktrees.exit(agent)`, which the `exit_worktree` tool calls, returns the Session to the source checkout of the recorded worktree that contains its current directory; the checkout and branch remain. Nested worktrees exit one level at a time. Cancellation or failure can also retain partial artifacts; the error identifies their location. The service aborts and drains pending operations on disposal. The [package README](../../packages/experimental/worktree/README.md) owns configuration and Git requirements.
 
 ## Request and result
 
@@ -142,6 +142,18 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @returns the directory and whether the branch was created again.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
+
+/**
+ * Return the calling Session from the worktree it works in to the source checkout that worktree was
+ * created from. The worktree is the recorded creation, the Session's own or fork-inherited, with the
+ * longest directory containing the Session's current directory. Its checkout and branch remain.
+ * @param agent - caller whose current directory lies in a recorded worktree.
+ * @param signal - cancellation of directory validation and of the working-directory change.
+ * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
+ * @throws when no recorded worktree contains the current directory, or the working-directory
+ *   service's error when the source checkout no longer exists.
+ */
+async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>
 
 /**
  * Read the archive cleanup of a Session's created checkout; waiting never

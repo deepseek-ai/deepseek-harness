@@ -37,7 +37,7 @@ afterEach(async () => {
 })
 
 describe('worktree tool through real Loader composition', () => {
-  it('creates and enters a new checkout, reports canonical fields, and unregisters on disposal', async () => {
+  it('creates and enters a new checkout, exits it to the source checkout, reports canonical fields, and unregisters on disposal', async () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-loader-')))
     const repository = join(root, 'repo')
     await mkdir(repository)
@@ -103,8 +103,26 @@ describe('worktree tool through real Loader composition', () => {
     expect(failure.isError).toBe(true)
     expect(failure.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
     expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({ card: 'generic', title: 'create_worktree', rawInput: { name: 'named' } })
+
+    const exit = (agentValue?: typeof agent) => executeToolFixture(context!, {
+      name: 'exit_worktree', callId: ToolCallId('exit'), arguments: {}, signal: new AbortController().signal,
+      ...agentValue === undefined ? {} : { agent: agentValue },
+    })
+    const left = await exit(agent)
+    expect(left.isError).not.toBe(true)
+    expect(left.value).toEqual(result.value)
+    expect(left.content).toEqual([{ type: 'text', text: JSON.stringify(result.value) }])
+    expect(context.workingDirectory.get(agent.session)).toBe(repository)
+    const outside = await exit(agent)
+    expect(outside.isError).toBe(true)
+    expect(outside.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('no recorded worktree contains the working directory')
+    const agentless = await exit()
+    expect(agentless.isError).toBe(true)
+    expect(agentless.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
+    expect(context.tools.get('exit_worktree')!.presentCall!({})).toEqual({ card: 'generic', title: 'exit_worktree', rawInput: {} })
+
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')
     await entry!.fiber!.dispose()
-    expect(context.tools.schemas().some(tool => tool.name === 'create_worktree')).toBe(false)
+    expect(context.tools.schemas().some(tool => tool.name === 'create_worktree' || tool.name === 'exit_worktree')).toBe(false)
   })
 })

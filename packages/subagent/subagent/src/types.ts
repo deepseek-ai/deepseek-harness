@@ -142,7 +142,10 @@ export interface SubagentCapabilities {
  * shares these task options and defines its own label and cancellation policy.
  */
 export interface SubagentStartRequest {
-  /** Initial child directory; relative paths resolve against the parent's current directory. Omitted inherits that directory at start. */
+  /**
+   * Host-chosen initial child directory, which becomes the child's workspace; a relative path resolves
+   * against the parent's workspace root. Omitted starts the child in that root.
+   */
   readonly cwd?: string
   /**
    * Independent preset id; omission joins the parent's current generation.
@@ -155,7 +158,7 @@ export interface SubagentStartRequest {
   /** Content delivered as the child's user message. */
   readonly prompt: ContentBlock[]
   /**
-   * The spawning agent. Its effective directory supplies the default cwd;
+   * The spawning agent. Its workspace root supplies the default cwd;
    * in-process children retain its origin, lineage, and delegation depth.
    */
   readonly parent: Agent

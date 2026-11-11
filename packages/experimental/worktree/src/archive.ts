@@ -48,8 +48,11 @@ interface Attempt {
  * Whether `path` is `root` or lies below it. Both are canonical absolute
  * directories of one execution world without a trailing separator, so string
  * prefixing is exact.
+ * @param root - canonical absolute directory.
+ * @param path - canonical absolute directory to test.
+ * @returns whether `root` contains `path`.
  */
-function within(root: string, path: string): boolean {
+export function within(root: string, path: string): boolean {
   return path === root || path.startsWith(`${root}/`)
 }
 

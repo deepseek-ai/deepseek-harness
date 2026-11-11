@@ -143,8 +143,6 @@ export interface SessionWorkingDirectorySetParams extends SessionWorkingDirector
 export interface SessionWorkingDirectoryResult {
   /** Absolute directory used by future independent operations and new processes. */
   cwd: string
-  /** Absolute workspace root: the checkout `cwd` is in, which file views and the write boundary follow. */
-  root: string
 }
 
 /** Deployment-mapped SDK outcome: `ok` for an accepted result, `error` otherwise. */

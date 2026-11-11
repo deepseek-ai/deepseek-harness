@@ -2,15 +2,15 @@
 
 [English](worktrees.md) | 中文
 
-实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)把 Session 迁入其中，把该检出目录登记为工作区锚；它是包含新当前目录的最长锚，因此成为 Session 的工作区根。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
+实验性的 [`dsh-experimental-worktree`](../../packages/experimental/worktree/README.zh.md) 服务提供 `ctx.worktrees`。其消费方 [`create_worktree`](../../packages/experimental/tool-worktree/README.zh.md) 创建新的 Git 分支与检出目录，再通过[工作目录服务](working-directory.zh.md)选中它。[变更请求与工作树组合包](../../packages/experimental/forge-bundle/README.zh.md#use-this-package)通过 GUI 插件管理器一起加载这两个包，随安装提供但默认关闭。其他 profile 可以选择[独立工作树组合包](../../packages/experimental/tool-worktree/README.zh.md#use-this-package)，或显式挂载这两个包。
 
 ## 创建与保留
 
 调用方 Session 的当前目录决定源仓库。创建操作在分配检出目录前，将请求的本地提交、分支或标签固定为具体提交；省略时选择 `HEAD`。每个名称必须对应新分支与未使用的检出路径。操作既不获取缺失对象，也不复制源检出目录中的暂存、未暂存、未跟踪或被忽略文件。
 
-默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才迁移工作目录。
+默认目标为 `<current checkout root>/.agents/worktrees/<name>`。`repositoryRoot` 是调用方当前检出目录的顶层目录；因此，链接检出目录会在自身内部保存工作树父目录。仅当服务的分配操作创建了配置指定的父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`。已有文件与忽略规则保持不变。调用方 Session 的现有沙箱策略必须允许写入目标目录与共享 Git 管理目录。Git 初始化成功后才改变工作目录。
 
-通过 `working_directory({ cd: path })` 离开时，会保留检出目录与分支。取消或失败也可能留下部分产物；错误会指出它们的位置。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
+`exit_worktree` 工具调用的 `ctx.worktrees.exit(agent)` 找到包含 Session 当前目录的已记录工作树，把 Session 送回它的源检出；检出目录与分支保留。嵌套的工作树每次退出一层。取消或失败也可能留下部分产物；错误会指出它们的位置。服务销毁时会中止待完成操作并等待它们结束。[包 README](../../packages/experimental/worktree/README.zh.md)拥有配置与 Git 要求。
 
 ## 请求与结果
 
@@ -142,6 +142,18 @@ async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortS
  * @returns the directory and whether the branch was created again.
  */
 async restore( agent: Agent, request: RestoreWorktreeRequest, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<RestoredWorktree>
+
+/**
+ * Return the calling Session from the worktree it works in to the source checkout that worktree was
+ * created from. The worktree is the recorded creation, the Session's own or fork-inherited, with the
+ * longest directory containing the Session's current directory. Its checkout and branch remain.
+ * @param agent - caller whose current directory lies in a recorded worktree.
+ * @param signal - cancellation of directory validation and of the working-directory change.
+ * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
+ * @throws when no recorded worktree contains the current directory, or the working-directory
+ *   service's error when the source checkout no longer exists.
+ */
+async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>
 
 /**
  * Read the archive cleanup of a Session's created checkout; waiting never

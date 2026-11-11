@@ -95,7 +95,7 @@
     },
     {
       "name": "create_worktree",
-      "description": "Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail. Use working_directory with cd to leave; the checkout and branch remain.",
+      "description": "Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail. exit_worktree returns to the source checkout.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -150,6 +150,14 @@
           "old_string",
           "new_string"
         ]
+      }
+    },
+    {
+      "name": "exit_worktree",
+      "description": "Change this session's working directory from the worktree it is in back to the checkout that worktree was created from, and report the worktree left. The worktree and its branch remain.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
       }
     },
     {
@@ -347,10 +355,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -376,10 +380,6 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "cwd": {
-            "type": "string",
-            "description": "Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent."
-          },
           "description": {
             "type": "string",
             "description": "A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request."
@@ -607,19 +607,6 @@
           "script",
           "meta"
         ]
-      }
-    },
-    {
-      "name": "working_directory",
-      "description": "Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "cd": {
-            "type": "string",
-            "description": "Existing directory to enter. Omit to read the current directory."
-          }
-        }
       }
     },
     {
