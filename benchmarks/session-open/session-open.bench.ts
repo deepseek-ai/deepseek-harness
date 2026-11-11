@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import {
   runBuiltBenchmarkWorker,
@@ -364,7 +365,7 @@ describe('Session opening benchmark prerequisites', () => {
       const original = await readFile(facts.path)
       const directory = join(root, SYNTHETIC_SESSION_DIRECTORY)
       const persistence = await mount()
-      const read = await persistence.open(SessionId(SYNTHETIC_SESSION_ID), 'read')
+      const read = await persistence.open(brandString<SessionId>(SYNTHETIC_SESSION_ID), 'read')
       const initial = await read.read()
       const session = Session.fromRestore(read.header.id, initial.events, read.header, read.inheritedEventCount, initial.eventState)
       expect(read.header.version).toBe(SESSION_FORMAT_VERSION)
@@ -380,11 +381,11 @@ describe('Session opening benchmark prerequisites', () => {
       )
       await read.close()
       expect(await readdir(directory)).toEqual([SYNTHETIC_V0_FILENAME])
-      const writer = await persistence.open(SessionId(SYNTHETIC_SESSION_ID), 'write')
+      const writer = await persistence.open(brandString<SessionId>(SYNTHETIC_SESSION_ID), 'write')
       expect((await writer.read()).events).toEqual(initial.events)
       await writer.close()
       expect(await readdir(directory)).toContain(SYNTHETIC_CURRENT_FILENAME)
-      const reopened = await (await mount()).open(SessionId(SYNTHETIC_SESSION_ID), 'read')
+      const reopened = await (await mount()).open(brandString<SessionId>(SYNTHETIC_SESSION_ID), 'read')
       expect((await reopened.read()).events).toEqual(initial.events)
       await reopened.close()
       expect(await readFile(facts.path)).toEqual(original)

@@ -5,13 +5,14 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   acknowledgeReloadConnectionLoss, launchWebScaffold,
   seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, scrollIntoView } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Borrowed read-only: this scenario needs any settled assistant message to
 // address, not a new recording (message-actions / sidebar-scrollbar pattern).
@@ -121,7 +122,7 @@ describe('web e2e: durable per-message feedback', () => {
     await expect.poll(() => restored.getAttribute('aria-pressed'), { timeout: 15_000 }).toBe('true')
     // The retract label sits on the Dislike side: the Like stays unpressed.
     await expect.poll(() => cold.getAttribute('aria-pressed'), { timeout: 10_000 }).toBe('false')
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))
     if (agent === undefined) throw new Error('seeded session did not attach an agent')
     const puts = agent.session.snapshotEvents().filter(event => event.type === 'feedback/message-put')
     expect(puts.map(event => event.type === 'feedback/message-put' ? event.data.item : undefined)).toMatchObject([
@@ -148,7 +149,7 @@ describe('web e2e: durable per-message feedback', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-header-feedback'))
     await openSeededSession()
     await page.getByText('DONE', { exact: true }).waitFor({ timeout: 30_000 })
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))
     if (agent === undefined) throw new Error('seeded session did not attach an agent')
     const feedbackEvents = () => agent.session.snapshotEvents().filter(event => event.type.startsWith('feedback/'))
     const before = feedbackEvents().length

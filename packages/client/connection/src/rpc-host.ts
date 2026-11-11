@@ -4,11 +4,8 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { PeerId, PeerScope, Principal } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConnectionInteractions } from './connect-protocol.ts'
-import {
-  RpcId,
-  type ClientRequest,
-  type RpcId as RpcIdType,
-} from './rpc.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ClientRequest, RpcId as RpcIdType } from './rpc.ts'
 import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
 import { isRemoteAuthority, isTrustedApiRequest } from './api-request-trust.ts'
@@ -33,7 +30,7 @@ import type {
   HostConnectionRpc,
 } from './rpc.ts'
 
-const INVALID_REQUEST_RPC_ID = RpcId('invalid-request')
+const INVALID_REQUEST_RPC_ID = brandString<RpcIdType>('invalid-request')
 const CHANNEL_PATTERN = /^\/[A-Za-z0-9._~-]+$/
 const ENDPOINT_SEGMENT_PATTERN = /^[A-Za-z0-9_$.-]+$/
 
@@ -350,7 +347,7 @@ function rpcFetchHandler(
 
 function invalidEnvelopeResponse(body: unknown, issues: readonly object[]): Response {
   const rawId = (body as { rpcId?: unknown } | null)?.rpcId
-  const rpcId = typeof rawId === 'string' ? RpcId(rawId) : INVALID_REQUEST_RPC_ID
+  const rpcId = typeof rawId === 'string' ? brandString<RpcIdType>(rawId) : INVALID_REQUEST_RPC_ID
   return errorResponse(rpcId, {
     code: 'gateway/bad-request',
     message: 'invalid client-request message',

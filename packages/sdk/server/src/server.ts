@@ -15,7 +15,7 @@ import { queryCommandImages, queryContent } from './query-content.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import { admitEncodedImages, type EncodedImageAttachment, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage, ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ReasoningEffortId, type ContentBlock, type LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type {} from '@deepseek-ai/dsh-user-approval'
@@ -90,7 +90,7 @@ export class HarnessSdkJsonRpcServer {
   private cwd = process.cwd()
   private provider = 'deepseek-official'
   private model = 'deepseek-official'
-  private reasoningEffort: ReturnType<typeof ReasoningEffortId> | undefined
+  private reasoningEffort: ReasoningEffortId | undefined
   private maxTokens: number | undefined
   private llmFiber: { dispose(): Promise<void> } | undefined
   private readonly sessions = new Map<string, SessionRecord>()
@@ -229,7 +229,7 @@ export class HarnessSdkJsonRpcServer {
     const model = params.model
     const reasoningEffort = params.reasoningEffort === undefined
       ? undefined
-      : ReasoningEffortId(params.reasoningEffort)
+      : brandString<ReasoningEffortId>(params.reasoningEffort)
     if (!this.hasAdapterFor(provider)) {
       if (provider !== 'deepseek-official') throw new Error(`no adapter registered for provider "${provider}"`)
       this.llmFiber = await this.ctx.plugin(LlmDeepSeek)

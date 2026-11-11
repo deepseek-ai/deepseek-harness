@@ -15,7 +15,7 @@ afterEach(() => {
 function mount(overrides: Partial<ViewOptions> = {}, visible = true, fold?: string) {
   const options: ViewOptions = {
     anyExpanded: false, hasFiles: true, toggleExpansion: vi.fn(), split: true, toggleSplit: vi.fn(), wrap: false, toggleWrap: vi.fn(),
-    hideTests: true, toggleTests: vi.fn(), refresh: vi.fn(), ...overrides,
+    hideTests: true, toggleTests: vi.fn(), refresh: vi.fn(), lenses: [], chooseLens: vi.fn(), plugins: vi.fn(() => null), ...overrides,
   }
   const view = render(<div data-fold={fold}><ViewOptionsMenu options={options} visible={visible} t={t} /></div>)
   const trigger = within(view.container).getByRole('button', { name: en['diff.moreOptions'] })
@@ -72,4 +72,17 @@ it('toggles test files from the menu', () => {
   fireEvent.click(m.trigger)
   fireEvent.click(m.view.getByRole('menuitem', { name: en['tests.hide'] }))
   expect(m.options.toggleTests).toHaveBeenCalledTimes(1)
+})
+
+it('lists the lenses with the test switch at level 2, chooses one, and draws the plugin rows that close the menu', () => {
+  const chooseLens = vi.fn()
+  const plugins = vi.fn((close: () => void) => <button type="button" role="menuitem" onClick={close}>Notes 2</button>)
+  const m = mount({ lenses: [{ id: 'fixture/exports', title: 'Exports', count: 1 }], chooseLens, plugins }, true, '2')
+  fireEvent.click(m.trigger)
+  expect(m.rows()).toEqual(['Expand all files', 'Side by side', 'Wrap lines', 'Hide test files', 'No lens', 'Exports1', 'Notes 2'])
+  fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Exports1' }))
+  expect(chooseLens).toHaveBeenCalledWith('fixture/exports')
+  fireEvent.click(m.trigger)
+  fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Notes 2' }))
+  expect(m.rows()).toEqual([])
 })

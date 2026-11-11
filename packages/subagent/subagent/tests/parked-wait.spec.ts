@@ -7,10 +7,11 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { NO_START_CAPABILITIES, type SubagentActivation } from '../src/index.ts'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { managerState } from './manager-internals.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function message(text: string) {
   return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
@@ -33,7 +34,7 @@ async function setup() {
     prepareContinuable: () => Promise.resolve({}),
   })
   const { agent: parent } = await ctx.agents.create({
-    sessionId: SessionId('parked-wait-root'),
+    sessionId: brandString<SessionId>('parked-wait-root'),
     agentOptions: { provider: 'mock', model: 'mock' },
   })
 

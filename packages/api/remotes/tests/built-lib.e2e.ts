@@ -20,6 +20,7 @@ const requiredArtifacts = [
   'packages/api/remotes/lib/client.js',
   'packages/core/agent/lib/index.js',
   'packages/core/session/lib/index.js',
+  'packages/util/brand/lib/index.js',
   'packages/goal/goal/lib/index.js',
   'packages/goal/goal/lib/typert.host.js',
   'packages/api/gateway/lib/client.js',
@@ -34,6 +35,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
   it('runs root and Agent-scoped calls through generated bundles and real HTTP', async () => {
     const urls = Object.fromEntries(Object.entries({
       agent: 'packages/core/agent/lib/index.js',
+      brand: 'packages/util/brand/lib/index.js',
       apiGatewayClient: 'packages/api/gateway/lib/client.js',
       apiGatewayHost: 'packages/api/gateway/lib/index.js',
       connectionClient: 'packages/client/connection/lib/client.js',
@@ -62,7 +64,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const { default: SessionProjectionRegistry } = await import(urls.sessionProjections)
       const { TYPERT } = await import(urls.goalTypert)
       const { default: TypertRegistry } = await import(urls.registryHost)
-      const { Session, SessionId } = await import(urls.session)
+      const { Session } = await import(urls.session)
+      const { brandString } = await import(urls.brand)
 
       const routes = []
       const credentialRecords = new Map()
@@ -94,7 +97,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       host.typert.register(TYPERT)
 
       const makeAgent = rawId => {
-        const session = new Session(SessionId(rawId))
+        const session = new Session(brandString(rawId))
         return {
           id: session.id,
           options: {},

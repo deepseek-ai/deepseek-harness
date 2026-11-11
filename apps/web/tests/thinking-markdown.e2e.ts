@@ -4,7 +4,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   assertFixtureInventory,
@@ -17,6 +17,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { expandTurnProcesses, newEnglishPage, saveFailureShot, scrollIntoView } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const EXPECTED_DIR = fileURLToPath(new URL('./expected/thinking-markdown', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/thinking-markdown/ui.expected.md', import.meta.url))
@@ -27,7 +28,7 @@ const LONG_TOKEN = 'workspace/packages/client/secondary-markdown/'.repeat(12)
 
 /** Closed Session using semantic Markdown and content wider than the message column. */
 function thinkingFixture(): string {
-  const session = Session.create(SessionId('thinking-markdown-source'))
+  const session = Session.create(brandString<SessionId>('thinking-markdown-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Show reasoning and a main answer.' }],

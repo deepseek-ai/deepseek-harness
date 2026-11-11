@@ -2,7 +2,7 @@ import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { setImmediate } from 'node:timers/promises'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -13,6 +13,7 @@ import type { Config } from '../src/index.ts'
 import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 import { mountRuntime } from './setup.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const request: PtcRunRequest = { program: 'return 1', bindings: [] }
 
@@ -510,7 +511,7 @@ describe('Node runtime host failures', () => {
 
 it('keeps failed per-call cleanup registered until process observation succeeds', async () => {
   const h = await setup()
-  const session = h.ctx.sessions.create(SessionId('per-call-cleanup-retry'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('per-call-cleanup-retry'))
   h.waitForExit.mockRejectedValue(new Error('range cannot be observed'))
   h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) })
@@ -525,7 +526,7 @@ it('keeps failed per-call cleanup registered until process observation succeeds'
 
 it('unregisters a Session resource when process spawn fails', async () => {
   const h = await setup()
-  const session = h.ctx.sessions.create(SessionId('failed-session-spawn'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('failed-session-spawn'))
   h.spawn.mockImplementation(() => { throw new Error('spawn failed') })
   const result = await h.start({ ...request, sandboxPolicy: h.ctx.sandboxPolicy.resolve({ session }) }, NO_INITIAL_FRAME)
   expect(result.error?.message).toContain('spawn failed')
@@ -534,7 +535,7 @@ it('unregisters a Session resource when process spawn fails', async () => {
 
 it('preserves execution context for bindings delivered by an external control stream', async () => {
   const h = await setup()
-  const session = h.ctx.sessions.create(SessionId('external-binding-context'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('external-binding-context'))
   const booted = Promise.withResolvers<undefined>()
   h.receive((raw) => {
     const message = raw as { t: string; m?: string; r?: unknown }

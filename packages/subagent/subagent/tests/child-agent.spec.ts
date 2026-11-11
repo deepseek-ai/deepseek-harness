@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { resolveChildAgentOptions, resolveChildDepth } from '../src/child-agent.ts'
 
 function parentAgent(): Agent {
-  const id = SessionId('parent')
+  const id = brandString<SessionId>('parent')
   return {
     id,
     options: {
       provider: 'parent-provider',
       model: 'parent-model',
-      reasoningEffort: ReasoningEffortId('high'),
+      reasoningEffort: brandString<ReasoningEffortId>('high'),
       maxTokens: 512,
     },
     session: Session.create(id),
@@ -55,7 +56,7 @@ describe('child Agent options', () => {
     expect(resolveChildAgentOptions(parentAgent(), {
       provider: 'child-provider',
       model: 'child-model',
-      reasoningEffort: ReasoningEffortId('max'),
+      reasoningEffort: brandString<ReasoningEffortId>('max'),
     }, 1)).toEqual({
       provider: 'child-provider',
       model: 'child-model',
@@ -72,7 +73,7 @@ describe('child Agent options', () => {
         config: {
           provider: 'current-provider',
           model: 'current-model',
-          reasoningEffort: ReasoningEffortId('low'),
+          reasoningEffort: brandString<ReasoningEffortId>('low'),
         },
       },
       reason: 'initial',

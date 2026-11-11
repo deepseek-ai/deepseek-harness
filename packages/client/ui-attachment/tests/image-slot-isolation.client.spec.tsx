@@ -4,8 +4,9 @@ import * as fileDragPlugin from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { UiConversation } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation/assembly.ts'
@@ -36,10 +37,10 @@ async function bench() {
   } })
   await runtime.mount(attachmentPlugin)
   await runtime.sessions.add({ id: 'image-domains' })
-  const session = runtime.sessions.retainFor(runtime.ctx, SessionId('image-domains'))
+  const session = runtime.sessions.retainFor(runtime.ctx, brandString<SessionId>('image-domains'))
   const input: MessageImagesOwnerProps = {
     images: [{ attachment: {
-      attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png',
+      attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`), mediaType: 'image/png',
       name: 'shared.png', width: 1, height: 1, bytes: 68,
     } }],
     loadImage: vi.fn(async () => 'blob:shared'), align: 'start',

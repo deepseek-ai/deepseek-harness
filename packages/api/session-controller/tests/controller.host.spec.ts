@@ -3,9 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { LlmAttemptId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type LlmAttemptId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -30,7 +31,7 @@ describe('SessionController facade', () => {
     await mountAgentLoopTestHarness(ctx)
     const gateway: Partial<TypertGatewayService> = { getPendingRemoteEvents: () => [] }
     ctx.provide('typertGateway', gateway as TypertGatewayService)
-    const session = ctx.sessions.create(SessionId('assistant-interleave'), { meta: { cwd: '/workspace' } })
+    const session = ctx.sessions.create(brandString<SessionId>('assistant-interleave'), { meta: { cwd: '/workspace' } })
     const partial: Partial<Agent> = { id: session.id, session, status: 'running', ctx }
     const agent = partial as Agent
     const entered = Promise.withResolvers<undefined>()
@@ -50,7 +51,7 @@ describe('SessionController facade', () => {
     // An Agent start racing the list read must not be lost before the controller publishes.
     ctx.emit('agent/assistant-stream', {
       agent,
-      frame: { type: 'start', attemptId: LlmAttemptId('boot-attempt'), revision: 1, turn: 1, step: 1 },
+      frame: { type: 'start', attemptId: brandString<LlmAttemptId>('boot-attempt'), revision: 1, turn: 1, step: 1 },
     })
     gate.resolve(undefined)
     const controller = await mounting
@@ -71,7 +72,7 @@ describe('SessionController facade', () => {
     const gateway: Partial<TypertGatewayService> = { getPendingRemoteEvents: () => [] }
     ctx.provide('typertGateway', gateway as TypertGatewayService)
     const controller = await createSessionTestController(ctx, defaults)
-    const sessionId = SessionId('passive-facade')
+    const sessionId = brandString<SessionId>('passive-facade')
     ctx.sessions.create(sessionId, { meta: { cwd: '/workspace' } })
     const address = { kind: 'session' as const, sessionId }
     const signal = new AbortController().signal
@@ -97,7 +98,7 @@ describe('SessionController facade', () => {
     onTestFinished(() => ctx.fiber.dispose())
     await mountAgentLoopTestDependencies(ctx)
     await mountAgentLoopTestHarness(ctx)
-    const sessionId = SessionId('controller-session')
+    const sessionId = brandString<SessionId>('controller-session')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION,
       id: sessionId,
@@ -174,7 +175,7 @@ describe('SessionController facade', () => {
     expect(ctx.sessionProjections.snapshot(session).values.modelSelection).toEqual({
       lastUsed: { provider: 'fixture', model: 'fixture-model' }, next: { provider: 'fixture', model: 'fixture-model' },
     })
-    const unowned = ctx.sessions.create(SessionId('controller-unowned'), {
+    const unowned = ctx.sessions.create(brandString<SessionId>('controller-unowned'), {
       meta: { cwd: '/workspace' },
     })
     unowned.append('request/header', {
@@ -204,7 +205,7 @@ describe('SessionController facade', () => {
       await ctx.plugin(SessionStore)
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentRegistry)
-      const sessionId = SessionId(`background-${outcome}`)
+      const sessionId = brandString<SessionId>(`background-${outcome}`)
       const header: SessionHeader = {
         version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
       }
@@ -262,7 +263,7 @@ describe('SessionController facade', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const sessionId = SessionId('background-disposal')
+    const sessionId = brandString<SessionId>('background-disposal')
     const header: SessionHeader = {
       version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
     }

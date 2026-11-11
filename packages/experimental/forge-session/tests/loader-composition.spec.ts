@@ -14,9 +14,9 @@ import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import * as ForgeGitHub from '@deepseek-ai/dsh-experimental-forge-github'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { createUserMessage, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -29,6 +29,7 @@ import ForgeSessionService from '../src/index.ts'
 import type { SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
 import type { ShellExecution } from '@deepseek-ai/dsh-shell'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * GitHub CLI fixture: `pr create` prints PR 8; `pr view` prints PR 9, whose description links PR 6;
@@ -130,7 +131,7 @@ class ScriptedModel extends LlmAdapter {
     this.requests.push(options)
     const command = this.commands[this.requests.length - 1]
     if (command !== undefined) {
-      const call = { type: 'tool-call' as const, id: ToolCallId(`shell-${this.requests.length}`), name: 'bash', arguments: JSON.stringify({ command, description: 'Run the scripted command' }) }
+      const call = { type: 'tool-call' as const, id: brandString<ToolCallId>(`shell-${this.requests.length}`), name: 'bash', arguments: JSON.stringify({ command, description: 'Run the scripted command' }) }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: call }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -212,11 +213,11 @@ async function load() {
 
 async function observerFixture() {
   const { ctx, path, root } = await load()
-  const handle = await ctx.agents.create({ sessionId: SessionId('reference-observer') })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('reference-observer') })
   const controller = new AbortController()
   const exec: ToolExecution = {
     name: 'bash', agent: handle.agent,
-    callId: ToolCallId('reference'), rootCallId: ToolCallId('reference'), token: Symbol('reference') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('reference'), rootCallId: brandString<ToolCallId>('reference'), token: Symbol('reference') as ToolExecutionToken,
     arguments: { command: `${path} gh pr view 9 -R octo/demo --json number` }, signal: controller.signal,
   }
   const result: ToolExecutionResult = {
@@ -342,7 +343,7 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
       `${path} gh pr view 9 --repo octo/demo --json number,title,body 2>&1 | head -200`,
     ])
     ctx.llm.registerAdapter(['fixture'], model)
-    const agent = await ctx.agentLoop.create(SessionId('forge-session-loader'), { provider: 'fixture', model: 'fixture' }, { cwd: root })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('forge-session-loader'), { provider: 'fixture', model: 'fixture' }, { cwd: root })
     const idle: PromiseWithResolvers<void> = Promise.withResolvers()
     const stop = ctx.on('agent/status', ({ agent: subject, status }) => {
       if (subject === agent && status === 'idle') idle.resolve()

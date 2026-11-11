@@ -90,7 +90,6 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-error": "workspace:*",
     "@deepseek-ai/dsh-hmr": "workspace:*",
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*",
     "@deepseek-ai/dsh-sandbox": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*"

@@ -8,7 +8,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { InMemoryTransport, type Transport } from '@modelcontextprotocol/client'
 import { McpServer } from '@modelcontextprotocol/server'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
@@ -60,7 +61,7 @@ describe('modern MCP connections', () => {
     }))
     const ctx = await connect(server)
     const result = await executeToolFixture(ctx, {
-      name: 'mcp__fixture__measure', arguments: {}, callId: ToolCallId('measure'), signal: new AbortController().signal,
+      name: 'mcp__fixture__measure', arguments: {}, callId: brandString<ToolCallId>('measure'), signal: new AbortController().signal,
     })
     expect(result.error).toEqual({
       message: 'Tool "measure" returned an invalid MCP result: structured content does not match the output schema: data/size must be number',
@@ -95,7 +96,7 @@ describe('modern MCP connections', () => {
     ] as const) {
       const result = await executeToolFixture(ctx, {
         name, arguments: { server: 'fixture' },
-        callId: ToolCallId(name), signal: new AbortController().signal,
+        callId: brandString<ToolCallId>(name), signal: new AbortController().signal,
       })
       expect(result).toMatchObject({ isError: false, value: expected })
     }
@@ -103,14 +104,14 @@ describe('modern MCP connections', () => {
     expect(debug).not.toHaveBeenCalled()
     const read = await executeToolFixture(ctx, {
       name: 'read_mcp_resource', arguments: { server: 'fixture', uri: 'memo://readme' },
-      callId: ToolCallId('unsupported-resource-read'), signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('unsupported-resource-read'), signal: new AbortController().signal,
     })
     expect(read.isError).toBe(true)
     if (read.isError) expect(read.error.message).toContain('Method not found')
     expect(ctx.tools.schemas().map(tool => tool.name)).toEqual(names)
     const ping = await executeToolFixture(ctx, {
       name: 'mcp__fixture__ping', arguments: {},
-      callId: ToolCallId('ping-after-resource-errors'), signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('ping-after-resource-errors'), signal: new AbortController().signal,
     })
     expect(ping).toMatchObject({ isError: false, value: { content: [{ type: 'text', text: 'pong' }] } })
   })
@@ -135,7 +136,7 @@ describe('modern MCP connections', () => {
       for (const cursor of [undefined, 'opaque-page']) {
         const result = await executeToolFixture(ctx, {
           name, arguments: { server: 'fixture', ...cursor === undefined ? {} : { cursor } },
-          callId: ToolCallId(name), signal: new AbortController().signal,
+          callId: brandString<ToolCallId>(name), signal: new AbortController().signal,
         })
         expect(result.isError).toBe(false)
       }
@@ -143,7 +144,7 @@ describe('modern MCP connections', () => {
     expect(seen).toEqual([undefined, 'opaque-page', undefined, 'opaque-page'])
     const read = await executeToolFixture(ctx, {
       name: 'read_mcp_resource', arguments: { server: 'fixture', uri: 'memo://readme' },
-      callId: ToolCallId('read-resource'), signal: new AbortController().signal,
+      callId: brandString<ToolCallId>('read-resource'), signal: new AbortController().signal,
     })
     expect(read).toMatchObject({ isError: false, value: { contents: [{ uri: 'memo://readme', text: 'memo' }] } })
   })
@@ -171,7 +172,7 @@ describe('modern MCP connections', () => {
     const ctx = await connect(server)
     const controller = new AbortController()
     const result = executeToolFixture(ctx, {
-      callId: ToolCallId('cancel'), name: 'mcp__fixture__wait', arguments: {}, signal: controller.signal,
+      callId: brandString<ToolCallId>('cancel'), name: 'mcp__fixture__wait', arguments: {}, signal: controller.signal,
     })
     await entered.promise
     controller.abort(new Error('caller stopped'))

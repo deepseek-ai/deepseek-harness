@@ -3,9 +3,10 @@ import { createRef, useCallback, useMemo, useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { useTextInteraction } from '../src/client/chat/text-interaction.ts'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TextInteractionBinding } from '../src/client/chat/text-interaction.ts'
 import type { TextInteractionGesture, TextInteractionRequest } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const rect = (left: number, top: number, width: number, height: number): DOMRect => new DOMRect(left, top, width, height)
 let selectionRect = rect(100, 120, 40, 20)
@@ -50,7 +51,7 @@ function Area({ id = 'action', admit, onBinding, enabled = true, composer = fals
   const dispatch = useCallback((gesture: TextInteractionGesture): string | null => {
     if (!enabled) return null
     let opened = false
-    const request: TextInteractionRequest = { ...gesture, sessionId: SessionId(id), open: () => { opened = true } }
+    const request: TextInteractionRequest = { ...gesture, sessionId: brandString<SessionId>(id), open: () => { opened = true } }
     if (admit === undefined) { if (request.trigger === 'selection') request.open() }
     else admit(request)
     return opened ? id : null

@@ -4,12 +4,13 @@ import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
   ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
-import { createAssistantMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import ForgeSessionService from '../src/index.ts'
 import type { Config } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Repository served by {@link FakeProvider}. */
 export const demo: ForgeRepository = { forge: 'fake', host: 'fake.test', owner: 'octo', name: 'demo' }
@@ -176,18 +177,18 @@ export function shellTurn(session: Session, calls: readonly ShellCall[]): void {
     step,
     stream: [],
     message: createAssistantMessage({
-      content: calls.map(call => ({ type: 'tool-call' as const, id: ToolCallId(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })),
+      content: calls.map(call => ({ type: 'tool-call' as const, id: brandString<ToolCallId>(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })),
       source: { provider: 'fixture', model: 'fixture' },
     }),
   }, { surfaceOp: 'append' })
   for (const call of calls) {
-    session.append('tool/call', { turn, step, callId: ToolCallId(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })
+    session.append('tool/call', { turn, step, callId: brandString<ToolCallId>(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })
   }
   for (const call of calls) {
     session.append('tool/result', {
       turn,
       step,
-      message: createToolResultMessage({ callId: ToolCallId(call.callId), content: [{ type: 'text', text: call.output }], isError: call.isError ?? false }),
+      message: createToolResultMessage({ callId: brandString<ToolCallId>(call.callId), content: [{ type: 'text', text: call.output }], isError: call.isError ?? false }),
     }, { surfaceOp: 'append' })
   }
   session.append('step/end', { turn, step })

@@ -14,7 +14,8 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import * as workspaceDependencies from '../src/index.ts'
 import { copyPrimaryRuntime, installPrimaryRuntime, parsePrimaryRuntime, readPrimaryRuntime, resolvePrimaryRuntime, workspaceDependencyPaths, type PrimaryRuntimeManifest } from '../src/index.ts'
 
@@ -244,7 +245,7 @@ it('reports preparation failures with structured tool errors', async () => {
     const { source, root, manifest, directory } = await fixture()
     await ctx.plugin(workspaceDependencies, { source, root })
     const call = async (id: string) => (await executeToolFixture(ctx, {
-      name: 'load_workspace_dependencies', arguments: {}, callId: ToolCallId(id), signal: new AbortController().signal,
+      name: 'load_workspace_dependencies', arguments: {}, callId: brandString<ToolCallId>(id), signal: new AbortController().signal,
     })).error
     await writeFile(join(source, 'runtime.json'), JSON.stringify({ ...manifest, platform: process.platform === 'linux' ? 'darwin' : 'linux' }))
     expect(await call('platform')).toEqual({
@@ -318,7 +319,7 @@ it('loads the real tool through Cordis, exposes payload paths in place, and unre
     for (const entry of ctx.loader.entries()) await entry.fiber?.await()
     const environment = { ...process.env }
     const request = { signal: new AbortController().signal, name: 'load_workspace_dependencies', arguments: {} }
-    const results = await Promise.all(['first', 'second'].map(id => executeToolFixture(ctx, { ...request, callId: ToolCallId(id) })))
+    const results = await Promise.all(['first', 'second'].map(id => executeToolFixture(ctx, { ...request, callId: brandString<ToolCallId>(id) })))
     for (const result of results) {
       expect(result.isError).toBe(false)
       expect(result.content).toEqual([{ type: 'text', text: JSON.stringify(workspaceDependencyPaths(source, manifest), undefined, 2) }])
@@ -371,7 +372,7 @@ async function tool(config: workspaceDependencies.Config) {
     await fiber
     const execute = () => executeToolFixture(ctx, {
       signal: new AbortController().signal, name: 'load_workspace_dependencies',
-      arguments: {}, callId: ToolCallId('dependencies'),
+      arguments: {}, callId: brandString<ToolCallId>('dependencies'),
     })
     return { ctx, fiber, execute }
   } catch (error) {

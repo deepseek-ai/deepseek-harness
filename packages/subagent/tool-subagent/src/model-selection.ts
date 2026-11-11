@@ -1,6 +1,7 @@
 /** Child LLM route selection for the subagent tool. */
 
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import type { LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import z from '@deepseek-ai/schemastery'
@@ -123,7 +124,7 @@ export function requestedAgentOptions(
     provider: request.provider,
     model: request.model,
     // Explicit undefined also clears compatible parent effort during child-option merging.
-    reasoningEffort: request.reasoning_effort === undefined ? undefined : ReasoningEffortId(request.reasoning_effort),
+    reasoningEffort: request.reasoning_effort === undefined ? undefined : brandString<ReasoningEffortId>(request.reasoning_effort),
   }
 }
 

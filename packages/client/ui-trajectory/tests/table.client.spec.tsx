@@ -5,10 +5,11 @@ import { es, pt } from '../src/client/locales.ts'
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { useState, type ComponentProps, type ReactNode } from 'react'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type { MessageImageLoader, MessageImagesOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
@@ -35,7 +36,7 @@ async function imageSlotFixture() {
   const runtime = await SlotTestRuntime.create()
   onTestFinished(() => runtime.dispose())
   await runtime.sessions.add({ id: 'trajectory-images' })
-  const session = runtime.sessions.retainFor(runtime.ctx, SessionId('trajectory-images'))
+  const session = runtime.sessions.retainFor(runtime.ctx, brandString<SessionId>('trajectory-images'))
   type Seats = PropsRenderSlots<'conversation.trajectory.images'>
   const captured: { seats?: Seats; setContent?: (content: ReactNode) => void } = {}
   await runtime.root.declare({ 'conversation.trajectory.images': { kind: 'single', scope: 'session' } }, function TestRoot(props) {
@@ -1267,7 +1268,7 @@ describe('TrajectoryTable', () => {
     'keeps mixed attachments ordered and raw fields complete in %s',
     async (_locale, translate, listLabel, imageLabel, summaryTab, previewTab, rawTab) => {
       const attachment = {
-        attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+        attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
         mediaType: 'image/png' as const,
         bytes: 68,
         width: 40,
@@ -1275,7 +1276,7 @@ describe('TrajectoryTable', () => {
         originalDimensions: { width: 400, height: 8000 },
       }
       const file = {
-        attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+        attachmentId: brandString<AttachmentId>(`sha256:${'b'.repeat(64)}`),
         name: `${'long-filename-'.repeat(12)}.txt`,
         bytes: 0,
       }
@@ -1324,7 +1325,7 @@ describe('TrajectoryTable', () => {
   it('renders a tool-result image through the shared gallery in the Result tab', async () => {
     const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
-      attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'b'.repeat(64)}`),
       mediaType: 'image/png',
       bytes: 68,
       width: 320,
@@ -1361,7 +1362,7 @@ describe('TrajectoryTable', () => {
   it('keeps the failure name beside an image-only error result', async () => {
     const { render, renderSlot } = await imageSlotFixture()
     const attachment = {
-      attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${'c'.repeat(64)}`),
       mediaType: 'image/png',
       bytes: 68,
       width: 320,

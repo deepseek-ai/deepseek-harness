@@ -79,6 +79,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [`ptc-runtime-python`](ptc-runtime-python/README.md) | CPython subprocess backend for the PTC execution seam | `ctx.ptcRuntime` |
 | [CUA](cua/README.md) | Application/window objects, authorized execution, and permission controls. | `ctx.cuaAccess` |
 | [macOS CUA](cua-macos/README.md) | Swift native execution and platform preparation. | `ctx.computerUse` |
+| [Windows CUA](cua-windows/README.md) | Native application and window operations through Windows UI Automation. | `ctx.computerUse` |
 | [`cua-bundle`](cua-bundle/README.md) | Optional Computer Use switch for PTC sessions | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.md) | Use an installed Cua Driver through MCP | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.md) | Embed the Cua Driver native npm runtime | `ctx.computerUse` |

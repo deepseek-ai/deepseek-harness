@@ -5,27 +5,28 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
-import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ToolCallId, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
-import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionPersistenceRevision, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { makeBridgeHarness, textResponse, type BridgeHarness } from './harness.ts'
 import { startHttpMcpFixture } from '../../../mcp/mcp-client/tests/http-fixture.ts'
 
 /** Wrap a bare header as the snapshot shape `SessionPersistence.list` now returns. */
 function snapshotOf(header: SessionHeader): SessionPersistenceSnapshot {
-  return { header, revision: SessionPersistenceRevision(`test-${header.id}`) }
+  return { header, revision: brandString<SessionPersistenceRevision>(`test-${header.id}`) }
 }
 
 function oneToolCall(): StreamChunk[] {
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
-    { type: 'tool-call-delta', index: 0, id: ToolCallId('call-switch'), name: 'switch_model', argumentsDelta: '{}' },
+    { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('call-switch'), name: 'switch_model', argumentsDelta: '{}' },
     {
       type: 'block-end',
       index: 0,
-      block: { type: 'tool-call', id: ToolCallId('call-switch'), name: 'switch_model', arguments: '{}' },
+      block: { type: 'tool-call', id: brandString<ToolCallId>('call-switch'), name: 'switch_model', arguments: '{}' },
     },
     { type: 'finish', reason: { kind: 'tool-calls' } },
   ]
@@ -93,7 +94,7 @@ describe('automation-only ACP bridge', () => {
     })
     expect('messageId' in harness.updates[0]!).toBe(true)
     if ('messageId' in harness.updates[0]!) expect(typeof harness.updates[0].messageId).toBe('string')
-    expect(harness.ctx.agents.get(SessionId(sessionId))?.session.header.cwd).toBe(process.cwd())
+    expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))?.session.header.cwd).toBe(process.cwd())
     expect(harness.adapter.requests[0]?.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'say hello' }])
   })
 
@@ -105,8 +106,8 @@ describe('automation-only ACP bridge', () => {
 
     await harness.client.closeSession({ sessionId: first.sessionId })
 
-    expect(harness.ctx.agents.get(SessionId(first.sessionId))).toBeUndefined()
-    expect(harness.ctx.agents.get(SessionId(second.sessionId))).toBeDefined()
+    expect(harness.ctx.agents.get(brandString<SessionId>(first.sessionId))).toBeUndefined()
+    expect(harness.ctx.agents.get(brandString<SessionId>(second.sessionId))).toBeDefined()
     await expect(harness.client.prompt({
       sessionId: first.sessionId,
       prompt: [{ type: 'text', text: 'closed' }],
@@ -119,7 +120,7 @@ describe('automation-only ACP bridge', () => {
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const prompt = harness.client.prompt({ sessionId: created.sessionId, prompt: [{ type: 'text', text: 'hang' }] })
     await vi.waitFor(() => {
-      expect(harness!.ctx.agents.get(SessionId(created.sessionId))?.status).toBe('running')
+      expect(harness!.ctx.agents.get(brandString<SessionId>(created.sessionId))?.status).toBe('running')
     })
 
     await harness.client.closeSession({ sessionId: created.sessionId })
@@ -155,12 +156,12 @@ describe('automation-only ACP bridge', () => {
     harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
     vi.spyOn(agent, 'whenIdle').mockRejectedValueOnce(new Error('idle probe failed'))
 
     await expect(harness.client.closeSession({ sessionId: created.sessionId })).rejects.toThrow(/session close failed/)
 
-    expect(harness.ctx.agents.get(SessionId(created.sessionId))).toBeUndefined()
+    expect(harness.ctx.agents.get(brandString<SessionId>(created.sessionId))).toBeUndefined()
   })
 
   it('resumes a closed persisted session without replaying its history', async () => {
@@ -179,7 +180,7 @@ describe('automation-only ACP bridge', () => {
       mcpServers: [],
     })
     // Resume authorizes one known id through a point stat, never a corpus scan.
-    expect(statSpy).toHaveBeenCalledWith(SessionId(created.sessionId), expect.anything())
+    expect(statSpy).toHaveBeenCalledWith(brandString<SessionId>(created.sessionId), expect.anything())
     expect(listSpy).not.toHaveBeenCalled()
     expect(Array.isArray(resumed.configOptions)).toBe(true)
     expect(harness.updates).toHaveLength(updatesBeforeResume)
@@ -259,7 +260,7 @@ describe('automation-only ACP bridge', () => {
   it('excludes a globally live session owned outside this ACP bridge', async () => {
     harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
-    const sessionId = SessionId('other-frontend-live')
+    const sessionId = brandString<SessionId>('other-frontend-live')
     harness.ctx.sessions.create(sessionId, { meta: { cwd: process.cwd() } })
     vi.spyOn(harness.ctx.sessionPersistence, 'list').mockResolvedValue([snapshotOf({
       version: SESSION_FORMAT_VERSION,
@@ -303,7 +304,7 @@ describe('automation-only ACP bridge', () => {
     harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
     agent.session.append('session/title', { title: 'materialized', messageSeqs: [], source: { kind: 'user' } })
     await harness.client.closeSession({ sessionId: created.sessionId })
 
@@ -321,7 +322,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.setSessionConfigOption({
       sessionId: created.sessionId, configId: 'model', value: '["mock","plain"]',
     })
-    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
     expect(agent.session.requestHeader()).toBeUndefined()
     expect(agent.session.snapshotEvents().some(event => event.type === 'model/selection')).toBe(true)
     await harness.client.closeSession({ sessionId: created.sessionId })
@@ -391,10 +392,10 @@ describe('automation-only ACP bridge', () => {
   it.each([false, true])('resumes an ordinary fork with legacy parent metadata=%s', async (legacy) => {
     harness = await makeBridgeHarness()
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
-    const id = SessionId('ordinary-fork')
+    const id = brandString<SessionId>('ordinary-fork')
     const writer = await harness.ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: true,
-      cwd: process.cwd(), ...(legacy ? { parentSession: SessionId('source') } : {}),
+      cwd: process.cwd(), ...(legacy ? { parentSession: brandString<SessionId>('source') } : {}),
     }, { inheritedEventCount: SessionLogOffset(0) })
     try {
       await writer.append([{ type: 'session/end-seed', seq: SessionSeq(0), time: 1, data: { inherited: true } }])
@@ -410,18 +411,18 @@ describe('automation-only ACP bridge', () => {
     const active = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const persistence = harness.ctx.get('sessionPersistence')!
     vi.spyOn(persistence, 'list').mockResolvedValue(([
-      { version: SESSION_FORMAT_VERSION, id: SessionId(active.sessionId), createdAt: 9, isSeeded: false, cwd: process.cwd() },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('subagent'), createdAt: 8, isSeeded: false, cwd: '/missing/filter', origin: 'subagent' },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('fork'), createdAt: 7, isSeeded: false, cwd: '/missing/filter', parentSession: SessionId('parent') },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('relative'), createdAt: 5, isSeeded: false, cwd: 'relative' },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('other'), createdAt: 4, isSeeded: false, cwd: '/missing/other' },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('valid-b'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
-      { version: SESSION_FORMAT_VERSION, id: SessionId('valid-a'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(active.sessionId), createdAt: 9, isSeeded: false, cwd: process.cwd() },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('subagent'), createdAt: 8, isSeeded: false, cwd: '/missing/filter', origin: 'subagent' },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('fork'), createdAt: 7, isSeeded: false, cwd: '/missing/filter', parentSession: brandString<SessionId>('parent') },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('no-cwd'), createdAt: 6, isSeeded: false },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('relative'), createdAt: 5, isSeeded: false, cwd: 'relative' },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('other'), createdAt: 4, isSeeded: false, cwd: '/missing/other' },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('valid-b'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
+      { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('valid-a'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
     ] satisfies SessionHeader[]).map(snapshotOf))
     // Resume authorizes through a point stat, not the list scan mocked above.
-    vi.spyOn(persistence, 'stat').mockImplementation(async id => (id === SessionId('no-cwd')
-      ? snapshotOf({ version: SESSION_FORMAT_VERSION, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false })
+    vi.spyOn(persistence, 'stat').mockImplementation(async id => (id === brandString<SessionId>('no-cwd')
+      ? snapshotOf({ version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('no-cwd'), createdAt: 6, isSeeded: false })
       : undefined))
 
     await expect(harness.client.listSessions({ cwd: 'relative' })).rejects.toThrow(/absolute path/)
@@ -866,7 +867,7 @@ describe('automation-only ACP bridge', () => {
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
-    expect(harness.ctx.agents.get(SessionId(sessionId))?.options).toEqual({})
+    expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))?.options).toEqual({})
   })
 
   it('uses a recorded selection when ACP has no initial route', async () => {
@@ -878,7 +879,7 @@ describe('automation-only ACP bridge', () => {
     const created = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
 
     expect(created.configOptions).toEqual([])
-    const agent = harness.ctx.agents.get(SessionId(created.sessionId))!
+    const agent = harness.ctx.agents.get(brandString<SessionId>(created.sessionId))!
     agent.model.select({ provider: 'mock', model: 'mock' })
     await expect(harness.client.prompt({
       sessionId: created.sessionId,
@@ -933,7 +934,7 @@ describe('automation-only ACP bridge', () => {
     expect(firstImage.attachment.bytes).toBe(1)
     expect(secondImage.attachment.mediaType).toBe('image/jpeg')
     expect(secondImage.attachment.bytes).toBe(1)
-    const agent = harness.ctx.agents.get(SessionId(sessionId))
+    const agent = harness.ctx.agents.get(brandString<SessionId>(sessionId))
     expect(JSON.stringify(agent?.session.snapshotEvents())).not.toContain('AQ==')
   })
 
@@ -1007,7 +1008,7 @@ describe('automation-only ACP bridge', () => {
       sessionId,
       prompt: [{ type: 'image', data: '', mimeType: 'image/png' }],
     })).rejects.toThrow(/inline image prompts were not advertised/)
-    expect(harness.ctx.agents.get(SessionId(sessionId))?.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
+    expect(harness.ctx.agents.get(brandString<SessionId>(sessionId))?.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
   })
 
   it('renders baseline resource links as textual references in the user message', async () => {

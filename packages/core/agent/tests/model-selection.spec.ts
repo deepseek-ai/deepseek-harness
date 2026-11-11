@@ -7,8 +7,9 @@ import {
   type AgentOptions,
   type ModelSelection,
 } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, type EpochHeader } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ReasoningEffortId, type UserMessage } from '@deepseek-ai/dsh-llm'
+import SessionStore, { Session, type SessionId, type EpochHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { AgentModel, modelSelectionProjectionDefinition } from '../src/model-selection.ts'
 
@@ -25,7 +26,7 @@ async function harness(options: AgentOptions = INITIAL) {
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   const projection = await ctx.sessionProjections.register(modelSelectionProjectionDefinition)
-  const session = ctx.sessions.create(SessionId('model-selection'))
+  const session = ctx.sessions.create(brandString<SessionId>('model-selection'))
   const model = new AgentModel(() => projection.stateOf(session), session, options)
   const unused = (): never => { throw new Error('model-selection fixture does not drive the Agent') }
   const agent: Agent = {
@@ -78,7 +79,7 @@ describe('Session model selection', () => {
 
     h.record(INITIAL)
     expect(h.session.snapshotEvents()).toMatchObject([{ type: 'model/selection', data: INITIAL }])
-    const selected = { provider: 'beta', model: 'b1', reasoningEffort: ReasoningEffortId('high') }
+    const selected = { provider: 'beta', model: 'b1', reasoningEffort: brandString<ReasoningEffortId>('high') }
     h.record(selected)
     selected.model = 'mutated'
     const read: ModelSelection = h.current()!
@@ -93,17 +94,17 @@ describe('Session model selection', () => {
   it('retires only a matching pending selection and reconstructs it from the log', async () => {
     const h = await harness()
     h.header(INITIAL)
-    const selected = { provider: 'beta', model: 'b1', reasoningEffort: ReasoningEffortId('high') }
+    const selected = { provider: 'beta', model: 'b1', reasoningEffort: brandString<ReasoningEffortId>('high') }
     h.record(selected)
     for (const config of [
       { ...selected, provider: 'other' },
       { ...selected, model: 'other' },
-      { ...selected, reasoningEffort: ReasoningEffortId('low') },
+      { ...selected, reasoningEffort: brandString<ReasoningEffortId>('low') },
     ]) {
       h.header(config)
       expect(h.state()?.pending).toEqual(selected)
     }
-    const restored = Session.create(SessionId('restored'), h.session.snapshotEvents())
+    const restored = Session.create(brandString<SessionId>('restored'), h.session.snapshotEvents())
     const projection = await h.ctx.sessionProjections.register(modelSelectionProjectionDefinition)
     const restoredModel = new AgentModel(() => projection.stateOf(restored), restored, {})
     expect(restoredModel.current()).toEqual(selected)
@@ -119,11 +120,11 @@ describe('Session model selection', () => {
     const h = await harness()
     const selected = { provider: 'beta', model: 'b1' }
     h.record(selected)
-    h.header({ ...selected, reasoningEffort: ReasoningEffortId('high') }, { reasoningEffort: true })
+    h.header({ ...selected, reasoningEffort: brandString<ReasoningEffortId>('high') }, { reasoningEffort: true })
     expect(h.state()).toEqual({ lastUsed: selected, pending: null })
     expect(h.current()).toEqual(selected)
     expect(h.ctx.sessionProjections.snapshot(h.session).values.modelSelection).toEqual({ lastUsed: selected, next: selected })
-    h.header({ ...selected, reasoningEffort: ReasoningEffortId('low') })
+    h.header({ ...selected, reasoningEffort: brandString<ReasoningEffortId>('low') })
     expect(h.current()).toEqual({ ...selected, reasoningEffort: 'low' })
   })
 
@@ -139,7 +140,7 @@ describe('Session model selection', () => {
 
   it('replaces the complete selection and clears an omitted explicit effort', async () => {
     const h = await harness()
-    h.record({ ...INITIAL, reasoningEffort: ReasoningEffortId('high') })
+    h.record({ ...INITIAL, reasoningEffort: brandString<ReasoningEffortId>('high') })
     h.record(INITIAL)
     expect(h.current()).toEqual(INITIAL)
     expect(h.session.snapshotEvents()).toHaveLength(2)
@@ -174,7 +175,7 @@ describe('installModelSelection()', () => {
     await expect(preStep(h.agent, INITIAL)).resolves.toMatchObject({ messages: [INPUT] })
     h.header(INITIAL)
     await expect(preStep(h.agent, INITIAL)).resolves.toMatchObject({ messages: [INPUT] })
-    await expect(preStep(h.agent, { ...INITIAL, reasoningEffort: ReasoningEffortId('high') }))
+    await expect(preStep(h.agent, { ...INITIAL, reasoningEffort: brandString<ReasoningEffortId>('high') }))
       .resolves.toMatchObject({ messages: [INPUT] })
     const selected = { provider: 'alpha', model: 'a1' }
     await expect(agentEvents(h.ctx, h.agent).waterfall(

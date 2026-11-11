@@ -12,7 +12,8 @@ import { ProtocolError, SdkError, SdkErrorCode, type Transport } from '@modelcon
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import McpResources from '@deepseek-ai/dsh-mcp-resources'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import { TestCredentials } from './credential-fixture.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -148,7 +149,7 @@ function listing(...names: string[]): { tools: { name: string; inputSchema: { ty
 
 let callSeq = 0
 function nextCallId(): ToolCallId {
-  return ToolCallId(`reconnect-${++callSeq}`)
+  return brandString<ToolCallId>(`reconnect-${++callSeq}`)
 }
 
 // ---- Tests ----
