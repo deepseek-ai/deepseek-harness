@@ -1,6 +1,5 @@
 /** Schemastery fields for platform-specific native CUA configuration. */
 import Schema from '@deepseek-ai/schemastery'
-import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import NodePtcRuntime, { type Config as NodeRuntimeConfig } from '@deepseek-ai/dsh-ptc-runtime-node'
 import { RunCodeConfig } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 
@@ -37,16 +36,6 @@ export const CuaScreenshotTargetConfig: Schema<CuaScreenshotTargetConfig> = Sche
   longEdge: Schema.number().step(1).min(1).max(16_384).required(),
   maxBytes: Schema.number().step(1).min(1024).required(),
 })
-
-/**
- * Project a configured screenshot target onto one stored image.
- * @param configured - Validated `screenshotTarget`.
- * @param image - Durable normalized screenshot.
- * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
- */
-export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
-  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
-}
 
 /** Shared configuration fields extended by native platform providers. */
 export const CuaConfigFields = {

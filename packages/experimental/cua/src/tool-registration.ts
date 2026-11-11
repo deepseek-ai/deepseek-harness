@@ -6,12 +6,12 @@ import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import { createRunCodeToolHandle } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
-import type { ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
+import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { CuaConfig } from './index.ts'
-import { fixedScreenshotTarget } from './config.ts'
+import type { CuaScreenshotTargetConfig } from './config.ts'
 import { CUA_PROMPT_SECTION_NAME } from './guidance.ts'
 
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
@@ -46,6 +46,16 @@ declare module '@deepseek-ai/cordis' {
     /** Present while the CUA provider owns a dedicated program runtime. */
     cuaPrograms: CuaPrograms
   }
+}
+
+/**
+ * Project a configured screenshot target onto one stored image.
+ * @param configured - Validated `screenshotTarget`.
+ * @param image - Durable normalized screenshot.
+ * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
+ */
+export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
+  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
 }
 
 /**
