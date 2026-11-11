@@ -826,7 +826,9 @@ it.skipIf(MODE === 'record')('starts a Session in a worktree before its first me
   await change.getByText('等待评审', { exact: true }).waitFor()
   // The random branch suffix can read as a duration, so the branch is replaced before the capture normalizes durations.
   await compareOrRefreshGolden(join(EXPECTED, 'panel.expected.md'),
-    await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd, { replacements: [[branch, 'dsh-{{worktree}}']] }), MODE)
+    await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd, {
+      replacements: [[branch, 'dsh-{{worktree}}'], [abbreviateHomePath(scaffold.workspaceCwd, homedir()), '{{cwd}}']],
+    }), MODE)
   const beforeChecks = (await readFile(join(root, 'calls.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
   expect(beforeChecks.some(args => args.includes('id=rollup-7'))).toBe(false)
   const checksRow = change.getByRole('button', { name: /^检查/ })
@@ -1076,8 +1078,9 @@ it.skipIf(MODE === 'record')('shows the local changes of the Session by scope an
   await page.getByRole('menuitem', { name: '查看变更', exact: true }).waitFor()
   expect(await page.getByRole('menuitem', { name: '创建变更请求', exact: true }).count()).toBe(0)
   await card.getByRole('button', { name: '本地变更操作', exact: true }).click()
-  await compareOrRefreshGolden(join(EXPECTED, 'local-and-pr.expected.md'),
-    await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd), MODE)
+  await compareOrRefreshGolden(join(EXPECTED, 'local-and-pr.expected.md'), await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd, {
+    replacements: [[abbreviateHomePath(scaffold.workspaceCwd, homedir()), '{{cwd}}']],
+  }), MODE)
   await card.getByRole('button', { name: '本地变更 · 4 个文件，新增 4 行，删除 1 行', exact: true }).click()
   await local.getByText('暂存区与 HEAD 比较', { exact: true }).waitFor()
   await showSessionPanel(page)

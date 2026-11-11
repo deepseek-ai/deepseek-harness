@@ -2,6 +2,7 @@
 // over the real Host projection frame flow.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
@@ -10,6 +11,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
   launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
@@ -419,7 +421,10 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await tasks.getByRole('button', { name: /^(New task|Edit|Complete|Reopen|Delete)$/u }).count()).toBe(0)
     expect(await tasks.locator('input, select, textarea').count()).toBe(0)
 
-    const snapshot = await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd)
+    // The working directory row abbreviates the home directory, which holds the scratch workspace on CI.
+    const snapshot = await captureStableAria(page, '[data-session-panel]', scaffold.workspaceCwd, {
+      replacements: [[abbreviateHomePath(scaffold.workspaceCwd, homedir()), '{{cwd}}']],
+    })
     await compareOrRefreshGolden(PANEL_EXPECTED, snapshot, MODE)
     expect(projectionReads).not.toHaveBeenCalled()
     expect(tripwire.pageErrors).toEqual([])
