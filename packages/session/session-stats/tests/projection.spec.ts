@@ -12,9 +12,10 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as SessionStatsPlugin from '@deepseek-ai/dsh-session-stats'
@@ -26,7 +27,7 @@ async function harness(withStatsPlugin: boolean): Promise<{ ctx: Context; sessio
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   if (withStatsPlugin) await ctx.plugin(SessionStatsPlugin)
-  return { ctx, session: ctx.sessions.create(SessionId('counted')) }
+  return { ctx, session: ctx.sessions.create(brandString<SessionId>('counted')) }
 }
 
 /** Close one step; returns the counted `step/end` seq. */
@@ -252,10 +253,10 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
     expect(fold([
       at(1_000, 'step/start', { turn: 1, step: 1 }),
       messageAt(2_000, [
-        { time: 1_100, chunk: { type: 'tool-call-delta', index: 0, id: ToolCallId('call-1'), argumentsDelta: '' } },
+        { time: 1_100, chunk: { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('call-1'), argumentsDelta: '' } },
         {
           time: 1_200,
-          chunk: { type: 'tool-call-delta', index: 0, id: ToolCallId('call-1'), name: 'read', argumentsDelta: '' },
+          chunk: { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('call-1'), name: 'read', argumentsDelta: '' },
         },
       ]),
       at(2_100, 'step/end', { turn: 1, step: 1 }),
@@ -265,7 +266,7 @@ describe('sessionStats wall-time fold (controlled timestamps)', () => {
       at(1_000, 'step/start', { turn: 1, step: 1 }),
       messageAt(2_000, [{
         time: 1_300,
-        chunk: { type: 'tool-call-delta', index: 0, id: ToolCallId('call-1'), argumentsDelta: '{' },
+        chunk: { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('call-1'), argumentsDelta: '{' },
       }]),
       at(2_100, 'step/end', { turn: 1, step: 1 }),
     ])).toEqual(totals({ turns: 1, steps: 1, llmMs: 1_000, ttftMs: 300, ttftSteps: 1 }))

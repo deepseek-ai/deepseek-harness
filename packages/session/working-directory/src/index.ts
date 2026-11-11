@@ -13,6 +13,9 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import { WorkingDirectoryError } from './error.ts'
+
+export { WorkingDirectoryError, type WorkingDirectoryErrorCode } from './error.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -125,7 +128,7 @@ export class WorkingDirectoryService extends Service {
       return assembly
     }, { prepend: true })
     ctx.effect(() => async () => {
-      this.lifecycle.abort(new Error('working-directory service disposed'))
+      this.lifecycle.abort(new WorkingDirectoryError('working-directory service disposed', 'WORKING_DIRECTORY_UNAVAILABLE'))
       await Promise.allSettled(this.operations)
     })
   }
@@ -145,7 +148,8 @@ export class WorkingDirectoryService extends Service {
    * @param signal - cancellation for filesystem inspection.
    * @returns the existing directory; recovery is committed before fulfillment.
    * A notice failure is warned without reverting the committed state.
-   * @throws when the original project is also unavailable, or when a `working-directory/access` listener rejects.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
+   *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
    */
   ensure(agent: Agent, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path: null, signal: control }, async () => {
@@ -161,7 +165,10 @@ export class WorkingDirectoryService extends Service {
         return current
       }
       const original = agent.session.header.cwd ?? this.defaultDirectory
-      const restored = await this.directory(original, original, control)
+      const restored = await this.directory(original, original, control, () => new WorkingDirectoryError(
+        `working-directory: directory does not exist: ${JSON.stringify(original)}; the current working directory ${JSON.stringify(current)} is also unavailable`,
+        'WORKING_DIRECTORY_UNAVAILABLE',
+      ))
       this.commit(agent, restored, true, control)
       return restored
     }))
@@ -174,11 +181,13 @@ export class WorkingDirectoryService extends Service {
    * @param signal - cancellation before the durable change.
    * @returns the canonical absolute directory, committed before fulfillment.
    * A notice failure is warned; the next request still receives the committed directory.
-   * @throws when the requested path is not an existing directory.
+   * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and
+   *   `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a
+   *   `working-directory/access` listener.
    */
   set(agent: Agent, path: string, signal?: AbortSignal): Promise<string> {
     return this.serialize(agent, signal, control => this.ctx.waterfall('working-directory/access', { agent, path, signal: control }, async () => {
-      if (path.length === 0) throw new Error('working-directory: cd must not be empty')
+      if (path.length === 0) throw new WorkingDirectoryError('working-directory: cd must not be empty', 'WORKING_DIRECTORY_INVALID')
       const directory = await this.directory(path, this.get(agent.session), control)
       this.commit(agent, directory, false, control)
       return directory
@@ -189,13 +198,19 @@ export class WorkingDirectoryService extends Service {
     return `Current working directory: ${JSON.stringify(this.get(session))}.`
   }
 
-  private async directory(path: string, cwd: string, signal: AbortSignal): Promise<string> {
+  private async directory(
+    path: string,
+    cwd: string,
+    signal: AbortSignal,
+    missing = (): WorkingDirectoryError => new WorkingDirectoryError(
+      `working-directory: directory does not exist: ${JSON.stringify(path)}`,
+      'WORKING_DIRECTORY_NOT_FOUND',
+    ),
+  ): Promise<string> {
     const target = await this.ctx.fs.resolve(path, { cwd, signal })
     const info = await this.ctx.fs.stat(target, signal)
     signal.throwIfAborted()
-    if (info?.type !== 'directory') {
-      throw new Error(`working-directory: directory does not exist: ${JSON.stringify(path)}`)
-    }
+    if (info?.type !== 'directory') throw missing()
     return this.ctx.fs.processPath(target)
   }
 

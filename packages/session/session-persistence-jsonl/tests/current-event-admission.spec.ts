@@ -1,13 +1,14 @@
 import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { generationLogPath, scanLog } from '../src/format.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const id = SessionId('current-admission')
+const id = brandString<SessionId>('current-admission')
 const header = { type: 'session', version: SESSION_FORMAT_VERSION, id, createdAt: 1000, isSeeded: false, delegationDepth: 0 }
 const start = { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }
 const prefix = [header, start].map(row => JSON.stringify(row)).join('\n') + '\n'

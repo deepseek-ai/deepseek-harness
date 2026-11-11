@@ -2,21 +2,22 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
-import { DeepSeekFileId } from '../src/file-id.ts'
+import type { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
 
 const REF: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'a'.repeat(64)}`),
+  attachmentId: brandString<AttachmentId>(`sha256:${'a'.repeat(64)}`),
   mediaType: 'image/png',
   bytes: 3,
   width: 1,
   height: 1,
 }
 const VERSION: RequestImageAttachment = {
-  variantId: ImageVariantId(`sha256:${'b'.repeat(64)}`),
+  variantId: brandString<ImageVariantId>(`sha256:${'b'.repeat(64)}`),
   attachment: REF,
   data: Uint8Array.of(1, 2, 3),
   mediaType: 'image/png',
@@ -425,7 +426,7 @@ describe('DeepSeekFileStore', () => {
         scope: deepSeekFileScope(`${CONNECTION.baseURL}/v1`, JSON.stringify(Object.entries(CONNECTION.headers))),
         attachmentId: VERSION.attachment.attachmentId,
         variantId: VERSION.variantId,
-        fileId: DeepSeekFileId('file-api-winner'),
+        fileId: brandString<DeepSeekFileId>('file-api-winner'),
         bytes: 3,
         createdAt: NOW,
         expiresAt: NOW + POLICY.expiresAfterSeconds * 1_000,

@@ -1,6 +1,7 @@
 /** Model-call fixtures preserve raw JSON input and reject incomplete execution. */
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools, { type ToolExecutor } from '@deepseek-ai/dsh-tools'
 import { expect, it, onTestFinished } from 'vitest'
@@ -15,7 +16,7 @@ async function setup(execute: ToolExecutor['execute']): Promise<Context> {
   return ctx
 }
 
-const call = { callId: ToolCallId('fixture'), name: 'echo', signal: new AbortController().signal }
+const call = { callId: brandString<ToolCallId>('fixture'), name: 'echo', signal: new AbortController().signal }
 
 it('serializes model arguments and returns the selected executor result without an Agent', async () => {
   const result = { isError: false as const, value: 'done', content: [{ type: 'text' as const, text: 'done' }] }

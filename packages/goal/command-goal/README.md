@@ -76,7 +76,7 @@ This section explains how the command parses input and renders output; the obser
 ### Design
 
 - **Grammar, not free text.** The parser recognizes only the exact control words (`clear`, `pause`, `resume`, `edit`) when they fill the whole input; every other non-empty suffix is an objective. `edit` alone is invalid, and `edit` refuses to replace an unfinished goal directly.
-- **Domain rejections become stable errors.** `GoalError` outcomes are converted into direct command errors with a fixed message; unexpected failures rethrow so adapters report a command failure rather than a domain result. Rendered output never exposes branded ids or revisions.
+- **Domain rejections become stable errors.** `GoalError` outcomes other than `GOAL_STATE_CORRUPT` are converted into direct command errors with a fixed message; corrupt goal state and unexpected failures rethrow so adapters report a command failure rather than a domain result. Rendered output never exposes branded ids or revisions.
 - **Attachments accompany the objective.** On a successful create or edit, the command submits one user followup carrying the admitted image and file blocks in selection order plus the fixed text `Reference attachments for the goal objective.` Every other path submits nothing, so the dispatching composer keeps the draft and cards.
 
 ### Source map

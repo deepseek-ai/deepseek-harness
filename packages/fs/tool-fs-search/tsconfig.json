@@ -43,6 +43,9 @@
     },
     {
       "path": "../../session/working-directory"
+    },
+    {
+      "path": "../../util/ripgrep"
     }
   ]
 }

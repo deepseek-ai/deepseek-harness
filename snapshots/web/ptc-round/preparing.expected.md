@@ -2,4 +2,4 @@
 - button "Context injection skill-catalog"
 - button "Context injection time-context"
 - 'button "Think The user wants me to write a single `run_code` program that:"'
-- text: Preparing tool call Code
+- text: Preparing tool call Code Run bash echo and catch missing file read

@@ -90,11 +90,11 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 
 ### 退出工具
 
-`exit_plan_mode` 采用渐进式披露：从已选计划状态首次为激活的步骤起准入，并在会话剩余部分保持准入，因此首次进入计划模式时它与指引一起出现，之后的切换只改变指引；原生与 PTC 执行使用同一准入集合。计划模式未提交时调用会失败。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道，或评审等待期间服务重载，调用都会以拒绝方式失败，`/plan off` 仍是手动退路。
+`exit_plan_mode` 采用渐进式披露：从已选计划状态首次为激活的步骤起准入，并在会话剩余部分保持准入，因此首次进入计划模式时它与指引一起出现，之后的切换只改变指引；原生与 PTC 执行使用同一准入集合。计划模式未提交时调用以 `PlanModeError` `PLAN_NOT_ACTIVE` 失败，没有前导 `#` 标题的计划在评审前以 `ToolArgsError` 失败。经批准的评审会记录一个静默的待生效退出，由下一个被接受的轮内 pre-step 追加，当前这批工具调用剩余部分仍保留计划引导。缺少用户交互通道（`ToolContextUnavailableError`），或评审等待期间服务重载（`PLAN_REVIEW_INTERRUPTED`），调用都会以拒绝方式失败，`/plan off` 仍是手动退路。[`src/error.ts`](src/error.ts) 列出 `PlanModeError` 的 code。
 
 ### 会话投影单元
 
-本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配会明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
+本包要求 `ctx.sessionProjections`，并在激活期间等待 `plan` 单元注册完成。提示词段落在等待前注册。读取句柄不可用时，Agent 提示词装配、`/plan` 命令与 `exit_plan_mode` 会以 `PlanModeError` `PLAN_STATE_UNAVAILABLE` 明确失败，避免恢复的计划模式缺少指引仍继续运行。调用方必须等待插件激活完成后再运行 Agent。
 
 该单元把已记录的 `/plan` 命令运行转为候选目标，在 `plan/mode` 上提交已记录状态，并为 `view` 推导 `{ active, pending }`，其中 `pending` 仅在未结算或已成功的选择与已记录状态不同时为 true——这是仅凭日志即可恢复的纯回放量。key 由 [`src/types.ts`](src/types.ts) 的声明合并加入 `SessionProjectionMap`；框架负责驱动该单元，卸载插件 fiber 会注销该 key。状态读取使用保留的句柄，注销后仍然可用。
 
@@ -104,6 +104,7 @@ agent 完成计划后，会以 markdown 形式、从标题开头书写计划并�
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`ctx.planMode` 服务、`plan:policy` 段落、`/plan` 命令、`exit_plan_mode` 工具 |
 | [`src/types.ts`](src/types.ts) | `plan` 投影 key 声明与 `PlanProjection` 协议值 |
+| [`src/error.ts`](src/error.ts) | `PlanModeError` 及其封闭 code 联合类型 |
 | [`src/client.ts`](src/client.ts) | types 出口的客户端命名空间再导出 |
 
 审批意图携带发起工具调用的标识，让 Web 客户端在审批关闭后重新打开同一份计划。完整 Markdown 保留在已有的原生调用或 PTC dispatch 日志中。
@@ -166,7 +167,7 @@ You are in plan mode. Explore and design before presenting the complete plan thr
 
 #### 模型看到什么
 
-[`exit_plan_mode` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plan-mode) 从会话首次进入计划模式起提供；此前的调用返回 `UNKNOWN_TOOL`，离开计划模式后的调用会以计划模式之外不可用而失败。模式内获批的评审返回规范值 `{ approved: true }` 并渲染现有确认文本。拒绝仍是携带评审反馈的失败调用。放弃评审返回 `{ approved: false }`，渲染一条说明用户将自行回复的文本，并结束当前轮次，不再发起模型请求。
+[`exit_plan_mode` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plan-mode) 从会话首次进入计划模式起提供；此前的调用返回 `UNKNOWN_TOOL`，离开计划模式后的调用会以计划模式之外不可用而失败。模式内获批的评审返回规范值 `{ approved: true }` 并渲染现有确认文本。拒绝仍是以 `PLAN_REVISION_REQUESTED` 失败并携带评审反馈的调用。放弃评审返回 `{ approved: false }`，渲染一条说明用户将自行回复的文本，并结束当前轮次，不再发起模型请求。
 
 #### Token 影响
 

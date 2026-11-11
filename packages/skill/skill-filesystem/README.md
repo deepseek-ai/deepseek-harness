@@ -82,7 +82,7 @@ Existing roots are watched, so adding, renaming, or deleting a skill (or editing
 
 ### Observable success and failures
 
-A valid skill under any scanned root appears in the session catalog sorted by name, and loading it returns the current file body. A file without valid frontmatter, an invalid name, or an invalid invocation value is skipped with a warning, so the model catalog receives no per-skill diagnostic and cannot distinguish an absent skill from an invalid one. A root whose discovery or file read fails is logged with its path and omitted; other roots remain available. The observation is incomplete and is retried on the next lookup rather than cached. The model catalog identifies incomplete discovery separately from confirmed absence.
+A valid skill under any scanned root appears in the session catalog sorted by name, and loading it returns the current file body. A file without valid frontmatter, an invalid name, or an invalid invocation value is skipped with a warning, so the model catalog receives no per-skill diagnostic and cannot distinguish an absent skill from an invalid one. A root whose discovery or file read fails is logged with its path and omitted; other roots remain available. The observation is incomplete and is retried on the next lookup rather than cached. The model catalog identifies incomplete discovery separately from confirmed absence. Loading a skill read directly from the host filesystem, from a bundled root or without a filesystem service, rejects when the read fails for a reason other than absence with `SkillError` `SKILL_READ_FAILED`, keeping the system error as `cause`; reads through the filesystem service keep its `FsError`.
 
 -----
 

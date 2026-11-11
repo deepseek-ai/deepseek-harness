@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest'
 import fc from 'fast-check'
 import { BlockAssembler } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 
 // A small pool of indices so collisions (duplicate-index bugs) are common.
 const indexArb = fc.integer({ min: 0, max: 4 })
@@ -24,7 +25,7 @@ const blockEndArb = (index: number): fc.Arbitrary<StreamChunk> => fc.oneof(
     { type: 'block-end', index, block: { type: 'reasoning', text: r.text } }
   )),
   fc.record({ id: fc.string({ minLength: 1 }), name: fc.string(), args: fc.string() }).map((r): StreamChunk => (
-    { type: 'block-end', index, block: { type: 'tool-call', id: ToolCallId(r.id), name: r.name, arguments: r.args } }
+    { type: 'block-end', index, block: { type: 'tool-call', id: brandString<ToolCallId>(r.id), name: r.name, arguments: r.args } }
   )),
 )
 
@@ -36,7 +37,7 @@ const chunkArb: fc.Arbitrary<StreamChunk> = indexArb.chain(index => fc.oneof(
   fc.string().map((text): StreamChunk => ({ type: 'text-delta', index, text })),
   fc.string().map((text): StreamChunk => ({ type: 'reasoning-delta', index, text })),
   fc.record({ id: fc.string({ minLength: 1 }), argumentsDelta: fc.string() })
-    .map((r): StreamChunk => ({ type: 'tool-call-delta', index, id: ToolCallId(r.id), argumentsDelta: r.argumentsDelta })),
+    .map((r): StreamChunk => ({ type: 'tool-call-delta', index, id: brandString<ToolCallId>(r.id), argumentsDelta: r.argumentsDelta })),
   blockEndArb(index),
   fc.constant<StreamChunk>({ type: 'usage', usage: { inputTokens: 1, outputTokens: 1 } }),
   fc.constant<StreamChunk>({ type: 'finish', reason: { kind: 'stop' } }),

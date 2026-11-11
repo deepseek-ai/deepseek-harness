@@ -4,8 +4,9 @@ import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type Locator, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { sessionFileAddress } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
@@ -26,14 +27,14 @@ async function reloadPreview(page: Page, column: Locator, absolutePath: string):
 
 /** Build live test input with a parent-path link and a read result naming the same Host file. */
 function parentPathFixture(path: string): string {
-  const session = Session.create(SessionId('parent-file-links-source'))
+  const session = Session.create(brandString<SessionId>('parent-file-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Read the parent-path file and link lines 24 and 30.' }], source: { kind: 'user' },
   }), { surfaceOp: 'append' })
   session.append('session/title', { title: 'Parent file links', messageSeqs: [user.seq], source: { kind: 'fallback' } })
   session.append('step/start', { turn: 1, step: 1 })
-  const callId = ToolCallId('parent-file-read')
+  const callId = brandString<ToolCallId>('parent-file-read')
   const args = JSON.stringify({ file_path: path, offset: 24, limit: 7 })
   session.append('assistant/message', {
     turn: 1, step: 1, stream: [],
@@ -70,7 +71,7 @@ function parentPathFixture(path: string): string {
 
 /** Build a settled turn whose relative link follows a directory change into a nested checkout. */
 function changedDirectoryFixture(path: string): string {
-  const session = Session.create(SessionId('changed-directory-links-source'))
+  const session = Session.create(brandString<SessionId>('changed-directory-links-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Enter the worktree and link its notes.' }], source: { kind: 'user' },

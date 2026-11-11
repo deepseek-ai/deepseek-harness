@@ -1,16 +1,22 @@
 /** Reject new assertions to unknown while retiring the recorded existing assertions. */
 
-import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
+import {
+  countInventory,
+  listInventorySources,
+  runInventoryGate,
+  syntaxFingerprint,
+  verifyInventory,
+  type InventoryBaseline,
+  type InventoryGate,
+} from './baseline-inventory.ts'
 
 const root = resolve(import.meta.dirname, '..')
-const baselinePath = 'scripts/no-unknown-casts.baseline.json'
 
 /** Existing assertion counts, keyed by repository path and syntax fingerprint. */
-export type UnknownCastBaseline = Record<string, Record<string, number>>
+export type UnknownCastBaseline = InventoryBaseline
 
 /** One direct assertion to unknown in authored source. */
 export interface UnknownCast {
@@ -20,17 +26,6 @@ export interface UnknownCast {
   line: number
   /** SHA-256 of the assertion's syntax tokens, excluding comments and whitespace. */
   fingerprint: string
-}
-
-function syntaxFingerprint(node: ts.Node, source: ts.SourceFile): string {
-  const tokens: string[] = []
-  const visit = (child: ts.Node): void => {
-    if (ts.isJSDoc(child)) return
-    if (ts.isToken(child)) tokens.push(child.getText(source))
-    else child.getChildren(source).forEach(visit)
-  }
-  visit(node)
-  return createHash('sha256').update(JSON.stringify(tokens)).digest('hex')
 }
 
 function assertsUnknown(type: ts.TypeNode): boolean {
@@ -65,12 +60,6 @@ export function findUnknownCasts(file: string, text: string): UnknownCast[] {
   return casts
 }
 
-function isSource(file: string): boolean {
-  return /\.(?:[cm]?[jt]s|[jt]sx)$/u.test(file)
-    && !file.startsWith('vendor/')
-    && !file.startsWith('.agents/notes/archived/')
-}
-
 /**
  * Scan tracked source and non-ignored new source, including tests and configuration files.
  * @param repoRoot - repository root containing the Git index.
@@ -78,47 +67,17 @@ function isSource(file: string): boolean {
  * @throws if discovery omits a required source area or an eligible path is a symlink.
  */
 export function scanUnknownCasts(repoRoot: string): UnknownCast[] {
-  const files = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    maxBuffer: 16 * 1024 * 1024,
-  }).split('\0').map(file => file.replaceAll('\\', '/')).filter(isSource))].sort()
-  const present = files.filter((file) => {
-    const stat = lstatSync(resolve(repoRoot, file), { throwIfNoEntry: false })
-    if (stat?.isSymbolicLink()) throw new Error(`verify-no-unknown-casts: source symlink is unsupported: ${file}`)
-    return stat?.isFile() === true
-  })
-  for (const area of ['packages/', 'apps/', 'scripts/', 'website/']) {
-    if (!present.some(file => file.startsWith(area))) {
-      throw new Error(`verify-no-unknown-casts: source discovery omitted ${area}`)
-    }
-  }
-  return present.flatMap(file => findUnknownCasts(file, readFileSync(resolve(repoRoot, file), 'utf8')))
+  return listInventorySources(repoRoot, 'verify-no-unknown-casts')
+    .flatMap(file => findUnknownCasts(file, readFileSync(resolve(repoRoot, file), 'utf8')))
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function readBaseline(repoRoot: string): UnknownCastBaseline {
-  const value: unknown = JSON.parse(readFileSync(resolve(repoRoot, baselinePath), 'utf8'))
-  if (!isRecord(value)) throw new Error('verify-no-unknown-casts: baseline must be a file-to-counts object')
-  const baseline: UnknownCastBaseline = {}
-  for (const [file, counts] of Object.entries(value)) {
-    if (!isSource(file) || file.startsWith('/') || file.includes('\\') || file.split('/').includes('..')
-      || !isRecord(counts) || Object.keys(counts).length === 0) {
-      throw new Error(`verify-no-unknown-casts: invalid baseline file: ${file}`)
-    }
-    const parsed: Record<string, number> = {}
-    for (const [fingerprint, count] of Object.entries(counts)) {
-      if (!/^[a-f0-9]{64}$/u.test(fingerprint) || typeof count !== 'number' || !Number.isSafeInteger(count) || count <= 0) {
-        throw new Error(`verify-no-unknown-casts: invalid baseline count: ${file}:${fingerprint}`)
-      }
-      parsed[fingerprint] = count
-    }
-    baseline[file] = parsed
-  }
-  return baseline
+const gate: InventoryGate<UnknownCast> = {
+  name: 'verify-no-unknown-casts',
+  baselinePath: 'scripts/no-unknown-casts.baseline.json',
+  scan: scanUnknownCasts,
+  rejection: 'new assertions to unknown are forbidden. Use a typed value or narrow the input.',
+  describe: cast => `${cast.file}:${String(cast.line)} (${cast.fingerprint})`,
+  success: count => `verify-no-unknown-casts: no new assertions; ${String(count)} existing assertions remain.`,
 }
 
 /**
@@ -127,13 +86,7 @@ function readBaseline(repoRoot: string): UnknownCastBaseline {
  * @returns path and fingerprint counts in stable order for comparison and pruning.
  */
 export function countUnknownCasts(casts: readonly UnknownCast[]): UnknownCastBaseline {
-  const baseline: UnknownCastBaseline = {}
-  for (const { file, fingerprint } of casts) {
-    const counts = baseline[file] ??= {}
-    counts[fingerprint] = (counts[fingerprint] ?? 0) + 1
-  }
-  return Object.fromEntries(Object.entries(baseline).sort(([a], [b]) => a.localeCompare(b))
-    .map(([file, counts]) => [file, Object.fromEntries(Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)))]))
+  return countInventory(casts)
 }
 
 /**
@@ -144,43 +97,9 @@ export function countUnknownCasts(casts: readonly UnknownCast[]): UnknownCastBas
  * @throws for new assertions, malformed inventories, or stale entries without pruning.
  */
 export function verifyNoUnknownCasts(repoRoot: string, prune = false): number {
-  const baseline = readBaseline(repoRoot)
-  const casts = scanUnknownCasts(repoRoot)
-  const current = countUnknownCasts(casts)
-  const remaining = structuredClone(baseline)
-  const added: UnknownCast[] = []
-  for (const cast of casts) {
-    const counts = remaining[cast.file]
-    const allowance = counts?.[cast.fingerprint] ?? 0
-    if (counts !== undefined && allowance > 0) counts[cast.fingerprint] = allowance - 1
-    else added.push(cast)
-  }
-  if (added.length > 0) {
-    throw new Error('verify-no-unknown-casts: new assertions to unknown are forbidden. Use a typed value or narrow the input.\n'
-      + added.map(cast => `  ${cast.file}:${String(cast.line)} (${cast.fingerprint})`).join('\n'))
-  }
-  const stale = Object.entries(remaining).flatMap(([file, counts]) => Object.entries(counts)
-    .filter(([, count]) => count > 0).map(([fingerprint]) => `  ${file} (${fingerprint})`))
-  if (stale.length > 0) {
-    if (!prune) {
-      throw new Error('verify-no-unknown-casts: remove retired baseline entries with pnpm run verify-no-unknown-casts --prune.\n'
-        + stale.join('\n'))
-    }
-    writeFileSync(resolve(repoRoot, baselinePath), `${JSON.stringify(current, null, 2)}\n`)
-  }
-  return casts.length
+  return verifyInventory(gate, repoRoot, prune)
 }
 
 if (import.meta.filename === resolve(process.argv[1] ?? '')) {
-  try {
-    const args = process.argv.slice(2)
-    if (args.length > 1 || (args.length === 1 && args[0] !== '--prune')) {
-      throw new Error('Usage: pnpm run verify-no-unknown-casts [--prune]')
-    }
-    const count = verifyNoUnknownCasts(root, args[0] === '--prune')
-    console.log(`verify-no-unknown-casts: no new assertions; ${String(count)} existing assertions remain.`)
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error))
-    process.exitCode = 1
-  }
+  runInventoryGate(gate, root)
 }

@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
-import { CompactionId, isCompactCheckpointSource, ManualCompactionError } from '@deepseek-ai/dsh-compaction'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
+import { isCompactCheckpointSource, ManualCompactionError } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
 import {
   createAssistantMessage,
@@ -20,7 +22,7 @@ import type {
   StreamChunk,
   TokenUsage,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore, { buildForkSeed, Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { buildForkSeed, Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
@@ -111,7 +113,7 @@ async function loopHarness(): Promise<LoopHarness> {
   const adapter = new TextAdapter()
   ctx.llm.registerAdapter([MODEL], adapter)
   const compact = new GatedCompactionEngine(ctx, { auto: false })
-  const agent = await ctx.agentLoop.create(SessionId('manual-compact'), { provider: MODEL, model: MODEL })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('manual-compact'), { provider: MODEL, model: MODEL })
   const log: string[] = []
   ctx.on('session/event', (_session, event) => {
     if (event.type === 'turn/start') log.push('turn/start')
@@ -171,7 +173,7 @@ function deferred(): { promise: Promise<undefined>; resolve: () => void } {
 
 /** A closed-tail session with compactable exchanges and no live agent. */
 function closedConversation(turns = 2, lastTurnNumber = turns): Session {
-  const session = Session.create(SessionId(`closed-${turns}-${lastTurnNumber}`))
+  const session = Session.create(brandString<SessionId>(`closed-${turns}-${lastTurnNumber}`))
   for (let index = 1; index <= turns; index += 1) {
     const turn = index === turns ? lastTurnNumber : index
     session.append('turn/start', { turn })
@@ -409,7 +411,7 @@ describe('compactNow through the real loop', () => {
 describe('compactNow transaction and failure classification', () => {
   it('returns null without writing a bracket for history that cannot be compacted', async () => {
     const { compact } = detachedService()
-    const session = Session.create(SessionId('empty'))
+    const session = Session.create(brandString<SessionId>('empty'))
     let released = 0
     const agent = fakeAgent(session, () => () => { released += 1 })
 
@@ -423,7 +425,7 @@ describe('compactNow transaction and failure classification', () => {
     const { compact, flushes } = detachedService()
     const session = closedConversation(2, 7)
     const agent = fakeAgent(session, () => () => undefined)
-    const commandId = CommandId('manual-compact-command')
+    const commandId = brandString<CommandId>('manual-compact-command')
 
     const result = await compact.compactNow(agent, SIGNAL, commandId)
 
@@ -449,7 +451,7 @@ describe('compactNow transaction and failure classification', () => {
     const { compact } = detachedService()
     const session = closedConversation(2)
     session.append('compaction/start', {
-      compactionId: CompactionId('live-manual-compaction'),
+      compactionId: brandString<CompactionId>('live-manual-compaction'),
       turn: null,
     })
     const agent = fakeAgent(session, () => () => undefined)
@@ -464,10 +466,10 @@ describe('compactNow transaction and failure classification', () => {
     const { compact } = detachedService()
     const original = closedConversation(2)
     original.append('compaction/start', {
-      compactionId: CompactionId('stale-manual-compaction'),
+      compactionId: brandString<CompactionId>('stale-manual-compaction'),
       turn: null,
     })
-    const reloaded = Session.create(SessionId('stale-orphan'), original.snapshotEvents())
+    const reloaded = Session.create(brandString<SessionId>('stale-orphan'), original.snapshotEvents())
     const boundary = reloaded.snapshotEvents().findLast(event => event.type === 'session/end-seed')
     const orphan = reloaded.snapshotEvents().find(event => event.type === 'compaction/start')
     const agent = fakeAgent(reloaded, () => () => undefined)
@@ -486,13 +488,13 @@ describe('compactNow transaction and failure classification', () => {
     const original = closedConversation(2)
     original.append('turn/start', { turn: 3 })
     original.append('compaction/start', {
-      compactionId: CompactionId('forked-manual-compaction'),
+      compactionId: brandString<CompactionId>('forked-manual-compaction'),
       turn: 3,
     })
     const seed = buildForkSeed(original.snapshotEvents(), original.snapshotEvents().at(-1)!.seq)
     expect(seed.filter(event => event.type === 'compaction/end')).toEqual([])
     expect(seed.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'forked' } } })
-    const child = Session.create(SessionId('forked-orphan'), seed)
+    const child = Session.create(brandString<SessionId>('forked-orphan'), seed)
     const agent = fakeAgent(child, () => () => undefined)
 
     await expect(compact.compactNow(agent, SIGNAL)).resolves.not.toBeNull()
@@ -503,12 +505,12 @@ describe('compactNow transaction and failure classification', () => {
     const { compact } = detachedService()
     const original = closedConversation(2)
     original.append('compaction/start', {
-      compactionId: CompactionId('reloaded-manual-compaction'),
+      compactionId: brandString<CompactionId>('reloaded-manual-compaction'),
       turn: null,
     })
     original.append('turn/start', { turn: 3 })
     original.append('turn/end', { turn: 3, reason: { kind: 'interrupted' } })
-    const reloaded = Session.create(SessionId('reloaded-orphan'), original.snapshotEvents())
+    const reloaded = Session.create(brandString<SessionId>('reloaded-orphan'), original.snapshotEvents())
     const agent = fakeAgent(reloaded, () => () => undefined)
 
     await expect(compact.compactNow(agent, SIGNAL)).resolves.not.toBeNull()
@@ -720,7 +722,7 @@ describe('compactNow transaction and failure classification', () => {
 
   it('compacts a session with no durable turn boundary without creating one', async () => {
     const { compact } = detachedService()
-    const session = Session.create(SessionId('turnless'))
+    const session = Session.create(brandString<SessionId>('turnless'))
     for (const text of [PROMPT, 'recent tail']) {
       session.append('user/message', createUserMessage({
         content: [{ type: 'text', text }],
@@ -754,7 +756,7 @@ describe('compactNow transaction and failure classification', () => {
   it('lets a pre-aborted signal win before reservation, measurement, or summarization', async () => {
     const cases = [
       { name: 'busy', session: closedConversation(2), release: undefined },
-      { name: 'empty', session: Session.create(SessionId('pre-aborted-empty')), release: () => undefined },
+      { name: 'empty', session: Session.create(brandString<SessionId>('pre-aborted-empty')), release: () => undefined },
       { name: 'compactable', session: closedConversation(2, 9), release: () => undefined },
     ] as const
 

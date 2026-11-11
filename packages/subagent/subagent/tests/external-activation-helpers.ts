@@ -6,9 +6,10 @@ import { onTestFinished } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import { unsupportedModel, createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { SubagentActivation, SubagentStartRequest } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const parents = new WeakMap<Context, Promise<WeakMap<Agent, Agent>>>()
 
@@ -30,7 +31,7 @@ function parentStore(ctx: Context): Promise<WeakMap<Agent, Agent>> {
 /** Register a parent with a real Session and an observable, non-driving Inbox. */
 export async function externalTestParent(ctx: Context, cwd?: string): Promise<Agent> {
   await parentStore(ctx)
-  const session = ctx.sessions.create(SessionId(randomUUID()), {
+  const session = ctx.sessions.create(brandString<SessionId>(randomUUID()), {
     meta: cwd === undefined ? {} : { cwd },
   })
   const inbox = createInboxStub()

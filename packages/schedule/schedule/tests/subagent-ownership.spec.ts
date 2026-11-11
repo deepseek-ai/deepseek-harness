@@ -1,15 +1,16 @@
 /** Host Schedule refuses to arm delivery for a Session a delegated child owns. */
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createAfterScheduleRecord } from '../src/domain.ts'
 import type { ScheduleTask } from '../src/storage.ts'
-import type { ScheduleRecord } from '../src/types.ts'
+import type { ScheduleRecord, ScheduleId } from '../src/types.ts'
 import { agentFor, boundTask, harness, storedSession, seedTasks, taskTable } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
-const childId = SessionId('subagent-child')
-const parentId = SessionId('top-level-parent')
+const childId = brandString<SessionId>('subagent-child')
+const parentId = brandString<SessionId>('top-level-parent')
 const RRULE = 'DTSTART:20260917T000000Z\nRRULE:FREQ=DAILY'
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00.000Z')) })
@@ -59,7 +60,7 @@ it('refuses to create for a live child with an explicit subagent origin', async 
 })
 
 it('refuses to update a stored reminder bound to a delegated child Session', async () => {
-  const record = createAfterScheduleRecord(ScheduleId('subagent-task'), 'Exact prompt', 60, Date.now(), 'Child task')
+  const record = createAfterScheduleRecord(brandString<ScheduleId>('subagent-task'), 'Exact prompt', 60, Date.now(), 'Child task')
   const task = childTask(record)
   const test = await setup(task)
   const child = agentFor(test.ctx, childId, { origin: 'subagent', delegationDepth: 1 })
@@ -104,7 +105,7 @@ it('still creates a reminder for a top-level Agent', async () => {
 })
 
 it('still lists and deletes a stored reminder bound to a delegated child Session', async () => {
-  const record = createAfterScheduleRecord(ScheduleId('legacy-subagent-task'), 'Exact prompt', 60, Date.now(), 'Legacy task')
+  const record = createAfterScheduleRecord(brandString<ScheduleId>('legacy-subagent-task'), 'Exact prompt', 60, Date.now(), 'Legacy task')
   const test = await setup(childTask(record))
   const child = agentFor(test.ctx, childId, { origin: 'subagent', delegationDepth: 1 })
   await test.ctx.agents.register(child)

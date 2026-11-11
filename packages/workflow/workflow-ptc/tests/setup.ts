@@ -26,7 +26,7 @@ export async function mountPtcRuntime(ctx: Context, mode: SandboxMode = 'danger-
   })
   const cwd = join(root, 'workspace')
   await mkdir(cwd)
-  await mountWorkflowRuntime(ctx, { cwd, mode, runtimeConfig: { graceMs: 50, executionMode } })
+  await mountWorkflowRuntime(ctx, { cwd, mode, runtimeConfig: { graceMs: 50, executionMode, replScoped: false } })
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
   return { root, cwd }
 }

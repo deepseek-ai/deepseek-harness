@@ -42,7 +42,8 @@ get(session: Session): string
  * @param signal - cancellation for filesystem inspection.
  * @returns the existing directory; recovery is committed before fulfillment.
  * A notice failure is warned without reverting the committed state.
- * @throws when the original project is also unavailable, or when a `working-directory/access` listener rejects.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also
+ *   unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.
  */
 ensure(agent: Agent, signal?: AbortSignal): Promise<string>
 
@@ -53,7 +54,9 @@ ensure(agent: Agent, signal?: AbortSignal): Promise<string>
  * @param signal - cancellation before the durable change.
  * @returns the canonical absolute directory, committed before fulfillment.
  * A notice failure is warned; the next request still receives the committed directory.
- * @throws when the requested path is not an existing directory.
+ * @throws {@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and
+ *   `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a
+ *   `working-directory/access` listener.
  */
 set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>
 ```

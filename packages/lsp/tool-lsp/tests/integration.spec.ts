@@ -102,4 +102,17 @@ describe('tool-lsp integration', () => {
     expect(result.error?.info?.code).toBe('TOOL_TIMEOUT')
     await ctx.fiber.dispose()
   }, 30_000)
+
+  it('keeps provider failure names and codes on tool results', async () => {
+    const outside = join(root, 'outside.ts')
+    await writeFile(outside, 'x')
+    const ctx = await mount(false)
+    const missing = await call(ctx, { operation: 'goToDefinition', file_path: 'missing.ts', line: 1, character: 1 })
+    expect(missing.isError).toBe(true)
+    expect(missing.error?.info).toEqual({ name: 'FsError', code: 'FS_NOT_FOUND' })
+    const escaped = await call(ctx, { operation: 'goToDefinition', file_path: outside, line: 1, character: 1 })
+    expect(escaped.isError).toBe(true)
+    expect(escaped.error?.info).toEqual({ name: 'LspError', code: 'LSP_FILE_OUTSIDE_WORKSPACE' })
+    await ctx.fiber.dispose()
+  }, 30_000)
 })

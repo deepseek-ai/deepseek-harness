@@ -14,21 +14,27 @@ import LocalBashExecutor from '@deepseek-ai/dsh-bash-local'
 import ForgeService from '@deepseek-ai/dsh-experimental-forge'
 import * as ForgeGitHub from '@deepseek-ai/dsh-experimental-forge-github'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { createUserMessage, LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
-import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import LlmRuntime, { createUserMessage, LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk, ToolCallBlock } from '@deepseek-ai/dsh-llm'
+import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
+import SessionStore, { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolBash from '@deepseek-ai/dsh-tool-bash'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
+import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import WorkingDirectoryService from '@deepseek-ai/dsh-working-directory'
 import ForgeSessionService from '../src/index.ts'
 import type { SessionChangeRequest, SessionChangeRequestsListener } from '../src/index.ts'
 import type { ShellExecution } from '@deepseek-ai/dsh-shell'
 import type { ToolExecution, ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * GitHub CLI fixture: `pr create` prints PR 8; `pr view` prints PR 9, whose description links PR 6;
@@ -68,6 +74,7 @@ if ('branch' in fields) {
   reply({ repository: { defaultBranchRef: { name: 'main' }, pullRequests: { nodes: fields.branch === 'feat' ? [{ number: 7, isCrossRepository: false }] : [] } } })
 }
 const node = (number) => ({
+  id: 'pull-' + number,
   number,
   url: 'https://github.com/octo/demo/pull/' + number,
   title: 'Change ' + number,
@@ -79,17 +86,24 @@ const node = (number) => ({
   headRefName: number === 7 ? 'feat' : 'other',
   headRefOid: 'a'.repeat(40),
   baseRefName: 'main',
+  baseRefOid: 'e'.repeat(40),
   additions: 1,
   deletions: 0,
   mergeable: 'MERGEABLE',
   mergeStateStatus: number === 7 ? 'BLOCKED' : 'CLEAN',
   reviewDecision: null,
-  reviewThreads: { nodes: [] },
+  viewerCanUpdateBranch: false,
+  canBeRebased: false,
+  reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
+  reviewRequests: { totalCount: 0, nodes: [] },
+  latestReviews: { totalCount: 0, nodes: [] },
+  latestOpinionatedReviews: { totalCount: 0, nodes: [] },
+  closingIssuesReferences: { totalCount: 0, nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {
     id: 'rollup-' + number, state: number === 7 ? 'PENDING' : 'SUCCESS',
     contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
       __typename: 'CheckRun', id: 'check-1', databaseId: 1, name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
-      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
+      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { databaseId: 1, event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
     }] },
   } } }] },
 })
@@ -107,10 +121,24 @@ const FAKE_GIT = `#!/bin/sh
 printf 'To github.com:octo/demo.git\\n * [new branch]      feat -> feat\\n' >&2
 `
 
+/** One scripted model step: the tool call it makes, or the final text when undefined. */
+type ScriptedCall = Omit<ToolCallBlock, 'type' | 'id'> | undefined
+
+/** A `bash` call running `command`. */
+function bashCall(command: string): ScriptedCall {
+  return { name: 'bash', arguments: JSON.stringify({ command, description: 'Run the scripted command' }) }
+}
+
+/** A PTC `run_code` call whose TypeScript program runs `commands` through the `bash` binding in order. */
+function programCall(commands: readonly string[]): ScriptedCall {
+  const code = `for (const command of ${JSON.stringify(commands)}) await tools.bash({ command, description: 'Run the scripted command' })`
+  return { name: 'run_code', arguments: JSON.stringify({ code, description: 'Run the scripted commands' }) }
+}
+
 class ScriptedModel extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
 
-  constructor(private readonly commands: readonly string[]) {
+  constructor(private readonly calls: readonly ScriptedCall[]) {
     super()
   }
 
@@ -120,9 +148,9 @@ class ScriptedModel extends LlmAdapter {
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
-    const command = this.commands[this.requests.length - 1]
-    if (command !== undefined) {
-      const call = { type: 'tool-call' as const, id: ToolCallId(`shell-${this.requests.length}`), name: 'bash', arguments: JSON.stringify({ command, description: 'Run the scripted command' }) }
+    const scripted = this.calls[this.requests.length - 1]
+    if (scripted !== undefined) {
+      const call = { type: 'tool-call' as const, id: brandString<ToolCallId>(`shell-${this.requests.length}`), ...scripted }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: call }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -146,7 +174,19 @@ afterEach(async () => {
 
 const suite = process.platform === 'win32' ? describe.skip : describe
 
-async function load() {
+/** Plugins that replace the native executor in PTC mode, in load order. */
+const PTC_MODULES = [
+  ['@deepseek-ai/dsh-sandbox-local', LocalSandbox],
+  ['@deepseek-ai/dsh-sandbox-policy', SandboxPolicy],
+  ['@deepseek-ai/dsh-ptc-runtime-node', NodeRuntime],
+  ['@deepseek-ai/dsh-tool-executor-ptc', PtcToolExecutor],
+] as const
+
+/**
+ * Boot the composition through a test-only cordis.yml. `ptc` replaces the native executor with the PTC executor,
+ * the Node program runtime, and the sandbox services that runtime requires.
+ */
+async function load(mode: 'native' | 'ptc' = 'native') {
   root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-forge-session-loader-')))
   const bin = join(root, 'bin')
   await mkdir(bin)
@@ -164,7 +204,7 @@ async function load() {
     ['@deepseek-ai/dsh-fs-local', LocalFileSystem],
     ['@deepseek-ai/dsh-working-directory', WorkingDirectoryService],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
-    ['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor],
+    ...mode === 'native' ? [['@deepseek-ai/dsh-tool-executor-native', NativeToolExecutor] as const] : PTC_MODULES,
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-agent-loop', AgentLoop],
     ['@deepseek-ai/dsh-subprocess-local', LocalSubprocessRuntime],
@@ -178,6 +218,7 @@ async function load() {
   const configs: Record<string, readonly string[]> = {
     '@deepseek-ai/dsh-agent-loop': ['agents: []'],
     '@deepseek-ai/dsh-shell-env': [`dshHome: ${JSON.stringify(join(root, 'dsh-home'))}`],
+    '@deepseek-ai/dsh-sandbox-policy': ['mode: danger-full-access'],
     '@deepseek-ai/dsh-bash-local': ['timeoutMs: 20000'],
     '@deepseek-ai/dsh-experimental-forge': ['activeIntervalMs: 600000', 'idleIntervalMs: 600000'],
     '@deepseek-ai/dsh-experimental-forge-github': [`ghCommand: ${JSON.stringify(join(bin, 'gh'))}`],
@@ -204,11 +245,11 @@ async function load() {
 
 async function observerFixture() {
   const { ctx, path, root } = await load()
-  const handle = await ctx.agents.create({ sessionId: SessionId('reference-observer') })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('reference-observer') })
   const controller = new AbortController()
   const exec: ToolExecution = {
     name: 'bash', agent: handle.agent,
-    callId: ToolCallId('reference'), rootCallId: ToolCallId('reference'), token: Symbol('reference') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('reference'), rootCallId: brandString<ToolCallId>('reference'), token: Symbol('reference') as ToolExecutionToken,
     arguments: { command: `${path} gh pr view 9 -R octo/demo --json number` }, signal: controller.signal,
   }
   const result: ToolExecutionResult = {
@@ -233,6 +274,58 @@ async function observerFixture() {
     return execution
   })
   return { ctx, path, exec, result, controller, entry, records, query, executeSpy, recorded }
+}
+
+/** Push `feat`, create PR 8, and view PR 9 by number without its URL in the output. */
+function scriptedCommands(path: string): string[] {
+  return [
+    `${path} git push -u origin feat`,
+    `${path} gh pr create --fill --head other`,
+    `${path} gh pr view 9 --repo octo/demo --json number,title,body 2>&1 | head -200`,
+  ]
+}
+
+/** Run one user turn of a scripted model in a new Agent and wait until the Agent is idle. */
+async function runTurn(ctx: Context, root: string, sessionId: string, calls: readonly ScriptedCall[]) {
+  const model = new ScriptedModel(calls)
+  ctx.llm.registerAdapter(['fixture'], model)
+  const agent = await ctx.agentLoop.create(brandString<SessionId>(sessionId), { provider: 'fixture', model: 'fixture' }, { cwd: root })
+  const idle: PromiseWithResolvers<void> = Promise.withResolvers()
+  const stop = ctx.on('agent/status', ({ agent: subject, status }) => {
+    if (subject === agent && status === 'idle') idle.resolve()
+  })
+  agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Push feat, open a pull request, and view PR 9.' }], source: { kind: 'user' } }))
+  await idle.promise
+  stop()
+  return { agent, model }
+}
+
+/** Arguments of every fake `gh` invocation in call order. */
+async function ghCalls(root: string): Promise<string[][]> {
+  return (await readFile(join(root, 'gh.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+}
+
+function byUrl(entries: readonly SessionChangeRequest[]): SessionChangeRequest[] {
+  return [...entries].sort((left, right) => left.url.localeCompare(right.url))
+}
+
+/** Expect the push to discover PR 7, the create to bind PR 8, and the numbered view to resolve PR 9 through `gh`. */
+async function expectScriptedBindings(ctx: Context, session: Session, root: string): Promise<void> {
+  const records = () => session.snapshotEvents().flatMap((event) => {
+    const record = pluginRecordOf(event)
+    return record === undefined ? [] : [record.data]
+  })
+  await vi.waitFor(() => { expect(records()).toEqual(expect.arrayContaining([
+    { action: 'discover', url: 'https://github.com/octo/demo/pull/7' },
+    { action: 'reference', url: 'https://github.com/octo/demo/pull/9' },
+  ])) })
+  const github = (number: number) => ({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number })
+  expect(byUrl(ctx.forgeSession.changeRequests(session))).toEqual([
+    { url: 'https://github.com/octo/demo/pull/7', origin: 'discovered', ref: github(7), update: null },
+    { url: 'https://github.com/octo/demo/pull/8', origin: 'created', ref: github(8), update: null },
+    { url: 'https://github.com/octo/demo/pull/9', origin: 'referenced', ref: github(9), update: null },
+  ])
+  expect(await ghCalls(root)).toContainEqual(['pr', 'view', '9', '--repo', 'octo/demo', '--json', 'url'])
 }
 
 suite('forge-session through a real cordis.yml Loader composition', () => {
@@ -288,7 +381,6 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     emit({ ...f.exec, name: 'pwsh' })
     const { agent: _agent, ...withoutAgent } = f.exec
     emit(withoutAgent)
-    emit({ ...f.exec, parent: f.exec.token })
     emit(f.exec, { isError: true, error: { message: 'failed' }, content: [] })
     emit({ ...f.exec, arguments: {} })
     emit(f.exec, { isError: false, value: { kind: 'background' }, content: [] })
@@ -328,40 +420,12 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
 
   it('binds the pull requests that bash pushes discover, creates, and views, and polls them through the GitHub provider', async () => {
     const { ctx, path, root } = await load()
-    const model = new ScriptedModel([
-      `${path} git push -u origin feat`,
-      `${path} gh pr create --fill --head other`,
-      `${path} gh pr view 9 --repo octo/demo --json number,title,body 2>&1 | head -200`,
-    ])
-    ctx.llm.registerAdapter(['fixture'], model)
-    const agent = await ctx.agentLoop.create(SessionId('forge-session-loader'), { provider: 'fixture', model: 'fixture' }, { cwd: root })
-    const idle: PromiseWithResolvers<void> = Promise.withResolvers()
-    const stop = ctx.on('agent/status', ({ agent: subject, status }) => {
-      if (subject === agent && status === 'idle') idle.resolve()
-    })
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Push feat and open a pull request.' }], source: { kind: 'user' } }))
-    await idle.promise
-    stop()
+    const { agent, model } = await runTurn(ctx, root, 'forge-session-loader', scriptedCommands(path).map(bashCall))
 
     expect(model.requests).toHaveLength(4)
-    const github = (number: number) => ({ repository: { forge: 'github', host: 'github.com', owner: 'octo', name: 'demo' }, number })
-    const records = () => agent.session.snapshotEvents().flatMap((event) => {
-      const record = pluginRecordOf(event)
-      return record === undefined ? [] : [record.data]
-    })
-    await vi.waitFor(() => { expect(records()).toEqual(expect.arrayContaining([
-      { action: 'discover', url: 'https://github.com/octo/demo/pull/7' },
-      { action: 'reference', url: 'https://github.com/octo/demo/pull/9' },
-    ])) })
-    const byUrl = (entries: readonly SessionChangeRequest[]) => [...entries].sort((left, right) => left.url.localeCompare(right.url))
-    expect(byUrl(ctx.forgeSession.changeRequests(agent.session))).toEqual([
-      { url: 'https://github.com/octo/demo/pull/7', origin: 'discovered', ref: github(7), update: null },
-      { url: 'https://github.com/octo/demo/pull/8', origin: 'created', ref: github(8), update: null },
-      { url: 'https://github.com/octo/demo/pull/9', origin: 'referenced', ref: github(9), update: null },
-    ])
-    const lookups = (await readFile(join(root, 'gh.log'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as string[])
+    await expectScriptedBindings(ctx, agent.session, root)
+    const lookups = await ghCalls(root)
     expect(lookups.find(args => args.includes('branch=feat'))).toEqual(expect.arrayContaining(['--hostname', 'github.com', 'owner=octo', 'name=demo']))
-    expect(lookups).toContainEqual(['pr', 'view', '9', '--repo', 'octo/demo', '--json', 'url'])
 
     const listener = vi.fn<SessionChangeRequestsListener>()
     ctx.forgeSession.watch(agent.session, listener)
@@ -374,5 +438,19 @@ suite('forge-session through a real cordis.yml Loader composition', () => {
     await entry?.fiber?.dispose()
     expect(ctx.sessionProjections.checkpoint(agent.session)).toHaveProperty('forgeChangeRequests', row)
     expect(ctx.sessionProjections.checkpoint(ctx.sessions.create())).not.toHaveProperty('forgeChangeRequests')
+  }, 60_000)
+
+  it('binds the pull requests that shell calls inside a PTC program push, create, and view', async () => {
+    const { ctx, path, root } = await load('ptc')
+    const { agent, model } = await runTurn(ctx, root, 'forge-session-ptc', [programCall(scriptedCommands(path))])
+
+    expect(model.requests).toHaveLength(2)
+    expect(model.requests[0]?.tools?.map(tool => tool.name)).toEqual(['run_code'])
+    const events = agent.session.snapshotEvents()
+    expect(events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])).toEqual(['run_code'])
+    expect(events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [[event.data.name, event.data.isError]] : [])).toEqual([
+      ['bash', false], ['bash', false], ['bash', false],
+    ])
+    await expectScriptedBindings(ctx, agent.session, root)
   }, 60_000)
 })
