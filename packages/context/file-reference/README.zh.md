@@ -59,7 +59,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 抽象 `FileReferenceService` 与 `FILE_REFERENCE_PROMPT` |
 | [`src/grammar.ts`](src/grammar.ts) | `activeAtToken` 识别与 `formatFileMention` 渲染 |
-| [`src/types.ts`](src/types.ts) | 仅含路径的结果类型 `FileReferenceCandidate` |
+| [`src/types.ts`](src/types.ts) | 仅含路径的 `FileReferenceCandidate` 结果和 `ActiveAtToken` 提及词元记录 |
 
 ### 主要流程
 

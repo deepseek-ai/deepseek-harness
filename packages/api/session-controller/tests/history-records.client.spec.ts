@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionHistoryRecord } from '../src/types.ts'
 import {
   historyEntries,

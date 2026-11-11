@@ -29,7 +29,7 @@ kind: "package-reference"
 
 任何调用模型提供方的组合——agent loop（智能体循环）、会话标题生成器、压缩（compaction）摘要器——都会通过本服务流式发起请求。与至少一个提供方适配器一起挂载它；服务本身没有任何配置，也不包含提供方协议代码。
 
-使用 `import type` 从 `@deepseek-ai/dsh-llm/brand` 或包根入口导入消息、工具调用、提供方请求、尝试和推理强度标识符类型。通过 `@deepseek-ai/dsh-brand` 的 `brandString<IdentifierType>(value)` 为字符串添加品牌；此操作保留原字符串，不执行校验。
+使用 `import type` 从 `@deepseek-ai/dsh-llm/types` 或包根入口导入消息、工具调用、提供方请求、尝试和推理强度标识符类型。通过 `@deepseek-ai/dsh-brand` 的 `brandString<IdentifierType>(value)` 为字符串添加品牌；此操作保留原字符串，不执行校验。
 
 ### 何时选择
 

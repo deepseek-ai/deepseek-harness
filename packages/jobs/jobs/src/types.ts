@@ -5,11 +5,11 @@
  * @module @deepseek-ai/dsh-jobs/types
  */
 
-import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEventMap, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { JobId } from './brand.ts'
 import type { JobChannel, JobChunk, JobKind, JobView } from './view.ts'
 
-export { JobId } from './brand.ts'
+export type { JobId } from './brand.ts'
 export type { JobChannel, JobChunk, JobKind, JobKindMap, JobStatus, JobView } from './view.ts'
 
 /** Tool dispatch that created a job; nested calls retain their root invocation. */
