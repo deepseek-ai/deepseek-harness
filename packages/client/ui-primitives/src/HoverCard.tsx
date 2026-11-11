@@ -16,6 +16,22 @@ const INLINE_PREVIEW_WIDTH = 300
 const ANCHOR_GAP = 8
 const VIEWPORT_MARGIN = 8
 
+/**
+ * Left edge of a compact card: beside the anchor's end edge, or beside its start edge when the measured card would
+ * cross the viewport's end and fits before the anchor instead; with neither side fitting, against the viewport's end
+ * margin over the anchor, as long as the viewport is wider than the card.
+ * @param anchor - the anchor wrapper's rect.
+ * @param width - the card's measured width, 0 before it mounts.
+ * @returns the card's left edge in viewport pixels.
+ */
+function compactLeft(anchor: DOMRect, width: number): number {
+  const end = anchor.right + ANCHOR_GAP
+  const limit = window.innerWidth - VIEWPORT_MARGIN
+  if (end + width <= limit) return end
+  const start = anchor.left - ANCHOR_GAP - width
+  return start >= VIEWPORT_MARGIN ? start : Math.max(VIEWPORT_MARGIN, limit - width)
+}
+
 interface CardPosition {
   left: number
   top: number
@@ -32,7 +48,8 @@ interface CardPosition {
  * @param props.content - card content; the pointer may rest on it, so it is
  * readable and selectable, but it carries no dismissal affordance of its own.
  * @param props.openDelayMs - hover dwell before the card shows (default 500).
- * @param props.variant - compact card beside the anchor, or a preview above/below it
+ * @param props.variant - compact card beside the anchor's end edge, or its start edge when only that side fits, or
+ * over the anchor at the viewport's end margin when neither fits; or a preview above/below it
  * with 24px side insets, a 420px height cap, the frame-top clearance (capped below an anchor inside the top strip),
  * and 100ms opacity transitions.
  * @param props.widthAnchorRef - optional element whose width and horizontal position size the preview.
@@ -221,7 +238,7 @@ export function HoverCard({
         return
       }
       const top = r.top + h > window.innerHeight - VIEWPORT_MARGIN ? window.innerHeight - h - VIEWPORT_MARGIN : r.top
-      setPos({ left: r.right + ANCHOR_GAP, top })
+      setPos({ left: compactLeft(r, cardRef.current?.offsetWidth ?? 0), top })
     }
     place()
     // Observe only the anchor's ancestors: an offscreen drawer can hide without resizing its retained row.
@@ -243,16 +260,19 @@ export function HoverCard({
     }
   }, [open, variant, widthAnchorRef, positioned, inline, fitContent, dismissImmediately])
 
-  // The first placement ran before the card mounted (height read 0): once the
-  // card's real height is measurable, correct the bottom-edge clamp. The
-  // correction converges — a clamped top satisfies the guard, so it runs once.
+  // The first placement ran before the card mounted (size read 0): once the
+  // card's real size is measurable, correct the bottom-edge clamp and the side.
+  // The correction converges — a corrected position satisfies both guards, so it runs once.
   useLayoutEffect(() => {
     if (!open || pos === null || variant === 'preview' || inline) return
-    /* v8 ignore next -- the card is mounted whenever pos is set, so the ref is attached here. */
-    const h = cardRef.current?.offsetHeight ?? 0
-    if (pos.top + h > window.innerHeight - VIEWPORT_MARGIN) {
-      setPos({ left: pos.left, top: window.innerHeight - h - VIEWPORT_MARGIN })
-    }
+    const card = cardRef.current
+    const anchor = rootRef.current
+    /* v8 ignore next -- the card and anchor are mounted whenever pos is set, so the refs are attached here. */
+    if (card === null || anchor === null) return
+    const h = card.offsetHeight
+    const left = compactLeft(anchor.getBoundingClientRect(), card.offsetWidth)
+    const top = pos.top + h > window.innerHeight - VIEWPORT_MARGIN ? window.innerHeight - h - VIEWPORT_MARGIN : pos.top
+    if (left !== pos.left || top !== pos.top) setPos({ left, top })
   }, [open, pos, variant, inline])
 
   const copy = async (text: string): Promise<void> => {

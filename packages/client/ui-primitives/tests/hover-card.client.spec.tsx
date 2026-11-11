@@ -619,6 +619,36 @@ describe('HoverCard', () => {
     }
   })
 
+  it('opens on the anchor\'s start side once the measured card would cross the viewport\'s end, and over the anchor when neither side fits', () => {
+    window.innerWidth = 1000
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')!
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 244 })
+    try {
+      const { wrapper } = mount()
+      // The anchor spans 880–980: 988 + 244 crosses 1000 - 8, and 880 - 8 - 244 = 628 fits.
+      stubAnchorRect(screen.getByText('row'), { top: 40, right: 980 })
+      fireEvent.pointerEnter(wrapper)
+      act(() => { vi.advanceTimersByTime(500) })
+      const card = screen.getByText('card body').parentElement as HTMLElement
+      expect(card.style.left).toBe('628px')
+      // Placement on scroll keeps the start side with the card already measured.
+      act(() => { fireEvent.scroll(document) })
+      expect(card.style.left).toBe('628px')
+      // With room on neither side, the card keeps to the viewport's end margin: 400 - 8 - 244 = 148.
+      stubAnchorRect(screen.getByText('row'), { top: 40, right: 300 })
+      window.innerWidth = 400
+      act(() => { fireEvent.resize(window) })
+      expect(card.style.left).toBe('148px')
+      // A viewport narrower than the card keeps its start margin.
+      window.innerWidth = 200
+      act(() => { fireEvent.resize(window) })
+      expect(card.style.left).toBe('8px')
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth)
+      window.innerWidth = 1024
+    }
+  })
+
   it('clamps inside placement itself when the card is already measured (resize path)', () => {
     window.innerHeight = 300
     const { wrapper } = mount()
