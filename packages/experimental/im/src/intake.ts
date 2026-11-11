@@ -29,6 +29,31 @@ const noop = () => {}
 const OWN_ENVELOPE_BYTES = 1024
 
 /**
+ * Bytes the delivery intent of one stored message adds to it: its id, mode, media flags and the JSON around the
+ * messages it repeats. A message admitted at the very edge of `maxInputBytes` would otherwise be stored, acknowledged
+ * and then refused when it is delivered, which the intake reports as ignored.
+ */
+const DELIVERY_ENVELOPE_BYTES = 256
+
+/**
+ * One own draft with only the head of its text that fits a byte budget.
+ * @param draft - the draft to shorten.
+ * @param room - UTF-8 bytes the text may take.
+ * @returns the draft with its content and text cut to that head.
+ */
+function headed(draft: ImMessageDraft, room: number): ImMessageDraft {
+  let used = 0
+  let end = 0
+  for (const character of draft.text) {
+    used += Buffer.byteLength(character)
+    if (used > room) break
+    end += character.length
+  }
+  const text = draft.text.slice(0, end)
+  return { ...draft, content: h('message', h.text(text)), text }
+}
+
+/**
  * Whether the platform handed this message as a card. A card arrives as a projection of itself, which is only the part
  * the platform is willing to describe: the card as it was sent is a platform read away.
  * @param content - the decoded message content.
@@ -64,7 +89,8 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
  *   afterwards. A rejection (a storage failure) therefore leaves the platform event unacked and a redelivery is
  *   expected. A message over `maxInputBytes` is remembered and acknowledged instead: refusing it would have the
  *   platform redeliver a message that can never be accepted. The platform reads of a frame (a card, a merged forward,
- *   the text of a quoted reply) happen outside the store chain, so a slow read delays only its own frame.
+ *   the text of a quoted reply) happen outside the store chain and in arrival order per chat, so a slow read delays
+ *   only its own chat and never lets a later message of that chat take a smaller `seq`.
  * - A `(bot, event id)` the intake already recorded is one delivery: the record the first delivery stored stands, a
  *   payload that drifted from it is logged once, and the redelivered frame is ACKed like any duplicate.
  * - A chat matched by no `sources` rule is neither stored nor emitted.
@@ -77,6 +103,13 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
 export class ImIntake {
   /** The store chain: recording and storing one frame never interleave with another's; platform reads stay outside. */
   private chain: Promise<void> = Promise.resolve()
+  /**
+   * Per chat, the chain of the platform reads one frame needs: a slow read of one message finishes before the next
+   * message of the same chat is read, so arrival order decides `seq`. Chats never wait for each other.
+   */
+  private readonly reading = new Map<ImChatKey, Promise<void>>()
+  /** Frames already accepted and not finished yet, so {@link dispose} can wait for the ones still reading. */
+  private readonly receiving = new Set<Promise<void>>()
   /** Own publications in flight, by message key, so a receipt can wait for the record one of them stores. */
   private readonly announcing = new Map<string, Promise<ImMessage | undefined>>()
   /** The pass currently dispatching, if any. */
@@ -92,6 +125,23 @@ export class ImIntake {
    * @param session - the adapter session of one received platform message.
    */
   async receive(session: Session): Promise<void> {
+    const running = this.receiveFrame(session)
+    this.receiving.add(running)
+    try {
+      await running
+    } finally {
+      this.receiving.delete(running)
+    }
+  }
+
+  /**
+   * Record, store and pump one received frame.
+   * @param session - the adapter session of one received platform message.
+   */
+  private async receiveFrame(session: Session): Promise<void> {
+    // A frame that arrives while this intake is shutting down is not acknowledged: the platform redelivers it to a
+    // process that can store it.
+    if (this.disposed) return
     const message = session.message
     if (session.type !== 'message' || message === undefined) return
     const bot = session.bot
@@ -113,13 +163,31 @@ export class ImIntake {
     const receivedAt = Date.now()
     // The platform reads of one draft — a card, a merged forward, the text of a quoted reply — happen BEFORE the intake
     // chain, because that chain is what the rest of this listener's callers wait on to acknowledge: a slow read inside
-    // it delayed the acknowledgement of every other chat. A frame that races another copy of itself may read twice;
-    // the store keeps one record per key either way.
-    const draft = await this.inspect(bot, message)
+    // it delayed the acknowledgement of every other chat. They stay in arrival order inside one chat, so a slow read
+    // cannot hand a later message a smaller `seq`; a frame that races another copy of itself may read twice, and the
+    // store keeps one record per key either way.
+    const chat = ImChatKey(bot.id, message.chat.id)
+    const draft = await this.readInOrder(chat, () => this.inspect(bot, message))
     const accepted = this.chain.then(() => this.accept(key, digest, receivedAt, draft))
     this.chain = accepted.then(noop, noop)
     await accepted
     this.pump()
+  }
+
+  /**
+   * Run the platform reads of one frame behind the reads already queued for its chat.
+   * @param chat - the chat the frame arrived in.
+   * @param inspect - the reads and admission of that frame.
+   * @returns what that frame stores, exactly as {@link inspect} answers.
+   */
+  private readInOrder(chat: ImChatKey, inspect: () => Promise<ImMessageDraft | undefined>): Promise<ImMessageDraft | undefined> {
+    const previous = this.reading.get(chat) ?? Promise.resolve()
+    // A read that failed must not stall the chat: the next frame reads whether or not the previous one succeeded.
+    const running = previous.then(inspect, inspect)
+    const settled = running.then(noop, noop)
+    this.reading.set(chat, settled)
+    void settled.then(() => { if (this.reading.get(chat) === settled) this.reading.delete(chat) })
+    return running
   }
 
   /**
@@ -200,19 +268,17 @@ export class ImIntake {
   private boundedOwn(draft: ImMessageDraft): ImMessageDraft {
     const budget = this.config.maxInputBytes
     if (inputBytes(draft) <= budget) return draft
-    // The stored draft carries its text twice (`content` and `text`), so each copy gets half the budget less the
-    // envelope the rest of the record occupies.
-    const room = Math.max(1, Math.floor((budget - OWN_ENVELOPE_BYTES) / 2))
-    let used = 0
-    let end = 0
-    for (const character of draft.text) {
-      used += Buffer.byteLength(character)
-      if (used > room) break
-      end += character.length
+    // The stored draft carries its text twice (`content` and `text`), and JSON escapes part of it (a newline or a quote
+    // is two bytes, a control character six), so the estimate is measured again on the record it produced and shrunk
+    // until that record fits.
+    let room = Math.max(1, Math.floor((budget - OWN_ENVELOPE_BYTES) / 2))
+    let bounded = headed(draft, room)
+    while (inputBytes(bounded) > budget && room > 1) {
+      room = Math.floor(room / 2)
+      bounded = headed(draft, room)
     }
     this.ctx.logger.warn('IM own message %s is over maxInputBytes (%s); only its text is stored', draft.key, budget)
-    const text = draft.text.slice(0, end)
-    return { ...draft, content: h('message', h.text(text)), text }
+    return bounded
   }
 
   /** Kick the pump (new message, startup re-dispatch, retry timer). Never throws. */
@@ -237,9 +303,14 @@ export class ImIntake {
     while (this.active) await this.active
   }
 
-  /** Stop pumping; in-flight waterfalls finish, undispatched records stay pending for the next start. */
+  /**
+   * Stop receiving and pumping. Frames already accepted finish first — one may still be reading the platform, and its
+   * store write needs a store that is still open — then the in-flight waterfall finishes and undispatched records stay
+   * pending for the next start.
+   */
   async dispose(): Promise<void> {
     this.disposed = true
+    await Promise.allSettled([...this.receiving])
     await this.chain
     if (this.active) await this.active
   }
@@ -363,10 +434,13 @@ export class ImIntake {
       return
     }
     const bytes = inputBytes(draft)
-    if (bytes > this.config.maxInputBytes) {
+    // The delivery intent of this message carries it again plus the intent's own fields, and an over-budget delivery is
+    // refused later, when nothing can be reported to the chat any more. Reserve that overhead here.
+    if (bytes + DELIVERY_ENVELOPE_BYTES > this.config.maxInputBytes) {
       // Acknowledge and dedupe like a drifted redelivery: a refusal would leave the frame unacked, and the platform
       // would redeliver a message that can never be accepted.
-      this.ctx.logger.warn('IM message %s is %s bytes (maxInputBytes is %s); acknowledged without dispatching',
+      this.ctx.logger.warn(
+        'IM message %s is %s bytes, over what maxInputBytes (%s) leaves for delivery; acknowledged without dispatching',
         draft.key, bytes, this.config.maxInputBytes)
       await this.store.remember(key, { digest, receivedAt })
       return
@@ -526,8 +600,14 @@ function chatOf(bot: string, chat: ChatRef, source: ImSourceConfig): ImChat {
   return { key: ImChatKey(bot, chat.id), bot, ref: chat, source: ImSourceId(source.id) }
 }
 
-/** Whether a source admits the bot and the chat (its `users` allowlist needs a sender and is checked separately). */
-function admitsChat(source: ImSourceConfig, bot: string, chat: ChatRef): boolean {
+/**
+ * Whether a source admits the bot and the chat (its `users` allowlist needs a sender and is checked separately).
+ * @param source - one configured admission rule.
+ * @param bot - id of the bot that received the message or the interaction.
+ * @param chat - the platform chat the event belongs to.
+ * @returns true when the rule names this bot (or any bot) and this chat (or every chat).
+ */
+export function admitsChat(source: ImSourceConfig, bot: string, chat: ChatRef): boolean {
   return (source.bot === '*' || source.bot === bot) && allows(source.chats, chat.id)
 }
 

@@ -22,9 +22,9 @@ const RECENT_OUTCOMES = 100
 const noop = () => {}
 
 /**
- * Byte size of one message-shaped value, the one budget `maxInputBytes` bounds everywhere: the draft the intake
- * accepts, and the delivery intent a session records. Both measure the JSON they are going to store, so a message that
- * passes one check passes the other — the two used to measure different objects and disagree by a factor of two.
+ * Byte size of one message-shaped value, the one unit `maxInputBytes` bounds: the draft the intake accepts and the
+ * delivery intent a session records. Both measure the JSON they are going to store. An intent repeats the messages it
+ * carries in addition to its own fields, so the intake reserves that overhead when it measures a draft.
  * @param value - the draft, intent or stored record to measure.
  * @returns its UTF-8 JSON size in bytes.
  */

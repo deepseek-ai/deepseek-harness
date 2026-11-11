@@ -188,6 +188,56 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-slow'))?.text).toBe('read back')
   })
 
+  it('keeps the arrival order of one chat when a platform read is slow', async () => {
+    const { bot, store, intake } = await boot()
+    const held = Promise.withResolvers<undefined>()
+    let reads = 0
+    bot.getMessage = async () => {
+      reads += 1
+      await held.promise
+      return inbound({ id: 'm-card', content: h('message', h.text('card body')) })
+    }
+    const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
+    const slow = deliver(bot, 'evt-card', inbound({ id: 'm-card', content: card }))
+    await vi.waitFor(() => { expect(reads).toBe(1) })
+
+    // The next message of the same chat arrives while that read is open: it waits, so it cannot take the smaller seq.
+    const next = deliver(bot, 'evt-next', inbound({ id: 'm-next', content: h('message', h.text('算了，不用了')) }))
+    held.resolve(undefined)
+    await Promise.all([slow, next])
+    await intake.idle()
+
+    expect(store.after(CHAT, 0, 10).map(message => message.text)).toEqual(['card body', '算了，不用了'])
+  })
+
+  it('finishes a frame that is still reading the platform before it stops', async () => {
+    const { bot, store, intake } = await boot()
+    const held = Promise.withResolvers<undefined>()
+    bot.getMessage = async () => {
+      await held.promise
+      return inbound({ id: 'm-card', content: h('message', h.text('card body')) })
+    }
+    const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
+    void deliver(bot, 'evt-card', inbound({ id: 'm-card', content: card }))
+    await vi.waitFor(() => { expect(store.get(ImMessageKey('fake:bot', 'm-card'))).toBeUndefined() })
+
+    // The store is closed after the reads of the frames already accepted: a frame that read too late would write into
+    // a closed domain and lose its acknowledgement.
+    const stopped = intake.dispose()
+    held.resolve(undefined)
+    await stopped
+    expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toBe('card body')
+  })
+
+  it('acknowledges a message the delivery budget could never carry', async () => {
+    const { bot, store, intake } = await boot({ config: { maxInputBytes: 4096 } })
+    // The record fits, but the delivery intent that repeats it does not: storing it would be acknowledged here and
+    // refused later, where nothing can report it to the chat.
+    await deliver(bot, 'evt-big', inbound({ id: 'm-big', content: h('message', h.text('x'.repeat(1800))) }))
+    await intake.idle()
+    expect(store.get(ImMessageKey('fake:bot', 'm-big'))).toBeUndefined()
+  })
+
   it('reads the entries of a merged forward the event could only reference', async () => {
     const { bot, store, intake } = await boot()
     // An event hands the container alone; the platform answers a read of it with the entries.
@@ -543,6 +593,10 @@ describe('ImIntake outbound', () => {
     const long = await intake.outbound(bot, await bot.send(target, h('message', h.text('x'.repeat(6000)))))
     expect(long?.text.length).toBeGreaterThan(0)
     expect(Buffer.byteLength(JSON.stringify(long))).toBeLessThanOrEqual(4096)
+
+    // JSON escapes part of that body ('\n' is two bytes), so the cut is measured again on the stored record.
+    const escaped = await intake.outbound(bot, await bot.send(target, h('message', h.text('\n'.repeat(6000)))))
+    expect(Buffer.byteLength(JSON.stringify(escaped))).toBeLessThanOrEqual(4096)
   })
 
   it('ignores chats no source admits and empty handles', async () => {
