@@ -12,9 +12,10 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   createAssistantMessage, createToolResultMessage, createUserMessage, LlmAdapter, LlmRuntime,
-  resolveImageAttachmentAccess, ToolCallId,
+  resolveImageAttachmentAccess, type ToolCallId,
 } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageBlock, StreamChunk, UserMessage } from '@deepseek-ai/dsh-llm'
 import { deepSeekImageRequestPricing, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
@@ -24,7 +25,7 @@ import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import LocalSpillStore from '@deepseek-ai/dsh-spill-local'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
@@ -45,7 +46,7 @@ const text = (value: string): ContentBlock => ({ type: 'text', text: value })
 const textOf = (content: readonly ContentBlock[]): string => content.filter(block => block.type === 'text').map(block => block.text).join('')
 const imagesOf = (content: readonly ContentBlock[]): ImageBlock[] => content.filter((block): block is ImageBlock => block.type === 'image')
 
-async function setup(mode: 'native' | 'ptc' = 'native') {
+async function setup(mode: 'native' | 'ptc' = 'native', maxInlineTokens = CAP) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-image-recovery-'))
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx, root)
@@ -74,12 +75,12 @@ async function setup(mode: 'native' | 'ptc' = 'native') {
     stream(_options: GenerateOptions): AsyncIterable<StreamChunk> { throw new Error('keyless fixture does not infer') }
   }
   ctx.llm.registerAdapter(['vision'], new VisionRoute())
-  await ctx.plugin(SpillPolicy, { maxInlineTokens: CAP })
-  const session = ctx.sessions.create(SessionId('recovery'), { meta: { cwd: root } })
+  await ctx.plugin(SpillPolicy, { maxInlineTokens })
+  const session = ctx.sessions.create(brandString<SessionId>('recovery'), { meta: { cwd: root } })
   const agent = { session, options: { provider: 'vision', model: MODEL }, ctx } as Agent
   let ordinal = 0
   const execute = (name: string, args: JsonValue = {}) => executeModelToolFixture(ctx, {
-    name, arguments: args, callId: ToolCallId(`recovery-${++ordinal}`), agent, signal: new AbortController().signal,
+    name, arguments: args, callId: brandString<ToolCallId>(`recovery-${++ordinal}`), agent, signal: new AbortController().signal,
   })
   const red = await sharp({ create: { width: 1920, height: 1080, channels: 3, background: '#ff0000' } }).png().toBuffer()
   const blue = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: '#0000ff' } }).png().toBuffer()
@@ -103,7 +104,7 @@ async function setup(mode: 'native' | 'ptc' = 'native') {
   const cost = (content: ContentBlock[]) => estimateContent(content.filter(block => block.type === 'text'))
     + pricing.priceImages(imagesOf(content)).reduce((sum, price) => sum + price.visualTokens + estimateContent([text(price.text)]), 0)
   const requestImages = async (content: ContentBlock[], contexts: UserMessage[] = []) => {
-    const callId = ToolCallId('visible-result')
+    const callId = brandString<ToolCallId>('visible-result')
     const history = [
       createUserMessage({ source: { kind: 'user' }, content: [text('Inspect the supplied images.')] }),
       createAssistantMessage({ source: { provider: 'vision', model: MODEL }, content: [
@@ -127,6 +128,32 @@ async function setup(mode: 'native' | 'ptc' = 'native') {
 }
 
 describe('multimodal recovery through real providers', () => {
+  it('reports a spilled image notice to the program without restoring the omitted image', async () => {
+    const { ctx, root, green, session, execute } = await setup('ptc', 512)
+    await ctx.plugin(Subprocess)
+    await ctx.plugin(Sandbox, {})
+    await ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
+    await ctx.plugin(NodeRuntime)
+    await writeFile(join(root, 'large.png'), green)
+    const result = await execute('run_code', {
+      code: `try {
+  await tools.read_image({ file_path: 'large.png' });
+  inspect('unexpected image');
+} catch (error) {
+  inspect(error.name, error.toolName, error.message);
+}`,
+      description: 'Inspect an image omission notice',
+    })
+    expect(result.isError).toBe(false)
+    expect(textOf(result.content)).toContain('ToolCallError read_image Image output was removed by a tool output policy.')
+    expect(textOf(result.content)).toContain('Omitted 1 images.')
+    const dispatch = session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch' && event.data.name === 'read_image')
+    expect(dispatch?.data).toMatchObject({ isError: false })
+    expect(textOf(result.additionalContexts?.flatMap(context => context.content) ?? [])).toContain('Omitted 1 images.')
+    expect(imagesOf([...result.content, ...result.additionalContexts?.flatMap(context => context.content) ?? []])).toEqual([])
+    expect(await readFile(join(root, 'large.png'))).toEqual(green)
+  })
+
   it('keeps a large single-image read inside a fresh 12500-token budget', async () => {
     const { ctx, root, green, execute, cost, requestImages } = await setup()
     const saves = vi.spyOn(ctx.spillStore, 'saveText')
@@ -198,18 +225,20 @@ describe('multimodal recovery through real providers', () => {
       ? 'await Promise.all([tools.ends({}), tools.middle({}), tools.small({})])'
       : '[await tools.ends({}), await tools.middle({}), await tools.small({})]'
     const result = await execute('run_code', {
-      code: `const [ends, middle, small] = ${calls}; return { ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length };`,
+      code: `const [ends, middle, small] = ${calls};
+inspect(JSON.stringify({ ends: ends.content[2].text.length, middle: middle.content[0].text.length, small: small.content[0].text.length }));`,
       description: 'Inspect independent image result budgets',
     })
     expect(result.isError).toBe(false)
-    expect(result.value).toMatchObject({ result: { ends: LONG.length, middle: LONG.length, small: SMALL.length } })
+    expect(result.value).toMatchObject({ logs: [JSON.stringify({ ends: LONG.length, middle: LONG.length, small: SMALL.length }) + '\n'] })
     const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data)
     expect(dispatches).toHaveLength(3)
     for (const dispatch of dispatches) expect(cost(dispatch.content)).toBeLessThanOrEqual(CAP)
     expect(dispatches.find(event => event.name === 'ends')?.content.filter(block => block.type === 'image')).toHaveLength(2)
     expect(textOf(dispatches.find(event => event.name === 'middle')!.content)).toContain('Omitted 1 images.')
     expect(dispatches.find(event => event.name === 'small')?.content).toEqual([text(SMALL)])
-    expect(result.additionalContexts).toHaveLength(2)
+    expect(imagesOf(result.content)).toEqual([])
+    expect(imagesOf(result.additionalContexts?.flatMap(context => context.content) ?? [])).toHaveLength(2)
     expect(await requestImages(result.content, result.additionalContexts)).toEqual(['red', 'blue'])
   })
 })

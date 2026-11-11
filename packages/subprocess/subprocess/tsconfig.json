@@ -19,6 +19,9 @@
     },
     {
       "path": "../../util/launch-environment"
+    },
+    {
+      "path": "../../util/error"
     }
   ]
 }

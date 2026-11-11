@@ -8,13 +8,14 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as Spawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as Fork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-child-directory-'))
@@ -39,7 +40,7 @@ async function fixture() {
   const adapter = new MockAdapter([textResponse('parent'), textResponse('child'), textResponse('continued')])
   ctx.llm.registerAdapter(['mock'], adapter)
   const { agent: parent } = await ctx.agents.create({
-    sessionId: SessionId('directory-parent'),
+    sessionId: brandString<SessionId>('directory-parent'),
     meta: { cwd: origin },
     agentOptions: { provider: 'mock', model: 'mock' },
   })
@@ -89,7 +90,7 @@ describe('subagent working directories', () => {
   it('rolls back a local child whose setup realm has no directory service', async () => {
     const { ctx, parent, second, adapter } = await fixture()
     const beforeSessions = ctx.sessions.list().length
-    const childId = SessionId('missing-directory-service')
+    const childId = brandString<SessionId>('missing-directory-service')
     const create = ctx.agents.create.bind(ctx.agents)
     const creation = vi.spyOn(ctx.agents, 'create').mockImplementation(options => create({
       ...options,
@@ -101,7 +102,11 @@ describe('subagent working directories', () => {
         provider: 'spawn', label: 'unavailable directory service', childId,
         parent, cwd: second, prompt: [{ type: 'text', text: 'child' }],
         signal: new AbortController().signal,
-      })).rejects.toThrow(/subagents require the working-directory service/)
+      })).rejects.toMatchObject({
+        name: 'SubagentError',
+        code: 'WORKING_DIRECTORY_UNAVAILABLE',
+        message: expect.stringMatching(/subagents require the working-directory service/) as string,
+      })
 
       expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
       expect(parent.session.snapshotEvents().filter(event => event.type === 'subagent/catalog')).toEqual([])

@@ -5,6 +5,8 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as CordisInspectProviders from '../src/host.ts'
+import * as CordisInspectTools from '../src/index.ts'
+import { hostInspectProviders } from '../src/providers.ts'
 
 /**
  * The Host inspect providers are one process-global set: the host entry
@@ -33,5 +35,32 @@ describe('the cordis-inspect-providers host entry', () => {
 
     await fiber.dispose()
     expect(ctx.cordisInspect.list()).toEqual([])
+  })
+
+  it('reports a missing Agent and an undeclared provider method with error codes', async () => {
+    const ctx = await host()
+    await ctx.plugin(CordisInspectProviders)
+    await ctx.plugin(CordisInspectTools)
+    const signal = new AbortController().signal
+    const query = ctx.tools.get('cordis_inspect_query')
+    await expect(query?.execute({ platform: 'host', provider: 'Tool', method: 'listTools' }, { signal } as never)).rejects.toMatchObject({
+      name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE', message: 'Cordis inspection requires an Agent-backed session',
+    })
+    for (const provider of hostInspectProviders(ctx).filter(candidate => ['Service', 'Tool'].includes(candidate.manifest.id))) {
+      await expect(Promise.resolve().then(() => provider.query('undeclared', undefined, { agent: undefined as never, signal })))
+        .rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_METHOD_NOT_FOUND' })
+    }
+    await ctx.fiber.dispose()
+  })
+})
+
+describe('the cordis inspect tools', () => {
+  it('declares both read-only tools parallel-safe', async () => {
+    const ctx = await host()
+    const fiber = ctx.plugin(CordisInspectTools)
+    await fiber
+    expect(ctx.tools.get('cordis_inspect_list')?.isConcurrencySafe?.({})).toBe(true)
+    expect(ctx.tools.get('cordis_inspect_query')?.isConcurrencySafe?.({ platform: 'host', provider: 'Service', method: 'get' })).toBe(true)
+    await fiber.dispose()
   })
 })

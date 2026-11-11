@@ -163,7 +163,7 @@ class PatchPtcRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunSpec) {
-    return { logs: [], value: await request.bindings[0]!.functions.apply_patch!({ input: this.patch }) }
+    return { output: [{ type: 'text' as const, text: JSON.stringify(await request.bindings[0]!.functions.apply_patch!({ input: this.patch })) }] }
   }
 }
 
@@ -179,10 +179,10 @@ it('dispatches native and PTC patch calls with identical values', async () => {
   await t.file('a', 'old\n')
   const ptc = await executeModelToolFixture(p.ctx, {
     signal: p.exec.signal, callId: p.exec.callId, agent: { ctx: p.ctx, session: { header: { cwd: t.workspace }, append() {} } } as never,
-    name: 'run_code', arguments: { code: 'return await tools.apply_patch({patch})', description: 'Apply the fixture patch' },
+    name: 'run_code', arguments: { code: 'inspect(JSON.stringify(await tools.apply_patch({patch})))', description: 'Apply the fixture patch' },
   })
   if (ptc.isError) throw new Error(JSON.stringify(ptc))
-  expect(ptc.value).toEqual({ logs: [], result: native.value })
+  expect(ptc.value).toEqual({ logs: [JSON.stringify(native.value)] })
   expect(await t.bytes('a')).toBe('new\n')
 })
 

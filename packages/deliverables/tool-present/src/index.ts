@@ -3,7 +3,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { FsError } from '@deepseek-ai/dsh-fs'
-import { defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { ToolArgsError, ToolContextUnavailableError, defineTool, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { PresentedFile } from './types.ts'
@@ -76,21 +76,21 @@ export function apply(ctx: Context, config: Config): void {
       render: (_args, value) => [{ type: 'text', text: value.files.map(file => `Presented ${file.path}`).join('\n') }],
     },
     async execute(args, exec) {
-      if (exec.agent === undefined) throw new Error('present requires an agent Session')
+      if (exec.agent === undefined) throw new ToolContextUnavailableError('present requires an agent Session')
       const boundary = ctx.agents.turnBoundaryOf(exec.agent.session)
-      if (boundary.openTurnStartSeq === null) throw new Error('present requires an open turn')
-      if (args.files.length === 0 || args.files.length > config.maxFiles) throw new Error(`present accepts 1 to ${config.maxFiles} files`)
+      if (boundary.openTurnStartSeq === null) throw new ToolContextUnavailableError('present requires an open turn')
+      if (args.files.length === 0 || args.files.length > config.maxFiles) throw new ToolArgsError([`present accepts 1 to ${config.maxFiles} files`])
       const cwd = await ctx.workingDirectory.ensure(exec.agent, exec.signal)
       const options = { cwd, signal: exec.signal }
       const files: PresentedFile[] = []
       for (const file of args.files) {
-        if (file.path.trim().length === 0) throw new Error('present requires a non-empty file path')
+        if (file.path.trim().length === 0) throw new ToolArgsError(['present requires a non-empty file path'])
         const entry = await ctx.fs.lstat(file.path, { cwd }, exec.signal)
-        if (entry !== undefined && entry.type !== 'file') throw new Error(`Cannot present ${file.path}: not a regular file`)
+        if (entry !== undefined && entry.type !== 'file') throw new FsError(`Cannot present ${file.path}: not a regular file`, 'FS_NOT_REGULAR_FILE')
         const target = await ctx.fs.resolve(file.path, options)
         const info = await ctx.fs.stat(target, exec.signal)
         if (info === undefined) throw new FsError(`Cannot present ${file.path}: file not found. Check the path, create the file if needed, and retry.`, 'FS_NOT_FOUND')
-        if (info.type !== 'file') throw new Error(`Cannot present ${file.path}: not a regular file`)
+        if (info.type !== 'file') throw new FsError(`Cannot present ${file.path}: not a regular file`, 'FS_NOT_REGULAR_FILE')
         files.push({ ...file, path: ctx.fs.processPath(target) })
       }
       exec.signal.throwIfAborted()

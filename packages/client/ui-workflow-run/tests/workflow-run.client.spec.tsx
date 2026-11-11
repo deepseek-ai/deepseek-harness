@@ -940,6 +940,7 @@ describe('plugin lifecycle', () => {
     ctx.provide('sessions', sessions)
     const openSession = vi.fn(async () => {})
     ctx.provide('uiWorkspace', { openSession } as never)
+    ctx.provide('uiSession.sessionStatus', createSnapshotStore(new Map()) as never)
     const conversationEvents = new UiConversation(ctx, ctx.sessions).events
     ctx.slots.register({
       name: 'root',

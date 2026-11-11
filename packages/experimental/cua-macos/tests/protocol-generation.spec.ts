@@ -21,6 +21,16 @@ describe('native protocol generation', () => {
     expect(validate({ id: 'invalid', method: 'setValue', params: target })).toBe(false)
   })
 
+  it('enforces macOS tree budgets at native admission', () => {
+    const validate = new Ajv2020().compile(JSON.parse(renderNativeProtocol().json))
+    const read = (maxElements: number, maxDepth: number) => ({
+      id: 'tree', method: 'getState', params: { appHandle: 'app', maxElements, maxDepth },
+    })
+    expect(validate(read(100000, 512))).toBe(true)
+    expect(validate(read(100001, 512))).toBe(false)
+    expect(validate(read(100000, 513))).toBe(false)
+  })
+
   it('rejects a key array at both model and native pressKey admission', () => {
     const request = { method: 'pressKey', params: { appHandle: 'app', key: ['w', 'd'] } }
     expect(Request.safeParse(request).success).toBe(false)
@@ -29,11 +39,10 @@ describe('native protocol generation', () => {
   })
 
   it.each([
-    { method: 'getState', params: { appHandle: 'app', maxElements: 1 } },
-    { method: 'drag', params: { appHandle: 'app', windowId: 1, fromX: 1, fromY: 1, toX: 2, toY: 2, steps: 1 } },
+    { method: 'drag', params: { appHandle: 'app', windowId: '1', fromX: 1, fromY: 1, toX: 2, toY: 2, steps: 1 } },
     { method: 'paste', params: { appHandle: 'app', text: 'text', maxClipboardBytes: 1024 } },
     { method: 'paste', params: { appHandle: 'app', text: 'text', pasteReadTimeoutMs: 1000 } },
-    { method: 'mouseMove', params: { appHandle: 'app', windowId: 1, x: 0, y: 0, allowSystemPointer: true } },
+    { method: 'mouseMove', params: { appHandle: 'app', windowId: '1', x: 0, y: 0, allowSystemPointer: true } },
     { method: 'findApps', params: { query: 'Editor', maxAppMatches: 1 } },
     { method: 'releaseHeldKeys', params: { runId: 'execution' } },
     { method: 'launchApp', params: { appHandle: 'pending' } },

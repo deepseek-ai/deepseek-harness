@@ -274,6 +274,51 @@ export async function localText(
 }
 
 /**
+ * Read the old side of one changed file in a scope: the fork point for the `branch` scope, the first parent of the
+ * first chosen commit for chosen commits, the index for `unstaged`, else HEAD.
+ * @param ctx - context that provides `subprocess`, `sandbox`, and `sandboxPolicy`.
+ * @param config - Git and size limits.
+ * @param session - Session whose sandbox policy and execution world apply.
+ * @param root - top-level directory of the checkout.
+ * @param scope - the scope whose old side to read.
+ * @param fork - the `branch` scope's fork point, or null for other scopes.
+ * @param path - path relative to `root` on the old side, as the diff names it.
+ * @param signal - cancellation.
+ * @returns the text, or null when the old side has no such file or holds binary content.
+ * @throws NoForkPoint for the `branch` scope without `fork`; CommitsMissing for a chosen commit that is not a full
+ * object name; DiffTooLarge over `maxDiffBytes`; an Error for a path outside the checkout or a failed read.
+ */
+export async function localOldText(
+  ctx: Context,
+  config: DiffConfig,
+  session: Session,
+  root: string,
+  scope: ForgeLocalScope,
+  fork: ForkPoint | null,
+  path: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  if (!insideCheckout(path)) throw new Error(`forge-panel: ${JSON.stringify(path)} is not a path inside the checkout`)
+  let revision: string
+  switch (scope.kind) {
+    case 'branch':
+      if (fork === null) throw new NoForkPoint('The checkout has no fork point to compare its branch with')
+      if (scope.commits !== null && !COMMIT.test(scope.commits.from)) throw new CommitsMissing('The chosen commit is not a full object name')
+      revision = scope.commits === null ? fork.commit : `${scope.commits.from}^`
+      break
+    case 'unstaged': revision = ''; break
+    case 'uncommitted': case 'staged': revision = 'HEAD'; break
+    /* v8 ignore next -- closed ForgeLocalScope union exhaustiveness guard */
+    default: return assertNever(scope, 'ForgeLocalScope.kind')
+  }
+  const git = gitIn(ctx, { ...config, maxOutputBytes: config.maxDiffBytes }, session, root, signal)
+  // Git exits with 128 for a path or revision that does not exist, such as the parent of a root commit.
+  const shown = await bounded(git('show', ['show', `${revision}:${path}`], [0, 128]))
+  if (shown.exitCode !== 0 || shown.stdout.slice(0, BINARY_PROBE).includes('\0')) return null
+  return shown.stdout
+}
+
+/**
  * Measure the `branch` scope for the panel's card.
  * @param ctx - context that provides `fs`, `subprocess`, `sandbox`, and `sandboxPolicy`.
  * @param config - Git and size limits.

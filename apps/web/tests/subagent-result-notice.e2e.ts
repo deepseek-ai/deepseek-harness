@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium, type Browser, type BrowserContext } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createSettlementMessage } from '@deepseek-ai/dsh-subagent/src/continuation-messages.ts'
 import type { SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import {
@@ -13,6 +13,7 @@ import {
   launchWebScaffold, watchConsole, webSnapshotMode,
 } from './scaffold.ts'
 import { connectFreshWorkspace, connectFreshWorkspaceZh } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const DIR = fileURLToPath(new URL('./expected/subagent-result-notice/', import.meta.url))
 const MODE = webSnapshotMode()
@@ -60,7 +61,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagent result notices', () => {
         session.append('turn/end', { turn, reason: { kind: 'completed' } })
       }
       appendTurn(1, createUserMessage({ content: [{ type: 'text', text: 'Inspect child execution results.' }], source: { kind: 'user' } }))
-      const childId = SessionId('notice-result-child')
+      const childId = brandString<SessionId>('notice-result-child')
       const notices: { title: string; message: ReturnType<typeof createUserMessage> }[] = OUTCOMES.map(outcome => ({
         title: outcome[locale],
         message: createSettlementMessage(childId, 'agent-1', {

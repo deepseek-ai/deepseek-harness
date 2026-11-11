@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-scoped-repl
+profile: headless
+composition: ptc
+recording: live
+header:
+  class: ptc-scoped-repl
+  pin: true
+permission: workspace-write

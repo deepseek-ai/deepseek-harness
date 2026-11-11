@@ -1,14 +1,15 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import LlmRuntime, { createUserMessage, isAgentLoopRequest, LlmAdapter, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, isAgentLoopRequest, LlmAdapter, type ReasoningEffortId, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   FinishReason,
   GenerateOptions,
   LlmResolvedModelInfo,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import type { SessionTitleProviderRequest } from '@deepseek-ai/dsh-session-title'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import {
@@ -40,7 +41,7 @@ class RecordingAdapter extends LlmAdapter {
         ? {}
         : {
           reasoning: {
-            efforts: efforts.map(id => ({ id: ReasoningEffortId(id), name: id })),
+            efforts: efforts.map(id => ({ id: brandString<ReasoningEffortId>(id), name: id })),
           },
         },
     })
@@ -106,7 +107,7 @@ const FLOOR_SELECTOR = (model: Readonly<LlmResolvedModelInfo>): ReasoningEffortI
 const CEILING_SELECTOR = (model: Readonly<LlmResolvedModelInfo>): ReasoningEffortId | undefined =>
   model.reasoning?.efforts.at(-1)?.id
 
-const TITLE_PROVIDER = SessionTitleProviderId('test-title-provider')
+const TITLE_PROVIDER = brandString<SessionTitleProviderId>('test-title-provider')
 let nextSession = 0
 
 function request(
@@ -114,7 +115,7 @@ function request(
   signal = new AbortController().signal,
   headerMaxTokens?: number,
 ): SessionTitleProviderRequest {
-  const session = ctx.sessions.create(SessionId(`title-call-${++nextSession}`))
+  const session = ctx.sessions.create(brandString<SessionId>(`title-call-${++nextSession}`))
   session.append('turn/start', {
     turn: 1,
   })
@@ -218,7 +219,7 @@ describe('executeSessionTitleLlm', () => {
       maxTokens: 32,
       sessionId: providerRequest.session.id,
       purpose: 'session-title',
-      reasoningEffort: ReasoningEffortId('off'),
+      reasoningEffort: brandString<ReasoningEffortId>('off'),
     })
     expect(options.system).toBe(preparedRequest.system)
     const prompt = options.messages[0]?.content[0]
@@ -231,7 +232,7 @@ describe('executeSessionTitleLlm', () => {
         system: preparedRequest.system,
         messages: options.messages,
         maxTokens: 32,
-        reasoningEffort: ReasoningEffortId('off'),
+        reasoningEffort: brandString<ReasoningEffortId>('off'),
       })
   })
 
@@ -252,8 +253,8 @@ describe('executeSessionTitleLlm', () => {
       .findLast(event => event.type === 'session/title-llm-request')?.data
     expect(options.maxTokens).toBe(32)
     expect(logged?.maxTokens).toBe(32)
-    expect(options.reasoningEffort).toBe(ReasoningEffortId('max'))
-    expect(logged?.reasoningEffort).toBe(ReasoningEffortId('max'))
+    expect(options.reasoningEffort).toBe(brandString<ReasoningEffortId>('max'))
+    expect(logged?.reasoningEffort).toBe(brandString<ReasoningEffortId>('max'))
   })
 
   it('keeps the title output cap independent of a smaller conversation cap', async () => {
@@ -472,7 +473,7 @@ describe('executeSessionTitleLlm', () => {
       { type: 'block-start', index: 0, blockType: 'text' },
       { type: 'text-delta', index: 0, text: 'text beside a tool call' },
       { type: 'block-start', index: 1, blockType: 'tool-call' },
-      { type: 'tool-call-delta', index: 1, id: ToolCallId('title-tool'), name: 'unexpected', argumentsDelta: '{}' },
+      { type: 'tool-call-delta', index: 1, id: brandString<ToolCallId>('title-tool'), name: 'unexpected', argumentsDelta: '{}' },
       { type: 'finish', reason: { kind: 'tool-calls' } },
     ])
     const providerRequest = request(ctx)

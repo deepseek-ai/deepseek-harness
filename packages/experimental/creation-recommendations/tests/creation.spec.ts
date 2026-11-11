@@ -1,6 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -29,7 +30,7 @@ describe('interface creation', () => {
     expect(await f.ctx.skills.list()).toMatchSnapshot('skill discovery')
     expect(f.manager.listBundles).not.toHaveBeenCalled()
     const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'personalized-pages' }, agent: f.agent,
-      callId: ToolCallId('discovery'), signal: new AbortController().signal })
+      callId: brandString<ToolCallId>('discovery'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.value).toMatchSnapshot('skill policy and current catalog')
     f.bundles[0] = { ...f.bundles[0]!, enabled: false }
@@ -86,7 +87,7 @@ describe('interface creation', () => {
   it('leaves existing subagent receipts unchanged when the recommendation plugin loads', async () => {
     const f = await fixture()
     await f.fiber.dispose()
-    const child = await f.ctx.agents.create({ sessionId: SessionId('existing-creator-child'),
+    const child = await f.ctx.agents.create({ sessionId: brandString<SessionId>('existing-creator-child'),
       meta: { parentSession: f.agent.id, origin: 'subagent' } })
     await f.propose('call-creation-1', proposal, child.agent)
     const receipt = { callId, phase: 'interrupted', slot: 'page' as const, bundleName: '@dsh-local/view-existing' }
@@ -135,7 +136,7 @@ describe('interface creation', () => {
 
   it('uses the profile workspace when an accepted Session has no recorded working directory', async () => {
     const f = await fixture()
-    const handle = await f.ctx.agents.create({ sessionId: SessionId('without-cwd') })
+    const handle = await f.ctx.agents.create({ sessionId: brandString<SessionId>('without-cwd') })
     await f.propose('call-creation-1', proposal, handle.agent)
     await f.act('create', 'sidebar-right', undefined, handle.agent)
     const spec = await f.entered.promise
@@ -271,7 +272,7 @@ describe('interface creation', () => {
   it('keeps a Session usable when profile recovery fails, and checks again before any retry', async () => {
     const f = await fixture({ callId, phase: 'creating', slot: 'page', bundleName: '@dsh-local/recover' })
     await f.propose()
-    recordCard(f.agent.session, { callId: ToolCallId('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
+    recordCard(f.agent.session, { callId: brandString<ToolCallId>('other-kept'), phase: 'kept', slot: 'page', bundleName: '@dsh-local/kept' })
     await f.fiber.dispose()
     f.manager.listBundles.mockRejectedValue(new Error('profile read failed'))
     await f.ctx.plugin(CreationRecommendations)
@@ -320,7 +321,7 @@ describe('interface creation', () => {
   it('ignores page receipts whose data no longer validates and decisions of other kinds', async () => {
     const f = await fixture()
     await f.propose()
-    const other = { callId: ToolCallId('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
+    const other = { callId: brandString<ToolCallId>('other-card'), action: 'other_action', phase: 'creating', data: { slot: 'page', bundleName: '@dsh-local/other' } }
     appendPluginRecord(f.agent.session, 'plugin:action-cards/decision', other)
     f.ctx.actionCards.record(f.agent, { callId, action: ACTION, phase: 'installed', data: { slot: 'elsewhere' } })
     expect(await f.act('keep')).toEqual({ status: 'refused', reason: 'unavailable' })
@@ -411,15 +412,15 @@ describe('interface creation', () => {
     f.ctx.tools.register(defineTool({ name: 'plugin_manager', description: 'fixture', parameters: { action: { type: 'string', required: true } },
       output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: async () => 'done' }))
     const run = (action: string, agent = child) => executeToolFixture(f.ctx, { name: 'plugin_manager', arguments: { action },
-      callId: ToolCallId('manager'), agent, signal: new AbortController().signal })
+      callId: brandString<ToolCallId>('manager'), agent, signal: new AbortController().signal })
     expect((await run('install')).isError).toBe(true)
     expect((await run('list_bundles')).isError).toBe(false)
     expect((await run('install', f.agent)).isError).toBe(false)
-    const unrelated = await f.harness.create(SessionId('other-root'))
+    const unrelated = await f.harness.create(brandString<SessionId>('other-root'))
     expect((await run('install', unrelated)).isError).toBe(false)
-    const helper = await f.ctx.agents.create({ sessionId: SessionId('creator-helper'),
+    const helper = await f.ctx.agents.create({ sessionId: brandString<SessionId>('creator-helper'),
       meta: { parentSession: child.id, origin: 'subagent' } })
-    const nested = await f.ctx.agents.create({ sessionId: SessionId('creator-nested'),
+    const nested = await f.ctx.agents.create({ sessionId: brandString<SessionId>('creator-nested'),
       meta: { parentSession: helper.agent.id, origin: 'subagent' } })
     await childHandle.dispose()
     expect((await run('install', child)).isError).toBe(false)
@@ -428,13 +429,13 @@ describe('interface creation', () => {
       expect((await run('list_bundles', owned)).isError).toBe(false)
     }
     // Historical ordinary forks do not acquire subagent restrictions.
-    const lineage = await f.ctx.agents.create({ sessionId: SessionId('creator-lineage'), meta: { parentSession: child.id } })
+    const lineage = await f.ctx.agents.create({ sessionId: brandString<SessionId>('creator-lineage'), meta: { parentSession: child.id } })
     expect((await run('install', lineage.agent)).isError).toBe(false)
-    const unlinked = await f.ctx.agents.create({ sessionId: SessionId('unlinked-subagent'), meta: { origin: 'subagent' } })
+    const unlinked = await f.ctx.agents.create({ sessionId: brandString<SessionId>('unlinked-subagent'), meta: { origin: 'subagent' } })
     expect((await run('install', unlinked.agent)).isError).toBe(false)
-    const cycle = await f.ctx.agents.create({ sessionId: SessionId('cycle-first'),
-      meta: { origin: 'subagent', parentSession: SessionId('cycle-second') } })
-    await f.ctx.agents.create({ sessionId: SessionId('cycle-second'),
+    const cycle = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cycle-first'),
+      meta: { origin: 'subagent', parentSession: brandString<SessionId>('cycle-second') } })
+    await f.ctx.agents.create({ sessionId: brandString<SessionId>('cycle-second'),
       meta: { origin: 'subagent', parentSession: cycle.agent.id } })
     expect((await run('install', cycle.agent)).isError).toBe(false)
     await helper.dispose()
@@ -502,7 +503,7 @@ describe('interface creation', () => {
     f.startActivation.mockImplementation(async (spec) => { const value = await original(spec); await gate.promise; return value })
     await f.act('create')
     const spec = await f.entered.promise
-    const unrelated = await f.ctx.agents.create({ sessionId: SessionId('unrelated') })
+    const unrelated = await f.ctx.agents.create({ sessionId: brandString<SessionId>('unrelated') })
     await unrelated.dispose()
     expect(spec.signal.aborted).toBe(false)
     await f.agentHandle.dispose()

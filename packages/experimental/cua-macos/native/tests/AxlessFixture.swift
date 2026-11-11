@@ -80,7 +80,7 @@ final class AxlessFixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let rect = button.convert(button.bounds, to: nil)
         let data = try! JSONSerialization.data(withJSONObject: [
             "pid": ProcessInfo.processInfo.processIdentifier,
-            "windowId": window.windowNumber,
+            "windowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "hiddenAX": hiddenAX, "count": count, "resizeCount": resizeCount, "moved": moved,
             "hidden": NSApplication.shared.isHidden, "minimized": window.isMiniaturized,
             "active": NSApplication.shared.isActive,

@@ -10,11 +10,12 @@ import type { Browser, Page, Route } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { createChatScrollFixture, type ChatScrollFixture } from './chat-scroll-fixture.ts'
 import {
   launchWebScaffold,
@@ -28,7 +29,7 @@ import { expandOwningTurnProcess, newEnglishPage, openSettings, saveFailureShot 
 
 const MODE = webSnapshotMode()
 const HISTORY_SESSION_ID = 'chat-scroll-history-e2e'
-const TOOL_SESSION_ID = SessionId('chat-scroll-tool-e2e')
+const TOOL_SESSION_ID = brandString<SessionId>('chat-scroll-tool-e2e')
 const RESTORE_SESSION_A_ID = 'chat-scroll-restore-a-e2e'
 const RESTORE_SESSION_B_ID = 'chat-scroll-restore-b-e2e'
 const REPLAY_CONTEXT_WINDOW = 10_000_000
@@ -39,7 +40,7 @@ const LIVE_TEXT_PROMPT = 'CHAT_SCROLL_LIVE_USER Continue this long conversation 
 const LIVE_TEXT_FIRST = 'CHAT_SCROLL_LIVE_FIRST'
 const LIVE_TEXT_DONE = 'CHAT_SCROLL_LIVE_DONE'
 const LIVE_TOOL_PROMPT = 'CHAT_SCROLL_TOOL_USER Run the requested diagnostic and then summarize it.'
-const LIVE_TOOL_CALL_ID = ToolCallId('chat-scroll-live-tool-call')
+const LIVE_TOOL_CALL_ID = brandString<ToolCallId>('chat-scroll-live-tool-call')
 const LIVE_TOOL_RESULT = 'CHAT_SCROLL_LIVE_TOOL_RESULT'
 const LIVE_TOOL_FIRST = 'CHAT_SCROLL_TOOL_STREAM_FIRST'
 const LIVE_TOOL_DONE = 'CHAT_SCROLL_TOOL_STREAM_DONE'
@@ -47,7 +48,7 @@ const TOOL_READY_FILE = '.chat-scroll-tool-ready'
 const TOOL_RELEASE_FILE = '.chat-scroll-tool-release'
 const INPUTS_SESSION_ID = 'chat-scroll-inputs-e2e'
 const RAIL_SESSION_ID = 'chat-scroll-rail-e2e'
-const FLING_SESSION_ID = SessionId('chat-scroll-fling-e2e')
+const FLING_SESSION_ID = brandString<SessionId>('chat-scroll-fling-e2e')
 const LIVE_FLING_PROMPT = 'CHAT_SCROLL_FLING_USER Keep streaming while I fling back through older output.'
 const LIVE_FLING_FIRST = 'CHAT_SCROLL_FLING_STREAM_FIRST'
 const LIVE_FLING_DONE = 'CHAT_SCROLL_FLING_STREAM_DONE'
@@ -749,7 +750,7 @@ describe('web e2e: long Chat scroll contract', () => {
             yield chunk
           }
         })
-        const resolved = await world.scaffold.ctx.sessionController.resolveAgent(SessionId(`visible-fold-${scenario.name}`))
+        const resolved = await world.scaffold.ctx.sessionController.resolveAgent(brandString<SessionId>(`visible-fold-${scenario.name}`))
         if ('error' in resolved) throw resolved.error
         // Maintenance keeps the accepted message in the inbox, so its echo folds the earlier work before the Turn starts.
         const promptGate = Promise.withResolvers<undefined>()
