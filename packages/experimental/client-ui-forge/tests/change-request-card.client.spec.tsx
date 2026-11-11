@@ -184,6 +184,7 @@ describe('collapsed ChangeRequestCard', () => {
   it.each([
     ['not-found', en['change.failure.notFound']],
     ['unauthenticated', en['change.failure.unauthenticated']],
+    ['rate-limited', en['change.failure.rateLimited']],
     ['unavailable', en['change.failure.unavailable']],
   ] as const)('explains a %s read failure in place of the summary and retries it', (code, text) => {
     const failure: ForgeFailure = { code, message: 'detail' }

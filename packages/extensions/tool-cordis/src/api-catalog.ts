@@ -1354,6 +1354,33 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'viewerSources(): ForgeViewerSource[]',
+        description: 'List the viewer lists every registered provider offers; `forge/providers-changed` announces a change.',
+        parameters: [],
+        returns: 'one source per provider that declares viewer lists and reads them, in registration order.',
+      },
+      {
+        signature: 'async listForViewer(forge: string, query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>',
+        description: 'Read one list of open change requests that involve the signed-in user.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider.' }, { name: 'query', description: 'host, list, repository, and limit of the read.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the list, or why the host did not provide it; `unsupported` when the provider does not offer the host or list.',
+        throws: ['when no provider serves `forge`, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async countForViewer(forge: string, host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>',
+        description: 'Count the change requests in each viewer list a provider offers on one host.',
+        parameters: [{ name: 'forge', description: 'forge family of a registered provider.' }, { name: 'host', description: 'lowercase host name the provider lists on.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the count of each list, or why the host did not provide them; `unsupported` when the provider does not list on `host`.',
+        throws: ['when no provider serves `forge`, or with `signal.reason` when it aborts.'],
+      },
+      {
+        signature: 'async readDescription(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>',
+        description: 'Read the description and labels of a change request.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the description, or why the host did not provide it; `unsupported` when the provider reads no descriptions.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
         description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -6173,12 +6200,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ChangeRequestCheck {\n    readonly name: string;\n    readonly state: CheckState;\n    readonly url: string | null;\n    readonly workflow: string | null;\n    readonly startedAt: string | null;\n    readonly completedAt: string | null;\n    readonly rerun: ForgeCheckId | null;\n}',
   },
   {
+    name: 'ChangeRequestDescription',
+    declaration: 'export interface ChangeRequestDescription {\n    readonly body: string;\n    readonly labels: readonly ChangeRequestLabel[];\n    readonly labelsTruncated: boolean;\n    readonly images: Readonly<Record<string, string>>;\n    readonly imagesExpireAt: string | null;\n    readonly createdAt: string;\n}',
+  },
+  {
     name: 'ChangeRequestIssue',
     declaration: 'export interface ChangeRequestIssue {\n    readonly repository: ForgeRepository;\n    readonly number: number;\n    readonly title: string;\n    readonly state: \'open\' | \'closed\';\n    readonly url: string;\n}',
   },
   {
     name: 'ChangeRequestKey',
     declaration: 'export type ChangeRequestKey = Branded<\'ChangeRequestKey\'>;',
+  },
+  {
+    name: 'ChangeRequestLabel',
+    declaration: 'export interface ChangeRequestLabel {\n    readonly name: string;\n    readonly color: string | null;\n}',
   },
   {
     name: 'ChangeRequestListener',
@@ -6201,8 +6236,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ChangeRequestState = \'open\' | \'closed\' | \'merged\';',
   },
   {
+    name: 'ChangeRequestSummary',
+    declaration: 'export interface ChangeRequestSummary {\n    readonly ref: ChangeRequestRef;\n    readonly url: string;\n    readonly title: string;\n    readonly draft: boolean;\n    readonly author: ForgeCommentAuthor | null;\n    readonly headSha: string;\n    readonly checksRollup: ChecksRollup;\n    readonly reviewDecision: ReviewDecision;\n    readonly viewerReview: ChangeRequestViewerReview | null;\n    readonly viewerRequest: {\n        readonly team: string | null;\n    } | null;\n    readonly closingIssues: readonly ChangeRequestIssue[];\n    readonly closingIssuesTruncated: boolean;\n    readonly updatedAt: string;\n}',
+  },
+  {
     name: 'ChangeRequestUpdate',
     declaration: 'export type ChangeRequestUpdate = {\n    readonly key: ChangeRequestKey;\n    readonly fetchedAt: number;\n} & ({\n    readonly snapshot: ChangeRequestSnapshot;\n} | {\n    readonly failure: ForgeFailure;\n});',
+  },
+  {
+    name: 'ChangeRequestViewerReview',
+    declaration: 'export interface ChangeRequestViewerReview {\n    readonly verdict: ReviewVerdict;\n    readonly reviewedSha: string | null;\n}',
   },
   {
     name: 'ChangeResult',
@@ -6874,7 +6917,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeFailure',
-    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
+    declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'rate-limited\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
   },
   {
     name: 'ForgeFileLayer',
@@ -6962,7 +7005,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeProvider',
-    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    merge(ref: ChangeRequestRef, request: MergeRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>;\n    diff(ref: ChangeRequestRef, headSha: string, signal: AbortSignal, base?: string): Promise<string | ForgeFailure>;\n    fileText(ref: ChangeRequestRef, commit: string, path: string, signal: AbortSignal): Promise<string | /* …truncated — full shape in source */',
+    declaration: 'export interface ForgeProvider {\n    readonly forge: string;\n    readonly viewer?: ForgeViewerCapability;\n    listForViewer?(query: ForgeViewerQuery, signal: AbortSignal): Promise<ForgeViewerList | ForgeFailure>;\n    countForViewer?(host: string, signal: AbortSignal): Promise<ReadonlyMap<ForgeViewerFilter, number> | ForgeFailure>;\n    readDescription?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestDescription | ForgeFailure>;\n    submitReview?(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>;\n    readReview?(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeReviewData | ForgeFailure>;\n    writeReview?(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>;\n    repositoryFromRemote(url: string): ForgeRepository | undefined;\n    changeRequestFromUrl(url: string): ChangeRequestRef | undefined;\n    changeRequestUrl(ref: ChangeRequestRef): string;\n    fetch(refs: readonly ChangeRequestRef[], signal: AbortSignal): Promise<ReadonlyMap<ChangeRequestKey, ChangeRequestSnapshot | ForgeFailure>>;\n    fetchChecks?(ref: ChangeRequestRef, signal: AbortSignal): Promise<ChangeRequestSnapshot | ForgeFailure>;\n    findByHead(repository: ForgeRepository, branch: string, signal: AbortSignal): Promise<readonly ChangeRequestRef[]>;\n    readiness(host: string, signal: AbortSignal): Promise<ForgeReadiness>;\n    markReady(ref: ChangeRequestRef, signal: AbortSig /* …truncated — full shape in source */',
   },
   {
     name: 'ForgeReadiness',
@@ -7047,6 +7090,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeViewedState',
     declaration: 'export type ForgeViewedState = \'viewed\' | \'unviewed\' | \'dismissed\';',
+  },
+  {
+    name: 'ForgeViewerCapability',
+    declaration: 'export interface ForgeViewerCapability {\n    readonly hosts: readonly string[];\n    readonly filters: ReadonlySet<ForgeViewerFilter>;\n    readonly maxItems: number;\n}',
+  },
+  {
+    name: 'ForgeViewerFilter',
+    declaration: 'export type ForgeViewerFilter = \'review-requested\' | \'authored\' | \'involved\';',
+  },
+  {
+    name: 'ForgeViewerList',
+    declaration: 'export interface ForgeViewerList {\n    readonly viewer: string;\n    readonly items: readonly ChangeRequestSummary[];\n    readonly total: number;\n}',
+  },
+  {
+    name: 'ForgeViewerQuery',
+    declaration: 'export interface ForgeViewerQuery {\n    readonly host: string;\n    readonly filter: ForgeViewerFilter;\n    readonly repository: Pick<ForgeRepository, \'owner\' | \'name\'> | null;\n    readonly limit: number;\n}',
+  },
+  {
+    name: 'ForgeViewerSource',
+    declaration: 'export interface ForgeViewerSource extends ForgeViewerCapability {\n    readonly forge: string;\n}',
   },
   {
     name: 'ForgeWorktreeBlocker',

@@ -80,6 +80,7 @@ const REVIEW: Record<ChangeRequestSnapshot['reviewDecision'], ForgePanelKey> = {
 const FAILURE: Record<ForgeFailure['code'], ForgePanelKey> = {
   'not-found': 'change.failure.notFound',
   'unauthenticated': 'change.failure.unauthenticated',
+  'rate-limited': 'change.failure.rateLimited',
   'too-large': 'change.failure.unavailable',
   'stale': 'change.failure.unavailable',
   'unsupported': 'change.failure.unavailable',

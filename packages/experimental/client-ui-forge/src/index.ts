@@ -1289,6 +1289,7 @@ function readError(failure: ForgeFailure): RemoteError {
     case 'stale': return new RemoteError('forgePanel/stale-head', failure.message, {})
     case 'not-found':
     case 'unauthenticated':
+    case 'rate-limited':
     case 'unsupported':
     case 'unavailable': return new RemoteError('forgePanel/diff-failed', failure.message, {})
     /* v8 ignore next -- closed ForgeFailure code union exhaustiveness guard */
@@ -1309,6 +1310,7 @@ function reviewError(failure: ForgeFailure): RemoteError {
     case 'not-found':
     case 'unauthenticated':
     case 'too-large':
+    case 'rate-limited':
     case 'unavailable': return new RemoteError('forgePanel/review-failed', failure.message, {})
     /* v8 ignore next -- closed ForgeFailure code union exhaustiveness guard */
     default: return assertNever(failure.code, 'ForgeFailure.code')
