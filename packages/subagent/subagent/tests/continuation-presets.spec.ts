@@ -1,7 +1,7 @@
 /** Independent spawn presets and compatibility of persisted child compositions. */
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -13,6 +13,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -122,6 +123,25 @@ describe('child preset start validation', () => {
     expect(ctx.sessions.list()).toHaveLength(beforeSessions)
     expect(parent.session.snapshotEvents()).toEqual(beforeEvents)
     expect(published).toEqual([])
+    expect(adapter.requests).toEqual([])
+  })
+
+  it('propagates a registry join failure unchanged', async () => {
+    const { ctx, parent, adapter } = await setup()
+    const failure = new Error('Child already joined a preset')
+    vi.spyOn(ctx.agentPresets, 'composeFrom').mockImplementation(() => { throw failure })
+
+    await expect(ctx.subagents.startActivation(startSpec(parent))).rejects.toBe(failure)
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
+    expect(adapter.requests).toEqual([])
+  })
+
+  it('rejects an unknown independent preset with the registry RemoteError as a HarnessError', async () => {
+    const { ctx, parent, adapter } = await setup()
+    const failure: unknown = await ctx.subagents.startActivation(startSpec(parent, 'absent')).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(HarnessError)
+    expect(failure).toMatchObject({ name: 'RemoteError', code: 'agent-preset/not-found', message: 'Unknown agent preset: absent' })
+    expect(ctx.agents.list().map(agent => agent.id)).toEqual([parent.id])
     expect(adapter.requests).toEqual([])
   })
 

@@ -10,7 +10,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { ROOT_AGENT_NAME } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -73,7 +73,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     async execute(args, exec) {
       const sender = exec.agent
       if (!sender) {
-        throw new Error('send_message requires a calling agent (exec.agent was undefined)')
+        throw new ToolContextUnavailableError('send_message requires a calling agent (exec.agent was undefined)')
       }
       const message: ContentBlock[] = [{ type: 'text', text: args.message }]
       const targetId = await ctx.subagents.resolveName(sender, args.agent, exec.signal)
@@ -146,7 +146,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const caller = exec.agent
       if (!caller) {
         // Ancestor authority requires an exact live calling agent.
-        throw new Error('interrupt_agent requires a calling agent (exec.agent was undefined)')
+        throw new ToolContextUnavailableError('interrupt_agent requires a calling agent (exec.agent was undefined)')
       }
       const targetId = await ctx.subagents.resolveName(caller, args.agent, exec.signal)
       // The service authorizes the exact live caller against the target's

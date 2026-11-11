@@ -177,7 +177,8 @@ function executeGoalCommand(ctx: Context, invocation: CommandInvocation): Comman
       default: return assertNever(command, 'goal command')
     }
   } catch (error: unknown) {
-    if (error instanceof GoalError) {
+    // Corrupt goal state is not a command-shape problem; the command runtime reports its cause.
+    if (error instanceof GoalError && error.code !== 'GOAL_STATE_CORRUPT') {
       return {
         kind: 'error',
         text: 'The goal command is not valid for the current state. Run /goal to view available commands.',

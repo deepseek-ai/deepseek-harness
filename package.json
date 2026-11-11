@@ -264,6 +264,7 @@
     "@vitest/coverage-v8": "^4.1.11",
     "@yao-pkg/pkg": "6.21.0",
     "@yarnpkg/cli-dist": "4.18.0",
+    "diff": "^9.0.0",
     "eslint-plugin-sonarjs": "^4.2.0",
     "execa": "^10.0.1",
     "zod": "4.6.6",

@@ -26,24 +26,15 @@ export type {
 } from './types.ts'
 
 /**
- * Binding globals EVERY backend refuses because SOME backend owns the slot in
- * the program's namespace: `console` and `inspect` (Node's output bindings),
- * `Image` (Node's program image class), and
- * `__dsh_main__`/`__builtins__`/`__name__` (the Python backend's bootstrap
- * wrapper and seeded module globals),
- * and `__debug__`. One shared set — rather than each backend refusing only its
- * own slots — keeps the portability promise real: a namespace list valid on
- * one backend is valid on all, so a caller cannot pick a name that works on
- * Node and collides on Python (or vice versa). `__name__` et al. ARE
- * valid portable identifiers, so the identifier rule on
- * `PtcBindingNamespace.global` never rejects them — hence this explicit set.
- * (Error members differ: {@link DUNDER_MEMBER} refuses every dunder form
- * wholesale; binding globals refuse only the names listed here.) `__debug__`
- * is listed for a different reason than a collision: CPython compiles a bare
- * `__debug__` reference to the constant `True` and rejects any assignment to
- * the name at COMPILE time, so an injected global under that name is
- * unreachable from the program — accepted by validation, unusable on the
- * Python backend, which is exactly the split the shared set exists to prevent.
+ * Globals reserved by the language-portable binding contract, independently of
+ * the installed provider. Node uses `console`, `inspect`, and `Image` for output.
+ * Python presentation reserves `__dsh_main__` for a program wrapper and
+ * `__builtins__`/`__name__` for module globals; Python also rejects assignment to
+ * `__debug__` at compile time. The executor supports externally supplied Python
+ * runtimes, so every provider enforces the same exclusions. A namespace list
+ * valid for one provider remains valid when the runtime language changes.
+ * Binding globals reserve only these listed names; error members reject every
+ * dunder form through {@link DUNDER_MEMBER}.
  */
 export const RESERVED_BINDING_GLOBALS: ReadonlySet<string> = new Set([
   'console', 'inspect', 'Image',
@@ -72,14 +63,11 @@ export const RESERVED_ERROR_MEMBERS: ReadonlySet<string> = new Set([
 export const DUNDER_MEMBER = /^__.+__$/
 
 /**
- * Reserved words of every portable target language (ECMAScript ∪ Python),
- * refused as {@link PtcBindingNamespace.global} / error-class names by all
- * backends, one per language: the released TypeScript Node process and the
- * experimental, private CPython subprocess. The portable-identifier contract
- * promises a namespace list valid on one backend is valid on every backend; a
- * per-language check would let `lambda` pass the TypeScript backend and fail
- * the Python one. Extending the seam with a new language means widening this
- * union (a breaking review of existing binding names, by design).
+ * ECMAScript and Python reserved words, rejected for binding globals and error
+ * class names by every provider. The executor presents both languages, including
+ * externally supplied Python runtimes. A shared set keeps namespace declarations
+ * portable: `lambda` is rejected even by a TypeScript provider. Adding another
+ * language requires reviewing this union against existing binding names.
  */
 export const PORTABLE_RESERVED_WORDS: ReadonlySet<string> = new Set([
   // ECMAScript reserved words and reserved-in-strict-mode names.
@@ -143,8 +131,7 @@ export abstract class PtcRuntime extends Service {
    * generates language-specific presentation (typed SDK stubs, usage
    * instructions) switches on it and fails loud on a language it cannot
    * present. Well-known values: `'typescript'` and `'python'`, those
-   * `dsh-tool-executor-ptc` presents; the TypeScript backend is released, the Python
-   * backend is experimental and private (not published).
+   * `dsh-tool-executor-ptc` presents. The shipped Node backend reports `'typescript'`.
    */
   abstract readonly language: string
 

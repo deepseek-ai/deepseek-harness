@@ -478,7 +478,7 @@ export class GoalService extends TypertRemoteService {
   /** Read the current durable projection maintained by the registry. */
   private state(session: Session): GoalProjection | null {
     const state = this.goalProjectionHandle.stateOf(session)
-    if (state.failure !== null) throw new Error(state.failure)
+    if (state.failure !== null) throw new GoalError(state.failure, 'GOAL_STATE_CORRUPT')
     return state.current
   }
 

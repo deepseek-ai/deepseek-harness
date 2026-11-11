@@ -260,7 +260,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it.each([
     new Error('root lookup failed'),
-    new SubagentError('root data is unreadable', 'CORRUPT'),
+    new SubagentError('root data is unreadable', 'PERSISTENCE_UNAVAILABLE'),
   ])('propagates identity lookup errors other than an unavailable root: $message', async (error) => {
     const { ctx, parent } = await setup([])
     const lookup = vi.spyOn(ctx.subagents, 'namesOf').mockImplementation(() => { throw error })
@@ -465,6 +465,7 @@ describe('dsh-tool-subagent-control', () => {
     const result = await callTool(ctx, 'send_message', { agent: 'x', message: 'y' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it.each([{}, { interrupt: true }, { interrupt: false }])('unregisters and reloads with config %j (HMR safety)', async (config) => {
@@ -694,5 +695,6 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     const result = await callTool(ctx, 'interrupt_agent', { agent: 'x' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 })

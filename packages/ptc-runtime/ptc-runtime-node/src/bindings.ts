@@ -14,12 +14,8 @@ export function validateBindings(request: PtcRunRequest): Map<string, PtcBinding
     if (!IDENTIFIER.test(namespace.global) || PORTABLE_RESERVED_WORDS.has(namespace.global)) {
       throw new PtcRuntimeError(`dsh-ptc-runtime-node: binding global ${JSON.stringify(namespace.global)} is not a usable identifier`, 'PTC_RUNTIME_INVALID_ARGUMENT')
     }
-    // RESERVED_BINDING_GLOBALS is the seam's shared backend-owned set:
-    // `inspect` and `console` are this backend's output slots; the dunder entries exist
-    // for the Python side — its seeded/wrapped slots plus the `__debug__`
-    // compile-time constant — refused here too so the namespace list stays
-    // portable across backends. The seam declaration is the single home for
-    // why each entry is reserved.
+    // Shared exclusions keep binding declarations portable across the SDK's
+    // supported languages, including externally supplied Python runtimes.
     if (RESERVED_BINDING_GLOBALS.has(namespace.global)) {
       throw new PtcRuntimeError(`dsh-ptc-runtime-node: reserved binding global ${JSON.stringify(namespace.global)}`, 'PTC_RUNTIME_INVALID_ARGUMENT')
     }
