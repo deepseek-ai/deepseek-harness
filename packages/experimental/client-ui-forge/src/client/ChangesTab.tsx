@@ -619,9 +619,12 @@ export function ChangesTab({
   useEffect(() => {
     if (choices?.navigated === navigation.revision) return
     actions.navigated(tab.id, navigation.revision)
-    const lensParam = navigation.params?.lens
+    // Every tab of this kind is a `forge-changes` resource address, so its params are that type's; the union is
+    // narrowed on the field read, not validated.
+    const params = navigation.params
+    const lensParam = params !== undefined && 'lens' in params ? params.lens : undefined
     if (lensParam !== undefined) actions.filtered(tab.id, lensParam)
-    const path = navigation.params?.path
+    const path = params !== undefined && 'path' in params ? params.path : undefined
     if (path === undefined) return
     setTreeState(value => ({ ...value, selected: path }))
     setChosen(value => ({ ...value, [path]: true }))
