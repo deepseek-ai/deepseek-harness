@@ -14,11 +14,11 @@ const capabilities: CuaCapabilities = {
   keyboard: ['app'], sessionLocked: false, methods: ['getCapabilities', 'getApp', 'getState', 'screenshot'],
   coordinateSpace: 'screenshot-pixels', browser: false,
 }
-const selected = { appHandle: 'app-17', pid: 17, name: 'Editor', running: true }
+const selected = { appHandle: 'app-17', name: 'Editor', running: true }
 const bounds = { x: 0, y: 0, width: 640, height: 480 }
 const snapshot = {
   appHandle: 'app-17', windowId: null, snapshotId: 'snapshot-1', tree: '0 button', truncated: false,
-  windows: [{ windowId: 23, appName: 'Editor', title: 'Document', bounds, isOnScreen: true, onCurrentSpace: null }],
+  windows: [{ windowId: '23', appName: 'Editor', title: 'Document', bounds, isOnScreen: true, onCurrentSpace: null }],
 }
 
 it('uses the current tool binding when a retained app is called by another execution', async () => {
@@ -31,14 +31,14 @@ it('uses the current tool binding when a retained app is called by another execu
   let current: CuaToolBinding = first
   const cua = connectCua(() => current)
   const app = await cua.getApp('Editor')
-  const window = await app.getWindow(23)
+  const window = await app.getWindow('23')
   await window.getAccessibilityTree()
   const second = vi.fn(async (): Promise<JsonValue> => ({ dispatched: true }))
   current = second
 
   await expect(window.click(element('0'))).resolves.toEqual({ dispatched: true })
   expect(first).toHaveBeenCalledTimes(3)
-  expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0', windowId: 23 } })
+  expect(second).toHaveBeenCalledWith({ method: 'click', params: { appHandle: 'app-17', snapshotId: 'snapshot-1', elementId: '0', windowId: '23' } })
   current = first
   await expect(app.getAccessibilityTree()).resolves.toBe('0 button')
 })
@@ -52,8 +52,8 @@ it('propagates a denied action without retrying it', async () => {
 })
 
 it('returns normalized application records', async () => {
-  const cua = connectCua(() => async () => [{ pid: 17, name: 'Editor' }])
-  await expect(cua.listApps()).resolves.toEqual([{ id: '17', displayName: 'Editor', isRunning: true, pid: 17 }])
+  const cua = connectCua(() => async () => [{ id: 'editor-selector', name: 'Editor', isRunning: true }])
+  await expect(cua.listApps()).resolves.toEqual([{ id: 'editor-selector', displayName: 'Editor', isRunning: true }])
 })
 
 it.each([null, 'text only', { content: [{ type: 'text', text: '{}' }] }])('rejects an unusable tool result %j', async (result) => {
@@ -70,7 +70,7 @@ it('returns the program Image unchanged from one screenshot tool call', async ()
     return image
   })
   const app = await connectCua(() => tool).getApp('Editor')
-  const window = await app.getWindow(23)
+  const window = await app.getWindow('23')
 
   expect(await window.getScreenshot()).toBe(image)
   expect(tool.mock.calls.map(([operation]) => operation.method)).toEqual(['getCapabilities', 'getApp', 'screenshot'])

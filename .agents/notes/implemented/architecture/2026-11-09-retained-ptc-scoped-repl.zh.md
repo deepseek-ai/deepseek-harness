@@ -418,12 +418,12 @@ REPL 用 Node 的 `domain` 接住程序启动的异步工作里抛出的错误�
 | 位置 | 改动 |
 |---|---|
 | `ptc-runtime` 的 `PtcProgramFormat` | 包含 `'scoped-repl'` |
-| `ptc-runtime-node` 的 `config.ts` | 布尔字段 `replScoped`，默认 false，只能和 `persistent-in-memory` 一起用，否则加载时报错 |
+| `ptc-runtime-node` 的 `config.ts` | 布尔字段 `replScoped`，只能和 `persistent-in-memory` 一起用，否则加载时报错；省略时由 `resolveReplScoped` 取 `resolvePersistentExecution` 对函数体写入的 `persistent-in-memory` 取值（目前为 true），其他模式下为 false |
 | `ptc-runtime-node` 的 `execution.ts` | `persistent-in-memory` 分支里 `replScoped` 为 true 时：格式 `scoped-repl`，`retainsState` 为 true，TypeScript 按 REPL 语句擦除，配一段新的模型说明 |
 | `ptc-runtime-node` 的 `evaluators/index.ts` | 求值器表含 `scoped-repl`，三个开关取默认值 |
 | `ptc-runtime-node` 的 `protocol.ts` | 协议版本是 3，旧 bootstrap 在就绪阶段报错；升级指南 `docs/upgrade-guide/v0.2.2-rc.1/ptc-bootstrap-protocol/` 同时说明 `PtcProgramFormat` 新增的成员 |
 | workflow-ptc 的 `host.ts` | `scoped-repl` 用和 `repl` 一样的包装 `await (async () => {…})()` |
-| `ptc-runtime-node` 的 `configuration.ts`（CUA 用它合并配置） | `resolvePersistentExecution` 返回 `executionMode`、`scriptPersistence`、`replScoped` 三个字段，一起合并：`scoped-repl` 对应 `replScoped: true`，其余格式为 `false`，覆盖 profile 里残留的值 |
+| `ptc-runtime-node` 的 `configuration.ts`（CUA 用它合并配置） | `resolvePersistentExecution` 返回 `executionMode`、`scriptPersistence`、`replScoped` 三个字段，一起合并：`script` 保持持久化的 VM Script，`replScoped: false`；`scoped-repl` 为 `replScoped: true`；函数体和 REPL 语句为 `persistent-in-memory` 加常量 `SCOPED_REPL_BY_DEFAULT`（目前为 true），覆盖 profile 里残留的值。这个常量同时决定 `config.ts` 里省略时的默认值，改它只改一行；`config.ts` 从 `configuration.ts` 导入这个函数，而 `configuration.ts` 本身也是包的发布入口；`configuration.ts` 只导入 `Config` 类型，所以打包不会生成共用的 chunk |
 | 文档、快照和测试 | 包 README 的配置项、行为说明和"已知限制"、config catalog、快照场景 `ptc-scoped-repl`；构建产物的 e2e 含 `replScoped: true` 用例 |
 
 tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使用"打印输出"那套说明。模型说明写明上面的精确行为，尤其是：输出用 `inspect(...)`，这句和其他模式共用；不支持顶层 `return`；每次调用开始时拷贝、旧代码不受影响；需要共享的可变状态放进对象；不声明直接赋值只改拷贝，前面的 `const` 也可以这样赋值；`let`、`const`、`class` 重新声明的初始化表达式读不到同名旧值，要在旧值上计算就直接赋值或换个名字；`var` 重新声明从旧值开始；调用中途失败时，没执行完的 `let`、`const`、`class`、`var` 重新声明保留旧值；块里的 `var` 也算这次调用的顶层名字，其他块里的声明只属于它的块；只能用 `import()`，相对路径按这个环境第一次调用的目录解析。测试整段逐字比对模型说明。
@@ -520,4 +520,5 @@ tool-executor-ptc 没有改动：格式不是 `function-body` 时，它自动使
 - 异步错误：上面列出的每种情况在执行结束后和执行中各测一次，交给 `reportError` 的文本以 `Uncaught ` 开头；进程不退出，变量保留。`stack` 为空、读取 `stack` 抛错、自定义 inspect 抛错时，分别报"名字: 消息"和固定文本，进程不退出；抛出普通对象时报错里没有 `domainThrown`。
 - import：默认加载器和 import 处理器两条路径，相对路径按创建时的目录解析，之后换了目录也不变。
 - 构建产物的 e2e 覆盖 `replScoped: true`。
+- 挂载 `persistent-in-memory` 的测试都显式写 `replScoped`，保留执行的测试两种取值都跑；只有一个测试检查省略时的默认值。
 - 新文件覆盖率 100%；现有求值器及其测试不变。

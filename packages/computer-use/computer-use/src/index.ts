@@ -4,7 +4,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { ComputerUseProviderName } from './brand.ts'
+import type { ComputerUseProviderName } from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {

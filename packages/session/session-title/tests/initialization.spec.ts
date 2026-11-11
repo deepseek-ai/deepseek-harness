@@ -4,7 +4,9 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import SessionStore, { type Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import SessionTitleService, { SessionTitleProviderId, type SessionTitleProviderRequest } from '@deepseek-ai/dsh-session-title'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
+import SessionTitleService, { type SessionTitleProviderRequest } from '@deepseek-ai/dsh-session-title'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
@@ -75,7 +77,7 @@ describe('SessionTitleService activation', () => {
     const requests: SessionTitleProviderRequest[] = []
     const provider = ctx.inject(['sessionTitle'], (owner) => {
       owner.sessionTitle.register({
-        id: SessionTitleProviderId('activation'), automatic: 'all-prompts',
+        id: brandString<SessionTitleProviderId>('activation'), automatic: 'all-prompts',
         async generate(request) {
           requests.push(request)
           return { title: 'Generated after activation', messageSeqs: request.messages.map(item => item.seq) }

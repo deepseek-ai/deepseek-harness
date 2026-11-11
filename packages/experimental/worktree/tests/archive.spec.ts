@@ -7,7 +7,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { appendPluginRecord, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { appendPluginRecord, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import * as SessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -28,6 +28,7 @@ import * as removal from '../src/removal.ts'
 import { git, repository, UnusedSandbox } from './harness.ts'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Archive tests only use the query service's listing and observation APIs. */
 class ArchiveQueries extends SessionQueryEngine {
@@ -90,7 +91,7 @@ async function fixture(options: { cache?: boolean; retainOnArchive?: boolean; ma
   const { cache: _cache, ...config } = options
   const worktrees = ctx.plugin(WorktreeService, config)
   await worktrees
-  const session = ctx.sessions.create(SessionId('archive-owner'), { meta: { cwd: root } })
+  const session = ctx.sessions.create(brandString<SessionId>('archive-owner'), { meta: { cwd: root } })
   const agent = agentFor(ctx, session)
   await ctx.agents.register(agent)
   const worktree = await ctx.worktrees.create(agent, { name: 'archive-me' })
@@ -114,7 +115,7 @@ async function persisted(f: Fixture, session: Session): Promise<void> {
 
 /** A live Session whose store entry the test detaches itself, leaving only its persisted log. */
 function detachable(f: Fixture, id: string, meta: { cwd?: string }): { session: Session; detach: () => void } {
-  const session = f.ctx.sessions.prepare(SessionId(id), { meta })
+  const session = f.ctx.sessions.prepare(brandString<SessionId>(id), { meta })
   const detach = f.ctx.sessions.enter(session)
   f.ctx.sessions.announce(session)
   return { session, detach }
@@ -218,11 +219,11 @@ describe('archive-triggered worktree cleanup', () => {
 
   it('registers nothing for a Session that created no checkout or only inherited one', async () => {
     const f = await fixture()
-    const other = f.ctx.sessions.create(SessionId('no-checkout'), { meta: { cwd: f.root } })
+    const other = f.ctx.sessions.create(brandString<SessionId>('no-checkout'), { meta: { cwd: f.root } })
     await f.ctx.workspaceRegistry.archiveSession(other.id)
     expect(await f.ctx.worktrees.cleanupOf(other, null)).toBeNull()
     const seed = f.session.snapshotEvents()
-    const fork = f.ctx.sessions.create(SessionId('fork'), {
+    const fork = f.ctx.sessions.create(brandString<SessionId>('fork'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
     })
     await f.ctx.workspaceRegistry.archiveSession(fork.id)
@@ -233,7 +234,7 @@ describe('archive-triggered worktree cleanup', () => {
   it('retains a checkout while a fork or a directory borrower is unarchived, and does not reconsider when they archive', async () => {
     const f = await fixture()
     const seed = f.session.snapshotEvents()
-    const fork = f.ctx.sessions.create(SessionId('fork'), {
+    const fork = f.ctx.sessions.create(brandString<SessionId>('fork'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
     })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -243,7 +244,7 @@ describe('archive-triggered worktree cleanup', () => {
     expect(await f.ctx.worktrees.cleanupOf(fork, null)).toBeNull()
     await access(f.worktree.path)
     await f.ctx.workspaceRegistry.unarchiveSession(f.session.id)
-    const borrower = f.ctx.sessions.create(SessionId('borrower'), { meta: { cwd: f.worktree.path } })
+    const borrower = f.ctx.sessions.create(brandString<SessionId>('borrower'), { meta: { cwd: f.worktree.path } })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'retained' })
     await f.ctx.workspaceRegistry.archiveSession(borrower.id)
@@ -252,10 +253,10 @@ describe('archive-triggered worktree cleanup', () => {
 
   it('treats a subagent child beneath the archived Session as archived', async () => {
     const f = await fixture()
-    const child = f.ctx.sessions.create(SessionId('child'), {
+    const child = f.ctx.sessions.create(brandString<SessionId>('child'), {
       meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: f.session.id },
     })
-    const grandchild = f.ctx.sessions.create(SessionId('grandchild'), {
+    const grandchild = f.ctx.sessions.create(brandString<SessionId>('grandchild'), {
       meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: child.id },
     })
     expect(f.ctx.workspaceRegistry.archivedSessionIds).not.toContain(child.id)
@@ -266,8 +267,8 @@ describe('archive-triggered worktree cleanup', () => {
 
   it('retains a checkout for an unrelated subagent child that works inside it', async () => {
     const f = await fixture()
-    const other = f.ctx.sessions.create(SessionId('other-parent'), { meta: { cwd: f.root } })
-    f.ctx.sessions.create(SessionId('other-child'), { meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: other.id } })
+    const other = f.ctx.sessions.create(brandString<SessionId>('other-parent'), { meta: { cwd: f.root } })
+    f.ctx.sessions.create(brandString<SessionId>('other-child'), { meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: other.id } })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'retained' })
   })
@@ -301,7 +302,7 @@ describe('archive-triggered worktree cleanup', () => {
   it('retains a checkout while a live fork that moved elsewhere still carries its creation', async () => {
     const f = await fixture()
     const seed = f.session.snapshotEvents()
-    const fork = f.ctx.sessions.create(SessionId('fork-elsewhere'), {
+    const fork = f.ctx.sessions.create(brandString<SessionId>('fork-elsewhere'), {
       seed, inheritedEventCount: SessionLogOffset(seed.length), meta: { isSeeded: true, cwd: f.root },
     })
     const agent = agentFor(f.ctx, fork)
@@ -395,7 +396,7 @@ describe('archive-triggered worktree cleanup', () => {
     await f.ctx.workingDirectory.set(f.agent, f.root)
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     await entered.promise
-    const other = f.ctx.sessions.create(SessionId('elsewhere'), { meta: { cwd: f.root } })
+    const other = f.ctx.sessions.create(brandString<SessionId>('elsewhere'), { meta: { cwd: f.root } })
     const otherAgent = agentFor(f.ctx, other)
     await f.ctx.agents.register(otherAgent)
     expect(await f.ctx.workingDirectory.ensure(otherAgent)).toBe(f.root)
@@ -429,7 +430,7 @@ describe('archive-triggered worktree cleanup', () => {
     const list = f.ctx.sessionQuery.listSessions.bind(f.ctx.sessionQuery)
     vi.spyOn(f.ctx.sessionQuery, 'listSessions').mockImplementationOnce(async (...args) => {
       const records = await list(...args)
-      f.ctx.sessions.create(SessionId('late-borrower'), { meta: { cwd: f.worktree.path } })
+      f.ctx.sessions.create(brandString<SessionId>('late-borrower'), { meta: { cwd: f.worktree.path } })
       return records
     })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
@@ -440,8 +441,8 @@ describe('archive-triggered worktree cleanup', () => {
 
   it('treats a subagent child whose parent is unknown to the corpus as unarchived', async () => {
     const f = await fixture()
-    f.ctx.sessions.create(SessionId('orphan-child'), {
-      meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: SessionId('never-existed') },
+    f.ctx.sessions.create(brandString<SessionId>('orphan-child'), {
+      meta: { cwd: f.worktree.path, origin: 'subagent', parentSession: brandString<SessionId>('never-existed') },
     })
     await f.ctx.workspaceRegistry.archiveSession(f.session.id)
     expect(await settled(f)).toMatchObject({ status: 'retained' })

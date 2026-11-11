@@ -3,13 +3,14 @@ import { PassThrough, Writable } from 'node:stream'
 import { finished } from 'node:stream/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { NativeClient } from '@deepseek-ai/dsh-cua/native-client'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import Tools, { defineTool } from '@deepseek-ai/dsh-tools'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import { installHeldKeys } from '../src/held-keys.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const Request = z.object({ id: z.string(), method: z.string(), params: z.record(z.string(), z.json()) })
 
@@ -69,13 +70,13 @@ async function program(body: (send: (client: NativeClient) => Promise<void>) => 
     async execute(_args, execution) {
       await body(async (client) => {
         await sendKeyEvent(client, { key: 'w', direction: 'down' }, {
-          ...execution, name: 'cua', callId: ToolCallId('held-key'), parent: execution.token,
+          ...execution, name: 'cua', callId: brandString<ToolCallId>('held-key'), parent: execution.token,
         })
       })
       return null
     },
   }))
-  return { run: () => executeToolFixture(ctx, { name: 'cua_run_code', callId: ToolCallId('held-program'), arguments: {}, signal: new AbortController().signal }) }
+  return { run: () => executeToolFixture(ctx, { name: 'cua_run_code', callId: brandString<ToolCallId>('held-program'), arguments: {}, signal: new AbortController().signal }) }
 }
 
 it('releases native keys before connection closure without waiting for unrelated program work', async () => {

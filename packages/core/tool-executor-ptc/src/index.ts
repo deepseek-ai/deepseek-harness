@@ -94,6 +94,7 @@ export class PtcExecutor implements ToolExecutor {
 
 export { Config } from './config.ts'
 export { CodeRunFailedError, CodeResetFailedError } from './errors.ts'
+export type { CodeRunErrorCode } from './errors.ts'
 export type { PtcDispatchLog } from './runtime-types.ts'
 export type { PtcDispatchStartEventData, PtcDispatchEventData } from './types.ts'
 export { jsonSchemaToTs, renderToolsSdk, type ToolSdkSchema } from './ts-types.ts'

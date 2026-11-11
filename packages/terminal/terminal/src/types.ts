@@ -7,7 +7,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 
-/** Internal exported basis for the public `TerminalSessionId` type/value pair. */
+/** Internal exported basis for the public `TerminalSessionId` type. */
 export type TerminalSessionIdValue = Branded<'TerminalSessionId'>
 
 /** Why one interactive send returned control to its caller. */

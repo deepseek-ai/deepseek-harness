@@ -2,6 +2,7 @@
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { LaunchConfig } from './launch.ts'
+import { resolvePersistentExecution } from './configuration.ts'
 
 /** Deployment-varying runtime bounds and launch choices. */
 export interface Config {
@@ -11,7 +12,10 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
-  /** Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings. */
+  /**
+   * Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings;
+   * omitted, it is `SCOPED_REPL_BY_DEFAULT` from configuration.ts, currently true, with persistent-in-memory and false otherwise.
+   */
   replScoped?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
@@ -37,7 +41,7 @@ export type ResolvedConfig = Required<Config>
 export const NodeConfig: z<Config> = z.object({
   executionMode: z.union([z.const('per-call'), z.const('persistent-in-memory'), z.const('vm-script')]).default('per-call'),
   scriptPersistence: z.boolean().default(false),
-  replScoped: z.boolean().default(false),
+  replScoped: z.boolean(),
   timeoutMs: z.number().default(120_000),
   maxTimeoutMs: z.number().default(600_000),
   maxOutputBytes: z.number().default(67_108_864),
@@ -51,6 +55,16 @@ export const NodeConfig: z<Config> = z.object({
     z.object({ kind: z.const('embedded').required(), executable: z.string().required() }),
   ]),
 })
+
+/**
+ * Select the scoped REPL setting for the configured execution mode.
+ * @param config - Loader-defaulted fields whose `replScoped` may be omitted.
+ * @returns The explicit setting; when omitted, the setting that `resolvePersistentExecution` writes for function bodies with
+ * `persistent-in-memory`, and false in other modes.
+ */
+export function resolveReplScoped(config: Pick<Config, 'executionMode' | 'replScoped'>): boolean {
+  return config.replScoped ?? (config.executionMode === 'persistent-in-memory' && resolvePersistentExecution().replScoped)
+}
 
 /**
  * Validate resolved Node limits and paths.

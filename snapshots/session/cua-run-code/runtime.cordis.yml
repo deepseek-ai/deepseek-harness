@@ -27,6 +27,9 @@
     - id: cua-run-code-fixture
       name: './provider.mjs'
       config:
+        standaloneRunCode:
+          runtime:
+            replScoped: false
         allowedApps:
           - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             name: Fixture

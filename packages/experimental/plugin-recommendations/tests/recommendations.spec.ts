@@ -1,6 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import type { BundleInfo, ChangeResult } from '@deepseek-ai/dsh-plugin-manager/types'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -30,7 +31,7 @@ describe('official recommendations', () => {
       { ...bundle, name: 'unsupported-catalog', availability: 'missing', error: { code: 'unsupported-platform' } },
     ])
     const result = await executeToolFixture(f.ctx, { name: 'skill', arguments: { name: 'official-plugins' }, agent: f.agent,
-      callId: ToolCallId('discovery'), signal: new AbortController().signal })
+      callId: brandString<ToolCallId>('discovery'), signal: new AbortController().signal })
     expect(result.isError, JSON.stringify(result.content)).toBe(false)
     expect(result.value).toMatchSnapshot('skill policy and current catalog')
     const controller = new AbortController()
@@ -54,7 +55,7 @@ describe('official recommendations', () => {
       textResponse('Search is one click away.'),
     ])
     f.ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await f.ctx.agentLoop.create(SessionId('invitation'), { provider: 'mock', model: 'mock' })
+    const agent = await f.ctx.agentLoop.create(brandString<SessionId>('invitation'), { provider: 'mock', model: 'mock' })
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Can DSH search my old conversations?' }], source: { kind: 'user' } }))
     await agent.whenIdle()
     const results = agent.session.snapshotEvents().flatMap(event => event.type === 'tool/result' ? [event.data.message] : [])
@@ -91,7 +92,7 @@ describe('official recommendations', () => {
     const unnamed = f.propose('call-unnamed', { ...proposal, details: {} })
     expect(await f.ctx.pluginRecommendations.describe(f.agent, unnamed)).toEqual({ status: 'refused', reason: 'unknown' })
     expect(await f.ctx.actionCards.act(f.agent, unnamed, 'enable')).toEqual({ status: 'refused', reason: 'unavailable' })
-    expect(await f.ctx.pluginRecommendations.describe(f.agent, ToolCallId('toString'))).toEqual({ status: 'refused', reason: 'unknown' })
+    expect(await f.ctx.pluginRecommendations.describe(f.agent, brandString<ToolCallId>('toString'))).toEqual({ status: 'refused', reason: 'unknown' })
     vi.spyOn(f.ctx.agents, 'get').mockReturnValueOnce(undefined)
     expect(await f.ctx.pluginRecommendations.describe(f.agent, callId)).toEqual({ status: 'refused', reason: 'not-live-root' })
     const service = f.ctx.pluginRecommendations

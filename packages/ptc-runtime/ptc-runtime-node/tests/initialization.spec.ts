@@ -11,7 +11,7 @@ async function setup(config: Config = {}, initialization?: string) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-ptc-initialization-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const { runtime } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', ...config })
+  const { runtime } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped: false, ...config })
   if (initialization !== undefined) onTestFinished(runtime.registerEnvironmentInitializer(initialization))
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
@@ -80,6 +80,13 @@ describe('Node environment initialization', () => {
     const result = await run('throw new Error("program failure")')
     expect(result.error?.kind).toBe('exception')
     expect(result.error?.message).toContain('ptc-repl:1:7')
+  })
+
+  it('keeps scoped REPL source locations independent of initialization, which takes the first program number', async () => {
+    const { run, cwd } = await setup({ replScoped: true }, '\n\n\nglobalThis.ready = true')
+    const result = await run('throw new Error("program failure")')
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain(`${join(cwd, '.ptc-repl-2.js')}:1:7`)
   })
 
   it.each(['timeout', 'abort'] as const)('discards partial initialization on %s', async (action) => {

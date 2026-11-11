@@ -211,13 +211,13 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             ? CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(overlayID)) as? [[String: Any]] : nil
         let overlayOnScreen = overlayRows?.contains { ($0[kCGWindowIsOnscreen as String] as? Bool) == true } ?? false
         let state: [String: Any] = ["count": count, "secondaryCount": secondaryCount, "text": field.stringValue, "selectedFile": selectedFile,
-            "rowCount": rowCount, "primaryWindowId": window.windowNumber,
+            "rowCount": rowCount, "primaryWindowId": window.windowNumber > 0 ? String(window.windowNumber) as Any : NSNull(),
             "dragDownCount": dragPad.dragDownCount, "dragCount": dragPad.dragCount, "dragPoint": [dragPad.lastPoint.x, dragPad.lastPoint.y],
             "hoverVisible": !dragPad.hoverButton.isHidden, "hoverClicks": dragPad.hoverClicks,
             "defaultUIRequests": (dragPad as? AlternateHoverPad)?.defaultUIRequests ?? 0,
             "cursorSamples": cursorSamples, "cursorChanges": cursorChanges,
-            "overlayMode": overlayMode, "overlayWindowId": inputOverlay?.windowNumber ?? 0,
-            "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow,
+            "overlayMode": overlayMode, "overlayWindowId": overlayID > 0 ? String(overlayID) as Any : NSNull(),
+            "overlayOnScreen": overlayOnScreen, "hoverHitWindow": hoverHitWindow > 0 ? String(hoverHitWindow) as Any : NSNull(),
             "rightDownCount": dragPad.rightDownCount, "rightUpCount": dragPad.rightUpCount,
             "scrollEventCount": scroll.eventCount, "scrollY": scroll.contentView.bounds.origin.y, "dragBounds": windowPoints(dragPad), "scrollBounds": windowPoints(scroll),
             "primaryWindowSize": [window.frame.width, window.frame.height],

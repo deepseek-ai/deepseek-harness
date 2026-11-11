@@ -31,7 +31,7 @@ Mount the service once beside the chosen provider in a Cordis composition:
 - name: '@deepseek-ai/dsh-computer-use'
 ```
 
-The service has no configuration. Provider plugins inject `computerUse` and call `ctx.computerUse.register(ComputerUseProviderName(name))`; the brand is exported from `@deepseek-ai/dsh-computer-use/brand`. The returned effect disposer releases that registration.
+The service has no configuration. Provider plugins inject `computerUse` and call `ctx.computerUse.register(brandString<ComputerUseProviderName>(name))`, using `brandString` from `@deepseek-ai/dsh-brand` and the type from `@deepseek-ai/dsh-computer-use/types`. The returned effect disposer releases that registration.
 
 Providers stop admitting tool calls, close their resources, and await owned work before releasing the registration. `ctx.computerUse.providerName` reports the registered name until release.
 
@@ -56,6 +56,7 @@ One private name owns the slot. Cordis effects remove contributions when their p
 - [Computer Use bundle](../../experimental/cua-bundle/README.md) — enable DSH's native CUA and permission controls.
 - [Shared CUA library](../../experimental/cua/README.md) — application/window objects, tool execution, and application consent.
 - [macOS CUA provider](../../experimental/cua-macos/README.md) — DSH's Swift implementation and native helper lifecycle.
+- [Windows CUA provider](../../experimental/cua-windows/README.md) — inspect applications and windows through Windows UI Automation.
 - [Cua Driver MCP provider](../../experimental/computer-use-cua-driver-mcp/README.md) — use an installed driver.
 - [Cua Driver native provider](../../experimental/computer-use-cua-driver-native/README.md) — use the npm runtime.
 

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { TurnEndReason } from '@deepseek-ai/dsh-session'
 import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** One pending message, as the inbox records it. */
 function message(text: string) {
@@ -37,14 +38,14 @@ function steppedTurn(session: Session, turn: number, reason: TurnEndReason): voi
 
 describe('foldConsumedWork', () => {
   it('reports nothing for a log that consumed no work', () => {
-    const session = Session.create(SessionId('empty'))
+    const session = Session.create(brandString<SessionId>('empty'))
     accept(session, 'queued')
 
     expect(foldConsumedWork(session.snapshotEvents())).toEqual({ droppedUnrun: false })
   })
 
   it('reports the latest turn that entered a model step', () => {
-    const session = Session.create(SessionId('stepped'))
+    const session = Session.create(brandString<SessionId>('stepped'))
     steppedTurn(session, 1, { kind: 'completed' })
     steppedTurn(session, 2, { kind: 'max-tokens' })
 
@@ -53,7 +54,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('reports a turn that claimed its input and then failed before any step', () => {
-    const session = Session.create(SessionId('failed-claim'))
+    const session = Session.create(brandString<SessionId>('failed-claim'))
     steppedTurn(session, 1, { kind: 'completed' })
     // The step boundary runs the durability checkpoint and prompt assembly, so a
     // turn can take its input and then fail without entering a step.
@@ -65,7 +66,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('reports a turn that claimed its input and was then stopped before any step', () => {
-    const session = Session.create(SessionId('stopped-claim'))
+    const session = Session.create(brandString<SessionId>('stopped-claim'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('turn/start', { turn: 2 })
     claim(session)
@@ -75,7 +76,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('ignores a turn stopped, failed, or rejected without taking any input', () => {
-    const session = Session.create(SessionId('no-claim'))
+    const session = Session.create(brandString<SessionId>('no-claim'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('turn/start', { turn: 2 })
     session.append('turn/end', { turn: 2, reason: { kind: 'aborted', reason: { kind: 'parent' } } })
@@ -89,7 +90,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('reports a turn whose claimed input a pre-step rejection discarded', () => {
-    const session = Session.create(SessionId('rejected-claim'))
+    const session = Session.create(brandString<SessionId>('rejected-claim'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('turn/start', { turn: 2 })
     claim(session)
@@ -101,7 +102,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('ignores a claim its own turn emptied', () => {
-    const session = Session.create(SessionId('emptied-claim'))
+    const session = Session.create(brandString<SessionId>('emptied-claim'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('turn/start', { turn: 2 })
     claim(session)
@@ -113,7 +114,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('credits a claim with no open turn to no turn at all', () => {
-    const session = Session.create(SessionId('mid-turn-suffix'))
+    const session = Session.create(brandString<SessionId>('mid-turn-suffix'))
     steppedTurn(session, 1, { kind: 'completed' })
     // An owned suffix can begin inside a turn whose start it does not contain,
     // so a claim may appear with no turn to attribute it to.
@@ -124,7 +125,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('reports work cancelled out of the inbox after the last accounting turn', () => {
-    const session = Session.create(SessionId('dropped'))
+    const session = Session.create(brandString<SessionId>('dropped'))
     steppedTurn(session, 1, { kind: 'completed' })
     accept(session, 'never runs')
     cancelPending(session)
@@ -137,7 +138,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('keeps a replacement pending rather than counting it as dropped', () => {
-    const session = Session.create(SessionId('replaced'))
+    const session = Session.create(brandString<SessionId>('replaced'))
     steppedTurn(session, 1, { kind: 'completed' })
     session.append('agent/inbox/spliced', {
       target: 'next-turn', start: 0, removedCount: 1, inserted: [message('rewritten')], outcome: 'canceled',
@@ -147,7 +148,7 @@ describe('foldConsumedWork', () => {
   })
 
   it('lets a later accounting turn absorb an earlier drop', () => {
-    const session = Session.create(SessionId('absorbed'))
+    const session = Session.create(brandString<SessionId>('absorbed'))
     steppedTurn(session, 1, { kind: 'completed' })
     cancelPending(session)
     steppedTurn(session, 2, { kind: 'completed' })

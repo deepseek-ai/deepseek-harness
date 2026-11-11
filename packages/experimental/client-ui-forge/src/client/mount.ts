@@ -17,13 +17,18 @@ import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
 import type { ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
-import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgePanelChangeRequest } from '../types.ts'
+import type {
+  ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgePanelChangeRequest,
+} from '../types.ts'
+import { AnnotationView } from './annotations.ts'
+import { ForgeChangesService } from './changes-service.ts'
+import type {} from './slots.ts'
 import { ReviewQueue } from './review-queue.ts'
 import { ViewedFiles } from './viewed-files.ts'
 import { formatReviewComment, reviewQuoteSummary, type ReviewSelection } from './review.ts'
 import { formatThreadQuote, threadQuoteSummary } from './review-threads.ts'
 import { ActionToast } from './ActionToast.tsx'
-import { CHANGES_ID, changesDefinition } from './changes-address.ts'
+import { CHANGES_ID, CHANGES_KIND, changesDefinition, parseChangesAddress } from './changes-address.ts'
 import { createChangesStore } from './changes-store.ts'
 import { ChangesTab, type ChangesTabInjected } from './ChangesTab.tsx'
 import { ChangesTabTitle } from './ChangesTabTitle.tsx'
@@ -72,6 +77,8 @@ interface SessionStores {
   readonly visibility: VisibilitySource
   readonly reviews: WeakMap<AbortSignal, ReviewQueue>
   readonly viewed: ViewedFiles
+  /** Plugin annotations of each changes view of the Session, by address. */
+  readonly annotations: Map<string, AnnotationView>
   readonly release: () => void
 }
 
@@ -116,12 +123,37 @@ function registerUi(ctx: Context): void {
         stores.delete(sessionId)
       }, 'forge-panel: release Session state')
       store = {
-        panel, visibility: createVisibilitySource(), reviews: new WeakMap(), viewed: new ViewedFiles(sessionId),
+        panel, visibility: createVisibilitySource(), reviews: new WeakMap(), viewed: new ViewedFiles(sessionId), annotations: new Map(),
         release: () => { void dispose() },
       }
       stores.set(sessionId, store)
     }
     return store
+  }
+  // The Host's lenses and annotation limit, streamed while any view reads them.
+  const extensionSource = createStreamSource<ForgeExtensionState, ForgeExtensionState | null>({
+    open: signal => ctx.remote.forgePanel.extensions(signal),
+    subscribeReset: listener => ctx.on('connection/reset', listener),
+  }, null, (_previous, frame) => frame)
+  ctx.effect(() => () => { extensionSource.close() }, 'forge-panel: extension stream')
+  const changes = new ForgeChangesService({
+    mounted: () => ctx.sidebarRight.mounted.getSnapshot(),
+    openResource: (address, params) => { ctx.sidebarRight.openResource(address, params === undefined ? undefined : { params }) },
+  }, {
+    getSnapshot: () => extensionSource.observable.getSnapshot().state,
+    subscribe: listener => extensionSource.observable.subscribe(listener),
+  }, { changes: CHANGES_KIND, panel: TAB_KIND })
+  const withdrawChanges = ctx.reflect.provide('forgeChanges', changes)
+  ctx.effect(() => () => { void withdrawChanges() }, 'forge-panel: changes view face')
+  const annotationsOf = (store: SessionStores, address: string): AnnotationView => {
+    let view = store.annotations.get(address)
+    if (view === undefined) {
+      const target = parseChangesAddress(address)
+      if (target === undefined) throw new Error(`forge-panel: not a changes address "${address}"`)
+      view = new AnnotationView(changes.annotationSources, target)
+      store.annotations.set(address, view)
+    }
+    return view
   }
   const settled = (result: RemoteResult<unknown>, failure: ForgePanelKey, codes: Partial<Record<string, ForgePanelKey>> = {}): boolean => {
     if (result.ok) return true
@@ -271,7 +303,12 @@ function registerUi(ctx: Context): void {
   const changesFace = (sessionId: SessionId): ChangesTabInjected => {
     const store = storesOf(sessionId)
     return {
-      keyedHooks: { panel: visibility => visibility === 'visible' ? store.panel.hooks.panel : undefined },
+      keyedHooks: {
+        panel: visibility => visibility === 'visible' ? store.panel.hooks.panel : undefined,
+        annotations: address => annotationsOf(store, address),
+      },
+      hooks: { lenses: changes.lenses, extensions: extensionSource.observable },
+      changesLens: (request, signal) => ctx.remote.forgePanel.changesLens(sessionId, request, signal),
       reconnect: store.panel.reconnect,
       localDiff: (scope, signal) => ctx.remote.forgePanel.localDiff(sessionId, scope, signal),
       diffBases: (query, signal) => ctx.remote.forgePanel.diffBases(sessionId, query, signal),
@@ -356,6 +393,7 @@ function registerUi(ctx: Context): void {
   }), 'forge-panel: sidebar tab')
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: TAB_ID, locale: NS, inject: tabFace,
+    children: { 'forge.change-request.card.actions': { kind: 'list', scope: 'session' } },
   }, ForgeTab))
   ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title', key: TAB_ID, locale: NS,
@@ -363,6 +401,12 @@ function registerUi(ctx: Context): void {
   ctx.effect(() => ctx.sidebarRightTabs.register(changesDefinition(t)), 'forge-panel: changes tab')
   ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab', key: CHANGES_ID, locale: NS, store: createChangesStore(), inject: changesFace,
+    children: {
+      'forge.changes.toolbar': { kind: 'list', scope: 'session' },
+      'forge.changes.file.menu': { kind: 'list', scope: 'session' },
+      'forge.diff.line.annotation': { kind: 'keyed', scope: 'session' },
+      'forge.diff.comment.actions': { kind: 'list', scope: 'session' },
+    },
   }, ChangesTab))
   ctx.slots.inject('sidebar.right.pane.tab.title', () => ctx.slots.register({
     name: 'sidebar.right.pane.tab.title', key: CHANGES_ID, locale: NS,

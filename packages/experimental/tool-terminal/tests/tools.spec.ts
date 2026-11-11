@@ -4,15 +4,16 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { createInboxStub, unsupportedModel, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { renderToolsSdk } from '@deepseek-ai/dsh-tool-executor-ptc'
 import type { ToolSdkSchema } from '@deepseek-ai/dsh-tool-executor-ptc/src/ts-types.ts'
-import TerminalSessionService, { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import TerminalSessionService, { type TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalBackend, TerminalBackendSession, TerminalSendOperation, TerminalSendRead, TerminalSendRequest, TerminalSessionStatus, TerminalSignal } from '@deepseek-ai/dsh-terminal'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
@@ -21,7 +22,7 @@ import { sendSource } from '../src/background.ts'
 
 async function fakeAgent(ctx: Context, rawId: string): Promise<Agent> {
   const scope = ctx.plugin(() => {})
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const session = Session.create(id)
   const agent: Agent = {
     id, options: {}, session, model: unsupportedModel(),
@@ -136,11 +137,11 @@ let callNumber = 0
 const TOOL_NAMES = ['terminal_open', 'terminal_send', 'terminal_read', 'terminal_signal', 'terminal_close', 'terminal_list'] as const
 const testToolSignal = new AbortController().signal
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
-  return executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, ...agent ? { agent } : {} })
+  return executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>(`pty-call-${++callNumber}`), name, arguments: args, ...agent ? { agent } : {} })
 }
 
 function callWithSignal(ctx: Context, name: string, args: unknown, agent: Agent, signal: AbortSignal) {
-  return executeToolFixture(ctx, { callId: ToolCallId(`pty-call-${++callNumber}`), name, arguments: args, agent, signal })
+  return executeToolFixture(ctx, { callId: brandString<ToolCallId>(`pty-call-${++callNumber}`), name, arguments: args, agent, signal })
 }
 
 function text(result: { content: { type: string; text?: string }[] }): string {
@@ -510,7 +511,7 @@ describe('tool-terminal task integration', () => {
     const { ctx, agent, stub } = await setup(false)
     await call(ctx, 'terminal_open', { type: 'stub' }, agent)
     stub.sessions[0]!.closeGate = Promise.withResolvers<undefined>()
-    const first = ctx.terminals.kill(agent, TerminalSessionId('pty-1'))
+    const first = ctx.terminals.kill(agent, brandString<TerminalSessionId>('pty-1'))
     const second = call(ctx, 'terminal_close', { sessionId: 'pty-1' }, agent)
     stub.sessions[0]!.closeGate?.resolve(undefined)
     await first

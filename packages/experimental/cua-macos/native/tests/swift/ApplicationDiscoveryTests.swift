@@ -111,10 +111,16 @@ func failedLaunchInspectionInvalidatesThePendingHandle(failure: String) async th
         let handle = try #require(first["appHandle"].string)
         #expect(try await select(catalog)["appHandle"].string == handle)
         let second = process(43, executablePath: executable)
+        let instances = ApplicationCatalogSnapshot(applications: [second, running], frontPID: nil)
         do {
-            _ = try await select(ApplicationCatalogSnapshot(applications: [running, second], frontPID: nil))
+            _ = try await select(instances)
             Issue.record("Selected one of two processes at the same executable path")
         } catch let failure as NativeFailure { #expect(failure.code == "AMBIGUOUS_APP") }
+        let request = Data(#"{"id":"select-pid","method":"getApp","params":{"selector":"\#(getpid())"}}"#.utf8)
+        let byPID = try await worker.execute("getApp", params: RequestParameters(NativeRequest(data: request)), catalog: instances)
+        guard case .result(let selected) = byPID else { throw NativeFailure(code: "TEST", message: "Expected PID selection") }
+        #expect(selected["pid"] == .number(Double(getpid())))
+        #expect(selected["appHandle"].string == handle)
     } catch {
         await worker.shutdown()
         throw error
