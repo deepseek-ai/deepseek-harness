@@ -63,7 +63,13 @@ function createFixture(served?: Buffer): Fixture {
   return { root, cacheDir, cacheFile: join(cacheDir, 'payload.deb'), curlLog, env }
 }
 
-function acquire(fixture: Fixture, env: NodeJS.ProcessEnv = fixture.env): { status: number | null; signal: NodeJS.Signals | null; stderr: string } {
+interface AcquireResult {
+  readonly status: number | null
+  readonly signal: NodeJS.Signals | null
+  readonly stderr: string
+}
+
+function acquire(fixture: Fixture, env: NodeJS.ProcessEnv = fixture.env): AcquireResult {
   const result = spawnSync(
     bash,
     ['-c', 'set -euo pipefail; source "$1"; acquire_verified_archive "$2" "$3" "$4"', 'acquire', library, url, payloadSha256, fixture.cacheFile],
