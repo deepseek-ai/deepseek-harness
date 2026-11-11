@@ -1,39 +1,17 @@
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { readFileSync, symlinkSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { createInventoryRepo, gitFixture as git, removeInventoryRepos, writeFixture as write } from './baseline-inventory.fixture.ts'
 import { countUnknownCasts, findUnknownCasts, scanUnknownCasts, verifyNoUnknownCasts } from './verify-no-unknown-casts.ts'
 
-const roots: string[] = []
 const baselinePath = 'scripts/no-unknown-casts.baseline.json'
 const sourcePath = 'packages/example/src/index.ts'
 const assertion = 'const result = value as unknown\n'
 
-afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
-})
-
-function write(root: string, file: string, contents: string): void {
-  const path = join(root, file)
-  mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, contents)
-}
-
-function git(root: string, ...args: string[]): void {
-  execFileSync('git', args, { cwd: root, stdio: 'pipe' })
-}
+afterEach(removeInventoryRepos)
 
 function fixture(): string {
-  const root = mkdtempSync(join(tmpdir(), 'dsh-unknown-casts-'))
-  roots.push(root)
-  git(root, 'init', '--quiet')
-  for (const area of ['packages', 'apps', 'scripts', 'website']) {
-    write(root, `${area}/seed.ts`, 'export {}\n')
-  }
-  write(root, baselinePath, '{}\n')
-  git(root, 'add', '.')
-  return root
+  return createInventoryRepo(baselinePath, 'export {}\n')
 }
 
 function recordBaseline(root: string): string {

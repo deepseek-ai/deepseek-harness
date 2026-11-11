@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import type { Message } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
@@ -19,6 +19,7 @@ import type { AgentBinding } from '../src/host-ops.ts'
 import type { LoadedMod } from '../src/chain.ts'
 import { createToolNameAliases } from '../src/tool-names.ts'
 import { messageOf, record, requireString, stringify } from '../src/values.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * The host op table against bare and partially composed contexts: the error a
@@ -75,9 +76,9 @@ function fakeAgent(ctx: Context, overrides: { cwd?: string; model?: string; requ
     id: 'fake',
     ctx,
     options: overrides.model === undefined ? {} : { model: overrides.model },
-    session: Object.assign(Session.create(SessionId('fake'), [], {
+    session: Object.assign(Session.create(brandString<SessionId>('fake'), [], {
       version: SESSION_FORMAT_VERSION,
-      id: SessionId('fake'),
+      id: brandString<SessionId>('fake'),
       createdAt: 1,
       isSeeded: false,
       ...overrides.cwd === undefined ? {} : { cwd: overrides.cwd },
@@ -301,7 +302,7 @@ describe('the committed directory owner', () => {
     const harness = await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(LocalSubprocessRuntime)
     const { call } = await setup(ctx)
-    const agent = await harness.create(SessionId('directory-owner'), {}, { cwd: origin })
+    const agent = await harness.create(brandString<SessionId>('directory-owner'), {}, { cwd: origin })
     await ctx.workingDirectory.set(agent, current)
 
     expect(await call('session.cwd', {}, agent)).toBe(current)

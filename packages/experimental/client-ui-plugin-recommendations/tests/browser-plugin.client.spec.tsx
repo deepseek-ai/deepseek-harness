@@ -3,8 +3,9 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ActionCardDescriptor } from '@deepseek-ai/dsh-client-ui-action-cards/client'
 import { FoldedText } from '@deepseek-ai/dsh-client-ui-action-cards/src/client/Card.tsx'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
@@ -34,9 +35,9 @@ it('registers the plugin body, its copy and Remote for the plugin lifetime and s
   const descriptor = register.mock.calls[0]![0]
   expect(descriptor).toMatchObject({ action: 'enable_official_plugin', locale: 'pluginRecommendations' })
   expect(locale.bind('pluginRecommendations')('heading')).toBe('Recommended plugin')
-  const proposal = { callId: ToolCallId('card'), turn: 1, action: 'enable_official_plugin', title: 'Search', brief: 'Find old sessions.',
+  const proposal = { callId: brandString<ToolCallId>('card'), turn: 1, action: 'enable_official_plugin', title: 'Search', brief: 'Find old sessions.',
     details: { name: 'official-search' } }
-  const card = () => <descriptor.Body proposal={proposal} decision={undefined} sessionId={SessionId('session-one')} summary={null}
+  const card = () => <descriptor.Body proposal={proposal} decision={undefined} sessionId={brandString<SessionId>('session-one')} summary={null}
     Folded={FoldedText} act={vi.fn()} t={locale.bind('pluginRecommendations')} />
   render(card())
   await act(async () => {})

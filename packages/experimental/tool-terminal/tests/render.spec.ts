@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { boundTerminalText, renderList, renderRead, renderSend, renderSendRead, renderSpawn } from '@deepseek-ai/dsh-tool-terminal/src/render.ts'
 
 describe('tool-terminal rendering', () => {
   it('renders spawn with and without names or MOTD', () => {
-    expect(renderSpawn({ sessionId: TerminalSessionId('pty-1'), type: 'shell', status: { kind: 'running' }, motd: '' }, 1024))
+    expect(renderSpawn({ sessionId: brandString<TerminalSessionId>('pty-1'), type: 'shell', status: { kind: 'running' }, motd: '' }, 1024))
       .toBe('started terminal session pty-1 [type: shell]\n(no startup output)')
-    expect(renderSpawn({ sessionId: TerminalSessionId('pty-2'), name: 'main', type: 'shell', pid: 2, status: { kind: 'running' }, motd: 'ready' }, 1024))
+    expect(renderSpawn({ sessionId: brandString<TerminalSessionId>('pty-2'), name: 'main', type: 'shell', pid: 2, status: { kind: 'running' }, motd: 'ready' }, 1024))
       .toContain('pty-2 (main)')
   })
 
@@ -30,10 +31,10 @@ describe('tool-terminal rendering', () => {
       .toBe('(no retained output)\n[lines: 0-0 of 0]\n[output truncated]')
     expect(renderList([], 1024)).toBe('(no terminal sessions)')
     expect(renderList([
-      { sessionId: TerminalSessionId('pty-1'), type: 'shell', status: { kind: 'running' } },
-      { sessionId: TerminalSessionId('pty-2'), name: 'done', type: 'shell', pid: 9, status: { kind: 'exited', exitCode: 2, signal: null } },
-      { sessionId: TerminalSessionId('pty-3'), type: 'shell', status: { kind: 'exited', exitCode: null, signal: 'SIGTERM' } },
-      { sessionId: TerminalSessionId('pty-4'), type: 'shell', status: { kind: 'exited', exitCode: null, signal: null } },
+      { sessionId: brandString<TerminalSessionId>('pty-1'), type: 'shell', status: { kind: 'running' } },
+      { sessionId: brandString<TerminalSessionId>('pty-2'), name: 'done', type: 'shell', pid: 9, status: { kind: 'exited', exitCode: 2, signal: null } },
+      { sessionId: brandString<TerminalSessionId>('pty-3'), type: 'shell', status: { kind: 'exited', exitCode: null, signal: 'SIGTERM' } },
+      { sessionId: brandString<TerminalSessionId>('pty-4'), type: 'shell', status: { kind: 'exited', exitCode: null, signal: null } },
     ], 1024)).toBe('pty-1 [shell] running\npty-2 (done) [shell] exited code=2 signal=null pid=9\npty-3 [shell] exited code=null signal=SIGTERM\npty-4 [shell] exited code=null signal=null')
   })
 
@@ -55,11 +56,11 @@ describe('tool-terminal rendering', () => {
     expect(read).toContain('[lines: 0-10 of 20]')
 
     expect(Buffer.byteLength(renderSpawn({
-      sessionId: TerminalSessionId('pty-1'), type: 'shell', status: { kind: 'running' }, motd: 'x'.repeat(200),
+      sessionId: brandString<TerminalSessionId>('pty-1'), type: 'shell', status: { kind: 'running' }, motd: 'x'.repeat(200),
     }, 32))).toBeLessThanOrEqual(32)
 
     const boundedSpawn = renderSpawn({
-      sessionId: TerminalSessionId('pty-1'), type: 'shell', status: { kind: 'running' }, motd: 'x'.repeat(200),
+      sessionId: brandString<TerminalSessionId>('pty-1'), type: 'shell', status: { kind: 'running' }, motd: 'x'.repeat(200),
     }, 96)
     expect(boundedSpawn).toContain('started terminal session pty-1')
     expect(boundedSpawn).toContain('[output truncated]')

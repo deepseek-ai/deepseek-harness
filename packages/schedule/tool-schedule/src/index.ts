@@ -18,13 +18,19 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import {
-  DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, MAX_TITLE_LENGTH, MIN_EVERY_INTERVAL_SECONDS, ScheduleId, ScheduleInputError,
+  DEFAULT_LIST_LIMIT,
+  MAX_LIST_LIMIT,
+  MAX_TITLE_LENGTH,
+  MIN_EVERY_INTERVAL_SECONDS,
+  ScheduleInputError,
   formatScheduleLocalTime,
 } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type {
   InternalScheduleError, ScheduleEditRequest, ScheduleTargetRequest, ScheduleToolError,
   ScheduleCatalogEntry, ScheduleDeliveryReceipt, ScheduleRecord, SubagentSessionError,
 } from '@deepseek-ai/dsh-schedule'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Plugin name registered with the Loader. */
 export const name = 'tool-schedule'
@@ -290,7 +296,8 @@ function internalError(): InternalScheduleError {
  * Run one Schedule operation for the root Agent that dispatched the call.
  *
  * A delegated subagent cannot use scheduled tasks, so every tool refuses it here even when its preset exposes the
- * tool. An input error keeps its code when the tool declares that code; every other failure becomes `internal_error`.
+ * tool. An input error keeps its code when the tool declares that code; every other operation failure becomes
+ * `internal_error`. An invalid runtime delegation depth is a caller defect and throws its `SubagentError`.
  * @param exec - Run context of the call.
  * @param codes - Error codes of the tool.
  * @param operation - Service call for the calling Agent.
@@ -402,6 +409,8 @@ function registerScheduleTools(ctx: Context): void {
       offset: { type: 'integer', description: 'Number of tasks to skip; defaults to 0.' },
     },
     output: { schema: LIST_OUTPUT_SCHEMA, render: renderValue },
+    // Host task reads activate no target Session.
+    isConcurrencySafe: () => true,
     execute({ active, limit, offset }, exec) {
       // The open parameter root admits unknown keys; only the declared page fields select the Host-wide list.
       return runForCaller(exec, LIST_ERRORS, () => ctx.schedule.list({
@@ -420,8 +429,10 @@ function registerScheduleTools(ctx: Context): void {
       id: { type: 'string', required: true, description: 'Task id.' },
     },
     output: { schema: VIEW_OUTPUT_SCHEMA, render: renderValue },
+    // Host task reads activate no target Session.
+    isConcurrencySafe: () => true,
     execute(args, exec) {
-      return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: ScheduleId(args.id) })
+      return runForCaller(exec, CALLER_ERRORS, () => ctx.schedule.view({ id: brandString<ScheduleId>(args.id) })
         .then(result => 'kind' in result ? modelTask(result) : result))
     },
     presentCall: args => present('View scheduled task', 'read', args.id),
@@ -455,7 +466,7 @@ function registerScheduleTools(ctx: Context): void {
     output: { schema: EDIT_OUTPUT_SCHEMA, render: renderValue },
     execute(args, exec) {
       return runForCaller(exec, EDIT_ERRORS, (agent) => {
-        const id = ScheduleId(args.id)
+        const id = brandString<ScheduleId>(args.id)
         const expected = args.expectedUpdatedAt === undefined ? {} : { expectedUpdatedAt: args.expectedUpdatedAt }
         let request: ScheduleEditRequest
         if (args.action === 'delete') {

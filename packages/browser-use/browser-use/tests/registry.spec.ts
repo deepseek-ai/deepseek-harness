@@ -1,10 +1,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import BrowserUseRegistry from '../src/index.ts'
-import { BrowserUseProviderName } from '../src/brand.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '../src/types.ts'
 
-const MCP = BrowserUseProviderName('playwright-mcp')
-const NATIVE = BrowserUseProviderName('stagehand')
+const MCP = brandString<BrowserUseProviderName>('playwright-mcp')
+const NATIVE = brandString<BrowserUseProviderName>('stagehand')
 
 describe('browser-use provider registration', () => {
   it('rejects a second provider and permits registration after disposal', async () => {

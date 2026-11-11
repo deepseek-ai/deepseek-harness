@@ -4,7 +4,7 @@
  * runs, and the pre-step re-check of queued reader input, including input recovered from a durable Inbox.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -25,6 +25,7 @@ import { identityKeyOf } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import { ForkRegistry } from '../src/host/fork-registry.ts'
 import { apply } from '../src/host/share-host.ts'
 import { shareViewerPrincipal } from '../src/host/viewer-principal.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const worker = vi.hoisted(() => ({ event: undefined as ((event: TunnelWorkerEvent) => void) | undefined }))
 vi.mock('../src/host/tunnel-worker.ts', () => ({ TunnelWorker: class {
@@ -87,8 +88,8 @@ async function harness(empty = false, mode: Mode = 'write', options: { readonly 
   /** The registered policy's answer, through the remote access service, for this reader of `share` on one Session. */
   const decide = (sessionId: string, action: 'session/prompt' | 'session/cancel', args?: Readonly<Record<string, unknown>>) =>
     ctx.remoteAccess.decide({ principal: shareViewerPrincipal('share', actor), action,
-      resources: [{ kind: 'session', id: SessionId(sessionId) }], ...(args === undefined ? {} : { args }) })
-  const agent = (id: string) => ({ id: SessionId(id), session: { id: SessionId(id) } }) as Agent
+      resources: [{ kind: 'session', id: brandString<SessionId>(sessionId) }], ...(args === undefined ? {} : { args }) })
+  const agent = (id: string) => ({ id: brandString<SessionId>(id), session: { id: brandString<SessionId>(id) } }) as Agent
   return { ctx, start, agent, fetch, file, decide }
 }
 
@@ -112,7 +113,7 @@ describe('share-bound receiving Session admission', () => {
     await createSessionTestController(fixture.ctx, {
       cwd: process.cwd(), defaultModelSelection: () => ({ provider: 'unused', model: 'unused' }),
     })
-    const agent = await driver.create(SessionId('private'))
+    const agent = await driver.create(brandString<SessionId>('private'))
     const followup = vi.spyOn(agent, 'followup')
     const cancel = vi.spyOn(agent, 'cancel')
     await fixture.start()
@@ -208,7 +209,7 @@ describe('share-bound receiving Session admission', () => {
         principal: shareViewerPrincipal('deleted-share', actor) } })
     // `prepare` only mints the header; a detached Session cannot append, so the event is written
     // through the persistence seam and the resumed Agent recovers it from the stored log.
-    const stored = fixture.ctx.sessions.prepare(SessionId('source'))
+    const stored = fixture.ctx.sessions.prepare(brandString<SessionId>('source'))
     const writer = await fixture.ctx.sessionPersistence.create(stored.header)
     try {
       await writer.append([{

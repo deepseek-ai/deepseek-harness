@@ -1,0 +1,49 @@
+# Bilingual-pair consistency record for 2026-11-05-stable-api-policy.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/process/2026-11-05-stable-api-policy.md
+/agent-note-stable-api-policy:
+  en: efcff6bc65d1ae54
+  zh: 2b32885373cb788d
+/agent-note-stable-api-policy/problem:
+  en: b6492a320d28ff1c
+  zh: 0105277d71fe43ab
+/agent-note-stable-api-policy/proposal:
+  en: 88384462c8232e93
+  zh: 355ad48f96efc95e
+/agent-note-stable-api-policy/proposal/stability-levels:
+  en: ad9ea5e151e05ac2
+  zh: baa08299dac43ee4
+/agent-note-stable-api-policy/proposal/unit-one-capability-seam:
+  en: 2d33b23a61c8dae4
+  zh: 4d781899433069d5
+/agent-note-stable-api-policy/proposal/what-stable-covers:
+  en: 0a637e21cfbabeb3
+  zh: 76078282bf686e17
+/agent-note-stable-api-policy/proposal/api-report-and-ci:
+  en: 772026ec3f2512b0
+  zh: d6cf271248e85a0e
+/agent-note-stable-api-policy/proposal/plugin-author-warnings:
+  en: e9bdb925a73e14e4
+  zh: e04aa39a43407070
+/agent-note-stable-api-policy/proposal/plugin-requirements:
+  en: cce626a0c5dff76f
+  zh: d85d04d33ddcff48
+/agent-note-stable-api-policy/proposal/compatibility-layer:
+  en: 40445e93d1bb8561
+  zh: 05a845c5093f4abd
+/agent-note-stable-api-policy/proposal/rollout:
+  en: 16e88b03b3f1bc38
+  zh: 5628adf979269b92
+/agent-note-stable-api-policy/proposal/open-questions:
+  en: b33cf00ac8a10a94
+  zh: e0a041a07879d2d5
+/agent-note-stable-api-policy/alternatives-considered:
+  en: 4154f0aadc2f0017
+  zh: cc1e120f80e7fbb8
+/agent-note-stable-api-policy/acceptance-criteria:
+  en: a858ac77edabe3d3
+  zh: 63f0872b73eef7f3
+/agent-note-stable-api-policy/risks:
+  en: 16693acc4f57df3a
+  zh: 96b056ba83bf3c38

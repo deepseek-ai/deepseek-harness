@@ -1,7 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
-import { JobId, JobRegistry } from '@deepseek-ai/dsh-jobs'
+import { type JobId, JobRegistry } from '@deepseek-ai/dsh-jobs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JobStatus, JobView } from '@deepseek-ai/dsh-jobs'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { Readable } from 'node:stream'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,7 +21,7 @@ class RosterOnlyJobRegistry extends JobRegistry {
   start(): never { throw new Error('unsupported') }
   list(caller?: SessionId): JobView[] {
     return (jobs.get(caller) ?? []).map((status, index) => ({
-      id: JobId(`bash-${index + 1}`),
+      id: brandString<JobId>(`bash-${index + 1}`),
       kind: 'bash',
       label: 'sleep 60',
       ...caller === undefined ? {} : { owner: caller },
@@ -50,7 +51,7 @@ beforeEach(() => {
 
 afterEach(async () => { await ctx.fiber.dispose() })
 
-function idleAgent(): AgentState { return { id: SessionId('update-task-owner'), status: 'idle', inbox: { nextTurn: [], nextStep: [] } } }
+function idleAgent(): AgentState { return { id: brandString<SessionId>('update-task-owner'), status: 'idle', inbox: { nextTurn: [], nextStep: [] } } }
 
 function request(next: () => Promise<void>) {
   const incoming = Readable.from([]) as IncomingMessage

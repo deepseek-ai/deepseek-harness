@@ -93,6 +93,49 @@ export function apply(ctx: Context) {
 }
 ```
 
+## Forge 评审扩展
+
+变更请求评审经由 [forge 扩展 API](../subsystems/forge.zh.md#extension-api) 向插件开放。Host 插件注册一个筛选透镜，它保留变更视图所显示文件中的一部分，并给出它关心的行：
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ForgeLensId } from '@deepseek-ai/dsh-experimental-client-ui-forge'
+
+export const name = 'exports-lens'
+export const inject = ['forgePanel']
+
+export function apply(ctx: Context) {
+  // An effect of this plugin's fiber: unloading the plugin withdraws the lens and aborts its runs.
+  ctx.forgePanel.registerLens({
+    id: brandString<ForgeLensId>('example/exports'),
+    version: '1',
+    async classify(input, signal) {
+      const files: Record<string, { ranges: { old: []; new: { start: number; end: number }[] } }> = {}
+      for (const file of input.files) {
+        const lines = (await input.text('new', file.path, signal))?.split('\n') ?? []
+        const ranges = lines.flatMap((line, at) => line.startsWith('export') ? [{ start: at + 1, end: at + 1 }] : [])
+        if (ranges.length > 0) files[file.path] = { ranges: { old: [], new: ranges } }
+      }
+      return { files }
+    },
+  })
+}
+```
+
+Client 插件给这个透镜起名并添加行注解；`notesOf` 为每个视图返回一个稳定的可观察对象，`NoteBody` 是模块级组件，在视图所画的外框中绘制一条注解。forge 测试的[夹具插件](../../apps/web/tests/fixtures/plugins/fixture-forge-extension/client.js)还用到了工具栏、文件菜单、评论框和卡片的 slot。
+
+```ts ignore-check
+export const inject = ['forgeChanges', 'slots']
+
+export function apply(ctx: Context) {
+  ctx.effect(() => ctx.forgeChanges.describeLens({ id: brandString<ForgeLensId>('example/exports'), title: () => 'Exports' }))
+  ctx.effect(() => ctx.forgeChanges.registerAnnotations({ id: 'example-notes', observe: target => notesOf(target) }))
+  ctx.slots.inject('forge.diff.line.annotation', () => ctx.slots.register(
+    { name: 'forge.diff.line.annotation', key: 'example-notes' }, NoteBody))
+}
+```
+
 ## 可运行的组装示例
 
 交付应用通过 `packages/bundle/*/cordis.patch.yml` 提供 profile 层，产品 `dsh` 启动器通过具名 profile 负责 Web、ACP、SDK 与一次性 headless 执行。可选的用户 overlay 位于 `apps/cli/config/examples/`；profile 集成测试位于 `apps/cli/tests/profiles/`，包专属 Loader 组合则留在对应包的测试目录中。

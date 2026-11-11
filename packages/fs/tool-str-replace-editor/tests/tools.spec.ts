@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -19,6 +19,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -30,7 +31,7 @@ afterEach(async () => {
 })
 
 async function agent(ctx: Context, cwd: string): Promise<Agent> {
-  const id = SessionId(`str-replace-editor-owner-${callNumber}`)
+  const id = brandString<SessionId>(`str-replace-editor-owner-${callNumber}`)
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
@@ -62,7 +63,7 @@ function text(result: { content: { type: string; text?: string }[] }): string {
 function call(ctx: Context, owner: Agent | undefined, args: unknown) {
   return executeToolFixture(ctx, {
     signal: new AbortController().signal,
-    callId: ToolCallId(`str-replace-editor-${++callNumber}`),
+    callId: brandString<ToolCallId>(`str-replace-editor-${++callNumber}`),
     name: 'str_replace_editor',
     arguments: args,
     ...owner === undefined ? {} : { agent: owner },
@@ -460,6 +461,7 @@ describe('tool-str-replace-editor', () => {
     const relative = await call(ctx, owner, { command: 'view', path: 'ambiguous.txt' })
     expect(relative.isError).toBe(true)
     expect(text(relative)).toContain('is not an absolute path')
+    expect(relative.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     expect(await readFile(ambiguous, 'utf8')).toBe('alpha\nbeta\nmiddle\nalpha\nbeta')
   })
 
@@ -476,39 +478,42 @@ describe('tool-str-replace-editor', () => {
     await writeFile(threeLines, 'one\ntwo\nthree')
     await mkdir(directory)
 
-    const cases = [
-      { command: null, path: ambiguous },
-      { command: 'view', path: null },
-      { command: 'view', path: '' },
-      { command: 'view', path: join(root, 'missing.txt') },
-      { command: 'view', path: ambiguous, view_range: [1] },
-      { command: 'view', path: ambiguous, view_range: [0, 1] },
-      { command: 'view', path: ambiguous, view_range: [1.5, 2] },
-      { command: 'view', path: threeLines, view_range: [1, 99] },
-      { command: 'view', path: threeLines, view_range: [2, 1] },
-      { command: 'view', path: directory, view_range: [1, 1] },
-      { command: 'create', path: join(root, 'new.txt') },
-      { command: 'create', path: join(root, 'new.txt'), file_text: null },
-      { command: 'create', path: ambiguous, file_text: 'overwrite' },
-      { command: 'str_replace', path: ambiguous, new_str: 'x' },
-      { command: 'str_replace', path: ambiguous, old_str: null, new_str: 'x' },
-      { command: 'str_replace', path: ambiguous, old_str: 'same same', new_str: null },
-      { command: 'str_replace', path: ambiguous, old_str: '', new_str: 'x' },
-      { command: 'insert', path: ambiguous, new_str: 'x' },
-      { command: 'insert', path: ambiguous, insert_line: null, new_str: 'x' },
-      { command: 'insert', path: ambiguous, insert_line: 0, new_str: null },
-      { command: 'insert', path: ambiguous, insert_line: -1, new_str: 'x' },
-      { command: 'insert', path: ambiguous, insert_line: 1.5, new_str: 'x' },
-      { command: 'insert', path: ambiguous, insert_line: 99, new_str: 'x' },
-      { command: 'insert', path: empty, insert_line: 2, new_str: 'x' },
-      { command: 'insert', path: directory, insert_line: 0, new_str: 'x' },
+    const args = { name: 'ToolArgsError', code: 'INVALID_ARGS' }
+    const cases: [Record<string, unknown>, { name: string; code: string }][] = [
+      [{ command: null, path: ambiguous }, args],
+      [{ command: 'view', path: null }, args],
+      [{ command: 'view', path: '' }, args],
+      [{ command: 'view', path: join(root, 'missing.txt') }, { name: 'FsError', code: 'FS_NOT_FOUND' }],
+      [{ command: 'view', path: ambiguous, view_range: [1] }, args],
+      [{ command: 'view', path: ambiguous, view_range: [0, 1] }, args],
+      [{ command: 'view', path: ambiguous, view_range: [1.5, 2] }, args],
+      [{ command: 'view', path: threeLines, view_range: [1, 99] }, args],
+      [{ command: 'view', path: threeLines, view_range: [2, 1] }, args],
+      [{ command: 'view', path: directory, view_range: [1, 1] }, args],
+      [{ command: 'create', path: join(root, 'new.txt') }, args],
+      [{ command: 'create', path: join(root, 'new.txt'), file_text: null }, args],
+      [{ command: 'create', path: ambiguous, file_text: 'overwrite' }, { name: 'FsError', code: 'FS_ALREADY_EXISTS' }],
+      [{ command: 'str_replace', path: ambiguous, new_str: 'x' }, args],
+      [{ command: 'str_replace', path: ambiguous, old_str: null, new_str: 'x' }, args],
+      [{ command: 'str_replace', path: ambiguous, old_str: 'same same', new_str: null }, args],
+      [{ command: 'str_replace', path: ambiguous, old_str: '', new_str: 'x' }, args],
+      [{ command: 'insert', path: ambiguous, new_str: 'x' }, args],
+      [{ command: 'insert', path: ambiguous, insert_line: null, new_str: 'x' }, args],
+      [{ command: 'insert', path: ambiguous, insert_line: 0, new_str: null }, args],
+      [{ command: 'insert', path: ambiguous, insert_line: -1, new_str: 'x' }, args],
+      [{ command: 'insert', path: ambiguous, insert_line: 1.5, new_str: 'x' }, args],
+      [{ command: 'insert', path: ambiguous, insert_line: 99, new_str: 'x' }, args],
+      [{ command: 'insert', path: empty, insert_line: 2, new_str: 'x' }, args],
+      [{ command: 'insert', path: directory, insert_line: 0, new_str: 'x' }, { name: 'FsError', code: 'FS_NOT_REGULAR_FILE' }],
     ]
-    for (const args of cases) {
-      expect((await call(ctx, owner, args)).isError).toBe(true)
+    for (const [callArgs, info] of cases) {
+      const result = await call(ctx, owner, callArgs)
+      expect(result.isError).toBe(true)
+      expect({ args: callArgs, info: result.error?.info }).toEqual({ args: callArgs, info })
     }
     expect(await readFile(ambiguous, 'utf8')).toBe('same same')
 
-    ctx.fs.stat = async () => ({ version: FsVersion('special'), type: 'other' })
+    ctx.fs.stat = async () => ({ version: brandString<FsVersion>('special'), type: 'other' })
     const special = await call(ctx, owner, { command: 'view', path: join(root, 'special') })
     expect(special.isError).toBe(true)
     expect(special.error).toMatchObject({ info: { code: 'FS_NOT_REGULAR_FILE' } })
@@ -626,6 +631,24 @@ describe('tool-str-replace-editor', () => {
 
     await expect(ctx.plugin(ToolStrReplaceEditor))
       .rejects.toThrow('the mounted filesystem confines but ctx.sandboxPolicy is missing')
+  })
+
+  it('reports a file created after the absence check as FS_ALREADY_EXISTS', async () => {
+    const { ctx, root, owner } = await setup()
+    const path = join(root, 'raced.txt')
+    await writeFile(path, 'concurrent')
+    const stat = ctx.fs.stat.bind(ctx.fs)
+    let first = true
+    ctx.fs.stat = async (target, signal) => {
+      if (!first) return stat(target, signal)
+      first = false
+      return undefined
+    }
+    const result = await call(ctx, owner, { command: 'create', path, file_text: 'mine' })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_ALREADY_EXISTS' })
+    expect(text(result)).toContain(`File already exists at: ${path}`)
+    expect(await readFile(path, 'utf8')).toBe('concurrent')
   })
 
   it('maps unexpected backend write failures for replace and insert', async () => {

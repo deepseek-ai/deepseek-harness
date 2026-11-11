@@ -1,11 +1,12 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import SessionTitleService, {
-  SessionTitleProviderId,
   type Config,
   type SessionTitleProvider,
   type SessionTitleProviderRequest,
@@ -38,7 +39,7 @@ async function setup(config: Config = CONFIG): Promise<Context> {
 }
 
 function startSession(ctx: Context, id: string): ReturnType<Context['sessions']['create']> {
-  const session = ctx.sessions.create(SessionId(id))
+  const session = ctx.sessions.create(brandString<SessionId>(id))
   session.append('turn/start', {
     turn: 1,
   })
@@ -68,7 +69,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
 
   it('returns no title for empty input with or without a provider, and rejects detached or pre-aborted refreshes', async () => {
     const fallbackOnly = await setup()
-    const empty = fallbackOnly.sessions.create(SessionId('empty-fallback'))
+    const empty = fallbackOnly.sessions.create(brandString<SessionId>('empty-fallback'))
     await expect(fallbackOnly.sessionTitle.refresh(empty)).resolves.toBeUndefined()
 
     const withProvider = await setup()
@@ -77,15 +78,15 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
       messageSeqs: [SessionSeq(0)],
     }))
     withProvider.sessionTitle.register({
-      id: SessionTitleProviderId('empty-provider'),
+      id: brandString<SessionTitleProviderId>('empty-provider'),
       automatic: 'first-prompt',
       generate,
     })
-    const providerEmpty = withProvider.sessions.create(SessionId('empty-provider'))
+    const providerEmpty = withProvider.sessions.create(brandString<SessionId>('empty-provider'))
     await expect(withProvider.sessionTitle.refresh(providerEmpty)).resolves.toBeUndefined()
     expect(generate).not.toHaveBeenCalled()
 
-    await expect(withProvider.sessionTitle.refresh(Session.create(SessionId('detached'))))
+    await expect(withProvider.sessionTitle.refresh(Session.create(brandString<SessionId>('detached'))))
       .rejects.toThrow(/not live in this store/)
     const controller = new AbortController()
     controller.abort(new Error('already cancelled'))
@@ -97,7 +98,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const ctx = await setup()
     let observed: SessionTitleProviderRequest | undefined
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('explicit-no-route'),
+      id: brandString<SessionTitleProviderId>('explicit-no-route'),
       automatic: 'first-prompt',
       async generate(request) {
         observed = request
@@ -120,7 +121,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const callerPending = deferred<SessionTitleProviderResult>()
     let callerSignal: AbortSignal | undefined
     callerCtx.sessionTitle.register({
-      id: SessionTitleProviderId('caller-cancel'),
+      id: brandString<SessionTitleProviderId>('caller-cancel'),
       automatic: 'first-prompt',
       generate(request) {
         callerSignal = request.signal
@@ -142,14 +143,14 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const disposePending = deferred<SessionTitleProviderResult>()
     let disposeSignal: AbortSignal | undefined
     disposeCtx.sessionTitle.register({
-      id: SessionTitleProviderId('session-dispose'),
+      id: brandString<SessionTitleProviderId>('session-dispose'),
       automatic: 'first-prompt',
       generate(request) {
         disposeSignal = request.signal
         return disposePending.promise
       },
     })
-    const disposed = disposeCtx.sessions.prepare(SessionId('session-dispose'))
+    const disposed = disposeCtx.sessions.prepare(brandString<SessionId>('session-dispose'))
     const detach = disposeCtx.sessions.enter(disposed)
     disposeCtx.sessions.announce(disposed)
     disposed.append('turn/start', {
@@ -167,13 +168,13 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
 
   it('shares one fallback across concurrent refreshes', async () => {
     const ctx = await setup()
-    const seed = Session.create(SessionId('fallback-concurrency-seed'))
+    const seed = Session.create(brandString<SessionId>('fallback-concurrency-seed'))
     seed.append('turn/start', {
       turn: 1,
     })
     const source = appendPrompt(seed, 'Create exactly one fallback title')
     seed.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const session = ctx.sessions.create(SessionId('fallback-concurrency'), { seed: seed.snapshotEvents() })
+    const session = ctx.sessions.create(brandString<SessionId>('fallback-concurrency'), { seed: seed.snapshotEvents() })
 
     const results = await Promise.all([
       ctx.sessionTitle.refresh(session),
@@ -218,7 +219,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const requests: SessionTitleProviderRequest[] = []
     const results: Array<ReturnType<typeof deferred<SessionTitleProviderResult>>> = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('refresh-order'),
+      id: brandString<SessionTitleProviderId>('refresh-order'),
       automatic: 'first-prompt',
       generate(request) {
         requests.push(request)
@@ -302,7 +303,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const result = deferred<SessionTitleProviderResult>()
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('service-unload'),
+      id: brandString<SessionTitleProviderId>('service-unload'),
       automatic: 'all-prompts',
       generate(request) {
         requests.push(request)
@@ -338,7 +339,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
   it('warns when a detached session prevents queued fallback publication', async () => {
     const ctx = await setup()
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
-    const session = ctx.sessions.prepare(SessionId('fallback-detach'))
+    const session = ctx.sessions.prepare(brandString<SessionId>('fallback-detach'))
     const detach = ctx.sessions.enter(session)
     ctx.sessions.announce(session)
     ctx.on('session/event', (subject, event) => {
@@ -378,20 +379,22 @@ describe('SessionTitleService Provider validation and stale scheduling', () => {
       generate,
     } as unknown as SessionTitleProvider)).toThrow(/id must be a non-empty string/)
     expect(() => ctx.sessionTitle.register({
-      id: SessionTitleProviderId(''),
+      id: brandString<SessionTitleProviderId>(''),
       automatic: 'first-prompt',
       generate,
     })).toThrow(/id must be a non-empty string/)
     expect(() => ctx.sessionTitle.register({
-      id: SessionTitleProviderId('bad-mode'),
+      id: brandString<SessionTitleProviderId>('bad-mode'),
       automatic: 'sometimes' as never,
       generate,
     })).toThrow(/automatic mode is invalid/)
-    expect(() => ctx.sessionTitle.register({
-      id: SessionTitleProviderId('missing-generate'),
+    const missingGenerate: SessionTitleProvider = {
+      id: brandString<SessionTitleProviderId>('missing-generate'),
       automatic: 'first-prompt',
-      generate: undefined,
-    } as unknown as SessionTitleProvider)).toThrow(/requires generate/)
+      generate,
+    }
+    Reflect.set(missingGenerate, 'generate', undefined)
+    expect(() => ctx.sessionTitle.register(missingGenerate)).toThrow(/requires generate/)
   })
 
   it('drops automatic work when its provider is disposed before the queued start', async () => {
@@ -401,7 +404,7 @@ describe('SessionTitleService Provider validation and stale scheduling', () => {
       messageSeqs: [request.messages[0]!.seq],
     }))
     const dispose = ctx.sessionTitle.register({
-      id: SessionTitleProviderId('queued-dispose'),
+      id: brandString<SessionTitleProviderId>('queued-dispose'),
       automatic: 'all-prompts',
       generate,
     })
@@ -425,7 +428,7 @@ describe('SessionTitleService Provider validation and stale scheduling', () => {
     const ctx = await setup()
     let result: unknown
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('invalid-results'),
+      id: brandString<SessionTitleProviderId>('invalid-results'),
       automatic: 'first-prompt',
       generate: async () => result as SessionTitleProviderResult,
     })

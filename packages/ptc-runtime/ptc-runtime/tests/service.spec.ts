@@ -15,12 +15,12 @@ class StubRuntime extends PtcRuntime {
   readonly language = 'typescript'
   readonly isolation = 'in-process-stub'
   requests: PtcRunRequest[] = []
-  nextResult: PtcRunResult = { logs: [] }
+  nextResult: PtcRunResult = { output: [] }
 
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
     this.requests.push(request)
     if (request.signal?.aborted) {
-      return { logs: [], error: { kind: 'abort', message: String(request.signal.reason) } }
+      return { output: [], error: { kind: 'abort', message: String(request.signal.reason) } }
     }
     for (const namespace of request.bindings) {
       for (const fn of Object.values(namespace.functions)) {
@@ -49,13 +49,14 @@ describe('PtcRuntime service seam', () => {
     expect(runtime.executionInstructions).toBe('')
     expect(runtime.timeout).toBeUndefined()
     await expect(runtime.release({})).resolves.toBeUndefined()
+    expect(() => runtime.registerEnvironmentInitializer('')).toThrow('environment initialization is unsupported')
 
     const calls: unknown[] = []
     const result = await runtime.run(runtime.resolve({
       program: 'return 1',
       bindings: [{ global: 'tools', functions: { probe: async (args) => { calls.push(args); return null } } }],
     }))
-    expect(result).toEqual({ logs: [] })
+    expect(result).toEqual({ output: [] })
     expect(calls).toEqual([{ from: 'stub' }])
     expect(runtime.requests).toHaveLength(1)
   })
@@ -63,7 +64,7 @@ describe('PtcRuntime service seam', () => {
   it('reports a failed run as an error field on a resolved result, never a rejection', async () => {
     const { runtime } = await setup()
     runtime.nextResult = {
-      logs: ['boom'],
+      output: [{ type: 'text', text: 'boom' }],
       error: { kind: 'exception', message: 'boom' },
     }
     const result = await runtime.run(runtime.resolve({ program: 'throw new Error("boom")', bindings: [] }))

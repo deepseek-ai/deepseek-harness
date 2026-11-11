@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP-Server für Computernutzung",
+    "description": "Stellt Computer Use aus dem Profil cua-mcp für Codex, Claude Code und andere MCP-Clients bereit: cua_run_code führt persistente Programme gegen Desktop-Anwendungen aus, cua_reset löscht sie."
+  }
+}

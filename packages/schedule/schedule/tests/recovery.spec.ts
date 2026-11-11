@@ -5,13 +5,15 @@ import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest'
 import ScheduleService from '../src/index.ts'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
-import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createAfterScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { ScheduleRuntime } from '../src/runtime.ts'
 import { agentFor, boundTask, harness, taskTable, storedUnit } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -101,9 +103,9 @@ it.each([
   const repaired = encoded({ 'a-good': oldTask, 'z-broken': repairedTask })
   await writeFile(path, repaired)
   await ctx.plugin(ScheduleService)
-  expect(taskTable(ctx).get(ScheduleId('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
+  expect(taskTable(ctx).get(brandString<ScheduleId>('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
   // A delivered one-shot rule ends; its receipt now names the Session that accepted it.
-  expect(taskTable(ctx).get(ScheduleId('z-broken'))).toMatchObject({
+  expect(taskTable(ctx).get(brandString<ScheduleId>('z-broken'))).toMatchObject({
     status: 'ended', lastDelivery: { ...repairedTask.lastDelivery, targetSessionId: 'original' },
   })
   expect(await ctx.schedule.catalog()).toHaveLength(2)
@@ -119,8 +121,8 @@ it.each([
   code,
 ) => {
   const { root } = await rootWith({})
-  const rule = createAfterScheduleRecord(ScheduleId('kept'), 'Keep me', 60, Date.now(), 'Keep me')
-  const valid: ScheduleTask = boundTask(SessionId('original'), rule)
+  const rule = createAfterScheduleRecord(brandString<ScheduleId>('kept'), 'Keep me', 60, Date.now(), 'Keep me')
+  const valid: ScheduleTask = boundTask(brandString<SessionId>('original'), rule)
   const file = join(root, 'schedule.json')
   const bytes = typeof broken === 'string' ? broken
     : typeof broken === 'number' ? encoded({ kept: valid }, broken) : encoded({ kept: { ...valid, record: undefined, ...broken } })
@@ -159,7 +161,7 @@ it.each([
 
 it.each([true, false])('reads earlier history with receipt=%s without rewriting the earlier file', async (hasReceipt) => {
   const legacy = hasReceipt ? repairedTask : { ...oldTask, status: 'inactive' }
-  const taskId = ScheduleId(legacy.record.id)
+  const taskId = brandString<ScheduleId>(legacy.record.id)
   const bytes = encoded({ [taskId]: legacy })
   const { root, path } = await rootWith({}, bytes)
   const test = await harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
@@ -193,8 +195,8 @@ it.each(['create', 'delete'] as const)('returns the durable %s result when an an
     cleanupHadStarted = stop.mock.calls.length !== 0
   })
   const mutation = operation === 'create'
-    ? test.service.create({ prompt: 'Accepted before unload', title: 'Accepted before unload', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: SessionId('original') } }, SessionId('original'))
-    : test.service.edit({ action: 'delete', id: ScheduleId('a-good') })
+    ? test.service.create({ prompt: 'Accepted before unload', title: 'Accepted before unload', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: brandString<SessionId>('original') } }, brandString<SessionId>('original'))
+    : test.service.edit({ action: 'delete', id: brandString<ScheduleId>('a-good') })
   const outcome = await mutation.then(value => ({ value }), (error: unknown) => ({ error }))
   await unloading
   expect(cleanupHadStarted).toBe(false)
@@ -246,7 +248,7 @@ it('logs startup dispatch admission failure without rejecting initialized storag
   expect(await test.service.catalog()).toEqual([])
   expect(facility?.get(scheduleDomain.name)).toBeDefined()
   expect(vi.getTimerCount()).toBe(0)
-  await test.service.create({ prompt: 'Explicit later wake', title: 'Explicit later wake', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: SessionId('original') } }, SessionId('original'))
+  await test.service.create({ prompt: 'Explicit later wake', title: 'Explicit later wake', timing: { kind: 'after', after_seconds: 60 }, target: { kind: 'session', sessionId: brandString<SessionId>('original') } }, brandString<SessionId>('original'))
   await vi.advanceTimersByTimeAsync(0)
   expect(admission).toHaveBeenCalledTimes(2)
   expect(vi.getTimerCount()).toBe(1)
@@ -301,7 +303,7 @@ it('does not start dispatch when storage opens after its owner begins unloading'
     expect(vi.getTimerCount()).toBe(0)
     // The import finished before activation failed; the next startup reads the copied task.
     const reopened = await facility.open(scheduleDomain)
-    expect(reopened.table('tasks').get(ScheduleId('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
+    expect(reopened.table('tasks').get(brandString<ScheduleId>('a-good'))).toMatchObject({ status: 'active', record: oldTask.record })
     await reopened.close()
     expect(await readFile(path, 'utf8')).toBe(encoded({ 'a-good': oldTask }))
   } finally {

@@ -79,7 +79,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-缺少 `agents` 服务时，启动请求以 `CONTINUATION_UNAVAILABLE` 拒绝；运行时可用但父级缺失或被替换时，以 `UNAUTHORIZED` 拒绝。未实现任何执行方法的提供方会在注册时以 `UNSUPPORTED_CAPABILITY` 被拒绝；请求不受支持的能力会以同一码使创建失败。如果等待目录解析期间提供方被移除或替换，创建会在调用任何一方之前以 `PROVIDER_CHANGED` 拒绝；调用方可根据当前注册重试委派。调用方信号仅取消尚未发布的工作；发布后通过 `dispose()` 取消该次 activation，并等待其资源清理完成。创建后代独立继续运行；宿主必须在释放根句柄前等待 `drainDescendants([root])`，以停止所有成员并等待正在启动的工作。`result` 在清理与通知结束后完成，携带输出、可选结构化数据与停止原因；结果捕获故障在清理后使其拒绝。清理失败使 `dispose()` 拒绝，并将生命周期结束事件标记为失败；结果 promise 与父级通知保留已捕获的执行结果。
+每个 `SubagentError` 都携带 [`src/error.ts`](src/error.ts) 中封闭联合类型 `SubagentErrorCode` 的一个 code，该文件逐条说明各条件。缺少 `agents` 服务时，启动请求以 `CONTINUATION_UNAVAILABLE` 拒绝；运行时可用但父级缺失或被替换时，以 `UNAUTHORIZED` 拒绝。未实现任何执行方法的提供方会在注册时以 `UNSUPPORTED_CAPABILITY` 被拒绝；请求不受支持的能力会以同一码使创建失败。如果等待目录解析期间提供方被移除或替换，创建会在调用任何一方之前以 `PROVIDER_CHANGED` 拒绝；调用方可根据当前注册重试委派。以下创建失败均为 `SubagentError`：超出请求深度的子代以 `SubagentDepthError` 子类和 `DEPTH_EXCEEDED` 拒绝，无效的运行时 `subagentDepth` 以 `INVALID_DEPTH` 拒绝，选择了 preset 但缺少 preset 服务时以 `PRESET_UNAVAILABLE` 拒绝（所选 preset 未知或无法加载时保留 registry 的 `RemoteError` code），缺少工作目录服务的本地子代以 `WORKING_DIRECTORY_UNAVAILABLE` 拒绝，cwd 为相对路径或不可进入的进程外子代以 `INVALID_CWD` 拒绝。持久化 descriptor 损坏的冷目标以 `NOT_RESUMABLE` 拒绝，有待处理输入时调用 `structured_output` 以 `STRUCTURED_OUTPUT_PENDING_INPUT` 失败。调用方信号仅取消尚未发布的工作；发布后通过 `dispose()` 取消该次 activation，并等待其资源清理完成。创建后代独立继续运行；宿主必须在释放根句柄前等待 `drainDescendants([root])`，以停止所有成员并等待正在启动的工作。`result` 在清理与通知结束后完成，携带输出、可选结构化数据与停止原因；结果捕获故障在清理后使其拒绝。清理失败使 `dispose()` 拒绝，并将生命周期结束事件标记为失败；结果 promise 与父级通知保留已捕获的执行结果。
 
 -----
 
@@ -124,7 +124,7 @@ kind: "package-reference"
 
 ### Activation 结算
 
-管理器预留子级身份与容量，创建本地 Agent 或外部执行，并接受初始任务。本地 Agent 活动和待处理输入结束后，管理器在最终 Session flush 后重新验证活动状态并关闭准入。本地与外部 activation 都在句柄清理、容量归还及结算通知结束后交付结果。宿主在 subagent 树根上等待仍在推进的成员及其清理，包括失败的执行；有停放输入的空闲成员继续驻留，但不延迟宿主完成。普通成员不等待后代。关闭准入并释放句柄可防止迟到工作进入已释放的 Agent。父级投递仅在创建者仍在线时于结算后发送通知；调用方投递由等待中的工作流收集。Headless 宿主交替等待 `agent.whenIdle()` 与 `waitForTreeWork(agent)`，直至没有子级工作，且父级在检查子级期间保持空闲、Session 序号不变，让完成通知可驱动父级生成最终答案。
+管理器预留子级身份与容量，创建本地 Agent 或外部执行，并接受初始任务。本地 Agent 活动和待处理输入结束后，管理器在最终 Session flush 后重新验证活动状态并关闭准入。本地与外部 activation 都在句柄清理、容量归还及结算通知结束后交付结果。宿主在 subagent 树根上等待仍在推进的成员及其清理，包括失败的执行；有停放输入的空闲成员继续驻留，但不延迟宿主完成。普通成员不等待后代。关闭准入并释放句柄可防止迟到工作进入已释放的 Agent。父级投递仅在创建者仍在线时于结算后发送通知；调用方投递由等待中的工作流收集。Headless 宿主交替等待 `agent.whenIdle()` 与 `waitForTreeWork(agent)`，直至没有子级工作，且父级在检查子级期间保持空闲、Session 序号不变，让完成通知可驱动父级生成最终答案。本地 Agent 因工厂卸载而释放时，管理器在 Agent 停稳并离开注册表后结算其 Activation。如果关闭失败时仍有待处理输入，原本为 `completed` 的结果改为报告 `error`，并保留已经生成的输出。
 
 结算归属信息记录确切的执行停止原因，不改变面向模型的通知内容。历史通知可以缺少该字段；读取方不得从英文摘要推断它。
 

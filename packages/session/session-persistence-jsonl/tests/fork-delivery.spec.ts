@@ -1,12 +1,13 @@
 /** Fork history retains delivery ownership without requiring a source relationship. */
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { generationLogPath } from '../src/format.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function fixture(compression: 'none' | 'zstd') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-fork-delivery-'))
@@ -36,12 +37,12 @@ function delivered(session: Session): void {
 describe.each(['none', 'zstd'] as const)('fork delivery persistence (%s)', (compression) => {
   it.each(['ordinary', 'nested', 'subagent', 'legacy'] as const)('restores %s fork history through read and write access', async (kind) => {
     const { ctx, persist } = await fixture(compression)
-    const source = ctx.sessions.create(SessionId('source'))
+    const source = ctx.sessions.create(brandString<SessionId>('source'))
     delivered(source)
-    const ordinary = ctx.sessions.fork(source, undefined, SessionId('ordinary'))
+    const ordinary = ctx.sessions.fork(source, undefined, brandString<SessionId>('ordinary'))
     const child = kind === 'ordinary' ? ordinary : kind === 'nested'
-      ? ctx.sessions.fork(ordinary, undefined, SessionId('nested'))
-      : ctx.sessions.create(SessionId(kind), {
+      ? ctx.sessions.fork(ordinary, undefined, brandString<SessionId>('nested'))
+      : ctx.sessions.create(brandString<SessionId>(kind), {
         seed: source.snapshotEvents(), inheritedEventCount: source.seq,
         meta: { parentSession: source.id, isSeeded: true, ...(kind === 'subagent' ? { origin: 'subagent' } : {}) },
       })
@@ -65,9 +66,9 @@ describe.each(['none', 'zstd'] as const)('fork delivery persistence (%s)', (comp
 
   it.each(['foreign-own', 'invalid-through', 'inherited-through'] as const)('refuses %s delivery without modifying the file', async (damage) => {
     const { ctx, persist } = await fixture(compression)
-    const source = ctx.sessions.create(SessionId('source'))
+    const source = ctx.sessions.create(brandString<SessionId>('source'))
     delivered(source)
-    const invalidTarget = damage === 'inherited-through' ? source : ctx.sessions.fork(source, undefined, SessionId('child'))
+    const invalidTarget = damage === 'inherited-through' ? source : ctx.sessions.fork(source, undefined, brandString<SessionId>('child'))
     invalidTarget.append('session-log-deepseek/delivery-accepted', {
       sessionId: damage === 'foreign-own' ? source.id : invalidTarget.id,
       sessionFormatVersion: 4,

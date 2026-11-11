@@ -14,7 +14,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { resolveKitModule } from './locate.ts'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { OfficeKitError } from './errors.ts'
-import { OfficeKitGeneration, type OfficeSourceKey } from './identity.ts'
+import type { OfficeKitGeneration, OfficeSourceKey } from './identity.ts'
 import type {
   OfficeConversionRequest, OfficeFileResult, OfficeImagesRequest, OfficeImagesResult, OfficeKitRequest, OfficeKitResult,
   OfficeKitPriority, OfficeOutputTarget, OfficeRecalculationRequest, RenderedDocumentBytes,
@@ -127,7 +127,7 @@ interface Slot {
 export class OfficeKit extends TypertRemoteService {
   static Config = Config
   /** Changes whenever engine, font, or conversion configuration is replaced. */
-  readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())
+  readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())
   /** Absolute Host directory holding converted and recalculated files; consumers check that their execution world reads it. */
   readonly outputDirectory: string
   private readonly remoteLifetime = new AbortController()

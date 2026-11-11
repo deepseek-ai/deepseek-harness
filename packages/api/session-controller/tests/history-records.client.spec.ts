@@ -1,7 +1,8 @@
 /** V2 history records become one event-shaped Client value per wire record. */
 
 import { describe, expect, it } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { SessionHistoryRecord } from '../src/types.ts'
 import {
   historyEntries,
@@ -72,7 +73,7 @@ describe('Session history record projection', () => {
             type: 'tool-call-chunks',
             time0: 200,
             index: 1,
-            id: ToolCallId('call-1'),
+            id: brandString<ToolCallId>('call-1'),
             dt: [2, 3],
             args: ['', '{"x":', '1}'],
           }],

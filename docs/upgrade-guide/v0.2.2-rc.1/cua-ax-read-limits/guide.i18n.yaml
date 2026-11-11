@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/cua-ax-read-limits/guide.md
+/:
+  en: a8ca814cf60ea12e
+  zh: f068d1ee13e80594
+/macos-ax-tree-read-limits:
+  en: a7eed0c191ff2b32
+  zh: 15291798ba91329b
+/macos-ax-tree-read-limits/change:
+  en: e4281d86095b950f
+  zh: 684ddf2957443ace
+/macos-ax-tree-read-limits/migration:
+  en: 97a3885f5d1cb907
+  zh: 19313c56eff68835

@@ -15,11 +15,12 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { WorktreeReclamation } from './archive.ts'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { generatedWorktreeName } from './name.ts'
-import { runCommand } from './process.ts'
+import { runCommand, scanCommand } from './process.ts'
 import type { ProcessConfig } from './process.ts'
 import { CREATED_RECORD, worktreeProjection } from './projection.ts'
 import type { WorktreeProjectionState } from './projection.ts'
 import { checkoutIdentity, registration, removeCheckout } from './removal.ts'
+import type { GitScan } from './removal.ts'
 import type {
   CreatedWorktree, CreateWorktreePhase, CreateWorktreeRequest, RestoredWorktree, RestoreWorktreeRequest, WorktreeCleanup,
 } from './types.ts'
@@ -47,7 +48,11 @@ export interface Config {
   timeoutMs?: number
   /** Subprocess termination grace in milliseconds. */
   graceMs?: number
-  /** Maximum captured bytes per subprocess output stream. */
+  /**
+   * Maximum captured bytes per subprocess output stream; archive inspection
+   * streams `git status`, and inspection and restoration stream the worktree
+   * listing, so it bounds only their stderr.
+   */
   maxOutputBytes?: number
 }
 
@@ -220,8 +225,9 @@ export class WorktreeService extends Service {
   ): Promise<boolean> {
     const control = AbortSignal.any([this.lifetime.signal, signal])
     control.throwIfAborted()
-    const run = this.gitRunner(this.ctx.sandboxPolicy.resolve({ session }), control)
-    const operation = removeCheckout(this.ctx, this.config.directory, request, run, control, admit)
+    const policy = this.ctx.sandboxPolicy.resolve({ session })
+    const git = { read: this.gitRunner(policy, control), scan: this.gitScanner(policy, control) }
+    const operation = removeCheckout(this.ctx, this.config.directory, request, git, control, admit)
     this.pending.add(operation)
     try { return await operation } finally { this.pending.delete(operation) }
   }
@@ -296,7 +302,8 @@ export class WorktreeService extends Service {
     if (identity === null) throw new Error('worktree restoration must use a canonical directory inside the configured pool of the source checkout root')
     await run(repositoryRoot, ['check-ref-format', `refs/heads/${branch}`])
     await run(repositoryRoot, ['rev-parse', '--verify', '--end-of-options', `${baseCommit}^{commit}`])
-    const fields = await registration(this.ctx, { path, branch, baseCommit, repositoryRoot }, identity.target, run, signal)
+    const scan = this.gitScanner(policy, signal)
+    const fields = await registration(this.ctx, { path, branch, baseCommit, repositoryRoot }, identity.target, scan, signal)
     if (fields !== undefined) {
       if (fields.some(field => field === 'locked' || field.startsWith('locked '))) throw new Error(`worktree is locked: ${path}`)
       if (await this.ctx.fs.lstat(path, undefined, signal) !== undefined) throw new Error(`worktree path already exists: ${path}`)
@@ -320,13 +327,21 @@ export class WorktreeService extends Service {
     }
   }
 
-  /** Confine Git commands to the caller's sandbox policy, with hooks and the filesystem monitor disabled. */
+  /** Confine Git commands to the caller's sandbox policy, collecting bounded stdout. */
   private gitRunner(policy: SandboxExecutionPolicy, signal: AbortSignal): GitRun {
     return (directory, args, allowedExitCodes, env) => runCommand(
-      this.ctx, this.config, policy, directory,
-      [this.config.gitCommand, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args],
-      signal, allowedExitCodes, env,
+      this.ctx, this.config, policy, directory, this.gitArgv(args), signal, allowedExitCodes, env,
     )
+  }
+
+  /** Confine Git commands to the caller's sandbox policy, streaming stdout instead of collecting it. */
+  private gitScanner(policy: SandboxExecutionPolicy, signal: AbortSignal): GitScan {
+    return (directory, args, onField) => scanCommand(this.ctx, this.config, policy, directory, this.gitArgv(args), signal, onField)
+  }
+
+  /** The configured Git executable with hooks and the filesystem monitor disabled, followed by `args`. */
+  private gitArgv(args: string[]): [string, ...string[]] {
+    return [this.config.gitCommand, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args]
   }
 
   /** Allocate the checkout directory exclusively inside the pool, creating a self-ignoring pool when it is new. */

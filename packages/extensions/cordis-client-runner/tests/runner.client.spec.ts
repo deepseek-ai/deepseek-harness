@@ -12,6 +12,7 @@
 /* oxlint-disable typescript/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
@@ -23,13 +24,13 @@ import { DYNAMIC_CLIENT_REDIRECTS } from '../src/client/evaluator.ts'
 import { DynamicCordisPackageRunner } from '../src/client/runtime.ts'
 import type { DynamicCordisClientHalf, DynamicCordisRenderFailure } from '../src/client/runtime.ts'
 
-const PLUGIN = 'dyn-1' as CordisDynamicPluginId
-const PACKAGE = 'pkg-1' as CordisDynamicPackageId
-const RUN = 'run-1' as CordisDynamicPluginRunId
+const PLUGIN = brandString<CordisDynamicPluginId>('dyn-1')
+const PACKAGE = brandString<CordisDynamicPackageId>('pkg-1')
+const RUN = brandString<CordisDynamicPluginRunId>('run-1')
 const AGENT = 's-1' as SessionId
 
 function runId(value: number): CordisDynamicPluginRunId {
-  return `run-${value}` as CordisDynamicPluginRunId
+  return brandString<CordisDynamicPluginRunId>(`run-${value}`)
 }
 
 /** One browser half as the host hands it over. */

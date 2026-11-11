@@ -3,8 +3,7 @@
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import type { MessageId, ToolCallId } from './brand.ts'
-import type { ContentBlock } from './types.ts'
+import type { ContentBlock, MessageId, ToolCallId } from './types.ts'
 
 /** Provider/model identity and adapter-private replay data for an assistant message. */
 export interface AssistantProviderMetadata {

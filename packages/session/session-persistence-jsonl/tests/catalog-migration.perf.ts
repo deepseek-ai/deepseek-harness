@@ -1,7 +1,7 @@
 /** Threshold-free, built-runtime measurements of historical catalog reads as the corpus grows. */
 
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { spawnSync } from 'node:child_process'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const CHILDREN = 4
 const CHILD_EVENTS = 1_000
@@ -34,7 +35,7 @@ async function measure(unrelated: number) {
       await writeFile(join(directory, 'session.v3.jsonl'), [header, ...events].map(row => JSON.stringify(row) + '\n').join(''))
     }
     await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
-    const parent = SessionId('parent')
+    const parent = brandString<SessionId>('parent')
     const timed = async (operation: () => Promise<unknown>): Promise<number> => {
       const start = performance.now()
       await operation()

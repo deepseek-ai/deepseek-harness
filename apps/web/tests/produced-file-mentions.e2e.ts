@@ -4,8 +4,9 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -26,7 +27,7 @@ const WRITES = ['site/report.html', 'a/style.css', 'b/style.css', 'report.txt']
 
 /** Build a settled write turn whose closing prose mentions files in inline code. */
 function mentionFixture(): string {
-  const session = Session.create(SessionId('produced-file-mentions-source'))
+  const session = Session.create(brandString<SessionId>('produced-file-mentions-source'))
   const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
@@ -41,7 +42,7 @@ function mentionFixture(): string {
   session.append('step/start', { turn: 1, step: 1 })
   const calls = WRITES.map((path, index) => ({
     path,
-    callId: ToolCallId(`file-mention-${String(index)}`),
+    callId: brandString<ToolCallId>(`file-mention-${String(index)}`),
     args: JSON.stringify({ file_path: path, content: `content of ${path}\n` }),
   }))
   session.append('assistant/message', {
@@ -79,7 +80,7 @@ function mentionFixture(): string {
     }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
   }
   session.append('working-directory/change', { cwd: '{{cwd}}' })
-  session.append('deliverables/presented', { turn: 1, callId: ToolCallId('present-child'), files: [{ path: '{{cwd}}/child/report.txt' }] })
+  session.append('deliverables/presented', { turn: 1, callId: brandString<ToolCallId>('present-child'), files: [{ path: '{{cwd}}/child/report.txt' }] })
   session.append('step/end', { turn: 1, step: 1 })
   session.append('step/start', { turn: 1, step: 2 })
   session.append('assistant/message', {

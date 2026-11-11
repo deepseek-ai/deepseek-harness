@@ -1,10 +1,11 @@
 import { Context } from '@deepseek-ai/cordis'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { PtcCalls } from '../src/ptc-calls.ts'
 import { CodeRunFailedError } from '../src/errors.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup() {
   const ctx = new Context()
@@ -12,7 +13,7 @@ async function setup() {
   await ctx.plugin(Sessions)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode: 'workspace-write' })
-  const session = ctx.sessions.create(SessionId('ptc-calls'))
+  const session = ctx.sessions.create(brandString<SessionId>('ptc-calls'))
   const calls = new PtcCalls(ctx)
   const mode = () => ctx.sandboxPolicy.resolve({ session }).mode
   const signal = new AbortController().signal
@@ -27,7 +28,7 @@ it('commits policy immediately, cancels existing calls, and waits for their comp
   const next = vi.fn(async () => mode())
   try {
     session.append('turn/start', { turn: 1 })
-    setSandboxMode(ctx.sessions.create(SessionId('another')), 'read-only')
+    setSandboxMode(ctx.sessions.create(brandString<SessionId>('another')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(oldSignal?.aborted).toBe(false)
     setSandboxMode(session, 'read-only')
@@ -86,6 +87,9 @@ it('unloads the executor only after calls stop and refuses late admission', asyn
     await rejected
     await disposed
     await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toThrow('PTC tool executor disposed')
+    await expect(calls.run(session.id, signal, mode, async () => 'unexpected')).rejects.toMatchObject({
+      name: 'CodeRunFailedError', code: 'CODE_RUN_UNAVAILABLE',
+    })
   } finally { cleanup.resolve(undefined); await first; await disposed }
 })
 
@@ -106,7 +110,7 @@ it('resets from the host while a call is stuck and blocks admission until releas
     expect(calls.reset(session.id, release)).toBe(reset)
     await releaseStarted.promise
     expect(nextBody).not.toHaveBeenCalled()
-    expect(await calls.run(SessionId('unrelated'), signal, () => undefined, async () => 'independent')).toBe('independent')
+    expect(await calls.run(brandString<SessionId>('unrelated'), signal, () => undefined, async () => 'independent')).toBe('independent')
     released.resolve(undefined)
     await released.promise
     expect(nextBody).not.toHaveBeenCalled()
@@ -158,7 +162,7 @@ it('waits for an idle reset during executor disposal and refuses further resets'
   const started = Promise.withResolvers<undefined>()
   const reset = calls.reset(session.id, async () => { started.resolve(undefined); await release.promise })
   await started.promise
-  const active = calls.run(SessionId('disposal-observer'), new AbortController().signal, () => undefined, async (signal) => {
+  const active = calls.run(brandString<SessionId>('disposal-observer'), new AbortController().signal, () => undefined, async (signal) => {
     signal.addEventListener('abort', () => { disposedSignal.resolve(undefined) }, { once: true })
     await disposedSignal.promise
   })

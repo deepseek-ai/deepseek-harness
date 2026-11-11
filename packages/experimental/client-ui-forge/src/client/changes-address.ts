@@ -39,11 +39,13 @@ export interface ChangesTarget {
 export interface ChangesParams {
   /** File to scroll to, by its path in the diff. */
   readonly path?: string
+  /** Identity of the filter lens to choose. */
+  readonly lens?: string
 }
 
 declare module '@deepseek-ai/dsh-client-ui-sidebar-right/client' {
   interface SidebarRightResourceParamsMap {
-    /** The file a changes tab scrolls to. */
+    /** The file a changes tab scrolls to and the lens it chooses. */
     'forge-changes': ChangesParams
   }
 }

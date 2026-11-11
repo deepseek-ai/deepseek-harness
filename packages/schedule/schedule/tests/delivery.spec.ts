@@ -1,12 +1,14 @@
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { expect, it, vi } from 'vitest'
-import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createAfterScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { ScheduleRuntime } from '../src/runtime.ts'
 import type { ScheduleTask } from '../src/storage.ts'
 import { boundTask } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it('acknowledges the real synchronous inbox splice after flush without claiming model execution', async () => {
   vi.useFakeTimers()
@@ -15,14 +17,14 @@ it('acknowledges the real synchronous inbox splice after flush without claiming 
   try {
     await mountAgentLoopTestDependencies(ctx)
     const loop = await mountAgentLoopTestHarness(ctx)
-    const agent = await loop.create(SessionId('delivery-owner'))
+    const agent = await loop.create(brandString<SessionId>('delivery-owner'))
     // Maintenance holds model execution while the production followup still records inbox input.
     const releaseMaintenance = Promise.withResolvers<undefined>()
     const maintenance = agent.runMaintenance(() => releaseMaintenance.promise)
     try {
       const resolve = vi.fn(async (_sessionId: SessionId) => ({ agent }))
       ctx.provide('sessionController', { resolveAgent: resolve } as never)
-      const record = createAfterScheduleRecord(ScheduleId('receipt'), 'Inbox only', 1, Date.now() - 2000, 'Inbox only')
+      const record = createAfterScheduleRecord(brandString<ScheduleId>('receipt'), 'Inbox only', 1, Date.now() - 2000, 'Inbox only')
       const seeded = boundTask(agent.session.id, record)
       const tasks: ScheduleTask[] = [seeded]
       const flushStarted = Promise.withResolvers<undefined>()

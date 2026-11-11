@@ -29,6 +29,8 @@ Mount `dsh-session` wherever a session must exist. It creates and holds event-so
 
 ### Create and inspect sessions
 
+`SessionId` is a type exported by the package root and `/types`. Apply it to an admitted string with `brandString<SessionId>(value)` from `dsh-brand`; branding does not validate or generate an id.
+
 `ctx.sessions.create()` builds a live session bound to the calling fiber; `get(id)` and `list()` find sessions, and `fork()` creates an independent session from a stable prefix of a live one. It copies history, `cwd`, `isSeeded`, and the inherited event count without recording a source relationship. `parentSession` records a subagent’s direct creator; historical ordinary forks may retain their source there, so classification uses `origin`.
 
 Independent `Session.create()` and `Session.fromRestore()` instances accept events and plugin records without sending `session/event`. A `SessionStore` takes ownership through `prepare()` or `enter()`; writes then require store membership and a completed synchronous `session/created` announcement. Creation listeners are read-only and see all existing history; entering an independent instance does not replay that history as `session/event`. Failed announcement or removal leaves writes disabled. Removal emits `session/disposed` only if `session/created` began, including a failed announcement; an entered but never announced instance emits neither notification.
@@ -82,6 +84,8 @@ The [experimental persistence catalog](../../../docs/experimental-persistence-ca
 `ctx.sessions.fork(source, boundary?, childSessionId?)` copies an exact inclusive event prefix (default: the last event) from a live source. `buildForkSeed` in `dsh-session/fork` places an inherited marker after the copied events, adds missing error tool results only for the open step, and closes that step and turn with a `forked` reason. Closed steps and turns remain unchanged, including historical missing results. The marker and closers belong to the child; `inheritedEventCount` counts only the copied prefix.
 
 The logical `SessionHeader.isSeeded` field reports whether fork history exists without exposing a positional integer. `Session.inheritedEventCount` retains the exact checked `SessionLogOffset`; `ownEvents()` returns events at and after that cut, and `isOwnSeq(seq)` accepts only an existing child-owned position. A low-level seeded constructor must supply an explicit `seed` and `inheritedEventCount` because the constructor seed can contain child-owned setup events after the inherited prefix.
+
+`session.append(type, data, ...opts)` appends one event and returns that event. `session.append(inputs)` accepts a readonly array of positional `[type, data, ...opts]` tuples (`SessionEventInput`) and returns the committed events in input order; an empty array appends nothing. Array admission validates every candidate and synchronous dispatch before changing the log or message surface, so observers read the complete committed group. Persistence listeners retain their own durability rules; array admission alone does not guarantee crash-atomic storage.
 
 ### Flush durable state
 

@@ -161,7 +161,7 @@ The [local provider](../../packages/sandbox/sandbox-local/README.md) owns operat
 
 ## Provider and fail-closed errors
 
-`await ctx.sandbox.confine(argv, policy, signal)` resolves policy paths and returns a `ConfinedArgv` from the execution world, or rejects with `SandboxUnavailableError` and code `SANDBOX_UNAVAILABLE` when no usable backend exists. The optional signal cancels resolution before launch. Consumers may also classify a failure while spawning or observing the returned argv; that attribution belongs to the consumer contract. Silent unconfined passthrough is never legal for a confined policy.
+`await ctx.sandbox.confine(argv, policy, signal)` resolves policy paths and returns a `ConfinedArgv` from the execution world, or rejects with `SandboxUnavailableError` and code `SANDBOX_UNAVAILABLE` when no usable backend exists, or with `SandboxPreparationError` (`SANDBOX_PREPARATION_FAILED`, `SANDBOX_INVALID_TEMP_ROOT`) when the provider cannot prepare host state for the mode. The optional signal cancels resolution before launch. Consumers may also classify a failure while spawning or observing the returned argv; that attribution belongs to the consumer contract. Silent unconfined passthrough is never legal for a confined policy.
 
 Provider selection, probing, caching, and backend-specific enforcement reports belong to the [local provider](../../packages/sandbox/sandbox-local/README.md).
 
@@ -213,6 +213,8 @@ The sandbox-policy service (`ctx.sandboxPolicy`). Owns the deployment default mo
  * snapshotted together; existing operations and processes keep their policy.
  * @param request - optional session and approved mode override.
  * @returns the fully resolved per-call mode and absolute workspace root.
+ * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's recorded cwd is
+ *   relative or contains a NUL byte.
  */
 resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy
 

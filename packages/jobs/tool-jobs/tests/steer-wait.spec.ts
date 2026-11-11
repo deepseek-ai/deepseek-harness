@@ -1,8 +1,10 @@
 import { setImmediate } from 'node:timers/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import LlmRuntime, { createUserMessage, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -29,7 +31,7 @@ function textChunks(value: string): StreamChunk[] {
 
 /** One complete single-tool-call response, ending the model turn. */
 function toolCallChunks(callId: string, name: string, args: object): StreamChunk[] {
-  const id = ToolCallId(callId)
+  const id = brandString<ToolCallId>(callId)
   const argumentsJson = JSON.stringify(args)
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
@@ -55,7 +57,7 @@ async function setup(build?: (id: JobId) => ScriptedCall[]) {
   // script is appended once the registry has issued it.
   const adapter = new ScriptedAdapter([])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const handle = await ctx.agents.create({ sessionId: SessionId('steer-wait'), agentOptions: { provider: 'mock', model: 'mock' } })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('steer-wait'), agentOptions: { provider: 'mock', model: 'mock' } })
   const agent = handle.agent
   const done = Promise.withResolvers<JobOutcome>()
   const cancel = vi.fn(() => { done.resolve({ status: 'killed' }) })
@@ -155,7 +157,7 @@ describe('next-step input during a background result wait', () => {
     const h = await setup()
     try {
       h.agent.inbox.append('next-step', message('ALREADY_PENDING'))
-      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: ToolCallId('pending'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
+      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: brandString<ToolCallId>('pending'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
       expect(result.isError).not.toBe(true)
       expect(JSON.stringify(result.content)).toContain('[status: running, user steered]')
       expect(h.agent.inbox.nextStep).toHaveLength(1)
@@ -172,7 +174,7 @@ describe('next-step input during a background result wait', () => {
         h.agent.inbox.append('next-step', message('REGISTRATION_RACE'))
         return originalWait(...args)
       })
-      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: ToolCallId('race'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
+      const result = await executeToolFixture(h.ctx, { name: 'job_output', callId: brandString<ToolCallId>('race'), arguments: { job_id: h.id, wait: true }, agent: h.agent, signal: new AbortController().signal })
       expect(result.isError).not.toBe(true)
       expect(JSON.stringify(result.content)).toContain('[status: running, user steered]')
       expect(h.cancel).not.toHaveBeenCalled()

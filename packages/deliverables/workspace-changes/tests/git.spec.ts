@@ -6,8 +6,9 @@ import { Context } from '@deepseek-ai/cordis'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { GitRunner, blobText, diffTrees, ignoredPaths, locateGitWorkspace, snapshotTree, treeBlob } from '../src/git.ts'
 import { TurnRecorder } from '../src/recorder.ts'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import { git, scratchDir, startTurn, toolCall } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** An object directory factory under a scratch root. */
 const objectsIn = (root: string) => () => Promise.resolve(join(root, 'objects'))
@@ -170,7 +171,7 @@ describe('TurnRecorder', () => {
   it('stays silent when disposed while git work is pending, and warns on failures otherwise', async () => {
     const cwd = await scratchDir('dsh-recorder-', cleanups)
     const { ctx, git: runnerGit } = await runner()
-    const session = ctx.sessions.create(SessionId('recorder'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('recorder'), { meta: { cwd } })
     const warnings: string[] = []
     let release!: (runner: GitRunner | null) => void
     const gate = new Promise<GitRunner | null>((resolve) => { release = resolve })
@@ -202,13 +203,13 @@ describe('TurnRecorder', () => {
       git: Promise.resolve(runnerGit), tempRoot, maxFiles: 10, maxFileBytes: 1024, diffTimeoutMs: 100,
       warn: (m: string) => { throw new Error(m) },
     }
-    const plain = new TurnRecorder(ctx.sessions.create(SessionId('plain'), { meta: { cwd: tempRoot } }), tempRoot, env)
+    const plain = new TurnRecorder(ctx.sessions.create(brandString<SessionId>('plain'), { meta: { cwd: tempRoot } }), tempRoot, env)
     plain.start(1)
     await plain.settled()
     await plain.dispose()
     const cwd = await scratchDir('dsh-recorder-repo-', cleanups)
     git(cwd, 'init', '-q', '-b', 'main')
-    const repo = new TurnRecorder(ctx.sessions.create(SessionId('repo'), { meta: { cwd } }), cwd, env)
+    const repo = new TurnRecorder(ctx.sessions.create(brandString<SessionId>('repo'), { meta: { cwd } }), cwd, env)
     repo.start(1)
     await repo.settled()
     const [objects, ...others] = (await readdir(tempRoot)).filter(entry => entry.startsWith('dsh-workspace-changes-'))
@@ -226,7 +227,7 @@ describe('TurnRecorder', () => {
     const tempRoot = join(cwd, 'tmp')
     await mkdir(tempRoot)
     const { ctx, git: runnerGit } = await runner()
-    const session = ctx.sessions.create(SessionId('tmp-in-tree'), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>('tmp-in-tree'), { meta: { cwd } })
     const env = {
       git: Promise.resolve(runnerGit), tempRoot, maxFiles: 10, maxFileBytes: 1024, diffTimeoutMs: 100,
       warn: (m: string) => { throw new Error(m) },

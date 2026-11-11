@@ -1,12 +1,13 @@
 /** A failed creation of a reserved Session keeps its task due, and the next drive request creates that same Session. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { ScheduleId } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { createRRuleScheduleRecord } from '../src/domain.ts'
 import { ScheduleRuntime } from '../src/runtime.ts'
 import { agentFor, harness, seededTask } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const active: Awaited<ReturnType<typeof harness>>[] = []
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-09-16T00:00:00Z') })
@@ -18,9 +19,9 @@ afterEach(async () => {
 it('retries a reserved new Session identity after creation fails', async () => {
   const test = await harness()
   active.push(test)
-  const reserved = SessionId('reserved-retry')
+  const reserved = brandString<SessionId>('reserved-retry')
   const task = seededTask(
-    createRRuleScheduleRecord(ScheduleId('retry'), 'Retry', 'Deliver', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now()),
+    createRRuleScheduleRecord(brandString<ScheduleId>('retry'), 'Retry', 'Deliver', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now()),
     { kind: 'new_once', sessionId: reserved, create: {} },
   )
   const agents = new Map<string, Agent>()

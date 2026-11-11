@@ -6,15 +6,18 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus, Inbox } from '@deepseek-ai/dsh-agent'
-import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+import GoalService from '@deepseek-ai/dsh-goal'
 import type { GoalRef } from '@deepseek-ai/dsh-goal'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
   SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -60,8 +63,8 @@ await isolatedInboxCtx.plugin(AgentRegistry)
 function stubAgent(rawId: string, supplied?: Session, suppliedCtx?: Context): StubAgent {
   const agentCtx = suppliedCtx ?? isolatedInboxCtx
   const session = supplied ?? (suppliedCtx === undefined
-    ? agentCtx.sessions.create(SessionId(rawId))
-    : suppliedCtx.sessions.create(SessionId(rawId)))
+    ? agentCtx.sessions.create(brandString<SessionId>(rawId))
+    : suppliedCtx.sessions.create(brandString<SessionId>(rawId)))
   if (suppliedCtx === undefined) {
     if (agentCtx.sessions.get(session.id) !== session) {
       agentCtx.sessions.enter(session)
@@ -140,7 +143,7 @@ async function execute(
 ): Promise<ToolExecutionResult> {
   const run = () => executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${Math.random()}`),
+    callId: brandString<ToolCallId>(`call-${Math.random()}`),
     name,
     arguments: args,
     ...agent === undefined ? {} : { agent },
@@ -173,7 +176,7 @@ describe('goal tool registration and presentation', () => {
       .toEqual(['create_goal', 'get_goal', 'update_goal'])
     const pipeline = new ToolExecutionPipeline(ctx)
     for (const name of ['create_goal', 'get_goal', 'update_goal']) {
-      expect(pipeline.executionMode({ signal: testToolSignal, callId: ToolCallId(name), name, arguments: {} }))
+      expect(pipeline.executionMode({ signal: testToolSignal, callId: brandString<ToolCallId>(name), name, arguments: {} }))
         .toEqual({ kind: 'exclusive' })
     }
     const section = (await ctx.systemPrompt.assemble()).sections.find(item => item.name === 'tool:goal')
@@ -284,7 +287,7 @@ describe('goal tool execution authority', () => {
     openTurn(root, { kind: 'user' })
     const driverless = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('call-driverless'),
+      callId: brandString<ToolCallId>('call-driverless'),
       name: 'get_goal',
       arguments: {},
       agent: root.agent,
@@ -297,7 +300,7 @@ describe('goal tool execution authority', () => {
     expect(nonHuman.error?.info?.code).toBe('GOAL_TOOL_AUTHORITY_REQUIRED')
     closeTurn(root, 2)
 
-    const child = stubAgent('goal-tool-child', ctx.sessions.create(SessionId('goal-tool-child'), { meta: { origin: 'subagent' } }), ctx)
+    const child = stubAgent('goal-tool-child', ctx.sessions.create(brandString<SessionId>('goal-tool-child'), { meta: { origin: 'subagent' } }), ctx)
     ctx.agents.enter(child.agent)
     await ctx.agents.announce(child.agent, 'startup')
     openTurn(child, { kind: 'user' })
@@ -324,7 +327,7 @@ describe('goal tool execution authority', () => {
     const originalTurn = openTurn(root, { kind: 'user' })
     const created = ctx.goals.create(root.agent, { objective: 'resume the fork' })
     closeTurn(root, originalTurn)
-    const forkId = SessionId('goal-tool-resumed-fork')
+    const forkId = brandString<SessionId>('goal-tool-resumed-fork')
     const forkSession = Session.create(forkId, root.session.snapshotEvents(), {
       version: SESSION_FORMAT_VERSION,
       id: forkId,
@@ -435,7 +438,7 @@ describe('goal tool state transitions', () => {
     }, root.agent)
     expect(rejected.error?.info?.code).toBe('GOAL_TOOL_RESUME_PAUSED')
     const resumed = ctx.goals.resume(root.agent, {
-      id: GoalId(goal['id'] as string), revision: goal['revision'] as number,
+      id: brandString<GoalId>(goal['id'] as string), revision: goal['revision'] as number,
     })
     expect(resumed).toMatchObject({ phase: 'active', revision: 4 })
   })
@@ -689,7 +692,7 @@ describe('goal tool state transitions', () => {
     let turn = openTurn(root, { kind: 'user' })
     const created = ctx.goals.create(root.agent, { objective: 'blocked eventually' })
     closeTurn(root, turn)
-    const ref: GoalRef = { id: GoalId(created.id), revision: created.revision }
+    const ref: GoalRef = { id: brandString<GoalId>(created.id), revision: created.revision }
 
     for (let round = 1; round <= 2; round += 1) {
       turn = openTurn(root, { kind: 'goal', goalId: ref.id, revision: ref.revision, round })
