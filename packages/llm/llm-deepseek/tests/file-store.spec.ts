@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment/types'
 import type { ImageAttachmentRef, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
-import { DeepSeekFileStore, MAX_IMAGE_BYTES } from '../src/file-store.ts'
+import { TimeoutReason } from '@deepseek-ai/dsh-timeout'
+import { DeepSeekFileStore, FILES_API_TIMEOUT, MAX_IMAGE_BYTES } from '../src/file-store.ts'
 import type { DeepSeekFileId } from '../src/file-id.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from '../src/upload-index.ts'
 
@@ -68,6 +69,84 @@ function uploadFetch(now: () => number = () => NOW) {
 }
 
 describe('DeepSeekFileStore', () => {
+  it('skips 1, 2, 4 and 8 upload-bearing requests between timeouts, and resets after an upload', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-backoff-'))
+    roots.push(dir)
+    const fetch = vi.fn(uploadFetch().fetchImpl)
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    const cached = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'c'.repeat(64)}`) }
+    await store.ensureUploaded(cached, CONNECTION, POLICY)
+    async function expire(image: RequestImageAttachment) {
+      const started = Promise.withResolvers<undefined>()
+      fetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        started.resolve(undefined)
+        init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
+      }))
+      const controller = new AbortController()
+      const pending = store.ensureUploaded(image, CONNECTION, POLICY, controller.signal)
+      await started.promise
+      const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+      controller.abort(reason)
+      await expect(pending).rejects.toBe(reason)
+    }
+
+    for (const count of [1, 2, 4, 8]) {
+      await expire(VERSION)
+      const calls = fetch.mock.calls.length
+      for (let i = 0; i < count; i++) {
+        await expect(store.ensureUploaded(cached, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: false })
+        // The two cache misses are images from one model request.
+        const request = {}
+        const missing = [VERSION, { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'e'.repeat(64)}`) }]
+        await Promise.all(missing.map(image => expect(store.ensureUploaded(image, CONNECTION, POLICY, undefined, request))
+          .rejects.toMatchObject({ code: 'TIMEOUT' })))
+      }
+      expect(fetch).toHaveBeenCalledTimes(calls)
+      await expect(store.ensureUploaded(VERSION, { ...CONNECTION, headers: { 'x-api-key': 'other' } }, POLICY)).resolves.toBeDefined()
+      await expect(store.ensureUploaded(VERSION, { ...CONNECTION, baseURL: 'https://other.example' }, POLICY)).resolves.toBeDefined()
+    }
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    const fresh = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'d'.repeat(64)}`) }
+    await expire(fresh)
+    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+  })
+
+  it('counts overlapping timeouts once and keeps an abandoned response from clearing backoff', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-overlap-'))
+    roots.push(dir)
+    const now = NOW
+    const remote = uploadFetch(() => now)
+    const fetch = vi.fn(remote.fetchImpl)
+    const store = new DeepSeekFileStore({ fetch, now: () => now, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    const stalled = async (variantId: string) => {
+      const started = Promise.withResolvers<undefined>()
+      const response = Promise.withResolvers<Response>()
+      fetch.mockImplementationOnce(() => { started.resolve(undefined); return response.promise })
+      const image = { ...VERSION, variantId: brandString<ImageVariantId>(variantId) }
+      const controller = new AbortController()
+      const pending = store.ensureUploaded(image, CONNECTION, POLICY, controller.signal)
+      await started.promise
+      return { image, response, pending, controller }
+    }
+    const first = await stalled('first')
+    const second = await stalled('second')
+    for (const upload of [first, second]) {
+      const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+      upload.controller.abort(reason)
+      await expect(upload.pending).rejects.toBe(reason)
+      upload.response.resolve(await remote.fetchImpl(CONNECTION.baseURL, { method: 'POST' }))
+    }
+    // A settled index write makes the late responses observable before checking the backoff.
+    await vi.waitFor(async () => {
+      const scope = deepSeekFileScope(CONNECTION.baseURL + '/v1', JSON.stringify(Object.entries(CONNECTION.headers)))
+      const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+      expect(await index.get(scope, second.image.variantId, now, 0)).toBeDefined()
+    })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+  })
+
   it('isolates credential values and header kinds while reusing reordered headers', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-credentials-'))
     roots.push(dir)

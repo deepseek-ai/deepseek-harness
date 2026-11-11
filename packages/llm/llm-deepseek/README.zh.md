@@ -47,7 +47,7 @@ kind: "package-reference"
     maxRequestFilesBytes: 134217728
     maxInlineRequestImageBytes: 20971520
     maxImagesPerRequest: 600
-    filesApiTimeoutMs: 60000
+    filesApiTimeoutMs: 20000
 ```
 
 请求用 `provider: deepseek-official` 选择路由；模型 id 原样传到协议，因此新增 DeepSeek 模型无需重新注册。省略 `models` 时公布支持文本和图像的 `deepseek-flash`，以及仅支持文本的 `deepseek-v4-pro`，各自的上下文窗口均为官方模型列表声明的 1,048,576 token。显式列表会替换这些默认值，核心调用中未列出的模型 id 仍作为纯文本路由原样通过。在官方端点上，当 `models` 保持这些默认值时，API key 路由改为使用服务端的模型列表（[列表规则](../llm-deepseek-api-key/README.zh.md#use-this-package)）。GUI 选择要求模型具有目录条目；条目消失后，已保存的选择仍可提交请求。包括模型发现工具在内的客户端可通过 `ctx.llm.listModels('deepseek-official')` 读取这些建议性条目。支持图片的条目可把 `imagePixelBudget` 设置为正整数或 `low`，也可以设置 `imageMaxBytes`。当端点把 `messages` 中任意位置最新的 `system` 消息读作完整的有效系统提示词时，条目可以声明 `systemPromptUpdate: in-history`；适配器会在已解析模型与已准备调用上报告该模式，agent loop（智能体循环）随后把变化后的提示词追加到已缓存历史之后，而不是改写开头的 system 消息（[决策规则](../../core/agent-loop/README.zh.md#understand-the-implementation)）。默认的 `deepseek-flash` 条目声明该模式；其他模型需通过 `models` 显式声明，`in-history` 以外的任何值都会在加载时以 `llm-deepseek: catalog model "<id>" systemPromptUpdate must be "in-history" when present` 失败。
@@ -67,7 +67,7 @@ kind: "package-reference"
 | `imageOffloadByteQuantum` | `64 MiB` | Files 模式最旧前缀移除量子 |
 | `inlineImageOffloadByteQuantum` | `10 MiB` | 内联模式最旧前缀移除量子 |
 | `imageOffloadCountQuantum` | `20` | 数量超限移除量子 |
-| `filesApiTimeoutMs` | `60,000` | 每张图片 Files 解析截止时间 |
+| `filesApiTimeoutMs` | `20,000` | 每张图片 Files 解析截止时间 |
 | `fileExpiresAfterSeconds` | `604,800` | 请求的上传图片生存期与本地复用期限 |
 | `fileRefreshMarginSeconds` | `3,600` | 低于此剩余复用期时替换 id |
 | `fileQuotaCleanupBatch` | `100` | 配额重试前删除的、归 harness 所有的最旧文件数 |
@@ -98,6 +98,8 @@ Messages 和 Files 请求通过 `x-dsh-auth-token` 发送账号 token，不加 B
 支持图片的路由为每个持久引用选定请求目标，再把它解析为确定性请求版本。省略 `imagePixelBudget` 时按官方公布的视觉 token 网格定目标，即 14 px patch、3:1 降采样、单图最多 1024 token，因此正方形图片最多保留 1302×1302 像素，16:9 图片以 1708×961 发送、对应提供方 1708×966 的网格；正整数会用总像素预算取代网格，`low` 使用总计 512×512 像素。每张请求图片单边最多 4096 像素，这是提供方对包含 15 张及以上图片的请求的限制；`imageMaxBytes` 默认为 2 MiB。带 alpha 的图片使用 effort 0 的 WebP，不透明图片使用 JPEG，并采用 85/75/60 质量阶梯；全部候选都超过目标时保留最小输出。每张保留图片前都有文本，注明完整附件 id 与实际请求尺寸。当前文件系统可以映射附件提供方的宿主对象时，该文本还携带只读执行世界路径与可写副本使用的扩展名。纯文本与未列出路由接收稳定附件占位符，而持久历史继续保留图片引用。
 
 适配器通常通过 `/v1/files` 上传这些确切请求字节，并发送 file-id 引用。Files 请求与包含 file id 的模型请求均携带 `anthropic-beta: files-api-2025-04-14`。全部请求拒绝重定向，确保凭据仅发送到配置的源。文件解析失败或超时会按内联预算，用内联 base64 重建整份模型请求；一次请求绝不混用 file id 与内联图片。调用方取消会停止请求。
+
+上传超时后，下一次需要上传图片的模型请求直接使用内联图片。连续上传超时时，跳过的请求数依次为 1、2、4、8 次，之后继续翻倍，不受经过时间的影响。同一端点和凭据按请求计数，多张图片只算一次。纯文本请求和所有图片都命中文件 ID 缓存的请求不计数。实际上传成功后清零。
 
 缓存 id 按端点与凭据限定作用域，在到期前刷新，根据提供方的陈旧文件错误失效，并通过带等待方局部取消的 singleflight 解析。上传通过 `expires_after[anchor]=created_at` 与 `expires_after[seconds]` 请求过期。Messages 文件元数据不含远端过期时间，因此本地复用期限使用原始上传时间加 `fileExpiresAfterSeconds`；这不保证远端文件删除。配额失败会先删除一批配置数量的最旧 harness 文件，再重试一次上传。
 

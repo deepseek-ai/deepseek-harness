@@ -536,39 +536,39 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(JSON.stringify(body)).not.toContain('file-api-partial')
   })
 
-  it('falls back after the configured Files API deadline without aborting the model request', async () => {
+  it('sends successive image requests inline after one 20-second upload timeout', async () => {
     vi.useFakeTimers()
     const started = Promise.withResolvers<undefined>()
-    const files = fileStoreOf((_version, _connection, _policy, signal) => new Promise((_resolve, reject) => {
+    const upload = vi.fn<typeof fetch>((_url, init) => new Promise((_resolve, reject) => {
       started.resolve(undefined)
-      signal?.addEventListener('abort', () => {
-        const reason: unknown = signal.reason
-        reject(reason instanceof Error ? reason : new Error('files operation aborted'))
-      }, { once: true })
+      init!.signal!.addEventListener('abort', () => { reject(new Error('upload aborted')) }, { once: true })
     }))
+    const files = new Protocol.DeepSeekFileStore({ fetch: upload })
     const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(successfulSseResponse())
-    const adapter = adapterOf({
-      baseURL: 'https://deepseek.invalid',
-      filesApiTimeoutMs: 50,
-      models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
-    }, attachments, files.store)
-
-    const pending = drain(adapter.stream({
-      provider: 'deepseek-official',
-      model: 'deepseek-v4-flash-vision-exp',
-      messages: [createUserMessage({
-        content: [{ type: 'image', attachment: imageRef }],
-        source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-      })],
+    const messages = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => successfulSseResponse())
+    const adapter = adapterOf({ baseURL: 'https://deepseek.invalid' }, attachments, files)
+    const request = () => drain(adapter.stream({
+      provider: 'deepseek-official', model: 'deepseek-flash',
+      messages: [createUserMessage({ content: [{ type: 'image', attachment: imageRef }], source: { kind: 'user' } })],
     }))
-    await started.promise
-    await vi.advanceTimersByTimeAsync(50)
-    await pending
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
-    expect(fetchSpy.mock.calls[0]?.[1]?.body).toEqual(expect.stringContaining('base64'))
-    fetchSpy.mockRestore()
+    try {
+      const first = request()
+      await started.promise
+      await vi.advanceTimersByTimeAsync(19_999)
+      expect(messages).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      await first
+      await vi.advanceTimersByTimeAsync(3_600_000)
+      await drain(adapter.stream({ provider: 'deepseek-official', model: 'deepseek-flash', messages: [] }))
+      await request()
+      expect(upload).toHaveBeenCalledTimes(1)
+      expect(messages).toHaveBeenCalledTimes(3)
+      expect(messages.mock.calls[0]?.[1]?.body).toEqual(expect.stringContaining('base64'))
+      expect(messages.mock.calls[2]?.[1]?.body).toEqual(expect.stringContaining('base64'))
+    } finally {
+      messages.mockRestore()
+    }
   })
 
   it('does not turn caller cancellation during file resolution into base64 fallback', async () => {

@@ -1,5 +1,7 @@
 /** DeepSeek Files API upload reuse, invalidation, and quota recovery. @module dsh-llm-deepseek/file-store */
 
+import { addAbortListener } from 'node:events'
+import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import { DeepSeekFilesClient, isFilesQuotaError } from './files-api.ts'
@@ -11,6 +13,18 @@ import type { DeepSeekUploadRecord } from './upload-index.ts'
 /** Shared Files-store limit for each request image, including file-id references. */
 export const MAX_IMAGE_BYTES = 32 * 1024 * 1024
 const OWNED_FILE_PREFIX = 'dsh-'
+/** Per-image deadline whose expiry during upload starts Files backoff. */
+export const FILES_API_TIMEOUT = 'DEEPSEEK_FILES_API_TIMEOUT'
+
+interface UploadBackoff {
+  interval: bigint
+  remaining: bigint
+}
+
+/** Shared by all image resolutions of one model request, including stale-id recovery. */
+export interface FileUploadRequest {
+  skipped?: boolean
+}
 
 /** Resolved file-store policy from the plugin configuration. */
 export interface DeepSeekFilePolicy {
@@ -122,6 +136,7 @@ export class DeepSeekFileStore {
   private readonly index: DeepSeekUploadIndex
   private readonly now: () => number
   private readonly fetchImpl: typeof fetch | undefined
+  private readonly backoffs = new Map<DeepSeekUploadRecord['scope'], UploadBackoff>()
   private readonly inflight = new Map<string, SharedUpload>()
 
   /**
@@ -147,16 +162,41 @@ export class DeepSeekFileStore {
    * @param connection - endpoint and API-key snapshot.
    * @param policy - expiry and quota-recovery policy.
    * @param signal - cancellation of this wait; shared transport stops when no waiter remains.
-   * @returns a reusable file id and whether this call published a new upload.
+   * @param request - one model request's skip decision, shared across its images. Omit for an independent resolution.
+   * @returns a reusable file id and whether this call published a new upload. A skipped upload rejects with TIMEOUT.
    */
   ensureUploaded(
     version: RequestImageAttachment,
     connection: DeepSeekFileConnection,
     policy: DeepSeekFilePolicy,
     signal?: AbortSignal,
+    request: FileUploadRequest = {},
   ): Promise<DeepSeekFileReference> {
     signal?.throwIfAborted()
+    if (version.bytes > MAX_IMAGE_BYTES) {
+      return Promise.reject(new LlmError('DeepSeek image exceeds the 32 MiB per-image limit.', 'INVALID_REQUEST'))
+    }
     const scope = fileScope(connection)
+    if (request.skipped || this.backoffs.get(scope)?.remaining) {
+      return this.index.get(scope, version.variantId, this.now(), policy.refreshMarginSeconds * 1_000, signal).then((cached) => {
+        signal?.throwIfAborted()
+        if (cached) return { record: cached, uploaded: false }
+        const backoff = this.backoffs.get(scope)
+        if (!request.skipped && backoff?.remaining) {
+          backoff.remaining--
+          request.skipped = true
+        }
+        if (request.skipped) throw new LlmError('DeepSeek Files API upload skipped after a timeout.', 'TIMEOUT')
+        return this.sharedUpload(version, connection, policy, scope, signal)
+      })
+    }
+    return this.sharedUpload(version, connection, policy, scope, signal)
+  }
+
+  private sharedUpload(
+    version: RequestImageAttachment, connection: DeepSeekFileConnection, policy: DeepSeekFilePolicy,
+    scope: DeepSeekUploadRecord['scope'], signal?: AbortSignal,
+  ): Promise<DeepSeekFileReference> {
     const key = `${scope}\0${version.variantId}`
     let active = this.inflight.get(key)
     if (active?.controller.signal.aborted) {
@@ -171,7 +211,7 @@ export class DeepSeekFileStore {
       waiters: 0,
       promise: undefined as never,
     }
-    shared.promise = this.ensureUploadedOnce(version, connection, policy, controller.signal).then((value) => {
+    shared.promise = this.ensureUploadedOnce(version, connection, policy, scope, controller.signal).then((value) => {
       shared.settled = true
       return value
     }, (error: unknown) => {
@@ -189,12 +229,9 @@ export class DeepSeekFileStore {
     version: RequestImageAttachment,
     connection: DeepSeekFileConnection,
     policy: DeepSeekFilePolicy,
+    scope: DeepSeekUploadRecord['scope'],
     signal: AbortSignal,
   ): Promise<DeepSeekFileReference> {
-    if (version.bytes > MAX_IMAGE_BYTES) {
-      throw new LlmError('DeepSeek image exceeds the 32 MiB per-image limit.', 'INVALID_REQUEST')
-    }
-    const scope = fileScope(connection)
     const now = this.now()
     const marginMs = policy.refreshMarginSeconds * 1_000
     const cached = await this.index.get(scope, version.variantId, now, marginMs)
@@ -202,6 +239,14 @@ export class DeepSeekFileStore {
 
     const client = this.client(connection)
     const upload = async (): Promise<DeepSeekUploadRecord> => {
+      signal.throwIfAborted()
+      const previous = this.backoffs.get(scope)
+      // Count overlapping uploads from one failure interval once, even if an aborted transport never settles.
+      using _listener = addAbortListener(signal, () => {
+        if (!timeoutOf(signal, FILES_API_TIMEOUT) || this.backoffs.get(scope) !== previous) return
+        const interval = previous ? previous.interval * 2n : 1n
+        this.backoffs.set(scope, { interval, remaining: interval })
+      })
       const remote = await client.upload({
         data: version.data,
         mediaType: version.mediaType,
@@ -212,6 +257,7 @@ export class DeepSeekFileStore {
       if (remote.bytes !== version.data.byteLength) {
         throw new LlmError('DeepSeek Files API upload response does not match the submitted image.', 'INVALID_RESPONSE')
       }
+      if (!signal.aborted) this.backoffs.delete(scope)
       return {
         scope,
         attachmentId: version.attachment.attachmentId,
