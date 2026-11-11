@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "macOS と Windows のアプリを操作できます。Windows で npm から DSH をインストールした場合は、ヘルパーを別途設定してください。",
+    "description": "エージェントがパソコン上のアプリを直接操作できるようにします。",
     "detail": "docs/DETAIL.md"
   }
 }

@@ -22,6 +22,7 @@ function observe(value: CuaApplicationState & { system: CuaSystemPermissionState
 
 function fixture() {
   const state = createSnapshotStore<PermissionView>({
+    windowsProvider: { value: null, busy: false, error: null },
     runtime: { value: { persistent: false, writable: true }, busy: false, error: null },
     system: { value: null, busy: true, error: null }, applications: { value: null, busy: true, error: null },
     icons: { value: null, busy: true, error: null }, busy: true, changing: false, toast: null,
@@ -441,11 +442,24 @@ it('retains a known read-only configuration and query failure throughout managem
   expect(f.state.getSnapshot().changing).toBe(true)
 })
 
+it('shows Windows setup above the controls even when the helper is missing', () => {
+  const f = fixture()
+  f.publish({ system: { value: null, error: 'helper missing', busy: false }, windowsProvider: { value: true, error: null, busy: false } })
+  render(<PermissionPanel {...f.props} />)
+  const instructions = screen.getByText(/cua-helper-win-x64\.zip/)
+  const firstSetting = screen.getByRole('group', { name: en.defaultTitle })
+  expect(instructions.compareDocumentPosition(firstSetting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(screen.getByText(/helperPath/)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: en.request })).toBeNull()
+})
+
 it.each([true, false, null] as const)('shows Windows desktop access for lock state %s without macOS permission actions', (sessionLocked) => {
   const f = fixture()
   f.publish({ ...observe(value), system: { value: { platform: 'windows', sessionLocked, captureAvailable: true,
     elevated: false, helper: { path: 'C:\\helper.exe' } }, error: null, busy: false } })
   render(<PermissionPanel {...f.props} />)
+  expect(screen.getByText(en.previewNotice)).toBeTruthy()
+  expect(screen.getByText(/helperPath/)).toBeTruthy()
   const desktop = screen.getByRole('group', { name: en.windowsDesktop })
   const capture = screen.getByRole('group', { name: en.windowsCapture })
   expect(within(desktop).getByText(sessionLocked === null ? en.unknown : sessionLocked ? en.locked : en.available)).toBeTruthy()

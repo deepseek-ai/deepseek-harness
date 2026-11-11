@@ -7,6 +7,7 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import type { CuaApplicationId, CuaApplicationState, CuaSystemPermission, CuaSystemPermissionState } from '../access-types.ts'
 
 interface PermissionData {
+  windowsProvider: boolean
   runtime: { persistent: boolean; writable: boolean }
   system: CuaSystemPermissionState
   applications: CuaApplicationState
@@ -39,6 +40,7 @@ export interface PermissionFace {
 export class PermissionController {
   /** Last observed permissions and the lifetime of the current refresh/action. */
   readonly state = createSnapshotStore<PermissionView>({
+    windowsProvider: { value: null, busy: false, error: null },
     runtime: { value: null, busy: false, error: null },
     system: { value: null, busy: false, error: null },
     applications: { value: null, busy: false, error: null },
@@ -53,9 +55,10 @@ export class PermissionController {
   /**
    * @param remote Generated CUA Remote namespace; failed results follow the query and action paths.
    * @param locale Current Client language, read when a permission action starts.
+   * @param windowsProvider Read the enabled Host provider when native setup fails before reporting its platform.
    */
   constructor(private readonly remote: Context['remote']['cuaAccess'],
-    private readonly locale: () => string) {}
+    private readonly locale: () => string, private readonly windowsProvider: () => Promise<RemoteResult<boolean>>) {}
   /**
    * Bind the permission projection to its user actions.
    * @returns Reactive state and controls shared by the page, prompt, and toast host.
@@ -117,7 +120,10 @@ export class PermissionController {
       const latest = () => current() && this.sequence === sequence
       const refresh = Promise.all([
         this.read('runtime', this.remote.ptcConfiguration, latest),
-        this.read('system', this.remote.systemStatus, latest),
+        this.read('system', this.remote.systemStatus, latest).then(async () => {
+          // The Windows helper can be missing before its first permission response.
+          if (latest() && this.state.getSnapshot().system.value === null) await this.read('windowsProvider', this.windowsProvider, latest)
+        }),
         this.read('applications', this.remote.applications, latest),
         this.read('icons', this.remote.applicationIcons, latest),
       ]).then(() => {

@@ -24,10 +24,22 @@ function fixture() {
     enablePersistentPtc: vi.fn<CuaRemote['enablePersistentPtc']>(async () => ({ ok: true, value: undefined })),
   }
   let locale = 'zh'
-  const controller = new PermissionController(actions, () => locale)
+  const windowsProvider = vi.fn(async () => ({ ok: true as const, value: true }))
+  const controller = new PermissionController(actions, () => locale, windowsProvider)
   onTestFinished(() => controller.dispose())
-  return { actions, controller, face: controller.face(), setLocale: (value: string) => { locale = value } }
+  return { actions, controller, windowsProvider, face: controller.face(), setLocale: (value: string) => { locale = value } }
 }
+
+it('identifies the enabled provider if the native helper cannot report its platform', async () => {
+  const f = fixture()
+  f.actions.systemStatus.mockRejectedValueOnce(new Error('helper missing'))
+  f.face.refresh()
+  await vi.waitFor(() => expect(f.controller.state.getSnapshot().windowsProvider.value).toBe(true))
+  expect(f.controller.state.getSnapshot().system.error).toBe('helper missing')
+  f.face.refresh()
+  await vi.waitFor(() => expect(f.controller.state.getSnapshot().system.value).toEqual(value))
+  expect(f.windowsProvider).toHaveBeenCalledOnce()
+})
 
 it('refreshes after a request and then waits for an explicit refresh', async () => {
   vi.useFakeTimers()

@@ -2,6 +2,9 @@
 export const NS = 'cuaPermissions'
 /** English permission-page dictionary. */
 export const en = {
+  previewNotice: 'Computer use is an experimental preview. The agent may click the wrong button or type in the wrong window. Use caution in production environments. We recommend native PTC mode so the agent can operate apps and call other tools in the same program.',
+  windowsHelperBuild: 'If you installed DSH through npm, prepare the Windows helper separately. On x64, you can extract the entire {archive}. To build it yourself, open {directory} in the matching DSH source checkout and run {x64} or {arm64} with the .NET 10 SDK.',
+  windowsHelperPath: 'In the active profile’s {patch}, find or add the entry with ID {entry}. Set {path} under its {config} to the absolute path of {exe}.',
   approvalRisks: 'Risks',
   approvalRiskTitle: 'Computer use risks',
   approvalRiskNotice: 'The agent can access only apps you approve, and can read and control them in the background.\n\nOnline games, messaging apps, and other apps may restrict automation. Violating their rules could result in your account with that app being suspended or banned.\n\nProceed at your own risk. To stop automated control at any time, press Stop in DeepSeek Harness.',
@@ -52,6 +55,9 @@ export const en = {
 export type CuaPermissionLocaleKey = keyof typeof en
 /** Chinese permission-page dictionary. */
 export const zh: Record<CuaPermissionLocaleKey, string> = {
+  previewNotice: 'Computer Use 是实验性预览功能。agent 可能点错按钮，或把内容输入错误的窗口，请谨慎在生产环境中使用。推荐使用原生 PTC 模式，agent 可以在同一段代码中操作应用并调用其他工具。',
+  windowsHelperBuild: '通过 npm 安装 DSH 后，需要单独准备 Windows 辅助程序。x64 用户可完整解压 {archive}。如需自行构建，请在与 DSH 版本匹配的源码中进入 {directory}，使用 .NET 10 SDK 运行 {x64} 或 {arm64}。',
+  windowsHelperPath: '在当前 profile 的 {patch} 中，找到或添加 ID 为 {entry} 的条目，将其 {config} 下的 {path} 设为 {exe} 的绝对路径。',
   approvalRisks: '风险提示',
   approvalRiskTitle: 'Computer Use 风险提示',
   approvalRiskNotice: '智能体只能访问你已授权的应用，并可在后台读取应用内容、操作应用。\n\n网络游戏、即时通讯等应用可能对自动化操作有所限制。违反相关规则可能导致你在该应用中的账号被暂停使用或封禁。\n\n请自行承担使用风险。如需停止自动化操作，可随时点击 DeepSeek Harness 中的停止按钮。',
@@ -99,6 +105,9 @@ export const zh: Record<CuaPermissionLocaleKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  previewNotice: 'Computer Use は実験的なプレビュー機能です。エージェントが誤ったボタンをクリックしたり、別のウィンドウに入力したりする可能性があります。本番環境では慎重に使用してください。ネイティブ PTC モードでは、同じプログラムでアプリの操作と他のツールの呼び出しができるため、このモードを推奨します。',
+  windowsHelperBuild: 'npm で DSH をインストールした場合は、Windows 用ヘルパーを別途用意してください。x64 では {archive} をすべて展開できます。自分でビルドするには、DSH と同じバージョンのソースで {directory} を開き、.NET 10 SDK を使って {x64} または {arm64} を実行します。',
+  windowsHelperPath: '使用中のプロファイルの {patch} で、ID が {entry} の項目を探すか追加し、その {config} 内の {path} に {exe} の絶対パスを指定してください。',
   windowsSetupTitle: 'Windows デスクトップへのアクセスを確認',
   windowsSetupBody: 'Windows デスクトップのロックを解除して再確認してください。DSH は各アプリへのアクセス前に確認します。',
   windowsSessionUnknown: '操作可能な Windows デスクトップを確認できませんでした。サインイン済みのデスクトップセッションで DSH を実行し、再確認してください。',
@@ -167,6 +176,9 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  previewNotice: 'Computer Use es una función experimental en fase de prueba. El agente puede pulsar el botón equivocado o escribir en otra ventana. Úsala con precaución en entornos de producción. Recomendamos el modo PTC nativo para que el agente pueda controlar aplicaciones y usar otras herramientas en el mismo programa.',
+  windowsHelperBuild: 'Si instalaste DSH con npm, prepara por separado el programa auxiliar de Windows. En x64 puedes extraer todo el archivo {archive}. Para compilarlo, abre {directory} en el código fuente de la misma versión de DSH y ejecuta {x64} o {arm64} con el SDK de .NET 10.',
+  windowsHelperPath: 'En el archivo {patch} del perfil activo, busca o añade la entrada con el ID {entry}. En su sección {config}, establece {path} en la ruta absoluta de {exe}.',
   windowsSetupTitle: 'Comprobar el acceso al escritorio de Windows',
   windowsSetupBody: 'Desbloquea el escritorio de Windows y vuelve a comprobarlo. DSH pide permiso antes de acceder a cada aplicación.',
   windowsSessionUnknown: 'No se ha verificado un escritorio interactivo de Windows. Ejecuta DSH en una sesión de escritorio iniciada y vuelve a comprobarlo.',
@@ -221,6 +233,9 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  previewNotice: 'Computer Use est proposé en aperçu expérimental. L’agent peut cliquer sur le mauvais bouton ou saisir du texte dans la mauvaise fenêtre. Soyez prudent en production. Nous recommandons le mode PTC natif pour que l’agent puisse piloter des applications et utiliser d’autres outils dans le même programme.',
+  windowsHelperBuild: 'Si vous avez installé DSH avec npm, préparez séparément le programme auxiliaire Windows. Sur x64, vous pouvez extraire toute l’archive {archive}. Pour le compiler, ouvrez {directory} dans les sources de la même version de DSH et exécutez {x64} ou {arm64} avec le SDK .NET 10.',
+  windowsHelperPath: 'Dans le fichier {patch} du profil actif, trouvez ou ajoutez l’entrée d’identifiant {entry}. Dans sa section {config}, indiquez le chemin absolu de {exe} dans {path}.',
   windowsSetupTitle: 'Vérifier l’accès au bureau Windows',
   windowsSetupBody: 'Déverrouillez le bureau Windows, puis vérifiez à nouveau. DSH demande une autorisation avant d’accéder à chaque application.',
   windowsSessionUnknown: 'Aucun bureau Windows interactif n’a été vérifié. Exécutez DSH dans une session de bureau ouverte, puis vérifiez à nouveau.',
@@ -275,6 +290,9 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  previewNotice: 'Computer Use ist eine experimentelle Vorschau. Der Agent kann auf die falsche Schaltfläche klicken oder Text im falschen Fenster eingeben. Sei in Produktionsumgebungen vorsichtig. Wir empfehlen den nativen PTC-Modus, damit der Agent Anwendungen bedienen und andere Werkzeuge im selben Programm aufrufen kann.',
+  windowsHelperBuild: 'Wenn du DSH über npm installiert hast, richte das Windows-Hilfsprogramm separat ein. Unter x64 kannst du {archive} vollständig entpacken. Zum Selbstbauen wechsle im passenden DSH-Quellcode nach {directory} und führe mit dem .NET 10 SDK {x64} oder {arm64} aus.',
+  windowsHelperPath: 'Suche oder erstelle in der Datei {patch} des aktiven Profils den Eintrag mit der ID {entry}. Setze dort unter {config} den Wert von {path} auf den absoluten Pfad zu {exe}.',
   windowsSetupTitle: 'Windows-Desktopzugriff prüfen',
   windowsSetupBody: 'Entsperren Sie den Windows-Desktop und prüfen Sie erneut. DSH fragt vor dem Zugriff auf jede Anwendung nach einer Erlaubnis.',
   windowsSessionUnknown: 'Es wurde kein interaktiver Windows-Desktop bestätigt. Führen Sie DSH in einer angemeldeten Desktopsitzung aus und prüfen Sie erneut.',
@@ -329,6 +347,9 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  previewNotice: 'Управление компьютером доступно в режиме экспериментального предпросмотра. Агент может нажать не ту кнопку или ввести текст не в то окно. Используйте эту функцию в рабочей среде с осторожностью. Рекомендуем нативный режим PTC: в нём агент может управлять приложениями и вызывать другие инструменты в одной программе.',
+  windowsHelperBuild: 'Если DSH установлен через npm, подготовьте вспомогательную программу для Windows отдельно. На x64 можно полностью распаковать архив {archive}. Для самостоятельной сборки откройте {directory} в исходном коде соответствующей версии DSH и выполните {x64} или {arm64} с помощью .NET 10 SDK.',
+  windowsHelperPath: 'В файле {patch} активного профиля найдите или добавьте запись с идентификатором {entry}. В её разделе {config} задайте для {path} абсолютный путь к {exe}.',
   windowsSetupTitle: 'Проверить доступ к рабочему столу Windows',
   windowsSetupBody: 'Разблокируйте рабочий стол Windows и повторите проверку. DSH запрашивает разрешение перед доступом к каждому приложению.',
   windowsSessionUnknown: 'Интерактивный рабочий стол Windows не подтверждён. Запустите DSH в сеансе вошедшего в систему пользователя и повторите проверку.',
@@ -383,6 +404,9 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  previewNotice: 'Computer Use é um recurso experimental em prévia. O agente pode clicar no botão errado ou digitar na janela errada. Use com cautela em ambientes de produção. Recomendamos o modo PTC nativo para que o agente possa controlar aplicativos e usar outras ferramentas no mesmo programa.',
+  windowsHelperBuild: 'Se você instalou o DSH pelo npm, prepare o auxiliar do Windows separadamente. Em x64, você pode extrair todo o arquivo {archive}. Para compilá-lo, abra {directory} no código-fonte da mesma versão do DSH e execute {x64} ou {arm64} com o SDK do .NET 10.',
+  windowsHelperPath: 'No arquivo {patch} do perfil ativo, localize ou adicione a entrada com o ID {entry}. Em {config}, defina {path} como o caminho absoluto de {exe}.',
   windowsSetupTitle: 'Verificar acesso à área de trabalho do Windows',
   windowsSetupBody: 'Desbloqueie a área de trabalho do Windows e verifique novamente. O DSH pede permissão antes de acessar cada aplicativo.',
   windowsSessionUnknown: 'Nenhuma área de trabalho interativa do Windows foi confirmada. Execute o DSH em uma sessão com login e verifique novamente.',
