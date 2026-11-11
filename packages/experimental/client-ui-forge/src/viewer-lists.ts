@@ -52,22 +52,32 @@ export class Reader<T> {
     signal.addEventListener('abort', this.abort, { once: true })
   }
 
+  /**
+   * Offer a frame, replacing one the reader has not taken; ignored after the stream ended.
+   * @param frame - the frame.
+   */
   push(frame: T): void {
     if (this.ended) return
     this.pending = frame
     this.wake?.()
   }
 
+  /** End the stream once the reader took the frame it waits for. */
   end(): void {
     this.ended = true
     this.wake?.()
   }
 
+  /** End the stream and stop following its abort signal. */
   dispose(): void {
     this.signal.removeEventListener('abort', this.abort)
     this.end()
   }
 
+  /**
+   * Yield each latest frame as the reader takes it, until the stream ends.
+   * @returns the frames.
+   */
   async *frames(): AsyncIterable<T> {
     while (!this.ended) {
       if (this.pending === undefined) {
