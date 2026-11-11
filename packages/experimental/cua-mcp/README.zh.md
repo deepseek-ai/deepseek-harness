@@ -52,6 +52,7 @@ command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP st
 command = "/absolute/path/to/dsh"
 args = ["--profile", "cua-mcp"]
 env = { DSH_HOME = "/absolute/path/to/dsh-home", DSH_CUA_CONSENT = "elicit" }
+required = true
 startup_timeout_sec = 120
 tool_timeout_sec = 600
 enabled_tools = ["cua_get_api_reference", "cua_run_code", "cua_reset"]
@@ -61,13 +62,17 @@ omit_tools_from = ["code_mode", "deferred"]
 output_token_limit = 25000
 ```
 
-`startup_timeout_sec = 120` 留给首次 helper 准备，`tool_timeout_sec = 600` 对齐默认程序上限，`enabled_tools` 配合 `omit_tools_from` 让三个工具直接暴露而不进入工具搜索，`output_token_limit` 把 `cua_run_code` 的输出预算提高到 25,000 token。Claude Code 以十分钟工具超时注册同一配置项：
+`required = true` 让 Codex 在首个模型请求之前等待服务器就绪，并在服务器无法启动时结束会话；不设置时 Codex 只等待 `mcp_optional_startup_grace_ms`（默认一秒），首个请求可能不带这三个工具。`startup_timeout_sec = 120` 限定这段等待并留给首次 helper 准备，`tool_timeout_sec = 600` 对齐默认程序上限，`enabled_tools` 配合 `omit_tools_from` 让三个工具直接暴露而不进入工具搜索，`output_token_limit` 把 `cua_run_code` 的输出预算提高到 25,000 token。
+
+`codex exec` 以审批策略 `never` 运行，此时 Codex 会拒绝 `cua_run_code`（本服务器唯一标注为 destructive 与 open-world 的工具），错误为 `MCP tool call requires approval, but approval policy is never`（在 codex-cli 0.153.2 上观察到）。因此无人值守运行要在 `cua_run_code` 表中加入 `approval_mode = "approve"`，并设置 `DSH_CUA_CONSENT = "allow"`。
+
+Claude Code 以十分钟工具超时注册同一配置项：
 
 ```sh
 claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
 ```
 
-其他客户端在 `mcpServers` 下使用同样的 `command`、`args` 与 `env`。Claude Code 与 `dsh-mcp-client` 两条配置经真实 macOS 桌面验证；Codex 配置按 Codex 配置参考及其自带 Computer Use 插件的 `.mcp.json` 给出，未在此实测，也没有客户端经本 profile 操作过 Windows 桌面。截至 2026-11-10，Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
+其他客户端在 `mcpServers` 下使用同样的 `command`、`args` 与 `env`。Claude Code、`dsh-mcp-client` 与 Codex 三条配置都经真实 macOS 桌面验证，其中 Codex 是在 codex-cli 0.153.2 与 0.166.0-alpha.5.1 上通过 `codex exec` 并以 `DSH_CUA_CONSENT=allow` 验证的；没有客户端经本 profile 操作过 Windows 桌面。Codex 的交互式审批提示及其 elicitation 转发未在此实测；按 Codex 配置参考，截至 2026-11-11，Codex 只有在 `approval_policy.granular.mcp_elicitations = true` 时才转发 elicitation。DSH 自己的 `dsh-mcp-client` 未声明 elicitation 能力，Claude Code 2.1 的 print 模式会拒绝 elicitation，因此经这两类客户端的无人值守运行需要 `DSH_CUA_CONSENT=allow`。
 
 按名称放行工具的客户端必须放行全部三个：缺少 `cua_get_api_reference` 时，它的模型拿不到 `cua` API 参考。服务器使用的 Harness home 不要与采用未压缩 Session 日志的 profile 共用：本 profile 在 `sessions` 下写入 zstd 压缩的日志，设置了 `compression: none` 的 profile（例如 `sdk-minimal`）在含有这些日志的目录上查询 Session 会失败。
 

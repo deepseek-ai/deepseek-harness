@@ -52,6 +52,7 @@ command = [*resolve_bundled_launch_args(), "--profile", "cua-mcp"]  # the MCP st
 command = "/absolute/path/to/dsh"
 args = ["--profile", "cua-mcp"]
 env = { DSH_HOME = "/absolute/path/to/dsh-home", DSH_CUA_CONSENT = "elicit" }
+required = true
 startup_timeout_sec = 120
 tool_timeout_sec = 600
 enabled_tools = ["cua_get_api_reference", "cua_run_code", "cua_reset"]
@@ -61,13 +62,17 @@ omit_tools_from = ["code_mode", "deferred"]
 output_token_limit = 25000
 ```
 
-`startup_timeout_sec = 120` covers first-run helper preparation, `tool_timeout_sec = 600` matches the default program maximum, `enabled_tools` with `omit_tools_from` exposes the three tools directly instead of through tool search, and `output_token_limit` raises the `cua_run_code` output budget to 25,000 tokens. For Claude Code, register the same entry with a ten-minute tool timeout:
+`required = true` makes Codex wait for the server before its first model request and end the session when the server does not start; without it Codex waits `mcp_optional_startup_grace_ms`, one second by default, and the first request can go out without the three tools. `startup_timeout_sec = 120` bounds that wait and covers first-run helper preparation, `tool_timeout_sec = 600` matches the default program maximum, `enabled_tools` with `omit_tools_from` exposes the three tools directly instead of through tool search, and `output_token_limit` raises the `cua_run_code` output budget to 25,000 tokens.
+
+`codex exec` runs with the approval policy `never`, under which Codex refuses `cua_run_code`, the one tool this server annotates as destructive and open-world, with `MCP tool call requires approval, but approval policy is never` (observed on codex-cli 0.153.2). An unattended run therefore adds `approval_mode = "approve"` to the `cua_run_code` table and sets `DSH_CUA_CONSENT = "allow"`.
+
+For Claude Code, register the same entry with a ten-minute tool timeout:
 
 ```sh
 claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","args":["--profile","cua-mcp"],"env":{"DSH_HOME":"/absolute/path/to/dsh-home","DSH_CUA_CONSENT":"elicit"},"timeout":600000,"alwaysLoad":true}'
 ```
 
-Other clients take the same `command`, `args`, and `env` under `mcpServers`. The Claude Code and `dsh-mcp-client` entries were exercised against a real macOS desktop; the Codex entry follows the Codex configuration reference and the `.mcp.json` of its bundled Computer Use plugin and was not exercised here, and no client has driven a Windows desktop through this profile. As of 2026-11-10, Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
+Other clients take the same `command`, `args`, and `env` under `mcpServers`. The Claude Code, `dsh-mcp-client`, and Codex entries were exercised against a real macOS desktop, Codex through `codex exec` on codex-cli 0.153.2 and 0.166.0-alpha.5.1 with `DSH_CUA_CONSENT=allow`; no client has driven a Windows desktop through this profile. Codex's interactive approval prompts and its elicitation forwarding were not exercised here; per the Codex configuration reference as of 2026-11-11, Codex forwards elicitations only with `approval_policy.granular.mcp_elicitations = true`. DSH's own `dsh-mcp-client` declares no elicitation capability, and Claude Code 2.1 print mode declines elicitations, so unattended runs through those clients need `DSH_CUA_CONSENT=allow`.
 
 A client that allows tools by name must allow all three: without `cua_get_api_reference` its model has no `cua` API reference. Give the server a Harness home that no profile with uncompressed Session logs shares: this profile writes zstd-compressed logs under `sessions`, and a profile that sets `compression: none`, such as `sdk-minimal`, fails Session queries on a directory that holds them.
 
