@@ -88,6 +88,7 @@ async function fullBench(sessions: SessionSummary[]) {
     },
   } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('uiSession.sessionStatus', createSnapshotStore(new Map()) as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
   await provideSlotFaces(ctx)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
@@ -107,7 +108,7 @@ const FAMILY: SessionSummary[] = [
 
 describe('apply', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight'])
+    expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight', 'uiSession.sessionStatus'])
   })
 
   it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {

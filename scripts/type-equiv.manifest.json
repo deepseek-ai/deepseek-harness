@@ -2957,6 +2957,41 @@
       "doc": "docs/subsystems/forge.md",
       "symbol": "ForgeViewedRequest",
       "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeReviewChange",
+      "source": "packages/experimental/forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLens",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLensInput",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLensResult",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLensKeep",
+      "source": "packages/experimental/client-ui-forge/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeLineAnnotation",
+      "source": "packages/experimental/client-ui-forge/src/client/changes-service.ts"
+    },
+    {
+      "doc": "docs/subsystems/forge.md",
+      "symbol": "ForgeAnnotationSource",
+      "source": "packages/experimental/client-ui-forge/src/client/changes-service.ts"
     }
   ]
 }

@@ -117,7 +117,8 @@
     "@deepseek-ai/dsh-session-projection-cache": "workspace:*",
     "@deepseek-ai/dsh-session-query": "workspace:*",
     "@deepseek-ai/dsh-api-remote-access": "workspace:*",
-    "@types/picomatch": "^4.0.3"
+    "@types/picomatch": "^4.0.3",
+    "@deepseek-ai/dsh-brand": "workspace:*"
   },
   "files": [
     "locale/*.json",
