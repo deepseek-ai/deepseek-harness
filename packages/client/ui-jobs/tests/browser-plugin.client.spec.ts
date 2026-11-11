@@ -5,7 +5,7 @@
  */
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
+import type { JobId } from '@deepseek-ai/dsh-jobs/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'

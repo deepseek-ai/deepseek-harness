@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { appendFileSync } from 'node:fs'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import type { ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 
 /** Script one delegation, then acknowledge the receipt and the completion notice. */

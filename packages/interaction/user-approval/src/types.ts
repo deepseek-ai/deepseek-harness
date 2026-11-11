@@ -8,7 +8,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type { Agent } from '@deepseek-ai/dsh-agent/types'
-import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 
 /**
  * Pairs one `approval/asked` audit event with its `approval/decided`.
