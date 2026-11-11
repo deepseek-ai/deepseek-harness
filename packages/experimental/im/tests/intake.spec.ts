@@ -188,6 +188,26 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-slow'))?.text).toBe('read back')
   })
 
+  it('acknowledges nothing for a frame that arrives after it stopped', async () => {
+    const { bot, store, intake } = await boot()
+    await intake.dispose()
+    // The platform redelivers it to a process that can store it, so this one neither stores nor settles it.
+    await deliver(bot, 'evt-late', inbound({ id: 'm-late' }))
+    expect(store.get(ImMessageKey('fake:bot', 'm-late'))).toBeUndefined()
+  })
+
+  it('keeps reading a chat after a platform read failed', async () => {
+    const { bot, store, intake } = await boot()
+    bot.getMessage = async () => { throw new Error('the platform is gone') }
+    const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
+    const first = deliver(bot, 'evt-card', inbound({ id: 'm-card', content: card }))
+    const second = deliver(bot, 'evt-next', inbound({ id: 'm-next' }))
+    await Promise.all([first, second])
+    await intake.idle()
+    // The failed read leaves the reference as it arrived, and the next frame of the same chat is still stored.
+    expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toBe('[image]')
+    expect(store.get(ImMessageKey('fake:bot', 'm-next'))?.text).toBe('hello')
+  })
   it('keeps the arrival order of one chat when a platform read is slow', async () => {
     const { bot, store, intake } = await boot()
     const held = Promise.withResolvers<undefined>()

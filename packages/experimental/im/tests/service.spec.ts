@@ -133,6 +133,30 @@ describe('ImService facade', () => {
     await expect(service.readMessage(other, 'm1')).resolves.toMatchObject({ key: ImMessageKey('fake:bot', 'm1') })
   })
 
+  it('reads a message the store does not hold from the platform, and keeps it', async () => {
+    const { service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+    bot.getMessage = async () => inbound('m-late', { content: h('message', h.text('read back')) })
+
+    const message = await service.readMessage(CHAT, 'm-late')
+    expect(message.text).toBe('read back')
+    // The read is admitted and stored like any other, so a second read stays local.
+    expect(service.history.get(ImMessageKey('fake:bot', 'm-late'))).toBeDefined()
+  })
+
+  it('refuses a platform read that answers with another chat\'s message', async () => {
+    const { service, bot } = await mount()
+    await deliver(bot, inbound('m1'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+    // `getMessage` is handed the chat as a routing hint; a bot that serves several chats resolves an id globally.
+    bot.getMessage = async () => inbound('m-foreign', { chat: { id: 'elsewhere', type: 'group' } })
+
+    await expect(service.readMessage(CHAT, 'm-foreign'))
+      .rejects.toThrow('Message m-foreign belongs to chat elsewhere, not chat.')
+    expect(service.history.get(ImMessageKey('fake:bot', 'm-foreign'))).toBeUndefined()
+  })
+
   it('fills a merged forward stored as a bare reference with the entries a read returns', async () => {
     const { service, bot } = await mount()
     await deliver(bot, inbound('m1', { content: h('message', h('forward', { id: 'm1' })) }))
