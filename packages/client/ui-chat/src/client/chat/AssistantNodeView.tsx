@@ -1,5 +1,4 @@
 import { memo, useCallback, useMemo } from 'react'
-import { MarkdownPathScope } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import type {} from '@deepseek-ai/dsh-working-directory/client'
@@ -52,28 +51,27 @@ export const AssistantNodeView = memo(function AssistantNodeView({
   const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
   // Relative destinations name files in the directory that was current when this message was written.
   const directory = useProjection('workingDirectoryHistory', history => directoryAt(history, node.anchorSeq))
-  const resolvePath = useCallback(
-    (path: string) => directory === undefined ? path : resolveWorkspacePath(directory, path),
+  const resolvePath = useMemo(
+    () => directory === undefined ? undefined : (path: string) => resolveWorkspacePath(directory, path),
     [directory],
   )
   return (
-    <MarkdownPathScope resolvePath={resolvePath}>
-      <AssistantMarkdown
-        blocks={data.blocks}
-        groupPart={groupPart}
-        useDisclosure={useDisclosure}
-        streaming={data.status === 'running'}
-        textInteractionSource={data.status === 'settled' && data.finalNode?.messageId !== undefined}
-        interrupted={data.status === 'interrupted'}
-        loadImage={loadImage}
-        reasoningHidden={reasoningHidden}
-        useGroupAction={useGroupAction}
-        usePresentation={usePresentation}
-        renderSlot={renderSlot}
-        revealProcess={revealProcess}
-        mentions={mentions}
-        t={t}
-      />
-    </MarkdownPathScope>
+    <AssistantMarkdown
+      blocks={data.blocks}
+      groupPart={groupPart}
+      useDisclosure={useDisclosure}
+      streaming={data.status === 'running'}
+      textInteractionSource={data.status === 'settled' && data.finalNode?.messageId !== undefined}
+      interrupted={data.status === 'interrupted'}
+      loadImage={loadImage}
+      reasoningHidden={reasoningHidden}
+      useGroupAction={useGroupAction}
+      usePresentation={usePresentation}
+      renderSlot={renderSlot}
+      revealProcess={revealProcess}
+      mentions={mentions}
+      resolvePath={resolvePath}
+      t={t}
+    />
   )
 })
