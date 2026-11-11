@@ -6,7 +6,7 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import toastCss from '@deepseek-ai/dsh-client-ui-primitives/src/Toast.module.css'
 import type { PaneId, SidebarRightTabInfo, TabId } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ActionToast } from '../src/client/ActionToast.tsx'
 import { changesAddress } from '../src/client/changes-address.ts'
 import { ChangesTabTitle } from '../src/client/ChangesTabTitle.tsx'
@@ -16,6 +16,7 @@ import { en } from '../src/client/locales.ts'
 import { createNoticeSource, type PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelState } from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => {
   cleanup()
@@ -113,7 +114,7 @@ describe('ChangesTabTitle', () => {
   }
 
   it('names the view from its address in the current language', () => {
-    const view = title(changesAddress({ sessionId: SessionId('s1'), source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } }))
+    const view = title(changesAddress({ sessionId: brandString<SessionId>('s1'), source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } }))
     expect(view.container.textContent).toBe('Changes in #7')
     expect(view.container.querySelector('svg')).not.toBeNull()
   })

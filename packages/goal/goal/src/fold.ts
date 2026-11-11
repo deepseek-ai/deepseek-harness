@@ -2,7 +2,9 @@
 
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { GOAL_CHANGE_VERSION, GoalId } from './runtime.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId } from './types.ts'
+import { GOAL_CHANGE_VERSION } from './runtime.ts'
 import type { GoalBlockReason, GoalPhase, GoalRef, GoalSnapshot } from './types.ts'
 import type {
   FoldedGoal,
@@ -105,7 +107,7 @@ function decodeSnapshot(value: unknown): GoalSnapshot {
     throw new Error(`goal change goal for phase ${phase} must have exactly ${expectedKeys} fields`)
   }
   return {
-    id: GoalId(value['id']),
+    id: brandString<GoalId>(value['id']),
     revision: positiveInteger(value['revision'], 'goal.revision'),
     objective: value['objective'],
     phase,
@@ -122,7 +124,7 @@ function decodeRef(value: unknown): GoalRef {
   if (typeof value['id'] !== 'string' || value['id'].length === 0) {
     throw new Error('goal clear tombstone id must be a non-empty string')
   }
-  return { id: GoalId(value['id']), revision: positiveInteger(value['revision'], 'cleared.revision') }
+  return { id: brandString<GoalId>(value['id']), revision: positiveInteger(value['revision'], 'cleared.revision') }
 }
 
 /**

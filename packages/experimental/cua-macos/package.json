@@ -61,6 +61,7 @@
     "@deepseek-ai/dsh-cua": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "ajv": "^8.20.0",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",

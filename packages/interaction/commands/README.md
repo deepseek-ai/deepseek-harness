@@ -29,6 +29,8 @@ Compose this service when an interactive UI should let users drive agent-side be
 
 ### Registering a command
 
+Import `CommandDefinitionId` and `CommandId` as types from `@deepseek-ai/dsh-commands/brand`. Use `brandString<T>()` from `@deepseek-ai/dsh-brand` to brand an admitted string; it neither validates nor generates ids.
+
 A plugin registers a command with `ctx.commands.register()`: a lowercase name, a discovery description, an optional `input` hint, and a handler. An optional branded `definitionId` gives the definition a stable, plugin-namespaced identity for adapters; it is independent of display copy and execution `commandId`. The effective descriptor carries only the selected definition's identity, so a scoped override never inherits the shadowed registration's identity.
 
 ```text

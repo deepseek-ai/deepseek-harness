@@ -5,13 +5,14 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, type Browser } from 'playwright'
 import { readProfileManifest } from '@deepseek-ai/dsh-app-boot'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { load } from 'js-yaml'
 import { expect, it, vi } from 'vitest'
 import { captureStableAria, compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 import { connectFreshWorkspaceZh, ZH_BROWSER_LOCALE } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // This fixture exercises the macOS provider’s permission setup.
 it.skipIf(process.platform !== 'darwin').each([
@@ -62,7 +63,7 @@ it.skipIf(process.platform !== 'darwin').each([
     let toggle = card.getByRole('switch', { name: '启用 Computer Use', exact: true })
     const originalAgent = scaffold.ctx.agents.list()[0]!
     const ptcAgent = (await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-existing-ptc'),
+      sessionId: brandString<SessionId>('cua-existing-ptc'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
     })).agent
     expect(scaffold.ctx.tools.schemas(ptcAgent).some(tool => tool.name === 'cua')).toBe(false)
@@ -136,7 +137,7 @@ it.skipIf(process.platform !== 'darwin').each([
       expect(scaffold.ctx.tools.schemas(originalAgent).some(tool => tool.name === 'cua_run_code')).toBe(preset !== 'ptc')
     }
     const child = await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-child'),
+      sessionId: brandString<SessionId>('cua-child'),
       setup: (ctx) => { scaffold.ctx.agentPresets.composeFrom(ctx, ptcAgent.ctx) },
     })
     expect(scaffold.ctx.tools.schemas(child.agent).some(tool => tool.name === 'cua')).toBe(true)
@@ -161,14 +162,14 @@ it.skipIf(process.platform !== 'darwin').each([
       ]))
     }
     const freshDefault = (await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-new-default'),
+      sessionId: brandString<SessionId>('cua-new-default'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(freshDefault.ctx)).toBe(initialDefault)
     expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua')).toBe(false)
     expect(scaffold.ctx.tools.schemas(freshDefault).some(tool => tool.name === 'cua_run_code')).toBe(true)
     const fresh = (await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-new-ptc'),
+      sessionId: brandString<SessionId>('cua-new-ptc'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx, 'ptc') },
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(fresh.ctx)).toBe('ptc')
@@ -253,7 +254,7 @@ it.skipIf(process.platform !== 'darwin').each([
     expect(scaffold.ctx.agentPresets.composedPreset(originalAgent.ctx)).toBe(initialDefault)
     expect(scaffold.ctx.agentPresets.composedPreset(freshDefault.ctx)).toBe(initialDefault)
     const confirmed = (await scaffold.ctx.agents.create({
-      sessionId: SessionId('cua-confirmed-default'),
+      sessionId: brandString<SessionId>('cua-confirmed-default'),
       setup: async (ctx) => { await scaffold.ctx.agentPresets.mount(ctx) },
     })).agent
     expect(scaffold.ctx.agentPresets.composedPreset(confirmed.ctx)).toBe('ptc')

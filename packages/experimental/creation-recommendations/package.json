@@ -52,6 +52,7 @@
     "@deepseek-ai/dsh-tool-testkit": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "yaml": "^2.9.0",
     "resolve.exports": "^2.0.3",
     "zod": "4.6.6",

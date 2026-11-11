@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { agentEvents, type Agent, type PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { fixture, callId, proposal, recordCard, ACTION } from './fixture.ts'
 import * as CreationRecommendations from '../src/index.ts'
 
@@ -93,7 +94,7 @@ it('reports installed and removed outcomes, including application errors, withou
   if (removed.kind !== 'enter') throw new Error('request was rejected')
   expect(JSON.stringify(removed.messages[0]!.content)).toContain('removed')
   enter(f.agent, removed)
-  recordCard(f.agent.session, { callId: ToolCallId('older-card'), slot: 'page', phase: 'installed', application: 'failed' })
+  recordCard(f.agent.session, { callId: brandString<ToolCallId>('older-card'), slot: 'page', phase: 'installed', application: 'failed' })
   const failedApplication = await prepare(f)
   if (failedApplication.kind !== 'enter') throw new Error('request was rejected')
   expect(JSON.stringify(failedApplication.messages[0]!.content)).toContain('failed')

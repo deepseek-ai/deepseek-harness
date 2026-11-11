@@ -9,11 +9,12 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as webApiPlugin from '@deepseek-ai/dsh-web-deepseek-api'
 import { provideRoutes, type RouteRow } from './routes.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A value the API-key route resolver throws instead of resolving; undefined lets it resolve normally. */
 const resolverThrow = vi.hoisted(() => ({ value: undefined as string | undefined }))
@@ -110,7 +111,7 @@ let sessions = 0
 async function operate(ctx: Context, operation: Operation, route?: string): Promise<unknown> {
   const run = () => operation === 'search' ? ctx.web.search({ query: 'q' }) : ctx.web.fetch({ url: 'https://example.test/' })
   if (route === undefined) return await run()
-  const session = ctx.sessions.create(SessionId(`web-api-${String(sessions++)}`))
+  const session = ctx.sessions.create(brandString<SessionId>(`web-api-${String(sessions++)}`))
   session.append('turn/start', { turn: 1 })
   session.append('request/context', { provider: route, model: 'test-model' })
   return await ctx.agents.withInitiator({ session } as Agent, run)

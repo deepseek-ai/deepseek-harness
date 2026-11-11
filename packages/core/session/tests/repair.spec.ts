@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { interruptedTurnClosers as repairInterruptedTurn, SessionSeq, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN, ToolCallRecovery } from '../src/index.ts'
 import { openTurnClosers as closeOpenTurn, type OpenTurnCloseCause } from '../src/repair.ts'
 import type { SessionEvent as LogicalSessionEvent, SurfaceEvent } from '../src/index.ts'
@@ -42,8 +43,8 @@ function liveToolRequests(): LogicalSessionEvent<'assistant/message'> {
       message: createMessage({
         role: 'assistant', source: { kind: 'model', provider: 'mock', model: 'mock' },
         content: [
-          { type: 'tool-call', id: ToolCallId('started'), name: 'bash', arguments: '{}' },
-          { type: 'tool-call', id: ToolCallId('pending'), name: 'bash', arguments: '{}' },
+          { type: 'tool-call', id: brandString<ToolCallId>('started'), name: 'bash', arguments: '{}' },
+          { type: 'tool-call', id: brandString<ToolCallId>('pending'), name: 'bash', arguments: '{}' },
         ],
       }),
     },
@@ -58,7 +59,7 @@ describe('ToolCallRecovery', () => {
     recovery.observe(liveToolRequests())
     recovery.observe({
       type: 'tool/call', seq: SessionSeq(22), time: 120,
-      data: { turn: 3, step: 2, callId: ToolCallId('started'), name: 'bash', arguments: '{}' },
+      data: { turn: 3, step: 2, callId: brandString<ToolCallId>('started'), name: 'bash', arguments: '{}' },
     })
 
     const results = recovery.results()
@@ -89,11 +90,11 @@ describe('ToolCallRecovery', () => {
       ...kind === 'replacement' ? { sourceEventSeqs: [SessionSeq(10)] } : {},
       data: {
         turn, step,
-        message: createToolResultMessage({ callId: ToolCallId('started'), content: [{ type: 'text', text: 'old result' }], isError: false }),
+        message: createToolResultMessage({ callId: brandString<ToolCallId>('started'), content: [{ type: 'text', text: 'old result' }], isError: false }),
       },
     })
 
-    expect(recovery.results().map(event => event.data.message.toolCallId)).toEqual([ToolCallId('started'), ToolCallId('pending')])
+    expect(recovery.results().map(event => event.data.message.toolCallId)).toEqual([brandString<ToolCallId>('started'), brandString<ToolCallId>('pending')])
   })
 
 })
@@ -142,7 +143,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
           role: 'assistant',
           content: [
             { type: 'text', text: 'calling a tool' },
-            { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -161,9 +162,9 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
       step: 1,
       message: {
         id: `${cause.kind}-tool-result-call-1-3`,
-        source: { callId: ToolCallId('call-1') },
+        source: { callId: brandString<ToolCallId>('call-1') },
         role: 'tool',
-        toolCallId: ToolCallId('call-1'),
+        toolCallId: brandString<ToolCallId>('call-1'),
         isError: true,
       },
       error: { code: TOOL_NOT_STARTED },
@@ -184,7 +185,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -195,7 +196,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
       { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 2, step: 1,
         message: createToolResultMessage({
-          callId: ToolCallId('call-1'),
+          callId: brandString<ToolCallId>('call-1'),
           content: [{ type: 'text', text: 'ok' }],
           isError: false,
         }),
@@ -215,7 +216,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -243,7 +244,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('old-call'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('old-call'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -254,7 +255,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
       { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createToolResultMessage({
-          callId: ToolCallId('old-call'),
+          callId: brandString<ToolCallId>('old-call'),
           content: [],
           isError: false,
         }),
@@ -268,7 +269,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('new-call'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('new-call'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -292,8 +293,8 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('call-a'), name: 'bash', arguments: '{}' },
-            { type: 'tool-call', id: ToolCallId('call-b'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-a'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-b'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -305,7 +306,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
       { type: 'tool/result', seq: 3, time: 3, surfaceOp: 'append', data: {
         turn: 1, step: 1,
         message: createToolResultMessage({
-          callId: ToolCallId('call-a'),
+          callId: brandString<ToolCallId>('call-a'),
           content: [],
           isError: false,
         }),
@@ -326,7 +327,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -334,7 +335,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
           },
         }),
       } },
-      { type: 'tool/call', seq: 3, time: 3, data: { turn: 1, step: 1, callId: ToolCallId('call-1'), name: 'bash', arguments: '{}' } },
+      { type: 'tool/call', seq: 3, time: 3, data: { turn: 1, step: 1, callId: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' } },
     ]
     const closers = openTurnClosers(events, cause)
     expect(closers.map(e => e.type)).toEqual(['tool/result', 'step/end', 'turn/end'])
@@ -357,7 +358,7 @@ describe.each(causes)('openTurnClosers (cause %o)', (cause) => {
     const events: SessionEvent[] = [
       userTurnStart(1, 0),
       { type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 } },
-      { type: 'tool/call', seq: 2, time: 2, data: { turn: 1, step: 1, callId: ToolCallId('orphan'), name: 'bash', arguments: '{}' } },
+      { type: 'tool/call', seq: 2, time: 2, data: { turn: 1, step: 1, callId: brandString<ToolCallId>('orphan'), name: 'bash', arguments: '{}' } },
     ]
     const closers = openTurnClosers(events, cause)
     // No pending calls → no synthetic tool/result, just step/end + turn/end.
@@ -376,7 +377,7 @@ describe('openTurnClosers model-visible wording', () => {
         message: createMessage({
           role: 'assistant',
           content: [
-            { type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' },
+            { type: 'tool-call', id: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' },
           ],
           source: {
             kind: 'model',
@@ -386,7 +387,7 @@ describe('openTurnClosers model-visible wording', () => {
       } },
     ]
     if (started) {
-      events.push({ type: 'tool/call', seq: 3, time: 3, data: { turn: 1, step: 1, callId: ToolCallId('call-1'), name: 'bash', arguments: '{}' } })
+      events.push({ type: 'tool/call', seq: 3, time: 3, data: { turn: 1, step: 1, callId: brandString<ToolCallId>('call-1'), name: 'bash', arguments: '{}' } })
     }
     return events
   }

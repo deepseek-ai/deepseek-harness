@@ -229,7 +229,7 @@ it('sends foreground intent to the Host when joining an in-flight prewarm', asyn
 
 it('counts unresolved renderer metadata against the reader limit and joins it on disposal', async () => {
   const h = harness(2, 32, 8, 1)
-  const completed = Promise.withResolvers<{ ok: true; value: ReturnType<typeof OfficeKitGeneration> }>()
+  const completed = Promise.withResolvers<{ ok: true; value: OfficeKitGeneration }>()
   h.generation.mockReturnValueOnce(completed.promise)
   const first = expect(h.read()).rejects.toMatchObject({ name: 'AbortError' })
   await expect(h.read()).rejects.toThrow('busy')
@@ -362,8 +362,8 @@ it.each([[2, 32], [8, 2]])('reserves the final pending/reader slot for foregroun
 
 it('reports repeated generation supersession through the localized capacity failure', async () => {
   const h = harness()
-  const first = Promise.withResolvers<{ ok: true; value: ReturnType<typeof OfficeKitGeneration> }>()
-  const retry = Promise.withResolvers<{ ok: true; value: ReturnType<typeof OfficeKitGeneration> }>()
+  const first = Promise.withResolvers<{ ok: true; value: OfficeKitGeneration }>()
+  const retry = Promise.withResolvers<{ ok: true; value: OfficeKitGeneration }>()
   h.generation.mockReturnValueOnce(first.promise)
   const work = expect(h.read()).rejects.toThrow('busy')
   try {
