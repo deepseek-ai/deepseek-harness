@@ -74,7 +74,7 @@ afterEach(async () => {
  */
 async function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
   const agent = { session: { header: { id: SessionId('web-sess') } } }
-  const exec = { callId: ToolCallId('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as unknown as ToolExecution
+  const exec = { callId: ToolCallId('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as ToolExecution
   if (exec.agent === undefined) throw new Error('the spill fixture call needs its session owner')
   const toolSet = await ctx.tools.resolve({ agent: exec.agent, modelSelection: { provider: 'test', model: 'test' }, signal: exec.signal })
   try {

@@ -9,6 +9,7 @@
     "src/client",
     "src/commit-range.ts",
     "src/css-modules.d.ts",
+    "src/lens-version.ts",
     "src/types.ts"
   ],
   "references": [
@@ -65,6 +66,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
     },
     {
       "path": "../../util/values"

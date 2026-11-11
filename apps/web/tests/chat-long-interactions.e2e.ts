@@ -19,7 +19,7 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { conversationContextKey, expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
+import { conversationContextKey, expandOwningTurnProcess, loadEarlierChatPage, newEnglishPage, saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
 const SESSION_ID = 'chat-long-interactions-e2e'
@@ -219,10 +219,9 @@ describe('web e2e: long Chat interaction contract', () => {
     ))
     expect(await markPitch()).toBe(10)
 
-    const loadEarlier = page.getByRole('button', { name: 'Load earlier', exact: true })
     const loadedRows = page.locator('[data-chat-flow-key]')
     const loadedBefore = await loadedRows.count()
-    await loadEarlier.click()
+    await loadEarlierChatPage(page)
     await expect.poll(() => loadedRows.count(), { timeout: 15_000 }).toBeGreaterThan(loadedBefore)
     await railScroller.hover()
     await page.mouse.wheel(0, -FIXTURE_TURNS * 10)

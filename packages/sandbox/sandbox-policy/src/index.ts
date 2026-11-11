@@ -27,6 +27,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { z as zod } from 'zod'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent'
+import { SandboxInvalidRootError } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -34,10 +35,9 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 
 export { SANDBOX_MODES, setSandboxMode } from './session-mode.ts'
 
-/** Preserve execution-world spelling; enforcing providers resolve filesystem identity on their host. */
-function resolveWorkspaceRoot(path: string): string {
-  if (!isAbsolute(path) || path.includes('\0')) throw new Error('sandbox-policy: workspace root must be an absolute execution-world path without NUL bytes')
-  return path
+/** Whether a path is usable as an execution-world grant: absolute and free of NUL bytes. */
+function isExecutionWorldPath(path: string): boolean {
+  return isAbsolute(path) && !path.includes('\0')
 }
 
 /**
@@ -160,7 +160,12 @@ export class SandboxPolicyService extends Service {
     // runtime fact. `workspaceRoot` has NO schema default, so its fallback to
     // the process cwd is real branching, resolved absolute either way.
     this.defaultMode = config.mode as SandboxMode
-    this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
+    // Execution-world spelling is preserved; enforcing providers resolve filesystem identity on their host.
+    const workspaceRoot = config.workspaceRoot ?? process.cwd()
+    if (!isExecutionWorldPath(workspaceRoot)) {
+      throw new Error('sandbox-policy: workspace root must be an absolute execution-world path without NUL bytes')
+    }
+    this.workspaceRoot = workspaceRoot
     this.additionalWritableRoots = resolveAdditionalWritableRoots(config.additionalWritableRoots)
   }
 
@@ -197,6 +202,8 @@ export class SandboxPolicyService extends Service {
    * snapshotted together; existing operations and processes keep their policy.
    * @param request - optional session and approved mode override.
    * @returns the fully resolved per-call mode and absolute workspace root.
+   * @throws `SandboxInvalidRootError` (`SANDBOX_INVALID_ROOT`) when the session's recorded cwd is
+   *   relative or contains a NUL byte.
    */
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
@@ -206,10 +213,20 @@ export class SandboxPolicyService extends Service {
       : resolveAdditionalWritableRoots([...(this.additionalWritableRoots ?? []), ...registrations.values()])
     return {
       mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
-      workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
+      workspaceRoot: this.sessionWorkspaceRoot(session),
       ...additionalWritableRoots === undefined ? {} : { additionalWritableRoots },
       ...session === undefined ? {} : { sessionId: session.id },
     }
+  }
+
+  /** The session's recorded cwd, or the configured root, as the workspace-write boundary. */
+  private sessionWorkspaceRoot(session: Session | undefined): string {
+    const cwd = session?.header.cwd
+    if (cwd === undefined) return this.workspaceRoot
+    if (!isExecutionWorldPath(cwd)) {
+      throw new SandboxInvalidRootError(cwd, 'the Session working directory must be an absolute execution-world path without NUL bytes', 'sandbox workspace root')
+    }
+    return cwd
   }
 
   /**

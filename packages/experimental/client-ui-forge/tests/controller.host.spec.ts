@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ForgeFailure, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
+import type { ForgeFailure, ForgeProvider, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
@@ -306,6 +306,8 @@ describe('forgePanel.follow', () => {
 
     expect(moved.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
     expect(opened.provider.probes).toEqual(['fake.test', 'other.test'])
+    // A new commit gives the next inspection a state of its own to publish.
+    await git(repo, 'commit', '--allow-empty', '-m', 'again')
     shellTurn(opened.session, 2, [{ callId: 'again', command: 'ls', output: '' }])
     await follower.next(state => state.checkout.state === 'ready')
     expect(follower.states.at(-1)?.readiness).toEqual({ state: 'unauthenticated', message: 'sign in' })
@@ -724,6 +726,57 @@ describe('forgePanel change request diffs', () => {
     await reader(other).until(state => polled(state, pullUrl(7)))
     await expect(other.ctx.forgePanel.changeRequestDiff(other.session, pullUrl(7), null, signal))
       .rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'down' })
+  })
+
+  it('reads the patch and the .gitattributes together, and reports the patch\'s failure before the attributes failure', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => polled(state, pullUrl(7)))
+    const read = async (): Promise<unknown> => await opened.ctx.forgePanel.changeRequestDiff(opened.session, pullUrl(7), null, signal)
+    const cancelled: string[] = []
+    // The patch read ends only after the attributes read has failed, so the attributes failure always comes first.
+    let attributesFailed = Promise.withResolvers<undefined>()
+    const later = <T>(value: T) => async (): Promise<T> => {
+      await attributesFailed.promise
+      return value
+    }
+
+    // Failed reads are not kept, so each case reads again.
+    const diff = vi.spyOn(opened.provider, 'diff').mockImplementation(later<string | ForgeFailure>({ code: 'too-large', message: 'diff over 300 files' }))
+    const text = vi.spyOn(opened.provider, 'fileText').mockImplementation(async () => {
+      attributesFailed.resolve(undefined)
+      return { code: 'unavailable', message: 'attributes down' }
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-too-large', message: 'diff over 300 files' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>({ code: 'stale', message: 'head moved' }))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'head moved' })
+    attributesFailed = Promise.withResolvers()
+    diff.mockImplementation(later<string | ForgeFailure>(PATCH))
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'attributes down' })
+
+    // A failed patch read cancels the attributes read it no longer needs.
+    diff.mockResolvedValue({ code: 'unavailable', message: 'patch down' })
+    text.mockImplementation(async (_ref, _commit, _path, operation) => {
+      await new Promise((resolve) => { operation.addEventListener('abort', resolve, { once: true }) })
+      cancelled.push('attributes')
+      throw operation.reason
+    })
+    await expect(read()).rejects.toMatchObject({ code: 'forgePanel/diff-failed', message: 'patch down' })
+    expect(cancelled).toEqual(['attributes'])
+
+    // The patch read finishes only once the attributes read has started, so reading them one after the other never ends.
+    const attributesStarted = Promise.withResolvers<undefined>()
+    diff.mockImplementation(async () => {
+      await attributesStarted.promise
+      return PATCH
+    })
+    text.mockImplementation(async () => {
+      attributesStarted.resolve(undefined)
+      return 'src/** linguist-generated\n'
+    })
+    await expect(read()).resolves.toMatchObject({ files: [{ path: 'src/a.ts', layer: 'test' }] })
   })
 
   it('lists the commits of a change request and reads consecutive ones from the first one\'s parent', async () => {
@@ -1726,18 +1779,35 @@ describe('forgePanel actions', () => {
     expect(settled).toBe(false)
     inspection.release()
     await inspected
-    await follower.next(() => true)
 
     const probe = Promise.withResolvers<ForgeReadiness>()
     opened.provider.readinessImpl = () => probe.promise
     settled = false
     const probed = opened.ctx.forgePanel.refresh(opened.session, signal).then(() => { settled = true })
-    await follower.next(() => true)
+    await vi.waitFor(() => { expect(opened.provider.probes).toHaveLength(3) })
     await settle()
     expect(settled).toBe(false)
     probe.resolve({ state: 'ready', message: null })
     await probed
     expect(opened.provider.probes).toHaveLength(3)
+  })
+
+  it('publishes nothing when a reinspection and a sign-in probe find what the panel already shows', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    const follower = reader(opened)
+    await follower.until(state => ready(state) && state.readiness !== null)
+    await settle()
+    const published = follower.states.length
+    const inspections = opened.sandbox.calls.length
+
+    shellTurn(opened.session, 1, [{ callId: 'list', command: 'ls', output: '' }])
+    await opened.ctx.forgePanel.refresh(opened.session, signal)
+    await settle()
+
+    expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
+    expect(opened.provider.probes).toHaveLength(2)
+    expect(follower.states).toHaveLength(published)
   })
 
   it('refreshes a Session outside a checkout without polling change requests that no provider serves', async () => {
@@ -1749,8 +1819,10 @@ describe('forgePanel actions', () => {
 
     await opened.ctx.forgePanel.refresh(opened.session, signal)
 
-    const refreshed = await follower.next(state => state.checkout.state === 'none')
-    expect(refreshed.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
+    // The refresh found the same state, which the panel already published.
+    const refreshed = follower.states.at(-1)
+    expect(refreshed?.checkout.state).toBe('none')
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null, reviewRevision: 0 }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])
@@ -1777,6 +1849,88 @@ describe('forgePanel actions', () => {
       .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Pull Request is not mergeable' })
 
     expect(opened.provider.actions).toEqual(['ready 7', `merge 7 squash ${head}`, `merge 7 rebase ${head}`, 'ready 7', `merge 7 merge ${head}`])
+  })
+
+  it('reads and saves viewed marks of a bound change request through its provider, separating a moved head', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+    const request = { path: 'src/app.ts', viewed: true, headSha: head }
+
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toBeNull()
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider keeps no viewed marks' })
+    const marks = { headSha: head, files: { 'src/app.ts': 'dismissed' as const }, truncated: false }
+    const viewedFiles = vi.fn<NonNullable<ForgeProvider['viewedFiles']>>(async () => marks)
+    const setViewed = vi.fn<NonNullable<ForgeProvider['setViewed']>>(async () => undefined)
+    Object.assign(opened.provider, { viewedFiles, setViewed })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal)).resolves.toEqual(marks)
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal)).resolves.toBeUndefined()
+    expect(setViewed).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), request, expect.any(AbortSignal))
+
+    viewedFiles.mockResolvedValueOnce({ code: 'stale', message: 'moved' }).mockResolvedValueOnce({ code: 'unavailable', message: 'rate limited' })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, pullUrl(7), head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/viewed-failed', message: 'rate limited' })
+    setViewed.mockResolvedValueOnce({ code: 'stale', message: 'moved' })
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), request, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head' })
+    await expect(opened.ctx.forgePanel.setFileViewed(opened.session, pullUrl(7), { ...request, path: '' }, signal)).rejects.toThrow('Invalid viewed file')
+    for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
+      await expect(opened.ctx.forgePanel.changeRequestViewed(opened.session, url, head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.setFileViewed(opened.session, url, request, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    }
+    expect(setViewed).toHaveBeenCalledTimes(2)
+  })
+
+  it('reruns checks, requests reviews, lists reviewers, and updates the branch of a bound change request', async () => {
+    const { repo } = await project()
+    const opened = await open(repo)
+    shellTurn(opened.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    await reader(opened).until(state => ready(state) && polled(state, pullUrl(7)))
+    const head = 'a'.repeat(40)
+    const reviewers = [{ kind: 'user' as const, login: 'mona' }]
+
+    await expect(opened.ctx.forgePanel.rerunChecks(opened.session, pullUrl(7), { headSha: head }, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'This provider reruns no checks' })
+    await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, pullUrl(7), '', signal))
+      .rejects.toMatchObject({ code: 'forgePanel/reviewers-failed', message: 'This provider requests no reviews' })
+    const candidates = [{ login: 'mona', name: 'Mona', avatarUrl: null, suggested: true }]
+    const rerunChecks = vi.fn<NonNullable<ForgeProvider['rerunChecks']>>(async () => undefined)
+    const requestReviews = vi.fn<NonNullable<ForgeProvider['requestReviews']>>(async () => undefined)
+    const reviewerCandidates = vi.fn<NonNullable<ForgeProvider['reviewerCandidates']>>(async () => candidates)
+    const updateBranch = vi.fn<NonNullable<ForgeProvider['updateBranch']>>(async () => ({ code: 'stale', message: 'moved' }))
+    Object.assign(opened.provider, { rerunChecks, requestReviews, reviewerCandidates, updateBranch })
+
+    await expect(opened.ctx.forgePanel.rerunChecks(opened.session, pullUrl(7), { headSha: head }, signal)).resolves.toBeUndefined()
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal)).resolves.toBeUndefined()
+    await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, pullUrl(7), 'mo', signal)).resolves.toEqual(candidates)
+    await expect(opened.ctx.forgePanel.updateBranch(opened.session, pullUrl(7), 'rebase', head, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/stale-head', message: 'moved' })
+    updateBranch.mockResolvedValueOnce(undefined)
+    await expect(opened.ctx.forgePanel.updateBranch(opened.session, pullUrl(7), 'merge', head, signal)).resolves.toBeUndefined()
+    expect(requestReviews).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), { reviewers }, expect.any(AbortSignal))
+    expect(updateBranch).toHaveBeenCalledWith(expect.objectContaining({ number: 7 }), { method: 'rebase', headSha: head }, expect.any(AbortSignal))
+    for (const invalid of [[], [{ kind: 'user' as const, login: ' ' }]]) {
+      await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), invalid, signal)).rejects.toThrow('Invalid reviewers')
+    }
+    requestReviews.mockResolvedValueOnce({ code: 'failed', message: 'Could not resolve user' })
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-failed', message: 'Could not resolve user' })
+    // An outcome the host did not confirm keeps its own code, so the reader is told to check it there.
+    requestReviews.mockResolvedValueOnce({ code: 'unknown', message: 'Something went wrong' })
+    await expect(opened.ctx.forgePanel.requestReviews(opened.session, pullUrl(7), reviewers, signal))
+      .rejects.toMatchObject({ code: 'forgePanel/action-unknown', message: 'Something went wrong' })
+    for (const url of [pullUrl(8), 'https://unserved.test/a/b/pull/3']) {
+      await expect(opened.ctx.forgePanel.rerunChecks(opened.session, url, { headSha: head }, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.requestReviews(opened.session, url, reviewers, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.reviewerCandidates(opened.session, url, '', signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+      await expect(opened.ctx.forgePanel.updateBranch(opened.session, url, 'merge', head, signal)).rejects.toMatchObject({ code: 'forgePanel/not-bound' })
+    }
+    expect(rerunChecks).toHaveBeenCalledTimes(1)
   })
 
   it('publishes a review only for a visible binding and validates wire ranges before calling the provider', async () => {
@@ -1906,6 +2060,10 @@ describe('forgePanel configuration', () => {
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],
     [{ maxCommits: 0 }, 'forge-panel: maxCommits must be a positive integer'],
+    [{ lensTimeoutMs: 0 }, 'forge-panel: lensTimeoutMs must be a positive integer no greater than 2147483647'],
+    [{ maxLensReadBytes: 0 }, 'forge-panel: maxLensReadBytes must be a positive integer'],
+    [{ maxCachedLensBytes: -1 }, 'forge-panel: maxCachedLensBytes must be a positive integer'],
+    [{ maxAnnotationsPerFile: 1.5 }, 'forge-panel: maxAnnotationsPerFile must be a positive integer'],
     [{ testPaths: ['**/*.spec.*', ' '] }, 'forge-panel: testPaths entries must not be empty'],
     [{ interfacePaths: [''] }, 'forge-panel: interfacePaths entries must not be empty'],
     [{ worktreePrefix: '-dsh/' }, prefix],

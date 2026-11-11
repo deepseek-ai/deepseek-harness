@@ -206,7 +206,7 @@ describe('multimodal spill', () => {
         if (binding === undefined) throw new Error('missing inspect binding')
         if (failure) await expect(binding({})).rejects.toThrow('capture failed')
         else expect(await binding({})).toEqual({ content: original })
-        return { logs: [], value: 'complete' }
+        return { output: [], value: 'complete' }
       }
     }
     await ctx.plugin(BindingRuntime)

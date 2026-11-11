@@ -2,6 +2,11 @@
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
+import FsLocal from '@deepseek-ai/dsh-fs-local'
+import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
+import Sandbox from '@deepseek-ai/dsh-sandbox-local'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
+import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import UserQuestions, { type AskUserQuestionAnswer } from '@deepseek-ai/dsh-user-questions'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -398,9 +403,30 @@ it('preserves captured launch metadata separately from the current helper parent
   const launchApplication = { name: 'Visual Studio Code', path: '/Applications/Visual Studio Code.app', icon: 'data:image/png;base64,aWNvbg==' }
   control.request.mockResolvedValueOnce({ platform: 'darwin' as const, accessibility: false, screenRecording: false,
     helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
-  expect(await f.ctx.cuaAccess.systemStatus()).toMatchObject({ parent: { pid: 1 }, launchApplication })
+  expect(await f.ctx.cuaAccess.systemStatus()).toEqual({ platform: 'darwin', accessibility: false, screenRecording: false,
+    helper: { pid: 9 }, parent: { pid: 1, path: '/sbin/launchd' }, launchApplication })
 })
 
+it.each([
+  ['helper', {}], ['parent', {}], ['helper', { pid: 0 }], ['parent', { pid: -1 }],
+  ['helper', { pid: 1.5 }], ['parent', { pid: '1' }],
+] as const)('rejects an invalid macOS %s PID from native permission diagnostics: %j', async (field, processInfo) => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  native.instances.at(-1)!.request.mockResolvedValueOnce({
+    platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 1 }, [field]: processInfo,
+  })
+  await expect(f.ctx.cuaAccess.systemStatus()).rejects.toMatchObject({ issues: [{ path: [field, 'pid'] }] })
+})
+
+it('omits the Windows helper PID while retaining its diagnostic name and path', async () => {
+  const f = await setup()
+  await f.ctx.cuaAccess.systemStatus()
+  const status = { platform: 'windows', sessionLocked: null, captureAvailable: true, elevated: false }
+  const helper = { name: 'dsh-cua-windows', path: 'C:/fixture/dsh-cua-windows.exe' }
+  native.instances.at(-1)!.request.mockResolvedValueOnce({ ...status, helper: { ...helper, pid: 4 } })
+  expect(await f.ctx.cuaAccess.systemStatus()).toEqual({ ...status, helper })
+})
 
 it('omits session-only grants from the permission page and retains their access after another session saves a grant', async () => {
   const f = await setup()
@@ -418,7 +444,7 @@ it('omits session-only grants from the permission page and retains their access 
   await expect(f.access.run(f.client, handle, signal, async () => 'still allowed')).resolves.toBe('still allowed')
 })
 
-it.each(['function-body', 'repl', 'script'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
+it.each(['function-body', 'repl', 'script', 'scoped-repl'] as const)('enables retention for effective %s semantics with one profile edit', async (programFormat) => {
   const f = await setup()
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: false, writable: false })
   await expect(f.ctx.cuaAccess.enablePersistentPtc()).rejects.toThrow('no editable profile entry')
@@ -426,10 +452,10 @@ it.each(['function-body', 'repl', 'script'] as const)('enables retention for eff
   const runtime = { programFormat, retainsState: false }
   const edit = vi.fn(async (received: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
     expect(received).toBe(entry)
-    // Effective mode can come from a lower profile; a stale local flag must be replaced.
-    expect(change({ timeoutMs: 4200, scriptPersistence: true })).toEqual({
+    // Effective mode can come from a lower profile; stale local flags must be replaced.
+    expect(change({ timeoutMs: 4200, scriptPersistence: true, replScoped: programFormat === 'script' })).toEqual({
       timeoutMs: 4200, executionMode: programFormat === 'script' ? 'vm-script' : 'persistent-in-memory',
-      scriptPersistence: programFormat === 'script',
+      scriptPersistence: programFormat === 'script', replScoped: programFormat !== 'script',
     })
     runtime.retainsState = true
   })
@@ -441,6 +467,34 @@ it.each(['function-body', 'repl', 'script'] as const)('enables retention for eff
   expect(f.ctx.cuaAccess.ptcConfiguration()).toEqual({ persistent: true, writable: true })
   await f.ctx.cuaAccess.enablePersistentPtc()
   expect(edit).toHaveBeenCalledOnce()
+})
+
+it('runs scoped REPL programs after enabling persistence for a per-call PTC runtime', async () => {
+  const f = await setup()
+  await f.ctx.plugin(FsLocal)
+  await f.ctx.plugin(Subprocess)
+  await f.ctx.plugin(Sandbox)
+  await f.ctx.plugin(SandboxPolicy, { mode: 'danger-full-access' })
+  let config: Record<string, unknown> = { executionMode: 'per-call' }
+  let mounted = await f.ctx.plugin(NodeRuntime, config)
+  const entry = { options: { id: 'ptc-runtime' } }
+  // The editor applies the profile change by replacing the runtime, as a Loader reload does.
+  f.ctx.provide('configEditor', { entries: () => [entry], edit: async (_entry: object, change: (current: Record<string, unknown>) => Record<string, unknown>) => {
+    config = change(config)
+    await mounted.dispose()
+    mounted = await f.ctx.plugin(NodeRuntime, config)
+  } })
+  expect(f.ctx.get('ptcRuntime')?.programFormat).toBe('function-body')
+  await f.ctx.cuaAccess.enablePersistentPtc()
+  expect(config).toMatchObject({ executionMode: 'persistent-in-memory', replScoped: true })
+  const runtime = f.ctx.get('ptcRuntime')
+  if (runtime === undefined) throw new Error('missing persistent runtime')
+  expect(runtime.programFormat).toBe('scoped-repl')
+  const owner = {}
+  const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner, discardCompletion: true }))
+  expect((await run('const value = 1\nglobalThis.readFirst = () => value')).error).toBeUndefined()
+  expect(await run('const value = 2\ninspect(value, readFirst())')).toMatchObject({ output: [{ type: 'text', text: '2 1\n' }] })
+  await runtime.release(owner)
 })
 
 it('rejects invalid application identities before a permission file or native handle can be touched', async () => {

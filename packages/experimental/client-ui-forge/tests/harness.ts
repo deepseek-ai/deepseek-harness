@@ -257,12 +257,19 @@ export function snapshot(ref: ChangeRequestRef): ChangeRequestSnapshot {
     mergeability: 'mergeable',
     mergeReady: true,
     mergeMethods: ['squash', 'merge', 'rebase'],
+    branchUpdates: [],
     reviewDecision: 'none',
+    reviewers: [],
+    reviewersTruncated: false,
+    canRequestReviews: false,
     checks: [],
     checksRollup: 'success',
     checksTruncated: false,
+    canRerunChecks: false,
     unresolvedThreads: 0,
     threadsTruncated: false,
+    closingIssues: [],
+    closingIssuesTruncated: false,
     updatedAt: '2026-10-09T00:00:00Z',
     closedAt: null,
   }
@@ -347,13 +354,13 @@ export class FakeProvider implements ForgeProvider {
     return Promise.resolve(this.actionResult)
   }
 
-  diff(ref: ChangeRequestRef, headSha: string): Promise<string | ForgeFailure> {
+  diff(ref: ChangeRequestRef, headSha: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     this.diffs.push(ref.number)
     this.diffHeads.push(headSha)
     return Promise.resolve(this.patches.get(ref.number) ?? { code: 'not-found', message: `no diff of #${ref.number}` })
   }
 
-  fileText(_ref: ChangeRequestRef, commit: string, path: string): Promise<string | ForgeFailure> {
+  fileText(_ref: ChangeRequestRef, commit: string, path: string, _signal: AbortSignal): Promise<string | ForgeFailure> {
     return Promise.resolve(this.texts.get(`${commit}:${path}`) ?? { code: 'not-found', message: `no ${path} at ${commit}` })
   }
 

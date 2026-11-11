@@ -10,7 +10,7 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mountAgentLoopTestDependencies, provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -355,6 +355,27 @@ describe('bare provider (no dsh-fs-observation-policy)', () => {
     expect(text(result)).toContain('1: alpha')
   })
 
+  it('reports a host metadata fault as a typed filesystem failure', async () => {
+    await symlink(join(dir, 'loop'), join(dir, 'loop'))
+    const result = await call('read', { file_path: 'loop' })
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_IO_ERROR' })
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('reports unreadable content as FS_PERMISSION_DENIED', async () => {
+    const file = join(dir, 'locked.txt')
+    await writeFile(file, 'secret')
+    await chmod(file, 0o000)
+    try {
+      const result = await call('read', { file_path: 'locked.txt' })
+      expect(result.isError).toBe(true)
+      expect(result.error?.info).toEqual({ name: 'FsError', code: 'FS_PERMISSION_DENIED' })
+      expect(text(result)).toContain('permission denied')
+    } finally {
+      await chmod(file, 0o600)
+    }
+  })
+
   it('write unconditionally creates a new file', async () => {
     const result = await call('write', { file_path: 'new.txt', content: 'fresh' })
     expect(result.isError).toBe(false)
@@ -619,7 +640,7 @@ describe('current working directory', () => {
           if (read === undefined) throw new Error('missing read binding')
           const value = await read({ file_path: 'note.txt' })
           expect(JSON.stringify(value)).toContain('current')
-          return { logs: [], value }
+          return { output: [], value }
         }
       }
       await ctx.plugin(ReadBindingRuntime)

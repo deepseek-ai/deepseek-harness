@@ -52,7 +52,7 @@
         "index": 0,
         "id": "call_reuse",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); ({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() })\",\"description\":\"Reuse retained objects and current tool bindings\"}"
+        "argumentsDelta": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); inspect(JSON.stringify(({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() }), null, 2))\",\"description\":\"Reuse retained objects and current tool bindings\"}"
       },
       {
         "type": "block-end",
@@ -61,7 +61,7 @@
           "type": "tool-call",
           "id": "call_reuse",
           "name": "run_code",
-          "arguments": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); ({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() })\",\"description\":\"Reuse retained objects and current tool bindings\"}"
+          "arguments": "{\"code\":\"const childProcess = await import(\\\"node:child_process\\\"); childProcess.execFileSync(process.execPath, [\\\"-e\\\", \\\"process.stdout.write(\\\\\\\"raw child output\\\\\\\")\\\"], { stdio: \\\"inherit\\\" }); await fs.writeFile(\\\"persistent-count.txt\\\", String(increment()) + \\\"\\\\n\\\"); const result = await report({command:\\\"pwd\\\",description:\\\"Read current working directory\\\"}); inspect(JSON.stringify(({ value: counter.value, same: alias === counter, sameDirectory: process.cwd() === result.stdout.text.trim() }), null, 2))\",\"description\":\"Reuse retained objects and current tool bindings\"}"
         }
       },
       {
@@ -132,7 +132,7 @@
         "index": 0,
         "id": "call_recover",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); ({ missing, recreated: recovered.value })\",\"description\":\"Recreate variables after execution process exits\"}"
+        "argumentsDelta": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); inspect(JSON.stringify(({ missing, recreated: recovered.value }), null, 2))\",\"description\":\"Recreate variables after execution process exits\"}"
       },
       {
         "type": "block-end",
@@ -141,7 +141,7 @@
           "type": "tool-call",
           "id": "call_recover",
           "name": "run_code",
-          "arguments": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); ({ missing, recreated: recovered.value })\",\"description\":\"Recreate variables after execution process exits\"}"
+          "arguments": "{\"code\":\"let missing; try { counter.value } catch (error) { missing = error.name === \\\"ReferenceError\\\" }; const fs2 = await import(\\\"node:fs/promises\\\"); let recovered = { value: 0 }; await fs2.appendFile(\\\"persistent-count.txt\\\", \\\"recreated\\\\n\\\"); inspect(JSON.stringify(({ missing, recreated: recovered.value }), null, 2))\",\"description\":\"Recreate variables after execution process exits\"}"
         }
       },
       {

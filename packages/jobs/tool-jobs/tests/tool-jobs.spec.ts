@@ -569,10 +569,17 @@ describe('job_output', () => {
 
   it('rejects an empty or unknown job id as an errored result', async () => {
     const { ctx } = await setup()
-    expect((await call(ctx, 'job_output', { job_id: '' })).isError).toBe(true)
+    expect(await call(ctx, 'job_output', { job_id: '' })).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    })
     const unknown = await call(ctx, 'job_output', { job_id: 'bash-99' })
-    expect(unknown.isError).toBe(true)
+    expect(unknown).toMatchObject({ isError: true, error: { info: { name: 'JobError', code: 'JOB_NOT_FOUND' } } })
     expect(text(unknown)).toContain('unknown job bash-99')
+    expect(await call(ctx, 'job_output', { job_id: 'bash-99', wait: true, timeout_ms: 0 })).toMatchObject({
+      isError: true,
+      error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    })
   })
 })
 
@@ -769,12 +776,9 @@ describe('completion notices across scoped mounts', () => {
     bindScopeParent(agentKey, scopeOf(standingA.ctx) as object)
 
     const inject = vi.fn()
-    const owner = {
-      id: SessionId('sess-scoped'),
-      ctx: agentScope.ctx,
-      inject,
-      session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },
-    } as unknown as Agent
+    const owner = await fakeAgent(ctx, 'sess-scoped', { inject })
+    await detachAgent(owner)
+    Object.assign(owner, { ctx: agentScope.ctx })
     const dispose = await ctx.agents.register(owner)
 
     try {
@@ -1162,7 +1166,7 @@ describe('completion notices', () => {
     await tick()
     aborter.abort()
     const result = await pending
-    expect(result.isError).toBe(true)
+    expect(result).toMatchObject({ isError: true, error: { info: { name: 'AbortError', code: 'ABORTED' } } })
     expect(text(result)).toContain('wait aborted')
 
     p.settle({ status: 'completed' })
