@@ -33,8 +33,6 @@ export const ja = {
   'more': 'その他',
   'collapse': '折りたたむ',
   'expand': '展開',
-  'subtitle.expand': '{name} の説明を展開',
-  'subtitle.collapse': '{name} の説明を折りたたむ',
   'back': '戻る',
   'brand.localBuild': 'DSHローカルビルド',
   'workspace.defaultName': 'デフォルトワークスペース',

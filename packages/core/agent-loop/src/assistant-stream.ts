@@ -1,9 +1,10 @@
 /** Process-local assistant attempt framing and durable stream accumulation. */
 
+import { brandString } from '@deepseek-ai/dsh-brand'
 import {
   AssistantStreamAccumulator,
   BlockAssembler,
-  LlmAttemptId,
+  type LlmAttemptId,
   type AssistantStreamRecord,
   type ContentBlock,
   type FinishReason,
@@ -42,7 +43,7 @@ export class AssistantStreamAttempt {
     readonly step: number,
     private readonly emit: (frame: AssistantStreamFrame) => void,
   ) {
-    this.attemptId = LlmAttemptId(`${sessionId}:${attempt}`)
+    this.attemptId = brandString<LlmAttemptId>(`${sessionId}:${attempt}`)
   }
 
   /** Publish the opening marker before the first delivered chunk. */

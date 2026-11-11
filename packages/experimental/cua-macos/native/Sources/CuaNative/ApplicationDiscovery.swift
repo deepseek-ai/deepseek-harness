@@ -25,8 +25,11 @@ struct InstalledApplication: Sendable, Equatable {
         let values = [name, URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent, bundleID ?? "", path]
         return values.contains { exact ? $0.caseInsensitiveCompare(query) == .orderedSame : $0.localizedCaseInsensitiveContains(query) }
     }
+    func matchesProcess(_ process: ApplicationInfo) -> Bool {
+        process.executablePath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } == executablePath
+    }
     func json(catalog: ApplicationCatalogSnapshot) -> JSONValue {
-        let process = catalog.applications.first { $0.executablePath.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } == executablePath }
+        let process = catalog.applications.first(where: matchesProcess)
         var value: [String: JSONValue] = ["id": .string(bundleID ?? path), "displayName": .string(name), "path": .string(path),
                                         "isRunning": .bool(process != nil)]
         if let process { value["pid"] = .number(Double(process.pid)) }
@@ -72,7 +75,8 @@ struct InstalledApplication: Sendable, Equatable {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.addsToRecentItems = false
-        configuration.createsNewApplicationInstance = true
+        // Reuse is limited to this installation, even if another copy has the same bundle identifier.
+        configuration.allowsRunningApplicationSubstitution = false
         let running = try await NSWorkspace.shared.openApplication(
             at: URL(fileURLWithPath: app.path), configuration: configuration)
         while !running.isFinishedLaunching {

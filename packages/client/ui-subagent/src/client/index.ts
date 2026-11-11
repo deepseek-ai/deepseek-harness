@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type SubagentKey } from './locales.ts'
@@ -31,8 +32,11 @@ export type {
   SubagentReadOnlyComposerProps, SubagentReadOnlyMatch,
 } from './SubagentReadOnlyComposer.tsx'
 
-/** Required services for subagent presentation and navigation. */
-export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight']
+/**
+ * Required services for subagent presentation and navigation. `uiSession.sessionStatus` provides the
+ * `useSessionStatus` hook the lineage header renders with, so the plugin unloads and reloads with it.
+ */
+export const inject = ['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight', 'uiSession.sessionStatus']
 
 /** Claim the composer when the child mode does not allow follow-ups. */
 function selectReadOnlySubagent(owner: ComposerChainProps): SubagentReadOnlyMatch | null {
@@ -61,6 +65,19 @@ export function apply(ctx: ClientContext): void {
         kind: 'subagentchat',
         preferNewPane: true,
       })
+    },
+    async prepareCatalog(parentSessionId: SessionId) {
+      await ctx.sessions.refreshProjections(parentSessionId)
+      const parent = ctx.sessions.list.getSnapshot().projectionsBySession[parentSessionId]
+      if (parent?.state !== 'ready') return
+      for (const entry of parent.values.subagentCatalog ?? []) {
+        if (entry.mode === 'external') continue
+        const state = ctx.sessions.list.getSnapshot()
+        if (state.byId[entry.id]?.formatStatus === 'migration-required'
+          || state.projectionsBySession[entry.id]?.state === 'migration-required'
+          || state.projectionsBySession[entry.id]?.state === 'error') continue
+        await ctx.sessions.refreshProjections(entry.id)
+      }
     },
     refreshProjection(parentSessionId: SessionId) {
       void ctx.sessions.refreshProjections(parentSessionId)

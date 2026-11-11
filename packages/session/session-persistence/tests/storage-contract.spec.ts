@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   SessionAlreadyExistsError,
@@ -14,7 +14,6 @@ import {
   SessionOwnershipLostError,
   SessionPersistenceCorruptionError,
   SessionPersistenceNotFoundError,
-  SessionPersistenceRevision,
   SessionReadOnlyError,
   assertContiguous,
   assertStoredId,
@@ -25,6 +24,7 @@ import {
 } from '../src/index.ts'
 import type { SessionLocation } from '../src/index.ts'
 import { meta } from './contract.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const LOCATION: SessionLocation = { kind: 'jsonl', path: '/store/session.jsonl' }
 
@@ -48,7 +48,7 @@ describe('assertStoredId', () => {
   it('accepts a bound header and names both ids on a mismatch', () => {
     const m = meta('bound')
     expect(() => { assertStoredId(m.id, m) }).not.toThrow()
-    expect(() => { assertStoredId(SessionId('requested'), m) })
+    expect(() => { assertStoredId(brandString<SessionId>('requested'), m) })
       .toThrow('stored session identity mismatch: requested "requested", header contains "bound"')
   })
 })
@@ -260,29 +260,29 @@ describe('assertContiguous', () => {
       { type: 'turn/start', seq: 6, time: 1, data: { turn: 2 } },
       { type: 'turn/end', seq: 7, time: 2, data: { turn: 2, reason: { kind: 'completed' } } },
     ] as SessionEvent[]
-    expect(() => { assertContiguous(SessionId('ok'), events, 6) }).not.toThrow()
-    expect(() => { assertContiguous(SessionId('ok'), [], 6) }).not.toThrow()
+    expect(() => { assertContiguous(brandString<SessionId>('ok'), events, 6) }).not.toThrow()
+    expect(() => { assertContiguous(brandString<SessionId>('ok'), [], 6) }).not.toThrow()
   })
 
   it('names the expected seq for a stale batch and for a mid-batch gap', () => {
     const stale = [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
     ] as SessionEvent[]
-    expect(() => { assertContiguous(SessionId('stale'), stale, 6) })
+    expect(() => { assertContiguous(brandString<SessionId>('stale'), stale, 6) })
       .toThrow('append seq mismatch for "stale": expected 6 at index 0, got 0')
 
     const gapped = [
       { type: 'turn/start', seq: 6, time: 1, data: { turn: 2 } },
       { type: 'turn/end', seq: 8, time: 2, data: { turn: 2, reason: { kind: 'completed' } } },
     ] as SessionEvent[]
-    expect(() => { assertContiguous(SessionId('gapped'), gapped, 6) })
+    expect(() => { assertContiguous(brandString<SessionId>('gapped'), gapped, 6) })
       .toThrow('append seq mismatch for "gapped": expected 7 at index 1, got 8')
   })
 })
 
 describe('error vocabulary', () => {
   it('carries stable names, messages, and the session id', () => {
-    const id = SessionId('errored')
+    const id = brandString<SessionId>('errored')
     const notFound = new SessionPersistenceNotFoundError(id)
     expect(notFound.name).toBe('SessionPersistenceNotFoundError')
     expect(notFound.sessionId).toBe(id)
@@ -312,11 +312,5 @@ describe('error vocabulary', () => {
     const corruption = new SessionPersistenceCorruptionError('bad log', { cause })
     expect(corruption.name).toBe('SessionPersistenceCorruptionError')
     expect(corruption.cause).toBe(cause)
-  })
-})
-
-describe('SessionPersistenceRevision', () => {
-  it('brands the backend token without changing its runtime value', () => {
-    expect(SessionPersistenceRevision('rev:1')).toBe('rev:1')
   })
 })

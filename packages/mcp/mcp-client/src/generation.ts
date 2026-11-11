@@ -62,7 +62,7 @@ export class McpGeneration {
   /** Reject when this generation was cancelled or its transport reported closure. */
   assertOpen(): void {
     this.lifetime.signal.throwIfAborted()
-    if (this.closeObserved) throw new McpLocalError('MCP transport closed')
+    if (this.closeObserved) throw new McpLocalError('MCP transport closed', 'MCP_CONNECTION_CLOSED')
   }
 
   /**
@@ -93,7 +93,7 @@ export class McpGeneration {
    * @param reason - error that cancelled callers receive; the first close decides it.
    * @returns the shared cleanup result, distinguishing transport closure from cleanup failure.
    */
-  close(reason: Error = new McpLocalError('MCP connection closed')): Promise<McpCloseResult> {
+  close(reason: Error = new McpLocalError('MCP connection closed', 'MCP_CONNECTION_CLOSED')): Promise<McpCloseResult> {
     return this.closing ??= this.finish(reason)
   }
 

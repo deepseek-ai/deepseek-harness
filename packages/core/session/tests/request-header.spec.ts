@@ -1,9 +1,10 @@
 /** Request-header canonicalization, equality, and snapshot folding. */
 
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId, SessionSeq, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionSeq, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import type { EpochHeader, SessionEvent } from '@deepseek-ai/dsh-session'
-import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 
 const CONFIG = { provider: 'mock', model: 'm' }
@@ -40,7 +41,7 @@ describe('headerEquals', () => {
     expect(headerEquals(base, { ...base, config: { provider: 'mock', model: 'other' } })).toBe(false)
     expect(headerEquals(base, {
       ...base,
-      config: { ...base.config, reasoningEffort: ReasoningEffortId('high') },
+      config: { ...base.config, reasoningEffort: brandString<ReasoningEffortId>('high') },
     })).toBe(false)
     expect(headerEquals(
       { ...base, config: { ...base.config, maxTokens: 256_000 } },
@@ -73,7 +74,7 @@ describe('foldRequestHeader', () => {
   })
 
   it('takes the latest full snapshot and skips unrelated events', () => {
-    const session = Session.create(SessionId('fold'))
+    const session = Session.create(brandString<SessionId>('fold'))
     session.append('turn/start', { turn: 1 })
     session.append('request/header', { header: { config: CONFIG, tools: [tool('first')] }, reason: 'initial' })
     session.append('user/message', createUserMessage({
@@ -99,13 +100,13 @@ describe('Session.requestContext', () => {
   }
 
   it('reads undefined before any record exists', () => {
-    expect(Session.create(SessionId('no-capacity')).requestContext()).toBeUndefined()
+    expect(Session.create(brandString<SessionId>('no-capacity')).requestContext()).toBeUndefined()
   })
 
   it('folds a seeded log on first read, taking the last record', () => {
     // The fold watermark starts at 0 with the seed already in the log, so the
     // first read must consume the whole seed rather than skip it.
-    const session = Session.create(SessionId('seeded-capacity'), seedWith(
+    const session = Session.create(brandString<SessionId>('seeded-capacity'), seedWith(
       CAPACITY,
       { ...CAPACITY, model: 'later', contextWindow: 256_000 },
     ))
@@ -113,7 +114,7 @@ describe('Session.requestContext', () => {
   })
 
   it('advances incrementally across appends and skips unrelated events', () => {
-    const session = Session.create(SessionId('incremental-capacity'), seedWith(CAPACITY))
+    const session = Session.create(brandString<SessionId>('incremental-capacity'), seedWith(CAPACITY))
     expect(session.requestContext()).toEqual(CAPACITY)
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'unrelated' }], source: { kind: 'user' },
@@ -126,7 +127,7 @@ describe('Session.requestContext', () => {
   })
 
   it('folds a batch appended between two reads', () => {
-    const session = Session.create(SessionId('batched-capacity'), seedWith(CAPACITY))
+    const session = Session.create(brandString<SessionId>('batched-capacity'), seedWith(CAPACITY))
     expect(session.requestContext()).toEqual(CAPACITY)
     session.append('request/context', { ...CAPACITY, contextWindow: 200_000 })
     session.append('user/message', createUserMessage({
@@ -137,7 +138,7 @@ describe('Session.requestContext', () => {
   })
 
   it('exposes a frozen record so a reader cannot desync later comparisons', () => {
-    const session = Session.create(SessionId('frozen-capacity'), seedWith(CAPACITY))
+    const session = Session.create(brandString<SessionId>('frozen-capacity'), seedWith(CAPACITY))
     const held = session.requestContext()
     if (held === undefined) throw new Error('expected a folded capacity record')
     expect(Object.isFrozen(held)).toBe(true)

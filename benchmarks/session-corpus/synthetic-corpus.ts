@@ -3,9 +3,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap, SessionEventType, SessionHeader } from '@deepseek-ai/dsh-session'
 import {
   eventLines,
@@ -68,7 +69,7 @@ export interface WrittenSession {
  * @returns stable Session id.
  */
 export function corpusSessionId(rank: number): SessionId {
-  return SessionId('bench-' + String(rank).padStart(5, '0'))
+  return brandString<SessionId>('bench-' + String(rank).padStart(5, '0'))
 }
 
 function vocabularyWord(rank: number): string {
@@ -213,18 +214,18 @@ function authorEvents(
     if (turn === 1) log.append('system/message', {
       turn, step: 1,
       message: {
-        id: MessageId('system-head'), role: 'system',
+        id: brandString<MessageId>('system-head'), role: 'system',
         content: [{ type: 'text', text: pool.slice(next, SYSTEM_PROMPT_CHARS) }],
         source: { kind: 'system-prompt' },
       },
     }, { surfaceOp: 'append' })
     log.append('user/message', {
-      id: MessageId('prompt-' + String(turn)), role: 'user',
+      id: brandString<MessageId>('prompt-' + String(turn)), role: 'user',
       content: [{ type: 'text', text: pool.slice(next, plan.userChars) }], source: { kind: 'user' },
     }, { surfaceOp: 'append' })
     for (let step = 1; step <= turnSteps + 1; step++) {
       if (step > 1) log.append('step/start', { turn, step })
-      const callId = step <= turnSteps ? ToolCallId(`call-${String(turn)}-${String(step)}`) : undefined
+      const callId = step <= turnSteps ? brandString<ToolCallId>(`call-${String(turn)}-${String(step)}`) : undefined
       const content: ContentBlock[] = [
         { type: 'reasoning', text: pool.slice(next, plan.reasoningChars) },
         { type: 'text', text: pool.slice(next, plan.textChars) },
@@ -242,7 +243,7 @@ function authorEvents(
       log.append('assistant/message', {
         turn, step,
         message: {
-          id: MessageId(`reply-${String(turn)}-${String(step)}`), role: 'assistant', content,
+          id: brandString<MessageId>(`reply-${String(turn)}-${String(step)}`), role: 'assistant', content,
           source: { kind: 'model', provider: 'bench', model: 'bench' },
         },
         stream: [...stream.snapshot()],
@@ -256,7 +257,7 @@ function authorEvents(
         log.append('tool/result', {
           turn, step,
           message: {
-            id: MessageId('result-' + callId), role: 'tool', toolCallId: callId, isError: false,
+            id: brandString<MessageId>('result-' + callId), role: 'tool', toolCallId: callId, isError: false,
             source: { kind: 'tool', callId },
             content: [{ type: 'text', text: pool.slice(next, plan.resultChars) }],
           },
@@ -346,7 +347,7 @@ export function corpusHeader(rank: number, count: number): SessionHeader {
 export function anchorHeader(anchor: number): SessionHeader {
   return {
     version: SESSION_FORMAT_VERSION,
-    id: SessionId(`bench-anchor-${String(anchor).padStart(2, '0')}`),
+    id: brandString<SessionId>(`bench-anchor-${String(anchor).padStart(2, '0')}`),
     createdAt: TIME_ZERO - 60_000,
     cwd: '/bench/anchors',
     isSeeded: false,

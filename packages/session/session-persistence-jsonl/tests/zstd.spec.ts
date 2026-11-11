@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, open, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -21,6 +21,7 @@ import { PublicZstdFrameDecoder } from '../src/zstd-public-decoder.ts'
 import {
   runPersistenceContract, meta, oneTurnLog, releasedV1OneTurnLog,
 } from '../../session-persistence/tests/contract.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const MAGIC = Buffer.from([0x28, 0xB5, 0x2F, 0xFD])
 const roots: string[] = []
@@ -570,6 +571,8 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
       await writeLog(ctx.sessionPersistence, header, oneTurnLog())
       await ctx.sessionPersistence.list()
       const path = logPath(root, header.cwd, header.id, compression)
+      // A changed revision makes the next listing read the header again.
+      await utimes(path, new Date(), new Date(Date.now() + 60_000))
       const probe = await open(path, 'r')
       const prototype = Object.getPrototypeOf(probe) as { read: HeaderRead }
       const originalRead = prototype.read
@@ -790,14 +793,14 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
       ['partial', MAGIC],
       ['not-header', await compressZstdFrame('{"type":"turn/start"}\n')],
     ] as const) {
-      const sessionId = SessionId(id)
+      const sessionId = brandString<SessionId>(id)
       await mkdir(sessionDir(root, undefined, sessionId), { recursive: true })
       await writeFile(logPath(root, undefined, sessionId, 'zstd'), content)
     }
     const ctx = await mount(root)
     expect(await ctx.sessionPersistence.list()).toEqual([])
 
-    const twoLinesId = SessionId('two-lines')
+    const twoLinesId = brandString<SessionId>('two-lines')
     await mkdir(sessionDir(root, undefined, twoLinesId), { recursive: true })
     await writeFile(logPath(root, undefined, twoLinesId, 'zstd'), await compressZstdFrame([
       JSON.stringify(toHeaderLine(meta('two-lines'))),
@@ -812,23 +815,23 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
   it('rejects missing, empty, and checksum-corrupt header frames on targeted reads', async () => {
     const root = await freshRoot()
     for (const id of ['partial-only', 'empty-header', 'bad-checksum']) {
-      await mkdir(sessionDir(root, undefined, SessionId(id)), { recursive: true })
+      await mkdir(sessionDir(root, undefined, brandString<SessionId>(id)), { recursive: true })
     }
-    await writeFile(logPath(root, undefined, SessionId('partial-only'), 'zstd'), MAGIC)
-    await writeFile(logPath(root, undefined, SessionId('empty-header'), 'zstd'), await compressZstdFrame(''))
+    await writeFile(logPath(root, undefined, brandString<SessionId>('partial-only'), 'zstd'), MAGIC)
+    await writeFile(logPath(root, undefined, brandString<SessionId>('empty-header'), 'zstd'), await compressZstdFrame(''))
     const corruptHeader = Buffer.from(await compressZstdFrame(`${JSON.stringify(toHeaderLine(meta('bad-checksum')))}\n`))
     corruptHeader[corruptHeader.length - 1] = corruptHeader[corruptHeader.length - 1]! ^ 0xFF
-    await writeFile(logPath(root, undefined, SessionId('bad-checksum'), 'zstd'), corruptHeader)
+    await writeFile(logPath(root, undefined, brandString<SessionId>('bad-checksum'), 'zstd'), corruptHeader)
     const ctx = await mount(root)
 
-    await expect(ctx.sessionPersistence.open(SessionId('partial-only'), 'read'))
+    await expect(ctx.sessionPersistence.open(brandString<SessionId>('partial-only'), 'read'))
       .rejects.toThrow(/empty or header-less Zstandard session log/)
-    await expect(ctx.sessionPersistence.open(SessionId('empty-header'), 'read'))
+    await expect(ctx.sessionPersistence.open(brandString<SessionId>('empty-header'), 'read'))
       .rejects.toThrow(/first frame is not exactly one header line/)
     expect(await ctx.sessionPersistence.list()).toEqual([])
-    await expect(ctx.sessionPersistence.stat(SessionId('bad-checksum')))
+    await expect(ctx.sessionPersistence.stat(brandString<SessionId>('bad-checksum')))
       .rejects.toThrow(/header frame failed validation/)
-    await expect(ctx.sessionPersistence.open(SessionId('bad-checksum'), 'read'))
+    await expect(ctx.sessionPersistence.open(brandString<SessionId>('bad-checksum'), 'read'))
       .rejects.toThrow(/frame at byte 0 failed validation/)
   })
 })

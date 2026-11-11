@@ -90,11 +90,11 @@ The command child activates only when a commands service is composed. It maps ba
 
 ### The exit tool
 
-`exit_plan_mode` is disclosed progressively: it is admitted from the first step whose selected plan state is active and stays admitted for the rest of the Session, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; Native and PTC execution use the same admitted set. A call while plan mode is not committed fails. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel, or after a service reload while the review is pending, the call fails closed and `/plan off` remains the manual escape.
+`exit_plan_mode` is disclosed progressively: it is admitted from the first step whose selected plan state is active and stays admitted for the rest of the Session, so entering plan mode the first time adds it together with the guidance, and later transitions change only the guidance; Native and PTC execution use the same admitted set. A call while plan mode is not committed fails with `PlanModeError` `PLAN_NOT_ACTIVE`, and a plan without a leading `#` heading fails with `ToolArgsError` before review. An approved review records a silent pending exit that the next accepted in-turn pre-step appends, keeping plan guidance for the rest of the current tool batch. Without a user-questions channel (`ToolContextUnavailableError`), or after a service reload while the review is pending (`PLAN_REVIEW_INTERRUPTED`), the call fails closed and `/plan off` remains the manual escape. [`src/error.ts`](src/error.ts) lists the `PlanModeError` codes.
 
 ### Session projection unit
 
-The package requires `ctx.sessionProjections` and awaits registration of the `plan` unit during activation. Its prompt section is registered before that wait. Agent prompt assembly fails explicitly while the reader is unavailable, so a restored plan cannot run without its guidance. Callers must await plugin activation before running an agent.
+The package requires `ctx.sessionProjections` and awaits registration of the `plan` unit during activation. Its prompt section is registered before that wait. Agent prompt assembly, the `/plan` command, and `exit_plan_mode` fail with `PlanModeError` `PLAN_STATE_UNAVAILABLE` while the reader is unavailable, so a restored plan cannot run without its guidance. Callers must await plugin activation before running an agent.
 
 The unit turns logged `/plan` command runs into a candidate target, commits the logged state on `plan/mode`, and derives `{ active, pending }` for `view`, where `pending` is true only while an unsettled or successful selection differs from the logged state — a pure replay quantity recoverable from the log alone. The key merges into `SessionProjectionMap` from [`src/types.ts`](src/types.ts); the framework drives the unit, and unloading the plugin fiber unregisters the key. State reads use the retained handle and remain available after unregistration.
 
@@ -104,6 +104,7 @@ The unit turns logged `/plan` command runs into a candidate target, commits the 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, the `ctx.planMode` service, `plan:policy` section, `/plan` command, `exit_plan_mode` tool |
 | [`src/types.ts`](src/types.ts) | The `plan` projection-key declaration and `PlanProjection` wire value |
+| [`src/error.ts`](src/error.ts) | `PlanModeError` and its closed code union |
 | [`src/client.ts`](src/client.ts) | Client-namespace re-export of the types outlet |
 
 The review intent carries the originating tool-call id, so the Web client can reopen the same submitted plan after the review closes. The complete Markdown remains in the existing native call or PTC dispatch log.
@@ -166,7 +167,7 @@ The user block is append-only conversation growth. Entering or leaving plan mode
 
 #### What the model sees
 
-The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) is offered from the first plan-mode entry in a Session; earlier calls return `UNKNOWN_TOOL`, calls after leaving plan mode fail as unavailable outside plan mode, and an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call carrying review feedback. A dismissed review returns `{ approved: false }`, renders a note that the user will reply, and concludes the turn without another model request.
+The [`exit_plan_mode` schema](../../../docs/tool-catalog.md#deepseek-aidsh-plan-mode) is offered from the first plan-mode entry in a Session; earlier calls return `UNKNOWN_TOOL`, calls after leaving plan mode fail as unavailable outside plan mode, and an approved in-mode review returns the canonical `{ approved: true }` value and renders the existing confirmation text. Rejection remains a failed call with `PLAN_REVISION_REQUESTED` carrying review feedback. A dismissed review returns `{ approved: false }`, renders a note that the user will reply, and concludes the turn without another model request.
 
 #### Token effect
 

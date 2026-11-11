@@ -15,7 +15,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type OfficeKit from '@deepseek-ai/dsh-office-kit'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
@@ -92,6 +92,7 @@ import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorkspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import { githubSlug } from './verify-md-links.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Attachment seam marker that makes the attachments-conditional `read_image` schema harvestable. */
 class CatalogAttachmentStore extends AttachmentStore {
@@ -664,7 +665,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(SubagentRuntime)
       await ctx.plugin(CatalogSessionPersistence)
       await ctx.plugin(TeamService)
-      const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
+      const session = ctx.sessions.create(brandString<SessionId>('tool-catalog-team-lead'))
       let agent!: Agent
       await ctx.plugin(Object.assign(async (inner: Context) => {
         agent = {

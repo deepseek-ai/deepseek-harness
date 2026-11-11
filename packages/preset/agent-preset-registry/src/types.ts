@@ -1,6 +1,30 @@
 /** Client-safe payloads and event declarations owned by the agent-preset domain. */
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
+/** Dictionary keys carrying one shipped preset's display copy. */
+export type BuiltInPresetCopyKey =
+  | 'presetStandardName' | 'presetStandardDescription'
+  | 'presetPtcName' | 'presetPtcDescription'
+  | 'presetMinimalName' | 'presetMinimalDescription'
+  | 'presetCordisName' | 'presetCordisDescription'
+
+/** Preset roster fields needed to resolve display copy. */
+export interface PresetDisplaySource {
+  /** Stable preset id. */
+  readonly id: string
+  /** Unlocalized name published by the preset. */
+  readonly name?: string
+  /** Unlocalized description published by the preset. */
+  readonly description?: string
+}
+
+/** Display copy resolved for the active locale. */
+export interface PresetDisplayText {
+  /** Localized built-in name or the preset's own fallback name. */
+  readonly name: string
+  /** Localized built-in description or the preset's own description. */
+  readonly description?: string
+}
 
 /**
  * One declared preset as a client reads it.

@@ -8,7 +8,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import type { SidebarRightTabActions } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { fileAddressFor } from '@deepseek-ai/dsh-util-workspace-path'
 import type { WorkspaceDiffHunk } from '@deepseek-ai/dsh-workspace-changes/types'
 import {
@@ -24,13 +24,14 @@ import { hunkRows, MAX_RENDERED_LINES, renderedHunks, splitRows } from '../src/c
 import { changesReviewDefinition } from '../src/client/review-definition.ts'
 import { createReviewStore } from '../src/client/review-store.ts'
 import { en, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
 
-const SESSION = SessionId('viewed')
+const SESSION = brandString<SessionId>('viewed')
 const TAB = 'tab-1' as TabId
 const COORDINATES = { sessionId: SESSION, seq: 5, turn: 2 }
 const ADDRESS = changesReviewAddress(COORDINATES)

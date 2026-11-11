@@ -138,7 +138,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://... # optional
 ```
 
-`DEEPSEEK_BASE_URL` 可选，默认为公开 API。请勿提交真实凭证。未设置 `DEEPSEEK_API_KEY` 时，真实 API 的 e2e 套件会自动跳过。
+`DEEPSEEK_BASE_URL` 可选，默认为公开 API。e2e 与 Web 的 Vitest 配置，以及 `DSH_SNAPSHOT=record` 时的快照配置，会自行加载根目录 `.env`；而从仓库根目录启动的 `pnpm dsh` 和 `pnpm run demo:ptc` 会把它当作项目 `.env` 读取，项目 `.env` 不能设置 `DEEPSEEK_BASE_URL`，因此这些启动需要导出该变量，或把它写入 `$DSH_HOME/.env`。请勿提交真实凭证。未设置 `DEEPSEEK_API_KEY` 时，真实 API 的 e2e 套件会自动跳过。
 
 ### Git 集成
 

@@ -3,8 +3,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "call_workspace_read", "name": "run_code", "argumentsDelta": "{\"code\":\"return await tools.read({ file_path: 'nested/task.txt' })\",\"description\":\"Read nested/task.txt\"}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_workspace_read", "name": "run_code", "arguments": "{\"code\":\"return await tools.read({ file_path: 'nested/task.txt' })\",\"description\":\"Read nested/task.txt\"}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "call_workspace_read", "name": "run_code", "argumentsDelta": "{\"code\":\"inspect(await tools.read({ file_path: 'nested/task.txt' })); return;\",\"description\":\"Read nested/task.txt\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_workspace_read", "name": "run_code", "arguments": "{\"code\":\"inspect(await tools.read({ file_path: 'nested/task.txt' })); return;\",\"description\":\"Read nested/task.txt\"}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

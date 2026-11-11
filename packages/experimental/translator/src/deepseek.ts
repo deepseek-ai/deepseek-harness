@@ -3,7 +3,8 @@ import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { BlockAssembler, ReasoningEffortId, type LlmRuntime, type GenerateOptions, type RequestUserInput, type FinishReason, type TextBlock } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { BlockAssembler, type ReasoningEffortId, type LlmRuntime, type GenerateOptions, type RequestUserInput, type FinishReason, type TextBlock } from '@deepseek-ai/dsh-llm'
 import type { Config as AccountNativeConfig } from '@deepseek-ai/dsh-llm-deepseek-account'
 import type { Config as OfficialNativeConfig } from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
@@ -163,7 +164,7 @@ export async function translateWithDeepSeek(ctx: Context, spec: PaidTranslationS
       }
     }, { global: true })
     const prepared = await awaitMetadata(() => owner.llm.prepareCall({ provider: spec.provider, model: MODEL,
-      reasoningEffort: ReasoningEffortId('off'), maxTokens: config.deepseekMaxOutputTokens }, timeout.signal), timeout.signal, track)
+      reasoningEffort: brandString<ReasoningEffortId>('off'), maxTokens: config.deepseekMaxOutputTokens }, timeout.signal), timeout.signal, track)
     timeout.signal.throwIfAborted()
     if (await eligible(ctx, spec.provider, timeout.signal, track) === undefined || unchanged(ctx, spec.provider, accepted) === undefined) {
       throw new TranslationError('TRANSLATION_UNAVAILABLE', 'Native Flash translation provider changed before dispatch')

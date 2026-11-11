@@ -1,0 +1,126 @@
+- img "变更请求状态：需要处理"
+- text: "Add the pull request panel #7"
+- button "查看的提交：全部提交": 全部提交
+- button "提交评审"
+- button "在浏览器中打开"
+- radiogroup "分层透镜":
+  - radio "全部 6" [checked]
+  - radio "接口 1"
+  - radio "实现 2"
+  - radio "测试 3"
+- button "全部 6 个文件"
+- switch "隐藏测试文件"
+- button "筛选透镜": 透镜
+- button "笔记 2" [pressed]
+- progressbar "已审阅的文件": 已审阅 0 / 6
+- text: +8 −2
+- button "刷新变更"
+- button "全部折叠"
+- button "左右对比" [pressed]
+- button "自动换行" [pressed]
+- button "将文件树移到右侧" [expanded]
+- region "全部 6 个文件":
+  - button "收起 panel.md" [expanded]
+  - text: docs/panel.md 新文件 +2 −0
+  - checkbox "将 panel.md 标记为已审阅"
+  - button "panel.md 的更多操作"
+  - strong: 笔记
+  - text: 已看过此文件
+  - button "移除"
+  - button "选择第 R1 行": "1"
+  - text: "+ # Panel"
+  - button "选择第 R2 行": "2"
+  - text: + Shows the change requests of a Session.
+  - button "收起 schema.json" [expanded]
+  - text: docs/schema.json 新文件 +1 −0
+  - checkbox "将 schema.json 标记为已审阅"
+  - button "schema.json 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ { \"type\": \"object\" }"
+  - button "收起 zh.json" [expanded]
+  - text: locale/zh.json 新文件 +1 −0
+  - checkbox "将 zh.json 标记为已审阅"
+  - button "zh.json 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ { \"title\": \"面板\" }"
+  - button "收起 panel.spec.ts" [expanded]
+  - text: src/panel.spec.ts 新文件 +1 −0
+  - checkbox "将 panel.spec.ts 标记为已审阅"
+  - button "panel.spec.ts 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ it('shows the panel', () => {})"
+  - button "收起 panel.ts" [expanded]
+  - text: src/panel.ts +2 −2
+  - checkbox "将 panel.ts 标记为已审阅"
+  - button "panel.ts 的更多操作"
+  - button "选择第 L1 行": "1"
+  - text: export const n1 = 1
+  - button "选择第 R1 行": "1"
+  - text: export const n1 = 1
+  - button "选择第 L2 行": "2"
+  - text: export const n2 = 2
+  - button "选择第 R2 行": "2"
+  - text: export const n2 = 'two'
+  - strong: 笔记
+  - text: Check the quoted value
+  - button "移除"
+  - button "选择第 L3 行": "3"
+  - text: export const n3 = 3
+  - button "选择第 R3 行": "3"
+  - text: export const n3 = 3
+  - button "选择第 L4 行": "4"
+  - text: export const n4 = 4
+  - button "选择第 R4 行": "4"
+  - text: export const n4 = 4
+  - button "选择第 L5 行": "5"
+  - text: export const n5 = 5
+  - button "选择第 R5 行": "5"
+  - text: export const n5 = 5
+  - button "6 行未变更"
+  - button "选择第 L12 行": "12"
+  - text: export const n12 = 12
+  - button "选择第 R12 行": "12"
+  - text: export const n12 = 12
+  - button "选择第 L13 行": "13"
+  - text: export const n13 = 13
+  - button "选择第 R13 行": "13"
+  - text: export const n13 = 13
+  - button "选择第 L14 行": "14"
+  - text: export const n14 = 14
+  - button "选择第 R14 行": "14"
+  - text: export const n14 = 14
+  - button "选择第 L15 行": "15"
+  - text: export const n15 = 15
+  - button "选择第 R15 行": "15"
+  - text: export const n15 = 'fifteen'
+  - button "选择第 L16 行": "16"
+  - text: export const n16 = 16
+  - button "选择第 R16 行": "16"
+  - text: export const n16 = 16
+  - button "选择第 L17 行": "17"
+  - text: export const n17 = 17
+  - button "选择第 R17 行": "17"
+  - text: export const n17 = 17
+  - button "选择第 L18 行": "18"
+  - text: export const n18 = 18
+  - button "选择第 R18 行": "18"
+  - text: export const n18 = 18
+  - button "其余未变更的行"
+  - button "收起 package.json" [expanded]
+  - text: package.json 新文件 +1 −0
+  - checkbox "将 package.json 标记为已审阅"
+  - button "package.json 的更多操作"
+  - button "选择第 R1 行": "1"
+  - text: "+ { \"name\": \"demo\" }"
+- separator "调整文件树宽度"
+- navigation "全部 6 个文件":
+  - textbox "筛选文件…"
+  - button "docs" [expanded]
+  - button "docs/panel.md": panel.md +2 −0
+  - button "docs/schema.json": schema.json +1 −0
+  - button "locale" [expanded]
+  - button "locale/zh.json": zh.json +1 −0
+  - button "src" [expanded]
+  - button "src/panel.spec.ts": panel.spec.ts +1 −0
+  - button "src/panel.ts": panel.ts +2 −2
+  - button "package.json": package.json +1 −0

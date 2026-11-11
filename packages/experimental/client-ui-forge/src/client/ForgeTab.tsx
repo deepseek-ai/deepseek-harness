@@ -4,7 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import {
   Button, IconBranchOutlineRegular, IconCopyOutlineRegular, IconFolderCloseRegular, IconWarningTriangleOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from './slots.ts'
 import type { RemoteHostFacts } from '@deepseek-ai/dsh-api-remotes/client'
 import type { MergeRequest } from '@deepseek-ai/dsh-experimental-forge/types'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -43,6 +44,14 @@ export interface ForgeTabInjected {
   readonly merge: (entry: ForgePanelChangeRequest, request: MergeRequest) => Promise<void>
   /** Read the complete checks of an opened change request. */
   readonly readChecks: NonNullable<ChangeRequestActions['readChecks']>
+  /** Rerun the failed checks or one check; settles once the outcome is reported. */
+  readonly rerunChecks: NonNullable<ChangeRequestActions['rerunChecks']>
+  /** Request reviews from more reviewers; settles once the outcome is reported. */
+  readonly requestReviews: NonNullable<ChangeRequestActions['requestReviews']>
+  /** List accounts a review can be requested from. */
+  readonly reviewerCandidates: NonNullable<ChangeRequestActions['reviewerCandidates']>
+  /** Bring the base branch's new commits into the head branch; settles once the outcome is reported. */
+  readonly updateBranch: NonNullable<ChangeRequestActions['updateBranch']>
   /** Check the removed worktree of the Session out again, reporting the outcome. */
   readonly restore: () => void
   /** Open a URL outside the app. */
@@ -60,6 +69,7 @@ export interface ForgeTabInjected {
 /** Full props of the tab body. */
 export type ForgeTabProps =
   Pick<PropsRuntime<'sidebar.right.pane.tab'>, 'useTabInfo' | 'sessionId'>
+  & Pick<PropsRenderSlots<'forge.change-request.card.actions'>, 'renderSlot'>
   & InjectFace<ForgeTabInjected>
   & PropsLocale<typeof NS>
 
@@ -158,8 +168,8 @@ function SignIn({ state, copyText, t }: {
  */
 export function ForgeTab({
   useTabInfo, sessionId, usePanel, useHost, useLocale, reconnect, refresh, remove, markReady, merge, readChecks, restore,
-  openLink, copyText, copyPath,
-  reportVisible, createChangeRequest, t,
+  rerunChecks, requestReviews, reviewerCandidates, updateBranch, openLink, copyText, copyPath,
+  reportVisible, createChangeRequest, renderSlot, t,
 }: ForgeTabProps): ReactNode {
   const snapshot = usePanel(current => current)
   const home = useHost(facts => facts.home)
@@ -190,7 +200,9 @@ export function ForgeTab({
   }
   const actions: ChangeRequestActions = {
     openLink, copyLink: copyText, retry: startRefresh, remove, markReady, merge, readChecks,
+    rerunChecks, requestReviews, reviewerCandidates, updateBranch,
     viewChanges: (entry) => { viewChanges({ kind: 'change', url: entry.url }) },
+    renderActions: owner => renderSlot('forge.change-request.card.actions', owner),
   }
   const local = state.local !== null && state.local.files.length > 0 ? state.local : null
   const expanded = chosen ?? defaultExpanded(state.changeRequests)

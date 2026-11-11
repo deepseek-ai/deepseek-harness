@@ -83,7 +83,7 @@ Each model step admits `web_search` and `web_fetch`, and so declares, describes,
 
 ### Failures and recovery
 
-Schema validation rejects an absent or non-array `queries` field, non-string array elements, an oversized array, or a blank URL before execution, with exact messages such as `Error: queries must contain at least one query` and `Error: url must be a non-empty string`. Provider-side failures surface as structured error tool results; the model can read them and decide the next step, for example fetching a cited URL or refining a query.
+Schema validation rejects an absent or non-array `queries` field, non-string array elements, an oversized array, or a blank URL before execution, with exact messages such as `Error: invalid arguments: queries must contain at least one query` and `Error: invalid arguments: url must be a non-empty string`. Provider-side failures surface as structured error tool results; the model can read them and decide the next step, for example fetching a cited URL or refining a query.
 
 -----
 
@@ -255,7 +255,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-Schema validation rejects an absent or non-array `queries` field and non-string array elements before execution. Value errors become exactly `Error: queries must contain at least one query`, `Error: queries must contain at most 1 query` when the configured cap is one, `Error: queries must contain at most <count> queries` for larger caps, `Error: each query must be a non-empty string`, or `Error: url must be a non-empty string`.
+Schema validation rejects an absent or non-array `queries` field and non-string array elements before execution. Query and URL value errors fail as `ToolArgsError` with `INVALID_ARGS` and become exactly `Error: invalid arguments: queries must contain at least one query`, `Error: invalid arguments: queries must contain at most 1 query` when the configured cap is one, `Error: invalid arguments: queries must contain at most <count> queries` for larger caps, `Error: invalid arguments: each query must be a non-empty string`, or `Error: invalid arguments: url must be a non-empty string`.
 
 #### Token effect
 

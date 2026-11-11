@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 可能出什么问题
 
-没有服务于所有者的控制器时无法启动工作——加载 `dsh-tool-jobs` 即附加一个，否则 `start()` 会以指出它的消息拒绝。返回但始终未结算 `done` 的生产方取消与缓慢停止无法区分，可能使销毁停滞并持续占用一个容量名额。运行期注册表记录会在 harness 进程退出时消失；已持久化的生命周期事件会保留。
+没有服务于所有者的控制器时无法启动工作——加载 `dsh-tool-jobs` 即附加一个，否则 `start()` 会以指出它的消息拒绝。拒绝均为 `JobError`：`JOB_CONTROLLER_UNAVAILABLE`、`JOB_LIMIT_REACHED`、`JOB_OWNER_NOT_LIVE`、`JOB_NOT_FOUND` 与 `JOB_FOREIGN_SESSION`；没有 agent 注册表时登记带所有者的 job 会以 `JOB_OWNER_REGISTRY_UNAVAILABLE` 失败。signal 中止的等待以名为 `AbortError` 的错误拒绝。返回但始终未结算 `done` 的生产方取消与缓慢停止无法区分，可能使销毁停滞并持续占用一个容量名额。运行期注册表记录会在 harness 进程退出时消失；已持久化的生命周期事件会保留。
 
 -----
 

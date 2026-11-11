@@ -8,12 +8,17 @@
  * key drops its trailing separators too, so `/` becomes the empty key and a
  * Windows drive root `C:\` becomes `C:`, and a top-level child's key still
  * ends at its parent's last `/`.
+ *
+ * Unless the reader shows them, hidden entries are left out, and a directory
+ * whose every entry is hidden says so. The same conversion draws a search's
+ * results, whose directories hold only the matches.
  */
 import type { RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TreeDirectoryState, TreeEntry } from './FileTree.tsx'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from './locales.ts'
-import { childPath, type FilesTreeState } from './store.ts'
+import { isHiddenEntry } from './search-rules.ts'
+import { childPath, type DirLevel, type FilesTreeState } from './store.ts'
 
 /**
  * Say why a directory could not be listed, in terms of the directory.
@@ -53,26 +58,47 @@ export function parentOf(tree: FilesTreeState, path: string): string {
 }
 
 /**
+ * A listing's entries as drawn.
+ * @param level - one ready listing.
+ * @param showHidden - whether hidden entries are drawn.
+ * @returns the entries, without hidden ones unless they are shown.
+ */
+function drawnEntries(level: DirLevel, showHidden: boolean): DirLevel['entries'] {
+  return showHidden ? level.entries : level.entries.filter(entry => !isHiddenEntry(entry))
+}
+
+/**
  * Every listed entry of a pane's tree, collapsed levels included, each named
- * as its listing spells it.
+ * as its listing spells it. Unless hidden entries are drawn, the kept levels
+ * below a hidden directory are left out with it, so a directory listed while
+ * hidden entries were shown is not drawn again through its descendants.
  * @param levels - the pane's level states.
+ * @param showHidden - whether hidden entries are drawn.
  * @returns the entries keyed as the tree draws them.
  */
-export function workspaceEntries(levels: FilesTreeState['levels']): TreeEntry[] {
-  return Object.entries(levels).flatMap(([path, level]) => level.kind !== 'ready' ? [] : level.level.entries
-    .map(entry => ({ path: childPath(path, entry.name), name: entry.name, meta: { kind: entry.type } })))
+export function workspaceEntries(levels: FilesTreeState['levels'], showHidden: boolean): TreeEntry[] {
+  const ready = Object.entries(levels).flatMap(([path, level]) => level.kind === 'ready' ? [{ path, level: level.level }] : [])
+  const hiddenPrefixes = showHidden ? [] : ready.flatMap(({ path, level }) => level.entries
+    .filter(entry => entry.type === 'directory' && isHiddenEntry(entry)).map(entry => childPath(childPath(path, entry.name), '')))
+  return ready
+    .filter(({ path }) => !hiddenPrefixes.some(prefix => `${path}/`.startsWith(prefix)))
+    .flatMap(({ path, level }) => drawnEntries(level, showHidden)
+      .map(entry => ({ path: childPath(path, entry.name), name: entry.name, meta: { kind: entry.type } })))
 }
 
 /**
  * Each directory's listing state: loading until its first listing settles, then
- * its latest failure and whether its listing is truncated.
+ * its latest failure, whether its listing is truncated, and whether it holds
+ * only hidden entries that are not drawn.
  * @param tree - the pane's root, level states, and expanded directories.
  * @param t - namespace-bound translate, for failure lines.
+ * @param showHidden - whether hidden entries are drawn.
  * @returns the states keyed as the tree draws them.
  */
 export function workspaceDirectories(
   tree: Pick<FilesTreeState, 'root' | 'levels' | 'expanded'>,
   t: TranslateNS<'sidebarFiles'>,
+  showHidden: boolean,
 ): Record<string, TreeDirectoryState> {
   const { root, levels, expanded } = tree
   const directories: Record<string, TreeDirectoryState> = {}
@@ -83,11 +109,23 @@ export function workspaceDirectories(
     if (level.kind === 'loading') directories[key] = { loading: true }
     else if (level.kind === 'failed') directories[key] = { failure: failureLine(t, level.failure) }
     else {
-      const state: { failure?: string; truncated?: true } = {}
+      const state: { failure?: string; truncated?: true; omitted?: 'hidden' } = {}
       if (level.failure !== undefined) state.failure = failureLine(t, level.failure)
       if (level.level.truncated) state.truncated = true
+      if (level.level.entries.length > 0 && drawnEntries(level.level, showHidden).length === 0) state.omitted = 'hidden'
       directories[key] = state
     }
   }
   return directories
+}
+
+/**
+ * Each directory of a search's results, which holds only the matches below it,
+ * so a matched directory without matched descendants draws no empty line.
+ * @param tree - the results as a tree.
+ * @returns the states keyed as the tree draws them.
+ */
+export function searchDirectories(tree: Pick<FilesTreeState, 'root' | 'levels'>): Record<string, TreeDirectoryState> {
+  return Object.fromEntries(Object.keys(tree.levels)
+    .map(path => [path === tree.root ? treeRootOf(path) : path, { omitted: 'unmatched' } as const]))
 }

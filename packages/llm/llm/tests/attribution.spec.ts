@@ -1,7 +1,11 @@
 import { createRequire } from 'node:module'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_IDENTITY, attributionHeaders, userAgent } from '@deepseek-ai/dsh-llm'
 import type { AppIdentity } from '@deepseek-ai/dsh-llm'
+
+// The default identity must not depend on the developer's exported suffix.
+beforeEach(() => { vi.stubEnv('DSH_USER_AGENT_SUFFIX', undefined) })
+afterEach(() => { vi.unstubAllEnvs() })
 
 const manifest = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -35,6 +39,29 @@ describe('userAgent', () => {
 
   it('renders a custom identity', () => {
     expect(userAgent(forkIdentity)).toBe('fork-agent/9.9.9 (+https://example.com/fork-agent)')
+  })
+
+  it('appends the identity suffix after the comment', () => {
+    expect(userAgent({ ...forkIdentity, suffix: 'dsh-profile/web' })).toBe('fork-agent/9.9.9 (+https://example.com/fork-agent) dsh-profile/web')
+  })
+})
+
+describe('DSH_USER_AGENT_SUFFIX', () => {
+  it('appends the launch suffix to the default User-Agent when read', () => {
+    vi.stubEnv('DSH_USER_AGENT_SUFFIX', 'dsh-profile/my%20web')
+    expect(APP_IDENTITY.suffix).toBe('dsh-profile/my%20web')
+    expect(userAgent()).toBe(`deepseek-harness/${manifest.version} (+https://github.com/deepseek-ai/deepseek-harness) dsh-profile/my%20web`)
+  })
+
+  it.each(['', undefined])('omits the suffix when it is %j', (value) => {
+    vi.stubEnv('DSH_USER_AGENT_SUFFIX', value)
+    expect(APP_IDENTITY.suffix).toBeUndefined()
+    expect(userAgent()).toBe(`deepseek-harness/${manifest.version} (+https://github.com/deepseek-ai/deepseek-harness)`)
+  })
+
+  it.each(['dsh-profile/my web', 'dsh-profile/web\r\nx-injected: 1', 'dsh-profile/(web)', 'dsh-profile/a/b'])('rejects %j', (value) => {
+    vi.stubEnv('DSH_USER_AGENT_SUFFIX', value)
+    expect(() => userAgent()).toThrow('DSH_USER_AGENT_SUFFIX must be an RFC 9110 product token')
   })
 })
 

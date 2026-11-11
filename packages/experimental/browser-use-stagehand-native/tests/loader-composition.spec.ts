@@ -13,9 +13,10 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
-import LlmRuntime, { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -51,7 +52,7 @@ class BrowserModel extends LlmAdapter {
     if (this.mainRequests.length <= 2) {
       const first = this.mainRequests.length === 1
       yield { type: 'block-end', index: 0, block: {
-        type: 'tool-call', id: ToolCallId(first ? 'extract-heading' : 'screenshot'),
+        type: 'tool-call', id: brandString<ToolCallId>(first ? 'extract-heading' : 'screenshot'),
         name: first ? 'stagehand_extract' : 'stagehand_screenshot',
         arguments: first ? '{"instruction":"Extract the heading"}' : '{}',
       } }
@@ -111,7 +112,7 @@ it('loads browser tools from cordis.yml, logs browser results, and admits the sc
   for (const entry of context.loader.entries()) await entry.fiber?.await()
   const model = new BrowserModel()
   context.llm.registerAdapter(['fixture'], model)
-  const agent = await context.agentLoop.create(SessionId('stagehand-loader'), { provider: 'fixture', model: 'vision' })
+  const agent = await context.agentLoop.create(brandString<SessionId>('stagehand-loader'), { provider: 'fixture', model: 'vision' })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Extract the heading and take a screenshot.' }], source: { kind: 'user' } }))
   await agent.whenIdle()
   expect(model.mainRequests).toHaveLength(3)

@@ -2,13 +2,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type { ChangeRequestListener, ChangeRequestRef, ChangeRequestSnapshot } from '@deepseek-ai/dsh-experimental-forge/types'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ChangeRequestStates, storedKey, type ChangeRequestStateSources, type ListedSession, type StoredStates } from '../src/states.ts'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame } from '../src/types.ts'
 import { demo, pullUrl, snapshot as openSnapshot } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const S1 = SessionId('s1')
-const S2 = SessionId('s2')
+const S1 = brandString<SessionId>('s1')
+const S2 = brandString<SessionId>('s2')
 
 const cleanups: (() => void | Promise<void>)[] = []
 
