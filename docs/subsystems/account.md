@@ -8,7 +8,7 @@ Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/accoun
 
 ## Request credentials
 
-`resolveRequestCredential(url)` is Host-only. It answers `undefined` while signed out, during credential removal, and for any destination outside the configured `inferenceOrigin`; otherwise it returns an `AccountRequestCredential` whose `headers` carry the token as `x-dsh-auth-token`, whose `value` is the bare token, and whose `reject()` removes the stored grant only while it still matches that token, containing storage failures so the caller reports the destination's rejection. The `deepseek-account` model route publishes this credential through `ctx.llm.routeCredential('deepseek-account')` ([LLM streaming](llm-streaming.md)); the DeepSeek web providers consume it there and, without that route, ask the account service directly. `resolveToken(url)` returns the bare token under the same policy for consumers that compose their own request, and `rejectToken(token)` is the invalidation `reject()` performs.
+`resolveRequestCredential(url)` is Host-only. It answers `undefined` while signed out, during credential removal, and for any destination outside the configured `inferenceOrigin`; otherwise it returns an `AccountRequestCredential` whose `headers` carry the token as `x-dsh-auth-token`, whose `value` is the bare token, and whose `reject()` removes the stored grant only while it still matches that token, containing storage failures so the caller reports the destination's rejection. The `deepseek-account` model route publishes this credential through `ctx.llm.routeCredential('deepseek-account')` ([LLM streaming](llm-streaming.md)); the DeepSeek web providers consume it there and, without that route, ask the account service directly. `reject()` runs on the account service mounted when it is called, so a reload between a request and the destination's answer still removes the grant; without a mounted service it leaves the grant for the next one to reject.
 
 Model routes that bill the account register a running-task report with `registerRunningTaskReport(report)` inside `ctx.effect()`; `hasRunningAccountTasks()` answers true while any report does, so the sign-out confirmation can warn about work the sign-out interrupts. The route plugin owns cancellation of that work after `deepseek-account/signed-out`.
 
@@ -82,13 +82,6 @@ Account login, credentials, and client-safe Remote operations.
 @Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>
 
 /**
- * Remove an inference-rejected token only while it still matches the stored login.
- * @param token - token captured by the rejected inference request.
- * @returns after matching credentials are removed and the expiry notification is emitted.
- */
-async rejectToken(token: string): Promise<void>
-
-/**
  * Read existing login identity without creating a device or returning credentials.
  * @returns optional device/account identifiers and the provider's OS version string.
  */
@@ -102,15 +95,9 @@ async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; 
 async getPlatformSession(): Promise<PlatformSession | null>
 
 /**
- * Resolve a credential only for the inference origin allowed by the provider.
- * @param url - actual request destination or API base URL.
- * @returns stored token, or undefined for other origins or a signed-out account.
- */
-async resolveToken(url: string): Promise<string | undefined>
-
-/**
  * Release the account credential for one request to `url` as the request
- * carries it, together with its invalidation. Host-only.
+ * carries it, together with its invalidation, which runs on the account
+ * service mounted when it is called. Host-only.
  * @param url - actual request destination or API base URL.
  * @returns the request credential, or undefined for other origins or a signed-out account.
  */
@@ -229,6 +216,6 @@ Local grant removal has completed.
 Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/account/deepseek-account/src/index.ts)
 <!-- END GENERATED cordis-surface -->
 
-The account Service Definition exposes getState, getProfile, getBalance, getNotifications, getNotificationContent, reportNotificationEvent, startSignIn, cancelSignIn, signOut, watch, and Host-only resolveToken, resolveRequestCredential, registerRunningTaskReport, and getPlatformSession. The platform provider implements it with an AuthorizationFlow and a private GrantRecord. AccountView distinguishes stored presence from server validation; attempt IDs bind cancellation to one local flow. AccountUpdate carries a complete AccountView in state and a type of snapshot for initial or progress updates, or credentials-changed for credential writes and removal. Pending credential changes take priority over progress updates. See [the account package](../../packages/account/deepseek-account/README.md).
+The account Service Definition exposes getState, getProfile, getBalance, getNotifications, getNotificationContent, reportNotificationEvent, startSignIn, cancelSignIn, signOut, watch, and Host-only resolveRequestCredential, registerRunningTaskReport, and getPlatformSession. The platform provider implements it with an AuthorizationFlow and a private GrantRecord. AccountView distinguishes stored presence from server validation; attempt IDs bind cancellation to one local flow. AccountUpdate carries a complete AccountView in state and a type of snapshot for initial or progress updates, or credentials-changed for credential writes and removal. Pending credential changes take priority over progress updates. See [the account package](../../packages/account/deepseek-account/README.md).
 
 `AccountClientMetadata` carries `version` from the caller’s `DSH_CLIENT_VERSION`, its active UI `locale`, and `timezoneOffsetSeconds` sampled when the operation begins. The offset is local time minus UTC in seconds: UTC+8 is `28800`. It contains no credentials. Login attempts retain their initiating metadata through exchange and cancellation; sign-out retains its metadata for revocation retries.

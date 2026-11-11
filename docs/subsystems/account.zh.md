@@ -8,7 +8,7 @@
 
 ## 请求凭据
 
-`resolveRequestCredential(url)` 仅限 Host。未登录、凭据删除进行中，以及目标地址不在配置的 `inferenceOrigin` 之内时，它回答 `undefined`；否则返回一个 `AccountRequestCredential`：`headers` 以 `x-dsh-auth-token` 携带 token，`value` 是裸 token，`reject()` 仅在已存授权仍与该 token 一致时删除它，并隔离存储失败，使调用方报告的是目标地址的拒绝。`deepseek-account` 模型路由通过 `ctx.llm.routeCredential('deepseek-account')`（[LLM 流式](llm-streaming.zh.md)）发布这份凭据；DeepSeek Web 提供方在那里消费它，没有该路由时直接询问账号服务。`resolveToken(url)` 在同一策略下为自行组装请求的消费方返回裸 token，`rejectToken(token)` 则是 `reject()` 执行的失效操作。
+`resolveRequestCredential(url)` 仅限 Host。未登录、凭据删除进行中，以及目标地址不在配置的 `inferenceOrigin` 之内时，它回答 `undefined`；否则返回一个 `AccountRequestCredential`：`headers` 以 `x-dsh-auth-token` 携带 token，`value` 是裸 token，`reject()` 仅在已存授权仍与该 token 一致时删除它，并隔离存储失败，使调用方报告的是目标地址的拒绝。`deepseek-account` 模型路由通过 `ctx.llm.routeCredential('deepseek-account')`（[LLM 流式](llm-streaming.zh.md)）发布这份凭据；DeepSeek Web 提供方在那里消费它，没有该路由时直接询问账号服务。`reject()` 在被调用时挂载的账号服务上执行，因此请求与目的地应答之间发生的重载仍会移除授权；没有挂载的服务时，授权留给下一个挂载的服务处理。
 
 按账号计费的模型路由在 `ctx.effect()` 内用 `registerRunningTaskReport(report)` 注册运行中任务报告；只要有报告回答 true，`hasRunningAccountTasks()` 就回答 true，使退登确认能够提醒退登将打断的工作。`deepseek-account/signed-out` 之后取消这些工作由路由插件负责。
 
@@ -82,13 +82,6 @@ Account login, credentials, and client-safe Remote operations.
 @Remote async reportNotificationEvent(id: AccountNotificationId, event: AccountNotificationEvent, client: AccountClientMetadata): Promise<boolean>
 
 /**
- * Remove an inference-rejected token only while it still matches the stored login.
- * @param token - token captured by the rejected inference request.
- * @returns after matching credentials are removed and the expiry notification is emitted.
- */
-async rejectToken(token: string): Promise<void>
-
-/**
  * Read existing login identity without creating a device or returning credentials.
  * @returns optional device/account identifiers and the provider's OS version string.
  */
@@ -102,15 +95,9 @@ async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; 
 async getPlatformSession(): Promise<PlatformSession | null>
 
 /**
- * Resolve a credential only for the inference origin allowed by the provider.
- * @param url - actual request destination or API base URL.
- * @returns stored token, or undefined for other origins or a signed-out account.
- */
-async resolveToken(url: string): Promise<string | undefined>
-
-/**
  * Release the account credential for one request to `url` as the request
- * carries it, together with its invalidation. Host-only.
+ * carries it, together with its invalidation, which runs on the account
+ * service mounted when it is called. Host-only.
  * @param url - actual request destination or API base URL.
  * @returns the request credential, or undefined for other origins or a signed-out account.
  */
@@ -229,6 +216,6 @@ Local grant removal has completed.
 Source: [`packages/account/deepseek-account/src/index.ts`](../../packages/account/deepseek-account/src/index.ts)
 <!-- END GENERATED cordis-surface -->
 
-账号服务定义提供 getState、getProfile、getBalance、getNotifications、getNotificationContent、reportNotificationEvent、startSignIn、cancelSignIn、signOut、watch 及仅限 Host 的 resolveToken、resolveRequestCredential、registerRunningTaskReport 和 getPlatformSession。平台提供者使用 AuthorizationFlow 和私有 GrantRecord 实现这些操作。AccountView 区分本地存在与服务器验证；尝试 ID 将取消绑定到单次本地流程。AccountUpdate 的 state 携带完整 AccountView，type 为 snapshot 时表示首次或进度更新，为 credentials-changed 时表示凭据写入或删除。待发送的凭据变化优先于进度更新。参见[账号包](../../packages/account/deepseek-account/README.zh.md)。
+账号服务定义提供 getState、getProfile、getBalance、getNotifications、getNotificationContent、reportNotificationEvent、startSignIn、cancelSignIn、signOut、watch 及仅限 Host 的 resolveRequestCredential、registerRunningTaskReport 和 getPlatformSession。平台提供者使用 AuthorizationFlow 和私有 GrantRecord 实现这些操作。AccountView 区分本地存在与服务器验证；尝试 ID 将取消绑定到单次本地流程。AccountUpdate 的 state 携带完整 AccountView，type 为 snapshot 时表示首次或进度更新，为 credentials-changed 时表示凭据写入或删除。待发送的凭据变化优先于进度更新。参见[账号包](../../packages/account/deepseek-account/README.zh.md)。
 
 `AccountClientMetadata` 携带调用方 `DSH_CLIENT_VERSION` 提供的 `version`、当前界面 `locale`，以及操作发起时采样的 `timezoneOffsetSeconds`。偏移为本地时间减 UTC 的秒数：UTC+8 对应 `28800`。其中不含凭证。登录申请在兑换及取消期间保留发起时的元数据；退出操作为撤销重试保留其元数据。

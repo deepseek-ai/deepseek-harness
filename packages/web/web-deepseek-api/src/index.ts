@@ -22,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef, credentialRefConfigured, resolveCredentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertUsableApiKey, type RouteCredential } from '@deepseek-ai/dsh-llm'
+import { assertUsableApiKey } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider } from './fetch.ts'
@@ -258,13 +258,15 @@ function ruleSources(ctx: Context, capability: Capability, rule: Rule): DeepSeek
  * @param capability - the capability whose diagnostics a misconfigured source names.
  * @param provider - the route.
  * @returns the source; undefined when no mounted route publishes a credential as `provider`; a misconfigured source
- *   when the route's settings do not resolve.
+ *   when the route's settings do not resolve or its published base URL does not parse.
  */
 function routeSource(ctx: Context, capability: Capability, provider: RouteName): DeepSeekWebAuthSource | undefined {
-  let credential: RouteCredential | undefined
-  try { credential = ctx.get('llm')?.routeCredential(provider) }
-  catch (error: unknown) { return misconfigured(capability, provider, error) }
-  return credential === undefined ? undefined : { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
+  try {
+    const credential = ctx.get('llm')?.routeCredential(provider)
+    return credential === undefined ? undefined : { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
+  } catch (error: unknown) {
+    return misconfigured(capability, provider, error)
+  }
 }
 
 /**

@@ -9,13 +9,13 @@ description: "DeepSeek 模型路由通过 ctx.llm.routeCredential() 发布自己
 
 ## 变更
 
-`LlmAdapter.routeCredential(provider)` 与 `LlmRuntime.routeCredential(provider)` 把路由当前的凭据发布为 `RouteCredential`：种类、解析后的基础地址、可选引用、不读取值的 `configured(endpoint)` 检查，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`，授权包含协议请求头、裸值和可选的 `reject()`。
+`LlmAdapter.routeCredential(provider)` 与 `LlmRuntime.routeCredential(provider)` 把路由当前的凭据发布为 `RouteCredential`：种类、解析后的基础地址、可选引用、`configured(endpoint)` 存在性检查，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`，授权包含协议请求头、裸值和可选的 `reject()`。
 
 `@deepseek-ai/dsh-llm-deepseek` 不再导出 `resolveDeepSeekApiKey`、`deepSeekApiKeyConfigured`、`resolveDeepSeekAccountToken` 和 `rejectDeepSeekAccountToken`。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回 `DeepSeekRequestAuth | undefined`，且 `DeepSeekRequestAuth` 在 `headers` 之外要求 `value`；新增的 `missingCredential` 与 `credential` 选项分别命名凭据缺失的失败和发布的凭据。`createModelListingCache` 的 `credential(url)` 返回请求头，其 `load` 变为可选。
 
 `@deepseek-ai/dsh-llm-deepseek-api-key` 不再导出 `plainOptions` 和 `resolveAdapterOptions`；`@deepseek-ai/dsh-llm-deepseek-account` 不再导出 `plainAccountOptions` 和 `resolveAccountOptions`。账号路由插件在退登后取消其运行中的 Agent，并注册运行中任务报告。
 
-`@deepseek-ai/dsh-deepseek-account` 新增仅限 Host 的 `resolveRequestCredential(url)` 与 `registerRunningTaskReport(report)`；`hasRunningAccountTasks()` 根据注册的报告作答，不再读取 `ctx.agents`。该包移除 `dsh-agent` 与 `dsh-llm` peer 依赖，并以不变的名字从 `packages/credentials/` 移至 `packages/account/`。`@deepseek-ai/dsh-credentials` 新增 `resolveCredentialRef(ctx, ref)` 与 `credentialRefConfigured(ctx, ref)`。
+`@deepseek-ai/dsh-deepseek-account` 新增仅限 Host 的 `resolveRequestCredential(url)` 与 `registerRunningTaskReport(report)`，并将 `resolveToken(url)` 与 `rejectToken(token)` 改为私有；`hasRunningAccountTasks()` 根据注册的报告作答，不再读取 `ctx.agents`。该包移除 `dsh-agent` 与 `dsh-llm` peer 依赖，并以不变的名字从 `packages/credentials/` 移至 `packages/account/`。`@deepseek-ai/dsh-credentials` 新增 `resolveCredentialRef(ctx, ref)` 与 `credentialRefConfigured(ctx, ref)`。
 
 `@deepseek-ai/dsh-web-deepseek-api` 移除对 `dsh-llm-deepseek`、两个路由插件和 `cordis-plugin-loader` 的 peer 依赖；`@deepseek-ai/dsh-web-search-deepseek` 移除 `dsh-llm-deepseek` 与 `dsh-deepseek-account`，新增 `dsh-llm`。两者都通过 `ctx.llm.routeCredential()` 读取路由凭据，因此以 DeepSeek 路由 id 注册但不发布凭据的适配器视为没有路由。没有账号路由时，Search 与 Fetch API 把账号凭据发往 `DEEPSEEK_BASE_URL` 所指的 origin，并拒绝不是不含内嵌凭据的 HTTP(S) URL 的值。`DeepSeekSearchProviderOptions` 用 `resolveAccountCredential(endpoint)` 替换 `resolveAccountToken` 与 `rejectAccountToken`。
 

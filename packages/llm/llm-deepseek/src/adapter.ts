@@ -60,7 +60,11 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       configured: endpoint => publication.configured(connection, endpoint),
       resolve: async (endpoint, signal) => {
         signal?.throwIfAborted()
-        return await this.dependencies.resolveAuth(connection, endpoint)
+        const auth = await this.dependencies.resolveAuth(connection, endpoint)
+        if (auth === undefined) return undefined
+        // The adapter's failure classification stays behind the seam.
+        const reject = auth.reject?.bind(auth)
+        return { headers: auth.headers, value: auth.value, ...reject === undefined ? {} : { reject } }
       },
     }
   }

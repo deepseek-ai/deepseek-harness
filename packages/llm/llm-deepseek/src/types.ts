@@ -142,7 +142,10 @@ export interface DeepSeekAdapterOptions<Connection extends DeepSeekConnectionOpt
    * credential for the route's own endpoint; omission reports `MISSING_CREDENTIAL`.
    */
   missingCredential?: (connection: Connection, provider: string) => LlmError
-  /** Publish the route's credential through `routeCredential()`; omission publishes none. */
+  /**
+   * Publish the route's credential through `routeCredential()`, whose `resolve` forwards the headers, value, and
+   * rejection of {@link resolveAuth} without its failure classification; omission publishes none.
+   */
   credential?: DeepSeekRouteCredentialOptions<Connection>
   /** Resolve the harness-home anonymous id shared with telemetry and feedback. */
   resolveUserId: () => AnonymousUserId

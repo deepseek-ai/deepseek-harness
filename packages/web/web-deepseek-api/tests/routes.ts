@@ -23,6 +23,8 @@ export interface RouteRow {
   withoutCredential?: boolean
   /** Value `routeCredential()` throws instead of publishing. */
   throws?: unknown
+  /** Base URL published in place of the resolved one, as a route publishing an unparsable base would. */
+  publishedBaseURL?: string
 }
 
 /** The credential `route` publishes, resolved from its config as the route plugin resolves it on each call. */
@@ -32,7 +34,7 @@ function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
     const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
     const ref = resolved.apiKeyEnv
     return {
-      kind: 'api-key', baseURL: resolved.baseURL, reference: ref,
+      kind: 'api-key', baseURL: route.publishedBaseURL ?? resolved.baseURL, reference: ref,
       configured: () => credentialRefConfigured(ctx, ref),
       resolve: async () => {
         const key = await resolveCredentialRef(ctx, ref)
@@ -42,7 +44,7 @@ function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
   }
   const resolved = resolveAccountOptions(plainAccountOptions(AccountConfig(route.config ?? {})), environment)
   return {
-    kind: 'account', baseURL: resolved.protocol.baseURL,
+    kind: 'account', baseURL: route.publishedBaseURL ?? resolved.protocol.baseURL,
     configured: async endpoint => (await ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint)) !== undefined,
     resolve: endpoint => ctx.get('deepseekAccount')?.resolveRequestCredential(endpoint) ?? Promise.resolve(undefined),
   }

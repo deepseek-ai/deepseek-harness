@@ -1018,12 +1018,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'true once the server accepts the event; false if signed out or credentials changed during the call.',
       },
       {
-        signature: 'async rejectToken(token: string): Promise<void>',
-        description: 'Remove an inference-rejected token only while it still matches the stored login.',
-        parameters: [{ name: 'token', description: 'token captured by the rejected inference request.' }],
-        returns: 'after matching credentials are removed and the expiry notification is emitted.',
-      },
-      {
         signature: 'async getDeviceIdentity(): Promise<{ deviceId?: string; userId?: AccountUserId; osVersion: string }>',
         description: 'Read existing login identity without creating a device or returning credentials.',
         parameters: [],
@@ -1036,14 +1030,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a Host-only snapshot, or null while signed out or when the credential changed during the read.',
       },
       {
-        signature: 'async resolveToken(url: string): Promise<string | undefined>',
-        description: 'Resolve a credential only for the inference origin allowed by the provider.',
-        parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
-        returns: 'stored token, or undefined for other origins or a signed-out account.',
-      },
-      {
         signature: 'async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined>',
-        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation. Host-only.',
+        description: 'Release the account credential for one request to `url` as the request carries it, together with its invalidation, which runs on the account service mounted when it is called. Host-only.',
         parameters: [{ name: 'url', description: 'actual request destination or API base URL.' }],
         returns: 'the request credential, or undefined for other origins or a signed-out account.',
       },

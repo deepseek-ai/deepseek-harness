@@ -157,11 +157,12 @@ async function fixture(
   const authorization = ctx.plugin(AuthorizationService)
   await authorization
   await beforeAccount?.(ctx, origin)
-  const provider = ctx.plugin(DeepSeekAccount, {
+  const accountConfig = {
     platformOrigin: origin, inferenceOrigin, embeddedPageDist, desktopPlatform,
     allowLoopbackHttp: true, requestHeaders, accountRequestHeaders,
     rewriteBrowserOrigin, logoutRetryDelayMs: 1, balanceTimeoutMs,
-  })
+  }
+  let provider = ctx.plugin(DeepSeekAccount, accountConfig)
   await provider
   cleanups.push(async () => { await provider.dispose(); await authorization.dispose(); await credentials.dispose(); await web.dispose() })
   const account = ctx.deepseekAccount
@@ -184,6 +185,13 @@ async function fixture(
     invalidateSummary: () => { normalWallets = [{ currency: 'CNY', balance: 'not-a-decimal' }] },
     normalWallets: (value: unknown) => { normalWallets = value },
     dispose: () => provider.dispose(), exchanged, release,
+    /** Replace the account service as a settings reload does; the stored grant and the other services stay. */
+    remount: async () => {
+      await provider.dispose()
+      provider = ctx.plugin(DeepSeekAccount, accountConfig)
+      await provider
+      return ctx.deepseekAccount
+    },
     redirect: () => { redirect = true },
     hold: () => { hold = true },
     initResponse: (value: Record<string, unknown>) => { initOverride = value },
@@ -267,7 +275,7 @@ it('stores a grant before redirecting, restores account presence, and signs out 
   await f.account.getProfile(clientMetadata())
   expect(await f.account.getPlatformSession()).toEqual({ origin: f.origin, userId: 'test-user', token: 'dsh_mock_test',
     requestHeaders: {} })
-  expect(await f.account.resolveToken('https://api.deepseek.com')).toBeUndefined()
+  expect(await f.account.resolveRequestCredential('https://api.deepseek.com')).toBeUndefined()
   await f.account.signOut(clientMetadata())
   expect((await f.account.getState()).status).toBe('signed-out')
   expect(await f.account.getPlatformSession()).toBeNull()
@@ -300,9 +308,9 @@ it('allows real account credentials only on the exact official HTTPS origin', as
   await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
     kind: 'grant', payload: { version: 1, issuer: 'https://platform.deepseek.com', token: 'test-account-token' },
   }))
-  expect(await f.account.resolveToken('https://api.deepseek.com/v1')).toBe('test-account-token')
+  expect((await f.account.resolveRequestCredential('https://api.deepseek.com/v1'))?.value).toBe('test-account-token')
   for (const url of ['http://api.deepseek.com', 'https://api.deepseek.com.evil.test', 'https://api.deepseek.com:8443', 'https://user@api.deepseek.com']) {
-    expect(await f.account.resolveToken(url)).toBeUndefined()
+    expect(await f.account.resolveRequestCredential(url)).toBeUndefined()
   }
 })
 
@@ -332,7 +340,32 @@ it('contains a storage failure while removing a rejected token', async () => {
   const credential = await f.account.resolveRequestCredential('http://inference.example.test:8094/v1/tools/search')
   await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({ kind: 'api-key', key: 'wrong-kind' }))
   await expect(credential!.reject()).resolves.toBeUndefined()
-  await expect(f.account.rejectToken('test-account-token')).rejects.toThrow('account: storage')
+  // The contained failure is the store's: it still holds the unreadable record.
+  await expect(f.account.getState()).rejects.toThrow('account: storage')
+})
+
+it('invalidates a rejected token through the account service mounted when the rejection runs', async () => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  // A settings reload replaces the service between the request's dispatch and the destination's answer.
+  const replacement = await f.remount()
+  const published: string[] = []
+  f.ctx.on('deepseek-account/signed-out', () => { published.push('signed-out') })
+  await credential.reject()
+  expect(published).toEqual(['signed-out'])
+  expect((await replacement.getState()).status).toBe('signed-out')
+  expect(await f.ctx.credentials.readRecord(credentialKey('deepseek-account-platform', 'default'))).toBeUndefined()
+})
+
+it('keeps a rejected token for the next mounted account service while none is mounted', async () => {
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  await f.dispose()
+  await expect(credential.reject()).resolves.toBeUndefined()
+  expect(await f.ctx.credentials.readRecord(credentialKey('deepseek-account-platform', 'default')))
+    .toMatchObject({ kind: 'grant', payload: { token: 'test-platform-grant' } })
 })
 
 it('restricts platform destinations to the configured origin and route', () => {
@@ -424,6 +457,16 @@ async function storeAccount(f: Awaited<ReturnType<typeof fixture>>) {
   }))
 }
 
+/** Inference origin a fixture allows a grant `storeAccount` wrote, which official inference refuses as development-issued. */
+const PRIVATE_INFERENCE = 'http://inference.example.test:8094'
+
+/** The request credential of the stored grant, released for the private inference origin. */
+async function storedCredential(f: Awaited<ReturnType<typeof fixture>>) {
+  const credential = await f.account.resolveRequestCredential(`${PRIVATE_INFERENCE}/v1/messages`)
+  if (credential === undefined) throw new Error('missing stored credential')
+  return credential
+}
+
 it('queries Platform Web endpoints with the stored grant and projects only masked profile and separate recharge and bonus balances', async () => {
   const f = await fixture()
   expect(await readDetails(f.account)).toBeNull()
@@ -454,7 +497,7 @@ it('publishes sign-out only after local grant removal and refuses token resoluti
   const observed: string[] = []
   f.ctx.on('deepseek-account/signed-out', () => { observed.push('signed-out') })
   const pending = f.account.signOut(clientMetadata())
-  expect(await f.account.resolveToken('https://api.deepseek.com')).toBeUndefined()
+  expect(await f.account.resolveRequestCredential('https://api.deepseek.com')).toBeUndefined()
   await pending
   expect(observed).toEqual(['signed-out'])
   expect((await f.account.getState()).status).toBe('signed-out')
@@ -855,10 +898,10 @@ it('sends a development grant only to its configured inference origin', async ()
   await f.wait('waiting-browser')
   await fetch(f.callback(), { redirect: 'manual' })
   await f.wait('succeeded')
-  expect(await f.account.resolveToken('http://inference.example.test:8094/api')).toBe('test-account-token')
+  expect((await f.account.resolveRequestCredential('http://inference.example.test:8094/api'))?.value).toBe('test-account-token')
   for (const url of ['https://api.deepseek.com', 'http://inference.example.test:8095/api',
     'https://inference.example.test:8094/api', 'http://user@inference.example.test:8094/api']) {
-    expect(await f.account.resolveToken(url)).toBeUndefined()
+    expect(await f.account.resolveRequestCredential(url)).toBeUndefined()
   }
 })
 
@@ -1117,14 +1160,14 @@ it.each([{ kind: 'api-key' as const, key: 'wrong-kind' }, { kind: 'grant' as con
     await expect(f.account.getState()).rejects.toThrow('account: storage')
     await expect(f.account.getProfile(clientMetadata())).rejects.toThrow('account: storage')
     await expect(f.account.getPlatformSession()).rejects.toThrow('account: storage')
-    await expect(f.account.resolveToken('https://api.deepseek.com')).rejects.toThrow('account: storage')
+    await expect(f.account.resolveRequestCredential('https://api.deepseek.com')).rejects.toThrow('account: storage')
     await expect(f.account.signOut(clientMetadata())).rejects.toThrow('account: storage')
   },
 )
 
 it('returns no credentials when signed out or disposed', async () => {
   const f = await fixture()
-  expect(await f.account.resolveToken('https://api.deepseek.com')).toBeUndefined()
+  expect(await f.account.resolveRequestCredential('https://api.deepseek.com')).toBeUndefined()
   expect(await f.account.getPlatformSession()).toBeNull()
   await f.account.cancelSignIn('missing' as import('@deepseek-ai/dsh-deepseek-account').SignInAttemptId)
   await f.dispose()
@@ -1139,7 +1182,7 @@ it('rejects sign-out and inference grants issued by another environment', async 
   await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
     kind: 'grant', payload: { version: 1, token: 'real-token', issuer: 'https://other.example' },
   }))
-  expect(await f.account.resolveToken('https://private.example')).toBeUndefined()
+  expect(await f.account.resolveRequestCredential('https://private.example')).toBeUndefined()
   await expect(f.account.signOut(clientMetadata())).rejects.toThrow('account: protocol')
 })
 
@@ -1148,7 +1191,7 @@ it('never sends a development issuer grant to official inference', async () => {
   await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
     kind: 'grant', payload: { version: 1, token: 'real-token', issuer: f.origin },
   }))
-  expect(await f.account.resolveToken('https://api.deepseek.com')).toBeUndefined()
+  expect(await f.account.resolveRequestCredential('https://api.deepseek.com')).toBeUndefined()
 })
 
 it('merges account cookies when there are no base cookies', async () => {
@@ -1632,13 +1675,14 @@ it('ignores a 401 whose response cleanup overlaps a credential replacement', asy
 })
 
 it('expires an inference-rejected token without another Platform request', async () => {
-  const f = await fixture()
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
   await storeAccount(f)
+  const credential = await storedCredential(f)
   const published: string[] = []
   f.ctx.on('deepseek-account/signed-out', () => { published.push('signed-out') })
   f.ctx.on('deepseek-account/session-expired', () => { published.push('session-expired') })
-  await f.account.rejectToken('test-platform-grant')
-  await f.account.rejectToken('test-platform-grant')
+  await credential.reject()
+  await credential.reject()
   const state = await f.account.getState()
   expect({ status: state.status, published, detailRequests: f.detailRequests })
     .toMatchInlineSnapshot(`
@@ -1654,17 +1698,24 @@ it('expires an inference-rejected token without another Platform request', async
 })
 
 it('retains a replacement login when inference rejects the previous token', async () => {
-  const f = await fixture()
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await f.ctx.credentials.modifyRecord(credentialKey('deepseek-account-platform', 'default'), () => Promise.resolve({
+    kind: 'grant', payload: { version: 1, issuer: f.origin, token: 'previous-platform-grant' },
+  }))
+  const previous = await storedCredential(f)
   await storeAccount(f)
-  await f.account.rejectToken('previous-platform-grant')
+  await previous.reject()
   expect(await f.account.getState()).toMatchObject({ status: 'credential-stored' })
   expect(await f.ctx.credentials.readRecord(credentialKey('deepseek-account-platform', 'default')))
     .toMatchObject({ kind: 'grant', payload: { token: 'test-platform-grant' } })
 })
 
 it('ignores an inference rejection while already signed out', async () => {
-  const f = await fixture()
-  await f.account.rejectToken('previous-platform-grant')
+  const f = await fixture(undefined, {}, false, {}, PRIVATE_INFERENCE)
+  await storeAccount(f)
+  const credential = await storedCredential(f)
+  await f.ctx.credentials.deleteRecord(credentialKey('deepseek-account-platform', 'default'))
+  await credential.reject()
   expect(await f.account.getState()).toMatchObject({ status: 'signed-out' })
   expect(await f.account.getState()).not.toHaveProperty('signOutReason')
 })

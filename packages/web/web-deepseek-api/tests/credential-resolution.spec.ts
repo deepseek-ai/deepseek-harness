@@ -687,6 +687,17 @@ describe('route credential failures', () => {
     await expect(failure).rejects.toThrow('that provider\'s settings do not resolve: route resolver unavailable. Search did not send')
     expect(sent()).toEqual([])
   })
+
+  it('reports a route publishing an unparsable base URL as misconfigured, before readiness and without sending', async () => {
+    const { ctx, sent } = await mount({
+      routes: [{ provider: 'deepseek-official', publishedBaseURL: 'not a url' }], environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, 'search', 'deepseek-official')).toBe(false)
+    const failure = operate(ctx, 'search', 'deepseek-official')
+    await expect(failure).rejects.toMatchObject({ code: 'WEB_PROVIDER_MISCONFIGURED' })
+    await expect(failure).rejects.toThrow('that provider\'s settings do not resolve: Invalid URL. Search did not send')
+    expect(sent()).toEqual([])
+  })
 })
 
 describe('billing settings', () => {

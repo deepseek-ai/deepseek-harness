@@ -122,7 +122,10 @@ export interface AccountRequestCredential {
   readonly value: string
   /**
    * Remove the stored token after the destination rejected it, unless a newer
-   * sign-in replaced it. Storage failures are contained: the caller reports
+   * sign-in replaced it. The removal runs on the account service mounted when
+   * this is called, so a reload between the request and the rejection does
+   * not keep the token; without a mounted service the token stays for the
+   * next one to reject. Storage failures are contained: the caller reports
    * the destination's rejection, and the next rejection retries the removal.
    * @returns settlement after the removal attempt.
    */

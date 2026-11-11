@@ -373,7 +373,7 @@ export class DeepSeekAccount extends TypertRemoteService {
    * @param token - token captured by the rejected inference request.
    * @returns after matching credentials are removed and the expiry notification is emitted.
    */
-  async rejectToken(token: string): Promise<void> {
+  private async rejectToken(token: string): Promise<void> {
     const lifetime = this.detailsLifetime
     const stored = await this.readCurrentGrant(lifetime)
     if (stored?.token !== token || this.detailsLifetime !== lifetime) return
@@ -450,7 +450,7 @@ export class DeepSeekAccount extends TypertRemoteService {
    * @param url - actual request destination or API base URL.
    * @returns stored token, or undefined for other origins or a signed-out account.
    */
-  async resolveToken(url: string): Promise<string | undefined> {
+  private async resolveToken(url: string): Promise<string | undefined> {
     if (this.closed || this.removing !== undefined) return undefined
     const destination = new URL(url)
     if (destination.origin !== this.inferenceOrigin || destination.username || destination.password) return undefined
@@ -470,18 +470,22 @@ export class DeepSeekAccount extends TypertRemoteService {
 
   /**
    * Release the account credential for one request to `url` as the request
-   * carries it, together with its invalidation. Host-only.
+   * carries it, together with its invalidation, which runs on the account
+   * service mounted when it is called. Host-only.
    * @param url - actual request destination or API base URL.
    * @returns the request credential, or undefined for other origins or a signed-out account.
    */
   async resolveRequestCredential(url: string): Promise<AccountRequestCredential | undefined> {
     const token = await this.resolveToken(url)
     if (token === undefined) return undefined
+    // The destination answers after a reload may have replaced this instance, so the rejection runs on the account
+    // service mounted at that time; without one, the grant stays for the next mounted service to reject.
+    const { ctx } = this
     return {
       headers: { [ACCOUNT_TOKEN_HEADER]: token },
       value: token,
       reject: async () => {
-        try { await this.rejectToken(token) }
+        try { await ctx.get('deepseekAccount')?.rejectToken(token) }
         catch (_credentialRemovalFailed) { /* The destination's rejection is the failure to report; the next rejection retries. */ }
       },
     }
