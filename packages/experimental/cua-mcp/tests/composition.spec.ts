@@ -214,11 +214,12 @@ describe('Computer Use MCP composition', () => {
       + 'inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid, cwd: process.cwd() }), await win.getScreenshot())', { description: 'Open the fixture' })
     expect(first.isError).not.toBe(true)
     // A program result is the program's own output: the inspected text, then the screenshot the program observed.
-    const result = JSON.parse(texts(first)[0] ?? '') as { visits: number; window: number; pid: number; cwd: string }
+    const result = JSON.parse(texts(first)[0] ?? '') as { visits: number; window: string; pid: number; cwd: string }
     expect(result).toMatchObject({ visits: 1, window: '7' })
     expect(result.pid).not.toBe(process.pid)
-    // Programs start in the directory the connection's Agent was created in.
-    expect(result.cwd).toBe(await realpath(directory))
+    // Programs start in the directory the connection's Agent was created in. Both spellings are resolved: the
+    // temporary directory is a symlink on macOS and an 8.3 short name on Windows.
+    expect(await realpath(result.cwd)).toBe(await realpath(directory))
     const image = first.content[1]
     if (image?.type !== 'image') throw new Error(`expected an image block, got ${JSON.stringify(image)}`)
     expect(image.mimeType).toMatch(/^image\//)

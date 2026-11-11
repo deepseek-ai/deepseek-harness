@@ -73,11 +73,13 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     } }) as CallResult
     expect(first.isError).toBeUndefined()
     expect(first.content.map(block => block.type)).toEqual(['text', 'image'])
-    const state = JSON.parse(textOf(first.content[0])) as { visits: number; window: number; pid: number; cwd: string }
+    const state = JSON.parse(textOf(first.content[0])) as { visits: number; window: string; pid: number; cwd: string }
     expect(state).toMatchObject({ visits: 1, window: '7' })
     // Without DSH_CUA_WORKSPACE the profile creates its workspace inside the Harness home and starts programs there.
-    expect(state.cwd).toBe(await realpath(join(home, 'cua-mcp', 'workspace')))
-    expect(state.cwd).not.toBe(await realpath(launch))
+    // Both spellings are resolved: the temporary directory is a symlink on macOS and an 8.3 short name on Windows.
+    const programDirectory = await realpath(state.cwd)
+    expect(programDirectory).toBe(await realpath(join(home, 'cua-mcp', 'workspace')))
+    expect(programDirectory).not.toBe(await realpath(launch))
     const image = first.content[1]
     if (image?.type !== 'image') throw new Error('expected an image block')
     expect(image.mimeType).toMatch(/^image\//)
