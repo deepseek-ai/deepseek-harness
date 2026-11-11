@@ -94,6 +94,43 @@ export function MarkdownDelegateProvider({
 }
 
 /**
+ * Map one decoded local Markdown destination to the path the delegate receives.
+ * @param path - Destination as the document authored it.
+ * @returns Path passed to file links, image previews, and object menus.
+ */
+export type MarkdownPathResolver = (path: string) => string
+
+const identityPath: MarkdownPathResolver = path => path
+const MarkdownPathContext = createContext<MarkdownPathResolver>(identityPath)
+
+/** Props for one local-destination resolution scope. */
+export interface MarkdownPathScopeProps {
+  /** Resolver for destinations rendered inside this scope; the nearest scope wins. */
+  readonly resolvePath: MarkdownPathResolver
+  readonly children: ReactNode
+}
+
+/**
+ * Resolve local destinations of the enclosed Markdown before they reach the
+ * enclosing {@link MarkdownDelegate}, for example against the directory that
+ * was current when one message was written. Rendered labels, titles, and alt
+ * text keep the authored path. Outside a scope, destinations pass unchanged.
+ * @param props - Resolver and child tree.
+ * @returns the scoped child tree.
+ */
+export function MarkdownPathScope({ resolvePath, children }: MarkdownPathScopeProps): ReactNode {
+  return <MarkdownPathContext.Provider value={resolvePath}>{children}</MarkdownPathContext.Provider>
+}
+
+/**
+ * Read the nearest local-destination resolver.
+ * @returns the scope's resolver, or identity outside a scope.
+ */
+export function useMarkdownPathResolver(): MarkdownPathResolver {
+  return useContext(MarkdownPathContext)
+}
+
+/**
  * Read the nearest Markdown navigation capabilities.
  * @returns Owner callbacks, or an empty delegate outside a provider.
  */

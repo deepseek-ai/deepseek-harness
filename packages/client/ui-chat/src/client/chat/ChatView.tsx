@@ -100,7 +100,7 @@ export function ChatView({
   const inbox = useProjection('inbox') as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
   const rootCwd = useSessions(s => s.byId[sessionId]?.cwd)
-  // Relative images resolve like file links: from the current directory, else that root.
+  // Images outside a message's path scope resolve like file links: from the current directory, else that root.
   const imageCwd = useProjection('workingDirectory') ?? rootCwd
   const fileImages = useMemo(() => ({
     fileDrag,

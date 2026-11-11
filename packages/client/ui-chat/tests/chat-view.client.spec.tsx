@@ -789,29 +789,42 @@ describe('Chat node rendering', () => {
     expect(h.openFile).toHaveBeenCalledWith('src/index.ts', { line: 24 })
   })
 
-  it('resolves relative Markdown images from the Session\'s current working directory', () => {
+  it('resolves each message\'s relative images and links from the directory current when it was written', () => {
     const h = makeHarness({
-      nodes: [user(1, 'draw'), assistant(2, '![chart](tmp/a.png)', 1)],
-      turnEnds: new Map([[1, 2]]),
+      nodes: [
+        user(1, 'draw'), assistant(2, '![before](tmp/a.png) [notes](notes.md)', 1),
+        user(6, 'again'), assistant(7, '![after](tmp/a.png) [notes again](notes.md)', 2),
+      ],
+      turnEnds: new Map([[1, 2], [2, 7]]),
     })
     const sessions = createSnapshotStore<SessionListState>({
       ids: [SID], phase: 'ready', projectionsBySession: {},
       byId: { [SID]: { id: SID, displayTitle: 'proj', cwd: '/proj', running: false, blank: false, updatedAt: 1, retainedBy: {} } },
     })
     h.props.useSessions = bindSnapshotSelector(sessions)
-    const directory = createSnapshotStore<string | null>('/proj/.agents/worktrees/w')
-    const useDirectory = bindSnapshotSelector(directory)
+    const projections = createSnapshotStore<Record<string, unknown>>({
+      workingDirectory: '/proj/w',
+      workingDirectoryHistory: [{ seq: 0, cwd: '/proj' }, { seq: 4, cwd: '/proj/w' }],
+    })
+    const useProjections = bindSnapshotSelector(projections)
     const useOther = h.props.useProjection
-    h.props.useProjection = (key: 'inbox' | 'workingDirectory') => {
-      const current = useDirectory(value => value)
+    h.props.useProjection = (key: 'inbox', selector?: (value: never) => unknown) => {
+      const value: unknown = useProjections(values => values[key])
       const other: unknown = useOther(key)
-      return key === 'workingDirectory' ? current : other
+      const picked = key in projections.getSnapshot() ? value : other
+      return selector === undefined ? picked : selector(picked as never)
     }
     const view = render(<h.ChatView {...h.props} />)
-    const source = () => new URL(view.getByRole('img', { name: 'chart' }).getAttribute('src')!, document.baseURI).searchParams.get('path')
-    expect(source()).toBe('/proj/.agents/worktrees/w/tmp/a.png')
-    act(() => { directory.set(null) })
-    expect(source()).toBe('/proj/tmp/a.png')
+    const source = (name: string) => new URL(view.getByRole('img', { name }).getAttribute('src')!, document.baseURI).searchParams.get('path')
+    expect(source('before')).toBe('/proj/tmp/a.png')
+    expect(source('after')).toBe('/proj/w/tmp/a.png')
+    fireEvent.click(view.getByRole('button', { name: 'notes' }))
+    expect(h.openFile).toHaveBeenLastCalledWith('/proj/notes.md')
+    fireEvent.click(view.getByRole('button', { name: 'notes again' }))
+    expect(h.openFile).toHaveBeenLastCalledWith('/proj/w/notes.md')
+    // Without a history, relative destinations fall back to the current directory.
+    act(() => { projections.set({ workingDirectory: '/proj/w', workingDirectoryHistory: undefined }) })
+    expect(source('before')).toBe('/proj/w/tmp/a.png')
   })
 
   it('threads the injected file-mention vocabulary into the closing prose only', () => {

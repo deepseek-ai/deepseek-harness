@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
-import { MarkdownDelegateProvider } from '../src/markdown/MarkdownDelegate.tsx'
+import { MarkdownDelegateProvider, MarkdownPathScope } from '../src/markdown/MarkdownDelegate.tsx'
 import { MarkdownText } from './markdown-test-components.tsx'
 import { parseGfm, parseGfmWithMath } from '../src/markdown/parse.ts'
 
@@ -171,4 +171,26 @@ it.each([parseGfm, parseGfmWithMath])('uses the shared image categories for bare
 it('uses the fallback filename for an external image URL without a path', () => {
   mount('![Remote](https://example.com/)')
   expect(screen.getByRole('img').getAttribute('src')).toBe('https://example.com/')
+})
+
+it('resolves scoped local destinations before every delegate call while showing the authored path', () => {
+  const resolve = vi.fn((path: string) => `https://example.com/api/file?path=${encodeURIComponent(path)}`)
+  const resourceAddress = vi.fn((path: string) => `dsh-resource://file/${path}`)
+  const getTriggerProps = vi.fn(() => ({}))
+  const openFile = vi.fn()
+  render(<MarkdownDelegateProvider openFile={openFile} getTriggerProps={getTriggerProps}
+    fileImages={{ fileDrag, resolve, resourceAddress, labels }}>
+    <MarkdownPathScope resolvePath={path => `/then/${path}`}>
+      <MarkdownText text={'![Chart](tmp/a.png)\n\n[Notes](notes.md#L3) and [Shot](tmp/b.png)'} />
+    </MarkdownPathScope>
+  </MarkdownDelegateProvider>)
+  expect(new URL(screen.getByRole('img', { name: 'Chart' }).getAttribute('src')!).searchParams.get('path')).toBe('/then/tmp/a.png')
+  expect(resolve).toHaveBeenCalledWith('/then/tmp/b.png')
+  expect(resolve).not.toHaveBeenCalledWith('tmp/a.png')
+  expect(resourceAddress).toHaveBeenCalledWith('/then/tmp/a.png')
+  expect(getTriggerProps).toHaveBeenCalledWith(expect.objectContaining({ kind: 'image', path: '/then/tmp/a.png' }))
+  expect(getTriggerProps).toHaveBeenCalledWith({ kind: 'file', path: '/then/notes.md', line: 3 })
+  fireEvent.click(screen.getByRole('button', { name: 'Notes' }))
+  expect(openFile).toHaveBeenCalledWith('/then/notes.md', { line: 3 })
+  expect(screen.getByRole('img', { name: 'Chart' }).getAttribute('alt')).toBe('Chart')
 })

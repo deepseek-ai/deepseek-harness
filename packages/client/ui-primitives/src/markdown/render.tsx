@@ -28,7 +28,7 @@ import { FenceCodeBlock, FenceMathBlock } from './FenceBlocks.tsx'
 import { isExplicitFilePath, parseFileLink } from './file-link.ts'
 import { renderTexToReact } from './katex.tsx'
 import { LinkIconMedium, classifyLinkPath } from '../LinkIcon.tsx'
-import { useMarkdownDelegate } from './MarkdownDelegate.tsx'
+import { useMarkdownDelegate, useMarkdownPathResolver } from './MarkdownDelegate.tsx'
 import { HoverCard } from '../HoverCard.tsx'
 import { DraggableImage } from '../DraggableImage.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
@@ -640,19 +640,21 @@ function MarkdownFileLink({ file, glyph, children }: {
   readonly children: ReactNode[]
 }): ReactNode {
   const { openFile, fileImages, getTriggerProps } = useMarkdownDelegate()
+  const resolvePath = useMarkdownPathResolver()
   const [load] = useState(nextImageLoad)
   if (openFile === undefined) return <>{children}</>
+  const target = { ...file, path: resolvePath(file.path) }
   // Pure-image anchors already contain their preview and keep one navigation target.
   const preview = glyph && classifyLinkPath(file.path) === 'image' ? fileImages : undefined
-  const resolved = preview?.resolve(file.path)
+  const resolved = preview?.resolve(target.path)
   const src = resolved === undefined ? undefined : freshImageUrl(resolved, load)
   const anchor = (
     <button
       type="button"
       className={clsx(css.fileMention, css.fileLink)}
       title={src === undefined ? file.path : undefined}
-      {...getTriggerProps?.({ kind: 'file', ...file })}
-      onClick={() => { openFile(file.path, file.line === undefined ? undefined : { line: file.line }) }}
+      {...getTriggerProps?.({ kind: 'file', ...target })}
+      onClick={() => { openFile(target.path, target.line === undefined ? undefined : { line: target.line }) }}
     >
       {glyph && <LinkIconMedium kind={classifyLinkPath(file.path)} className={css.linkIcon} />}
       {children}
@@ -694,9 +696,10 @@ function MarkdownImage({ destination, alt, pathImages, streaming, inLink }: {
   inLink: boolean
 }): ReactNode {
   const { fileImages } = useMarkdownDelegate()
+  const resolvePath = useMarkdownPathResolver()
   const [load] = useState(nextImageLoad)
   const file = streaming ? undefined : parseFileLink(destination)
-  const resolved = file === undefined ? undefined : fileImages?.resolve(file.path)
+  const resolved = file === undefined ? undefined : fileImages?.resolve(resolvePath(file.path))
   const src = resolved === undefined ? imageSource(destination, pathImages, load) : freshImageUrl(resolved, load)
   if (src === undefined) return <span className={css.imageAlt}>{alt}</span>
   return <LoadedMarkdownImage key={src} src={src} alt={alt} destination={destination} preview={inLink ? undefined : fileImages} />
@@ -709,12 +712,14 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   preview: ReturnType<typeof useMarkdownDelegate>['fileImages']
 }): ReactNode {
   const { getTriggerProps } = useMarkdownDelegate()
+  const resolvePath = useMarkdownPathResolver()
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const close = useCallback(() => { setOpen(false) }, [])
   if (failed) return <span className={css.imageAlt}>{preview === undefined ? '' : `${preview.labels.failed} · `}{alt || destination}</span>
   const file = parseFileLink(destination)
-  const contextMenuProps = getTriggerProps?.({ kind: 'image', url: src, ...(file === undefined ? {} : { path: file.path }) })
+  const targetPath = file === undefined ? undefined : resolvePath(file.path)
+  const contextMenuProps = getTriggerProps?.({ kind: 'image', url: src, ...(targetPath === undefined ? {} : { path: targetPath }) })
   const imageProps = { className: css.image, src, alt, onError: () => { setFailed(true) },
     loading: 'lazy' as const, decoding: 'async' as const, referrerPolicy: 'no-referrer' as const }
   if (preview === undefined) return <img {...imageProps} {...contextMenuProps} />
@@ -724,7 +729,7 @@ function LoadedMarkdownImage({ src, alt, destination, preview }: {
   const img = <DraggableImage
     fileDrag={preview.fileDrag}
     {...imageProps}
-    resourceAddress={file === undefined ? undefined : preview.resourceAddress?.(file.path)}
+    resourceAddress={targetPath === undefined ? undefined : preview.resourceAddress?.(targetPath)}
     name={exportName}
   />
   return <>
