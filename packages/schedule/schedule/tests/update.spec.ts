@@ -1,11 +1,11 @@
 /** Every timing kind uses one record construction and edit path. */
 import { expect, it } from 'vitest'
-import { ScheduleId } from '../src/domain.ts'
 import { createScheduleRecord, updateScheduleRecord } from '../src/update.ts'
-import type { ScheduleTiming } from '../src/types.ts'
+import type { ScheduleTiming, ScheduleId } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const now = Date.parse('2026-09-16T00:00:00.125Z')
-const id = ScheduleId('unchanged-identity')
+const id = brandString<ScheduleId>('unchanged-identity')
 const timings: ScheduleTiming[] = [
   { kind: 'after', after_seconds: 61 },
   { kind: 'at', at: '2026-09-17T01:00:00.123Z' },

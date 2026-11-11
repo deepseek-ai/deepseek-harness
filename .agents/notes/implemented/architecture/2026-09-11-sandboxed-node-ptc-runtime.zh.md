@@ -22,8 +22,6 @@ Host 在子进程启动时保留 `ELECTRON_RUN_AS_NODE`；bootstrap 在求值前
 
 文件模式、观察到的拒绝与强制完整性通过 `PtcRunResult.sandbox` 独立于程序结果传递。所需沙箱后端无法启动时，受限执行失败。完整访问是显式策略模式。程序成功不证明完整强制能力，`process` 描述符与额外控制管道也不声明多租户隔离。
 
-[实验性 Python 提供方](../../../../packages/experimental/ptc-runtime-python/README.zh.md)共享已解析文件策略与沙箱诊断，同时保留本地 Unix 执行和配置的经过时间截止。仍不支持单次 timeout 覆盖。
-
 ### 控制与生命周期
 
 子进程所有者提供专用的继承式二进制控制通道，与程序 stdout/stderr 及 launcher 生命周期 IPC 分开。Host 限制帧、排队写入、待处理调用和未完成参数字节，然后在分派前验证调用身份与绑定允许列表。模型代码可以写入该通道，因此其中字节仍不可信。

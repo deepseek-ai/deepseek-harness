@@ -12,7 +12,7 @@
         "index": 0,
         "id": "call_node_policy",
         "name": "run_code",
-        "argumentsDelta": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); return { denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() };\",\"description\":\"Verify Node file policy and execution context\"}"
+        "argumentsDelta": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); inspect({ denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() }); return;\",\"description\":\"Verify Node file policy and execution context\"}"
       },
       {
         "type": "block-end",
@@ -21,7 +21,7 @@
           "type": "tool-call",
           "id": "call_node_policy",
           "name": "run_code",
-          "arguments": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); return { denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() };\",\"description\":\"Verify Node file policy and execution context\"}"
+          "arguments": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); inspect({ denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() }); return;\",\"description\":\"Verify Node file policy and execution context\"}"
         }
       },
       {

@@ -5,6 +5,8 @@ import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
 // Declares `Context.pluginPackages`, the profile package lookup that resolves an entry's package directory.
 import { createConfigProjector, isNativeConfigSchema, LOADER_EXPRESSION_SCHEMA, type NativeConfigSchema } from '@deepseek-ai/dsh-app-boot'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import { InspectError } from '@deepseek-ai/dsh-cordis-host-runner'
+import { ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 
 /**
  * `schema`: the running plugin declares a native Schemastery Config. `absent`: it runs without one.
@@ -57,14 +59,14 @@ function parseQuery(input: JsonValue | undefined): ConfigQuery {
   const text = (key: string): string | undefined => {
     const value = fields[key]
     if (value === undefined) return undefined
-    if (typeof value !== 'string' || value === '') throw new Error(`${key} must be a non-empty string`)
+    if (typeof value !== 'string' || value === '') throw new ToolArgsError([`${key} must be a non-empty string`])
     return value
   }
   const offset = fields.offset ?? 0
   const limit = fields.limit ?? DEFAULT_LIMIT
-  if (!Number.isInteger(offset) || typeof offset !== 'number' || offset < 0) throw new Error('offset must be a non-negative integer')
+  if (!Number.isInteger(offset) || typeof offset !== 'number' || offset < 0) throw new ToolArgsError(['offset must be a non-negative integer'])
   if (!Number.isInteger(limit) || typeof limit !== 'number' || limit < 1 || limit > MAX_LIMIT) {
-    throw new Error(`limit must be an integer from 1 to ${MAX_LIMIT}`)
+    throw new ToolArgsError([`limit must be an integer from 1 to ${MAX_LIMIT}`])
   }
   return { entry: text('entry'), name: text('name'), offset, limit }
 }
@@ -93,11 +95,15 @@ function toJson(value: object): JsonValue {
  * @param ctx - Host context; its `loader`, when the profile was mounted by one, owns the entry tree.
  * @param input - model-supplied query: `entry` (Loader entry id), or `name`, `offset` (default 0), and `limit` (1 to 100, default 25).
  * @returns one directory page, or one entry's status and projected schema.
- * @throws when no Loader mounted this Host, when a query field is malformed, or when the entry id matches no live entry.
+ * @throws {ToolContextUnavailableError} when no Loader mounted this Host.
+ * @throws {ToolArgsError} when a query field is malformed.
+ * @throws {InspectError} `INSPECT_TARGET_NOT_FOUND` when the entry id matches no live entry.
  */
 export async function queryLiveConfig(ctx: Context, input: JsonValue | undefined): Promise<JsonValue> {
   const loader = ctx.get('loader')
-  if (loader === undefined) throw new Error('Config inspection requires the Loader that mounted this profile; this Host was composed without one')
+  if (loader === undefined) {
+    throw new ToolContextUnavailableError('Config inspection requires the Loader that mounted this profile; this Host was composed without one')
+  }
   const query = parseQuery(input)
   const entries = [...loader.entries()].map(liveConfig)
   if (query.entry === undefined) {
@@ -107,7 +113,7 @@ export async function queryLiveConfig(ctx: Context, input: JsonValue | undefined
     return { entries: page, total: matching.length, nextOffset: end < matching.length ? end : null }
   }
   const entry = entries.find(candidate => candidate.id === query.entry)
-  if (entry === undefined) throw new Error(`unknown entry id ${JSON.stringify(query.entry)}`)
+  if (entry === undefined) throw new InspectError(`unknown entry id ${JSON.stringify(query.entry)}`, 'INSPECT_TARGET_NOT_FOUND')
   const listed = { ...listing(entry), ...packageDir(ctx, loader.resolve(query.entry)) }
   if (entry.native === undefined) return listed
   const project = await createConfigProjector()

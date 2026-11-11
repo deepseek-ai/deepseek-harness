@@ -379,6 +379,17 @@ export const CompactionNodeView = memo(function CompactionNodeView({ node, t }: 
   return <CompactionItem node={node.data} t={t} />
 })
 
+/** Divider between a forked Session's inherited history and its own messages. */
+export const InheritedHistoryNodeView = memo(function InheritedHistoryNodeView({ t }: ChatNodeViewProps<'inherited-history'>) {
+  return (
+    <div className={css.inheritedHistoryRow} role="separator" aria-label={t('message.inheritedHistory')}>
+      <span className={css.inheritedHistoryLine} aria-hidden />
+      <span className={css.inheritedHistoryLabel} aria-hidden>{t('message.inheritedHistory')}</span>
+      <span className={css.inheritedHistoryLine} aria-hidden />
+    </div>
+  )
+})
+
 /** Correlated retry-chain keyed Chat renderer. */
 export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeViewProps<'model-retry'>) {
   const data = node.data

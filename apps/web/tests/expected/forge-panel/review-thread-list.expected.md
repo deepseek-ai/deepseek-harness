@@ -1,0 +1,15 @@
+- complementary "讨论列表，共 5 个":
+  - text: 讨论 5
+  - button "关闭讨论列表"
+  - radiogroup "筛选讨论":
+    - radio "未解决 4"
+    - radio "已解决 1"
+    - radio "全部 5" [checked]
+  - heading "docs/panel.md" [level=3]
+  - button "文件级讨论 Add a screenshot."
+  - heading "src/panel.ts" [level=3]
+  - button "R2 · 1 条回复 Why two?"
+  - button "L15 The old fifteen was a number."
+  - button "R15 Settled. 已解决"
+  - button "原在 R9 · 在 fffffff 上 This line moved. 已过期"
+  - button "在 GitHub 中查看"

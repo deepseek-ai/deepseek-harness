@@ -5,9 +5,10 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { CreateSessionOptions } from '@deepseek-ai/dsh-session'
-import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionPersistenceRevision, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import Storage, { type KvUnit, type KvUnitDescriptor, type StorageBackend } from '@deepseek-ai/dsh-storage'
 import { DomainFacility, type KvTable } from '@deepseek-ai/dsh-storage-domain'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -105,7 +106,7 @@ export async function harness(options: {
   })
   const resolve = vi.fn<Context['sessionController']['resolveAgent']>(async () => { throw new Error('missing Session') })
   const createSession = vi.fn<Context['sessionController']['create']>(async request => ({
-    sessionId: request.sessionId ?? SessionId('created-session'),
+    sessionId: request.sessionId ?? brandString<SessionId>('created-session'),
   }))
   // Every Session exists as a top-level stored Session unless a case overrides this observation.
   const stat = vi.fn<Context['sessionPersistence']['stat']>(async sessionId => storedSession(sessionId))
@@ -146,7 +147,7 @@ export function storedSession(sessionId: SessionId, delegationDepth?: number): S
       version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 0, isSeeded: false,
       ...(delegationDepth === undefined ? {} : { delegationDepth }),
     },
-    revision: SessionPersistenceRevision(`test:${sessionId}:stat`),
+    revision: brandString<SessionPersistenceRevision>(`test:${sessionId}:stat`),
   }
 }
 
@@ -171,7 +172,7 @@ export interface HarnessAgent extends Agent {
  * @returns Agent whose follow-up and inject entries are spies.
  */
 export function agentFor(ctx: Context, id = 'original', meta?: CreateSessionOptions['meta']): HarnessAgent {
-  const session = ctx.sessions.create(SessionId(id), meta === undefined ? undefined : { meta })
+  const session = ctx.sessions.create(brandString<SessionId>(id), meta === undefined ? undefined : { meta })
   return {
     id: session.id, session, ctx: ctx.extend(), options: {}, status: 'idle', model: unsupportedModel(), inbox: unsupportedInbox(),
     followup: vi.fn<(message: UserMessage) => void>(), inject: vi.fn<(message: UserMessage) => void>(),

@@ -33,7 +33,7 @@ Choose this backend when a deployment wants DeepSeek's native server-side web se
 
 ### Minimal configuration
 
-Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL`.
+Load the web service and the provider; the key resolves from `ctx.credentials` when that service is mounted, otherwise from the process environment. The auxiliary search call has its own endpoint setting and uses the Anthropic-compatible base `https://api.deepseek.com/anthropic/v1`, with `/messages` appended. It reads `$DEEPSEEK_SEARCH_BASE_URL`, independently of the conversation adapter’s `$DEEPSEEK_BASE_URL`; the `dsh` launcher accepts both variables from the launching environment or `$DSH_HOME/.env`, never from a project `.env` ([app-boot](../../boot/app-boot/README.md)).
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'

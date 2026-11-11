@@ -7,13 +7,14 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import PlanMode from '@deepseek-ai/dsh-plan-mode'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import UserQuestions, { UserQuestionError } from '@deepseek-ai/dsh-user-questions'
 import type { AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
 import { expect, it } from 'vitest'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
 import { modelInput } from './command-model-input.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const PLAN = '# Native plan\n\n- Inspect.\n- Implement after approval.'
 const GUIDANCE = 'You are in plan mode. Do not edit or write files. Present the plan through exit_plan_mode.'
@@ -52,7 +53,7 @@ async function scenario(path: 'sdk' | 'native', outcome: 'approve' | 'dismiss', 
     })
     await server.initialize({ cwd, provider: 'plan-parity', model: 'model', maxTokens: 123,
       capabilities: { userQuestions: path === 'sdk' } })
-    const sessionId = SessionId('plan-parity')
+    const sessionId = brandString<SessionId>('plan-parity')
     await server.prompt({ sessionId, contentBlocks: [{ type: 'text', text: 'Begin the same task.' }] })
     await server.wait({ sessionId })
     const agent = ctx.agents.get(sessionId)

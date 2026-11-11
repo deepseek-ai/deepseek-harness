@@ -48,7 +48,7 @@ private func hello(overrides: [String: JSONValue] = [:]) throws -> Data {
     ("axTimeoutMs", .number(0)), ("textEventIntervalMs", .number(-1)),
     ("screenshotTimeoutMs", .number(0)), ("timeoutMs", .string("8000")), ("graceMs", .number(-1)),
     ("maxClickHoldMs", .number(-1)), ("maxClickHoldMs", .number(0.5)),
-    ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)),
+    ("maxClickHoldMs", .number(2147483648)), ("unexpected", .bool(true)), ("systemPointerHover", .bool(true)),
 ])
 func refusesInvalidSharedConfiguration(_ name: String, _ value: JSONValue) throws {
     #expect(throws: NativeFailure.self) { try HelperConfiguration(hello: hello(overrides: [name: value]), runtimeKey: runtimeKey) }

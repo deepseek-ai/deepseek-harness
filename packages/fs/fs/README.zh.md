@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 服务能做什么
 
-通过 `ctx.fs` 可解析路径、读取文本或有界字节、列出直接子项并执行受防护变更。`patchText` 在版本检查的同一把锁内应用解析后的 hunk。`deleteFile` 删除普通文件。`moveFile` 锁定两端，按需修改源文本，发布目标后再删除源。防护是可选的：省略时无条件修改当前状态。失败携带运行时列表 `FS_ERROR_CODES` 中的稳定 `FsError` 错误码，传输校验器复用该列表。
+通过 `ctx.fs` 可解析路径、读取文本或有界字节、列出直接子项并执行受防护变更。`patchText` 在版本检查的同一把锁内应用解析后的 hunk。`deleteFile` 删除普通文件。`moveFile` 锁定两端，按需修改源文本，发布目标后再删除源。防护是可选的：省略时无条件修改当前状态。失败携带运行时列表 `FS_ERROR_CODES` 中的稳定 `FsError` 错误码，传输校验器复用该列表。基于宿主文件系统的提供方（目前是 `dsh-fs-local` 与 `dsh-fs-sandbox` 的包含性检查）用 `fsErrorFromErrno` 分类 errno 失败：`ENOENT` 与 `ENOTDIR` 变为 `FS_NOT_FOUND`，`EACCES` 与 `EPERM` 变为 `FS_PERMISSION_DENIED`，需要文件却遇到目录的 `EISDIR` 变为 `FS_NOT_REGULAR_FILE`，其他 errno 变为 `FS_IO_ERROR`，原错误作为 `cause`。
 
 `watch(target, changed, signal)` 报告单个文件或目录直接子项的失效通知。观察就绪后，它返回调用方必须等待完成的异步关闭函数。signal 取消初始化；不支持监听的提供方直接拒绝，不使用轮询。
 
@@ -62,6 +62,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 服务定义：抽象 `FileSystem` 类、`ctx.fs` 声明与 `fs/*` 事件词汇 |
 | [`src/types.ts`](src/types.ts) | 词汇：`FsTarget`/`FsTargetKey`、`FsVersion`、`FsObservation`、`FsWriteIntent`、`FsError` 及其错误码 |
+| [`src/errno.ts`](src/errno.ts) | `fsErrorFromErrno`：把 errno 分类为 `FsError` 错误码 |
 
 ### 调用流程
 

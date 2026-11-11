@@ -13,11 +13,12 @@ import type { Browser, Page, Response } from 'playwright'
 import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
-import { ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import type SessionToolResults from '@deepseek-ai/dsh-client-ui-trajectory'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { SESSION_FORMAT_VERSION, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -500,7 +501,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.getByText('Session copied as Markdown.', { exact: true }).waitFor({ timeout: 30_000 })
     expect(await page.evaluate(() => Number(Reflect.get(globalThis, '__dshClipboardWrites')))).toBe(1)
 
-    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(SessionId(SEED_ID)))?.location?.path
+    const sourcePath = (await scaffold.ctx.sessionPersistence.stat(brandString<SessionId>(SEED_ID)))?.location?.path
     if (sourcePath === undefined) throw new Error('seeded Session has no materialized artifact location')
     expect((await stat(sourcePath)).isFile()).toBe(true)
     expect(sourcePath.startsWith(`${scaffold.persistenceRoot}/`)).toBe(true)
@@ -678,15 +679,15 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   })
   it.skipIf(MODE === 'record')('inspects a live tool value without adding it to the Session journal', async () => {
     await ensureSeedOpen(page)
-    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
     const unregister = scaffold.ctx.tools.register(defineTool({
       name: 'live_result_probe', description: 'Live result inspection fixture.', parameters: {},
       output: { schema: { type: 'json' }, render: () => [{ type: 'text', text: 'LIVE_RESULT_RENDERED' }] },
       execute: async () => ({ answer: 42 }),
     }))
     onTestFinished(unregister)
-    const callId = ToolCallId('live-result-probe')
+    const callId = brandString<ToolCallId>('live-result-probe')
     let resultEvent: SessionEvent | undefined
     const off = scaffold.ctx.on('session/event', (_session, event) => {
       if (event.type === 'tool/result' && event.data.message.toolCallId === callId) resultEvent = event
@@ -728,7 +729,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     onTestFinished(unregisterJson)
     const jsonBatch = await scaffold.ctx.tools.execute({
       agent, signal: new AbortController().signal, log: { turn: 2, step: 1 },
-      calls: [{ type: 'tool-call', id: ToolCallId('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
+      calls: [{ type: 'tool-call', id: brandString<ToolCallId>('json-result-probe'), name: 'json_result_probe', arguments: '{}' }],
     })
     expect(jsonBatch.results[0]?.result.isError).toBe(false)
     await page.locator('tr[data-kind="tool"]').filter({ hasText: 'json_result_probe' }).click()
@@ -767,7 +768,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     const newer = await scaffold.ctx.tools.execute({
       agent, signal: new AbortController().signal,
       calls: Array.from({ length: 1000 }, (_, index) => ({
-        type: 'tool-call' as const, id: ToolCallId(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
+        type: 'tool-call' as const, id: brandString<ToolCallId>(`newer-result-${index}`), name: 'live_result_probe', arguments: '{}',
       })),
     })
     expect(newer.results).toHaveLength(1000)
@@ -785,18 +786,18 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
   it.skipIf(MODE === 'record')('keeps long raw strings and PTC output readable in one result scroller', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-long-tool-results'))
     await ensureSeedOpen(page)
-    await expect.poll(() => scaffold.ctx.agents.get(SessionId(SEED_ID)) !== undefined).toBe(true)
-    const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))!
+    await expect.poll(() => scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID)) !== undefined).toBe(true)
+    const agent = scaffold.ctx.agents.get(brandString<SessionId>(SEED_ID))!
     agent.session.append('turn/start', { turn: 3 })
     onTestFinished(() => {
       agent.session.append('step/end', { turn: 3, step: 1 })
       agent.session.append('turn/end', { turn: 3, reason: { kind: 'completed' } })
     })
     agent.session.append('step/start', { turn: 3, step: 1 })
-    const callId = ToolCallId('long-ptc-result')
+    const callId = brandString<ToolCallId>('long-ptc-result')
     const call = agent.session.append('tool/call', {
       turn: 3, step: 1, callId, name: 'run_code',
-      arguments: JSON.stringify({ code: 'console.log("PTC output")', description: 'Long program output' }),
+      arguments: JSON.stringify({ code: 'inspect("PTC output")', description: 'Long program output' }),
     })
     await page.getByRole('tab', { name: 'Trajectory' }).click()
     await page.locator('tr[data-kind="tool"]').filter({ hasText: 'Long program output' }).click()
@@ -831,7 +832,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       onTestFinished(unregister)
       const batch = await scaffold.ctx.tools.execute({
         agent, signal: new AbortController().signal, log: { turn: 3, step: 1 },
-        calls: [{ type: 'tool-call', id: ToolCallId(probe.name), name: probe.name, arguments: '{}' }],
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>(probe.name), name: probe.name, arguments: '{}' }],
       })
       expect(batch.results[0]?.result.isError).toBe(false)
     }

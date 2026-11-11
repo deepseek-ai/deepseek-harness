@@ -3,11 +3,13 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createDailyScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createDailyScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import type { ScheduleTask } from '../src/storage.ts'
 import { boundTask, harness, seedTasks, storedUnit } from './harness.ts'
 
@@ -31,13 +33,13 @@ async function setup(root: string, task?: ScheduleTask) {
 it.each([true, false])('persists same-ID daily edits of a version-1 task with saved history=%s without Session activation', async (withHistory) => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-update-'))
   roots.push(root)
-  const sessionId = SessionId('cold-original')
-  const id = ScheduleId('daily-stable-id')
+  const sessionId = brandString<SessionId>('cold-original')
+  const id = brandString<ScheduleId>('daily-stable-id')
   const record = createDailyScheduleRecord(id, 'Retained exact prompt\nsecond line', {
     time: '09:00:00.250', time_zone: 'UTC',
   }, Date.now(), 'Retained exact prompt')
   const lastDelivery = {
-    scheduledAt: '2026-09-15T09:00:00.250Z', deliveredAt: '2026-09-15T09:00:01.333Z', messageId: MessageId('saved'),
+    scheduledAt: '2026-09-15T09:00:00.250Z', deliveredAt: '2026-09-15T09:00:01.333Z', messageId: brandString<MessageId>('saved'),
   }
   // The earlier Host store saved each task in one whole-unit JSON file, with optional delivery history.
   const earlierFile = join(root, 'schedule.json')
@@ -92,8 +94,8 @@ it.each([true, false])('persists same-ID daily edits of a version-1 task with sa
 it('keeps stored IANA alias spelling and a pinned millisecond target byte-identical on a daily no-op', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-update-alias-'))
   roots.push(root)
-  const id = ScheduleId('alias')
-  const sessionId = SessionId('alias-session')
+  const id = brandString<ScheduleId>('alias')
+  const sessionId = brandString<SessionId>('alias-session')
   const rule = {
     id, kind: 'daily', title: 'Pinned target', prompt: 'Pinned target', time: '09:00:00.100',
     timeZone: 'US/Eastern', scheduledAt: '2026-09-16T14:00:00.321Z',
