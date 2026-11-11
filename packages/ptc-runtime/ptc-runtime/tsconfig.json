@@ -18,10 +18,10 @@
       "path": "../../sandbox/sandbox"
     },
     {
-      "path": "../../util/error"
+      "path": "../../attachment/attachment"
     },
     {
-      "path": "../../attachment/attachment"
+      "path": "../../util/error"
     }
   ]
 }

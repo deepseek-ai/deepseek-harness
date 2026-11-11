@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { HarnessError } from '@deepseek-ai/dsh-error'
+import { PtcRuntime, PtcRuntimeError } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 
 /**
@@ -94,4 +95,13 @@ describe('PtcRuntime service seam', () => {
     await expect(ctx.plugin(StubRuntime)).rejects.toThrow(/registered/)
   })
 
+})
+
+describe('PtcRuntimeError', () => {
+  it('carries its routable name and code as a HarnessError', () => {
+    const cause = new Error('underlying')
+    const error = new PtcRuntimeError('run() after disposal', 'PTC_RUNTIME_UNAVAILABLE', { cause })
+    expect(error).toBeInstanceOf(HarnessError)
+    expect(error).toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_UNAVAILABLE', message: 'run() after disposal', cause })
+  })
 })
