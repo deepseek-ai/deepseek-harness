@@ -22,18 +22,32 @@ export class ToolCallLimitExceededError extends Error {
 }
 
 /**
+ * Every {@link CodeRunFailedError} code:
+ * - `CODE_RUN_FAILED`: the program run failed, or the runtime rejected it without its own error code.
+ * - `CODE_RUN_UNAVAILABLE`: the executor was disposed before the run started.
+ */
+export const CODE_RUN_ERROR_CODES = ['CODE_RUN_FAILED', 'CODE_RUN_UNAVAILABLE'] as const
+
+/** One {@link CodeRunFailedError} code. */
+export type CodeRunErrorCode = typeof CODE_RUN_ERROR_CODES[number]
+
+/**
  * Thrown by `run_code` when the program run itself failed — a program
- * exception, a budget expiry, a runtime-local abort, or substrate death. Caller
- * cancellation uses the shared `AbortError` / `ABORTED` tool outcome. Extends
- * {@link HarnessError} (`code: 'CODE_RUN_FAILED'`); the registry's execution
- * pipeline converts it into a structured `isError` result with the failure
- * kind. Captured text and images accompany the original diagnostic;
- * outer result replacements remain authoritative.
+ * exception, a budget expiry, a runtime-local abort, or substrate death — or
+ * could not start. Caller cancellation uses the shared `AbortError` /
+ * `ABORTED` tool outcome. Extends {@link HarnessError} with a code from
+ * {@link CODE_RUN_ERROR_CODES}; the registry's execution pipeline converts it
+ * into a structured `isError` result with the failure kind. Captured text and
+ * images accompany the original diagnostic; outer result replacements remain
+ * authoritative.
  */
 export class CodeRunFailedError extends HarnessError {
-  constructor(message: string) {
-    super(message, 'CODE_RUN_FAILED')
+  override readonly code: CodeRunErrorCode
+
+  constructor(message: string, code: CodeRunErrorCode = 'CODE_RUN_FAILED', options?: ErrorOptions) {
+    super(message, code, options)
     this.name = 'CodeRunFailedError'
+    this.code = code
   }
 }
 

@@ -223,6 +223,19 @@ describe('FileSystemSkillProvider', () => {
     expect((await ctx.skills.list({ cwd: noGit })).map(skill => skill.name)).toContain('fallback-root')
   })
 
+  it('reports an unreadable trusted-host skill file as SKILL_READ_FAILED', async () => {
+    const home = await tempDir('skill-unreadable-home')
+    const bundled = await tempDir('skill-unreadable-bundled')
+    await writeSkill(bundled, 'bundled-only', 'bundled skill')
+    const ctx = await setupLocal(home, { bundledSkillDir: bundled })
+    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['bundled-only'])
+    const file = join(bundled, 'bundled-only/SKILL.md')
+    await rm(file)
+    await mkdir(file)
+    const failure = ctx.skills.get('bundled-only')
+    await expect(failure).rejects.toMatchObject({ name: 'SkillError', code: 'SKILL_READ_FAILED', cause: { code: 'EISDIR' } })
+  })
+
   it('lets project skills override runtime while runtime overrides custom and user skills', async () => {
     const home = await tempDir('skill-runtime-priority')
     const project = await tempDir('skill-runtime-project')

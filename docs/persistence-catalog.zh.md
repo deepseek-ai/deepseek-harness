@@ -4842,7 +4842,7 @@ SHA-256: `4d60dddaa65d3da8d4cd014d85ce3d2c2875664dd0433e331d8e9d395289686b`
 
 SHA-256: `65d583e66518c5236015e0846470fb32efcf92375ed306aef14e50a9d2cd2099`
 
-来源：[`packages/skill/tool-skill/src/index.ts:35`](../packages/skill/tool-skill/src/index.ts)
+来源：[`packages/skill/tool-skill/src/index.ts:36`](../packages/skill/tool-skill/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -4862,7 +4862,7 @@ SHA-256: `65d583e66518c5236015e0846470fb32efcf92375ed306aef14e50a9d2cd2099`
 
 SHA-256: `672c4aa2a9b736e3d6e5da6346d2e2ed5e3573f2d0baafa18e7407c9f3fee3db`
 
-来源：[`packages/skill/skill/src/index.ts:146`](../packages/skill/skill/src/index.ts)
+来源：[`packages/skill/skill/src/index.ts:149`](../packages/skill/skill/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -6280,7 +6280,7 @@ SHA-256: `374fdd68aee5ff844e378c0cbdd961d247a0f22e4ade0bb03d800cd2a46a2b8b`
 
 SHA-256: `83079c8a3f733ac3fa603eefa0fbb4737ca4d8b69e7e2e7298b60f9ac4098693`
 
-来源：[`packages/skill/tool-skill/src/index.ts:43`](../packages/skill/tool-skill/src/index.ts)
+来源：[`packages/skill/tool-skill/src/index.ts:44`](../packages/skill/tool-skill/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
