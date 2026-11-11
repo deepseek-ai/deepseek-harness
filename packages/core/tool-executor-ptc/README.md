@@ -155,7 +155,7 @@ These constraints apply to the host integration and accepted calls.
 - **No built-in reset control** — the shipped Loader plugin does not expose its executor instance through a service, GUI control or SDK endpoint. Hosts needing reset must mount and retain `PtcExecutor` in their own composition; that integration owns retries after a failed reset.
 - **PTC mode's SDK language follows the one loaded runtime, and a presentation is per agent rather than per tool** — PTC execution rejects prompt assembly unless `ctx.ptcRuntime.language` has a registered SDK renderer; within one agent no tool can be native-only while another is ptc-only.
 - **PTC mode intermediate values are execution-local and unbounded by bytes** — they cannot be reconstructed from session replay and may exhaust process or worker memory; only the outer `run_code` output has the worker's configurable hard cap.
-- **State depends on the runtime**: the default backend starts fresh; the Node REPL and Script mode with `scriptPersistence: true` retain memory per live Agent. Agent disposal awaits release. Restart and execution failures can clear memory; model-visible guidance explains how to recreate missing variables. Programs and results remain in the Session log, without serializing live objects.
+- **State depends on the runtime**: the default backend starts fresh; Node `persistent-in-memory` execution and Script mode with `scriptPersistence: true` retain memory per live Agent. Agent disposal awaits release. Restart and execution failures can clear memory; model-visible guidance explains how to recreate missing variables. Programs and results remain in the Session log, without serializing live objects.
 
 <a id="dev-note"></a>
 ### Dev Note

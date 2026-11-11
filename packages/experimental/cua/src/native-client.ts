@@ -1,6 +1,7 @@
 /** Agent-scoped JSONL requests over a connection to the shared native helper. */
 import { randomUUID } from 'node:crypto'
 import assert from 'node:assert/strict'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -19,15 +20,14 @@ const ScreenshotDiagnostic = z.object({
 const WireReply = z.union([Reply, ScreenshotDiagnostic.extend({ type: z.literal('diagnostic') })])
 
 /** Native refusal or transport failure with a stable machine-readable code. */
-export class NativeError extends Error {
+export class NativeError extends HarnessError {
   /**
    * @param code - Native error code or a transport-owned NATIVE_* code.
    * @param message - Actionable diagnostic, without its code prefix.
    * @param options - Original failure when available.
    */
-  constructor(readonly code: string, message: string, options?: ErrorOptions) {
-    super(`${code}: ${message}`, options)
-    this.name = 'NativeError'
+  constructor(code: string, message: string, options?: ErrorOptions) {
+    super(`${code}: ${message}`, code, options)
   }
 }
 

@@ -35,9 +35,12 @@ export type CuaStartupCapabilities = Pick<
   CuaCapabilities,
   'platform' | 'methods' | 'appLevelAccessibility' | 'keyboard' | 'browser' | 'coordinateSpace'
 > & { systemPointer?: boolean }
-/** App discovery result accepted by getApp. */
-export type CuaAppInfo = Pick<Extract<CuaFoundAppInfo, { isRunning: true }>, 'id' | 'displayName' | 'isRunning' | 'pid'>
-/** An installed application match; running matches include a process identifier. */
+/** App discovery result accepted by getApp, including the provider-reported running state. */
+export type CuaAppInfo = Pick<CuaFoundAppInfo, 'id' | 'displayName' | 'isRunning'> & {
+  /** Running process selector on macOS. */
+  pid?: number | undefined
+}
+/** An installed application match with its current running state. */
 export type CuaFoundAppInfo = z.output<typeof FoundAppsResult>[number]
 /** Window bounds in the provider's global native units. Local operations use an origin of [0,0]. */
 export type CuaBounds = CuaWindowInfo['bounds']
@@ -168,7 +171,8 @@ export interface CuaSurface {
  * Coordinate input requires a successful AX observation covering the window or a screenshot, and rejects resizing since that observation.
  */
 export interface CuaWindow extends CuaSurface {
-  readonly windowId: number
+  /** Opaque window identifier issued by the platform provider. */
+  readonly windowId: string
   /**
    * Capture the selected window.
    * @returns Stored Image with a readable path and pixel dimensions, ready for explicit inspection.
@@ -224,11 +228,11 @@ export interface CuaApp extends CuaSurface {
   getWindows(): Promise<CuaWindowInfo[]>
   /**
    * Select a specific window.
-   * @param windowId - ID obtained from getWindows.
+   * @param windowId - String ID obtained from getWindows, passed unchanged.
    * @returns A window object without a native request; selection leaves the accessibility snapshot unchanged.
    * Providers reject a closed or foreign window when operating on it.
    */
-  getWindow(windowId: number): Promise<CuaWindow>
+  getWindow(windowId: string): Promise<CuaWindow>
 }
 /** Native app API; its caller owns global bindings and variable persistence. */
 export interface CuaApi {
@@ -238,8 +242,8 @@ export interface CuaApi {
    */
   getCapabilities(): Promise<CuaCapabilities>
   /**
-   * Enumerate running applications.
-   * @returns identifiers accepted by getApp.
+   * List applications with their current running state. Providers may enumerate only running applications.
+   * @returns identifiers accepted by getApp and each application's running state.
    */
   listApps(): Promise<CuaAppInfo[]>
   /**
@@ -249,13 +253,13 @@ export interface CuaApi {
    */
   findApps(query: string): Promise<CuaFoundAppInfo[]>
   /**
-   * Discover apps.
-   * @returns native apps and an empty browser list.
+   * Summarize provider application discovery.
+   * @returns native apps with their running state and an empty browser list.
    */
   getState(): Promise<{ apps: CuaAppInfo[]; browsers: [] }>
   /**
-   * Select an app, obtain consent, and launch it in the background if necessary, without reading AX.
-   * @param selector - Exact name, bundle ID, absolute application path or running PID string; ambiguous names reject.
+   * Select an app, obtain consent, and launch it only where the provider supports launch, without reading AX; selection never activates it.
+   * @param selector - Provider-issued ID, or a supported exact name, bundle ID or absolute path; ambiguous selectors reject.
    * @returns An application handle tied to this process lifetime; call getAccessibilityTree explicitly before element operations.
    */
   getApp(selector: string): Promise<CuaApp>

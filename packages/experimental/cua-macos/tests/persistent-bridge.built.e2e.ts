@@ -84,7 +84,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       expect(initialization).toContain('/lib/bridge.js')
       const first = await run(`${initialization}
         var app = await cua.getApp("test.fixture");
-        var win = await app.getWindow(7);
+        var win = await app.getWindow('7');
         await win.getAccessibilityTree();
         await win.click("0");
         var shot = await win.getScreenshot();
@@ -94,7 +94,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       `, 'first')
       expect(first.error).toBeUndefined()
       expect(first.output).toEqual([])
-      expect(first.value).toEqual({ isImage: true, width: 1, height: 1, windowId: 7, byteLength: 90 })
+      expect(first.value).toEqual({ isImage: true, width: 1, height: 1, windowId: '7', byteLength: 90 })
       expect(images).toBe(1)
       expect(JSON.stringify(first)).not.toContain('iVBORw0KGgo')
       const invalid = await run('await cua.findApps("");', 'invalid')

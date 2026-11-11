@@ -61,7 +61,7 @@ async function agentWithSession(
     inject(message: UserMessage) {
       session.append('user/message', message, { surfaceOp: 'append' })
     },
-  } as unknown as Agent & { session: Session }
+  } as Agent & { session: Session }
   let scoped!: Context
   await ctx.plugin(Object.assign((inner: Context) => { scoped = createScope(inner, agent).ctx }, {
     inject: ['tools'],

@@ -108,7 +108,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
       this.requests.push(options)
       if (this.requests.length === 1) {
         const code = 'const app = await tools.cua({ method: "getApp", params: { selector: "9" } }); '
-          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.appHandle, windowId: 7 } }); '
+          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.appHandle, windowId: "7" } }); '
           + 'inspect({ path: result.path, width: result.width, height: result.height }, result);'
         const call = { type: 'tool-call' as const, id: ToolCallId('large-image-ptc'), name: 'run_code',
           arguments: JSON.stringify({ code, description: 'Inspect the generated large screenshot' }),

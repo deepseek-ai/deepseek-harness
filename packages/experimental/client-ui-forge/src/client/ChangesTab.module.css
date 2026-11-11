@@ -157,6 +157,8 @@
 
 .progressSlot,
 .foldTests,
+.foldPlugins,
+.lensSlot,
 .filesSlot {
   display: inline-flex;
   flex: none;
@@ -276,13 +278,15 @@
 }
 
 /* `observeToolbarFold` sets `data-fold` on the toolbar row to the shallowest level whose items fit on one line: level 1
-   folds the line totals, expansion, side by side, and wrapping into the More menu; level 2 the test switch, with the
-   progress label shortened to the bare count beside its ring; level 3 refresh. */
+   folds plugin tools, the line totals, expansion, side by side, and wrapping into the More menu; level 2 the test switch
+   and the lens menu while no lens is chosen, with the progress label shortened to the bare count beside its ring;
+   level 3 refresh. */
 .more {
   display: none;
 }
 
 .toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .foldViews,
+.toolbarMain:is([data-fold='1'], [data-fold='2'], [data-fold='3']) .foldPlugins,
 .toolbarMain:is([data-fold='2'], [data-fold='3']) .foldTests,
 .toolbarMain[data-fold='3'] .foldRefresh {
   display: none;
@@ -981,4 +985,63 @@
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
   line-height: 16px;
+}
+
+/* One line annotation from a plugin: the frame of a thread card, whose content the plugin draws. */
+.annotation {
+  box-sizing: border-box;
+  width: calc(100% - 20px);
+  max-width: 720px;
+  margin: 10px;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l3);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  white-space: normal;
+}
+
+/* In a comment row's stack the stack's gap and padding space the frame. */
+.noteStack > .annotation {
+  width: 100%;
+  margin: 0;
+}
+
+.outdatedAnnotations {
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+  font-family: var(--dsw-font-family);
+}
+
+.outdatedAnnotationsTitle {
+  padding: 8px 12px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Hunks a filter lens folds draw as one row like the collapsed unchanged lines, tinted to tell them apart. */
+.lensFold {
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 6%, var(--forge-fill));
+  color: var(--dsw-alias-label-secondary);
+}
+
+.lensFoldText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lensFoldAction {
+  flex: none;
+  color: var(--dsw-alias-state-business-primary);
+}
+
+/* A hairline above the first plugin row of a menu, drawn only when a plugin adds one. */
+.menuPlugins:has([role='menuitem']) {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
 }

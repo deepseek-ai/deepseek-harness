@@ -2836,13 +2836,14 @@ describe('JsonlSessionPersistence: edge cases', () => {
 
   it('accepts well-formed JSON values (null, booleans, nested arrays/objects)', async () => {
     const m = meta('json-ok')
-    const events = [{ type: 'user/message', seq: SessionSeq(0), time: 1, data: {
+    const data = {
       id: MessageId('json-ok'),
-      role: 'user',
-      content: [{ type: 'text', text: 'x' }],
-      source: { kind: 'user' },
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'x' }],
+      source: { kind: 'user' as const },
       extra: { a: null, b: true, c: [1, 2, { d: 'nested' }] },
-    }, surfaceOp: 'append' }] as unknown as SessionEvent[]
+    }
+    const events: SessionEvent[] = [{ type: 'user/message', seq: SessionSeq(0), time: 1, data, surfaceOp: 'append' }]
     await writeLog(ctx.sessionPersistence, m, events)
     expect((await readAll(ctx.sessionPersistence, m.id)).events).toEqual(events)
   })

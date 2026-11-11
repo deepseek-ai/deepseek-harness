@@ -14,10 +14,10 @@ import { randomUUID } from 'node:crypto'
 import AgentRegistry, { type Agent, type AgentHandle } from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { mountAgentLoopTestDependencies, unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
-import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import SubagentRuntime, { SubagentRunId, type SubagentStartRequest, type SubagentRun, type SubagentResult, type SubagentRunEndInfo } from '@deepseek-ai/dsh-subagent'
@@ -42,6 +42,25 @@ function testContext(): Context {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   return ctx
+}
+
+/** Prompt-routing fixture; the defaults outside followup/whenIdle do not implement Agent lifecycle behavior. */
+function promptAgentFixture(fields: Pick<Agent, 'id' | 'followup'> & Partial<Pick<Agent, 'whenIdle'>>): Agent {
+  return {
+    options: {},
+    session: Session.create(fields.id),
+    model: unsupportedModel(),
+    inbox: unsupportedInbox(),
+    status: 'idle',
+    ctx: testContext(),
+    send: () => {},
+    steer: () => ({ outcome: Promise.resolve({ status: 'rejected' }) }),
+    inject: () => {},
+    cancel: () => {},
+    runMaintenance: task => task(new AbortController().signal),
+    whenIdle: () => Promise.resolve(),
+    ...fields,
+  }
 }
 
 afterEach(async () => {
@@ -328,15 +347,15 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it('queues overlapping prompts for one session without blocking other sessions', async () => {
     const mainFollowup = vi.fn<Agent['followup']>()
-    const mainAgent = ({
+    const mainAgent = promptAgentFixture({
       id: SessionId('main'),
       followup: mainFollowup,
-    } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
+    })
     const otherFollowup = vi.fn<Agent['followup']>()
-    const otherAgent = ({
+    const otherAgent = promptAgentFixture({
       id: SessionId('other'),
       followup: otherFollowup,
-    } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
+    })
     const mainHandle = { agent: mainAgent, dispose: vi.fn(() => Promise.resolve()) }
     const otherHandle = { agent: otherAgent, dispose: vi.fn(() => Promise.resolve()) }
     const create = vi.fn(async (options: { sessionId: SessionId }) =>
@@ -365,7 +384,7 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it.each(['prompt', 'query', 'image-only', 'whitespace'] as const)('admits SDK images before the %s message enters the session', async (entry) => {
     const followup = vi.fn<Agent['followup']>()
-    const agent = ({ id: SessionId('image'), followup } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
+    const agent = promptAgentFixture({ id: SessionId('image'), followup })
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
     const ref = {
       attachmentId: 'sha256:image',
@@ -400,7 +419,7 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it('rejects inline SDK images when the composition has no attachment store', async () => {
     const followup = vi.fn<Agent['followup']>()
-    const agent = ({ id: SessionId('image'), followup } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
+    const agent = promptAgentFixture({ id: SessionId('image'), followup })
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
     const ctx = testContext()
     ctx.provide('agents', { create: vi.fn(async () => handle), get: () => agent })
@@ -418,7 +437,7 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it('rechecks agent liveness after asynchronous image admission', async () => {
     const followup = vi.fn<Agent['followup']>()
-    const agent = ({ id: SessionId('image-race'), followup } satisfies Pick<Agent, 'id' | 'followup'>) as unknown as Agent
+    const agent = promptAgentFixture({ id: SessionId('image-race'), followup })
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
     const admitted = Promise.withResolvers<Array<{
       attachmentId: string
@@ -452,11 +471,11 @@ describe('HarnessSdkJsonRpcServer', () => {
 
   it('rejects a prompt for a session whose agent was disposed outside the server', async () => {
     const followup = vi.fn<Agent['followup']>()
-    const agent = ({
+    const agent = promptAgentFixture({
       id: SessionId('zombie'),
       followup,
       whenIdle: vi.fn(() => Promise.resolve()),
-    } satisfies Pick<Agent, 'id' | 'followup' | 'whenIdle'>) as unknown as Agent
+    })
     const handle = { agent, dispose: vi.fn(() => Promise.resolve()) }
     // The registry drops the agent after creation, modelling an agent-loop-only
     // reload that leaves the server's SessionRecord pointing at a detached agent.

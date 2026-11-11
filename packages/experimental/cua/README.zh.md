@@ -31,15 +31,15 @@ kind: "package-reference"
 
 挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
-`cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，通过 `inspect(...values)` 展示选中的文字和截图；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
+`cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中按 scoped REPL 语句运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，通过 `inspect(...values)` 展示选中的文字和截图；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 
-通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝。这些设置不改变 profile 的共享 PTC 运行时。
+通过提供方的 `standaloneRunCode.runtime` 配置运行时资源和启动设置，通过 `standaloneRunCode.executor` 配置程序调用上限。运行时固定使用 `persistent-in-memory`，在其中设置 `executionMode` 或 `scriptPersistence` 会被拒绝；设置 `replScoped: false` 时改用 Node 的 REPL 求值器，不再使用 scoped REPL。这些设置不改变 profile 的共享 PTC 运行时。
 
 原始 `cua` 的注册使用基础 CUA 服务和 preset 选择，不依赖私有 Node 运行时，也不依赖仅供程序工具使用的 `workingDirectory`。其他 preset 仅在程序工具所需服务可用时获得 `cua_run_code`。只有创建使用程序形态的 Agent 时，才会等待私有运行时启动并报告其失败。修正无效设置后，显式重载已失败的插件；补齐缺失依赖会使等待中的插件继续启动。`agentPreset: false` 全局注册原始 `cua`，不创建私有运行时。
 
 `cua` 在创建环境时安装一次。不要覆盖这个全局对象。需要重建损坏的环境时，在 `cua_run_code` 中执行 `process.exit(0)`；该次工具调用会因进程退出而返回失败。下一次调用启动新环境并恢复 `cua`。请重新创建其他变量，并重新选择应用和窗口。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。`cua.listApps` 和 `cua.getState` 列出运行中的应用；`cua.findApps(query)` 搜索已安装应用，包括未运行的应用。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
@@ -65,7 +65,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 系统权限操作作用于运行 DSH 的电脑。远程访问时，请在该电脑上完成授权。
 
-从插件列表或详情页启用后，系统权限尚未就绪时会显示设置引导，提供“稍后”和“前往设置”。标准、创造和 PTC 模式均可使用 Computer Use。详情页的“新会话默认模式”提供“设为 PTC”按钮，仅点击此按钮才保存默认值。已有会话保留原 preset。“PTC 执行方式”一行的“设为持久化”在选用 Script 模式时单独启用 `ptc-runtime.scriptPersistence`；其他模式下保存 `ptc-runtime.executionMode: persistent-in-memory`。切换会重载共享 PTC 执行器，可能打断当前调用；后续调用在内存中保留变量和应用对象。已经使用持久化模式时，按钮显示“已设为持久化”并禁用。其他 preset 单独保留自己的 CUA 程序状态，不依赖此设置。
+从插件列表或详情页启用后，系统权限尚未就绪时会显示设置引导，提供“稍后”和“前往设置”。标准、创造和 PTC 模式均可使用 Computer Use。详情页的“新会话默认模式”提供“设为 PTC”按钮，仅点击此按钮才保存默认值。已有会话保留原 preset。“PTC 执行方式”一行的“设为持久化”在选用 Script 模式时单独启用 `ptc-runtime.scriptPersistence`；其他模式下保存 `ptc-runtime.executionMode: persistent-in-memory` 和 `replScoped: true`，使用 scoped REPL。切换会重载共享 PTC 执行器，可能打断当前调用；后续调用在内存中保留变量和应用对象。已经使用持久化模式时，按钮显示“已设为持久化”并禁用。其他 preset 单独保留自己的 CUA 程序状态，不依赖此设置。
 
 页面展示“始终允许的应用”和“不允许访问的应用”。后者汇总任一会话的拒绝记录，不取消其他会话已有的授权，也不阻止新会话询问授权。会话授权仍在对应会话中生效，详情页不展示这类应用。“撤销”会移除对应应用的访问许可并取消相关操作。已发送到应用的输入无法撤回，继续操作前需重新观察应用。“允许再次询问”清除该应用在所有会话中的拒绝记录；下次选择应用时仍需用户重新决定。
 
@@ -78,7 +78,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 提供方通过 `systemPointer: true` 声明支持真实鼠标移动。CUA 据此在工具 schema 和模型提示词中加入该选项，负责显示授权卡、记录当前会话的决定并限制子代理。CUA 检查应用访问权限和本次移动所需的授权后，将悬停方式传给提供方。
 
-权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。独立可执行文件按内容摘要保存。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
+权限响应标识所属平台，并且只报告该平台能够观察到的状态。共享页面显示这些观察结果支持的控件。平台尚未确认时显示通用观察和输入项，不提供系统操作。原生提供方共用编译锁和编译进程清理逻辑。macOS 提供方在锁内等待编译完成，再读取签名应用的构建回执。
 
 <details>
 <summary>共享执行与平台职责</summary>
@@ -116,7 +116,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 可选浏览器插件挂载原生 provider 的权限 Remote，复用插件页的启用引导和配置插槽。四排使用条件始终可见，未加载的字段保留占位；平台确认后，查询期间和权限已允许时均保留权限管理说明。默认模式、执行方式、系统权限、应用列表和应用图标分别查询，结果返回后各自显示。应用名称和操作按钮不等待图标，图标位置保留空位。用户操作按顺序执行，不等待尚未完成的查询；卸载时等待操作和查询全部结束，再释放独立持有的 Remote 挂载。已知查询错误和只读设置提示在管理操作或重试期间保持可见，操作按钮禁用。查询错误只显示在对应部分，启用引导只等待系统权限结果。注入层独立于页面观察插件管理操作。组合包和组件行变更会暂停四项查询，并使进行中的结果失效；操作结束后即使页面已关闭，也会重新查询。已知错误保留至读取成功；卸载后的迟到结果会被丢弃。控制器直接接收生成的 `ctx.remote.cuaAccess`，在现有查询和操作流程中处理失败响应，并把查询结果投影到页面和设置弹窗；重新连接时刷新状态。进入页面、窗口聚焦或操作完成后读取当前授权存储。操作提示挂载到 shell overlay，关闭页面后仍可显示。provider 负责权限检查、持久授权和取消；浏览器不保存授权决定。
 
-详情页通过现有 `configForms` 服务读取实际默认值（`selectedDefault ?? default`）。默认模式按钮仅写入 `selectedDefault`，沿用表单带版本检查的设置写入流程。执行方式一行调用 CUA 的 `ptcConfiguration()` 和 `enablePersistentPtc()`，根据已加载运行时的 `retainsState` 判断状态保留。启用持久化时保留正在使用的 Script 求值器，并通过配置编辑器同时写入 `executionMode` 和 `scriptPersistence`；其他模式选择保留状态的 REPL，并关闭 Script 状态保留。操作沿用普通 Loader 重载规则。权限检查和执行方式状态独立返回。设置仍在加载、只读或不可用时不能提交；写入失败时在设置旁显示错误，供用户重试。
+详情页通过现有 `configForms` 服务读取实际默认值（`selectedDefault ?? default`）。默认模式按钮仅写入 `selectedDefault`，沿用表单带版本检查的设置写入流程。执行方式一行调用 CUA 的 `ptcConfiguration()` 和 `enablePersistentPtc()`，根据已加载运行时的 `retainsState` 判断状态保留。启用持久化时保留正在使用的 Script 求值器，并通过配置编辑器同时写入 `executionMode`、`scriptPersistence` 和 `replScoped`；其他模式选择 scoped REPL，并关闭 Script 状态保留。操作沿用普通 Loader 重载规则。权限检查和执行方式状态独立返回。设置仍在加载、只读或不可用时不能提交；写入失败时在设置旁显示错误，供用户重试。
 </details>
 
 -----

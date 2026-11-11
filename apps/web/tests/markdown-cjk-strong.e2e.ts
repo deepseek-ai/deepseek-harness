@@ -125,6 +125,36 @@ describe('web e2e: CJK-adjacent Markdown strong emphasis', () => {
       expect(await page.getByText(paragraph, { exact: true }).count()).toBe(1)
     }
 
+    const viewport = page.viewportSize()!
+    try {
+      for (const size of [{ width: 390, height: 844 }, { width: 951, height: 669 }, { width: 669, height: 951 }]) {
+        await page.setViewportSize(size)
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('-webkit-text-size-adjust')))
+          .toBe('100%')
+        expect(await strong.evaluateAll(elements => elements.map(element => getComputedStyle(element).fontSize)))
+          .toEqual(CASES.map(() => '14px'))
+      }
+      const restoreFont = await page.evaluateHandle(() => {
+        const style = document.body.style
+        const before = style.getPropertyValue('--dsh-content-font-size')
+        const priority = style.getPropertyPriority('--dsh-content-font-size')
+        style.setProperty('--dsh-content-font-size', '18px')
+        return () => {
+          if (before) style.setProperty('--dsh-content-font-size', before, priority)
+          else style.removeProperty('--dsh-content-font-size')
+        }
+      })
+      try {
+        expect(await strong.evaluateAll(elements => elements.map(element => getComputedStyle(element).fontSize)))
+          .toEqual(CASES.map(() => '18px'))
+      } finally {
+        await restoreFont.evaluate((restore) => { restore() })
+        await restoreFont.dispose()
+      }
+    } finally {
+      await page.setViewportSize(viewport)
+    }
+
     const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)

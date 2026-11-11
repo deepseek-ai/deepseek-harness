@@ -95,7 +95,7 @@ async function setup(options?: SetupOptions) {
   if (options?.config?.maxHandoffChars !== undefined) config.maxHandoffChars = options.config.maxHandoffChars
   if (options?.config?.maxResultChars !== undefined) config.maxResultChars = options.config.maxResultChars
   const fiber = await ctx.plugin(toolRalph, config)
-  const parent = { id: SessionId('caller'), options: {} } as unknown as Agent
+  const parent = { id: SessionId('caller'), options: {} } as Agent
   return { ctx, engine: ctx.workflowEngine as StubEngine, parent, fiber }
 }
 

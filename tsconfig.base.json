@@ -112,6 +112,7 @@
       "@deepseek-ai/dsh-computer-use/brand": ["./packages/computer-use/computer-use/src/brand.ts"],
       "@deepseek-ai/dsh-experimental-computer-use-cua-driver-mcp": ["./packages/experimental/computer-use-cua-driver-mcp/src/index.ts"],
       "@deepseek-ai/dsh-experimental-cua-macos": ["./packages/experimental/cua-macos/src/index.ts"],
+      "@deepseek-ai/dsh-cua-windows": ["./packages/experimental/cua-windows/src/index.ts"],
       "@deepseek-ai/dsh-cua/config": ["./packages/experimental/cua/src/config.ts"],
       "@deepseek-ai/dsh-cua/native-schema": ["./packages/experimental/cua/src/native-schema.ts"],
       "@deepseek-ai/dsh-cua/native-build": ["./packages/experimental/cua/src/native-build.ts"],

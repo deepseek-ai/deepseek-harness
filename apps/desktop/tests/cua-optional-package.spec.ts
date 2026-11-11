@@ -10,11 +10,12 @@ import { pnpmCommand } from '../../../scripts/release/process.ts'
 
 const repository = resolve(import.meta.dirname, '../../..')
 const providerName = '@deepseek-ai/dsh-experimental-cua-macos'
+const windowsProvider = '@deepseek-ai/dsh-cua-windows'
 const bundleName = '@deepseek-ai/dsh-cua-bundle'
 const readManifest = async (path: string): Promise<Record<string, unknown>> =>
   JSON.parse(await readFile(join(repository, path, 'package.json'), 'utf8')) as Record<string, unknown>
 
-it('fetches the macOS optional tarball only for Darwin, with an empty cache for every target', async () => {
+it('fetches the platform-declared CUA provider tarballs with an empty cache for every target', async () => {
   const root = await mkdtemp(join(tmpdir(), 'cua-cold-install-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const userconfig = join(root, 'npmrc')
@@ -37,17 +38,22 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
   const cli = await readManifest('apps/cli')
   const bundle = await readManifest('packages/experimental/cua-bundle')
   const native = await readManifest('packages/experimental/cua-macos')
+  const windows = await readManifest('packages/experimental/cua-windows')
   expect(cli.dependencies).toHaveProperty(bundleName)
   expect(bundle.dependencies).not.toHaveProperty(providerName)
-  expect(bundle.optionalDependencies).toEqual({ [providerName]: 'workspace:*' })
+  expect(bundle.dependencies).not.toHaveProperty(windowsProvider)
+  expect(bundle.optionalDependencies).toEqual({ [providerName]: 'workspace:*', [windowsProvider]: 'workspace:*' })
+  expect(windows.os).toEqual(['win32', 'linux'])
   expect(native.os).toEqual(['darwin'])
   const version = '1.0.0'
   const bundleDependencies = Object.fromEntries(Object.keys(bundle.dependencies as Record<string, string>).map(name => [name, version]))
   const manifests = [
     { name: cli.name, version, dependencies: { [bundleName]: version } },
-    { name: bundleName, version, dependencies: bundleDependencies, optionalDependencies: { [providerName]: version } },
+    { name: bundleName, version, dependencies: bundleDependencies,
+      optionalDependencies: { [providerName]: version, [windowsProvider]: version } },
     ...Object.keys(bundleDependencies).map(name => ({ name, version })),
     { name: providerName, version, os: native.os, files: native.files },
+    { name: windowsProvider, version, os: windows.os, files: windows.files },
   ]
   const generation = 'a'.repeat(64)
   const nativePayload = `native/bin/darwin-arm64/${generation}/DSH Computer Use.app/Contents/MacOS/dsh-cua-native`
@@ -121,5 +127,7 @@ it('fetches the macOS optional tarball only for Darwin, with an empty cache for 
     expect(requests).toContain('/@deepseek-ai/dsh-cua.tgz')
     expect(requests.includes(`/${providerName}.tgz`), `${target}: ${JSON.stringify(requests)}\n${output}`)
       .toBe(target === 'darwin' || unrestricted)
+    expect(requests.includes(`/${windowsProvider}.tgz`), `${target}: ${JSON.stringify(requests)}\n${output}`)
+      .toBe(target !== 'darwin')
   }
 }, 120_000)

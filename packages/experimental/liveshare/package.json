@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-liveshare",
   "description": "Opt-in LiveShare host bundle: share a Session through a separate Relay at the view or bounded-write tier, with forking and attachment uploads as independent switches",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "icon": "./icon.svg",
   "repository": {
     "type": "git",

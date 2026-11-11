@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Windows Computer Use バックエンド",
+    "description": "共通の Computer Use サービスに Windows ネイティブのアプリとウィンドウのオブジェクトを提供します。"
+  }
+}

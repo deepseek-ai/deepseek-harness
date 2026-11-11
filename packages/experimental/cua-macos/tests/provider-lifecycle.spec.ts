@@ -140,7 +140,7 @@ class ImageAdapter extends LlmAdapter {
 }
 
 const imageData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
-const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: 7 }
+const imageMetadata = { pixelWidth: 1, pixelHeight: 1, bounds: { x: 2, y: 3, width: 1, height: 1 }, coordinateSpace: 'window-points', windowId: '7' }
 
 async function setup(model?: { provider: string; model: string }, ptc = false) {
   native.connect.mockClear()
@@ -407,7 +407,9 @@ it('rejects a model attempt to call the private launch operation', async () => {
 
 it('correlates a native request with its logged tool invocation', async () => {
   const f = await setup()
-  expect((await f.execute()).isError).toBe(false)
+  const apps = [{ name: 'Editor', isRunning: true, pid: 101 }]
+  native.request.mockResolvedValueOnce(apps)
+  expect((await f.execute()).value).toEqual(apps)
   expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
 })
 
@@ -599,7 +601,7 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
 
 it('rejects malformed and unowned operations before acquiring a helper', async () => {
   const f = await setup()
-  expect((await f.execute('screenshot', { pid: 9, windowId: 7 })).isError).toBe(true)
+  expect((await f.execute('screenshot', { pid: 9, windowId: '7' })).isError).toBe(true)
   const unowned = await executeToolFixture(f.ctx, {
     signal: new AbortController().signal, callId: ToolCallId('unowned'), name: 'cua', arguments: { method: 'listApps', params: {} },
   })
@@ -624,10 +626,10 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   const f = await setup()
   await selectApplication(f)
   native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
-    windows: [{ windowId: 7, appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
+    windows: [{ windowId: '7', appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: 'app-one' })
   expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-2'))
-  await f.execute('drag', { appHandle: 'app-one', windowId: 7, fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
+  await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
   expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
   await f.execute('paste', { appHandle: 'app-one', text: 'hello', format: 'text' })
   expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
@@ -663,7 +665,7 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   const data = imageData
   const metadata = imageMetadata
   native.request.mockResolvedValue({ ...metadata, mimeType: 'image/png', data })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError).toBe(false)
   const text = result.content.find(block => block.type === 'text')
   if (text?.type !== 'text') throw new Error('Screenshot coordinates were not returned')
@@ -673,14 +675,14 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   const stored = await f.ctx.attachments.readImage(image.attachment)
   expect(Buffer.from(stored.data).toString('base64')).toBe(data)
   expect(result.value).toMatchObject({ ...metadata, coordinateSpace: 'screenshot-pixels', mimeType: 'image/png', data })
-  const window = { windowId: 7, appName: 'Fixture', title: 'Window', bounds: metadata.bounds, isOnScreen: false, onCurrentSpace: true }
+  const window = { windowId: '7', appName: 'Fixture', title: 'Window', bounds: metadata.bounds, isOnScreen: false, onCurrentSpace: true }
   const hiddenPanel = { ...window, cacheOnly: true }
-  const minimizedDocument = { ...window, windowId: 8, title: 'Document' }
+  const minimizedDocument = { ...window, windowId: '8', title: 'Document' }
   native.request.mockResolvedValueOnce([hiddenPanel, minimizedDocument])
   const discovery = await f.execute('listWindows', { appHandle: 'app-one' })
   expect(discovery.value).toEqual([minimizedDocument])
   expect(discovery.content).toEqual([{ type: 'text', text: JSON.stringify([minimizedDocument]) }])
-  for (const windowId of [null, 7]) {
+  for (const windowId of [null, '7']) {
     native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId, snapshotId: 'snapshot', tree: '',
       windows: [hiddenPanel, minimizedDocument], truncated: false })
     const state = await f.execute('getState', { appHandle: 'app-one', ...windowId === null ? {} : { windowId } })
@@ -689,14 +691,14 @@ it('preserves screenshot attachments and invalidates pixel coordinates when wind
   native.request.mockResolvedValueOnce([{ ...window, isOnScreen: true }, minimizedDocument])
   await f.execute('listWindows', { appHandle: 'app-one' })
   native.request.mockResolvedValueOnce({ dispatched: true })
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })).isError).toBe(false)
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 0, y: 0 })).isError).toBe(false)
   const resizedBounds = { ...metadata.bounds, width: 2 }
   native.request.mockResolvedValueOnce([{ ...hiddenPanel, bounds: resizedBounds }])
   expect((await f.execute('listWindows', { appHandle: 'app-one' })).value).toEqual([])
   native.request.mockResolvedValueOnce([{ ...window, bounds: resizedBounds, isOnScreen: true }])
   await f.execute('listWindows', { appHandle: 'app-one' })
   native.request.mockClear()
-  const click = await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 0, y: 0 })
+  const click = await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 0, y: 0 })
   expect(click.isError).toBe(true)
   expect(JSON.stringify(click.content)).toContain('SCREENSHOT_REQUIRED')
   expect(native.request).not.toHaveBeenCalled()
@@ -718,25 +720,25 @@ it('maps the actual model-request image pixels back to native points without sto
   const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: '#4488cc' } }).png().toBuffer()
   native.request.mockResolvedValue({ ...imageMetadata, bounds: { x: 10, y: 20, width: 400, height: 200 },
     pixelWidth: 40, pixelHeight: 20, mimeType: 'image/png', data: image.toString('base64') })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError, JSON.stringify(result.content)).toBe(false)
   expect(result.value).toMatchObject({ pixelWidth: 10, pixelHeight: 5, coordinateSpace: 'screenshot-pixels' })
   const value = result.value as { data: string }
   expect(await sharp(Buffer.from(value.data, 'base64')).metadata()).toMatchObject({ width: 10, height: 5 })
   expect(save).toHaveBeenCalledTimes(1)
   native.request.mockResolvedValue({ dispatched: true })
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 5, y: 2.5 })).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
-  expect((await f.execute('click', { appHandle: 'app-one', windowId: 7, x: 999, y: 999, relative: true })).isError).toBe(false)
-  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: 7, x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 5, y: 2.5 })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 200, y: 100 }, expect.any(AbortSignal), expect.any(String))
+  expect((await f.execute('click', { appHandle: 'app-one', windowId: '7', x: 999, y: 999, relative: true })).isError).toBe(false)
+  expect(native.request).toHaveBeenLastCalledWith('click', { appHandle: 'app-one', windowId: '7', x: 399, y: 199 }, expect.any(AbortSignal), expect.any(String))
 })
 
-it.each([{ appHandle: 'foreign', windowId: 7 }, { appHandle: 'app-one', windowId: null }])(
+it.each([{ appHandle: 'foreign', windowId: '7' }, { appHandle: 'app-one', windowId: null }])(
   'rejects a helper observation for the wrong target before releasing its contents: %j', async (identity) => {
     const f = await setup()
     await selectApplication(f)
     native.request.mockResolvedValueOnce({ ...identity, snapshotId: 'other', tree: 'foreign content', truncated: false, windows: [] })
-    const result = await f.execute('getState', { appHandle: 'app-one', windowId: 7 })
+    const result = await f.execute('getState', { appHandle: 'app-one', windowId: '7' })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
     expect(JSON.stringify(result.content)).not.toContain('foreign content')
@@ -751,8 +753,8 @@ it('rejects a screenshot from another window before attachment admission', async
   onTestFinished(async () => { try { await f.ctx.fiber.dispose() } finally { await rm(root, { recursive: true, force: true }) } })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   const save = vi.spyOn(f.ctx.attachments, 'saveImages')
-  native.request.mockResolvedValueOnce({ ...imageMetadata, windowId: 8, mimeType: 'image/png', data: imageData })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  native.request.mockResolvedValueOnce({ ...imageMetadata, windowId: '8', mimeType: 'image/png', data: imageData })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('NATIVE_PROTOCOL')
   expect(save).not.toHaveBeenCalled()
@@ -766,7 +768,7 @@ it.each([{ pixelWidth: 2 }, { pixelHeight: 2 }])('rejects native screenshot dime
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   native.request.mockResolvedValue({ ...imageMetadata, ...invalid, mimeType: 'image/png', data: imageData })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('dimensions disagree')
   expect(result.content.some(block => block.type === 'image')).toBe(false)
@@ -776,7 +778,7 @@ it('refuses screenshot capture when no attachment store is mounted', async () =>
   const f = await setup({ provider: 'image-fixture', model: 'vision' })
   await selectApplication(f)
   native.request.mockClear()
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError).toBe(true)
   expect(JSON.stringify(result.content)).toContain('require an attachment store')
   expect(native.request).not.toHaveBeenCalled()
@@ -796,7 +798,7 @@ it.each(['unresolved', 'unknown', 'text-only', 'provider-error'] as const)(
       ...route === 'text-only' ? { inputModalities: ['text'] } : {},
     })
     native.request.mockClear()
-    const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+    const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
     expect(result.isError).toBe(true)
     expect(JSON.stringify(result.content)).toContain(route === 'unresolved' ? 'model route could not be resolved'
       : route === 'provider-error' ? 'model lookup failed' : 'declare image input')
@@ -817,7 +819,7 @@ it.each([
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   vi.spyOn(f.ctx.attachments, 'readImageRequest').mockRejectedValue(failure)
   native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: imageData })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   const content = JSON.stringify(result.content)
   expect(result.isError).toBe(true)
   expect(content).toContain('SCREENSHOT_IMAGE_FAILED: Screenshot model image preparation failed for window 7')
@@ -833,7 +835,7 @@ it('returns an image-admission failure without emitting a successful screenshot'
   onTestFinished(async () => { await f.ctx.fiber.dispose(); await rm(root, { recursive: true, force: true }) })
   await f.ctx.plugin(LocalAttachmentStore, { dshHome: root })
   native.request.mockResolvedValue({ ...imageMetadata, mimeType: 'image/png', data: 'AQ==' })
-  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const result = await f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   expect(result.isError).toBe(true)
   expect(result.content.some(block => block.type === 'image')).toBe(false)
   expect(JSON.stringify(result.content)).toContain('INVALID_IMAGE: Screenshot image admission failed for window 7')
@@ -869,7 +871,7 @@ it.each([
     if (stage === 'storage') { entered.resolve(); await release.promise }
     return saveImages(images)
   })
-  const pending = f.execute('screenshot', { appHandle: 'app-one', windowId: 7 })
+  const pending = f.execute('screenshot', { appHandle: 'app-one', windowId: '7' })
   let closing: Promise<void> | undefined
   try {
     const reached = await Promise.race([entered.promise.then(() => true), pending.then(() => false)])
@@ -1207,7 +1209,7 @@ it('rechecks the selection after a pending approval and does not dispatch revoke
 
 it('revalidates window coordinates after the user answers', async () => {
   const f = await hoverFixture()
-  native.request.mockResolvedValueOnce([{ windowId: 7, appName: 'Fixture', title: 'Window', bounds: { x: 0, y: 0, width: 100, height: 100 },
+  native.request.mockResolvedValueOnce([{ windowId: '7', appName: 'Fixture', title: 'Window', bounds: { x: 0, y: 0, width: 100, height: 100 },
     isOnScreen: true, onCurrentSpace: true }])
   await f.execute('listWindows', { appHandle: 'app-one' })
   f.ask.mockImplementationOnce(async () => {
@@ -1215,7 +1217,7 @@ it('revalidates window coordinates after the user answers', async () => {
     await f.execute('listWindows', { appHandle: 'app-one' })
     return f.approved
   })
-  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: 7, x: 500, y: 500, relative: true, useSystemPointer: true })
+  const result = await f.execute('mouseMove', { appHandle: 'app-one', windowId: '7', x: 500, y: 500, relative: true, useSystemPointer: true })
   expect(JSON.stringify(result.content)).toContain('STALE_SNAPSHOT')
   expect(native.request.mock.calls.map(([name]) => name)).toEqual(['listWindows', 'listWindows'])
 })

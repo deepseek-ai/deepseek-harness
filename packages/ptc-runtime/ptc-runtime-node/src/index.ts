@@ -6,7 +6,7 @@ import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-fs'
 import { resolveLaunch } from './launch.ts'
-import { NodeConfig, validateConfig } from './config.ts'
+import { NodeConfig, resolveReplScoped, validateConfig } from './config.ts'
 import { createExecution } from './execution.ts'
 import { PolicyProcesses } from './policy-processes.ts'
 import type { Config, ResolvedConfig } from './config.ts'
@@ -40,7 +40,7 @@ export class NodePtcRuntime extends PtcRuntime {
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
-    this.config = { ...config, launch: resolveLaunch(config.launch) } as ResolvedConfig
+    this.config = { ...config, replScoped: resolveReplScoped(config), launch: resolveLaunch(config.launch) } as ResolvedConfig
     validateConfig(this.config)
     this.processes = new PolicyProcesses(ctx)
     this.execution = createExecution(ctx, this.config, this.processes)

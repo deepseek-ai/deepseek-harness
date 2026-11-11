@@ -1822,7 +1822,7 @@ describe('forgePanel actions', () => {
     // The refresh found the same state, which the panel already published.
     const refreshed = follower.states.at(-1)
     expect(refreshed?.checkout.state).toBe('none')
-    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null, reviewRevision: 0 }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])
@@ -2060,6 +2060,10 @@ describe('forgePanel configuration', () => {
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],
     [{ maxCommits: 0 }, 'forge-panel: maxCommits must be a positive integer'],
+    [{ lensTimeoutMs: 0 }, 'forge-panel: lensTimeoutMs must be a positive integer no greater than 2147483647'],
+    [{ maxLensReadBytes: 0 }, 'forge-panel: maxLensReadBytes must be a positive integer'],
+    [{ maxCachedLensBytes: -1 }, 'forge-panel: maxCachedLensBytes must be a positive integer'],
+    [{ maxAnnotationsPerFile: 1.5 }, 'forge-panel: maxAnnotationsPerFile must be a positive integer'],
     [{ testPaths: ['**/*.spec.*', ' '] }, 'forge-panel: testPaths entries must not be empty'],
     [{ interfacePaths: [''] }, 'forge-panel: interfacePaths entries must not be empty'],
     [{ worktreePrefix: '-dsh/' }, prefix],

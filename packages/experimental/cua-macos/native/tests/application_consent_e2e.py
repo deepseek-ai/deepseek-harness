@@ -40,7 +40,7 @@ def main():
             nonlocal checked_windows
             if not args.desktop:
                 return
-            state = wait_for_state(state_path, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            state = wait_for_state(state_path, lambda value: value["pid"] == pid and bool(value["windowId"]))
             owner = {"appHandle": app["appHandle"], "windowId": state["windowId"]}
             observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
@@ -128,7 +128,7 @@ def main():
         peer_pending = peer.call("getApp", {"selector": str(app)})
         process = subprocess.Popen([str(executable)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         cleanup.callback(stop, process)
-        wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+        wait_for_state(state, lambda value: value["pid"] == process.pid and bool(value["windowId"]))
         running = helper.call("getApp", {"selector": str(process.pid)})
         assert running["authorization"]["id"] == pending["authorization"]["id"] == expected, running["authorization"]
         resumed = peer.call("launchApp", {"appHandle": peer_pending["appHandle"]})
@@ -154,7 +154,7 @@ def main():
             process = subprocess.Popen([str(binary), str(state), "--background"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             cleanup.callback(stop, process)
             try:
-                wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+                wait_for_state(state, lambda value: value["pid"] == process.pid and bool(value["windowId"]))
                 running = helper.call("getApp", {"selector": str(process.pid)})
                 authorization = running["authorization"]
                 assert running.get("bundleId") is None and authorization["persistable"] is True, authorization
@@ -173,7 +173,7 @@ def main():
             pending = helper.call("getApp", {"selector": str(app)})
             launched = helper.call("launchApp", {"appHandle": pending["appHandle"]})
             assert launched["running"] is True, launched
-            pid = wait_for_state(state, lambda value: value["windowId"] > 0)["pid"]
+            pid = wait_for_state(state, lambda value: bool(value["windowId"]))["pid"]
             executable.unlink()
             buffer = ctypes.create_string_buffer(4096)
             ctypes.set_errno(0)

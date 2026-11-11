@@ -168,9 +168,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
@@ -235,9 +234,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "includeMenus": {
               "description": "Expand menu contents; omitted or false shows menu-bar entries only.",
@@ -291,9 +289,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -338,9 +335,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -427,9 +423,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -476,9 +471,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 4294967295
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -508,9 +502,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 4294967295
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -566,9 +559,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 4294967295
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -634,9 +626,8 @@
                   "minLength": 1
                 },
                 "windowId": {
-                  "type": "integer",
-                  "exclusiveMinimum": 0,
-                  "maximum": 4294967295
+                  "type": "string",
+                  "minLength": 1
                 },
                 "snapshotId": {
                   "type": "string",
@@ -726,9 +717,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -811,9 +801,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -877,9 +866,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "text": {
               "type": "string"
@@ -917,9 +905,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "text": {
               "type": "string"
@@ -988,9 +975,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "key": {
               "type": "string",
@@ -1035,9 +1021,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "key": {
               "type": "string",
@@ -1089,9 +1074,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "snapshotId": {
               "type": "string",
@@ -1152,9 +1136,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             },
             "mouseButton": {
               "type": "string",
@@ -1246,9 +1229,8 @@
               "minLength": 1
             },
             "windowId": {
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 4294967295
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [

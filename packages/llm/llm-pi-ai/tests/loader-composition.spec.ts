@@ -14,6 +14,7 @@ import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { profileComposition } from '../../../settings/settings/tests/profile-composition.ts'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
+import { recordKeyFor } from '../src/auth.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -144,7 +145,7 @@ describe('llm-pi-ai real dormant composition', () => {
   it('offers OpenAI sign-in by API key only, while other subscription logins stay', async () => {
     const { ctx } = await loadComposition()
     const methods = (provider: string): string[] | undefined => ctx.authorization.list()
-      .find(entry => entry.key === LlmPiAi.recordKeyFor(provider))?.methods.map(method => method.id)
+      .find(entry => entry.key === recordKeyFor(provider))?.methods.map(method => method.id)
 
     // pi-ai's Sign in with ChatGPT needs an installation ID the harness does
     // not supply, so the route offers only its key login.

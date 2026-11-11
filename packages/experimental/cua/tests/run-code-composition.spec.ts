@@ -32,7 +32,7 @@ import { CuaConfig, installCua } from '../src/index.ts'
 import { Request } from '../src/protocol.ts'
 
 const programs = [
-  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree(); await win.click("0"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })); inspect(screenshot)',
+  'globalThis.visits = 1; var initialCua = cua; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); await win.click("0"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId, pid: process.pid })); inspect(screenshot)',
   'globalThis.visits++; await win.getAccessibilityTree(); await win.click("0"); await win.getScreenshot(); inspect(JSON.stringify({ visits, sameCua: cua === initialCua, app: app.appHandle, window: win.windowId, tree: await win.getAccessibilityTree(), pid: process.pid }))',
   'await win.click("0")',
 ]
@@ -59,13 +59,13 @@ class ProgramModel extends LlmAdapter {
   }
 }
 
-async function setup(programs: readonly string[]) {
+async function setup(programs: readonly string[], platform = 'macos', selectorPid?: number) {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-cua-run-code-'))
   const ctx = new Context()
   onTestFinished(async () => {
     try { await ctx.fiber.dispose() } finally { await rm(directory, { recursive: true, force: true }) }
   })
-  const native = createNativeFixture()
+  const native = createNativeFixture(selectorPid)
   const guarded: string[] = []
   const modules = {
     llm: LlmRuntime, sessions: SessionStore, projections: SessionProjectionRegistry, systemPrompt: SystemPrompt,
@@ -99,7 +99,8 @@ async function setup(programs: readonly string[]) {
       apply(owner: Context, config: CuaConfig) {
         installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
           getGuidance: () => 'Use the CUA object API to inspect and control the selected application.',
-          capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
+          acceptsPidSelector: selectorPid !== undefined,
+          capabilities: { platform, methods: ['getCapabilities', 'listApps', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
           permissionParameters: (_method, permission, locale) => ({ permission, locale }),
         })
@@ -152,12 +153,12 @@ it('retains CUA objects, guards and logs hidden subcalls, forwards screenshots, 
   expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
   const results = agent.session.deriveMessages().filter(message => message.role === 'tool')
   expect(results.map(result => result.isError), JSON.stringify(results)).toEqual([false, false, true])
-  const first = z.object({ visits: z.number(), bindings: z.array(z.string()), app: z.string(), window: z.number(), pid: z.number() })
+  const first = z.object({ visits: z.number(), bindings: z.array(z.string()), app: z.string(), window: z.string(), pid: z.number() })
     .parse(JSON.parse(results[0]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
-  expect(first).toMatchObject({ visits: 1, bindings: ['cua'], app: 'fixture-app', window: 7 })
+  expect(first).toMatchObject({ visits: 1, bindings: ['cua'], app: 'fixture-app', window: '7' })
   expect(first.pid).not.toBe(process.pid)
   expect(JSON.parse(results[1]!.content.filter(block => block.type === 'text').map(block => block.text).join('\n')))
-    .toEqual({ visits: 2, sameCua: true, app: 'fixture-app', window: 7,
+    .toEqual({ visits: 2, sameCua: true, app: 'fixture-app', window: '7',
       tree: '- [0] AXButton "Increment"\n- AXStaticText "Count: 2"', pid: first.pid })
   expect(native.state.count).toBe(2)
   const dispatches = agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
@@ -199,7 +200,7 @@ it('recreates the automatic facade when its environment is rebuilt', async () =>
 
 it('settles an in-flight native call before releasing the provider connection and program process', async () => {
   const { ctx, native, agent, provider, run } = await setup([
-    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree(); inspect(process.pid)',
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); inspect(process.pid)',
     'await win.click("0")',
   ])
   const started = native.holdNextClick()
@@ -248,4 +249,28 @@ it('settles an in-flight native call before releasing the provider connection an
   expect(agent.session.deriveMessages().filter(message => message.role === 'tool').map(message => message.isError)).toEqual([false, true])
   expect(() => process.kill(pid, 0)).toThrow()
   expect(ctx.tools.get('cua_run_code', agent)).toBeUndefined()
+})
+
+it.each([
+  { platform: 'windows', selectorPid: undefined, expectedProcess: {}, selector: 'test.fixture' },
+  { platform: 'fixture', selectorPid: 101, expectedProcess: { pid: 101 }, selector: '101' },
+])('returns only usable application selectors for $platform', async ({ platform, selectorPid, expectedProcess, selector }) => {
+  const { agent, run, native } = await setup([
+    'var apps = await cua.listApps(); inspect(JSON.stringify(apps)); await cua.getApp(String(apps[0].pid ?? apps[0].id))',
+  ], platform, selectorPid)
+  await run()
+  const result = agent.session.deriveMessages().find(message => message.role === 'tool')
+  expect(result?.isError).toBe(false)
+  expect(JSON.parse(result!.content.filter(block => block.type === 'text').map(block => block.text).join('')))
+    .toEqual([{ id: 'test.fixture', displayName: 'Fixture', isRunning: true, ...expectedProcess }])
+  expect(native.calls.filter(call => call.method === 'getApp').map(call => call.params.selector)).toEqual([selector])
+})
+
+it('forwards per-read accessibility limits to the Windows backend', async () => {
+  const { run, native } = await setup([
+    'var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree({ maxElements: 30, maxDepth: 3 })',
+  ], 'windows')
+  await run()
+  expect(native.calls.find(call => call.method === 'getState')?.params)
+    .toMatchObject({ maxElements: 30, maxDepth: 3 })
 })

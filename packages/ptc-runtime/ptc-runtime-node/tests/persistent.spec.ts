@@ -12,7 +12,7 @@ async function setupRuntime(config: Config = {}) {
   const cwd = await mkdtemp(join(tmpdir(), 'dsh-persistent-ptc-'))
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
-  const { runtime, fiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', ...config })
+  const { runtime, fiber } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped: false, ...config })
   const owner = {}
   const run = (program: string, options: Partial<PtcRunRequest> = {}) =>
     runtime.run(runtime.resolve({ program, bindings: [], cwd, stateOwner: owner, ...options }))
@@ -24,7 +24,8 @@ function bindings(value: PtcBindingFunction) {
 }
 
 describe.each([
-  { executionMode: 'persistent-in-memory', scriptPersistence: false, format: 'repl' },
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: false, format: 'repl' },
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: true, format: 'scoped-repl' },
   { executionMode: 'vm-script', scriptPersistence: true, format: 'script' },
 ] as const)('retained Node $format', ({ format, ...mode }) => {
   const setup = (config: Config = {}) => setupRuntime({ ...mode, ...config })
@@ -131,8 +132,9 @@ describe.each([
     const { run } = await setup()
     const called = vi.fn(async () => 42)
     const options = { bindings: bindings(called) }
-    await run('let retained = 17; let trigger; let rejection; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { rejection = error.message } });', options)
-    expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); rejection', options)).value).toBe('PTC evaluation ended')
+    // The late callback stores into an object so that copy-per-call scoped REPL bindings observe it as well.
+    await run('let retained = 17; let trigger; const late = {}; const expired = new Promise(resolve => { trigger = resolve }); void expired.then(async () => { try { await tools.value({}) } catch (error) { late.rejection = error.message } });', options)
+    expect((await run('trigger(); await new Promise(resolve => setImmediate(resolve)); late.rejection', options)).value).toBe('PTC evaluation ended')
     expect(called).not.toHaveBeenCalled()
     expect(await run('({ retained, answer: await tools.value({}) })', options)).toMatchObject({ output: [], value: { retained: 17, answer: 42 } })
     expect(called).toHaveBeenCalledTimes(1)

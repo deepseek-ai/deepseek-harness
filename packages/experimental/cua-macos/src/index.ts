@@ -66,7 +66,7 @@ export const Config = Schema.object({
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
     getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
-    permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
+    acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
     installCua(ctx, config, { helperPath: config.helperPath, ...backend })

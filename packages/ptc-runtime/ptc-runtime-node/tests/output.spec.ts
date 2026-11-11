@@ -7,7 +7,7 @@ import { mountRuntime } from './setup.ts'
 
 const modes = [
   { executionMode: 'per-call', scriptPersistence: false },
-  { executionMode: 'persistent-in-memory', scriptPersistence: false },
+  { executionMode: 'persistent-in-memory', scriptPersistence: false, replScoped: false },
   { executionMode: 'vm-script', scriptPersistence: false },
   { executionMode: 'vm-script', scriptPersistence: true },
 ] as const

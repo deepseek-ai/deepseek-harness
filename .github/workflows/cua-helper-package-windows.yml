@@ -1,0 +1,107 @@
+name: Package CUA helper · Windows · x64
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      artifact-id:
+        description: '包含 win-x64 helper ZIP 的产物编号'
+        value: ${{ jobs.package.outputs.artifact-id }}
+      run-id:
+        description: '产物所属的构建运行编号'
+        value: ${{ jobs.package.outputs.run-id }}
+      build-key:
+        description: '提交 SHA、.NET SDK 版本和 win-x64 RID 的 SHA-256 摘要'
+        value: ${{ jobs.package.outputs.build-key }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      run-id: ${{ github.run_id }}
+      build-key: ${{ steps.metadata.outputs.build-key }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5.4.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore locked Windows helper and run protocol checks
+        run: |
+          dotnet restore packages/experimental/cua-windows/native/cua-windows.slnx --locked-mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project packages/experimental/cua-windows/native/tests/Protocol.Tests.csproj --configuration Release --no-restore
+      - name: Publish Windows CUA helper
+        run: >-
+          dotnet publish packages/experimental/cua-windows/native/entry/CuaWindows.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --no-restore
+          --output dist/cua-helper-win-x64
+      # Standalone helper zip contract: flat root with cua-helper.json,
+      # dsh-cua-windows.exe, and its runtime files. Installed providers place
+      # the same payload under native/bin/win-x64.
+      - name: Add helper metadata
+        id: metadata
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = 'dist/cua-helper-win-x64'
+          $exe = Join-Path $directory 'dsh-cua-windows.exe'
+          if (-not (Test-Path $exe -PathType Leaf)) { throw "helper executable is missing: $exe" }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $commit = $env:GITHUB_SHA
+          $sdk = (& dotnet --version).Trim()
+          $keyBytes = [Text.Encoding]::UTF8.GetBytes("$commit`n$sdk`nwin-x64")
+          $buildKey = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($keyBytes)).ToLowerInvariant()
+          $files = [ordered]@{}
+          Get-ChildItem $directory -Recurse -File | Sort-Object FullName | ForEach-Object {
+            $relative = [IO.Path]::GetRelativePath($directory, $_.FullName) -replace '\\', '/'
+            $files[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          # sha256 is the executable alias of files[dsh-cua-windows.exe].
+          # signing is an enum: unsigned or authenticode.
+          $metadata = [ordered]@{
+            schemaVersion = 1
+            platform = 'windows'
+            buildKey = $buildKey
+            version = $version
+            commit = $commit
+            architecture = 'x64'
+            executable = 'dsh-cua-windows.exe'
+            sha256 = $files['dsh-cua-windows.exe']
+            signing = 'unsigned'
+            files = $files
+          }
+          $json = $metadata | ConvertTo-Json -Depth 5
+          Set-Content -Path (Join-Path $directory 'cua-helper.json') -Value "$json`n" -NoNewline -Encoding utf8NoBOM
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "build-key=$buildKey`n" -NoNewline -Encoding utf8
+      - name: Archive publish output
+        run: |
+          $zipPath = 'dist/cua-helper-win-x64.zip'
+          Compress-Archive -Path dist/cua-helper-win-x64/* -DestinationPath $zipPath
+          $zip = [IO.Compression.ZipFile]::OpenRead((Resolve-Path $zipPath).Path)
+          try {
+            foreach ($name in 'dsh-cua-windows.exe', 'cua-helper.json') {
+              if (-not $zip.GetEntry($name)) { throw "Missing root entry in helper ZIP: $name" }
+            }
+          } finally { $zip.Dispose() }
+      - uses: actions/upload-artifact@v7.0.1
+        id: upload
+        with:
+          name: cua-helper-${{ github.run_id }}-${{ github.run_attempt }}-${{ steps.metadata.outputs.build-key }}
+          path: dist/cua-helper-win-x64.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
