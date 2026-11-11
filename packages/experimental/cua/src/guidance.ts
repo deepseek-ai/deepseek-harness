@@ -1,6 +1,9 @@
 /** Shared model instructions for native application and window operations. */
 const hoverSignature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean })'
 
+/** System-prompt section that carries the CUA operation guidance for one Agent. */
+export const CUA_PROMPT_SECTION_NAME = 'computer-use:dsh-cua'
+
 /** Async method catalog with consent and observation rules, grouped by observation, mouse, and keyboard. */
 export const COMMON_GUIDANCE = `Use cua to observe and operate native applications. Always use cua.getCapabilities() to confirm whether a specific API is available on the current platform; its reported capabilities take precedence over availability statements in these instructions. All methods are async. Actions report dispatch evidence, not verified completion. If sessionLocked is true or an operation reports SESSION_LOCKED, stop UI actions and ask the user to unlock the desktop session; null or unknown means verify a usable unlocked desktop session first. cua.getApp requests user consent; if access is denied or revoked, stop using that application until the user explicitly permits another request, and never bypass a refusal or switch tools to avoid it. Never replay uncertain input without a fresh observation.
 

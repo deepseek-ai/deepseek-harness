@@ -920,6 +920,35 @@ export type SourceSigning = 'ad-hoc' | {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-macos -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-mcp -->
+<a id="deepseek-aidsh-cua-mcp"></a>
+
+## `@deepseek-ai/dsh-cua-mcp`
+
+- `inject`: `cmdlineArgs` · `appReady` · `appExit` · `profileContext` · `agents` · `agentPresets` · `tools` · `systemPrompt` · `attachments`
+- `source`: [`packages/experimental/cua-mcp/src/index.ts:25`](../packages/experimental/cua-mcp/src/index.ts)
+
+```ts config-catalog
+/** Connection policy configurable from the profile patch. */
+export interface Config {
+  /**
+   * Who grants application and pointer consent for the connection's Agent: `allow` grants every request for
+   * this session without a human; `elicit` forwards each request to the MCP client as a form elicitation.
+   */
+  consent: ConsentMode
+  /**
+   * Absolute directory the connection's Agent works in: its programs start there, and it is their
+   * `workspace-write` root. Startup creates it when missing; a relative path or a directory that cannot be
+   * created is reported on stderr and ends the process with exit code 1.
+   */
+  workspace: string
+}
+
+/** Who decides application and pointer consent for the connection's Agent. */
+export type ConsentMode = 'allow' | 'elicit'
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-mcp -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
 <a id="deepseek-aidsh-cua-windows"></a>
 
