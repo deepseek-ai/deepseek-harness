@@ -316,6 +316,22 @@ describe('ImOutputRegistry buttons', () => {
     expect(harness.stopped).toEqual([])
   })
 
+  it('refuses an interaction of a chat the rule no longer lists', async () => {
+    const harness = booted()
+    const hosted = harness.host({ output: 'probe' })
+    // The rule survives while its `chats` list names another chat, which is how an operator narrows one source. The
+    // record stays in `im_messages`, but the old chat's members must not keep pressing the session's controls.
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: ['elsewhere'] })
+
+    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    expect(harness.buttons).toEqual([])
+    expect(harness.stopped).toEqual([])
+
+    harness.sources.set('team', { id: 'team', bot: BOT.id, writable: true, store: 'all', chats: [chatOf().ref.id] })
+    await harness.registry.button(click(`${STOP_BUTTON_PREFIX}${hosted.sessionId}`))
+    expect(harness.stopped).toEqual([hosted.sessionId])
+  })
+
   it('keeps a click without a stored message unattributed and ignores foreign chats', async () => {
     const harness = booted()
     harness.host({ output: 'probe' })

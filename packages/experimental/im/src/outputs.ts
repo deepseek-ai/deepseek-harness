@@ -25,7 +25,7 @@ import {
   type ImSendOptions, type ImSendResult, type ImSessions, type ImSourceConfig, type ImTurnOutput,
 } from './api.ts'
 import { ImError } from './error.ts'
-import { allows } from './intake.ts'
+import { allows, admitsChat } from './intake.ts'
 import type { ImSender } from './send.ts'
 
 /** Button id prefix the core routes to `sessions.stop`. */
@@ -209,6 +209,9 @@ export class ImOutputRegistry implements ImOutputs {
     // `im_messages`. Refuse the interaction: skipping the allowlist there would let every member of the old chat press
     // a control the session still owns, `/stop` included.
     if (source === undefined) return
+    // The rule may also still exist without this chat in its list, which is how an operator narrows one source. The
+    // next inbound frame is re-admitted against the current rules, so the controls have to be as well.
+    if (!admitsChat(source, interaction.bot.id, interaction.chat)) return
     if (!allows(source.users, interaction.user.id)) return
     const message = interaction.message === undefined
       ? undefined
