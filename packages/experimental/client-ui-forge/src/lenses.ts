@@ -1,7 +1,9 @@
 /** Filter lenses registered on the forge panel host, the runs that classify one diff with one of them, and the kept results. */
 
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import type { ForgeLens, ForgeLensFile, ForgeLensFrame, ForgeLensInput, ForgeLensKeep, ForgeLensSource } from './types.ts'
+import type {
+  ForgeLens, ForgeLensFile, ForgeLensFrame, ForgeLensInput, ForgeLensKeep, ForgeLensSource, ForgeRegisteredLens,
+} from './types.ts'
 
 /** The files a lens kept, by path. */
 export type LensFiles = Readonly<Record<string, ForgeLensKeep>>
@@ -79,12 +81,12 @@ export class LensRegistry {
   }
 
   /**
-   * Stream the identities of the registered lenses: the current list first, then the list after each change; changes
-   * that arrive while the reader is busy collapse into the next list.
+   * Stream the registered lenses: the current list first, then the list after each change; changes that arrive while
+   * the reader is busy collapse into the next list.
    * @param signal - ends the stream.
-   * @returns identities in registration order.
+   * @returns identities and versions in registration order.
    */
-  async *follow(signal: AbortSignal): AsyncIterable<readonly string[]> {
+  async *follow(signal: AbortSignal): AsyncIterable<readonly ForgeRegisteredLens[]> {
     const stop = AbortSignal.any([signal, this.closed.signal])
     let wake = Promise.withResolvers<void>()
     const listener = (): void => { wake.resolve() }
@@ -93,7 +95,7 @@ export class LensRegistry {
     try {
       while (!stop.aborted) {
         const current = wake
-        yield [...this.entries.keys()]
+        yield [...this.entries.values()].map(({ lens }) => ({ id: lens.id, version: lens.version }))
         await current.promise
         wake = Promise.withResolvers()
       }
@@ -138,8 +140,9 @@ export interface LensLimits {
 
 /**
  * Classify one diff with one lens. The lens's signal aborts with the caller's, when the registration ends, and after
- * `timeoutMs`; the run settles then even when the lens ignores its signal. Paths the lens names outside the diff are
- * left out of the result.
+ * `timeoutMs`; the run settles then even when the lens ignores its signal, while the registration's disposer waits until
+ * `classify` itself settles. A run whose signal aborted before it started does not call the lens. Paths the lens names
+ * outside the diff are left out of the result.
  * @param registration - the registered lens.
  * @param subject - the diff and its reader.
  * @param limits - deadline, read budget, and result bound.
@@ -176,14 +179,18 @@ export async function runLens(
     },
     progress: (done, total) => { if (!operation.aborted) progress(done, total) },
   }
-  const stopped = new Promise<never>((_resolve, reject) => {
-    operation.addEventListener('abort', () => { reject(new Error('the lens run stopped', { cause: operation.reason })) }, { once: true })
-  })
-  // The race observes `stopped`; this handler only keeps a later abort from rejecting unobserved.
-  void stopped.catch(() => undefined)
   let result: Awaited<ReturnType<ForgeLens['classify']>>
   try {
-    result = await registration.track(Promise.race([Promise.resolve().then(() => registration.lens.classify(input, operation)), stopped]))
+    // A registration that ended or a caller that left before the run starts never reaches the lens.
+    operation.throwIfAborted()
+    const stopped = new Promise<never>((_resolve, reject) => {
+      operation.addEventListener('abort', () => { reject(new Error('the lens run stopped', { cause: operation.reason })) }, { once: true })
+    })
+    // The race observes `stopped`; this handler only keeps a later abort from rejecting unobserved.
+    void stopped.catch(() => undefined)
+    // The registration's disposer waits for the classification itself; the race only decides when the caller hears back.
+    const classified = registration.track(Promise.resolve().then(() => registration.lens.classify(input, operation)))
+    result = await Promise.race([classified, stopped])
   } catch (error) {
     if (signal.aborted) throw signal.reason
     if (registration.lifetime.aborted) throw registration.lifetime.reason

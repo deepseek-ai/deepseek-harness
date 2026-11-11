@@ -2429,6 +2429,37 @@ describe('ChangesTab review threads', () => {
     expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
   })
 
+  it('reads the threads and the viewed marks again when the host announces a review change', async () => {
+    const m = mount({ source, setup: reviewed() })
+    await settle()
+    const reviews = m.faces.changeRequestReview.mock.calls.length
+    const marks = m.faces.changeRequestViewed.mock.calls.length
+    const current = m.panel.getSnapshot()
+    const state = current?.state
+    if (current === undefined || state === undefined || state === null) throw new Error('the panel has no state')
+    const announced = state.changeRequests.map(item => ({ ...item, reviewRevision: 1 }))
+    act(() => { m.panel.set({ ...current, state: { ...state, changeRequests: announced } }) })
+    await settle()
+    expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(reviews + 1)
+    expect(m.faces.changeRequestViewed).toHaveBeenCalledTimes(marks + 1)
+  })
+
+  it('clears a filter lens that hides the file of a thread the reader opens from the thread list', async () => {
+    const lens = 'fixture/exports'
+    const m = mount({ source, extensions: { lenses: [{ id: lens, version: '1' }], maxAnnotationsPerFile: 5 }, params: { lens }, setup: (faces) => {
+      reviewed()(faces)
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: { 'docs/notes.txt': {} } }]))
+    } })
+    await settle()
+    expect(m.view.container.querySelector('[data-forge-diff-file="src/app.ts"]')).toBeNull()
+    fireEvent.click(m.view.getByRole('button', { name: /^Review threads, / }))
+    scrolled.mockClear()
+    fireEvent.click(m.view.getByRole('complementary').querySelector('[data-forge-thread-item="on-row"]')!)
+    expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
+    await settle()
+    expect(scrolled.mock.contexts).toContain(card(m, 'on-row'))
+  })
+
   it('draws a file a thread jump targets before its section comes within reach, and keeps it drawn', async () => {
     // A double that never reports a section as reached, as for files far below the scrollport.
     vi.stubGlobal('IntersectionObserver', class {
@@ -2537,7 +2568,8 @@ describe('ChangesTab extensions', () => {
   const EXPORTS = 'fixture/exports'
   const KEPT = { 'src/app.ts': { ranges: { old: [], new: [{ start: 3, end: 3 }] } }, 'src/new.ts': {}, 'docs/gone.txt': { ranges: { old: [], new: [] } } }
   const describedLenses: readonly ForgeLensDescription[] = [{ id: EXPORTS as ForgeLensId, title: () => 'Exports' }]
-  const hosted: ForgeExtensionState = { lenses: ['lint/unused', EXPORTS], maxAnnotationsPerFile: 5 }
+  const UNUSED = { id: 'lint/unused', version: '1' }
+  const hosted: ForgeExtensionState = { lenses: [UNUSED, { id: EXPORTS, version: '1' }], maxAnnotationsPerFile: 5 }
 
   it('offers the Host lenses by their descriptions and filters the files to those a chosen lens keeps, folding the hunks it is not about', async () => {
     const m = mount({ extensions: hosted, lenses: describedLenses, setup: (faces) => {
@@ -2577,10 +2609,31 @@ describe('ChangesTab extensions', () => {
     } })
     await settle()
     expect(m.paths()).toEqual(['docs/gone.txt', 'src/app.ts', 'src/new.ts'])
-    act(() => { m.extensions.set({ state: { ...hosted, lenses: ['lint/unused'] }, disconnected: false }) })
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED] }, disconnected: false }) })
     expect(m.paths()).toHaveLength(6)
     expect(m.store.getSnapshot().byTab[TAB]?.filterLens).toBeNull()
     expect(m.faces.report).toHaveBeenCalledWith('filterLens.removed', { lens: 'Exports' })
+  })
+
+  it('asks again for a lens registered at another version and for equal files of another scope', async () => {
+    const m = mount({ extensions: hosted, lenses: describedLenses, params: { lens: EXPORTS }, setup: (faces) => {
+      faces.changesLens.mockImplementation(() => hostStream([{ kind: 'result', files: KEPT }]))
+    } })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    // The same registrations published again reuse the result.
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [{ ...UNUSED }, { id: EXPORTS, version: '1' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(1)
+    act(() => { m.extensions.set({ state: { ...hosted, lenses: [UNUSED, { id: EXPORTS, version: '2' }] }, disconnected: false }) })
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(2)
+    fireEvent.click(m.view.getByRole('button', { name: 'Branch' }))
+    fireEvent.click(m.view.getByRole('menuitem', { name: 'Unstaged' }))
+    await settle()
+    expect(m.faces.changesLens).toHaveBeenCalledTimes(3)
+    expect(m.faces.changesLens.mock.calls[2]?.[0])
+      .toEqual({ source: { kind: 'local', scope: { kind: 'unstaged' } }, version: lensVersion(LOCAL.files), lens: EXPORTS })
   })
 
   it('reports a failed lens with a retry and a clear, and a lens refused for files read again with a refresh', async () => {

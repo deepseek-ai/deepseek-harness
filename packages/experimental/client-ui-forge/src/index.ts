@@ -521,7 +521,8 @@ export class ForgePanelController extends TypertRemoteService {
    * @param signal - ends the classification.
    * @returns progress frames, then one result frame.
    * @throws `forgePanel/lens-missing` while no lens holds the identity or once its registration ends;
-   * `forgePanel/lens-stale` before a change request's status was read and when the files differ from `request.version`;
+   * `forgePanel/lens-stale` before a change request's status was read, when the files differ from `request.version`, and
+   * when local files changed while the lens ran;
    * `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers
    * over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.
    */
@@ -531,6 +532,9 @@ export class ForgePanelController extends TypertRemoteService {
     const registration = this.lenses.get(request.lens)
     if (registration === undefined) throw new RemoteError('forgePanel/lens-missing', `No lens "${request.lens}" is registered`, {})
     const subject = await this.lensSubject(session, request.source, signal)
+    // The registration may have ended while the files were read; its lens neither runs nor answers from memory then.
+    signal.throwIfAborted()
+    if (registration.lifetime.aborted) throw new RemoteError('forgePanel/lens-missing', `No lens "${request.lens}" is registered`, {})
     if (lensVersion(subject.files) !== request.version) {
       throw new RemoteError('forgePanel/lens-stale', 'The changes were read again since the view showed them', {})
     }
@@ -545,7 +549,16 @@ export class ForgePanelController extends TypertRemoteService {
     }
     try {
       for await (const frame of lensFrames(progress => runLens(registration, subject, limits, signal, progress))) {
-        if (frame.kind === 'result') this.lensResults.set(key, frame.files)
+        if (frame.kind === 'result') {
+          // Local files can change while the lens reads them; a result about other contents is neither kept nor sent.
+          if (request.source.kind === 'local') {
+            const now = await this.lensSubject(session, request.source, signal)
+            if (lensVersion(now.files) !== request.version) {
+              throw new RemoteError('forgePanel/lens-stale', 'The changes moved while the lens read them', {})
+            }
+          }
+          this.lensResults.set(key, frame.files)
+        }
         yield frame
       }
     } catch (error) {

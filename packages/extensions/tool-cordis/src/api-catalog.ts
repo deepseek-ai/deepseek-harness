@@ -1514,7 +1514,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Classify the files a changes view of a Session shows with one registered lens: progress frames while the lens runs, then the files it keeps. Results for the same files, lens, and lens version are reused from memory until `maxCachedLensBytes` evicts them. Local changes are read with the Session\'s permissions; a change request\'s files are those `changeRequestDiff` reads.',
         parameters: [{ name: 'session', description: 'Session whose checkout or binding the view shows.' }, { name: 'request', description: 'the view\'s source, the version of the files it shows, and the lens.' }, { name: 'signal', description: 'ends the classification.' }],
         returns: 'progress frames, then one result frame.',
-        throws: ['`forgePanel/lens-missing` while no lens holds the identity or once its registration ends; `forgePanel/lens-stale` before a change request\'s status was read and when the files differ from `request.version`; `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.'],
+        throws: ['`forgePanel/lens-missing` while no lens holds the identity or once its registration ends; `forgePanel/lens-stale` before a change request\'s status was read, when the files differ from `request.version`, and when local files changed while the lens ran; `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.'],
       },
       {
         signature: '@Remote async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
@@ -6863,7 +6863,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgeExtensionState',
-    declaration: 'export interface ForgeExtensionState {\n    readonly lenses: readonly string[];\n    readonly maxAnnotationsPerFile: number;\n}',
+    declaration: 'export interface ForgeExtensionState {\n    readonly lenses: readonly ForgeRegisteredLens[];\n    readonly maxAnnotationsPerFile: number;\n}',
   },
   {
     name: 'ForgeFailure',
@@ -6960,6 +6960,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ForgeReadiness',
     declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n}',
+  },
+  {
+    name: 'ForgeRegisteredLens',
+    declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
   },
   {
     name: 'ForgeRepository',

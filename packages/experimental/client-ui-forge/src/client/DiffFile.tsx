@@ -339,10 +339,19 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       window.removeEventListener('pointercancel', finish)
     }
   }, [selecting, nativeSelection])
-  const prepared = useMemo(() => segmentsOf(file, lines, open, folded?.hunks).map((segment): Prepared => segment.kind !== 'rows'
+  // A hunk that holds an open comment form or a comment saved in this browser stays drawn: folding it would move the form,
+  // which loses its text, and show the saved comment as written on lines the diff no longer has.
+  const foldHunks = useMemo(() => {
+    if (folded === undefined) return undefined
+    const holds = (index: number): boolean => editors.some(item => inHunks(file, [index], item.comment.side, item.comment.endLine))
+      || (review !== undefined && comments.threads.some(thread => reviewMatches(thread.selection, review.source, file)
+        && inHunks(file, [index], thread.selection.comment.side, thread.selection.comment.endLine)))
+    return new Set([...folded.hunks].filter(index => !holds(index)))
+  }, [folded, editors, review, comments.threads, file])
+  const prepared = useMemo(() => segmentsOf(file, lines, open, foldHunks).map((segment): Prepared => segment.kind !== 'rows'
     ? segment
     : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }),
-  [file, lines, open, folded, highlighter])
+  [file, lines, open, foldHunks, highlighter])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
     /* v8 ignore next -- the line buttons and hover pluses that choose a range draw only with review actions */

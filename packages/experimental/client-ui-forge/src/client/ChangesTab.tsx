@@ -658,7 +658,10 @@ export function ChangesTab({
   // also waits for its first status, which names the head, unless no provider serves it or its first poll failed.
   const pending = entry !== undefined && entry.ref !== null && entry.update === null
   const head = entry?.snapshot?.headSha ?? (pending ? null : '')
-  const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}` : head
+  // An accepted review change the host announced, from any plugin, reads a change request's viewed marks again.
+  const hostRevision = entry?.reviewRevision ?? 0
+  const version = state === null ? null : source.kind === 'local' ? `${scope}\n${JSON.stringify(state.local)}`
+    : head === null ? null : `${head}\n${hostRevision}`
   const headCommit = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.commit : null
   // The commits change with the head of a change request, with the local HEAD, branch, or base, and on a refresh.
   const commitsVersion = `${attempt}\n${source.kind === 'local'
@@ -705,7 +708,7 @@ export function ChangesTab({
   const prHead = entry?.snapshot?.headSha ?? null
   const prAuthor = entry?.snapshot?.author ?? null
   const threadRead = useThreadRead({ visible: tab.visible, url: source.kind === 'change' ? source.url : null, head: prHead,
-    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision, read: changeRequestReview })
+    updatedAt: entry?.snapshot?.updatedAt ?? null, statusAt, attempt, revision: reviewRevision + hostRevision, read: changeRequestReview })
   const review = data?.kind === 'change' && threadRead.review !== null && threadRead.review.headSha === prHead
     && (data.commits !== null || data.headSha === prHead) ? threadRead.review : null
   const placed = usePlacedThreads(review, data?.kind === 'change' ? { head: prHead ?? '', end: data.headSha, commits: data.commits } : null)
@@ -723,13 +726,14 @@ export function ChangesTab({
   const descriptions = useLenses(current => current)
   const hostLenses = extensions?.lenses ?? null
   const chosenLens = choices?.filterLens ?? null
-  const activeLens = chosenLens !== null && hostLenses?.includes(chosenLens) === true ? chosenLens : null
+  const activeEntry = chosenLens === null ? null : hostLenses?.find(item => item.id === chosenLens) ?? null
+  const activeLens = activeEntry?.id ?? null
   const lensSource = useMemo((): ForgeLensRequest['source'] | null => data === null ? null
     : data.kind === 'local' ? { kind: 'local', scope: data.scope } : { kind: 'change', url: data.url, commits: data.commits }, [data])
   const filesVersion = useMemo(() => data === null ? null : lensVersion(data.files), [data])
   const [lensAttempt, setLensAttempt] = useState(0)
   const lensRun = useLensRun({
-    visible: tab.visible, lens: activeLens, source: lensSource, version: filesVersion, attempt: lensAttempt, open: changesLens,
+    visible: tab.visible, lens: activeEntry, source: lensSource, version: filesVersion, attempt: lensAttempt, open: changesLens,
   })
   const kept = lensRun.run.kind === 'ready' ? lensRun.run.files : null
   const files = useMemo(() => allFiles.filter(file => shownBy(file, lens, hideTests, kept)), [allFiles, lens, hideTests, kept])
@@ -742,16 +746,16 @@ export function ChangesTab({
   // The described lenses come in their described order, then the lenses no Client plugin describes, by their identity.
   const offered = hostLenses ?? []
   const lensChoices: readonly LensChoice[] = [
-    ...descriptions.filter(item => offered.includes(item.id)).map(item => item.id as string),
-    ...offered.filter(id => !descriptions.some(item => item.id === id)),
-  ].map((id) => {
-    const result = lensRun.results.get(id)
+    ...descriptions.flatMap(item => offered.filter(entry => entry.id === item.id)),
+    ...offered.filter(entry => !descriptions.some(item => item.id === entry.id)),
+  ].map((entry) => {
+    const result = lensRun.resultOf(entry)
     const count = result === undefined ? null : allFiles.filter(file => shownBy(file, lens, hideTests, result)).length
-    return { id, title: lensTitle(id), count }
+    return { id: entry.id, title: lensTitle(entry.id), count }
   })
   const chosenChoice = lensChoices.find(item => item.id === activeLens) ?? null
   // A lens the Host withdrew, as when its plugin unloaded, stops filtering; the reader is told once.
-  const withdrawn = chosenLens !== null && hostLenses !== null && !hostLenses.includes(chosenLens) ? chosenLens : null
+  const withdrawn = chosenLens !== null && hostLenses !== null && activeEntry === null ? chosenLens : null
   useEffect(() => {
     if (withdrawn === null) return
     actions.filtered(tab.id, null)
@@ -820,11 +824,12 @@ export function ChangesTab({
   const jumpPosition = useRef<{ readonly data: ChangesData; readonly top: number } | null>(null)
   useLayoutEffect(() => {
     if (!tab.visible || wanted === null || data === null) return
-    // A file the lens or the test switch hides is shown before the view scrolls to it.
-    const hidden = allFiles.find(file => file.path === wanted.path && !shownBy(file, lens, hideTests))
+    // A file the layer, the test switch, or the filter lens hides is shown before the view scrolls to it.
+    const hidden = allFiles.find(file => file.path === wanted.path && !shownBy(file, lens, hideTests, kept))
     if (hidden !== undefined) {
       if (lens !== 'all') actions.lensed(tab.id, 'all')
       if (hideTests && hidden.layer === 'test') actions.toggledTests(tab.id)
+      if (kept !== null && !Object.hasOwn(kept, hidden.path)) actions.filtered(tab.id, null)
       return
     }
     // The browser's scroll anchoring keeps the section in place while the sections above it draw their lines.
@@ -842,7 +847,7 @@ export function ChangesTab({
     }
     if (scrollport.current !== null) jumpPosition.current = { data, top: scrollport.current.scrollTop }
     setWanted(null)
-  }, [tab.visible, wanted, data, allFiles, lens, hideTests, actions, tab.id])
+  }, [tab.visible, wanted, data, allFiles, lens, hideTests, kept, actions, tab.id])
   const refresh = (): void => { setAttempt(value => value + 1) }
   const root = state !== null && state.checkout.state === 'ready' ? state.checkout.checkout.root : null
   // A chosen base branch that is gone or shares no history with HEAD offers the automatic fork point instead.

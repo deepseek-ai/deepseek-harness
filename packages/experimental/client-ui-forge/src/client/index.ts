@@ -18,6 +18,11 @@ export type {
   ForgeChangeRequestCardActionsProps, ForgeChangesFileMenuProps, ForgeChangesToolbarProps, ForgeCommentActionsProps,
   ForgeLineAnnotationProps,
 } from './slots.ts'
+// The Host face's lens and extension types that the slot owner props and the changes view surface name.
+export type {
+  ForgeExtensionState, ForgeLensFile, ForgeLensFrame, ForgeLensId, ForgeLensKeep, ForgeLensRequest, ForgeLineRange,
+  ForgeRegisteredLens,
+} from '../types.ts'
 export type { ChangesTabInjected, ChangesTabProps } from './ChangesTab.tsx'
 export type { ChangesTabTitleProps } from './ChangesTabTitle.tsx'
 export type { DiffFileAction, DiffFileProps, DiffFileText } from './DiffFile.tsx'

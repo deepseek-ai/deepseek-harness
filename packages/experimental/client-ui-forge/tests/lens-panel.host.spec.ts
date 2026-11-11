@@ -8,7 +8,7 @@ import type {
   ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensId, ForgeLensInput, ForgeLensRequest, ForgeLensResult,
 } from '../src/index.ts'
 import { lensVersion } from '../src/lens-version.ts'
-import { bench, follow, git, pullUrl, repository, scratch, shellTurn } from './harness.ts'
+import { bench, follow, git, hold, pullUrl, repository, scratch, shellTurn } from './harness.ts'
 import type { Bench } from './harness.ts'
 
 const cleanups: (() => Promise<void>)[] = []
@@ -66,6 +66,13 @@ function exportsLens(reads: string[] = [], id = 'fixture/exports'): ForgeLens & 
   }
 }
 
+/** Settle once `lensSignal` aborts, as a lens that stops its work when asked does. */
+async function untilAborted(lensSignal: AbortSignal): Promise<never> {
+  return await new Promise<never>((_resolve, reject) => {
+    lensSignal.addEventListener('abort', () => { reject(new Error('stopped')) }, { once: true })
+  })
+}
+
 async function frames(ctx: Context, session: Session, request: ForgeLensRequest): Promise<ForgeLensFrame[]> {
   const list: ForgeLensFrame[] = []
   for await (const frame of ctx.forgePanel.changesLens(session, request, signal)) list.push(frame)
@@ -94,7 +101,7 @@ describe('forgePanel lens registrations', () => {
     await expect(states.next()).resolves.toEqual({ done: false, value: empty })
 
     const fiber = await provideLens(opened.ctx, exportsLens())
-    await expect(states.next()).resolves.toEqual({ done: false, value: { lenses: ['fixture/exports'], maxAnnotationsPerFile: 7 } })
+    await expect(states.next()).resolves.toEqual({ done: false, value: { lenses: [{ id: 'fixture/exports', version: '1' }], maxAnnotationsPerFile: 7 } })
     await expect(provideLens(opened.ctx, exportsLens())).rejects.toThrow('forge-panel: a lens "fixture/exports" is already registered')
     await fiber.dispose()
     await expect(states.next()).resolves.toEqual({ done: false, value: { lenses: [], maxAnnotationsPerFile: 7 } })
@@ -204,9 +211,9 @@ describe('forgePanel lenses over local changes', () => {
     const slow = await provideLens(opened.ctx, {
       id: 'fixture/slow' as ForgeLensId,
       version: '1',
-      classify: async () => {
+      classify: async (_input, lensSignal) => {
         started.resolve(undefined)
-        return await new Promise<never>(() => {})
+        return await untilAborted(lensSignal)
       },
     })
 
@@ -220,6 +227,51 @@ describe('forgePanel lenses over local changes', () => {
     await expect(pending).resolves.toMatchObject({ code: 'forgePanel/lens-missing', message: 'the lens "fixture/slow" was unregistered' })
   })
 
+  it('neither runs nor answers from memory for a lens withdrawn while the files are read', async () => {
+    const repo = await project()
+    await writeFile(join(repo, 'tracked.txt'), 'export const changed = 1\n')
+    const opened = await open(repo)
+    const lens = exportsLens()
+    const plugin = await provideLens(opened.ctx, lens)
+    const scope = { kind: 'unstaged' } as const
+    const { files } = await opened.ctx.forgePanel.localDiff(opened.session, scope, signal)
+    const request: ForgeLensRequest = { source: { kind: 'local', scope }, version: lensVersion(files), lens: 'fixture/exports' }
+    await frames(opened.ctx, opened.session, request)
+    expect(lens.classify).toHaveBeenCalledTimes(1)
+
+    const held = hold(opened.sandbox, 'diff')
+    const pending = rejection(opened.ctx, opened.session, request)
+    await held.reached
+    await plugin.dispose()
+    held.release()
+    await expect(pending).resolves.toMatchObject({ code: 'forgePanel/lens-missing', message: 'No lens "fixture/exports" is registered' })
+    expect(lens.classify).toHaveBeenCalledTimes(1)
+  })
+
+  it('neither sends nor keeps a result after the local files changed while the lens read them', async () => {
+    const repo = await project()
+    await writeFile(join(repo, 'tracked.txt'), 'export const value = 1\n')
+    const opened = await open(repo)
+    let edits = 0
+    const classify = vi.fn(async (input: ForgeLensInput): Promise<ForgeLensResult> => {
+      await input.text('new', 'tracked.txt', signal)
+      if (edits === 0) {
+        edits += 1
+        await writeFile(join(repo, 'tracked.txt'), 'export const value = 2\n')
+      }
+      return { files: { 'tracked.txt': {} } }
+    })
+    await provideLens(opened.ctx, { id: 'fixture/editing' as ForgeLensId, version: '1', classify })
+    const scope = { kind: 'unstaged' } as const
+    const { files } = await opened.ctx.forgePanel.localDiff(opened.session, scope, signal)
+    const request: ForgeLensRequest = { source: { kind: 'local', scope }, version: lensVersion(files), lens: 'fixture/editing' }
+    await expect(rejection(opened.ctx, opened.session, request))
+      .resolves.toMatchObject({ code: 'forgePanel/lens-stale', message: 'The changes moved while the lens read them' })
+    await writeFile(join(repo, 'tracked.txt'), 'export const value = 1\n')
+    await expect(frames(opened.ctx, opened.session, request)).resolves.toEqual([{ kind: 'result', files: { 'tracked.txt': {} } }])
+    expect(classify).toHaveBeenCalledTimes(2)
+  })
+
   it('passes a cancellation of the reader on unchanged', async () => {
     const repo = await project()
     await writeFile(join(repo, 'tracked.txt'), 'changed\n')
@@ -230,9 +282,9 @@ describe('forgePanel lenses over local changes', () => {
     await provideLens(opened.ctx, {
       id: 'fixture/slow' as ForgeLensId,
       version: '1',
-      classify: async () => {
+      classify: async (_input, lensSignal) => {
         started.resolve(undefined)
-        return await new Promise<never>(() => {})
+        return await untilAborted(lensSignal)
       },
     })
     const controller = new AbortController()

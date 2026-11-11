@@ -55,10 +55,10 @@ describe('LensRegistry', () => {
     const iterator = registry.follow(controller.signal)[Symbol.asyncIterator]()
     await expect(iterator.next()).resolves.toEqual({ done: false, value: [] })
     const a = registry.add(lens(async () => ({ files: {} }), 'a'))
-    registry.add(lens(async () => ({ files: {} }), 'b'))
-    await expect(iterator.next()).resolves.toEqual({ done: false, value: ['a', 'b'] })
+    registry.add({ ...lens(async () => ({ files: {} }), 'b'), version: '2' })
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: [{ id: 'a', version: '1' }, { id: 'b', version: '2' }] })
     await a()
-    await expect(iterator.next()).resolves.toEqual({ done: false, value: ['b'] })
+    await expect(iterator.next()).resolves.toEqual({ done: false, value: [{ id: 'b', version: '2' }] })
     const waiting = iterator.next()
     registry.close()
     await expect(waiting).resolves.toEqual({ done: true, value: undefined })
@@ -77,17 +77,27 @@ describe('LensRegistry', () => {
     await expect(waiting).resolves.toEqual({ done: true, value: undefined })
   })
 
-  it('aborts a running classification when its registration ends and waits for the run', async () => {
+  it('aborts a running classification when its registration ends and waits until the lens itself settles', async () => {
     const started = Promise.withResolvers<AbortSignal>()
+    const cleanup = Promise.withResolvers<undefined>()
+    const steps: string[] = []
     const { registration, dispose } = registered(lens(async (_input, signal) => {
       started.resolve(signal)
-      return await new Promise<never>(() => {})
+      await new Promise((resolve) => { signal.addEventListener('abort', resolve, { once: true }) })
+      await cleanup.promise
+      steps.push('lens settled')
+      throw new Error('stopped')
     }))
     const run = runLens(registration, subject([]), limits, new AbortController().signal, () => {})
     const signal = await started.promise
-    await dispose()
-    expect(signal.aborted).toBe(true)
+    const disposed = dispose().then(() => { steps.push('disposed') })
+    // The caller hears of the withdrawal at once; the disposer waits for the lens's own cleanup.
     await expect(run).rejects.toBeInstanceOf(LensWithdrawn)
+    expect(signal.aborted).toBe(true)
+    expect(steps).toEqual([])
+    cleanup.resolve(undefined)
+    await disposed
+    expect(steps).toEqual(['lens settled', 'disposed'])
   })
 })
 
@@ -161,6 +171,18 @@ describe('runLens', () => {
     const { registration } = registered(lens(async () => ({ files: { 'a.ts': { ranges: { old: [], new: Array.from({ length: 100 }, (_v, start) => ({ start, end: start })) } } } })))
     await expect(runLens(registration, subject([file('a.ts')]), limits, new AbortController().signal, () => {}))
       .rejects.toThrow(new LensFailed('the lens result exceeds maxCachedLensBytes (1024 bytes)'))
+  })
+
+  it('does not start a lens whose registration ended or whose caller left before the run', async () => {
+    const classify = vi.fn(async () => ({ files: {} }))
+    const withdrawn = registered(lens(classify))
+    await withdrawn.dispose()
+    await expect(runLens(withdrawn.registration, subject([]), limits, new AbortController().signal, () => {}))
+      .rejects.toBeInstanceOf(LensWithdrawn)
+    const live = registered(lens(classify))
+    await expect(runLens(live.registration, subject([]), limits, AbortSignal.abort(new Error('reader left')), () => {}))
+      .rejects.toThrow('reader left')
+    expect(classify).not.toHaveBeenCalled()
   })
 
   it('rethrows the caller\'s reason and stops reporting progress once the caller aborts', async () => {

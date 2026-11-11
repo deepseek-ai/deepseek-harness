@@ -179,8 +179,10 @@ describe('useLensRun', () => {
       },
     }
   }
+  const EXPORTS = { id: 'fixture/exports', version: '1' }
+  const OTHER = { id: 'other', version: '1' }
   const base: LensRunInput = {
-    visible: true, lens: 'fixture/exports', source: { kind: 'local', scope: { kind: 'unstaged' } }, version: 'v1', attempt: 0,
+    visible: true, lens: EXPORTS, source: { kind: 'local', scope: { kind: 'unstaged' } }, version: 'v1', attempt: 0,
     open: () => stream([]),
   }
 
@@ -196,16 +198,20 @@ describe('useLensRun', () => {
     await act(async () => { gate.resolve(undefined); await gate.promise })
     await vi.waitFor(() => { expect(hook.result.current.run).toEqual({ kind: 'ready', files: { 'a.ts': {} } }) })
 
-    hook.rerender({ ...base, open, lens: 'other' })
+    hook.rerender({ ...base, open, lens: OTHER })
     await vi.waitFor(() => { expect(hook.result.current.run).toEqual({ kind: 'ready', files: {} }) })
-    hook.rerender({ ...base, open, lens: 'fixture/exports' })
+    hook.rerender({ ...base, open, lens: { ...EXPORTS } })
     expect(hook.result.current.run).toEqual({ kind: 'ready', files: { 'a.ts': {} } })
-    expect([...hook.result.current.results.keys()]).toEqual(['fixture/exports', 'other'])
+    expect([hook.result.current.resultOf(EXPORTS), hook.result.current.resultOf(OTHER)]).toEqual([{ 'a.ts': {} }, {}])
     expect(open).toHaveBeenCalledTimes(2)
+    // A result holds for the lens version that answered it.
+    expect(hook.result.current.resultOf({ ...EXPORTS, version: '2' })).toBeUndefined()
 
-    // Other files drop the kept results.
+    // Other files, or equal files of another source, drop the kept results.
     hook.rerender({ ...base, open: () => stream([]), version: 'v2' })
-    expect(hook.result.current.results.size).toBe(0)
+    expect(hook.result.current.resultOf(EXPORTS)).toBeUndefined()
+    hook.rerender({ ...base, open: () => stream([]), source: { kind: 'local', scope: { kind: 'staged' } } })
+    expect(hook.result.current.resultOf(EXPORTS)).toBeUndefined()
   })
 
   it('reports a Remote failure by its code, another failure as a lens failure, and asks nothing while hidden or without files', async () => {

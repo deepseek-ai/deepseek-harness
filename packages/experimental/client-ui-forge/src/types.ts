@@ -433,10 +433,18 @@ export type ForgeLensFrame =
   | { readonly kind: 'progress'; readonly done: number; readonly total: number }
   | { readonly kind: 'result'; readonly files: Readonly<Record<string, ForgeLensKeep>> }
 
+/** A registered lens as changes views see it. */
+export interface ForgeRegisteredLens {
+  /** Identity of the lens. */
+  readonly id: string
+  /** The lens's `version`; a view does not reuse results of another version. */
+  readonly version: string
+}
+
 /** Facts about the panel's extensions that every changes view reads. */
 export interface ForgeExtensionState {
-  /** Identities of the registered lenses, in registration order. */
-  readonly lenses: readonly string[]
+  /** The registered lenses, in registration order. */
+  readonly lenses: readonly ForgeRegisteredLens[]
   /** Most line annotations a changes view shows in one file, across every annotation source. */
   readonly maxAnnotationsPerFile: number
 }

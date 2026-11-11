@@ -434,6 +434,30 @@ it('folds the hunks a lens folds into one row that shows them, holding the threa
   expect(m.props.handlers.unfold).toHaveBeenCalledWith('a.txt')
 })
 
+it('keeps a hunk with an open comment form or a comment saved in the browser drawn when a lens would fold it', () => {
+  const two: ForgeDiffFile = { ...file, additions: 4, deletions: 3, hunks: [file.hunks[0]!, { oldStart: 10, oldLines: 1, newStart: 11, newLines: 2, lines: ['-o', '+n', '+m'] }] }
+  const folded = { hunks: new Set([1]), lens: 'Exports' }
+  const m = mount({ file: two })
+  fireEvent.click(m.line('R12'))
+  fireEvent.click(m.getByRole('button', { name: 'Add comment' }))
+  fireEvent.change(m.getByRole('textbox'), { target: { value: 'half written' } })
+  m.rerender(<DiffFile {...m.props} file={two} folded={folded} />)
+  expect(m.container.querySelector('[data-forge-lens-fold]')).toBeNull()
+  expect((m.getByRole('textbox') as HTMLTextAreaElement).value).toBe('half written')
+
+  // Once the form became a saved comment, its hunk still stays drawn, with the comment on its line.
+  fireEvent.click(m.getByRole('button', { name: 'Add to input' }))
+  m.rerender(<DiffFile {...m.props} file={two} folded={folded} />)
+  expect(m.container.querySelector('[data-forge-lens-fold]')).toBeNull()
+  expect(m.code('R', 12)).toBeTruthy()
+  expect(m.container.querySelector('[data-forge-review-thread="agent"]')).not.toBeNull()
+
+  // Without either, the hunk folds.
+  localStorage.clear()
+  const fresh = mount({ file: two, folded })
+  expect(fresh.container.querySelector('[data-forge-lens-fold]')).not.toBeNull()
+})
+
 it('draws line annotations after a note that replaces the lines and lists the plugin rows of the file menu', () => {
   const m = mount({ file: { ...file, binary: true, hunks: [] }, annotationLimit: 10, annotations: [annotation('bin', { side: 'R', startLine: 1, endLine: 1 })] })
   expect(frames(m.container)).toEqual(['notes/bin'])
