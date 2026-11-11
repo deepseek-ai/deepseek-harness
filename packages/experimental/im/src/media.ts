@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { splitKey, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
 import { ImError } from './error.ts'
 import { hasUnreadForward } from './intake.ts'
+import { admitMediaSource, systemHostResolver, type HostResolver } from './media-source.ts'
 
 /** Kind of a downloadable media element: the image kind is normalized, every other kind is kept verbatim. */
 export type ImMediaKind = 'image' | 'file' | 'audio' | 'video'
@@ -207,16 +208,26 @@ function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new Error('The media admission was aborted')
 }
 
+/** What {@link ImMediaStore} needs besides its context and configuration. */
+export interface ImMediaStoreOptions {
+  /** Address lookup of an http(s) source's host; the system resolver by default. */
+  resolveHost?: HostResolver
+}
+
 /**
- * Downloads the media of stored messages, bounded by `config.media`: fetches a src, bounds its bytes, and keeps the
- * bytes as a durable attachment — normalized for an image, verbatim for every other kind — so a later
- * `im_read_image` / `im_read_file` resolves the same element.
+ * Downloads the media of stored messages, bounded by `config.media`: refuses a source a received message may not make
+ * this host fetch ({@link admitMediaSource}), fetches the rest, bounds their bytes, and keeps the bytes as a durable
+ * attachment — normalized for an image, verbatim for every other kind — so a later `im_read_image` / `im_read_file`
+ * resolves the same element.
  */
 export class ImMediaStore {
   /** `createResourceFetcher` closure, built on first use (it reads `ctx.http` per call). */
   private fetcher: PrepareContext['fetch'] | undefined
+  private readonly resolveHost: HostResolver
 
-  constructor(readonly ctx: Context, readonly config: ImConfig) {}
+  constructor(readonly ctx: Context, readonly config: ImConfig, options: ImMediaStoreOptions = {}) {
+    this.resolveHost = options.resolveHost ?? systemHostResolver
+  }
 
   /**
    * Download the references (bounded by `config.media.maxItems` / `maxBytes`; disabled ⇒ all skipped).
@@ -374,9 +385,11 @@ export class ImMediaStore {
 
   /**
    * Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms, refused past
-   * `media.maxBytes` while they are read.
+   * `media.maxBytes` while they are read. A `file:` source, and an http(s) one on a non-public address, is refused
+   * before any I/O unless `media.source` accepts it.
    */
-  private fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
+  private async fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
+    await admitMediaSource(src, this.config.media.source, this.resolveHost)
     this.fetcher ??= createResourceFetcher(this.ctx, { maxBytes: this.config.media.maxBytes })
     return this.fetcher(src, signal ?? new AbortController().signal)
   }

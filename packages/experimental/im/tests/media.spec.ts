@@ -3,6 +3,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { h, normalize, type Element, type UserRef } from '@deepseek-ai/cordis-plugin-im-core'
 import { ImChatKey, ImMessageKey, ImSourceId, type ImChat, type ImConfig, type ImMessage } from '../src/api.ts'
 import { ImError } from '../src/error.ts'
+import type { HostResolver } from '../src/media-source.ts'
 import {
   ImMediaStore, mediaKindOf, mediaLabel, mediaRefs, parseMediaId, sniffImageMediaType, type ImMediaItem, type ImMediaRef,
 } from '../src/media.ts'
@@ -105,10 +106,18 @@ function config(overrides: Partial<ImConfig['media']> = {}): ImConfig {
     maxRecords: 100,
     maxInputBytes: 262144,
     retryIntervalMs: 5000,
-    media: { download: true, maxBytes: 1048576, maxItems: 9, ...overrides },
+    media: { download: true, maxBytes: 1048576, maxItems: 9, source: { file: false, internal: false }, ...overrides },
     send: { maxMediaBytes: 1048576, operationTimeoutMs: 30000 },
     tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' },
   }
+}
+
+/** Every host in these scenarios resolves to one public address, so no scenario reaches a name resolver. */
+const PUBLIC_HOSTS: HostResolver = async () => ['93.184.216.34']
+
+/** A media store whose host lookups never leave the test. */
+function mediaStore(ctx: Context, configuration: ImConfig): ImMediaStore {
+  return new ImMediaStore(ctx, configuration, { resolveHost: PUBLIC_HOSTS })
 }
 
 describe('mediaRefs', () => {
@@ -206,7 +215,7 @@ describe('ImMediaStore.admit', () => {
 
   it('admits an image through http into a durable attachment', async () => {
     const attachments = attachmentsSaving()
-    const store = new ImMediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments }), config())
+    const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments }), config())
     const [item] = await store.admit([imageRef(1, 'https://cdn/1.png', '猫.png')])
     expect(item).toEqual({
       ref: imageRef(1, 'https://cdn/1.png', '猫.png'),
@@ -219,20 +228,34 @@ describe('ImMediaStore.admit', () => {
 
   it('admits an inline data: source without the http service', async () => {
     const attachments = attachmentsSaving()
-    const store = new ImMediaStore(fakeContext({ attachments }), config())
+    const store = mediaStore(fakeContext({ attachments }), config())
     const base64 = Buffer.from(PNG_BYTES).toString('base64')
     const [item] = await store.admit([imageRef(1, `data:image/png;base64,${base64}`)])
     expect(item?.image?.attachment).toMatchObject({ mediaType: 'image/png', bytes: 11 })
   })
 
   it('skips everything when downloading is disabled', async () => {
-    const store = new ImMediaStore(fakeContext({}), config({ download: false }))
+    const store = mediaStore(fakeContext({}), config({ download: false }))
     expect(await store.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'disabled' }])
+  })
+
+  it('skips a source a received message may not make this host fetch', async () => {
+    // The chat member writes the message, so the src is their choice: a path of this host and an internal address are
+    // reported as skipped instead of being fetched into the transcript.
+    const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving() }), config())
+    const [path, internal] = await store.admit([
+      imageRef(1, 'file:///home/u/.ssh/id_rsa'),
+      imageRef(2, 'http://169.254.169.254/latest/meta-data/'),
+    ])
+    expect(path).toMatchObject({ ref: imageRef(1, 'file:///home/u/.ssh/id_rsa') })
+    expect(path?.skipped).toContain('media.source.file')
+    expect(internal).toMatchObject({ ref: imageRef(2, 'http://169.254.169.254/latest/meta-data/') })
+    expect(internal?.skipped).toContain('media.source.internal')
   })
 
   it('admits a non-image element as a durable verbatim file', async () => {
     const attachments = attachmentsSaving()
-    const store = new ImMediaStore(
+    const store = mediaStore(
       fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf'), attachments }),
       config(),
     )
@@ -253,7 +276,7 @@ describe('ImMediaStore.admit', () => {
     const withoutMime: FakeHttp = {
       get: async () => ({ headers: { get: () => null }, arrayBuffer: async () => TEXT_BYTES.slice().buffer }),
     }
-    const store = new ImMediaStore(fakeContext({ http: withoutMime, attachments }), config())
+    const store = mediaStore(fakeContext({ http: withoutMime, attachments }), config())
     const [item] = await store.admit([fileRef(1, 'https://cdn/voice.opus')])
     expect(item).toEqual({
       ref: fileRef(1, 'https://cdn/voice.opus'),
@@ -266,14 +289,14 @@ describe('ImMediaStore.admit', () => {
 
   it('enforces the item bound across kinds', async () => {
     const attachments = attachmentsSaving()
-    const store = new ImMediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments }), config({ maxItems: 1 }))
+    const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments }), config({ maxItems: 1 }))
     const refs: ImMediaRef[] = [imageRef(1), { ...imageRef(2), kind: 'file' }, imageRef(3)]
     const items = await store.admit(refs)
     expect(items.map(item => item.image ? 'image' : item.file ? 'file' : item.skipped)).toEqual(['image', 'limit', 'limit'])
   })
 
   it('skips an oversized download', async () => {
-    const store = new ImMediaStore(
+    const store = mediaStore(
       fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving() }),
       config({ maxBytes: 4 }),
     )
@@ -281,20 +304,20 @@ describe('ImMediaStore.admit', () => {
   })
 
   it('skips an oversized file and one the attachment service cannot keep', async () => {
-    const oversized = new ImMediaStore(
+    const oversized = mediaStore(
       fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf'), attachments: attachmentsSaving() }),
       config({ maxBytes: 4 }),
     )
     expect(await oversized.admit([fileRef()])).toEqual([{ ref: fileRef(), bytes: 10, skipped: 'too-large' }])
-    const missing = new ImMediaStore(fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf') }), config())
+    const missing = mediaStore(fakeContext({ http: httpServing(TEXT_BYTES, 'application/pdf') }), config())
     expect(await missing.admit([fileRef()]))
       .toEqual([{ ref: fileRef(), mime: 'application/pdf', bytes: 10, skipped: 'unavailable' }])
     const withoutMime: FakeHttp = {
       get: async () => ({ headers: { get: () => null }, arrayBuffer: async () => TEXT_BYTES.slice().buffer }),
     }
-    const bareMissing = new ImMediaStore(fakeContext({ http: withoutMime }), config())
+    const bareMissing = mediaStore(fakeContext({ http: withoutMime }), config())
     expect(await bareMissing.admit([fileRef()])).toEqual([{ ref: fileRef(), bytes: 10, skipped: 'unavailable' }])
-    const failing = new ImMediaStore(fakeContext({
+    const failing = mediaStore(fakeContext({
       http: httpServing(TEXT_BYTES, 'application/pdf'),
       attachments: {
         saveImages: async () => [],
@@ -305,21 +328,21 @@ describe('ImMediaStore.admit', () => {
   })
 
   it('skips bytes that are not an accepted raster format', async () => {
-    const store = new ImMediaStore(fakeContext({ http: httpServing(TEXT_BYTES, 'text/plain') }), config())
+    const store = mediaStore(fakeContext({ http: httpServing(TEXT_BYTES, 'text/plain') }), config())
     expect(await store.admit([imageRef()]))
       .toEqual([{ ref: imageRef(), mime: 'text/plain', bytes: 10, skipped: 'unsupported' }])
     const withoutMime: FakeHttp = {
       get: async () => ({ headers: { get: () => null }, arrayBuffer: async () => TEXT_BYTES.slice().buffer }),
     }
-    const bare = new ImMediaStore(fakeContext({ http: withoutMime }), config())
+    const bare = mediaStore(fakeContext({ http: withoutMime }), config())
     expect(await bare.admit([imageRef()])).toEqual([{ ref: imageRef(), bytes: 10, skipped: 'unsupported' }])
   })
 
   it('skips when the attachment service is missing or returns nothing', async () => {
-    const missing = new ImMediaStore(fakeContext({ http: httpServing(PNG_BYTES) }), config())
+    const missing = mediaStore(fakeContext({ http: httpServing(PNG_BYTES) }), config())
     expect(await missing.admit([imageRef()]))
       .toEqual([{ ref: imageRef(), mime: 'image/png', bytes: 11, skipped: 'unavailable' }])
-    const empty = new ImMediaStore(
+    const empty = mediaStore(
       fakeContext({
         http: httpServing(PNG_BYTES),
         attachments: { saveImages: async () => [], saveFile: unusedFileStore },
@@ -331,23 +354,23 @@ describe('ImMediaStore.admit', () => {
   })
 
   it('reports a download or admission failure as the skipped reason', async () => {
-    const failing = new ImMediaStore(fakeContext({
+    const failing = mediaStore(fakeContext({
       http: { get: async () => { throw new Error('403 forbidden') } },
     }), config())
     expect(await failing.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: '403 forbidden' }])
-    const throwing = new ImMediaStore(fakeContext({
+    const throwing = mediaStore(fakeContext({
       http: httpServing(PNG_BYTES),
       attachments: { saveImages: async () => { throw new ImError('capacity', 'too many pixels') }, saveFile: unusedFileStore },
     }), config())
     expect(await throwing.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'too many pixels' }])
-    const odd = new ImMediaStore(fakeContext({
+    const odd = mediaStore(fakeContext({
       http: { get: async () => { throw 'no route' } },
     }), config())
     expect(await odd.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'no route' }])
   })
 
   it('stops on a caller abort', async () => {
-    const store = new ImMediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving() }), config())
+    const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving() }), config())
     const aborted = AbortSignal.abort(new Error('turn ended'))
     await expect(store.admit([imageRef()], aborted)).rejects.toThrow('turn ended')
     const reasonless = { aborted: true, reason: undefined } as AbortSignal
@@ -356,7 +379,7 @@ describe('ImMediaStore.admit', () => {
 
   it('rethrows the failure of an interrupted download', async () => {
     const controller = new AbortController()
-    const store = new ImMediaStore(fakeContext({
+    const store = mediaStore(fakeContext({
       http: {
         get: async () => {
           controller.abort(new Error('cancelled'))
@@ -387,7 +410,7 @@ function storeWith(
     get: () => undefined,
     latest: () => undefined,
   }
-  return new ImMediaStore(
+  return mediaStore(
     fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving(), im: { history }, ...options }),
     config(options.media),
   )
@@ -406,7 +429,7 @@ describe('ImMediaStore.read', () => {
     await expect(storeWith([imageMessage(12)]).read(CHAT.key, '12.2')).rejects.toThrow('no media element #2')
     await expect(storeWith([imageMessage(12)]).read(ImChatKey('b', 'other'), '12.1'))
       .rejects.toThrow('no stored message')
-    const noIm = new ImMediaStore(fakeContext({}), config())
+    const noIm = mediaStore(fakeContext({}), config())
     await expect(noIm.read(CHAT.key, '12.1')).rejects.toThrow('im service is not available')
   })
 
@@ -438,7 +461,7 @@ describe('ImMediaStore.read', () => {
       get: () => undefined,
       latest: () => undefined,
     }
-    const store = new ImMediaStore(
+    const store = mediaStore(
       fakeContext({
         http: httpServing(PNG_BYTES),
         attachments: attachmentsSaving(),

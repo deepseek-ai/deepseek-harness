@@ -28,7 +28,11 @@ describe('dsh-im contracts', () => {
   it('resolves the configuration defaults', () => {
     const config = parse({ sources: [{ id: 'main', bot: 'qq:1' }] })
     expect(config.sources).toEqual([{ id: 'main', bot: 'qq:1', chats: [], users: [], writable: false, store: 'all' }])
-    expect(config.media).toEqual({ download: true, maxBytes: 10485760, maxItems: 9 })
+    // A received message fetches what the platform hands it: a chat member's `file:` source and an internal address
+    // are both off unless the deployment turns them on.
+    expect(config.media).toEqual({
+      download: true, maxBytes: 10485760, maxItems: 9, source: { file: false, internal: false },
+    })
     expect(config.send).toEqual({ maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
     expect(config.tools).toEqual({ readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' })
     expect(config.retentionMs).toBe(30 * 86400000)

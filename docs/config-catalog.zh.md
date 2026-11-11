@@ -484,7 +484,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:105`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -1920,6 +1920,17 @@ export interface ImConfig {
     maxBytes: number
     /** Maximum resources downloaded for one message (default 9). */
     maxItems: number
+    /**
+     * Sources a received message may make this host fetch. A message is written by a chat member, not by the session
+     * that reads it, so the two sources that reach past the platform are off by default.
+     */
+    source: {
+      /** Accept a `file:` source, which names a path of this host the chat member chose (default off). */
+      file: boolean
+      /** Accept an http(s) source whose host is, or resolves to, a loopback, private, link-local or multicast
+       * address (default off). */
+      internal: boolean
+    }
   }
   /** Outbound publication limits. */
   send: {

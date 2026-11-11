@@ -57,6 +57,7 @@ kind: "package-reference"
 | `maxInputBytes` | 256 KiB | 单条入库消息或投递记录的最大 UTF-8 字节数 |
 | `retryIntervalMs` | 5 秒 | 重新派发待处理消息、重试待完成投递以及清理过期记录的定时间隔 |
 | `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | 是否将入站图片与文件下载为附件，以及单条字节上限与单条消息下载数量上限 |
+| `media.source.file` / `media.source.internal` | `false` / `false` | 收到的消息是否可让本机抓取 `file:` 源，以及是否可抓取主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 源 |
 | `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 秒 | 为另一执行世界的文件内联字节时的大小上限，以及单次发送超时时间 |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数，以及 `im_read_file` 暂存下载文件的会话内相对目录 |
 | `defaultDispatch` | 不配置 | 可选[默认分派会话](#the-default-dispatcher)：必填 `agentPreset`、`provider`、`model` 与绝对路径 `cwd`，可选 `output`（`'none'`）、`delivery`（`'steer'`）、`restrict`（不限制工具）与 `prompt`（`im:dispatcher`，order 81） |
@@ -103,6 +104,8 @@ kind: "package-reference"
 - `line`：每条消息压缩为单行文本（`#12 14:07 张三(u_1) ↩#10 李四: 原文: 正文`），适合批量浏览历史。
 
 消息正文中的媒体元素会被替换为聊天内稳定的标签，如 `[图片 #12.1]` 或 `[文件 #12.2 report.pdf]`。当 `format` 传入 `media: true` 时，符合限制的图片会下载到附件存储中，并作为 `image` 内容块追加在文本块之后；其余每种符合限制的元素（文件、语音、视频）按原样存为附件，并作为 `file` 内容块追加，由请求装配投影为只读保存路径。
+
+源由消息的发送者而不是读取它的会话决定，因此除非 `media.source` 接受，下载会在任何 I/O 之前被拒绝：`file:` 元素（本机路径）与主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 元素都不会被抓取，而是在会话文本里记为跳过。内联的 `data:`/`base64:` 源与本部署自己的 `satori:` 资源始终放行。
 
 `forward` 元素渲染为一行：还没有读到条目时是 `[合并转发 #id]`，读到之后是带预览的 `[合并转发 #id: 名字: 内容 …]`。对已存引用调用 `im_read` 会通过一次平台读把它展开，因此不必改写存储记录也能读到里面的条目；对里面的标签调用 `im_read_image` 或 `im_read_file` 走的是同一次读，转发对话里的图片与文件正是这样才落到媒体引用能取到的位置。条目里嵌套的转发单独占一行 `[合并转发 #id]`，跟在它后面的条目缩进在它之下——平台一次就把整棵树返回了。
 
@@ -282,9 +285,9 @@ You are the default IM session: you receive every message that addresses the bot
 - **流式输出不跨重启续传** — 若进程在轮次运行中途重启，已发出的流式消息会停留在最后一次更新的状态，不会在重启后继续更新。
 - **消息格式化仅支持固定样式** — `ctx.im.format` 仅提供 `xml` 与 `line` 两种样式，需要其他格式记录的插件需自行拼装内容。
 - **暂存的文件会多一份副本，远端后端还限制单次写入大小** — `im_read_file` 通过 `ctx.fs.writeBytes` 把已准入的字节写入会话工作目录下 `tools.fileDir`（按聊天键分目录，两个聊天不会写到同一个文件名），投递的消息里只保留持久的 `file` 块。字节写入受传输帧限制的执行文件系统（SSH 辅助进程为 8 MiB）会拒绝更大的元素；附件存储仍然保留它。
-- **读不受限，IM 自身也不加读策略** — `im_send_file` 会发布本进程能打开的任何文件（`cwd` 只用于锚定相对路径，`~` 会展开），托管会话自身的工具也能读到同样的文件：DSH 的文件系统沙箱只围住五个写操作，任何模式下读都放行，shell 的沙箱 profile 也把整个文件系统以只读方式挂载。因此能影响模型的人就能让它读取并发布本进程能读到的任何内容。
-- **发布可能让本机去抓取资源** — 发布内容里的 `file:` 或 `http(s)` 源会在 prepare 阶段由 `ctx.http` 解析，而该服务既没有 scheme 策略也没有地址策略：它既提供本地文件，也能访问内网地址。收到的消息里的入站媒体走同一个 fetcher，因此聊天成员的一条消息就能驱动一次本机抓取。这两条路径都不做限制。
-- **模型手写的相对资源由进程解析** — `im_send_file` 写入的 `file:` 源始终是绝对路径，但模型自己在 `im_send` markdown 里写的源按进程工作目录解析；`prepare` 按 bot 用 `sha256(src)` 缓存上传结果，因此两个聊天里相同的相对写法会共用同一份缓存上传。
+- **读不受限，IM 自身也不加读策略** — `im_send_file` 会发布本进程能打开的任何文件（`cwd` 只用于锚定相对路径，`~` 会展开），托管会话自身的工具也能读到同样的文件：DSH 的文件系统沙箱只围住五个写操作，任何模式下读都放行，shell 的沙箱 profile 也把整个文件系统以只读方式挂载。因此能影响模型的人就能让它读取并发布本进程能读到的任何内容。收窄会话的工具集（`defaultDispatch.restrict`）并不会收窄这个范围：除非按名字撤掉，`im_send_file` 与发布时的抓取依然可用。
+- **发布可能让本机去抓取资源** — 发布内容里的 `file:` 或 `http(s)` 源会在 prepare 阶段由 `ctx.http` 解析，而该服务既没有 scheme 策略也没有地址策略：它既提供本地文件，也能访问内网地址。收到的媒体则按上面更窄的规则处理，两条路径的区别在于谁选择源：会话语义上发布的是本部署允许它触及的范围，而聊天成员的一条消息既到不了本机路径，也到不了内网地址。
+- **发布的上传缓存按源计键，本地文件则完全不缓存** — 模型自己在 `im_send` markdown 里写的源按进程工作目录解析；`prepare` 按 bot 用 `sha256(src)` 缓存上传结果，因此两个聊天里相同的相对写法会共用同一份缓存上传。`file:` 源不在此列：同一路径背后的字节会变，因此每次发布该路径都会重新上传。
 - **IM 工具仅限托管会话调用** — 非 `ctx.im.sessions` 托管的普通 agent 调用 `im_*` 工具会返回 `ownership` 错误；未挂载 `fs` 与 `workingDirectory` 的环境不会注册 `im_send_file`。
 
 <a id="dev-note"></a>

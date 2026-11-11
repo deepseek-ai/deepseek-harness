@@ -59,6 +59,10 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
         "download": true,
         "maxBytes": 10485760,
         "maxItems": 9,
+        "source": {
+          "file": false,
+          "internal": false,
+        },
       },
       "retentionMs": 2592000000,
       "retryIntervalMs": 5000,

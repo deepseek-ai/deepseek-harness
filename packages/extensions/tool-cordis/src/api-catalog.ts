@@ -6999,6 +6999,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface HostConnectionRpc {\n    handle(channel: string, handler: ConnectionRpcHandler): () => Promise<void>;\n    intercept(channel: \'/api\', matches: ConnectionRpcEndpointMatcher, handler: ConnectionRpcHandler): () => Promise<void>;\n}',
   },
   {
+    name: 'HostResolver',
+    declaration: 'export type HostResolver = (hostname: string) => Promise<readonly string[]>;',
+  },
+  {
     name: 'ImActivity',
     declaration: 'export interface ImActivity {\n    session: ImSessionRecord;\n    turn: number;\n    status: \'running\' | \'done\' | \'cancelled\' | \'error\';\n    segments: readonly ImSegment[];\n    trigger?: ImMessage;\n    error?: string;\n    startedAt: number;\n    updatedAt: number;\n}',
   },
@@ -7076,7 +7080,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImConfig',
-    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
+    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n        source: {\n            file: boolean;\n            internal: boolean;\n        };\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
   },
   {
     name: 'ImDelivery',
@@ -7144,7 +7148,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImMediaStore',
-    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig);\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem>;\n}',
+    declaration: 'export class ImMediaStore {\n    constructor(readonly ctx: Context, readonly config: ImConfig, options: ImMediaStoreOptions = {});\n    async admit(refs: readonly ImMediaRef[], signal?: AbortSignal): Promise<ImMediaItem[]>;\n    async read(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaItem>;\n    async readFile(chat: ImChatKey, id: string, signal?: AbortSignal): Promise<ImMediaFileItem>;\n}',
+  },
+  {
+    name: 'ImMediaStoreOptions',
+    declaration: 'export interface ImMediaStoreOptions {\n    resolveHost?: HostResolver;\n}',
   },
   {
     name: 'ImMessage',
