@@ -106,6 +106,8 @@ interface CuaExecution extends ToolExecution {
 }
 
 
+const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
+
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
@@ -145,6 +147,8 @@ export interface CuaBackend {
    */
   getGuidance(kind: 'raw' | 'standalone'): string
   capabilities: CuaStartupCapabilities
+  /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
+  acceptsPidSelector?: boolean
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -304,6 +308,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
+      if ((method === 'listApps' || method === 'findApps') && !backend.acceptsPidSelector) {
+        return nativeDiscoveryRows.parse(result).map(({ pid: _pid, ...record }) => record)
+      }
       if (method === 'getCapabilities') {
         const runtime = z.record(z.string(), z.json()).parse(result)
         const capabilities = backend.capabilities

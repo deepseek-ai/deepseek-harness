@@ -6,6 +6,7 @@ import { IconEllipsisOutlineRegular, Menu, Tooltip, type MenuEntry } from '@deep
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
 import { foldOf } from './toolbar-fold.ts'
+import { lensEntries, lensOfRow, NO_LENS, type LensChoice } from './LensFilter.tsx'
 import css from './ChangesTab.module.css'
 
 /** Toolbar state and actions the menu repeats. */
@@ -23,11 +24,16 @@ export interface ViewOptions {
   readonly hideTests: boolean | undefined
   readonly toggleTests: () => void
   readonly refresh: () => void
+  /** Lenses the menu offers while the lens menu folds, empty while a lens is chosen and its menu stays in the row. */
+  readonly lenses: readonly LensChoice[]
+  readonly chooseLens: (lens: string | null) => void
+  /** Draw the `MenuItemButton` rows of plugin toolbar entries, which fold first; `close` closes the menu. */
+  readonly plugins: (close: () => void) => ReactNode
 }
 
 /**
  * Render the More button and its menu, which lists the controls of the toolbar's fold level when it opens (see
- * `observeToolbarFold`); the toolbar's styles hide the button while nothing folds.
+ * `observeToolbarFold`), then the rows of plugin toolbar entries; the toolbar's styles hide the button while nothing folds.
  * @param props - the toolbar state and actions, whether the owning tab is visible, and copy.
  * @returns the button and its portalled menu.
  */
@@ -45,10 +51,17 @@ export function ViewOptionsMenu({ options, visible, t }: PropsLocale<typeof NS> 
       { id: 'wrap', label: t('diff.wrapAria') },
     )
     if (fold >= 2 && options.hideTests !== undefined) entries.push({ type: 'separator', id: 'tests-separator' }, { id: 'tests', label: t('tests.hide') })
+    if (fold >= 2 && options.lenses.length > 0) entries.push({ type: 'separator', id: 'lens-separator' }, ...lensEntries(options.lenses, t))
     if (fold >= 3) entries.push({ type: 'separator', id: 'refresh-separator' }, { id: 'refresh', label: t('diff.refresh') })
   }
-  const selected = [options.split && 'split', options.wrap && 'wrap', options.hideTests === true && 'tests'].filter(item => item !== false)
+  const selected = [options.split && 'split', options.wrap && 'wrap', options.hideTests === true && 'tests', options.lenses.length > 0 && NO_LENS]
+    .filter(item => item !== false)
   const run = (id: string): void => {
+    const lens = lensOfRow(id)
+    if (lens !== undefined) {
+      options.chooseLens(lens)
+      return
+    }
     switch (id) {
       case 'expansion': options.toggleExpansion(); break
       case 'split': options.toggleSplit(); break
@@ -74,6 +87,8 @@ export function ViewOptionsMenu({ options, visible, t }: PropsLocale<typeof NS> 
             <IconEllipsisOutlineRegular />
           </button>
         </Tooltip>
-      )} />
+      )}>
+      {fold !== null && <div className={css.menuPlugins}>{options.plugins(() => { setFold(null) })}</div>}
+    </Menu>
   )
 }

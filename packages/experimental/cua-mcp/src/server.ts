@@ -84,7 +84,7 @@ const RESET_TOOL: Tool = {
   description: 'Discard the program environment of this connection: every variable, import, and application or '
     + 'window object held by earlier cua_run_code calls. A running cua_run_code program is cancelled. Application access '
     + 'grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment. '
-    + 'Use it when a declaration conflicts with an earlier call or the environment has become unusable.',
+    + 'Use it when the environment has become unusable or its retained state must not carry into the next task.',
   inputSchema: { type: 'object', properties: {} },
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
 }

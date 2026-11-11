@@ -209,13 +209,13 @@ describe('Computer Use MCP composition', () => {
     expect(referenceText).toContain('Maximum click holdMs: 5000 ms.')
     expect(native.calls).toEqual([])
 
-    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
+    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); '
       + 'await win.getAccessibilityTree(); await win.click("0"); '
       + 'inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid, cwd: process.cwd() }), await win.getScreenshot())', { description: 'Open the fixture' })
     expect(first.isError).not.toBe(true)
     // A program result is the program's own output: the inspected text, then the screenshot the program observed.
     const result = JSON.parse(texts(first)[0] ?? '') as { visits: number; window: number; pid: number; cwd: string }
-    expect(result).toMatchObject({ visits: 1, window: 7 })
+    expect(result).toMatchObject({ visits: 1, window: '7' })
     expect(result.pid).not.toBe(process.pid)
     // Programs start in the directory the connection's Agent was created in.
     expect(result.cwd).toBe(await realpath(directory))
@@ -226,7 +226,7 @@ describe('Computer Use MCP composition', () => {
     expect(first.content).toHaveLength(2)
     expect(native.state).toMatchObject({ count: 1, openedChannels: 1, closedChannels: 0 })
 
-    const second = await run('globalThis.visits++; await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, sameWindow: win.windowId === 7, pid: process.pid }))')
+    const second = await run('globalThis.visits++; await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, sameWindow: win.windowId === "7", pid: process.pid }))')
     expect(second.isError).not.toBe(true)
     expect(second.content).toHaveLength(1)
     expect(lastJson(second)).toEqual({ visits: 2, sameWindow: true, pid: result.pid })
@@ -284,7 +284,7 @@ describe('Computer Use MCP composition', () => {
   it('cancels an in-flight program and waits for its nested call to settle before a disposed Agent releases anything', async () => {
     // The native operation takes 200 ms to acknowledge cancellation, so the cancelled call stays in flight that long.
     const { ctx, native, run, adapter, frontend } = await setup({ cancellationAcknowledgementMs: 200 })
-    const opened = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree(); inspect("ready")')
+    const opened = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); await win.getAccessibilityTree(); inspect("ready")')
     expect(opened.isError).not.toBe(true)
     const { session } = adapter.agent
     const order: string[] = []
@@ -336,9 +336,9 @@ describe('Computer Use MCP composition', () => {
 
   it('grants consent without a human in allow mode and explains a client without elicitation', async () => {
     const allowed = await setup({ consent: 'allow', granted: false })
-    const result = await allowed.run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); inspect(win.windowId)')
+    const result = await allowed.run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); inspect(JSON.stringify(win.windowId))')
     expect(result.isError).not.toBe(true)
-    expect(lastJson(result)).toBe(7)
+    expect(lastJson(result)).toBe('7')
 
     const unsupported = await setup({ consent: 'elicit', granted: false })
     const refused = await unsupported.run('var app = await cua.getApp("test.fixture"); app.appHandle')

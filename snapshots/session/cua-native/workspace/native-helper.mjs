@@ -38,7 +38,7 @@ function serve() {
   }
   const instanceId = randomUUID()
   const sockets = new Set()
-  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: 99 }
+  const application = { count: 0, value: '', visualCount: 0, panelVisibility: 'closed', panelCount: 0, hovering: false, frontPid: 42, frontWindowId: '99' }
   const captureBroker = { pendingCapture: false }
   let started = false
   let hadClient = false
@@ -111,10 +111,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
   const scope = connectionId === 1 ? 'fixture' : `fixture-${connectionId}`
   const app = { appHandle: `${scope}-app`, pid: 9, name: 'Fixture', bundleId: 'test.fixture', running: true }
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
-  const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
-  const axlessWindow = { ...window, windowId: 8, title: 'AXless canvas' }
-  const transformedWindow = { ...window, windowId: 9, title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
-  const panel = { ...window, windowId: 10, title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
+  const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+  const axlessWindow = { ...window, windowId: '8', title: 'AXless canvas' }
+  const transformedWindow = { ...window, windowId: '9', title: 'Transformed window', bounds: { x: 16, y: 512, width: 131, height: 145 } }
+  const panel = { ...window, windowId: '10', title: 'Floating panel', bounds: { x: 100, y: 120, width: 240, height: 140 } }
   const windows = () => [window, axlessWindow, transformedWindow, ...(application.panelVisibility === 'closed' ? [] :
     [application.panelVisibility === 'hidden' ? { ...panel, isOnScreen: false, cacheOnly: true } : panel])]
   const screenshotConfig = new URL('./fixture-screenshot.json', import.meta.url)
@@ -135,7 +135,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { platform: 'darwin', ...state, helper: { pid: process.pid }, parent: { pid: process.ppid } }
     }
     if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
-    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId }]
+    if (method === 'listApps') return [{ pid: app.pid, name: app.name, bundleId: app.bundleId, isRunning: true }]
     if (method === 'getApp') {
       if (params.selector === 'Denied Fixture' || params.selector === 'Revocable Fixture') {
         const denied = params.selector === 'Denied Fixture'
@@ -176,7 +176,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       }
       for (const id of params.windowId === undefined ? windows().map(window => window.windowId) : [params.windowId]) observedWindows.add(id)
       generation++
-      const axless = params.windowId === 8
+      const axless = params.windowId === '8'
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
@@ -184,7 +184,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
         elements: [], windows: windows(), truncated: false,
       }
-      if (axless) return { appHandle: app.appHandle, windowId: 8, snapshotId,
+      if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }
       if (params.maxElements === 1) return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
         tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
@@ -195,7 +195,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
         focusedWindowId: window.windowId, windows: windows(), truncated: false }
     }
-    if (params.windowId === 9 && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
+    if (params.windowId === '9' && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
     }
     if (method === 'screenshot' && captureBroker.pendingCapture) {
@@ -235,7 +235,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
         application.hovering = !systemPointerMoved && alternate
       }
       else if (method === 'click' && params.windowId === panel.windowId) application.panelCount++
-      else if (method === 'click' && params.windowId === 8) application.visualCount++
+      else if (method === 'click' && params.windowId === '8') application.visualCount++
       else if (method === 'click') application.count++
       else application.value = params.value
       record('state', { count: application.count, value: application.value, visualCount: application.visualCount })
@@ -248,7 +248,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
     if (method === 'pressKey' && params.key === 'F10') captureBroker.pendingCapture = false
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
-    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = 99 }
+    if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = '99' }
     if (method === 'paste') {
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text

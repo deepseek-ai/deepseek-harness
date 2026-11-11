@@ -3,8 +3,8 @@ import { Buffer } from 'node:buffer'
 import { z } from 'zod'
 import type { CuaAppHandle, CuaSnapshotId } from './types.ts'
 
-const id = z.number().int().positive().max(2 ** 32 - 1)
-const pid = z.number().int().positive().max(2 ** 31 - 1)
+const windowId = z.string().min(1)
+const pixelDimension = z.number().int().positive().max(2 ** 32 - 1)
 const point = z.number().nonnegative()
 const relativePoint = z.number().int().min(0).max(999)
 const traversalLimit = z.number().min(1).multipleOf(1)
@@ -18,12 +18,12 @@ const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }
-const window = { ...app, windowId: id }
+const window = { ...app, windowId }
 const jsonValue = z.json()
 /** Provider-issued element reference from an accessibility observation. */
 export const elementId = z.string().min(1)
   .describe('Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot.')
-const snapshot = { ...app, windowId: id.optional(), snapshotId: z.string().min(1), elementId }
+const snapshot = { ...app, windowId: windowId.optional(), snapshotId: z.string().min(1), elementId }
 const coordinate = { ...window, snapshotId: z.string().min(1).optional(), x: point, y: point }
 const absoluteCoordinate = { ...coordinate, relative: z.literal(false).optional().describe('Omitted or false uses pixels in the latest screenshot returned by this tool.') }
 const relativeCoordinate = { ...coordinate, relative: z.literal(true).describe('Use integer thousandths of the window width and height, from 0 to 999.'), x: relativePoint, y: relativePoint }
@@ -50,9 +50,9 @@ function requestSchema<T extends z.ZodType>(hover: T) {
     operation('findApps', { query: z.string().min(1, 'Expected a non-empty search string').regex(/\S/, 'Expected a non-empty search string') }),
     operation('getApp', { selector: z.string().min(1) }),
     operation('activate', app),
-    operation('show', { ...app, windowId: id.optional() }),
+    operation('show', { ...app, windowId: windowId.optional() }),
     operation('listWindows', app),
-    operation('getState', { ...app, windowId: id.optional(),
+    operation('getState', { ...app, windowId: windowId.optional(),
       includeMenus: z.boolean().optional().describe('Expand menu contents; omitted or false shows menu-bar entries only.'),
       details: z.boolean().optional().describe('Include identifiers, global native bounds and complete action names.'),
       maxElements: traversalLimit.optional().describe('Maximum nodes to visit on this read. Omission uses the provider setting.'),
@@ -70,10 +70,10 @@ function requestSchema<T extends z.ZodType>(hover: T) {
     operation('setValue', { ...snapshot, value: jsonValue }),
     operation('selectText', { ...snapshot, text: z.string().min(1), prefix: z.string().optional(), suffix: z.string().optional(),
       selectionType: z.enum(['text', 'cursor_before', 'cursor_after']).optional() }),
-    operation('typeText', { ...app, windowId: id.optional(), text: z.string() }),
-    operation('paste', { ...app, windowId: id.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
-    operation('pressKey', { ...app, windowId: id.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
-    operation('sendKeyEvent', { ...app, windowId: id.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
+    operation('typeText', { ...app, windowId: windowId.optional(), text: z.string() }),
+    operation('paste', { ...app, windowId: windowId.optional(), text: z.string(), format: z.enum(['text', 'html']).optional() }),
+    operation('pressKey', { ...app, windowId: windowId.optional(), key: z.string().min(1), modifiers: z.array(z.string()).optional() }),
+    operation('sendKeyEvent', { ...app, windowId: windowId.optional(), key: z.string().min(1), direction: z.enum(['down', 'up']) }),
     z.object({ method: z.literal('scroll'), params: z.union([
       z.object({ ...absoluteCoordinate,
         deltaLinesX: z.number().int().min(-10).max(10), deltaLinesY: z.number().int().min(-10).max(10) }).strict(),
@@ -120,21 +120,32 @@ export const AppResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
   name: z.string(), bundleId: z.string().optional(), running: z.boolean(),
 })
-/** Running application records from the helper. */
-export const AppsResult = z.array(z.object({ pid, name: z.string(), bundleId: z.string().optional() }))
-/** Installed application matches keep running and stopped records distinct. */
-export const FoundAppsResult = z.array(z.intersection(z.object({ id: z.string().min(1), displayName: z.string(), path: z.string().min(1) }),
-  z.discriminatedUnion('isRunning', [z.object({ isRunning: z.literal(true), pid }), z.object({ isRunning: z.literal(false) })])))
+const processId = z.number().int().positive().max(2 ** 31 - 1)
+const appProcess = z.discriminatedUnion('isRunning', [
+  z.object({ isRunning: z.literal(true), pid: processId.optional() }),
+  z.object({ isRunning: z.literal(false) }),
+])
+/** Application records exposed for selection. Running macOS records carry a process ID. */
+export const AppsResult = z.array(z.intersection(z.union([
+  appProcess,
+  z.object({ isRunning: z.literal(true).default(true), pid: processId }),
+]), z.object({
+  id: z.string().min(1).optional(), name: z.string(), bundleId: z.string().optional(),
+})))
+/** Installed matches preserve their installation selector and the PID of a running macOS instance. */
+export const FoundAppsResult = z.array(z.intersection(appProcess, z.object({
+  id: z.string().min(1), displayName: z.string(), path: z.string().min(1),
+})))
 /** Current windows and their global native bounds. */
 export const WindowsResult = z.array(z.object({
-  windowId: id, appName: z.string(), title: z.string(), bounds,
+  windowId, appName: z.string(), title: z.string(), bounds,
   isOnScreen: z.boolean(), onCurrentSpace: z.boolean().nullable(),
 }))
 /** Observed state for the selected application or window. */
 export const StateResult = z.object({
   appHandle: z.string().min(1).transform(value => value as CuaAppHandle),
-  windowId: id.nullable(),
-  focusedWindowId: id.nullable().optional(),
+  windowId: windowId.nullable(),
+  focusedWindowId: windowId.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
 })
@@ -142,7 +153,7 @@ export const StateResult = z.object({
 export const ActionNamesResult = z.array(z.string())
 /** Original native PNG and platform window geometry before Host image preparation. */
 export const NativeScreenshotResult = z.object({
-  mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: id, pixelHeight: id, windowId: id,
+  mimeType: z.literal('image/png'), data: imageBase64, pixelWidth: pixelDimension, pixelHeight: pixelDimension, windowId,
   bounds: bounds.extend({ width: z.number().positive(), height: z.number().positive() }),
   coordinateSpace: z.enum(['window-points', 'window-pixels']),
 })
@@ -172,7 +183,7 @@ export const ActionResult = z.object({
 /** Hover reports whether the selected route moved the user's system pointer. */
 export const HoverResult = ActionResult.extend({ hoverRoute: z.enum(['accessibility', 'system-pointer']), systemPointerMoved: z.boolean() })
 /** Background restoration dispatch and sampled foreground changes; null means the observation was unavailable. */
-export const ShowResult = ActionResult.extend({ windowId: id.nullable(), foregroundChanged: z.boolean().nullable() })
+export const ShowResult = ActionResult.extend({ windowId: windowId.nullable(), foregroundChanged: z.boolean().nullable() })
 
 /** Bounded native PNG thumbnail for human presentation, excluded from model results and saved grants. */
 export const ApplicationIcon = z.string().max(65536).regex(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/)

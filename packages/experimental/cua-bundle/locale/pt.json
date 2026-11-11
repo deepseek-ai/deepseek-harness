@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Uso do computador",
-    "description": "Atualmente oferece suporte ao macOS; o suporte ao Windows está em desenvolvimento. Adiciona o uso do computador a sessões existentes e novas nos modos padrão, criador, PTC e outros. Conceda permissões de Acessibilidade e Gravação de tela antes de usar.",
+    "description": "Controle aplicativos no macOS e no Windows. Se instalar o DSH pelo npm no Windows, configure o programa auxiliar separadamente.",
     "detail": "docs/DETAIL.md"
   }
 }

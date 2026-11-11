@@ -4,14 +4,17 @@ import { finished } from 'node:stream/promises'
 
 export const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC'
 
-/** @returns An isolated desktop substitute and its observable native requests. */
-export function createNativeFixture() {
+/**
+ * @param selectorPid Process ID accepted by getApp, when the fixture supports PID selection.
+ * @returns An isolated desktop substitute and its observable native requests.
+ */
+export function createNativeFixture(selectorPid) {
   const calls = []
   const events = []
   const state = { count: 0, openedChannels: 0, closedChannels: 0 }
   let nextHeldClick
   const bounds = { x: 40, y: 60, width: 320, height: 200 }
-  const window = { windowId: 7, appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
+  const window = { windowId: '7', appName: 'Fixture', title: 'CUA fixture', bounds, isOnScreen: true, onCurrentSpace: true }
 
   function createChannel() {
     state.openedChannels++
@@ -22,8 +25,11 @@ export function createNativeFixture() {
     let heldCallId
     function dispatch(method, params) {
       if (method === 'getCapabilities') return { sessionLocked: false, permissions: { accessibility: true, screenRecording: true } }
+      if (method === 'listApps') return [{ id: 'test.fixture', name: 'Fixture', isRunning: true, pid: selectorPid ?? 4 }]
       if (method === 'getApp') {
-        if (params.selector !== 'test.fixture') throw new Error('Select test.fixture')
+        if (params.selector !== 'test.fixture' && (selectorPid === undefined || params.selector !== String(selectorPid))) {
+          throw new Error('Unknown fixture application selector')
+        }
         acquired = true
         return { appHandle: 'fixture-app', name: 'Fixture', bundleId: 'test.fixture', running: true,
           authorization: { id: 'a'.repeat(64), name: 'Fixture', executablePath: '/fixture/app', persistable: true } }

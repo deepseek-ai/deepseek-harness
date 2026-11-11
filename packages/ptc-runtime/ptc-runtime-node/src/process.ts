@@ -7,7 +7,7 @@ import { createProcessRpc } from './rpc.ts'
 import { captureStreamWrites, LogBuffer, makeInspect, makeBindingErrorClass, makeNamespaces, outputLimit, prepareCompletion, prepareException } from './bootstrap.ts'
 import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from './bootstrap.ts'
 import type { PtcImageWire } from './json-wire.ts'
-import { clearProgramEnvironment } from './environment.ts'
+import { clearProgramEnvironment, filterRuntimeWarnings } from './environment.ts'
 import { createProgramEvaluator } from './evaluators/index.ts'
 import { ImportEvaluationEndedError } from './imports/evaluation-ended.ts'
 import type { ProgramEvaluator, ProgramImportHandler, ProgramImportResult } from './evaluators/types.ts'
@@ -25,6 +25,8 @@ export interface ProgramProcess {
   stderr: PatchableStream
   exitCode?: string | number | null | undefined
   chdir(directory: string): void
+  /** Node's warning emitter; the child drops warnings from the runtime's own experimental features. */
+  emitWarning?: typeof process.emitWarning
 }
 
 interface Evaluation {
@@ -51,6 +53,7 @@ export async function runNodeMain(
 ): Promise<void> {
   if (!Number.isSafeInteger(maxMessageBytes) || maxMessageBytes <= 0) throw new Error('invalid control message limit')
   clearProgramEnvironment(processState)
+  filterRuntimeWarnings(processState)
   const context = new AsyncLocalStorage<Evaluation>()
   const closed = Promise.withResolvers<void>()
   const errors = new Map<string, { name: string; memberNameProperty: string; constructor: BindingErrorConstructor }>()

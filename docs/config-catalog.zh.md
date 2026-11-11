@@ -917,6 +917,26 @@ export type ConsentMode = 'allow' | 'elicit'
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-mcp -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
+<a id="deepseek-aidsh-cua-windows"></a>
+
+## `@deepseek-ai/dsh-cua-windows`
+
+- `inject`: `computerUse` · `tools` · `systemPrompt` · `subprocess` · `agents`
+- `refs`: [`CuaConfig`](../packages/experimental/cua/src/index.ts)
+- `source`: [`packages/experimental/cua-windows/src/index.ts:32`](../packages/experimental/cua-windows/src/index.ts)
+
+```ts config-catalog
+/** Windows native waiting policy, alongside shared CUA resource limits. */
+export interface Config extends CuaConfig {
+  /** Windows PowerShell executable used to query WSL interoperation and the Windows architecture. */
+  windowsPowerShellPath: string
+  /** Milliseconds between application-readiness and clipboard-release observations. */
+  pollIntervalMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-cua-windows -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
 <a id="deepseek-aidsh-deepseek-account"></a>
 
@@ -1112,7 +1132,7 @@ export interface CotTranslationPreferences {
 ## `@deepseek-ai/dsh-experimental-client-ui-forge`
 
 - `inject`: `forge` · `forgeSession` · `sessionProjections` · `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `agents`
-- `source`: [`packages/experimental/client-ui-forge/src/types.ts:381`](../packages/experimental/client-ui-forge/src/types.ts)
+- `source`: [`packages/experimental/client-ui-forge/src/types.ts:483`](../packages/experimental/client-ui-forge/src/types.ts)
 
 ```ts config-catalog
 /** Host settings of the forge panel Remote. */
@@ -1159,6 +1179,14 @@ export interface Config {
    * request's update time does not change when a thread is resolved.
    */
   reviewRefreshMs?: number
+  /** Deadline in milliseconds for one lens `classify` call. */
+  lensTimeoutMs?: number
+  /** Most UTF-8 bytes of file text one lens `classify` call may read. */
+  maxLensReadBytes?: number
+  /** Most UTF-8 bytes, as JSON, of lens results kept in memory for later requests with the same files, lens, and lens version. */
+  maxCachedLensBytes?: number
+  /** Most line annotations a changes view shows in one file, across every annotation source. */
+  maxAnnotationsPerFile?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-client-ui-forge -->
@@ -1224,7 +1252,7 @@ export type SourceSigning = 'ad-hoc' | {
 
 ## `@deepseek-ai/dsh-experimental-forge`
 
-- `source`: [`packages/experimental/forge/src/types.ts:588`](../packages/experimental/forge/src/types.ts)
+- `source`: [`packages/experimental/forge/src/types.ts:603`](../packages/experimental/forge/src/types.ts)
 
 ```ts config-catalog
 /** Poll cadence and fetch deadline for watched change requests. */
@@ -1637,7 +1665,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-file-reference-local`
 
 - `inject`: `agents` · `workingDirectory`
-- `source`: [`packages/context/file-reference-local/src/index.ts:35`](../packages/context/file-reference-local/src/index.ts)
+- `source`: [`packages/context/file-reference-local/src/index.ts:27`](../packages/context/file-reference-local/src/index.ts)
 
 ```ts config-catalog
 /** Local file-reference discovery configuration. */
@@ -2436,7 +2464,7 @@ export type Config = Readonly<Record<string, never>>
 ## `@deepseek-ai/dsh-lsp-stdio`
 
 - `inject`: `fs` · `lsp` · `subprocess`
-- `source`: [`packages/lsp/lsp-stdio/src/index.ts:83`](../packages/lsp/lsp-stdio/src/index.ts)
+- `source`: [`packages/lsp/lsp-stdio/src/index.ts:70`](../packages/lsp/lsp-stdio/src/index.ts)
 
 ```ts config-catalog
 /** Plugin configuration: provider id → local language-server configuration. */
@@ -2889,7 +2917,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-ptc-runtime-node`
 
 - `inject`: `fs` · `subprocess` · `sandbox` · `sandboxPolicy`
-- `source`: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:7`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
+- `source`: [`packages/ptc-runtime/ptc-runtime-node/src/config.ts:8`](../packages/ptc-runtime/ptc-runtime-node/src/config.ts)
 
 ```ts config-catalog
 /** Deployment-varying runtime bounds and launch choices. */
@@ -2900,6 +2928,11 @@ export interface Config {
   executionMode?: 'per-call' | 'persistent-in-memory' | 'vm-script'
   /** Retain a Script process and context per stateOwner; only supported with executionMode: vm-script. */
   scriptPersistence?: boolean
+  /**
+   * Run persistent-in-memory programs as scoped REPL statements whose later calls receive copies of earlier top-level bindings;
+   * omitted, it is `SCOPED_REPL_BY_DEFAULT` from configuration.ts, currently true, with persistent-in-memory and false otherwise.
+   */
+  replScoped?: boolean
   /** Default elapsed deadline, including nested tool and approval waits. */
   timeoutMs?: number
   /** Maximum numeric elapsed budget accepted by resolve. */

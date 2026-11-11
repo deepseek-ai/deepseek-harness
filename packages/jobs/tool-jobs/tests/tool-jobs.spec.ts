@@ -776,12 +776,9 @@ describe('completion notices across scoped mounts', () => {
     bindScopeParent(agentKey, scopeOf(standingA.ctx) as object)
 
     const inject = vi.fn()
-    const owner = {
-      id: SessionId('sess-scoped'),
-      ctx: agentScope.ctx,
-      inject,
-      session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },
-    } as unknown as Agent
+    const owner = await fakeAgent(ctx, 'sess-scoped', { inject })
+    await detachAgent(owner)
+    Object.assign(owner, { ctx: agentScope.ctx })
     const dispose = await ctx.agents.register(owner)
 
     try {

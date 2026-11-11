@@ -66,7 +66,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     await expect(`${textOf(reference.content[0])}\n`).toMatchFileSnapshot('./expected/reference.md')
 
     const first = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
+      code: 'globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow("7"); '
         + 'await win.getAccessibilityTree(); await win.click("0"); '
         + 'inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid, cwd: process.cwd() }), await win.getScreenshot())',
       description: 'Open the fixture window',
@@ -74,7 +74,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     expect(first.isError).toBeUndefined()
     expect(first.content.map(block => block.type)).toEqual(['text', 'image'])
     const state = JSON.parse(textOf(first.content[0])) as { visits: number; window: number; pid: number; cwd: string }
-    expect(state).toMatchObject({ visits: 1, window: 7 })
+    expect(state).toMatchObject({ visits: 1, window: '7' })
     // Without DSH_CUA_WORKSPACE the profile creates its workspace inside the Harness home and starts programs there.
     expect(state.cwd).toBe(await realpath(join(home, 'cua-mcp', 'workspace')))
     expect(state.cwd).not.toBe(await realpath(launch))
@@ -84,7 +84,7 @@ describe.skipIf(!existsSync(bin))('cua-mcp profile', { retry: 0 }, () => {
     expect(Buffer.from(image.data, 'base64').length).toBeGreaterThan(0)
 
     const second = await probe.request('tools/call', { name: 'cua_run_code', arguments: {
-      code: 'globalThis.visits++; inspect(JSON.stringify({ visits, sameWindow: win.windowId === 7, pid: process.pid }))', description: 'Count another visit',
+      code: 'globalThis.visits++; inspect(JSON.stringify({ visits, sameWindow: win.windowId === "7", pid: process.pid }))', description: 'Count another visit',
     } }) as CallResult
     expect(second.content).toHaveLength(1)
     expect(JSON.parse(textOf(second.content[0]))).toEqual({ visits: 2, sameWindow: true, pid: state.pid })

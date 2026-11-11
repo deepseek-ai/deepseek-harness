@@ -94,7 +94,7 @@ function textTool(name: string, text: string) {
 function exec(name: string, session = 's1'): ToolExecution {
   // Only agent.session.header.id is read by the policy; a structural stub suffices.
   const agent = { session: { header: { id: SessionId(session) } } }
-  return { callId: ToolCallId(`call-${name}`), name, arguments: {}, agent, signal: testToolSignal } as unknown as ToolExecution
+  return { callId: ToolCallId(`call-${name}`), name, arguments: {}, agent, signal: testToolSignal } as ToolExecution
 }
 
 /**

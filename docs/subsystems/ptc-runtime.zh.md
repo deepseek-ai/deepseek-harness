@@ -19,7 +19,7 @@ interface PtcRunRequest {
   /**
    * The program source, in the runtime's {@link ../index.ts | language}. It
    * follows the provider's programFormat: an async function body supports
-   * top-level `await` and `return`; REPL and Script programs support top-level
+   * top-level `await` and `return`; REPL (`repl`, `scoped-repl`) and Script programs support top-level
    * declarations, `await`, and a final expression, but not top-level `return`.
    * The Script provider lowers top-level await; its executionInstructions and
    * documentation define retained-binding semantics. The completion value
@@ -108,10 +108,10 @@ interface PtcRunResult {
 
 ```ts type-equiv
 /** Source evaluation form, independent of retained program state. */
-type PtcProgramFormat = 'function-body' | 'repl' | 'script'
+type PtcProgramFormat = 'function-body' | 'repl' | 'script' | 'scoped-repl'
 ```
 
-`programFormat` 区分异步函数体、REPL 语句与脚本。REPL 与 Script 程序接受顶层 `await`、声明和末尾表达式，不支持顶层 `return`。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。`retainsState` 独立于源码语法报告是否保留内存。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
+`programFormat` 区分异步函数体、REPL 语句、scoped REPL 语句与脚本。REPL、scoped REPL 与 Script 程序接受顶层 `await`、声明和末尾表达式，不支持顶层 `return`。保留状态的 REPL 各次调用共用一个作用域；scoped REPL 每次调用开始时拿到之前调用留下的顶层绑定的拷贝，因此可以再次声明这些名字，而不改变之前的代码。Node Script 提供方转换顶层 await 并等待完成值；其[声明限制](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#known-limitations-and-deferred-work)适用于转换后的程序。`retainsState` 独立于源码语法报告是否保留内存。`stateOwner` 是标识可选保留内存的进程内对象身份；不同对象相互隔离。消费者在所有者结束时等待 `release(owner)`；清理失败时该调用拒绝。省略所有者时仅执行一次，无状态提供方忽略所有权。[持久 Node 提供方](../../packages/ptc-runtime/ptc-runtime-node/README.zh.md#persistent-repl)定义重置和恢复行为；保留对象不会进入持久 Session 格式。
 
 ## 绑定：宿主函数作为程序全局变量
 

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Uso de la computadora",
-    "description": "Actualmente es compatible con macOS; la compatibilidad con Windows está en desarrollo. Añade el uso de la computadora a sesiones existentes y nuevas en los modos estándar, creador, PTC y otros. Concede permisos de Accesibilidad y Grabación de pantalla antes de usarlo.",
+    "description": "Controla aplicaciones en macOS y Windows. Si instalas DSH con npm en Windows, debes configurar el programa auxiliar por separado.",
     "detail": "docs/DETAIL.md"
   }
 }

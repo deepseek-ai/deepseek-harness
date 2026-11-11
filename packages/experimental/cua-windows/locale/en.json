@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Windows Computer Use provider",
+    "description": "Provide native Windows applications and windows for the shared Computer Use service."
+  }
+}

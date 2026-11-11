@@ -101,7 +101,7 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
-  '@deepseek-ai/dsh-timeout': ['deadline'],
+  '@deepseek-ai/dsh-timeout': ['deadline', 'timeoutOf'],
 } as const satisfies HostDependencyExports
 
 /** Exact import specifier to reviewed runtime exports. */

@@ -19,8 +19,8 @@
 - text: typescript
 - button "Wrap lines" [pressed]
 - button "Copy"
-- code: "globalThis.visits = 1; var app = await cua.getApp(\"test.fixture\"); var win = await app.getWindow(7); await win.getAccessibilityTree(); await win.click(\"0\"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId })); inspect(screenshot)"
-- text: "OUT {\"visits\":1,\"bindings\":[\"cua\"],\"app\":\"fixture-app\",\"window\":7} sha256:999f1d1527ee7e79266f16add5430fff76b1225d742464a5b1ff1f02971bb8ee (1x1px, 90 bytes)"
+- code: "globalThis.visits = 1; var app = await cua.getApp(\"test.fixture\"); var win = await app.getWindow('7'); await win.getAccessibilityTree(); await win.click(\"0\"); var screenshot = await win.getScreenshot(); inspect(JSON.stringify({ visits, bindings: Object.keys(tools), app: app.appHandle, window: win.windowId })); inspect(screenshot)"
+- text: "OUT {\"visits\":1,\"bindings\":[\"cua\"],\"app\":\"fixture-app\",\"window\":\"7\"} sha256:999f1d1527ee7e79266f16add5430fff76b1225d742464a5b1ff1f02971bb8ee (1x1px, 90 bytes)"
 - button "Inspect"
 - button "Tool call cua · getCapabilities"
 - button "Tool call cua · getApp"

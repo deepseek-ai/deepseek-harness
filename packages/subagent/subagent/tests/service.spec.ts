@@ -27,7 +27,7 @@ import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 function fakeParent(id = 'parent-1'): Agent {
-  return { id: SessionId(id) } as unknown as Agent
+  return { id: SessionId(id) } as Agent
 }
 
 const ALL_CAPS: SubagentCapabilities = {

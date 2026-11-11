@@ -79,7 +79,7 @@ claude mcp add-json dsh_cua '{"type":"stdio","command":"/absolute/path/to/dsh","
 
 `cua_run_code` 就是该 Agent 的 DSH 注册项以 MCP 工具的形式提供：每次 `tools/list` 都从工具注册表读取它的名称、描述和参数 schema，因此提供方的定义是唯一来源，`description` 按该定义必填，`timeoutMs` 限制单个程序。投影省略注册项中的沙箱提权字段 `sandbox_permissions` 与 `justification`，指定它们的调用在执行前被拒绝；其余参数原样交给 DSH 工具执行器，由它校验参数并回答未知名称，因此非法调用返回 DSH 的错误结果。程序作为 TypeScript REPL 语句在提供方保留的 Node 环境中对全局 `cua` 对象运行。结果携带程序传给 `inspect(...)` 的内容：文本成为文本块，每张被 inspect 的截图成为内联图片，且图片正是程序观察到的那一版，因此文本中的像素坐标与图片一致；没有 inspect 任何值的程序返回一条完成提示。执行规则在工具描述里。程序在工作区中启动，同一连接的程序按到达顺序逐个运行；取消调用会取消其程序。失败的调用返回 DSH 的失败信息并设置 `isError`，不带 DSH 的 `Error:` 前缀。
 
-`cua_reset` 丢弃程序环境：变量、导入以及应用或窗口对象，并取消仍在运行的 `cua_run_code` 程序。应用授权、本机连接和应用本身保留；下一个程序在新进程中启动。在声明冲突或环境不可用之后使用它。
+`cua_reset` 丢弃程序环境：变量、导入以及应用或窗口对象，并取消仍在运行的 `cua_run_code` 程序。应用授权、本机连接和应用本身保留；下一个程序在新进程中启动。在环境不可用之后，或不希望保留的状态带入下一个任务时使用它。
 
 连接的 Agent 在 stdio 传输打开之前创建于工作区中，因此首次列表就带有它的注册项；客户端关闭 stdin 时销毁，进程随之退出。工作区是 `DSH_CUA_WORKSPACE`，变量未设置时为 Harness home 下的 `cua-mcp/workspace`；profile 会创建它，程序在其中启动，默认的 `workspace-write` 沙箱允许程序写入的也是这个目录，与客户端从哪个目录启动服务器无关。应用授权按该 Agent 遵循 [CUA 授权规则](../cua/README.zh.md)：`DSH_CUA_CONSENT=allow` 在无人值守下为本会话放行每个请求；默认的 `elicit` 把请求作为表单 elicitation 转发给客户端，答案即 CUA 的选项标签；被拒绝的表单为本会话记录一次拒绝，不支持 elicitation 的客户端会收到指明 `allow` 模式的错误。
 
@@ -135,7 +135,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 #### Token 影响
 
-工具描述携带注册项的执行规则，约 2,000 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 500 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
+工具描述携带注册项的执行规则，约 3,200 个字符；一次 `cua_get_api_reference` 的结果就是 API 参考，使用当前 macOS 提供方时约 13,000 个字符，按仓库四字符/token 估算约 3,300 token，每次调用支付一次。截图是提供方 `screenshotTarget` 尺寸的内联图片。客户端会限制工具输出；文档给出的 Codex 配置把 `cua_run_code` 的预算提高到 25,000 token。客户端同样限制工具描述和服务器说明：Claude Code 2.1.309 对二者都只转发前 4,096 个字符并追加 `… [truncated]`；DSH 的 `dsh-mcp-client` 原样转发 20,000 个字符的描述。注册项的描述和约 500 个字符的服务器说明都在该预算之内；参考超出预算，因此作为工具结果传递。
 
 #### KV Cache 影响
 
@@ -145,7 +145,7 @@ patch 还以 `screenshotTarget: { longEdge: 2048, maxBytes: 2097152 }` 挂载提
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- 只有 macOS Host 有提供方；Windows 提供方就位后在此挂载。其他 Host 列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
+- 本 profile 中只有 macOS Host 有提供方：patch 没有挂载 [Windows 提供方](../cua-windows/README.zh.md)。其他 Host 列出 `cua_get_api_reference` 与 `cua_reset`，二者都指出缺少提供方；调用 `cua_run_code` 以 `unknown tool` 失败。
 - Elicitation 使用 2025 版 MCP 请求模型；协商到 2026-07-28 修订版的客户端在授权请求时收到错误，应改用 `DSH_CUA_CONSENT=allow`。
 - 不暴露程序沙箱提权和原始 `cua` 工具；`DSH_PERMISSION_MODE` 选择程序进程启动时的文件沙箱，工作区是它的 `workspace-write` 根。
 - `cua` API 参考只有在模型调用 `cua_get_api_reference` 时才到达模型。服务器观察不到既有连接上的新对话，也观察不到上下文压缩，因此由服务器说明和工具描述提出这一要求；不放行该工具的客户端，其模型只有执行规则可用。

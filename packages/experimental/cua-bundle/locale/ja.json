@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computer Use",
-    "description": "現在は macOS のみ対応し、Windows 対応は開発中です。標準、クリエイター、PTC などのモードで、既存および新規セッションに Computer Use を追加します。使用前にアクセシビリティと画面収録の権限を許可してください。",
+    "description": "macOS と Windows のアプリを操作できます。Windows で npm から DSH をインストールした場合は、ヘルパーを別途設定してください。",
     "detail": "docs/DETAIL.md"
   }
 }
