@@ -626,6 +626,15 @@ it('names the missing field of a request that matches none of its accepted forms
   expect(native.request).not.toHaveBeenCalled()
 })
 
+it('names an unknown top-level request key', async () => {
+  const f = await setup()
+  const result = await executeToolFixture(f.ctx, {
+    agent: f.handle.agent, signal: new AbortController().signal, callId: ToolCallId('extra-key'), name: 'cua',
+    arguments: { method: 'listApps', params: {}, extra: 1 },
+  })
+  expect(result.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: arguments: Unrecognized key: "extra"' }])
+})
+
 it('rejects malformed and unowned operations before acquiring a helper', async () => {
   const f = await setup()
   const malformed = await f.execute('screenshot', { pid: 9, windowId: '7' })

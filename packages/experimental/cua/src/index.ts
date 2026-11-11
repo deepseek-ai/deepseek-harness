@@ -102,7 +102,7 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
  */
 function requestViolation(issue: z.core.$ZodIssue, base: readonly PropertyKey[] = []): string {
   const path = [...base, ...issue.path]
-  const field = path.map(String).join('.')
+  const field = path.length > 0 ? path.map(String).join('.') : 'arguments'
   if (issue.code !== 'invalid_union' || issue.errors.length === 0) return `${field}: ${issue.message}`
   const forms = issue.errors.map(form => `(${form.map(nested => requestViolation(nested, path)).join('; ')})`)
   return `${field}: matches none of the accepted forms: ${forms.join(' or ')}`
