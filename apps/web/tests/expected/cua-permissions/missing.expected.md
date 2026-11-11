@@ -2,11 +2,11 @@
   - heading "Authorize computer use" [level=3]
   - group "Default mode for new sessions":
     - strong: Default mode for new sessions
-    - paragraph: Computer use is available only in PTC mode.
+    - paragraph: Computer use is available in Standard, Creator, and PTC modes. Choose PTC here to make it the default for new sessions.
     - button "Set to PTC"
   - group "PTC execution mode":
     - strong: PTC execution mode
-    - paragraph: Keep variables and application objects across tool calls. Switching restarts the PTC runtime.
+    - paragraph: Keep variables and application objects across PTC tool calls. Switching restarts the PTC runtime. Other modes always keep their computer use state separately.
     - button "Use persistent mode"
   - group "Accessibility":
     - strong: Accessibility

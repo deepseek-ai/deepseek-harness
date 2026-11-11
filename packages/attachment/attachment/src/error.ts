@@ -1,5 +1,7 @@
 /** Attachment failure class. @module @deepseek-ai/dsh-attachment/error */
 
+import { HarnessError } from '@deepseek-ai/dsh-error'
+
 const IMAGE_ADMISSION_ERROR_CODES = [
   'TOO_MANY_IMAGES',
   'IMAGES_TOO_LARGE',
@@ -35,17 +37,14 @@ const IMAGE_ADMISSION_ERROR_CODE_SET: ReadonlySet<string> = new Set(IMAGE_ADMISS
 const ATTACHMENT_ERROR_CODE_SET: ReadonlySet<string> = new Set(ATTACHMENT_ERROR_CODES)
 
 /**
- * Stable failures suitable for host RPC error mapping.
- *
- * Deliberately re-implements the `HarnessError` shape instead of extending it:
- * the base lives in `@deepseek-ai/dsh-llm`, which itself depends on this
- * package (`ImageBlock` references `ImageAttachmentRef`), so sharing the base
- * would create a dependency cycle. Consumers route on `code`, never on the
- * prototype chain, so the shapes stay interchangeable at the wire boundary.
+ * Stable failures suitable for host RPC error mapping. Extends {@link HarnessError}, so a tool
+ * result that fails with it records `name` `AttachmentError` and its `code`. Consumers that may
+ * receive an error from a duplicate package installation identify it with {@link isAttachmentError},
+ * which matches the code instead of the prototype chain.
  */
-export class AttachmentError extends Error {
+export class AttachmentError extends HarnessError {
   /** Stable machine-routing failure code. */
-  readonly code: AttachmentErrorCode
+  override readonly code: AttachmentErrorCode
 
   /**
    * @param message - human-readable failure description without raw bytes or host paths.
@@ -53,7 +52,7 @@ export class AttachmentError extends Error {
    * @param options - optional chained cause.
    */
   constructor(message: string, code: AttachmentErrorCode, options?: ErrorOptions) {
-    super(message, options)
+    super(message, code, options)
     this.name = 'AttachmentError'
     this.code = code
   }

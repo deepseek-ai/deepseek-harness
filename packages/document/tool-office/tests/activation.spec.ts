@@ -55,7 +55,7 @@ class SkillRuntime extends PtcRuntime {
     return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 }
   }
   async run(request: PtcRunRequest): Promise<PtcRunResult> {
-    return { logs: [], value: await request.bindings[0]!.functions.skill!({ name: this.skill }) }
+    return { output: [], value: await request.bindings[0]!.functions.skill!({ name: this.skill }) }
   }
 }
 

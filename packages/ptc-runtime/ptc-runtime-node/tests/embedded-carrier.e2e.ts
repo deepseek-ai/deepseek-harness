@@ -14,6 +14,7 @@ describe.skipIf(runtimePath === '')('packaged embedded carrier', () => {
     onTestFinished(async () => { await ctx.fiber.dispose(); await rm(cwd, { recursive: true, force: true }) })
     const { runtime } = await mountRuntime(ctx, {
       executionMode: 'persistent-in-memory',
+      replScoped: false,
       launch: { kind: 'embedded', executable: runtimePath },
     })
     const owner = {}

@@ -3064,6 +3064,9 @@ function classShape(node: ts.ClassDeclaration): ts.ClassDeclaration {
     if (ts.isClassStaticBlockDeclaration(member) || nonPublic(member)
       || (name !== undefined && ts.isPrivateIdentifier(name))) return []
     if (ts.isMethodDeclaration(member)) {
+      if (member.body !== undefined && node.members.some(candidate => ts.isMethodDeclaration(candidate)
+        && candidate.body === undefined && memberName(candidate.name) === memberName(member.name)
+        && hasModifier(candidate, ts.SyntaxKind.StaticKeyword) === hasModifier(member, ts.SyntaxKind.StaticKeyword))) return []
       return [ts.factory.updateMethodDeclaration(
         member,
         member.modifiers,

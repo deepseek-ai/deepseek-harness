@@ -324,12 +324,9 @@ describe('incremental DeepSeek session-log upload', () => {
   })
 
   it('rejects a missing event below the captured Session length', () => {
-    const session = {
-      id: SessionId('missing-event'),
-      header: { version: SESSION_FORMAT_VERSION },
-      seq: SessionLogOffset(1),
-      eventAt: () => undefined,
-    } as unknown as Session
+    const session = Session.create(SessionId('missing-event'))
+    session.append('turn/start', { turn: 1 })
+    vi.spyOn(session, 'eventAt').mockReturnValue(undefined)
 
     expect(() => SessionLogDeepSeek.acceptedThrough(session))
       .toThrow('session-log-deepseek: missing event 0 below captured length 1')

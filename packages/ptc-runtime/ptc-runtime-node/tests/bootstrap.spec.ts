@@ -1,7 +1,8 @@
 import { runInNewContext } from 'node:vm'
+import { inspect as nodeInspect } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
-import { LogBuffer, makeBindingErrorClass, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
-import type { BindingErrorConstructor, PatchableStream } from '../src/bootstrap.ts'
+import { LogBuffer, makeBindingErrorClass, makeInspect, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException } from '../src/bootstrap.ts'
+import type { BindingErrorConstructor, ImageInspectOptions, PatchableStream } from '../src/bootstrap.ts'
 import type { HostMethods } from '../src/protocol.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
 
@@ -10,6 +11,17 @@ function host(): Pick<HostMethods, 'invoke'> {
 }
 const TOOL_ERROR_CLASS = { name: 'ToolCallError', memberNameProperty: 'toolName' } as const
 function toolNamespace(names: string[]) { return { global: 'tools', names, errorClass: TOOL_ERROR_CLASS } }
+
+function inspectedImage(collectImage: ReturnType<typeof makeInspect>['collectImage'], path: string, width = 8, height = 4) {
+  const image = { path, width, height }
+  Object.defineProperty(image, nodeInspect.custom, {
+    value(this: object, _depth: number | null, options: ImageInspectOptions): object {
+      collectImage(this, options)
+      return this
+    },
+  })
+  return Object.freeze(image)
+}
 
 describe('LogBuffer', () => {
   it('streams entries to the sink until the byte budget, then emits one fitting prefix and reports the limit once', () => {
@@ -31,16 +43,222 @@ describe('LogBuffer', () => {
   })
 })
 
-describe('makeConsoleShim', () => {
-  it('captures the five methods and renders non-strings inspect-style', () => {
+describe('makeInspect', () => {
+  it('includes its emitted newline in output accounting', () => {
+    const text: string[] = []
+    const limit = vi.fn()
+    makeInspect(new LogBuffer(7, value => text.push(value), limit), new WeakMap(), () => {}).inspect('12')
+    expect(text).toEqual(['12'])
+    expect(limit).toHaveBeenCalledOnce()
+    const exact: string[] = []
+    makeInspect(new LogBuffer(8, value => exact.push(value), limit), new WeakMap(), () => {}).inspect('12')
+    expect(exact).toEqual(['12\n'])
+    expect(limit).toHaveBeenCalledOnce()
+  })
+
+  it('renders inspected arguments into captured output', () => {
     const seen: string[] = []
-    const shim = makeConsoleShim(new LogBuffer(1_000, text => seen.push(text)))
-    shim.log('plain', { a: 1 })
-    shim.info('i')
-    shim.warn('w')
-    shim.error('e')
-    shim.debug('d')
-    expect(seen).toEqual(['plain { a: 1 }', 'i', 'w', 'e', 'd'])
+    const { inspect } = makeInspect(new LogBuffer(1_000, text => seen.push(text)), new WeakMap(), () => {})
+    inspect('plain', { a: 1 })
+    expect(seen).toEqual(['plain { a: 1 }\n'])
+  })
+
+  it.each([
+    ['Buffer', Buffer.from([1, 2, 3]), '<Buffer 01 02 03>'],
+    ['TypedArray', new Uint8Array([1, 2, 3]), 'Uint8Array(3) [ 1, 2, 3 ]'],
+    ['function', () => 1, '[Function'],
+    ['Error', new Error('inspection failure'), 'Error: inspection failure'],
+    ['bigint', 1n, '1n'],
+    ['non-finite number', Infinity, 'Infinity'],
+    ['negative zero', -0, '-0'],
+    ['undefined property', { value: undefined }, '{ value: undefined }'],
+  ])('displays a %s argument and continues execution', (_name, value, expected) => {
+    const text: string[] = []
+    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    inspect('before', value, 'after')
+    expect(text).toHaveLength(1)
+    expect(text[0]).toContain(expected)
+    expect(text[0]).toMatch(/^before .* after\n$/s)
+  })
+
+  it('displays revoked proxies and accessors without invoking them', () => {
+    const revoked = Proxy.revocable({}, {})
+    revoked.revoke()
+    const text: string[] = []
+    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    inspect(revoked.proxy, { get value() { throw new Error('getter') } })
+    expect(text).toEqual(['<Revoked Proxy> { value: [Getter] }\n'])
+  })
+
+  it('renders complete arrays, long strings and deeply nested objects', () => {
+    const value = {
+      lines: Array.from({ length: 330 }, (_, index) => ({ number: index + 1, text: `line ${index + 1}` })),
+      text: 'x'.repeat(12_000),
+      nested: { a: { b: { c: { d: { e: { answer: 42 } } } } } },
+    }
+    const text: string[] = []
+    makeInspect(new LogBuffer(100_000, line => text.push(line)), new WeakMap(), () => {}).inspect(value)
+    expect(text).toHaveLength(1)
+    expect(runInNewContext(`(${text[0]!})`)).toEqual(value)
+  })
+
+  it('preserves preceding arguments when a custom formatter throws', () => {
+    const value = { [Symbol.for('nodejs.util.inspect.custom')]() { throw new Error('formatter failed') } }
+    const text: string[] = []
+    const { inspect } = makeInspect(new LogBuffer(1_000, line => text.push(line)), new WeakMap(), () => {})
+    expect(() => { inspect('before', value, 'after') }).toThrow('formatter failed')
+    expect(text).toEqual(['before\n'])
+  })
+
+  it('emits registered images in argument order from arrays and objects', () => {
+    const images = new WeakMap<object, string>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const one = inspectedImage(collectImage, '/one.png')
+    const two = inspectedImage(collectImage, '/two.png', 4, 8)
+    images.set(one, 'one').set(two, 'two')
+    const value = { first: [one, { second: two }] }
+    inspect('before', value, 'after', one)
+    expect(selected).toEqual(['one', 'two', 'one'])
+    expect(runInNewContext(`(${text[0]!.slice('before '.length)})`)).toEqual(value)
+    expect(text[1]).toBe('after\n')
+    inspect({ path: '/fake.png', width: 1, height: 1 }, null)
+    inspect()
+    expect(selected).toEqual(['one', 'two', 'one'])
+    expect(text.slice(2)).toEqual(["{ path: '/fake.png', width: 1, height: 1 } null\n", '\n'])
+  })
+
+  it('does not select images behind getters', () => {
+    const images = new WeakMap<object, string>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    const read = vi.fn(() => image)
+    inspect({ get image() { return read() } })
+    expect(read).not.toHaveBeenCalled()
+    expect(text).toEqual(['{ image: [Getter] }\n'])
+    expect(selected).toEqual([])
+  })
+
+  it('does not select images hidden by a custom formatter', () => {
+    const images = new WeakMap<object, string>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    inspect({
+      image,
+      [nodeInspect.custom]() { return 'summary' },
+    })
+    expect(text).toEqual(['summary\n'])
+    expect(selected).toEqual([])
+  })
+
+  it('selects registered images returned by a custom formatter', () => {
+    const images = new WeakMap<object, string>()
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    inspect({ [nodeInspect.custom]() { return { image } } })
+    inspect({ image: inspectedImage(collectImage, '/forged.png') })
+    expect(selected).toEqual(['image'])
+  })
+
+  it('keeps collectors separate across reentrant inspection calls', () => {
+    const images = new WeakMap<object, string>()
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const one = inspectedImage(collectImage, '/one.png')
+    const two = inspectedImage(collectImage, '/two.png')
+    images.set(one, 'one').set(two, 'two')
+    inspect({
+      [nodeInspect.custom](_depth: number | null, options: ImageInspectOptions) {
+        nodeInspect({ image: one }, options)
+        inspect({ image: two })
+        return nodeInspect({ image: one }, options)
+      },
+    })
+    expect(selected).toEqual(['two', 'one', 'one'])
+  })
+
+  it('discards collected images when their containing value fails to format', () => {
+    const images = new WeakMap<object, string>()
+    const text: string[] = []
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push: line => text.push(line) }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    expect(() => {
+      inspect('before', {
+        image,
+        bad: { [nodeInspect.custom]() { throw new Error('formatter failed') } },
+      })
+    }).toThrow('formatter failed')
+    expect(text).toEqual(['before\n'])
+    expect(selected).toEqual([])
+    inspect({ image })
+    expect(selected).toEqual(['image'])
+  })
+
+  it('selects images from Map entries, Set values and enumerable symbol properties', () => {
+    const images = new WeakMap<object, string>()
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const one = inspectedImage(collectImage, '/one.png')
+    const two = inspectedImage(collectImage, '/two.png', 4, 8)
+    images.set(one, 'one').set(two, 'two')
+    const value = {
+      map: new Map([[one, two]]),
+      set: new Set([two, one]),
+      [Symbol('image')]: one,
+    }
+    Object.defineProperty(value, 'hidden', { value: two })
+    inspect(value)
+    expect(selected).toEqual(['one', 'two', 'two', 'one', 'one'])
+  })
+
+  it('reads Map and Set entries without consulting overridden methods', () => {
+    const images = new WeakMap<object, string>()
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    const map = new Map([['image', image]])
+    const set = new Set([image])
+    Object.defineProperty(map, 'forEach', { get() { throw new Error('map getter') } })
+    Object.defineProperty(set, 'forEach', { get() { throw new Error('set getter') } })
+    inspect(map, set)
+    expect(selected).toEqual(['image', 'image'])
+  })
+
+  it('finds images in cyclic containers alongside binary views', () => {
+    const images = new WeakMap<object, string>()
+    const selected: string[] = []
+    const { inspect, collectImage } = makeInspect({ push() {} }, images, id => selected.push(id))
+    const image = inspectedImage(collectImage, '/image.png')
+    images.set(image, 'image')
+    const value: Record<string, unknown> = { binary: new Uint8Array([1, 2, 3]), image }
+    value.self = value
+    inspect(value)
+    expect(selected).toEqual(['image'])
+  })
+
+  it('displays undefined arguments and cycles', () => {
+    const text: string[] = []
+    const { inspect } = makeInspect({ push: line => text.push(line) }, new WeakMap(), () => {})
+    inspect(undefined)
+    expect(text).toEqual(['undefined\n'])
+    inspect(null)
+    expect(text).toEqual(['undefined\n', 'null\n'])
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    inspect(cyclic)
+    expect(text.at(-1)).toBe('<ref *1> { self: [Circular *1] }\n')
   })
 })
 

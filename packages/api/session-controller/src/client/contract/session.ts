@@ -4,8 +4,8 @@
  * ObservableSnapshot half), and orchestration code calls the behavior verbs
  * below — nothing else. Widening this interface is the explicit act of
  * widening what features may do to a session (and what every test fixture
- * must stub); implementation-internal entry points (history staging, wire-frame
- * dispatch) stay on the class, invisible out here.
+ * must stub); implementation-internal wire-frame dispatch stays on the class,
+ * invisible out here.
  */
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -132,10 +132,18 @@ export interface ISession {
   /**
    * Extend history by at least 50 messages and two Turn starts, including a
    * partial Turn at the window's beginning. Stop at 500 messages or history
-   * exhaustion even when those minima cannot be met. Publish one prepend.
-   * @returns completion; failures land in snapshot.openState/loadingOlder.
+   * exhaustion even when those minima cannot be met. At most one page may be
+   * loading or awaiting consumption; live events remain independently visible.
+   * @param options - deferConsumption keeps the page unpublished until consumeOlder; omitted consumes before completion.
+   * @returns request completion; failures and no progress set snapshot.historyLoadStatus to error.
    */
-  loadOlder(): Promise<void>
+  loadOlder(options?: { deferConsumption?: boolean }): Promise<void>
+  /**
+   * Publish the prepared page synchronously if its generation and starting cursor still match.
+   * A terminal empty page may publish hasMore=false; an invalidated page is discarded.
+   * @returns whether a prepared page was published; false while loading, absent, or invalidated.
+   */
+  consumeOlder(): boolean
   /**
    * Page history backwards until the window covers `seq` (inclusive) — the
    * turn-jump loader. Repeated calls while a jump is paging lower its shared

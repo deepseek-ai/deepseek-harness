@@ -28,6 +28,9 @@
     },
     {
       "path": "../../boot/app-boot"
+    },
+    {
+      "path": "../../util/error"
     }
   ]
 }

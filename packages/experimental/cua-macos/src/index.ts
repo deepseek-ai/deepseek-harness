@@ -8,15 +8,17 @@ import { CuaConfigFields } from '@deepseek-ai/dsh-cua/config'
 import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
-import { GUIDANCE } from './guidance.ts'
+import { installHeldKeys } from './held-keys.ts'
+import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
+import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
 const CAPABILITIES: CuaStartupCapabilities = {
-  platform: 'macos',
+  platform: 'macos', systemPointer: true,
   methods: [
     'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
     'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-    'selectText', 'setValue', 'show', 'typeText',
+    'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
   ],
   appLevelAccessibility: true,
   keyboard: ['app'],
@@ -42,6 +44,8 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
+  maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
@@ -60,8 +64,9 @@ export const Config = Schema.object({
  * @returns Completion after native preparation and tool registration.
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  const backend = { createChannel: createSharedNativeChannel, guidance: GUIDANCE, capabilities: CAPABILITIES,
-    permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
+  const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
+    getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
+    acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
     if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
     installCua(ctx, config, { helperPath: config.helperPath, ...backend })

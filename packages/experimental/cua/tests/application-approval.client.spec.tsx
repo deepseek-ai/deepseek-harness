@@ -84,3 +84,20 @@ it('uses the original question cancellation and refuses late approval', async ()
   expect(card.canAnswer()).toBe(false)
   await expect(card.onAllow()).rejects.toThrow('no channel accepts an answer yet')
 })
+
+it('shows the mouse interruption and expiry with only session approval and refusal', () => {
+  const display = {
+    question: { en: 'Move pointer?', zh: '允许移动鼠标指针吗？' },
+    detail: { en: 'Until restart', zh: '重启后失效' },
+    approve: { en: 'Allow for this session', zh: '本会话允许' },
+  }
+  const pending = new PendingQuestion('s1' as SessionId, [{ id: 'cua-mouse-control', question: display.question.en,
+    detail: display.detail.en, intent: { kind: 'approval', approve: display.approve.en, reject: 'Deny', display } }])
+  const factory = vi.fn((_name: string, _input: ApprovalCardInput) => null)
+  render(<ApplicationApproval {...{ matched: selectApplicationApproval(pending)!, renderFactorySlot: factory,
+    t: makeTranslate(zh), resolveText: text => text.zh } as ApplicationApprovalProps} />)
+  const card = factory.mock.calls[0]![1]
+  expect(card).toMatchObject({ title: display.question.zh, description: display.detail.zh, allowLabel: display.approve.zh })
+  expect(card.onAlways).toBeUndefined()
+  expect(card.warning).toBeUndefined()
+})

@@ -1,0 +1,9 @@
+version: 1
+scenario: cua-run-code
+profile: headless
+composition: default
+recording: authored
+header:
+  class: cua-run-code
+  pin: true
+permission: danger-full-access

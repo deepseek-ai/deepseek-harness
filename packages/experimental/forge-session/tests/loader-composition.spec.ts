@@ -68,6 +68,7 @@ if ('branch' in fields) {
   reply({ repository: { defaultBranchRef: { name: 'main' }, pullRequests: { nodes: fields.branch === 'feat' ? [{ number: 7, isCrossRepository: false }] : [] } } })
 }
 const node = (number) => ({
+  id: 'pull-' + number,
   number,
   url: 'https://github.com/octo/demo/pull/' + number,
   title: 'Change ' + number,
@@ -79,17 +80,24 @@ const node = (number) => ({
   headRefName: number === 7 ? 'feat' : 'other',
   headRefOid: 'a'.repeat(40),
   baseRefName: 'main',
+  baseRefOid: 'e'.repeat(40),
   additions: 1,
   deletions: 0,
   mergeable: 'MERGEABLE',
   mergeStateStatus: number === 7 ? 'BLOCKED' : 'CLEAN',
   reviewDecision: null,
-  reviewThreads: { nodes: [] },
+  viewerCanUpdateBranch: false,
+  canBeRebased: false,
+  reviewThreads: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
+  reviewRequests: { totalCount: 0, nodes: [] },
+  latestReviews: { totalCount: 0, nodes: [] },
+  latestOpinionatedReviews: { totalCount: 0, nodes: [] },
+  closingIssuesReferences: { totalCount: 0, nodes: [] },
   commits: { nodes: [{ commit: { statusCheckRollup: {
     id: 'rollup-' + number, state: number === 7 ? 'PENDING' : 'SUCCESS',
     contexts: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [{
       __typename: 'CheckRun', id: 'check-1', databaseId: 1, name: 'test', status: number === 7 ? 'IN_PROGRESS' : 'COMPLETED', conclusion: number === 7 ? null : 'SUCCESS',
-      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
+      detailsUrl: null, startedAt: null, completedAt: null, checkSuite: { app: { id: 'actions' }, workflowRun: { databaseId: 1, event: 'pull_request', workflow: { id: 'ci', name: 'ci' } } },
     }] },
   } } }] },
 })

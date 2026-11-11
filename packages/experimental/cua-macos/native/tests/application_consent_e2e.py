@@ -14,13 +14,13 @@ import tempfile
 import uuid
 
 from capabilities_e2e import stop_application, wait_for_state
-from native_test_support import BINARY, ROOT, NativeHelper, stop
+from native_test_support import ROOT, NativeHelper, stop
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--helper", type=Path, default=BINARY)
-    parser.add_argument("--desktop", action="store_true", help="Read, click and capture owned fixture windows; requires existing system grants")
+    parser.add_argument("--helper", type=Path)
+    parser.add_argument("--desktop", action="store_true", help="Read owned fixture windows, invoke their buttons and capture them; requires existing system grants")
     args = parser.parse_args()
     transcript = []
     with tempfile.TemporaryDirectory(prefix="dsh-cua-consent-") as temporary, ExitStack() as cleanup:
@@ -40,11 +40,11 @@ def main():
             nonlocal checked_windows
             if not args.desktop:
                 return
-            state = wait_for_state(state_path, lambda value: value["pid"] == pid and value["windowId"] > 0)
+            state = wait_for_state(state_path, lambda value: value["pid"] == pid and bool(value["windowId"]))
             owner = {"appHandle": app["appHandle"], "windowId": state["windowId"]}
             observed = helper.call("getState", {**owner, "maxElements": 2000, "maxDepth": 25})
             pad = next(item for item in observed["elements"] if item["role"] == "AXButton" and item["title"] == "Input receiver")
-            helper.call("click", {"appHandle": app["appHandle"], "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]})
+            helper.call("invoke", {**owner, "snapshotId": observed["snapshotId"], "elementId": pad["elementId"]})
             wait_for_state(state_path, lambda value: value["axPresses"] == state["axPresses"] + 1)
             captured = helper.call("screenshot", owner)
             assert base64.b64decode(captured["data"], validate=True).startswith(b"\x89PNG\r\n\x1a\n")
@@ -123,12 +123,30 @@ def main():
 
         app, executable, state, _ = fixture("Direct bundle", identifier)
         pending = helper.call("getApp", {"selector": str(app)})
+        peer = NativeHelper([], args.helper)
+        cleanup.callback(peer.stop)
+        peer_pending = peer.call("getApp", {"selector": str(app)})
         process = subprocess.Popen([str(executable)], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         cleanup.callback(stop, process)
-        wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+        wait_for_state(state, lambda value: value["pid"] == process.pid and bool(value["windowId"]))
         running = helper.call("getApp", {"selector": str(process.pid)})
         assert running["authorization"]["id"] == pending["authorization"]["id"] == expected, running["authorization"]
+        resumed = peer.call("launchApp", {"appHandle": peer_pending["appHandle"]})
+        assert peer.call("getApp", {"selector": str(process.pid)})["appHandle"] == resumed["appHandle"]
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="STALE_APP")
+        assert helper.call("getApp", {"selector": str(process.pid)})["appHandle"] == running["appHandle"]
         check_window(running, state, process.pid)
+
+        app, executable, _, _ = fixture("Concurrent instances", identifier + ".concurrent")
+        pending = helper.call("getApp", {"selector": str(app)})
+        for index in range(2):
+            state = root / f"concurrent-{index}.json"
+            instance = subprocess.Popen([str(executable), str(state), "--background"],
+                                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            cleanup.callback(stop, instance)
+            wait_for_state(state, lambda value: value["pid"] == instance.pid and value["windowId"] > 0)
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="AMBIGUOUS_APP")
+        helper.call("launchApp", {"appHandle": pending["appHandle"]}, error_code="STALE_APP")
 
         standalone_ids = []
         for index in range(2):
@@ -136,7 +154,7 @@ def main():
             process = subprocess.Popen([str(binary), str(state), "--background"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             cleanup.callback(stop, process)
             try:
-                wait_for_state(state, lambda value: value["pid"] == process.pid and value["windowId"] > 0)
+                wait_for_state(state, lambda value: value["pid"] == process.pid and bool(value["windowId"]))
                 running = helper.call("getApp", {"selector": str(process.pid)})
                 authorization = running["authorization"]
                 assert running.get("bundleId") is None and authorization["persistable"] is True, authorization
@@ -155,7 +173,7 @@ def main():
             pending = helper.call("getApp", {"selector": str(app)})
             launched = helper.call("launchApp", {"appHandle": pending["appHandle"]})
             assert launched["running"] is True, launched
-            pid = wait_for_state(state, lambda value: value["windowId"] > 0)["pid"]
+            pid = wait_for_state(state, lambda value: bool(value["windowId"]))["pid"]
             executable.unlink()
             buffer = ctypes.create_string_buffer(4096)
             ctypes.set_errno(0)
@@ -184,7 +202,7 @@ def main():
             os.kill(pid, 0)
             print(f"Deleted executable: bundle_id={bundle_id is not None}, proc_pidpath_bytes={copied}, errno={path_error}")
         print("PASS: changed bundles cannot launch; cold/running and direct-bundle identities agree; copies share consent; other IDs stay separate; missing IDs and standalone GUIs use persistent paths across restarts"
-              + (f"; {checked_windows} GUI instances expose controls, receive an AX click and produce a PNG" if args.desktop else ""))
+              + (f"; {checked_windows} GUI instances expose controls, receive a default AX action and produce a PNG" if args.desktop else ""))
 
 
 if __name__ == "__main__":

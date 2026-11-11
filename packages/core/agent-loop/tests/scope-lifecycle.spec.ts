@@ -446,7 +446,9 @@ describe('agent scope lifecycle', () => {
   })
 
   it('uses signal only for creation: aborts pending setup but not a returned live handle', async () => {
-    const ctx = await harness()
+    const adapter = new MockAdapter([textResponse('ok')])
+    const ctx = await harness(adapter)
+    onTestFinished(() => ctx.fiber.dispose())
     const pendingController = new AbortController()
     const setupStarted = Promise.withResolvers<undefined>()
     const pending = ctx.agents.create({
@@ -474,6 +476,9 @@ describe('agent scope lifecycle', () => {
     await Promise.resolve()
     expect(ctx.agents.get(live.agent.id)).toBe(live.agent)
     expect(live.agent.status).toBe('idle')
+    live.agent.followup(createUserMessage({ content: text('continue'), source: { kind: 'user' } }))
+    await live.agent.whenIdle()
+    expect(adapter.requests).toHaveLength(1)
     await live.dispose()
   })
 

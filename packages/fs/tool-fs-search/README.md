@@ -52,6 +52,8 @@ A subprocess backend, then the tools; the spill backend is optional and makes ca
 
 Routine budgets stay out of the model-facing schema: a model that needs surrounding context reads the matched file with `read`, and one that needs later results follows the returned spill locator's retrieval hint.
 
+Both tools opt into concurrent scheduling with sibling parallel-safe calls. A search records no file observation, over-cap spilling runs in the model-ordered post-execute phase, and working-directory recovery is serialized per Session by the working-directory service.
+
 ### Configuration
 
 `sampleOverCapGlobResults` is required; the remaining keys are optional search caps with the defaults below.
@@ -76,7 +78,7 @@ Node deployments receive the `@vscode/ripgrep` platform package on supported mac
 
 ### Failures and recovery
 
-Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes stay ordinary tool argument errors.
+Search failures carry the package-owned codes `SEARCH_INVALID_PATTERN` (ripgrep rejected the regex or glob), `SEARCH_FAILED` (a failed launch, inaccessible target, signal kill, or malformed `--json` output), `SEARCH_RAW_OUTPUT_OVERFLOW` (raw output over the cap), and `SEARCH_ABORTED` (cooperative timeout or caller cancellation). Exit 0 is success with results and exit 1 is a successful empty search; model argument mistakes throw `ToolArgsError` with `INVALID_ARGS`.
 
 -----
 
@@ -107,7 +109,7 @@ Local workspace discovery is naturally a process-backed `rg` workflow, and putti
 
 Without an explicit `path`, `glob` prunes unrelated subtrees for patterns such as `packages/core/src/*.ts` when every directory component is a plain relative name outside VCS metadata. Ordered ripgrep globs exclude the tree, admit directories with the prefix's distinct names, then apply the original file pattern. Same-named directories elsewhere may also be traversed, but only the original pattern admits files. The added arguments are capped at 8 KiB; larger sets use the original traversal. The search root, path separators, symlink handling, matching, and modification-time ordering stay unchanged; other patterns retain the original traversal.
 
-Each call resolves the packaged binary (`@vscode/ripgrep`, or the executable's `-rg` sidecar in a pkg single-file runtime), prepends `--no-config` so a host `RIPGREP_CONFIG_PATH` cannot inject a `--pre` preprocessor into the unconfined spawn, and passes every model-controlled value as a plain argv element — no shell layer exists, so no quoting applies. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
+Each call resolves and starts the packaged binary through the shared [ripgrep library](../../util/ripgrep/README.md), which prepends `--no-config` to prevent configuration-driven preprocessors. Model-controlled values remain plain argv elements without shell quoting. Collect-mode budgets bound complete stdout and a stderr tail; a lossy stdout read fails as `SEARCH_RAW_OUTPUT_OVERFLOW` rather than parsing a silently-partial stream. The tools never read a raw spill path.
 
 ### Native-mode benchmark
 

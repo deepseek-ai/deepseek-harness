@@ -94,12 +94,12 @@ try {
   const bindings = [{ global: 'tools', functions: { echo: async (input: unknown) => String(input) } }]
   const policy = { mode: 'danger-full-access', workspaceRoot: root } as const
   const result = await runtime.run(runtime.resolve({
-    program: 'const fs=await import("node:fs/promises"); await fs.writeFile("ptc.txt","embedded"); console.log("worker-output"); return {value:await tools.echo("bridge"),env:Object.keys(process.env),executable:process.execPath,cwd:process.cwd()};',
+    program: 'const fs=await import("node:fs/promises"); await fs.writeFile("ptc.txt","embedded"); inspect("worker-output"); return {value:await tools.echo("bridge"),env:Object.keys(process.env),executable:process.execPath,cwd:process.cwd()};',
     bindings, cwd: root, sandboxPolicy: policy,
   }))
   assert.equal(result.error, undefined, JSON.stringify(result))
   assert.deepEqual(result.value, { value: 'bridge', env: [], executable: hello.executable, cwd: root })
-  assert(result.logs.join('').includes('worker-output'))
+  assert(result.output.filter(block => block.type === 'text').map(block => block.text).join('').includes('worker-output'))
   assert.equal(await ctx.fs.readText(await ctx.fs.resolve(`${root}/ptc.txt`)), 'embedded')
   const locked = await runtime.run(runtime.resolve({
     program: 'const fs=await import("node:fs"); const {tryLockExclusive}=await import("@deepseek-ai/node-addon-system/flock"); const fd=fs.openSync("native-lock","w"); try { await tryLockExclusive(fd); return "locked" } finally { fs.closeSync(fd) }',

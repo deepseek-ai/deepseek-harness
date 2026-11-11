@@ -1,4 +1,4 @@
 - text: Blocked Goal retry with the edited plan
-- button "Resume goal"
 - button "Edit goal"
 - button "Clear goal"
+- button "Resume goal"

@@ -192,6 +192,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/drifted-provider.*DSH_UNDECLARED/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('rejects non-string values returned by a contributor', () => {
@@ -203,6 +204,7 @@ describe('ShellEnvRegistry', () => {
     })
 
     expect(() => registry.collect(execution())).toThrow(/wrong-value-type.*non-string.*DSH_STRING/)
+    expect(() => registry.collect(execution())).toThrow(expect.objectContaining({ name: 'ShellEnvError', code: 'SHELL_ENV_CONTRIBUTION_INVALID' }))
   })
 
   it('removes an effect-scoped contributor when its plugin is disposed', async () => {

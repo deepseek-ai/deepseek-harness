@@ -12,7 +12,7 @@ const HUNKS: readonly ForgeDiffHunk[] = [
 
 function file(overrides: Partial<ForgeDiffFile> = {}): ForgeDiffFile {
   return {
-    path: 'src/a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false,
+    path: 'src/a.ts', previousPath: null, status: 'modified', binary: false, oversized: false, untracked: false, layer: 'implementation', digest: 'digest',
     additions: 2, deletions: 2, hunks: HUNKS, ...overrides,
   }
 }
@@ -82,7 +82,7 @@ describe('matchesHunks', () => {
 
 describe('segmentsOf', () => {
   it('collapses the lines before, between, and after the hunks, the last of unknown length', () => {
-    expect(segmentsOf(file(), undefined, new Set([0, 1])).map(segment => segment.kind === 'gap' ? segment : segment.rows.length)).toEqual([
+    expect(segmentsOf(file(), undefined, new Set([0, 1])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       5,
       { kind: 'gap', index: 1, count: 4 },
@@ -105,7 +105,7 @@ describe('segmentsOf', () => {
   })
 
   it('keeps unexpanded gaps collapsed once the new side is known, and counts the lines after the last hunk', () => {
-    expect(segmentsOf(file(), NEW_SIDE, new Set([1])).map(segment => segment.kind === 'gap' ? segment : segment.rows.length)).toEqual([
+    expect(segmentsOf(file(), NEW_SIDE, new Set([1])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
       { kind: 'gap', index: 0, count: 2 },
       11,
       { kind: 'gap', index: 2, count: 2 },
@@ -131,6 +131,26 @@ describe('segmentsOf', () => {
     expect(segmentsOf(ending, undefined, new Set()).map(segment => segment.kind)).toEqual(['gap', 'rows'])
     const oldEnding = file({ hunks: [{ oldStart: 4, oldLines: 1, newStart: 4, newLines: 1, lines: ['-a', '\\ No newline at end of file', '+b'] }] })
     expect(segmentsOf(oldEnding, undefined, new Set()).map(segment => segment.kind)).toEqual(['gap', 'rows', 'gap'])
+  })
+
+  it('draws consecutive folded hunks as one row that takes the lines between them, and the gap before a folded run', () => {
+    const three = file({ hunks: [...HUNKS, { oldStart: 13, oldLines: 1, newStart: 13, newLines: 1, lines: ['-u', '+t13'] }] })
+    expect(segmentsOf(three, undefined, new Set(), new Set([1, 2])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+      { kind: 'gap', index: 0, count: 2 },
+      5,
+      { kind: 'gap', index: 1, count: 4 },
+      { kind: 'folded', hunks: [1, 2] },
+      { kind: 'gap', index: 3, count: null },
+    ])
+    expect(segmentsOf(three, undefined, new Set(), new Set([0, 2])).map(segment => segment.kind === 'rows' ? segment.rows.length : segment)).toEqual([
+      { kind: 'gap', index: 0, count: 2 },
+      { kind: 'folded', hunks: [0] },
+      { kind: 'gap', index: 1, count: 4 },
+      2,
+      { kind: 'gap', index: 2, count: 1 },
+      { kind: 'folded', hunks: [2] },
+      { kind: 'gap', index: 3, count: null },
+    ])
   })
 
   it('draws nothing for a file without hunks', () => {

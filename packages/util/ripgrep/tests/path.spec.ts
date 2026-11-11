@@ -39,7 +39,7 @@ describe('ripgrep resolution', () => {
     process.execPath = '/runtime/dsh'
     existsSync.mockReturnValue(true)
     const sidecar = '/runtime/dsh-rg'
-    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-util-ripgrep')
 
     await expect(resolveRgPath()).resolves.toBe(sidecar)
     expect(existsSync).toHaveBeenCalledWith(sidecar)
@@ -51,7 +51,7 @@ describe('ripgrep resolution', () => {
     process.execPath = 'C:\\runtime\\deepseek-harness-sdk-runtime-win-x64.exe'
     existsSync.mockReturnValue(true)
     const sidecar = 'C:\\runtime\\deepseek-harness-sdk-runtime-win-x64-rg.exe'
-    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-util-ripgrep')
 
     await expect(resolveRgPath()).resolves.toBe(sidecar)
     expect(existsSync).toHaveBeenCalledWith(sidecar)
@@ -59,7 +59,7 @@ describe('ripgrep resolution', () => {
 
   it('uses the dependency binary in an ordinary Node process', async () => {
     existsSync.mockReturnValue(true)
-    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-util-ripgrep')
 
     await expect(resolveRgPath()).resolves.toBe(dependency.rgPath)
     expect(existsSync).not.toHaveBeenCalled()
@@ -68,7 +68,7 @@ describe('ripgrep resolution', () => {
   it('uses the dependency binary when a packaged runtime has no sidecar', async () => {
     Reflect.defineProperty(process, 'pkg', { configurable: true, value: {} })
     existsSync.mockReturnValue(false)
-    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-util-ripgrep')
 
     await expect(resolveRgPath()).resolves.toBe(dependency.rgPath)
     const executable = parse(process.execPath)
@@ -81,7 +81,7 @@ describe('ripgrep resolution', () => {
   it('uses the unpacked executable path for an Electron ASAR dependency', async () => {
     Reflect.defineProperty(process.versions, 'electron', { configurable: true, value: '44.0.0' })
     dependency.rgPath = '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/node_modules/@vscode/ripgrep/bin/rg'
-    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-util-ripgrep')
 
     await expect(resolveRgPath()).resolves.toBe(
       '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar.unpacked/dsh/node_modules/@vscode/ripgrep/bin/rg',

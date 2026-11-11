@@ -13,7 +13,7 @@ function activity(name: string): RunningProcessActivity {
   if (name === 'write') return 'write'
   if (name === 'edit' || name === 'apply_patch') return 'edit'
   if (['bash', 'pwsh', 'exec_command', 'write_stdin'].includes(name) || name.startsWith('terminal_')) return 'commands'
-  if (name === 'run_code') return 'code'
+  if (name === 'run_code' || name === 'cua_run_code') return 'code'
   if (name === 'web_search') return 'webSearch'
   if (name === 'web_fetch') return 'webFetch'
   if (name === 'subagent' || name.startsWith('subagent_')) return 'subagents'

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-open-in-app",
   "description": "Session application submenus and native opening controls for directories and previewed files",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },
