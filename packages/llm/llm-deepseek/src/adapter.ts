@@ -108,7 +108,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
         let fileIds: Awaited<ReturnType<typeof prepareFileIds>> | undefined
         if (!inline) {
           try {
-            fileIds = await prepareFileIds(messages, versions, files)
+            fileIds = await prepareFileIds(messages, versions, files, connection.fileUploadConcurrency)
           } catch (error) {
             if (!(error instanceof FileResolutionFailure)) throw error
             inline = true

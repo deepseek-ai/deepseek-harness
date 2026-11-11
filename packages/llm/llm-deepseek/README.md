@@ -67,6 +67,9 @@ A request selects the route with `provider: deepseek-official`; the model id pas
 | `imageOffloadByteQuantum` | `64 MiB` | Files-mode oldest-prefix removal quantum |
 | `inlineImageOffloadByteQuantum` | `10 MiB` | Inline-mode oldest-prefix removal quantum |
 | `imageOffloadCountQuantum` | `20` | Count-overflow removal quantum |
+| `fileUploadConcurrency` | `3` | Simultaneous uploads of distinct images per model request (1–3), including stale-id replacements |
+| `fileUploadMaxRetries` | `2` | Extra upload attempts per image (0–2). HTTP 429 and one successful storage-quota cleanup share this budget. Exhaustion triggers request-wide inline fallback. |
+| `fileUploadRetryDelayMs` | `500` | Minimum wait after rate limiting. A longer Retry-After takes precedence and the per-image deadline covers all attempts. |
 | `filesApiTimeoutMs` | `60,000` | Per-image Files resolution deadline |
 | `fileExpiresAfterSeconds` | `604,800` | Requested uploaded-image lifetime and local reuse bound |
 | `fileRefreshMarginSeconds` | `3,600` | Remaining reuse lifetime below which an id is replaced |

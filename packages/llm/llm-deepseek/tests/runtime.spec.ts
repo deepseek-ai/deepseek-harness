@@ -138,6 +138,22 @@ function fileStoreOf(
   }
 }
 
+/** Opaque file ids reflect provider arrival order. Unrejected positions keep their original ids. */
+function expectFileReplacements(requests: readonly unknown[], count: number, rejected: readonly string[]): void {
+  expect(requests).toHaveLength(2)
+  const attempts = requests as Array<{ messages: Array<{ content: Array<{ type: string; source: { file_id: string } }> }> }>
+  const [first, second] = attempts.map(attempt => attempt.messages[0]!.content.filter(block => block.type === 'image').map(block => block.source.file_id))
+  const ids = (start: number, size: number) => Array.from({ length: size }, (_, index) => `file-api-${start + index}`)
+  expect(first!.toSorted()).toEqual(ids(1, count).toSorted())
+  expect(second).toHaveLength(count)
+  const replacements = []
+  for (const [position, id] of first!.entries()) {
+    if (rejected.includes(id)) replacements.push(second![position])
+    else expect(second![position]).toBe(id)
+  }
+  expect(replacements.toSorted()).toEqual(ids(count + 1, rejected.length).toSorted())
+}
+
 function fileReference(fileId: string): Awaited<ReturnType<Protocol.DeepSeekFileStore['ensureUploaded']>> {
   return {
     record: { fileId: Protocol.DeepSeekFileId(fileId) },
@@ -951,11 +967,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(3)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[0]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-1' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-2' } }])
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-1' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-3' } }])
+    expectFileReplacements(server.requests, 2, ['file-api-2'])
   })
 
   it('invalidates every listed missing file id and preserves unlisted mappings', async () => {
@@ -1008,19 +1020,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(5)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[0]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([
-        { type: 'image', source: { type: 'file', file_id: 'file-api-1' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-2' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-3' } },
-      ])
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([
-        { type: 'image', source: { type: 'file', file_id: 'file-api-4' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-2' } },
-        { type: 'image', source: { type: 'file', file_id: 'file-api-5' } },
-      ])
+    expectFileReplacements(server.requests, 3, ['file-api-1', 'file-api-3'])
   })
 
   it('recovers in one replacement request when the provider lists dozens of missing file ids', async () => {
@@ -1063,15 +1063,7 @@ describe('DeepSeekAdapter against a mock server', () => {
 
     expect(server.requests).toHaveLength(2)
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(70)
-    const attempts = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; source?: { file_id?: string } }> }> }>
-    const fileIds = (attempt: number) => attempts[attempt]?.messages[0]?.content
-      .filter(block => block.type === 'image')
-      .map(block => block.source?.file_id)
-    expect(fileIds(0)).toEqual(refs.map((_, index) => `file-api-${index + 1}`))
-    expect(fileIds(1)).toEqual([
-      ...missing.map((_, index) => `file-api-${41 + index}`),
-      ...refs.slice(30).map((_, index) => `file-api-${31 + index}`),
-    ])
+    expectFileReplacements(server.requests, 40, missing)
   })
 
   it('invalidates every used mapping when a stale-file response does not identify one file id', async () => {
@@ -1109,9 +1101,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.fileRequests.filter(request => request.method === 'POST')).toHaveLength(4)
-    const retries = server.requests as Array<{ messages: Array<{ content: Array<{ type: string; file_id?: string }> }> }>
-    expect(retries[1]?.messages[0]?.content.filter(block => block.type === 'image'))
-      .toEqual([{ type: 'image', source: { type: 'file', file_id: 'file-api-3' } }, { type: 'image', source: { type: 'file', file_id: 'file-api-4' } }])
+    expectFileReplacements(server.requests, 2, ['file-api-1', 'file-api-2'])
   })
 
   it('returns the second stale-file rejection without a third model attempt', async () => {
@@ -2174,6 +2164,15 @@ describe('plugin registration and config', () => {
     ['fileExpiresAfterSeconds', 2_592_001, /fileExpiresAfterSeconds must be an integer from 3600 through 2592000/],
     ['fileRefreshMarginSeconds', -1, /fileRefreshMarginSeconds must be a non-negative integer/],
     ['fileRefreshMarginSeconds', 604_800, /fileRefreshMarginSeconds must be a non-negative integer/],
+    ['fileUploadConcurrency', 0, /fileUploadConcurrency/],
+    ['fileUploadConcurrency', 4, /fileUploadConcurrency/],
+    ['fileUploadConcurrency', 1.5, /fileUploadConcurrency/],
+    ['fileUploadMaxRetries', -1, /fileUploadMaxRetries/],
+    ['fileUploadMaxRetries', 3, /fileUploadMaxRetries/],
+    ['fileUploadMaxRetries', 1.5, /fileUploadMaxRetries/],
+    ['fileUploadRetryDelayMs', 0, /fileUploadRetryDelayMs/],
+    ['fileUploadRetryDelayMs', MAX_TIMER_DELAY_MS + 1, /fileUploadRetryDelayMs/],
+    ['fileUploadRetryDelayMs', 1.5, /fileUploadRetryDelayMs/],
     ['fileQuotaCleanupBatch', 0, /fileQuotaCleanupBatch must be an integer from 1 through 1000/],
     ['fileQuotaCleanupBatch', 1_001, /fileQuotaCleanupBatch must be an integer from 1 through 1000/],
   ] as const)('rejects %s=%s', (field, value, message) => {

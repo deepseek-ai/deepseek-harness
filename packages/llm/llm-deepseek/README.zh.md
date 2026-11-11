@@ -67,6 +67,9 @@ kind: "package-reference"
 | `imageOffloadByteQuantum` | `64 MiB` | Files 模式最旧前缀移除量子 |
 | `inlineImageOffloadByteQuantum` | `10 MiB` | 内联模式最旧前缀移除量子 |
 | `imageOffloadCountQuantum` | `20` | 数量超限移除量子 |
+| `fileUploadConcurrency` | `3` | 每个模型请求同时上传 1 至 3 张不同图片，file ID 失效后的重传也遵守此限制 |
+| `fileUploadMaxRetries` | `2` | 每张图片最多额外上传 0 至 2 次，普通 429 重试和一次存储配额清理后的重试共用次数。次数用尽后，整个请求尝试改用内联图片。 |
+| `fileUploadRetryDelayMs` | `500` | 遇到限流后至少等待的毫秒数。服务端要求的 Retry-After 更长时按其要求等待，所有尝试共用单张图片的超时期限。 |
 | `filesApiTimeoutMs` | `60,000` | 每张图片 Files 解析截止时间 |
 | `fileExpiresAfterSeconds` | `604,800` | 请求的上传图片生存期与本地复用期限 |
 | `fileRefreshMarginSeconds` | `3,600` | 低于此剩余复用期时替换 id |

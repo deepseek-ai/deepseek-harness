@@ -75,6 +75,8 @@ export interface DeepSeekConnectionOptions {
   imageOffloadCountQuantum: number
   /** Maximum duration of one request-image Files API resolution. */
   filesApiTimeoutMs: number
+  /** Per-request parallel Files resolutions (defaults to three). */
+  fileUploadConcurrency?: number
   /** Upload expiry, refresh, and quota-recovery policy. */
   filePolicy: DeepSeekFilePolicy
   /** Provider-owned model-request retry policy, already resolved. */

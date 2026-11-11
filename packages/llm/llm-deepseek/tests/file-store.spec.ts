@@ -113,6 +113,50 @@ describe('DeepSeekFileStore', () => {
     expect(remote.uploads()).toBe(4)
   })
 
+  it.each([
+    { failures: [429, 429], retries: 2, uploads: 3, succeeds: true },
+    { failures: [429, 429, 429], retries: 2, uploads: 3, succeeds: false },
+    { failures: [429], retries: 0, uploads: 1, succeeds: false },
+    { failures: [503], retries: 2, uploads: 1, succeeds: false },
+  ])('bounds upload attempts for $failures with $retries retries', async ({ failures, retries, uploads, succeeds }) => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-retries-'))
+    roots.push(dir)
+    const remote = uploadFetch()
+    const fetchImpl = vi.fn<typeof fetch>(remote.fetchImpl)
+    for (const status of failures) fetchImpl.mockResolvedValueOnce(new Response('busy', { status }))
+    const store = new DeepSeekFileStore({ index: new DeepSeekUploadIndex(join(dir, 'index.json')), fetch: fetchImpl, now: () => NOW })
+    const result = store.ensureUploaded(VERSION, CONNECTION, { ...POLICY, uploadMaxRetries: retries, uploadRetryDelayMs: 1 })
+    if (succeeds) await expect(result).resolves.toMatchObject({ uploaded: true })
+    else await expect(result).rejects.toMatchObject({ failure: { status: failures.at(-1) } })
+    expect(fetchImpl.mock.calls.map(([, init]) => init?.method)).toEqual(Array<string>(uploads).fill('POST'))
+  })
+
+  it.each([
+    { errors: ['quota', 'quota'], attempts: 2 },
+    { errors: ['limit', 'quota', 'limit'], attempts: 3 },
+  ])('shares the retry budget and cleans quota once for $errors', async ({ errors, attempts }) => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-quota-retries-'))
+    roots.push(dir)
+    const fetchImpl = vi.fn<typeof fetch>()
+    for (const message of errors) fetchImpl.mockResolvedValueOnce(Response.json({ error: { message } }, { status: 429 }))
+    const store = new DeepSeekFileStore({ index: new DeepSeekUploadIndex(join(dir, 'index.json')), fetch: fetchImpl })
+    const reclaim = vi.spyOn(store, 'reclaimOldestOwned').mockResolvedValue(1)
+    await expect(store.ensureUploaded(VERSION, CONNECTION, { ...POLICY, uploadRetryDelayMs: 1 })).rejects.toMatchObject({ code: 'RATE_LIMIT' })
+    expect(fetchImpl).toHaveBeenCalledTimes(attempts)
+    expect(reclaim).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a Retry-After beyond the supported timer range without posting again', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-file-retry-after-'))
+    roots.push(dir)
+    const response = new Response('busy', { status: 429, headers: { 'retry-after': '3000000' } })
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response)
+    const store = new DeepSeekFileStore({ index: new DeepSeekUploadIndex(join(dir, 'index.json')), fetch: fetchImpl })
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY))
+      .rejects.toMatchObject({ failure: { providerRetryAfterMs: 3_000_000_000 } })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('reclaims the oldest owned native file across descending pages before retrying an upload', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-native-file-quota-'))
     roots.push(dir)

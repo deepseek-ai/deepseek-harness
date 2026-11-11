@@ -47,6 +47,52 @@ function harness(config: Config = {}) {
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('Messages Files requests', () => {
+  it.each([undefined, 1] as const)('bounds concurrent uploads and preserves wire order with concurrency %s', async (limit) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => success())
+    vi.stubGlobal('fetch', fetchImpl)
+    const h = harness(limit === undefined ? {} : { fileUploadConcurrency: limit })
+    const images = ['a', 'b', 'c', 'd'].map(digit => ({ ...ref, attachmentId: AttachmentId(`sha256:${digit.repeat(64)}`) }))
+    const gates = images.map(() => ({ started: Promise.withResolvers<undefined>(), finish: Promise.withResolvers<undefined>() }))
+    const resolve = h.ensureUploaded.getMockImplementation()!
+    h.ensureUploaded.mockImplementation(async (...args) => {
+      const index = images.indexOf(args[0].attachment)
+      gates[index]!.started.resolve(undefined)
+      await gates[index]!.finish.promise
+      const result = await resolve(...args)
+      return { ...result, record: { ...result.record, fileId: DeepSeekFileId(`file-${index}`) } }
+    })
+    const stream = chunks(h.adapter.stream(request([...images, images[0]!])))
+    const parallel = limit ?? 3
+    try {
+      await gates[parallel - 1]!.started.promise
+      expect(h.ensureUploaded).toHaveBeenCalledTimes(parallel)
+      gates[parallel - 1]!.finish.resolve(undefined)
+      await gates[parallel]!.started.promise
+    } finally {
+      for (const gate of gates) gate.finish.resolve(undefined)
+      await stream
+    }
+    expect(h.ensureUploaded).toHaveBeenCalledTimes(4)
+    expect([...body(fetchImpl.mock.calls[0]![1]).matchAll(/"file_id":"(file-\d+)"/gu)].map(match => match[1]))
+      .toEqual(['file-0', 'file-1', 'file-2', 'file-3', 'file-0'])
+  })
+
+  it('cancels sibling uploads and leaves queued images for inline fallback', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => success())
+    vi.stubGlobal('fetch', fetchImpl)
+    const h = harness()
+    const images = ['a', 'b', 'c', 'd'].map(digit => ({ ...ref, attachmentId: AttachmentId(`sha256:${digit.repeat(64)}`) }))
+    const cancelled: AbortSignal[] = []
+    h.ensureUploaded.mockRejectedValueOnce(new Error('offline')).mockImplementation(async (_version, _connection, _policy, signal) => {
+      cancelled.push(signal!)
+      return new Promise((_resolve, reject) => signal!.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }))
+    })
+    await chunks(h.adapter.stream(request(images)))
+    expect(h.ensureUploaded).toHaveBeenCalledTimes(3)
+    expect(cancelled.map(signal => signal.aborted)).toEqual([true, true])
+    expect(body(fetchImpl.mock.calls[0]![1]).match(/"type":"base64"/gu)).toHaveLength(4)
+  })
+
   it('keeps nested tool-result images in order and sends only Files ids with the beta header', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => success())
     vi.stubGlobal('fetch', fetchImpl)

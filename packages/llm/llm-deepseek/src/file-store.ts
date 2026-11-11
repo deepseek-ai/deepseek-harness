@@ -1,8 +1,11 @@
 /** DeepSeek Files API upload reuse, invalidation, and quota recovery. @module dsh-llm-deepseek/file-store */
 
+import { setTimeout as delay } from 'node:timers/promises'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { MAX_FILE_UPLOAD_RETRIES, DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS } from './defaults.ts'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
-import { DeepSeekFilesClient, isFilesQuotaError } from './files-api.ts'
+import { DeepSeekFilesClient, DeepSeekFilesError, isFilesQuotaError } from './files-api.ts'
 import type { DeepSeekFileId } from './file-id.ts'
 import { messagesApiRoot } from './messages-api.ts'
 import { deepSeekFileScope, DeepSeekUploadIndex } from './upload-index.ts'
@@ -17,6 +20,10 @@ export interface DeepSeekFilePolicy {
   expiresAfterSeconds: number
   refreshMarginSeconds: number
   quotaCleanupBatch: number
+  /** Additional attempts shared by rate-limit and quota recovery (default two). */
+  uploadMaxRetries?: number
+  /** Local delay after HTTP 429, in milliseconds. */
+  uploadRetryDelayMs?: number
 }
 
 /** Connection facts needed by file operations. */
@@ -224,13 +231,25 @@ export class DeepSeekFileStore {
     }
 
     let candidate: DeepSeekUploadRecord
-    try {
-      candidate = await upload()
-    } catch (error: unknown) {
-      if (!isFilesQuotaError(error)) throw error
-      const deleted = await this.reclaimOldestOwned(connection, policy.quotaCleanupBatch, signal)
-      if (deleted === 0) throw error
-      candidate = await upload()
+    const maxRetries = policy.uploadMaxRetries ?? MAX_FILE_UPLOAD_RETRIES
+    let reclaimed = false
+    for (let attempt = 0; ; attempt++) {
+      signal.throwIfAborted()
+      try {
+        candidate = await upload()
+        break
+      } catch (error) {
+        if (attempt >= maxRetries) throw error
+        if (isFilesQuotaError(error)) {
+          if (reclaimed || await this.reclaimOldestOwned(connection, policy.quotaCleanupBatch, signal) === 0) throw error
+          reclaimed = true
+        } else {
+          if (!(error instanceof DeepSeekFilesError) || error.code !== 'RATE_LIMIT') throw error
+          const wait = Math.max(error.failure.providerRetryAfterMs ?? 0, policy.uploadRetryDelayMs ?? DEFAULT_FILE_UPLOAD_RETRY_DELAY_MS)
+          if (wait > MAX_TIMER_DELAY_MS) throw error
+          await delay(wait, undefined, { signal })
+        }
+      }
     }
     const committed = await this.index.commit(candidate, this.now(), marginMs)
     if (!committed.accepted) {
