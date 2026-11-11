@@ -4840,7 +4840,7 @@ Sources: [`packages/experimental/liveshare/src/host/viewer-principal.ts:24`](../
 
 SHA-256: `65d583e66518c5236015e0846470fb32efcf92375ed306aef14e50a9d2cd2099`
 
-Sources: [`packages/skill/tool-skill/src/index.ts:35`](../packages/skill/tool-skill/src/index.ts)
+Sources: [`packages/skill/tool-skill/src/index.ts:36`](../packages/skill/tool-skill/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4860,7 +4860,7 @@ Sources: [`packages/skill/tool-skill/src/index.ts:35`](../packages/skill/tool-sk
 
 SHA-256: `672c4aa2a9b736e3d6e5da6346d2e2ed5e3573f2d0baafa18e7407c9f3fee3db`
 
-Sources: [`packages/skill/skill/src/index.ts:146`](../packages/skill/skill/src/index.ts)
+Sources: [`packages/skill/skill/src/index.ts:149`](../packages/skill/skill/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -6278,7 +6278,7 @@ Sources: [`packages/llm/llm-retry/src/types.ts:30`](../packages/llm/llm-retry/sr
 
 SHA-256: `83079c8a3f733ac3fa603eefa0fbb4737ca4d8b69e7e2e7298b60f9ac4098693`
 
-Sources: [`packages/skill/tool-skill/src/index.ts:43`](../packages/skill/tool-skill/src/index.ts)
+Sources: [`packages/skill/tool-skill/src/index.ts:44`](../packages/skill/tool-skill/src/index.ts)
 
 | Property | Presence | Type |
 |---|---|---|

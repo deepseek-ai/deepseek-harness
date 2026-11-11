@@ -229,6 +229,7 @@ describe('SkillRegistry registry', () => {
         get: () => Promise.resolve(undefined),
       })
       await expect(badList.skills.list()).rejects.toThrow('list() must return an array or { candidates, complete } observation')
+      await expect(badList.skills.list()).rejects.toThrow(expect.objectContaining({ name: 'SkillError', code: 'SKILL_INVALID_DEFINITION' }))
     }
 
     const cases: { patch: Partial<SkillCandidate>; expected: string }[] = [
@@ -262,6 +263,7 @@ describe('SkillRegistry registry', () => {
       })
 
       await expect(ctx.skills.list()).rejects.toThrow(expected)
+      await expect(ctx.skills.list()).rejects.toThrow(expect.objectContaining({ name: 'SkillError', code: 'SKILL_INVALID_DEFINITION' }))
     }
   })
 
@@ -556,6 +558,7 @@ describe('SkillRegistry registry', () => {
       })
 
       await expect(ctx.skills.get(skillName)).rejects.toThrow(expected)
+      await expect(ctx.skills.get(skillName)).rejects.toThrow(expect.objectContaining({ name: 'SkillError', code: 'SKILL_INVALID_DEFINITION' }))
     }
   })
 

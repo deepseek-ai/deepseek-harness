@@ -15,6 +15,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { PostToolDecision } from '@deepseek-ai/dsh-tools'
 import { McpToolRegistrationError, publicToolName, syncTools, type ToolBridgeOptions } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/client/validators/ajv'
 import { createTransport } from '@deepseek-ai/dsh-mcp-client/src/transport.ts'
 import { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -266,7 +267,9 @@ describe('syncTools', () => {
       { name: 'taken', inputSchema: { type: 'object' } },
     ])
 
-    await expect(syncTools(client as never, ctx, defaultOpts, new Map())).rejects.toBeInstanceOf(McpToolRegistrationError)
+    const failure = syncTools(client as never, ctx, defaultOpts, new Map())
+    await expect(failure).rejects.toBeInstanceOf(McpToolRegistrationError)
+    await expect(failure).rejects.toMatchObject({ name: 'McpLocalError', code: 'MCP_TOOL_REGISTRATION_FAILED' })
 
     // All-or-nothing: the non-conflicting tool is rolled back too.
     expect(ctx.tools.get('mcp__srv__free')).toBeUndefined()
@@ -854,9 +857,47 @@ describe('tool execution', () => {
     )
     await syncTools(invalid as never, invalidCtx, defaultOpts, new Map())
     const failure = await executeToolFixture(invalidCtx, { signal: testToolSignal, callId: brandString<ToolCallId>('invalid'), name: 'mcp__srv__structured', arguments: {} })
-    expect(failure.error).toMatchObject({ info: { code: 'INVALID_TOOL_OUTPUT' } })
-    expect(failure.content[0]?.type === 'text' ? failure.content[0].text : '')
-      .toContain('value.structuredContent.answer')
+    expect(failure.error).toEqual({
+      message: 'Tool "structured" returned an invalid MCP result: structured content does not match the output schema: data/answer must be integer',
+      info: { name: 'McpToolError', code: 'MCP_INVALID_RESULT' },
+    })
+    // The SDK's own output check is disabled: it would report the failure as a server JSON-RPC error.
+    expect(invalid.callTool.mock.calls[0]?.[1]).toMatchObject({ toolDefinition: { name: 'structured' } })
+    expect(invalid.callTool.mock.calls[0]?.[1]).not.toHaveProperty('toolDefinition.outputSchema')
+  })
+
+  it.each([
+    ['omits structuredContent', { name: 'structured', inputSchema: { type: 'object' }, outputSchema: { type: 'object' } },
+      'the tool has an output schema but returned no structured content', 1],
+    ['advertises an output schema that cannot be compiled', { name: 'structured', inputSchema: { type: 'object' }, outputSchema: { type: 'string', pattern: '(' } },
+      'its output schema cannot be compiled: SyntaxError: Invalid regular expression: /(/u: Unterminated group', 0],
+  ] as const)('reports a tool that %s as MCP_INVALID_RESULT, redacting the message', async (_label, tool, reason, calls) => {
+    const client = createMockClient([tool], { content: [{ type: 'text', text: 'no structure' }] })
+    await syncTools(client as never, ctx, { ...defaultOpts, redact: text => text.replace('structured', '[redacted]') }, new Map())
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('invalid'), name: 'mcp__srv__structured', arguments: {} })
+    expect(result.error).toEqual({
+      message: `Tool "[redacted]" returned an invalid MCP result: ${reason}`,
+      info: { name: 'McpToolError', code: 'MCP_INVALID_RESULT' },
+    })
+    expect(client.callTool).toHaveBeenCalledTimes(calls)
+  })
+
+  it('reports a validator that throws as MCP_INVALID_RESULT', async () => {
+    const getValidator = vi.spyOn(AjvJsonSchemaValidator.prototype, 'getValidator').mockReturnValue(() => { throw new Error('engine failed') })
+    try {
+      const client = createMockClient(
+        [{ name: 'structured', inputSchema: { type: 'object' }, outputSchema: { type: 'object' } }],
+        { content: [], structuredContent: {} },
+      )
+      await syncTools(client as never, ctx, defaultOpts, new Map())
+      const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('throws'), name: 'mcp__srv__structured', arguments: {} })
+      expect(result.error).toEqual({
+        message: 'Tool "structured" returned an invalid MCP result: structured content could not be validated: Error: engine failed',
+        info: { name: 'McpToolError', code: 'MCP_INVALID_RESULT' },
+      })
+    } finally {
+      getValidator.mockRestore()
+    }
   })
 
   it('falls back to JsonValue for unsupported advertised output schemas', async () => {
@@ -866,12 +907,12 @@ describe('tool execution', () => {
         inputSchema: { type: 'object' },
         outputSchema: { type: 'object', patternProperties: { '^x-': { type: 'string' } } },
       }],
-      { content: [], structuredContent: ['kept', { nested: true }] },
+      { content: [], structuredContent: { 'x-kept': 'kept', nested: { deep: true } } },
     )
     await syncTools(client as never, ctx, defaultOpts, new Map())
     const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('fallback'), name: 'mcp__srv__future-schema', arguments: {} })
     if (result.isError) throw new Error('unsupported MCP output schemas must fall back')
-    expect(result.value).toEqual({ content: [], structuredContent: ['kept', { nested: true }] })
+    expect(result.value).toEqual({ content: [], structuredContent: { 'x-kept': 'kept', nested: { deep: true } } })
   })
 
   it('maps isError to an error result via throw', async () => {

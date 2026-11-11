@@ -19,6 +19,7 @@
     { "path": "../../util/values" },
     { "path": "../../settings/settings" },
     { "path": "../../typert/protocol" },
+    { "path": "../../util/error" },
     { "path": "../../core/tools" },
     { "path": "../../util/brand" },
     { "path": "../../subprocess/subprocess" },
