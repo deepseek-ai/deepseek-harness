@@ -616,6 +616,16 @@ it('reports failed cleanup after waiting for other owners and releasing their Ag
   } finally { release.resolve(); await closing }
 })
 
+it('names the missing field of a request that matches none of its accepted forms', async () => {
+  const f = await setup()
+  const result = await f.execute('click', { appHandle: 'app', windowId: '7', x: 20 })
+  expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
+  const text = JSON.stringify(result.content)
+  expect(text).toContain('params: matches none of the accepted forms')
+  expect(text).toContain('params.y: Invalid input: expected number, received undefined')
+  expect(native.request).not.toHaveBeenCalled()
+})
+
 it('rejects malformed and unowned operations before acquiring a helper', async () => {
   const f = await setup()
   const malformed = await f.execute('screenshot', { pid: 9, windowId: '7' })

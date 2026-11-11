@@ -93,10 +93,25 @@ function executionAgent(execution: Readonly<ToolExecution>): Agent {
   return execution.agent
 }
 
+/**
+ * Describe one request issue for the model. A union that no accepted form matches lists each form's own
+ * issues, so the model learns which field to add or remove, such as a missing `params.y`.
+ * @param issue - one issue from parsing the request.
+ * @param base - path of the value the issue belongs to.
+ * @returns a single-line violation naming the field and the reason.
+ */
+function requestViolation(issue: z.core.$ZodIssue, base: readonly PropertyKey[] = []): string {
+  const path = [...base, ...issue.path]
+  const field = path.map(String).join('.')
+  if (issue.code !== 'invalid_union' || issue.errors.length === 0) return `${field}: ${issue.message}`
+  const forms = issue.errors.map(form => `(${form.map(nested => requestViolation(nested, path)).join('; ')})`)
+  return `${field}: matches none of the accepted forms: ${forms.join(' or ')}`
+}
+
 /** Parse the tool request; refinements the parameter schema cannot express fail as argument errors. */
 function parseRequest<T>(schema: z.ZodType<T>, args: unknown): T {
   const parsed = schema.safeParse(args)
-  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`))
+  if (!parsed.success) throw new ToolArgsError(parsed.error.issues.map(issue => requestViolation(issue)))
   return parsed.data
 }
 
