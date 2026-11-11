@@ -2565,6 +2565,26 @@ it('lists only the named bundles, each as the full listing reports it', async ()
   expect(await manager.listBundles({ names: [] })).toEqual([])
 })
 
+it('still enters a cited step when the profile cannot be read, describing the read failure', async () => {
+  const { ctx, dir, profile } = await fixture('startup')
+  writeFileSync(join(dir, 'package.json'), '{')
+  const id = SessionId('cited-plugin-unreadable')
+  const session = Session.create(id, undefined, { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd: profile.cwd })
+  const agent = { id, ctx, session } as Agent
+  const cited = createUserMessage({
+    source: { kind: 'user' },
+    content: [{ type: 'text', text: `Change ${formatPluginMention({ packageName: 'extra', label: 'Extra' })} please` }],
+  })
+  const decision = await agentEvents(ctx, agent).waterfall('agent/pre-step', {
+    messages: [cited], turn: 1, step: 1, signal: new AbortController().signal, modelSelection: { provider: 'mock', model: 'mock' },
+  }, () => Promise.resolve({ kind: 'enter' as const, messages: [cited] }))
+  if (decision.kind !== 'enter') throw new Error('expected the step to enter')
+  const block = decision.messages[1]?.content[0]
+  if (block?.type !== 'text') throw new Error('expected plugin context text')
+  const payload: unknown = JSON.parse(block.text.split('<referenced-plugins>\n')[1]!.split('\n</referenced-plugins>')[0]!)
+  expect(payload).toMatchObject({ plugins: [{ packageName: 'extra', label: 'Extra', error: 'the profile bundle list could not be read' }] })
+})
+
 it('expands a cited installed bundle into model context before the step', async () => {
   const { ctx, dir, profile } = await fixture('startup')
   const id = SessionId('cited-plugin')

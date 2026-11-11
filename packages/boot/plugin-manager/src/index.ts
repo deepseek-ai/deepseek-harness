@@ -516,11 +516,14 @@ export class PluginManager extends TypertRemoteService {
    */
   @Remote
   listBundles(options?: ListBundlesOptions): Promise<BundleInfo[]> {
-    const bundles = this.readBundles(options?.names === undefined ? undefined : new Set(options.names))
-    return Promise.resolve(bundles.map((bundle) => {
-      const target = updateRefusal(bundle, bundle.name)
-      return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
-    }))
+    // The profile reads throw synchronously; starting from a resolved promise reports that as a rejection.
+    return Promise.resolve().then(() => {
+      const only = options?.names === undefined ? undefined : new Set(options.names)
+      return this.readBundles(only).map((bundle) => {
+        const target = updateRefusal(bundle, bundle.name)
+        return typeof target === 'string' ? bundle : { ...bundle, update: target.kind }
+      })
+    })
   }
 
   /** The bundle inventory before update eligibility; each name is read independently of the others. */
