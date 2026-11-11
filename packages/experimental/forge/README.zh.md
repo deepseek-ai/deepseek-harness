@@ -42,6 +42,8 @@ kind: "package-reference"
 
 提供方可以同时实现 `viewedFiles` 与 `setViewed`。`viewedFiles(ref, headSha, signal)` 在 head 提交 `headSha` 上读取当前登录用户对变更请求各文件的已审阅标记，每个文件为 `viewed`、`unviewed`，或在标记后又有改动时为 `dismissed`，并带 `truncated` 标志；`setViewed(ref, { path, viewed, headSha }, signal)` 仅在 head 仍是 `headSha` 时设置或清除一个文件的标记。两者都把已移动的 head 报告为 `stale`，并像过期的 `diff` 一样立即轮询被监听的变更请求。提供方缺少其中任一方法时，`viewedFiles` 返回 undefined，`setViewed` 返回 `failed` 失败，因此使用方自行保存已审阅标记。
 
+提供方可以实现 `mergeBase(ref, base, head, signal)`，给出变更请求 diff 旧侧所显示文件所在的提交；缺少它时 `ctx.forge.mergeBase` 返回 `unsupported`。托管平台接受一次评审写入、一次评审提交或一个已审阅标记后，注册表以该变更请求和这次变化发出 `forge/review-changed`，无论是哪个插件做的；结果未知、被拒绝、已过时或不支持时不发出。[扩展 API](../../../docs/subsystems/forge.zh.md#extension-api) 列出其他插件可以依赖的内容。
+
 快照携带变更请求的概览。`reviewers` 先列出被请求的评审者，再列出每个账号最近一次评审的结论及其所针对的提交；`closingIssues` 列出变更请求合并时代码托管平台会关闭的 issue；`reviewersTruncated` 与 `closingIssuesTruncated` 标记提供方只读取了部分的列表。`branchUpdates` 列出能让落后于基线的 head 为当前登录用户更新的方式；head 已是最新、存在冲突或不允许更新时为空，因此使用方无法告诉没有更新权限的用户 head 已落后。`canRequestReviews` 与 `canRerunChecks` 说明当前登录用户的权限，每个检查的 `rerun` 指出能重跑它的托管平台运行，否则为 null；指向同一运行的检查一起重跑，且要等其中没有检查仍在进行。
 
 提供方可以实现 `rerunChecks(ref, { headSha }, signal)`，重跑 head 提交 `headSha` 中所在运行没有进行中检查的失败检查；可以同时实现 `requestReviews(ref, { reviewers }, signal)` 与 `reviewerCandidates(ref, query, signal)`，后者列出可以请求评审的账号，托管平台的建议排在最前；还可以实现 `updateBranch(ref, { method, headSha }, signal)`，仅在 head 仍是 `headSha` 时把基线合并或变基进 head。每个操作在托管平台接受后返回 undefined，否则返回 `ForgeActionFailure`，结束后会立即轮询被监听的变更请求。提供方缺少某个操作时，注册表以 `failed` 失败返回且不轮询；除非提供方同时实现两个评审请求方法，`reviewerCandidates` 返回 `unsupported`。
