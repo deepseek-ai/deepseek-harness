@@ -10,14 +10,15 @@ import type { InboundMessage } from '@deepseek-ai/cordis-plugin-im-core'
 import { createTextMode, FakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  ImChatKey, ImMessageKey, type ImConfig, type ImMessageEvent, type ImOutcome,
+  ImChatKey, ImMessageKey, ImSourceId, type ImChat, type ImConfig, type ImMessageEvent,
+  type ImOutcome,
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
 import { ImService } from '../src/index.ts'
 import { imSessionsDomain } from '../src/sessions.ts'
 import { imDomain } from '../src/state.ts'
-import { ImStore } from '../src/store.ts'
+import { ImStore, type ImMessageDraft } from '../src/store.ts'
 import { boot, cleanRoots, COMPOSITION, type SessionsHarness } from './support/sessions-harness.ts'
 
 /** The chat every facade test admits. */
@@ -35,10 +36,11 @@ const booted: Harness[] = []
 
 /**
  * Boot one context with the real plugin mounted as the only IM host.
- * @param options - `retryIntervalMs` to make the maintenance timer observable inside one test.
+ * @param options - `retryIntervalMs` to make the maintenance timer observable inside one test; `beforeMount` to seed
+ *   stored state the way an earlier process leaves it.
  * @returns the context, the mounted `ctx.im` and the platform fake it runs on.
  */
-async function mount(options: { retryIntervalMs?: number } = {}): Promise<Harness> {
+async function mount(options: { retryIntervalMs?: number; beforeMount?: (ctx: Context) => Promise<void> } = {}): Promise<Harness> {
   const retryIntervalMs = options.retryIntervalMs ?? 60_000
   // `withoutStart` leaves the harness's own sessions host inert: this context hosts exactly one IM service.
   const base = await boot({ withoutStart: true, config: { sources: SOURCES, retryIntervalMs } })
@@ -47,6 +49,7 @@ async function mount(options: { retryIntervalMs?: number } = {}): Promise<Harnes
   await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
   // The media bridge only reaches attachments for images it stores; the facade never saves one here.
   ctx.provide('attachments', { saveImages: async () => [] } as never)
+  await options.beforeMount?.(ctx)
   await ctx.plugin(ImService, Config({ sources: SOURCES, retryIntervalMs }))
   const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
   const harness: Harness = { base, service: ctx.im, bot }
@@ -242,6 +245,44 @@ describe('ImService facade', () => {
     })
     // One maintenance tick re-pumps the intake, retries deliveries and sweeps expired records.
     await vi.waitFor(() => { expect(sweeps.length).toBeGreaterThan(0) })
+  })
+
+  it('dispatches a stored message only after every routing plugin is mounted', async () => {
+    // A command a previous process left pending: dispatching it inside this load would run it before the plugins that
+    // listen to `im/message` exist, and it would settle as an ordinary message instead of running the command.
+    const { base, service } = await mount({
+      retryIntervalMs: 20,
+      beforeMount: async (ctx) => {
+        const seeded = new ImStore(ctx, Config({ sources: SOURCES }))
+        await seeded.start()
+        const chat: ImChat = {
+          key: CHAT, bot: 'fake:bot', ref: { id: 'chat', type: 'group' }, source: ImSourceId('team'),
+        }
+        await seeded.touchChat(chat)
+        const draft: ImMessageDraft = {
+          key: ImMessageKey('fake:bot', 'm-pending'),
+          chat,
+          sender: { id: 'user-1', name: 'User', self: false },
+          content: h('message', h.text('/clear')),
+          text: '/clear',
+          mentions: { self: true, all: false, users: [] },
+          addressed: true,
+          command: { name: 'clear', rawInput: '' },
+          time: 1000,
+          via: 'platform',
+        }
+        await seeded.put(draft, 'pending')
+        await seeded.dispose()
+      },
+    })
+    const seen: string[] = []
+    // Mounted after the service, which is how a routing plugin or the session command plugin arrives.
+    base.ctx.on('im/message', async (event) => {
+      seen.push(event.message.key)
+      return { kind: 'handled', by: 'probe' }
+    })
+    await vi.waitFor(() => { expect(service.store.pending()).toHaveLength(0) })
+    expect(seen).toEqual([ImMessageKey('fake:bot', 'm-pending')])
   })
 
   it('unmounts its service when the plugin is disposed', async () => {

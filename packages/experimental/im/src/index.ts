@@ -117,15 +117,21 @@ export class ImService extends Service implements ImApi {
       await this.sessions.start()
       await this.sender.start()
     } catch (error) {
-      // A load that fails halfway releases what it already opened: the domain facility keeps a handle until its owner
-      // closes it, so a crashed load used to leave `im_messages` open and make every later reload fail with
-      // `already-open im_messages` even once the real problem was fixed. Reverse order, and a secondary failure is
-      // reported rather than masking the first one.
-      for (const started of [this.sender, this.sessions, this.store]) {
+      // A load that fails halfway releases what it already opened, newest first: the domain facility keeps a handle
+      // until its owner closes it, so an unfinished load would make every later reload fail with `already-open
+      // im_messages`. The hosted agents are released first because `sessions.start()` opens them, and a secondary
+      // failure is reported rather than masking the first one.
+      const releases: [string, () => Promise<void>][] = [
+        ['the hosted agents', () => this.agentHost.disposeAll()],
+        ['the sender', () => this.sender.dispose()],
+        ['the session records', () => this.sessions.dispose()],
+        ['the message store', () => this.store.dispose()],
+      ]
+      for (const [what, release] of releases) {
         try {
-          await started.dispose()
+          await release()
         } catch (failure: unknown) {
-          ctx.logger.warn('IM shutdown after a failed load did not finish: %s', String(failure))
+          ctx.logger.warn('IM shutdown after a failed load left %s open: %s', what, String(failure))
         }
       }
       throw error
@@ -157,7 +163,9 @@ export class ImService extends Service implements ImApi {
         })
       })
     }
-    this.intake.pump()
+    // Messages a previous run stored are dispatched from the first tick rather than at the end of this load: this
+    // service finishes loading before the plugins that listen to `im/message` (routing strategies, session commands)
+    // start, so an eager pass would hand a pending command to the default dispatcher as an ordinary message.
     this.timer = setInterval(() => {
       this.intake.pump()
       this.sessions.retry()
@@ -251,6 +259,11 @@ export class ImService extends Service implements ImApi {
     if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so message ${id} cannot be read.`)
     if (bot.getMessage === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot read one message by id.`)
     const message = await bot.getMessage(record.ref, id)
+    // The stored branch checks the chat because a message key is per bot; a platform read needs the same check, since
+    // `getMessage` is handed the chat as a routing hint and one bot serves every chat it was added to.
+    if (message.chat.id !== record.ref.id) {
+      throw new ImError('access', `Message ${id} belongs to chat ${message.chat.id}, not ${record.ref.id}.`)
+    }
     const source = admit([...this.sources.values()], bot.id, message)
     if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
     return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')
