@@ -115,10 +115,18 @@ describe('DeepSeekFileStore', () => {
   it('counts overlapping timeouts once and keeps an abandoned response from clearing backoff', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-files-overlap-'))
     roots.push(dir)
-    const now = NOW
-    const remote = uploadFetch(() => now)
+    const remote = uploadFetch()
     const fetch = vi.fn(remote.fetchImpl)
-    const store = new DeepSeekFileStore({ fetch, now: () => now, index: new DeepSeekUploadIndex(join(dir, 'index.json')) })
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const writes = Promise.withResolvers<undefined>()
+    let written = 0
+    const commit = index.commit.bind(index)
+    vi.spyOn(index, 'commit').mockImplementation(async (...args) => {
+      const result = await commit(...args)
+      if (++written === 2) writes.resolve(undefined)
+      return result
+    })
+    const store = new DeepSeekFileStore({ fetch, now: () => NOW, index })
     const stalled = async (variantId: string) => {
       const started = Promise.withResolvers<undefined>()
       const response = Promise.withResolvers<Response>()
@@ -127,22 +135,17 @@ describe('DeepSeekFileStore', () => {
       const controller = new AbortController()
       const pending = store.ensureUploaded(image, CONNECTION, POLICY, controller.signal)
       await started.promise
-      return { image, response, pending, controller }
+      return { response, pending, controller }
     }
-    const first = await stalled('first')
-    const second = await stalled('second')
+    const first = await stalled(`sha256:${'c'.repeat(64)}`)
+    const second = await stalled(`sha256:${'d'.repeat(64)}`)
     for (const upload of [first, second]) {
       const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
       upload.controller.abort(reason)
       await expect(upload.pending).rejects.toBe(reason)
       upload.response.resolve(await remote.fetchImpl(CONNECTION.baseURL, { method: 'POST' }))
     }
-    // A settled index write makes the late responses observable before checking the backoff.
-    await vi.waitFor(async () => {
-      const scope = deepSeekFileScope(CONNECTION.baseURL + '/v1', JSON.stringify(Object.entries(CONNECTION.headers)))
-      const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
-      expect(await index.get(scope, second.image.variantId, now, 0)).toBeDefined()
-    })
+    await writes.promise
     await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
     await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
   })
