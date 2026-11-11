@@ -8,7 +8,7 @@ import { retainDesktopRelease, verifyRetainedDesktopRelease } from '../scripts/d
 
 function fixture() {
   const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), status: 'completed', conclusion: 'success',
-    event: 'workflow_dispatch', path: '.github/workflows/macos-package.yml', repository: { full_name: 'owner/repo' } }
+    event: 'workflow_dispatch', path: '.github/workflows/desktop-package-macos-arm64.yml', repository: { full_name: 'owner/repo' } }
   const jobs = [{ name: 'package', run_attempt: 2, runner_name: 'mini', conclusion: 'success' }]
   const routes = { mini: { label: 'dsh-mini', target: 'mac-arm64' } }
   const calls: string[] = []
@@ -30,7 +30,7 @@ it('pins the latest successful attempt and finds the package job across pages', 
 
 it('routes a Windows package through its own configured machine target', () => {
   const f = fixture()
-  f.run.path = '.github/workflows/windows-package.yml'
+  f.run.path = '.github/workflows/desktop-package-windows-x64.yml'
   const routes = { mini: { label: 'dsh-windows', target: 'win-x64' } }
   expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, routes, f.api)).toMatchObject({ runnerLabel: 'dsh-windows' })
   expect(() => selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api)).toThrow(/no configured/u)
@@ -69,10 +69,11 @@ it.each(['0', '../42', '1\nrunner=x', 'abc'])('rejects malformed package ID %s b
   expect(f.calls).toEqual([])
 })
 
-it('resolves an old locally retained package with publishRequested=false without a GitHub artifact', async () => {
+it.each(['desktop-package-macos-arm64.yml', 'macos-package.yml'])('publishes a locally retained %s build without a GitHub artifact', async (workflow) => {
   const root = await mkdtemp(join(tmpdir(), 'desktop-selection-'))
   try {
     const f = fixture()
+    f.run.path = `.github/workflows/${workflow}`
     const selection = selectDesktopPackage('owner/repo', { package_run_id: '42' }, f.routes, f.api)
     const file = join(root, 'installer.dmg')
     await writeFile(file, 'fixture')
@@ -126,7 +127,7 @@ it('resolves an old locally retained package with publishRequested=false without
 it('routes both Mac architectures to one machine without authorizing an unlisted target', () => {
   const f = fixture()
   const routes = { mini: { label: 'dsh-mini', target: ['mac-arm64', 'mac-x64'] } }
-  for (const path of ['macos-package.yml', 'macos-intel-package.yml']) {
+  for (const path of ['desktop-package-macos-arm64.yml', 'desktop-package-macos-x64.yml']) {
     f.run.path = `.github/workflows/${path}`
     expect(selectDesktopPackage('owner/repo', { package_run_id: '42' }, routes, f.api))
       .toMatchObject({ runnerName: 'mini', runnerLabel: 'dsh-mini' })

@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { resolveDesktopPublishRoute } from '../scripts/desktop-publish-route.ts'
 
 function fixture() {
-  const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), path: '.github/workflows/macos-package.yml',
+  const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), path: '.github/workflows/desktop-package-macos-arm64.yml',
     conclusion: 'success', event: 'workflow_dispatch', repository: { full_name: 'owner/repo' } }
   const source = { repository: 'owner/repo', runId: '42', attempt: '2', commit: run.head_sha, runnerName: 'mini',
     workflowCommit: run.head_sha, sourceRef: 'master', channel: 'nightly',
@@ -80,7 +80,7 @@ it('matches Intel artifacts to the Intel workflow on a machine serving both arch
   f.source.target = 'mac-x64'
   const routes = { mini: { label: 'dsh-mini', target: ['mac-arm64', 'mac-x64'] } }
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes)).toThrow(/does not match/u)
-  f.run.path = '.github/workflows/macos-intel-package.yml'
+  f.run.path = '.github/workflows/desktop-package-macos-x64.yml'
   expect(resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, routes))
     .toMatchObject({ target: 'mac-x64', runnerLabel: 'dsh-mini' })
   expect(() => resolveDesktopPublishRoute('owner/repo', f.run, { source: f.source }, f.jobs, f.routes)).toThrow(/no configured/u)
