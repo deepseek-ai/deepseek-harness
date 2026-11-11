@@ -216,6 +216,28 @@ async function assertFoldResize(toggle: Locator, from: number, to: number): Prom
   expect(sample.middle.width).toBeGreaterThan(Math.min(from, to))
   expect(sample.middle.width).toBeLessThan(Math.max(from, to))
   expect(sample.middle.gap).toBeCloseTo(sample.start.gap, 1)
+  // The sample above finishes this track transition from the page side, and CSS
+  // delivers the matching transitionend in a later rendering update. Give it that
+  // update and wait for the frame to settle before the caller changes the layout
+  // again: an end event from this sample delivered after the next toggle would
+  // settle the new window, drop data-animating and cancel the transition the next
+  // assertFoldResize looks for.
+  await toggle.evaluate(() => new Promise<void>((resolve) => {
+    let frames = 0
+    const tick = () => {
+      frames += 1
+      if (frames >= 2) resolve()
+      else requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+    // A hidden or throttled page may withhold animation frames; the settle poll below
+    // still covers that case through AppFrame's own 600ms fallback.
+    setTimeout(resolve, 2_000)
+  }))
+  await expect.poll(
+    () => toggle.evaluate(button => button.closest('[data-animating]') === null),
+    { timeout: 5_000 },
+  ).toBe(true)
 }
 
 it('overlays the conversation and closes after navigation without losing its sidebar content', async () => {
