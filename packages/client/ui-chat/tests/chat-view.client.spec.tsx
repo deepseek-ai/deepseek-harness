@@ -47,7 +47,7 @@ import { en, zh, pt } from '../src/client/locale.ts'
 import { AssistantNodeView } from '../src/client/chat/AssistantNodeView.tsx'
 import { CommandNodeView, ManualCompactionNodeView } from '../src/client/chat/CommandNodeView.tsx'
 import {
-  CompactionNodeView, ContextMessageNodeView, RetryNodeView, TurnErrorNodeView,
+  CompactionNodeView, ContextMessageNodeView, InheritedHistoryNodeView, RetryNodeView, TurnErrorNodeView,
   TurnMaxTokensNodeView, UnknownNodeView, UserMessageNodeView,
 } from '../src/client/chat/MessageItem.tsx'
 import { TurnTailNodeView } from '../src/client/chat/TurnTailNodeView.tsx'
@@ -355,6 +355,8 @@ function HarnessChatNode({
       return <TurnErrorNodeView {...nodeProps} node={owner.node} />
     case 'turn-max-tokens':
       return <TurnMaxTokensNodeView {...nodeProps} node={owner.node} />
+    case 'inherited-history':
+      return <InheritedHistoryNodeView {...nodeProps} node={owner.node} />
     case 'turn-process':
       return <TurnProcessNodeView {...nodeProps} node={owner.node} />
     case 'system-prompt':
@@ -3705,6 +3707,22 @@ describe('ChatView', () => {
     expect(buttons[0]!.getAttribute('aria-disabled')).toBeNull()
     fireEvent.click(buttons[0]!)
     expect(h.forkAt.mock.calls).toEqual([[3]])
+  })
+
+  it('separates inherited history from the forked Session\'s own messages', () => {
+    const base = chatSnapshotFixture({ nodes: [user(1, 'inherited question'), user(3, 'own question')] })
+    const divider: ChatNode<'inherited-history'> = {
+      key: 'fixture:inherited-history', id: 'inherited-history', target: 'chat', kind: 'inherited-history',
+      anchorSeq: 2, visibility: 'visible', location: { kind: 'session' }, data: {},
+    }
+    const chat = new ChatSnapshotBuilder().replace({ nodes: [...base.nodes.values(), divider], timeline: base.timeline })
+    const h = makeHarness({}, {}, chat)
+    const view = render(<h.ChatView {...h.props} />)
+    const separator = view.getByRole('separator', { name: '以上为继承的历史消息' })
+    const inherited = view.getByText('inherited question')
+    const own = view.getByText('own question')
+    expect(inherited.compareDocumentPosition(separator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(separator.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('disables fork when the indexed Turn has a later steering Node', () => {

@@ -23,6 +23,7 @@ import { commandDefinition } from '../src/client/conversation-nodes/command.ts'
 import { compactionDefinition } from '../src/client/conversation-nodes/compaction.ts'
 import { unknownFallbackDefinition } from '../src/client/conversation-nodes/fallback.ts'
 import { nextStepInboxDefinition, nextTurnInboxDefinition } from '../src/client/conversation-nodes/inbox.ts'
+import { inheritedHistoryDefinition } from '../src/client/conversation-nodes/inherited-history.ts'
 import { developerMessageDefinition, messageDefinition } from '../src/client/conversation-nodes/message.ts'
 import { inspectRequestPrompt } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { requestPromptDefinition, systemMessageDefinition } from '../src/client/conversation-nodes/request-prompt.ts'
@@ -49,6 +50,7 @@ const DEFINITIONS: readonly ConversationNodeDefinition[] = [
   toolDefinition,
   commandDefinition,
   compactionDefinition,
+  inheritedHistoryDefinition,
   retryDefinition,
   turnErrorDefinition,
   turnMaxTokensDefinition,
@@ -2820,6 +2822,54 @@ describe('built-in conversation node Definitions', () => {
     const automatic = node(snapshot(compactions), 'compaction')
     expect(automatic?.data).toMatchObject({ summary: 'automatic summary', summaryEventSeq: 21 })
     expect(snapshot(compactions).nodes.values().filter(candidate => candidate.kind === 'compaction')).toHaveLength(1)
+  })
+
+  it.each(['replace', 'append', 'prepend'] as const)('places one divider at the latest inherited history marker via %s', (mode) => {
+    const entries = [
+      at(0, 'session/end-seed', { inherited: true }),
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('parent', 'parent prompt'), { surfaceOp: 'append' }),
+      at(3, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(4, 'session/end-seed', { inherited: true }),
+      at(5, 'session/end-seed', {}),
+      at(6, 'turn/start', { turn: 2 }),
+      at(7, 'user/message', textMessage('child', 'child prompt'), { surfaceOp: 'append' }),
+    ]
+    const value = assembler(mode === 'replace' ? entries : mode === 'append' ? entries.slice(0, 4) : entries.slice(4), mode === 'prepend')
+    if (mode === 'append') {
+      for (const entry of entries.slice(4)) value.append(entry)
+    } else if (mode === 'prepend') {
+      value.prepend(entries.slice(0, 4), false)
+    }
+    value.flush()
+    const dividers = [...snapshot(value).nodes.values()].filter(candidate => candidate.kind === 'inherited-history')
+    expect(dividers.map(divider => [divider.anchorSeq, divider.location.kind])).toEqual([[4, 'session']])
+  })
+
+  it.each([false, true])('keeps a mid-turn inherited cut outside the Turn process (paginated: %s)', (paginated) => {
+    const entries = [
+      at(0, 'turn/start', { turn: 1 }),
+      at(1, 'user/message', textMessage('parent', 'parent prompt'), { surfaceOp: 'append' }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'session/end-seed', { inherited: true }),
+      at(4, 'turn/end', { turn: 1, reason: { kind: 'forked' } }),
+    ]
+    const value = assembler(paginated ? entries.slice(3) : entries, paginated)
+    if (paginated) {
+      value.prepend(entries.slice(0, 3), false)
+      value.flush()
+    }
+    const divider = node(snapshot(value), 'inherited-history')
+    expect(divider).toMatchObject({ anchorSeq: 3, groupTree: 'turn', location: { kind: 'step' } })
+  })
+
+  it('places no divider in a Session without inherited history', () => {
+    const value = assembler([
+      at(0, 'session/end-seed', {}),
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('own', 'own prompt'), { surfaceOp: 'append' }),
+    ])
+    expect(node(snapshot(value), 'inherited-history')).toBeUndefined()
   })
 
   it('fills a landed compaction marker when an older page supplies its summary', () => {
