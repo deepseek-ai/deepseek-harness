@@ -122,7 +122,7 @@ describe('LocalFileReferenceService', () => {
       const signal = new AbortController().signal
       expect(await ctx.fileReferences.list(agent, '', signal)).toEqual([{ path: 'README.md', kind: 'file' }])
       const original = agent.session.header.cwd
-      await ctx.workingDirectory.relocate(agent, nextRoot, { signal })
+      await ctx.workingDirectory.set(agent, nextRoot, signal)
       expect(await ctx.fileReferences.list(agent, '', signal)).toEqual([{ path: 'NEXT.md', kind: 'file' }])
       expect(agent.session.header.cwd).toBe(original)
     } finally {

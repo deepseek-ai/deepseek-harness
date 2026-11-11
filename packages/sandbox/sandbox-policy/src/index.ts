@@ -293,9 +293,9 @@ export class SandboxPolicyService extends Service {
     ctx.on('session/created', (session) => { this.prewarm(session) })
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'working-directory/change') return
-      // Entering a registered checkout is a trusted point to read its layout again: a root settled
+      // A Host move of the workspace reads the entered root's layout again: a root settled
       // without administration directories may have become a linked worktree since.
-      if (event.data.anchor !== undefined) this.gitAdministration.delete(this.rootOf(session))
+      if (event.data.workspace === true) this.gitAdministration.delete(this.rootOf(session))
       this.prewarm(session)
     })
     ctx.on('tools/pre-execute', async (exec, next) => {
@@ -389,8 +389,8 @@ export class SandboxPolicyService extends Service {
    * pointer is writable under workspace-write. Any other layout, a root without
    * `.git`, and a common directory containing the root add nothing. One
    * derivation runs per root and its result is kept once the layout was read,
-   * so a pointer written later does not widen the policy until the Session
-   * enters a registered checkout again; a derived directory that disappears is
+   * so a pointer written later does not widen the policy until a Host operation
+   * moves a Session's workspace to that root again; a derived directory that disappears is
    * derived again, and a failed read is logged once per root and retried on
    * the next call.
    * @param request - session whose workspace root is inspected, or the root {@link resolve} would select

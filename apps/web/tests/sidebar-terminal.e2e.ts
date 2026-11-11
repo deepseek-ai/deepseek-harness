@@ -263,8 +263,8 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     const sandbox = agent.ctx.get('sandbox')
     if (sandbox === undefined) throw new Error('Session sandbox provider is missing')
     const confine = vi.spyOn(sandbox, 'confine')
-    // A cd inside the root moves the model's current directory, not the checkout a new terminal starts in.
-    await directories.set(agent, child)
+    // A change without the workspace marker, as earlier logs hold, moves the current directory, not the root a new terminal starts in.
+    agent.session.append('working-directory/change', { cwd: child })
 
     await openTerminal(page)
     const firstProcess = processIdentity(0)
@@ -276,8 +276,8 @@ describe.skipIf(process.platform === 'win32')('Web sidebar terminal', () => {
     }
     await checkDirectory('FIRST_DIRECTORY_STATUS', original)
     expect(sandboxPolicy.resolve({ session: agent.session })).toEqual(policy)
-    // Entering another checkout moves the root for later terminals; the earlier one keeps its process directory.
-    const { root: entered } = await directories.relocate(agent, checkout)
+    // A Host move of the workspace moves the root for later terminals; the earlier one keeps its process directory.
+    const entered = await directories.set(agent, checkout)
     await checkDirectory('RETAINED_DIRECTORY_STATUS', original)
 
     await openTerminal(page)

@@ -133,7 +133,7 @@ export interface SessionWorkingDirectoryParams {
   sessionId: string
 }
 
-/** Change one Session's effective directory without changing its origin or permissions. */
+/** Change one Session's effective directory without changing its origin; the workspace-write boundary follows it. */
 export interface SessionWorkingDirectorySetParams extends SessionWorkingDirectoryParams {
   /** Directory to enter; relative paths resolve against the Session's current directory. */
   path: string
@@ -143,8 +143,6 @@ export interface SessionWorkingDirectorySetParams extends SessionWorkingDirector
 export interface SessionWorkingDirectoryResult {
   /** Absolute directory used by future independent operations and new processes. */
   cwd: string
-  /** Absolute workspace root: the checkout `cwd` is in, which file views and the write boundary follow. */
-  root: string
 }
 
 /** Deployment-mapped SDK outcome: `ok` for an accepted result, `error` otherwise. */

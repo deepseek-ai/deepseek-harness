@@ -1,6 +1,6 @@
 /**
- * Creates a new Git branch and checkout, then relocates the calling Session into it as a registered
- * workspace anchor; restores a removed checkout.
+ * Creates a new Git branch and checkout, then changes the calling Session's working directory; returns
+ * the Session to the source checkout; restores a removed checkout.
  */
 
 import { Context, Service, type Volatile } from '@deepseek-ai/cordis'
@@ -15,7 +15,7 @@ import type { Session } from '@deepseek-ai/dsh-session'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { WorktreeReclamation } from './archive.ts'
+import { within, WorktreeReclamation } from './archive.ts'
 import { PREPARE_DIRECTORY } from './directory.ts'
 import { generatedWorktreeName } from './name.ts'
 import { runCommand, scanCommand } from './process.ts'
@@ -208,6 +208,29 @@ export class WorktreeService extends Service {
   }
 
   /**
+   * Return the calling Session from the worktree it works in to the source checkout that worktree was
+   * created from. The worktree is the recorded creation, the Session's own or fork-inherited, with the
+   * longest directory containing the Session's current directory. Its checkout and branch remain.
+   * @param agent - caller whose current directory lies in a recorded worktree.
+   * @param signal - cancellation of directory validation and of the working-directory change.
+   * @returns the worktree the Session left; the Session now works in its `repositoryRoot`.
+   * @throws when no recorded worktree contains the current directory, or the working-directory
+   *   service's error when the source checkout no longer exists.
+   */
+  async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree> {
+    const operationSignal = signal === undefined ? this.lifetime.signal : AbortSignal.any([this.lifetime.signal, signal])
+    operationSignal.throwIfAborted()
+    const cwd = await this.ctx.workingDirectory.ensure(agent, operationSignal)
+    let left: CreatedWorktree | undefined
+    for (const { worktree } of this.projection.stateOf(agent.session).created) {
+      if (within(worktree.path, cwd) && (left === undefined || worktree.path.length >= left.path.length)) left = worktree
+    }
+    if (left === undefined) throw new Error(`worktree: no recorded worktree contains the working directory ${JSON.stringify(cwd)}`)
+    await this.ctx.workingDirectory.set(agent, left.repositoryRoot, operationSignal)
+    return left
+  }
+
+  /**
    * Read the archive cleanup of a Session's created checkout; waiting never
    * starts one. Absent without the Workspace and query providers.
    * @param session - archived Session whose cleanup is read.
@@ -284,7 +307,7 @@ export class WorktreeService extends Service {
       const overrides = await filterOverrides(write, path)
       onPhase?.('checkout')
       await write(path, ['--work-tree', path, 'reset', '--hard', '--no-recurse-submodules', baseCommit], undefined, overrides)
-      const { cwd: canonicalPath } = await this.ctx.workingDirectory.relocate(agent, path, { signal })
+      const canonicalPath = await this.ctx.workingDirectory.set(agent, path, signal)
       const created: CreatedWorktree = { path: canonicalPath, branch, baseCommit, repositoryRoot }
       appendPluginRecord(agent.session, CREATED_RECORD, created)
       return created

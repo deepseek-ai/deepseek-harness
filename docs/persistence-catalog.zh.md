@@ -85,7 +85,7 @@
 | `event:turn/start` | event | `aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8` | [`{ type: "turn/start" }`](#persistence-type-sha256-aa0957eca50aeb28bcd2e6930b95809926edacb550c8c340ba526ba6b861b3d8) |
 | `event:user/message` | event | `50a15408d511e9be3fa93abff37a38ae770f3ab905fc6849fee0d989200d2b97` | [`{ type: "user/message" }`](#persistence-type-sha256-50a15408d511e9be3fa93abff37a38ae770f3ab905fc6849fee0d989200d2b97) |
 | `event:web/deepseek-search-llm-request` | event | `0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52` | [`{ type: "web/deepseek-search-llm-request" }`](#persistence-type-sha256-0c556c9b9f2a96238a6b9bbb99e748206cbff2ed6203041c9571f04ae5802f52) |
-| `event:working-directory/change` | event | `376ab95962d99133db02add3a1dda91a257affb2c2e71e64da139b679d82cb88` | [`{ type: "working-directory/change" }`](#persistence-type-sha256-376ab95962d99133db02add3a1dda91a257affb2c2e71e64da139b679d82cb88) |
+| `event:working-directory/change` | event | `d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a` | [`{ type: "working-directory/change" }`](#persistence-type-sha256-d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a) |
 | `event:workspace/changes` | event | `e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72` | [`{ type: "workspace/changes" }`](#persistence-type-sha256-e308ccf867a5398e316e0af8cb6ce238a8d33a63b9b384c8250a686786285f72) |
 
 ## 事件信封
@@ -1329,14 +1329,15 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
   /** Absolute directory used by subsequent directory-based operations. */
   cwd: string
   /**
-   * Absolute checkout directory this change registers as a workspace anchor of the Session; it contains `cwd`.
-   * Present only when the change enters another checkout, such as a created worktree; an ordinary `cd` omits it.
+   * Present when the change moves the Session's workspace: `cwd` is the workspace root from this
+   * event on. The service sets it on every change it records. A change without it, recorded while
+   * the model could move the directory, moves only the current directory.
    */
-  anchor?: string
+  workspace?: true
 }
 ```
 
-来源：[`packages/session/working-directory/src/index.ts:56`](../packages/session/working-directory/src/index.ts)
+来源：[`packages/session/working-directory/src/index.ts:55`](../packages/session/working-directory/src/index.ts)
 
 ### `workspace/*`
 
@@ -5907,19 +5908,6 @@ SHA-256: `0d47a8f3d847243c4488e755ad4cab7a04ac5d4621b9c81865524cf3f4d8536f`
 |---|---|---|
 | `allowedModels` | 必需 | [`SessionTitleModelIdentity[]`](#persistence-type-sha256-ba77b58995e36f14bb13886b0493d0a1a63d5db10b1a6cd9f6ac65a72cf832ec) |
 
-<a id="persistence-type-sha256-40a4c38943f2e5ee0eaa0ea48238ec425e7900022a4b08e57c8335f0fd6eb435"></a>
-
-### `{ anchor?, cwd }`
-
-SHA-256: `40a4c38943f2e5ee0eaa0ea48238ec425e7900022a4b08e57c8335f0fd6eb435`
-
-来源：[`packages/session/working-directory/src/index.ts:56`](../packages/session/working-directory/src/index.ts)
-
-| 属性 | 存在性 | 类型 |
-|---|---|---|
-| `anchor` | 可选 | `string` |
-| `cwd` | 必需 | `string` |
-
 <a id="persistence-type-sha256-a853902cfab417b8f08aa51ad6855fea46f34ed4588a74e47403035111d0fb86"></a>
 
 ### `{ args?, commandId, name, source }`
@@ -6222,6 +6210,19 @@ SHA-256: `3e4e7683b0192c9f0e6a75c59076108f017892cdb302a98032c2632fd79c356f`
 | `compactionId` | 必需 | `string` |
 | `sourceCommandId` | 可选 | `string` |
 | `turn` | 必需 | [`OptionalSessionSeq`](#persistence-type-sha256-3bd652ebfa8726b3ce3937a4f1bd2759e02f86b3a08a20f9e41a8513656fbc5f) |
+
+<a id="persistence-type-sha256-57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9"></a>
+
+### `{ cwd, workspace? }`
+
+SHA-256: `57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9`
+
+来源：[`packages/session/working-directory/src/index.ts:55`](../packages/session/working-directory/src/index.ts)
+
+| 属性 | 存在性 | 类型 |
+|---|---|---|
+| `cwd` | 必需 | `string` |
+| `workspace` | 可选 | `true` |
 
 <a id="persistence-type-sha256-8ad45ad053b4d89f8865c17cc9ff3b8748e86045f3f0fb816269a34af2619141"></a>
 
@@ -7957,7 +7958,7 @@ SHA-256: `9edc162949abf93bd5ff049191b345454ba104f583937ce5580fb50f067d2b94`
 
 SHA-256: `2235d957bf4b7c6cf959231d480f0ba1f3a6d72d82981493fb6c7c963021d3d5`
 
-来源：[`packages/session/working-directory/src/index.ts:49`](../packages/session/working-directory/src/index.ts)
+来源：[`packages/session/working-directory/src/index.ts:48`](../packages/session/working-directory/src/index.ts)
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
@@ -9379,17 +9380,17 @@ SHA-256: `2d11ca7b0d4493e244b74eba093227866b33249841e59a1e9bf56afed38604c3`
 | `name` | 必需 | `"web_search"` |
 | `type` | 必需 | `"web_search_20250305"` |
 
-<a id="persistence-type-sha256-376ab95962d99133db02add3a1dda91a257affb2c2e71e64da139b679d82cb88"></a>
+<a id="persistence-type-sha256-d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a"></a>
 
 <a id="persistence-type-eventworking-directorychange"></a>
 
 ### `{ type: "working-directory/change" }`
 
-SHA-256: `376ab95962d99133db02add3a1dda91a257affb2c2e71e64da139b679d82cb88`
+SHA-256: `d9faba79a3513ba57fb26dde8fe980b2adfe01bb6be5bab05c3d64f5017c356a`
 
 | 属性 | 存在性 | 类型 |
 |---|---|---|
-| `data` | 必需 | [`{ anchor?, cwd }`](#persistence-type-sha256-40a4c38943f2e5ee0eaa0ea48238ec425e7900022a4b08e57c8335f0fd6eb435) |
+| `data` | 必需 | [`{ cwd, workspace? }`](#persistence-type-sha256-57adfa774e919b1e6924b2fb5afa955872a6be1d373f9e5d956b8d902b278ea9) |
 | `ignorable` | 可选 | `true` |
 | `seq` | 必需 | `number` |
 | `time` | 必需 | `number` |

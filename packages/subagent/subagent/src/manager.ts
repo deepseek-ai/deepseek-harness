@@ -8,7 +8,6 @@
 
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, resolve } from 'node:path'
-import type {} from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
@@ -492,17 +491,14 @@ export class SubagentManager {
     })
   }
 
-  /**
-   * Capture the explicit or inherited directory while the parent still owns startup. The result carries
-   * the canonical spelling the directory service records, so containment against the parent's root sees
-   * the same path a symlinked request denotes; an orchestration fixture without a filesystem keeps it lexical.
-   */
+  /** Capture the explicit directory, or the parent's workspace root, while the parent still owns startup. */
   private async resolveDirectory(request: Pick<SubagentStartRequest, 'parent' | 'cwd'>, signal: AbortSignal): Promise<string> {
-    const lexical = request.cwd !== undefined && isAbsolute(request.cwd)
-      ? request.cwd
-      : resolve(await this.ctx.workingDirectory.ensure(request.parent, signal), request.cwd ?? '.')
-    const fs = this.ctx.get('fs')
-    const cwd = fs === undefined ? lexical : fs.processPath(await fs.resolve(lexical, { signal }))
+    let cwd = request.cwd
+    if (cwd === undefined || !isAbsolute(cwd)) {
+      // Validation can restore the parent's workspace before its root is read.
+      await this.ctx.workingDirectory.ensure(request.parent, signal)
+      cwd = resolve(this.ctx.workingDirectory.rootOf(request.parent.session), cwd ?? '.')
+    }
     signal.throwIfAborted()
     return cwd
   }
@@ -844,9 +840,7 @@ export class SubagentManager {
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
           if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
-          // The child header records the parent's original project; the directory service decides whether
-          // the checkout the parent works in becomes the child's root as well.
-          await workingDirectory.inherit(child, create.parent.session, { cwd: create.cwd, signal: inputs.signal })
+          await workingDirectory.set(child, create.cwd, inputs.signal)
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
         if (inputs.outputSchema !== undefined) {

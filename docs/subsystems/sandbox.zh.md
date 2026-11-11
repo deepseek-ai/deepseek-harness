@@ -261,8 +261,8 @@ overrideOf(session: Session): SandboxMode | undefined
  * pointer is writable under workspace-write. Any other layout, a root without
  * `.git`, and a common directory containing the root add nothing. One
  * derivation runs per root and its result is kept once the layout was read,
- * so a pointer written later does not widen the policy until the Session
- * enters a registered checkout again; a derived directory that disappears is
+ * so a pointer written later does not widen the policy until a Host operation
+ * moves a Session's workspace to that root again; a derived directory that disappears is
  * derived again, and a failed read is logged once per root and retried on
  * the next call.
  * @param request - session whose workspace root is inspected, or the root {@link resolve} would select

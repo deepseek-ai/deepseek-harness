@@ -54,7 +54,7 @@ it('snapshots the worktree the Session entered, lists paths relative to it, and 
   await ctx.plugin(WorkspaceChanges, {} as WorkspaceChanges.Config)
   const session = ctx.sessions.create(SessionId('worktree-turns'), { meta: { cwd: main } })
   const agent = agentFor(ctx, session)
-  await ctx.workingDirectory.relocate(agent, worktree)
+  await ctx.workingDirectory.set(agent, worktree)
 
   // A shell-only edit inside the worktree is a change of the worktree's repository.
   startTurn(session, 1)

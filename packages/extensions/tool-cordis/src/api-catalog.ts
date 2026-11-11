@@ -2797,7 +2797,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async prepare(request: Pick<SandboxPolicyRequest, \'session\' | \'root\'>, signal?: AbortSignal): Promise<readonly string[]>',
-        description: 'Derive the Git administration directories of the session\'s workspace root so the next resolve grants them: a linked checkout\'s `.git` file names `<common>/worktrees/<name>`, whose `commondir` names the repository\'s common directory and whose `gitdir` names the checkout\'s `.git` again; only that layout grants the common directory, since the checkout\'s own `.git` pointer is writable under workspace-write. Any other layout, a root without `.git`, and a common directory containing the root add nothing. One derivation runs per root and its result is kept once the layout was read, so a pointer written later does not widen the policy until the Session enters a registered checkout again; a derived directory that disappears is derived again, and a failed read is logged once per root and retried on the next call.',
+        description: 'Derive the Git administration directories of the session\'s workspace root so the next resolve grants them: a linked checkout\'s `.git` file names `<common>/worktrees/<name>`, whose `commondir` names the repository\'s common directory and whose `gitdir` names the checkout\'s `.git` again; only that layout grants the common directory, since the checkout\'s own `.git` pointer is writable under workspace-write. Any other layout, a root without `.git`, and a common directory containing the root add nothing. One derivation runs per root and its result is kept once the layout was read, so a pointer written later does not widen the policy until a Host operation moves a Session\'s workspace to that root again; a derived directory that disappears is derived again, and a failed read is logged once per root and retried on the next call.',
         parameters: [{ name: 'request', description: 'session whose workspace root is inspected, or the root {@link resolve} would select for the same request.' }, { name: 'signal', description: 'caller cancellation, checked before and after the shared derivation.' }],
         returns: 'the derived directories outside the root, canonical in the execution world.',
       },
@@ -4698,8 +4698,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'workingDirectory',
-    summary: 'One owner for each Session\'s effective directory, its workspace root, and their model-visible changes.',
-    description: 'One owner for each Session\'s effective directory, its workspace root, and their model-visible changes.\n\nThe current directory is the cursor every relative path resolves from. The workspace root is the checkout that cursor is in: the longest registered anchor containing it. Anchors are the original project plus every checkout a relocate entered, so an ordinary set inside the root moves only the cursor, a `set` into another anchor switches the root to that anchor, and a `set` outside every anchor moves the cursor and leaves the root.',
+    summary: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.',
+    description: 'One owner for each Session\'s directory, its workspace root, and their model-visible changes.\n\nA Session works in one directory. Relative paths resolve from it, and it is the workspace root that the write boundary, file views, and discovery follow. Only Host operations move it, through set or the recovery of ensure; every such change moves both. The two differ only in a Session whose log holds a change without the `workspace` marker.',
     methods: [
       {
         signature: 'readonly defaultDirectory: string',
@@ -4716,47 +4716,27 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         signature: 'rootOf(session: Session): string',
         description: 'Read the committed workspace root without filesystem I/O.',
         parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
-        returns: 'the registered anchor containing the current directory, or the deployment default when none is recorded.',
+        returns: 'the directory of the last change that moved the workspace, the original project before any, or the deployment default when none is recorded.',
       },
       {
         signature: 'recordedRootOf(session: Session): string | undefined',
         description: 'Read the recorded workspace root without the deployment fallback and without filesystem I/O.',
         parameters: [{ name: 'session', description: 'Session whose root is requested.' }],
-        returns: 'the longest registered anchor containing the current directory, or undefined while the log registers no anchor; consumers apply their own fallback.',
-      },
-      {
-        signature: 'anchorsOf(session: Session): readonly string[]',
-        description: 'Read the registered workspace anchors without filesystem I/O.',
-        parameters: [{ name: 'session', description: 'Session whose anchors are requested.' }],
-        returns: 'anchors in registration order, the original project first when the header records one.',
+        returns: 'the directory of the last change that moved the workspace, the original project before any, or undefined while the log records neither; consumers apply their own fallback.',
       },
       {
         signature: 'ensure(agent: Agent, signal?: AbortSignal): Promise<string>',
         description: 'Validate the current directory and restore the original project when it disappeared.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'signal', description: 'cancellation for filesystem inspection.' }],
-        returns: 'the existing directory; recovery is committed before fulfillment. A Session without a recorded project records the deployment fallback as its first anchor on its first validation, and a recovery destination outside every anchor joins the anchors. A notice failure is warned without reverting the committed state.',
+        returns: 'the existing directory; recovery is committed before fulfillment and moves the workspace root with the directory. A notice failure is warned without reverting the committed state.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_UNAVAILABLE` when the original project is also unavailable or the service is disposed, or the rejection of a `working-directory/access` listener.'],
       },
       {
         signature: 'set(agent: Agent, path: string, signal?: AbortSignal): Promise<string>',
-        description: 'Change one Session\'s directory without changing existing processes or permissions. The workspace root follows the registered anchors: a path inside the current root keeps it, a path inside another anchor selects that anchor, and a path outside every anchor leaves the root unchanged.',
+        description: 'Move one Session\'s workspace: its current directory and its workspace root become `path`. Existing processes keep their directories. Callers are Host operations that chose the directory; a model-supplied path would move the workspace-write boundary with it.',
         parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'path', description: 'absolute path or a path relative to its current directory.' }, { name: 'signal', description: 'cancellation before the durable change.' }],
         returns: 'the canonical absolute directory, committed before fulfillment. A notice failure is warned; the next request still receives the committed directory.',
         throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path and `WORKING_DIRECTORY_NOT_FOUND` when the path is not an existing directory, or the rejection of a `working-directory/access` listener.'],
-      },
-      {
-        signature: 'relocate(agent: Agent, root: string, options: RelocateOptions = {}): Promise<RelocatedDirectories>',
-        description: 'Enter another checkout: register `root` as a workspace anchor of the Session and move its current directory to `options.cwd`, or to the root itself. One committed event carries both; existing processes and permissions are unchanged.',
-        parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session.' }, { name: 'root', description: 'absolute checkout directory, or a path relative to the current directory.' }, { name: 'options', description: 'directory to enter inside the root and cancellation before the durable change.' }],
-        returns: 'the committed current directory and the workspace root selected after the commit; the registered root is that root unless a more specific anchor already contains the directory. A notice failure is warned; the next request still receives the committed directories.',
-        throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_INVALID` for an empty path or a directory outside the root and `WORKING_DIRECTORY_NOT_FOUND` when either path is not an existing directory.'],
-      },
-      {
-        signature: 'async inherit(agent: Agent, source: Session, options: InheritOptions): Promise<RelocatedDirectories>',
-        description: 'Start a Session\'s directories from another Session\'s. When `source` works in a registered checkout other than the starting Session\'s own original project and `options.cwd` lies inside that checkout, the checkout is registered as the starting Session\'s anchor and `cwd` entered through relocate; otherwise only the current directory is set through set. Only the source\'s current root is passed on, never its other anchors, and later changes to `source` do not reach the starting Session.',
-        parameters: [{ name: 'agent', description: 'live or unpublished Agent owning the Session that starts.' }, { name: 'source', description: 'Session whose current root may be passed on; the call leaves it unchanged.' }, { name: 'options', description: 'canonical absolute directory to start in and cancellation before the durable change.' }],
-        returns: 'the committed current directory and the workspace root selected after the commit.',
-        throws: ['{@link WorkingDirectoryError} `WORKING_DIRECTORY_NOT_FOUND` when `options.cwd` is not an existing directory, or the rejection of a `working-directory/access` listener.'],
       },
     ],
   },
@@ -4993,6 +4973,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Check out a removed worktree again at its recorded directory: its branch when the branch still exists, otherwise a new branch of the same name at `baseCommit`. Only the missing target\'s unlocked registration is removed, and an existing directory fails. Changes that were never committed are not recovered. Checkout disables configured clean, smudge, and process filters, as creation does. The calling Session\'s working directory does not change. Failures may retain newly allocated Git/filesystem artifacts.',
         parameters: [{ name: 'agent', description: 'caller whose sandbox policy confines the commands.' }, { name: 'request', description: 'recorded directory, branch, base commit, and source repository root.' }, { name: 'signal', description: 'cancellation of the restoration.' }, { name: 'onPhase', description: 'receives each stage before it begins; it must not throw.' }],
         returns: 'the directory and whether the branch was created again.',
+      },
+      {
+        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>',
+        description: 'Return the calling Session from the worktree it works in to the source checkout that worktree was created from. The worktree is the recorded creation, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory lies in a recorded worktree.' }, { name: 'signal', description: 'cancellation of directory validation and of the working-directory change.' }],
+        returns: 'the worktree the Session left; the Session now works in its `repositoryRoot`.',
+        throws: ['when no recorded worktree contains the current directory, or the working-directory service\'s error when the source checkout no longer exists.'],
       },
       {
         signature: 'async cleanupOf(session: Session, revision: number | null): Promise<WorktreeCleanup | null>',
@@ -7215,10 +7202,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type IndexInjectionPlacement = \'head\' | \'body\';',
   },
   {
-    name: 'InheritOptions',
-    declaration: 'export interface InheritOptions {\n    cwd: string;\n    signal?: AbortSignal;\n}',
-  },
-  {
     name: 'InspectOptions',
     declaration: 'export interface InspectOptions {\n    readonly registry?: Registry;\n}',
   },
@@ -8417,14 +8400,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'Reload',
     declaration: 'export interface Reload {\n    filename: string;\n    modules: ReloadModules;\n    runtime?: Plugin.Runtime | undefined;\n}',
-  },
-  {
-    name: 'RelocatedDirectories',
-    declaration: 'export interface RelocatedDirectories {\n    root: string;\n    cwd: string;\n}',
-  },
-  {
-    name: 'RelocateOptions',
-    declaration: 'export interface RelocateOptions {\n    cwd?: string;\n    signal?: AbortSignal;\n}',
   },
   {
     name: 'RemoteAccessAction',

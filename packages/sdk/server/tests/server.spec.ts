@@ -236,12 +236,12 @@ describe('HarnessSdkJsonRpcServer', () => {
         .rejects.toThrow('SDK server is not initialized')
       expect(ctx.agents.list()).toEqual([])
       await server.initialize({ cwd: root, provider: 'mock', model: 'mock' })
-      // The header and the root carry the canonical spelling of the configured directory.
+      // The header carries the canonical spelling of the configured directory.
       const canonicalRoot = await realpath(root)
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: canonicalRoot, root: canonicalRoot })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'a' })).resolves.toEqual({ cwd: canonicalRoot })
       const selected = await realpath(child)
-      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected, root: canonicalRoot })
-      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: canonicalRoot, root: canonicalRoot })
+      await expect(server.handleRequest('session/working-directory/set', { sessionId: 'a', path: 'child' })).resolves.toEqual({ cwd: selected })
+      await expect(server.handleRequest('session/working-directory/get', { sessionId: 'b' })).resolves.toEqual({ cwd: canonicalRoot })
       const agent = ctx.agents.get(SessionId('a'))!
       expect(agent.session.header.cwd).toBe(canonicalRoot)
       await server.prompt({ sessionId: 'a', contentBlocks: [{ type: 'text', text: 'where' }] })

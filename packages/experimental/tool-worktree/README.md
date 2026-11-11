@@ -25,7 +25,7 @@ Let a model create and enter a new Git worktree with one call. Web and Desktop e
 <a id="use-this-package"></a>
 ## Use this package
 
-In the GUI, enable [Change requests & worktrees](../forge-bundle/README.md). The standalone bundle has no Plugins page card. Profiles without the Web application may select it in `dsh.profile.bundles`; it loads the [worktree runtime](../worktree/README.md) and this tool together. Turning it off removes `create_worktree` without deleting existing checkouts or branches. The built-in `working_directory` tool remains available.
+In the GUI, enable [Change requests & worktrees](../forge-bundle/README.md). The standalone bundle has no Plugins page card. Profiles without the Web application may select it in `dsh.profile.bundles`; it loads the [worktree runtime](../worktree/README.md) and this tool together. Turning it off removes `create_worktree` and `exit_worktree` without deleting existing checkouts or branches; a Session inside a worktree stays there until a Host operation moves it.
 
 For an explicit composition, mount this function plugin after the worktree runtime and tool registry.
 
@@ -34,7 +34,7 @@ For an explicit composition, mount this function plugin after the worktree runti
 - name: '@deepseek-ai/dsh-experimental-tool-worktree'
 ```
 
-Call `create_worktree({ name?: string, from?: string })`. Success returns the canonical checkout `path`, new `branch`, pinned `baseCommit`, and source `repositoryRoot`, and changes the calling Session's current working directory. To leave, call `working_directory({ cd: path })`; the checkout and branch remain. The [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-worktree) owns the exact schema and model-facing description.
+Call `create_worktree({ name?: string, from?: string })`. Success returns the canonical checkout `path`, new `branch`, pinned `baseCommit`, and source `repositoryRoot`, and changes the calling Session's current working directory. To leave, call `exit_worktree()`: it returns the Session to the source checkout of the worktree it is in and reports that worktree's record; the checkout and branch remain. The [generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-worktree) owns the exact schema and model-facing description.
 
 -----
 
@@ -68,7 +68,7 @@ No runtime invariant companion is published because the tool retains no state in
 
 #### What the model sees
 
-The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-worktree) defines `create_worktree`. Each successful result contains the created checkout's canonical path, branch, base commit, and source checkout’s top-level directory. Failed calls report the operation error.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-experimental-tool-worktree) defines `create_worktree` and `exit_worktree`. Each successful result contains the canonical path, branch, base commit, and source checkout’s top-level directory of the worktree created or left. Failed calls report the operation error.
 
 #### Token effect
 

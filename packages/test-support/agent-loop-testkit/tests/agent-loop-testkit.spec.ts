@@ -102,7 +102,7 @@ describe('dsh-agent-loop-testkit', () => {
     }
   })
 
-  it('supplies fixed directories whose root and only anchor are the recorded directory', async () => {
+  it('supplies fixed directories whose root is the recorded directory', async () => {
     const ctx = new Context()
     provideWorkingDirectoryFixture(ctx, '/fallback')
     const id = SessionId('fixture-recorded')
@@ -113,12 +113,10 @@ describe('dsh-agent-loop-testkit', () => {
     expect(directories.get(recorded)).toBe('/project')
     expect(directories.rootOf(recorded)).toBe('/project')
     expect(directories.recordedRootOf(recorded)).toBe('/project')
-    expect(directories.anchorsOf(recorded)).toEqual(['/project'])
     await expect(directories.ensure({ session: recorded } as never)).resolves.toBe('/project')
     expect(directories.get(unrecorded)).toBe('/fallback')
     expect(directories.rootOf(unrecorded)).toBe('/fallback')
     expect(directories.recordedRootOf(unrecorded)).toBeUndefined()
-    expect(directories.anchorsOf(unrecorded)).toEqual([])
     await ctx.fiber.dispose()
 
     const defaulted = new Context()

@@ -55,7 +55,7 @@ try {
 
 `await harness.resumeSession(savedId)` 从配置的 `dshHome` 恢复持久化会话，并返回可调用 `run()` 的 `HarnessSession`。请保存原会话 id，并沿用其 home 和工作区。恢复会保留对话历史及其目录、修复最后一个被中断的轮次，且不发送新输入。会话缺失、不可读、不兼容或被占用时，请求失败且不创建替代会话。`session(id)` 仍是当前进程内会话的惰性句柄，不会请求持久化恢复。此 API 不恢复 shell、浏览器或其他外部进程。
 
-`HarnessSession.getWorkingDirectory()` 读取有效目录；`getWorkspaceRoot()` 读取该目录所在的工作区根；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。每个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据、权限与已有进程保持不变。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
+`HarnessSession.getWorkingDirectory()` 读取有效目录；`setWorkingDirectory(path)` 修改目录并返回校验后的绝对路径。两个方法都可创建未知 Session，而不启动模型轮次。相对路径以 Session 当前目录解析。起始目录元数据与已有进程保持不变；`workspace-write` 边界移到新目录。`HarnessClient` 提供同名方法，并以 `sessionId` 作为首个参数。
 
 ### 用 DeepSeekHarness 运行 agent 轮次
 

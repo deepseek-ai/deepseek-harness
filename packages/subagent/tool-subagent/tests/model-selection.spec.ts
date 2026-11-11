@@ -92,7 +92,6 @@ describe('dsh-tool-subagent model selection', () => {
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
     expect(Object.keys(props).sort()).toEqual([
-      'cwd',
       'description',
       'model',
       'name',
@@ -125,7 +124,7 @@ describe('dsh-tool-subagent model selection', () => {
     const ctx = await setup({ provider: 'mock', parentAgentOptions: { provider: 'alpha', model: 'parent-model' } })
     const schema = ctx.tools.schemas().find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'name', 'prompt'])
+    expect(Object.keys(props).sort()).toEqual(['description', 'name', 'prompt'])
     expect(schema.description).not.toContain('list_subagent_models')
     expect(ctx.tools.get('list_subagent_models')).toBeUndefined()
 
@@ -186,7 +185,7 @@ describe('dsh-tool-subagent model selection', () => {
     const agent = modelSelectionSetupAgent(ctx)
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'model', 'name', 'prompt', 'provider', 'reasoning_effort'])
+    expect(Object.keys(props).sort()).toEqual(['description', 'model', 'name', 'prompt', 'provider', 'reasoning_effort'])
     expect(schema.description).not.toContain('list_subagent_models')
     expect(schema.description).not.toContain('Changing the route can prevent provider-side reuse')
     expect(ctx.tools.get('list_subagent_models', agent)).toBeDefined()
@@ -587,7 +586,7 @@ describe('dsh-tool-subagent model selection', () => {
     })
     const schema = ctx.tools.schemas(agent).find(entry => entry.name === 'subagent')!
     const props = (schema.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['cwd', 'description', 'name', 'prompt'])
+    expect(Object.keys(props).sort()).toEqual(['description', 'name', 'prompt'])
     expect(schema.description).toContain('inherits this conversation')
     expect(schema.description).not.toContain('list_subagent_models')
     expect(ctx.tools.get('list_subagent_models', agent)).toBeUndefined()

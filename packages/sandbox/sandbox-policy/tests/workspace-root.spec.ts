@@ -91,10 +91,12 @@ describe('workspace root as the write boundary', () => {
     const agent = agentFor(ctx, session)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 
-    await ctx.workingDirectory.set(agent, join(repo, '.agents'))
+    // A change without the workspace marker, as earlier logs hold, moves the directory and keeps the boundary.
+    session.append('working-directory/change', { cwd: join(repo, '.agents') })
+    expect(ctx.workingDirectory.get(session)).toBe(join(repo, '.agents'))
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(repo)
 
-    await ctx.workingDirectory.relocate(agent, worktree)
+    await ctx.workingDirectory.set(agent, worktree)
     expect(ctx.sandboxPolicy.resolve({ session }).workspaceRoot).toBe(worktree)
     // An agentless tool execution has no root to prepare and passes through.
     await ctx.waterfall('tools/pre-execute', { signal: new AbortController().signal } as never, () => Promise.resolve(undefined as never))
@@ -159,7 +161,7 @@ describe('Git administration directories of a linked checkout', () => {
     expect(ctx.sandboxPolicy.resolve()).toEqual({ mode: 'workspace-write', workspaceRoot: base, additionalWritableRoots: [extra] })
   })
 
-  it('settles a root once its layout was read and reads it again only when a Session enters a registered checkout', async () => {
+  it('settles a root once its layout was read and reads it again only when a Host operation moves a workspace into it', async () => {
     const { base, repo } = await scratch()
     const { ctx } = await mounted(base)
     const plain = ctx.sessions.create(SessionId('plain'), { meta: { cwd: repo } })
@@ -175,9 +177,9 @@ describe('Git administration directories of a linked checkout', () => {
     expect(await ctx.sandboxPolicy.prepare({ session: early })).toEqual([])
     expect(ctx.sandboxPolicy.resolve({ session: early }).additionalWritableRoots).toBeUndefined()
 
-    // Entering the checkout as a registered anchor is the trusted point that reads its layout again.
+    // A Host move of a workspace into the checkout reads its layout again.
     const entering = ctx.sessions.create(SessionId('entering'), { meta: { cwd: repo } })
-    await ctx.workingDirectory.relocate(agentFor(ctx, entering), later)
+    await ctx.workingDirectory.set(agentFor(ctx, entering), later)
     expect(await ctx.sandboxPolicy.prepare({ session: entering })).toEqual([join(repo, '.git')])
     expect(await ctx.sandboxPolicy.prepare({ session: early })).toEqual([join(repo, '.git')])
   })

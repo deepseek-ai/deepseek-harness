@@ -369,8 +369,6 @@ class SkillOutput(TypedDict):
     content: str
 
 class SubagentArgs(TypedDict):
-    # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
-    cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
     # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
@@ -384,8 +382,6 @@ class SubagentOutput(TypedDict):
     name: str
 
 class SubagentForkArgs(TypedDict):
-    # Initial child working directory. Relative paths use your current directory; omitted inherits it. Later directory changes in either agent are independent.
-    cwd: NotRequired[str]
     # A short (3-5 word) description of the delegated task, for display. Use the language of the user's current request.
     description: str
     # Optional short name for the subagent, unique among the subagents you create: lower-case letters, digits, and hyphens, starting with a letter, at most 32 characters; lead is reserved for the root agent. Omitted names default to agent-1, agent-2, and so on.
@@ -501,15 +497,6 @@ class WebSearchOutput(TypedDict):
     sources: list[WebSearchOutputSources]
     truncated: bool
 
-class WorkingDirectoryArgs(TypedDict):
-    # Existing directory to enter. Omit to read the current directory.
-    cd: NotRequired[str]
-    # Additional keys beyond those declared are allowed.
-
-class WorkingDirectoryOutput(TypedDict):
-    # Current absolute working directory.
-    cwd: str
-
 class WriteArgs(TypedDict):
     # Path to write, resolved by the filesystem backend. Provide `file_path` before `content` in the arguments.
     file_path: str
@@ -573,8 +560,6 @@ class Tools(Protocol):
         """Fetch the content of a specific HTTP(S) URL and return it decoded to text."""
     async def web_search(self, args: WebSearchArgs) -> WebSearchOutput:
         """Search the web for current information. Returns an optional summary answer and a list of source URLs."""
-    async def working_directory(self, args: WorkingDirectoryArgs) -> WorkingDirectoryOutput:
-        """Read the current working directory, or change it with cd. Relative paths use the current directory. Existing shells and running processes keep their own directories."""
     async def write(self, args: WriteArgs) -> WriteOutput:
         """Create or fully replace a UTF-8 text file."""
 

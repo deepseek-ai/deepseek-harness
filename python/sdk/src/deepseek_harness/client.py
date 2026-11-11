@@ -249,17 +249,8 @@ class HarnessClient:
         )
         return response.cwd
 
-    def get_workspace_root(self, session_id: str) -> str:
-        """Read the workspace root the effective directory is in, recovering a missing directory first."""
-        response = self.request(
-            "session/working-directory/get",
-            {"sessionId": session_id},
-            response_model=_WorkingDirectoryResponse,
-        )
-        return response.root
-
     def set_working_directory(self, session_id: str, path: str) -> str:
-        """Enter an absolute or Session-relative directory without changing origin or permissions."""
+        """Enter an absolute or Session-relative directory; the origin is unchanged and the write boundary follows."""
         response = self.request(
             "session/working-directory/set",
             {"sessionId": session_id, "path": path},
@@ -726,7 +717,6 @@ class _SessionPromptResponse(BaseModel):
 
 class _WorkingDirectoryResponse(BaseModel):
     cwd: str
-    root: str
 
 
 class _EmptyResponse(BaseModel):
