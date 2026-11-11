@@ -587,7 +587,7 @@ function pluginToolFailure(error: unknown): PluginToolError {
   let code: unknown
   try {
     code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined
-  } catch {
+  } catch (_codeReadTrapped) {
     // A trapped `code` read carries no usable code; the message alone describes the failure.
   }
   return new PluginToolError(typeof code === 'string' ? `${message} (code ${code})` : message, 'PLUGIN_TOOL_FAILED', { cause: error })
