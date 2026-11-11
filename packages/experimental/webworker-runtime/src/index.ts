@@ -43,7 +43,7 @@ export {
 } from './image-manifest.ts'
 export {
   parsePreviewFixtureManifest, PREVIEW_FIXTURE_MANIFEST_FILE, PREVIEW_FIXTURE_MANIFEST_VERSION,
-  type PreviewFixtureManifest, type PreviewFixtureManifestEntry,
+  type PreviewFixtureManifest, type PreviewFixtureManifestEntry, type PreviewLink,
 } from './fixture-manifest.ts'
 export { loadVfsImage, loadVfsOverlay, MemoryVfs } from './storage/memory.ts'
 export { inflateImage, inflateImageStream } from './storage/image-gzip.ts'

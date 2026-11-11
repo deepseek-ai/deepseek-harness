@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { SpillLocator } from '@deepseek-ai/dsh-spill'
+import type { SpillLocator } from '@deepseek-ai/dsh-spill'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { formatSpillNotice, hasSpillNotice } from '../src/notice.ts'
 
-const ref = { locator: SpillLocator('/spill/output.txt'), retrievalHint: 'Read the file.' }
+const ref = { locator: brandString<SpillLocator>('/spill/output.txt'), retrievalHint: 'Read the file.' }
 
 describe('persisted spill notice', () => {
   it('preserves the historical spelling independently of the formatter', () => {
@@ -30,7 +31,7 @@ describe('persisted spill notice', () => {
 
   it('keeps locator and retrieval text opaque, including parentheses and newlines', () => {
     const notice = formatSpillNotice({ kind: 'exact', count: 42 }, {
-      locator: SpillLocator('/spill/报告 (1).txt'), retrievalHint: 'Read it.\n\n(additional guidance)',
+      locator: brandString<SpillLocator>('/spill/报告 (1).txt'), retrievalHint: 'Read it.\n\n(additional guidance)',
     })
     expect(hasSpillNotice(notice)).toBe(true)
     expect(hasSpillNotice(`preview\n\n${notice}`)).toBe(true)

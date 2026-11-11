@@ -9,15 +9,17 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import AttachmentStore from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import { LlmAdapter, LlmRuntime, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, LlmRuntime, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk, ImageBlock, LlmImageRequestPricing, LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import { deepSeekImageTokens } from '@deepseek-ai/dsh-llm-deepseek'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -40,7 +42,7 @@ class TestAttachments extends AttachmentStore {
   validateImage(): Promise<void> { return Promise.resolve() }
   async saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef> {
     const ref: ImageAttachmentRef = {
-      attachmentId: AttachmentId(`sha256:${String(++this.ordinal).padStart(64, '0')}`),
+      attachmentId: brandString<AttachmentId>(`sha256:${String(++this.ordinal).padStart(64, '0')}`),
       mediaType: input.mediaType, bytes: input.data.byteLength, width: 1, height: 1,
     }
     await writeFile(this.imageHostPath(ref), input.data, { flag: 'wx' })
@@ -86,10 +88,10 @@ async function setup(content: JsonValue[], maxInlineTokens: number, mode: 'nativ
     name: 'inspect', rawName: 'inspect', description: 'Return text and screenshots',
     inputSchema: { type: 'object' }, call: async () => ({ content }),
   }))
-  const session = Session.create(SessionId('mixed-spill'))
+  const session = Session.create(brandString<SessionId>('mixed-spill'))
   const agent = { ctx, session, options: { provider: 'vision', model: 'vision' } } as Agent
   const execute = (name = 'inspect') => executeModelToolFixture(ctx, {
-    signal: new AbortController().signal, callId: ToolCallId('mixed-call'), name,
+    signal: new AbortController().signal, callId: brandString<ToolCallId>('mixed-call'), name,
     arguments: name === 'run_code' ? { code: 'return await tools.inspect({})', description: 'Inspect a window' } : {}, agent,
   })
   return { ctx, execute, session, fsFiber }
@@ -169,7 +171,7 @@ describe('multimodal spill', () => {
     }))
     const warning = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const result = await executeToolFixture(ctx, { signal: new AbortController().signal,
-      callId: ToolCallId('offline'), name: 'offline_image', arguments: {} })
+      callId: brandString<ToolCallId>('offline'), name: 'offline_image', arguments: {} })
     expect(result.content).toEqual([{ type: 'image', attachment }])
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('no image token calculator'))
   })

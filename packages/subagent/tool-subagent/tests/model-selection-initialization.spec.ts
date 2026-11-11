@@ -2,9 +2,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const ALLOWED_MODELS = [{ provider: 'alpha', model: 'fast-model' }]
 
@@ -36,7 +37,7 @@ async function setup() {
 describe('SubagentModelSelectionConfig activation', () => {
   it('records the policy for an Agent announced while registration is pending', async () => {
     const { ctx, fiber, release, announcing } = await setup()
-    const creation = ctx.agents.create({ sessionId: SessionId('during-policy-activation') })
+    const creation = ctx.agents.create({ sessionId: brandString<SessionId>('during-policy-activation') })
     await announcing
     release.resolve(undefined)
     const { agent } = await creation
@@ -48,7 +49,7 @@ describe('SubagentModelSelectionConfig activation', () => {
 
   it.each(['dispose', 'reject'] as const)('rejects Agent publication when policy activation ends with %s', async (ending) => {
     const { ctx, fiber, release, announcing } = await setup()
-    const id = SessionId('failed-policy-activation')
+    const id = brandString<SessionId>('failed-policy-activation')
     const creation = ctx.agents.create({ sessionId: id })
     const rejected = expect(creation).rejects.toThrow()
     await announcing

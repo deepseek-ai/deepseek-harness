@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { AgentTerminalError } from '@deepseek-ai/dsh-api-terminal-controller'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
-import { TerminalBackendCleanupError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { TerminalBackendCleanupError, type TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import { Config } from '../src/config.ts'
 import { PanelTerminalBackend, SUBAGENT_REFUSAL, startup } from '../src/backend.ts'
 import { POLICY_CHANGED } from '../src/session.ts'
@@ -29,7 +30,7 @@ describe('spawn', () => {
   it('opens the terminal under the Session policy and returns it after the shell reaches its prompt', async () => {
     const { terminal, services, backend: panel } = backend()
     const owner = agentFor(new Context(), 'session')
-    const spawning = panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner, type: 'shell', name: 'dev server', cwd: '/workspace/app' })
+    const spawning = panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner, type: 'shell', name: 'dev server', cwd: '/workspace/app' })
     await vi.advanceTimersByTimeAsync(50)
     terminal.output('%')
     await vi.advanceTimersByTimeAsync(300)
@@ -46,7 +47,7 @@ describe('spawn', () => {
   it('checks each send against the policy the Session resolves at that moment', async () => {
     const { terminal, services, backend: panel } = backend()
     const owner = agentFor(new Context(), 'session')
-    const spawning = panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner, type: 'shell' })
+    const spawning = panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner, type: 'shell' })
     await vi.advanceTimersByTimeAsync(300)
     const session = await spawning
     services.policy.mockReturnValue({ ...policy, mode: 'read-only' })
@@ -57,7 +58,7 @@ describe('spawn', () => {
 
   it('titles an unnamed terminal with its registry id and leaves the directory to the controller', async () => {
     const { terminal, services, backend: panel } = backend()
-    const spawning = panel.spawn({ sessionId: TerminalSessionId('pty-2'), owner: agentFor(new Context(), 'session'), type: 'shell' })
+    const spawning = panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-2'), owner: agentFor(new Context(), 'session'), type: 'shell' })
     await vi.advanceTimersByTimeAsync(0)
     terminal.output('$ ')
     await vi.advanceTimersByTimeAsync(300)
@@ -68,7 +69,7 @@ describe('spawn', () => {
 
   it('refuses subagents before opening anything', async () => {
     const { services, backend: panel } = backend()
-    await expect(panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'child', { subagent: true }), type: 'shell' }))
+    await expect(panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner: agentFor(new Context(), 'child', { subagent: true }), type: 'shell' }))
       .rejects.toThrow(SUBAGENT_REFUSAL)
     expect(services.open).not.toHaveBeenCalled()
   })
@@ -76,7 +77,7 @@ describe('spawn', () => {
   it('closes the terminal when startup fails and reports a failed cleanup with the cause', async () => {
     const failed = backend()
     failed.terminal.screen = ['']
-    const spawning = failed.backend.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell' })
+    const spawning = failed.backend.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell' })
     const rejected = expect(spawning).rejects.toThrow('did not reach its prompt within 5000 ms')
     await vi.advanceTimersByTimeAsync(5000)
     await rejected
@@ -85,7 +86,7 @@ describe('spawn', () => {
     const stuck = backend()
     stuck.terminal.close.mockRejectedValueOnce(new Error('cleanup failed'))
     const abort = new AbortController()
-    const cancelled = stuck.backend.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell', signal: abort.signal })
+    const cancelled = stuck.backend.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell', signal: abort.signal })
     await vi.advanceTimersByTimeAsync(0)
     abort.abort(new Error('tool call cancelled'))
     const error = await cancelled.catch((reason: unknown) => reason)
@@ -96,7 +97,7 @@ describe('spawn', () => {
   it('leaves a terminal the person took over during startup open', async () => {
     const { terminal, backend: panel } = backend()
     terminal.close.mockRejectedValueOnce(new AgentTerminalError('user-control', 'The user has taken over this terminal'))
-    const spawning = panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell' })
+    const spawning = panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell' })
     const rejected = expect(spawning).rejects.toThrow('exited during startup')
     await vi.advanceTimersByTimeAsync(0)
     terminal.update({ state: 'exited', exitCode: 1 })
@@ -106,7 +107,7 @@ describe('spawn', () => {
 
   it('rejects an already cancelled request', async () => {
     const { services, backend: panel } = backend()
-    await expect(panel.spawn({ sessionId: TerminalSessionId('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell', signal: AbortSignal.abort(new Error('gone')) }))
+    await expect(panel.spawn({ sessionId: brandString<TerminalSessionId>('pty-1'), owner: agentFor(new Context(), 'session'), type: 'shell', signal: AbortSignal.abort(new Error('gone')) }))
       .rejects.toThrow('gone')
     expect(services.open).not.toHaveBeenCalled()
   })

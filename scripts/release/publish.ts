@@ -187,7 +187,7 @@ export async function publishRelease(familyId: string, directory: string, distTa
     return { tarball, ...packedIdentity(tarball) }
   })
   for (const member of order) {
-    if (member.name !== '@deepseek-ai/dsh-experimental-cua-macos') continue
+    if (member.name !== '@deepseek-ai/dsh-cua-macos') continue
     await verifyCuaHelperTarball(member.tarball, { sourceDigest: cuaHelperSourceDigest(resolve(import.meta.dirname, '../..')) })
   }
   if (distTag !== undefined) {

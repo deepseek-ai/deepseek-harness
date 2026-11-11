@@ -28,6 +28,33 @@
   padding: 2px 0;
 }
 
+/* Inherited-history divider: a hairline split by a centered caption. The
+   bottom padding approaches the inter-turn space above it, so the divider
+   does not read as the next message's header. */
+.inheritedHistoryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 20px;
+}
+
+.inheritedHistoryLine {
+  flex: 1 1 0;
+  min-width: 16px;
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+}
+
+.inheritedHistoryLabel {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Compaction marker: one 24px row with a context icon at rest and a
    hover/focus disclosure for the summary body. */
 .compactionRow {

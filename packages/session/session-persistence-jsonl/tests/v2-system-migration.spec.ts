@@ -1,6 +1,7 @@
-import { freezeMessage, MessageId } from '@deepseek-ai/dsh-llm'
+import { freezeMessage, type MessageId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
-import { SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
@@ -11,7 +12,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { generationLogPath } from '../src/format.ts'
 
-const id = SessionId('v2-system-migration')
+const id = brandString<SessionId>('v2-system-migration')
 const config = { provider: 'mock', model: 'mock' }
 let root: string
 const contexts: Context[] = []
@@ -223,7 +224,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       session.append('step/start', { turn: 2, step: 1 })
       session.append('system/message', {
         turn: 2, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('resumed-system'), content: [{ type: 'text', text: 'resumed prompt' }], source: { kind: 'system-prompt' } }),
+        message: freezeMessage({ role: 'system', id: brandString<MessageId>('resumed-system'), content: [{ type: 'text', text: 'resumed prompt' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: { op: 'replace', startSeq: SessionSeq(4), endSeq: SessionSeq(4) }, sourceEventSeqs: [SessionSeq(4)] })
       session.append('step/end', { turn: 2, step: 1 })
       session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
@@ -277,12 +278,12 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
       session.append('step/start', { turn: 1, step: 1 })
       session.append('system/message', {
         turn: 1, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('head'), content: [{ type: 'text', text: 'head prompt' }], source: { kind: 'system-prompt' } }),
+        message: freezeMessage({ role: 'system', id: brandString<MessageId>('head'), content: [{ type: 'text', text: 'head prompt' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: 'append' })
-      session.append('user/message', freezeMessage({ role: 'user', id: MessageId('question'), content: human.content, source: { kind: 'user' } }), { surfaceOp: 'append' })
+      session.append('user/message', freezeMessage({ role: 'user', id: brandString<MessageId>('question'), content: human.content, source: { kind: 'user' } }), { surfaceOp: 'append' })
       session.append('system/message', {
         turn: 1, step: 1,
-        message: freezeMessage({ role: 'system', id: MessageId('context'), content: [{ type: 'text', text: 'tail context' }], source: { kind: 'system-prompt' } }),
+        message: freezeMessage({ role: 'system', id: brandString<MessageId>('context'), content: [{ type: 'text', text: 'tail context' }], source: { kind: 'system-prompt' } }),
       }, { surfaceOp: 'append' })
       session.append('step/end', { turn: 1, step: 1 })
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })

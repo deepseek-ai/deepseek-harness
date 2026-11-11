@@ -1,10 +1,11 @@
 import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, type ToolCallId  } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
-  SessionId,
+  type SessionId,
   type SessionEvent,
   type TurnEndReason,
   type UserMessage,
@@ -79,7 +80,7 @@ describe('agent/pre-step', () => {
   it('enter (default via next) records the user/message unchanged', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     const seen: string[] = []
     ctx.on('agent/pre-step', async ({ messages }, next) => {
@@ -107,7 +108,7 @@ describe('agent/pre-step', () => {
       parameters: { text: { type: 'string', required: true } },
       execute: async ({ text }) => [{ type: 'text', text }],
     }))
-    const agent = await ctx.agentLoop.create(SessionId('prompt-coordinates'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('prompt-coordinates'), { provider: 'mock', model: 'mock' })
     const seen: Array<{ turn: number; step: number; messages: number }> = []
     ctx.on('agent/pre-step', async ({ messages, turn, step }, next) => {
       seen.push({ turn, step, messages: messages.length })
@@ -126,7 +127,7 @@ describe('agent/pre-step', () => {
   it('publishes frozen input without replacing its identity', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('owned-input'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('owned-input'), { provider: 'mock', model: 'mock' })
     const entered = Promise.withResolvers<undefined>()
     const decision = Promise.withResolvers<PreStepDecision>()
     const observed: UserMessage[] = []
@@ -178,7 +179,7 @@ describe('agent/pre-step', () => {
   it('enter with content rewrites the prompt before it is recorded', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('agent/pre-step', async ({ messages }): Promise<PreStepDecision> =>
       ({
@@ -199,7 +200,7 @@ describe('agent/pre-step', () => {
   it('enter with additional messages records separately sourced context in the turn', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('agent/pre-step', async ({ messages }): Promise<PreStepDecision> =>
       ({
@@ -226,7 +227,7 @@ describe('agent/pre-step', () => {
   it('does not open another step when a completed turn rewrites pending input to empty', async () => {
     const adapter = new MockAdapter([textResponse('done')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('empty-completed-continuation'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('empty-completed-continuation'), {
       provider: 'mock',
       model: 'mock',
     })
@@ -253,7 +254,7 @@ describe('agent/pre-step', () => {
   it('reject closes the claimed prompt turn without a step or model call', async () => {
     const adapter = new MockAdapter([textResponse('should not run')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('agent/pre-step', async (): Promise<PreStepDecision> => ({ kind: 'reject' }))
 
@@ -276,7 +277,7 @@ describe('agent/pre-step', () => {
   it('stages inject and steer during pre-step for the entered turn', async () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('pre-step-outbox'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('pre-step-outbox'), { provider: 'mock', model: 'mock' })
     const entered = Promise.withResolvers<undefined>()
     const decision = Promise.withResolvers<PreStepDecision>()
     let claimed: UserMessage[] = []
@@ -338,7 +339,7 @@ describe('agent/pre-step', () => {
   it('preserves input staged after the blocked batch was claimed', async () => {
     const adapter = new MockAdapter([textResponse('retried')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('blocked-pre-step-outbox'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('blocked-pre-step-outbox'), { provider: 'mock', model: 'mock' })
     const entered = Promise.withResolvers<undefined>()
     const decision = Promise.withResolvers<PreStepDecision>()
     const disposeBlock = ctx.on('agent/pre-step', async () => {
@@ -388,7 +389,7 @@ describe('agent/pre-step', () => {
       textResponse('wake reply'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('rejected-pre-step-order'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('rejected-pre-step-order'), {
       provider: 'mock',
       model: 'mock',
     })
@@ -443,7 +444,7 @@ describe('agent/pre-step', () => {
   it('preserves context-only injection staged after pre-step began', async () => {
     const adapter = new MockAdapter([textResponse('continued')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('rejected-pre-step-context'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('rejected-pre-step-context'), { provider: 'mock', model: 'mock' })
     const entered = Promise.withResolvers<undefined>()
     const decision = Promise.withResolvers<PreStepDecision>()
     const disposeBlock = ctx.on('agent/pre-step', async () => {
@@ -478,7 +479,7 @@ describe('agent/pre-step', () => {
   it('leaves inbox state unchanged when its durable append fails', async () => {
     const adapter = new MockAdapter([])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('rejected-pre-step-append-failure'), {
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('rejected-pre-step-append-failure'), {
       provider: 'mock',
       model: 'mock',
     })
@@ -501,7 +502,7 @@ describe('agent/pre-step', () => {
       textResponse('wake reply'),
     ])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('agent/pre-step', async ({ messages }, next): Promise<PreStepDecision> => {
       const text = messages.flatMap(message => message.content)
@@ -537,7 +538,7 @@ describe('agent/pre-step', () => {
   it('a throwing pre-step listener reports the driver error and retains adjacent work', async () => {
     const adapter = new MockAdapter([textResponse('after')])
     const ctx = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     let threw = false
     ctx.on('agent/pre-step', async ({ messages }) => {
@@ -582,7 +583,7 @@ describe('agent/created', () => {
     const sources: SessionStartSource[] = []
     ctx.on('agent/created', ({ source }) => void sources.push(source))
 
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     expect(sources).toEqual(['startup'])
     expect(events(agent).some(e => e.type === 'turn/start')).toBe(false)
 
@@ -599,7 +600,7 @@ describe('agent/created', () => {
       agent.inject(createUserMessage({ content: [{ type: 'text', text: 'session preamble' }], source: { kind: 'test' } }))
     })
 
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
@@ -617,7 +618,7 @@ describe('agent/created', () => {
     const reason = new Error('creation hook broke')
     ctx.on('agent/created', () => { throw reason })
 
-    await expect(ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })).rejects.toBe(reason)
+    await expect(ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })).rejects.toBe(reason)
     expect(ctx.agents.list()).toEqual([])
     expect(ctx.sessions.list()).toEqual([])
     expect(adapter.requests).toHaveLength(0)
@@ -629,9 +630,9 @@ describe('tool additionalContexts buffering across a step', () => {
     // One assistant step with TWO tool calls; the second model response stops.
     const twoCalls = [
       { type: 'block-start' as const, index: 0, blockType: 'tool-call' as const },
-      { type: 'block-end' as const, index: 0, block: { type: 'tool-call' as const, id: ToolCallId('c1'), name: 'echo', arguments: '{"text":"a"}' } },
+      { type: 'block-end' as const, index: 0, block: { type: 'tool-call' as const, id: brandString<ToolCallId>('c1'), name: 'echo', arguments: '{"text":"a"}' } },
       { type: 'block-start' as const, index: 1, blockType: 'tool-call' as const },
-      { type: 'block-end' as const, index: 1, block: { type: 'tool-call' as const, id: ToolCallId('c2'), name: 'echo', arguments: '{"text":"b"}' } },
+      { type: 'block-end' as const, index: 1, block: { type: 'tool-call' as const, id: brandString<ToolCallId>('c2'), name: 'echo', arguments: '{"text":"b"}' } },
       { type: 'usage' as const, usage: { inputTokens: 5, outputTokens: 5 } },
       { type: 'finish' as const, reason: { kind: 'tool-calls' as const } },
     ]
@@ -641,7 +642,7 @@ describe('tool additionalContexts buffering across a step', () => {
       name: 'echo', description: 'echo', parameters: { text: { type: 'string' } },
       async execute(args) { return [{ type: 'text', text: String(args.text) }] },
     }))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     // Each call attaches one context naming itself.
     ctx.on('tools/post-execute', async (exec, _result): Promise<PostToolDecision> =>
@@ -688,7 +689,7 @@ describe('tool additionalContexts buffering across a step', () => {
         return [{ type: 'text', text: 'outer result' }]
       },
     }))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)
@@ -714,7 +715,7 @@ describe('tools/pre-execute gate (native-plugin permission pattern, end-to-end t
       name: 'danger', description: 'danger', parameters: {},
       async execute() { ran = true; return [{ type: 'text', text: 'should not run' }] },
     }))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
       if (exec.name === 'danger') return { kind: 'deny', reason: 'blocked dangerous tool' }
@@ -778,7 +779,7 @@ describe('worked example: a native hook plugin is just a cordis plugin on the se
       name: 'echo', description: 'echo', parameters: { text: { type: 'string' } },
       async execute(args) { return [{ type: 'text', text: String(args.text) }] },
     }))
-    const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a1'), { provider: 'mock', model: 'mock' })
 
     send(agent, 'please echo hi')
     await waitForIdle(ctx, agent)
@@ -801,7 +802,7 @@ describe('worked example: a native hook plugin is just a cordis plugin on the se
     const adapter = new MockAdapter([textResponse('should not run')])
     const ctx = await harness(adapter)
     await ctx.plugin(NativeGuard)
-    const agent = await ctx.agentLoop.create(SessionId('a2'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a2'), { provider: 'mock', model: 'mock' })
 
     const reasons: TurnEndReason[] = []
     ctx.on('session/event', (_s, event: SessionEvent) => { if (event.type === 'turn/end') reasons.push(event.data.reason) })
@@ -820,7 +821,7 @@ describe('worked example: a native hook plugin is just a cordis plugin on the se
     await fiber.dispose()
 
     // After disposal, a destructive prompt is NOT blocked (the listener is gone).
-    const agent = await ctx.agentLoop.create(SessionId('a3'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('a3'), { provider: 'mock', model: 'mock' })
     send(agent, 'run rm -rf /')
     await waitForIdle(ctx, agent)
     // the prompt ran (not rejected) — proving the pre-step listener was disposed

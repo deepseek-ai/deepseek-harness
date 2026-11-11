@@ -4,8 +4,9 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ProductTelemetry, { Config as TelemetryConfig, type ProductTelemetryRecord } from '@deepseek-ai/dsh-host-product-telemetry-otel'
-import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
-import { CompactionId } from '@deepseek-ai/dsh-compaction'
+import { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CompactionId } from '@deepseek-ai/dsh-compaction/types'
 import Analytics from '../src/index.ts'
 import { collectEnvironment, type EnvironmentAttributes } from '../src/environment.ts'
 
@@ -117,11 +118,11 @@ it('writes the selected event through the real exporter to an isolated collector
 
 it.each([true, false])('collects live manual and automatic compaction only when enabled: %s', async (enabled) => {
   const b = await setup(enabled)
-  const session = Session.create(SessionId('analytics-compaction'))
+  const session = Session.create(brandString<SessionId>('analytics-compaction'))
   b.ctx.emit('session/event', session, { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } })
   for (const turn of [null, 1]) {
     b.ctx.emit('session/event', session, { type: 'compaction/start', seq: SessionSeq(1), time: 1,
-      data: { compactionId: CompactionId('analytics-compaction'), turn } })
+      data: { compactionId: brandString<CompactionId>('analytics-compaction'), turn } })
   }
   if (enabled) await vi.waitFor(() => { expect(b.emit).toHaveBeenCalledTimes(2) })
   expect(b.emit.mock.calls.map(([event]) => event.attributes?.trigger_type)).toEqual(enabled ? ['manual', 'auto'] : [])

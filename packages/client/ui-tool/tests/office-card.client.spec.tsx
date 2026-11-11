@@ -13,7 +13,8 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { zh, en, ja, es, fr, de, ru, pt } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
-import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolTreeProps } from '../src/client/contract/slots.ts'
 import { officeRowModel } from '../src/client/tool/models/office-card-model.ts'
 import { OfficeRow, officeToolview, type OfficeRowProps } from '../src/client/tool/toolviews/office-row.tsx'
@@ -24,7 +25,7 @@ const SID = 's1' as SessionId
 const t: ToolTreeProps['t'] = makeTranslate(zh, commonZh)
 const RENDER_ARGS = '{"input":"docs/deck.pptx"}'
 const image: ImageAttachmentRef = {
-  attachmentId: AttachmentId(`sha256:${'b'.repeat(64)}`), mediaType: 'image/png', bytes: 120, width: 800, height: 600,
+  attachmentId: brandString<AttachmentId>(`sha256:${'b'.repeat(64)}`), mediaType: 'image/png', bytes: 120, width: 800, height: 600,
 }
 const SUMMARY = 'Rendered 1 image of /w/app/docs/deck.pptx (3 in the document) at 144 DPI.'
 

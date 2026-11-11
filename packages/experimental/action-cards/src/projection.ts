@@ -1,6 +1,7 @@
 /** Recover card proposals from logged `propose_action` calls and decisions from plugin records. */
 import { z } from 'zod'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 
@@ -19,7 +20,7 @@ export const argumentsSchema = z.object({
 })
 
 const proposalSchema = z.object({
-  callId: z.string().min(1).transform(ToolCallId),
+  callId: z.string().min(1).transform(brandString<ToolCallId>),
   turn: z.number().int().nonnegative(),
   action: z.string().min(1),
   title: z.string().min(1),
@@ -29,7 +30,7 @@ const proposalSchema = z.object({
 
 /** Recorded decision of one card. */
 export const decisionSchema = z.object({
-  callId: z.string().min(1).transform(ToolCallId),
+  callId: z.string().min(1).transform(brandString<ToolCallId>),
   action: z.string().min(1),
   phase: z.string().min(1),
   data: fieldsSchema.optional(),

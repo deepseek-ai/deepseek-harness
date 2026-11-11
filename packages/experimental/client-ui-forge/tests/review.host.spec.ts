@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChangeRequestRef, ForgeCommentId, ForgeFailure, ForgeReviewData, ForgeReviewId, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import ForgePanelController from '../src/index.ts'
 import type { ForgePanelState } from '../src/index.ts'
 import { bench, follow, git, pullUrl, repository, scratch, shellTurn } from './harness.ts'
 import type { Bench, Follower } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -74,7 +75,7 @@ describe('forgePanel change request reviews', () => {
     await follower.until(state => polledAt(state, pullUrl(7)))
 
     await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
-    const other = panel.ctx.sessions.create(SessionId('forge-review-other'), { meta: { cwd: repo } })
+    const other = panel.ctx.sessions.create(brandString<SessionId>('forge-review-other'), { meta: { cwd: repo } })
     panel.ctx.forgeSession.track(other, pullUrl(7))
     await expect(panel.ctx.forgePanel.changeRequestReview(other, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
     expect(readReview).toHaveBeenCalledTimes(1)

@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { RpcId, resultOf, transportError } from '../src/client/api.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type RpcId, resultOf, transportError } from '../src/client/api.ts'
 
 describe('transportError', () => {
   it('folds an Error to internal keeping the message, and stringifies non-Errors', () => {
@@ -16,6 +17,6 @@ describe('transportError', () => {
 
 describe('resultOf', () => {
   it('unwraps the result slot', () => {
-    expect(resultOf({ rpcId: RpcId('r'), result: { ok: true, value: 7 } })).toEqual({ ok: true, value: 7 })
+    expect(resultOf({ rpcId: brandString<RpcId>('r'), result: { ok: true, value: 7 } })).toEqual({ ok: true, value: 7 })
   })
 })

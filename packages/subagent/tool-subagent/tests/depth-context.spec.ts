@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as tool from '../src/index.ts'
 import { disposeSetupProvider, modelSelectionSetupAgent, setup } from './harness.ts'
 import { mountScriptedProvider } from './scripted-provider.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Read the current tool-owned depth context through real prompt assembly. */
 async function depthContext(ctx: Context, agent?: Agent): Promise<string[]> {
@@ -24,7 +25,7 @@ describe('delegation depth context', () => {
     const ctx = await setup({ provider: 'mock', maxDepth })
     const root = modelSelectionSetupAgent(ctx)
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('depth-context-child'),
+      sessionId: brandString<SessionId>('depth-context-child'),
       meta: { delegationDepth: depth },
       // Resumed agents can have fresh runtime options; the persisted depth wins.
       agentOptions: { subagentDepth: 0 },
@@ -51,7 +52,7 @@ describe('delegation depth context', () => {
   it('uses the runtime depth when it is deeper than the saved header', async () => {
     const ctx = await setup({ provider: 'mock', maxDepth: 2 })
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('deeper-runtime'),
+      sessionId: brandString<SessionId>('deeper-runtime'),
       agentOptions: { subagentDepth: 2 },
     })
     expect(await depthContext(ctx, agent)).toEqual([
@@ -73,7 +74,7 @@ describe('delegation depth context', () => {
     const ctx = await setup({ provider: 'mock', maxDepth: 0 })
     const root = modelSelectionSetupAgent(ctx)
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('scoped-depth-policy'),
+      sessionId: brandString<SessionId>('scoped-depth-policy'),
       meta: { delegationDepth: 1 },
       setup: async (agentCtx) => { await agentCtx.plugin(tool, { provider: 'mock', maxDepth: 1 }) },
     })

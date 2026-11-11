@@ -1,7 +1,9 @@
 /** Deterministic keyless LLM for the real-profile acceptance base: one file write, then text. */
 
 import { existsSync, writeFileSync } from 'node:fs'
-import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter } from '@deepseek-ai/dsh-llm'
+/** @import { ToolCallId } from '@deepseek-ai/dsh-llm/types' */
 
 let nextCall = 0
 let callCount = 0
@@ -18,7 +20,8 @@ function textChunks(text) {
 
 function writeChunks(filePath, content) {
   const index = 0
-  const id = ToolCallId(`base-fixture-${++nextCall}`)
+  /** @type {ToolCallId} */
+  const id = brandString(`base-fixture-${++nextCall}`)
   const args = JSON.stringify({ file_path: filePath, content })
   return [
     { type: 'block-start', index, blockType: 'tool-call' },
@@ -32,7 +35,8 @@ function writeChunks(filePath, content) {
 /** One `read` call the fixture issues for the acceptance cases that exercise the read ceiling. */
 function readChunks(filePath) {
   const index = 0
-  const id = ToolCallId(`base-fixture-read-${++nextCall}`)
+  /** @type {ToolCallId} */
+  const id = brandString(`base-fixture-read-${++nextCall}`)
   const args = JSON.stringify({ file_path: filePath })
   return [
     { type: 'block-start', index, blockType: 'tool-call' },

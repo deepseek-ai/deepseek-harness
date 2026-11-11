@@ -5,12 +5,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 import { storedKey, type StoredStates } from '../src/states.ts'
 import type { ForgeChangeRequestListState, ForgeChangeRequestStatesFrame } from '../src/types.ts'
 import { bench, pullUrl, type Bench } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -38,8 +39,8 @@ async function composed(options: { readonly remoteAccess?: (id: SessionId) => bo
   cleanups.push(() => rm(cwd, { recursive: true, force: true }))
   const b = await bench(cwd)
   cleanups.push(() => b.ctx.fiber.dispose())
-  const cold: SessionHeader = { ...b.session.header, id: SessionId('cold') }
-  const unseen: SessionHeader = { ...b.session.header, id: SessionId('unseen') }
+  const cold: SessionHeader = { ...b.session.header, id: brandString<SessionId>('cold') }
+  const unseen: SessionHeader = { ...b.session.header, id: brandString<SessionId>('unseen') }
   const records = new Map<string, ForgeChangeRequestListState>()
   const put = vi.fn<StoredStates['put']>(async (key, value) => { records.set(key, value) })
   const remove = vi.fn<StoredStates['delete']>(async key => records.delete(key))

@@ -4,8 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
 import ShellExecutor from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellExecution, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import * as ShellEnv from '@deepseek-ai/dsh-shell-env'
@@ -65,11 +66,11 @@ async function fixture() {
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(ShellEnv, { dshHome: process.cwd() })
   await ctx.plugin(LookupShell)
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('reference-observer') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('reference-observer') })
   const controller = new AbortController()
   const exec: ToolExecution = {
     name: 'bash', agent,
-    callId: ToolCallId('reference'), rootCallId: ToolCallId('reference'), token: Symbol('reference') as ToolExecutionToken,
+    callId: brandString<ToolCallId>('reference'), rootCallId: brandString<ToolCallId>('reference'), token: Symbol('reference') as ToolExecutionToken,
     arguments: { command: 'gh pr view 9 -R octo/demo --json number' }, signal: controller.signal,
   }
   const result: ToolExecutionResult = {
@@ -194,13 +195,13 @@ describe('PR reference lookup', () => {
       const rootController = new AbortController()
       const root: ToolExecution = {
         name: 'run_code', agent: f.agent,
-        callId: ToolCallId('program'), rootCallId: ToolCallId('program'), token: Symbol('program') as ToolExecutionToken,
+        callId: brandString<ToolCallId>('program'), rootCallId: brandString<ToolCallId>('program'), token: Symbol('program') as ToolExecutionToken,
         arguments: { code: 'await tools.bash({ command })', description: 'Run it' }, signal: rootController.signal,
       }
       const run = new AbortController()
       const nested = (n: number, command: string, cwd = process.cwd()): [ToolExecution, ToolExecutionResult] => [{
         ...f.exec,
-        callId: ToolCallId(`program:ptc:${n}`), rootCallId: root.callId, token: Symbol(`nested ${n}`) as ToolExecutionToken,
+        callId: brandString<ToolCallId>(`program:ptc:${n}`), rootCallId: root.callId, token: Symbol(`nested ${n}`) as ToolExecutionToken,
         parent: root.token, arguments: { command, description: 'View it' }, signal: run.signal,
       }, { ...f.result, value: { kind: 'foreground', cwd, exitCode: 0, signal: null, timedOut: false, aborted: false } }]
       const settle = (outcome: ToolExecutionResult = { isError: false, value: null, content: [{ type: 'text', text: 'done' }] }) => {
@@ -235,7 +236,7 @@ describe('PR reference lookup', () => {
       const f = await fixture()
       const p = program(f)
       const [inner, innerResult] = p.nested(1, 'gh pr view 9 -R octo/demo')
-      const middle: ToolExecution = { ...p.root, name: 'cua_run_code', callId: ToolCallId('program:ptc:2'), token: Symbol('middle') as ToolExecutionToken, parent: p.root.token }
+      const middle: ToolExecution = { ...p.root, name: 'cua_run_code', callId: brandString<ToolCallId>('program:ptc:2'), token: Symbol('middle') as ToolExecutionToken, parent: p.root.token }
       f.emit({ ...inner, parent: middle.token }, innerResult)
       f.emit(middle, { isError: false, value: null, content: [] })
       expect(f.execute).not.toHaveBeenCalled()

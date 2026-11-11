@@ -14,8 +14,9 @@ import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { apply, Config, inject, name } from '@deepseek-ai/dsh-agent-tool-presentation'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** A runtime that never runs anything: presentation never dispatches. */
 class StubRuntime extends PtcRuntime {
@@ -50,7 +51,7 @@ async function host(options: { runtime?: boolean } = {}) {
 /** Mount the row under one agent's scope, as a preset subtree does. */
 // oxlint-disable-next-line typescript/no-deprecated -- Exercise the supported compatibility plugin configuration.
 async function mount(ctx: Context, config: Config, id = 'agent') {
-  const agent = { id: SessionId(id) } as Agent
+  const agent = { id: brandString<SessionId>(id) } as Agent
   let inner!: Context
   const fiber = ctx.plugin(Object.assign((host: Context) => {
     inner = createScope(host, agent).ctx

@@ -2,9 +2,10 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, vi } from 'vitest'
 import { SessionResources } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it('closes an owned resource during disposed cancellation before the real Agent reaches idle', async () => {
   const ctx = new Context()
@@ -14,7 +15,7 @@ it('closes an owned resource during disposed cancellation before the real Agent 
   const releaseClose = Promise.withResolvers<undefined>()
   await mountAgentLoopTestDependencies(ctx)
   await mountAgentLoopTestHarness(ctx)
-  const owner = await ctx.agents.create({ sessionId: SessionId('browser-disposal') })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('browser-disposal') })
   const resources = new SessionResources(ctx, {
     label: 'browser-fixture', exclusive: true,
     open: async () => ({
@@ -54,7 +55,7 @@ it('disposes an initializing browser after its first caller was already user-can
   let acquisitionAborted = false
   await mountAgentLoopTestDependencies(ctx)
   await mountAgentLoopTestHarness(ctx)
-  const owner = await ctx.agents.create({ sessionId: SessionId('browser-initialization-disposal') })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('browser-initialization-disposal') })
   const execute = vi.fn(async () => true)
   const resources = new SessionResources(ctx, {
     label: 'initializing-browser', exclusive: true,

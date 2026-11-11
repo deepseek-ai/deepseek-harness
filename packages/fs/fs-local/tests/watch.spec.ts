@@ -1,6 +1,7 @@
 /** Watch initialization and asynchronous release at the Chokidar adapter. */
 import { Context } from '@deepseek-ai/cordis'
-import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { dirname, join, resolve } from 'node:path'
 import * as chokidar from 'chokidar'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -25,9 +26,9 @@ async function setup(kind: 'file' | 'directory' | 'missing' = 'file') {
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(LocalFileSystem)
   const path = resolve('/workspace/file.txt')
-  const target = { targetKey: FsTargetKey(path), displayPath: 'file.txt' }
+  const target = { targetKey: brandString<FsTargetKey>(path), displayPath: 'file.txt' }
   const stat = vi.spyOn(ctx.fs, 'stat').mockResolvedValue(kind === 'missing'
-    ? undefined : { type: kind, version: FsVersion('v1'), size: 1 })
+    ? undefined : { type: kind, version: brandString<FsVersion>('v1'), size: 1 })
   const changed = vi.fn<(error?: Error) => void>()
   const controller = new AbortController()
   onTestFinished(() => { controller.abort() })
