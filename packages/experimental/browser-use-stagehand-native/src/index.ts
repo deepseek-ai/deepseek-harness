@@ -195,7 +195,9 @@ function mountTools(ctx: Context, resources: SessionResources<BrowserResource>):
       throw new ToolContextUnavailableError('Stagehand browser tools require an exact live Agent')
     }
     // Arguments are checked before the browser is acquired, so an invalid first call launches nothing.
-    const parsed = browserInputs[exec.name.slice('stagehand_'.length) as BrowserMethod].safeParse(exec.arguments)
+    // A non-object value is read as `{}`, exactly as the MCP bridge passes it to the call.
+    const args = typeof exec.arguments === 'object' && exec.arguments !== null ? exec.arguments : {}
+    const parsed = browserInputs[exec.name.slice('stagehand_'.length) as BrowserMethod].safeParse(args)
     if (!parsed.success) {
       throw new ToolArgsError(parsed.error.issues.map(issue => `${['arguments', ...issue.path].join('.')}: ${issue.message}`))
     }

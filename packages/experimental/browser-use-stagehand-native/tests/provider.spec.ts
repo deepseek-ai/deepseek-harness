@@ -138,6 +138,13 @@ it('rejects invalid arguments before acquiring a browser', async () => {
   expect(fixture.browsers).toEqual([])
 })
 
+it('reads non-object arguments as an empty request, as the MCP bridge does', async () => {
+  await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
+  const result = await execute(first, 'screenshot', null)
+  expect(result.isError).toBe(false)
+  expect(fixture.browsers).toHaveLength(1)
+})
+
 it('uses its independent model for actions, observations, and a caller-selected extraction schema', async () => {
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
   expect((await execute(first, 'act', { instruction: 'Click the fixture button' })).isError).toBe(false)
