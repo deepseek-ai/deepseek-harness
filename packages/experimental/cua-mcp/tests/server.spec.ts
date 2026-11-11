@@ -249,6 +249,7 @@ describe('Computer Use MCP server', () => {
     release.mockImplementationOnce(async () => { order.push('release') })
     // The cancelled program takes this long to settle; the Agent is idle only afterwards.
     const settled = Promise.withResolvers<undefined>()
+    onTestFinished(() => { settled.resolve(undefined) })
     whenIdle.mockImplementationOnce(async () => { order.push('wait for the cancelled program'); await settled.promise })
     let answered = false
     const pending = reset().then((result) => { answered = true; return result })
@@ -284,6 +285,7 @@ describe('Computer Use MCP server', () => {
   it('shares one release between concurrent resets and holds back programs that arrive during it', async () => {
     const { run, reset, release, cancel, execute } = await setup()
     const released = Promise.withResolvers<undefined>()
+    onTestFinished(() => { released.resolve(undefined) })
     release.mockImplementationOnce(() => released.promise)
     const resets = Promise.all([reset(), reset()])
     const program = run({ code: '1', description: 'Arrives during the reset' })
@@ -324,6 +326,7 @@ describe('Computer Use MCP server', () => {
   it('lets a reset in progress settle before disposing the Agent', async () => {
     const served = await setup()
     const released = Promise.withResolvers<undefined>()
+    onTestFinished(() => { released.resolve(undefined) })
     served.release.mockImplementationOnce(() => released.promise)
     // The client's request ends with its connection; the server finishes the release regardless.
     const reset = served.reset().then(() => 'answered', () => 'connection closed')
