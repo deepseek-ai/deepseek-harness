@@ -81,13 +81,17 @@
   flex-direction: column;
 }
 
-/* The row button's overlay covers the whole line, so the line highlights as one
-   row; the stop control sits above the overlay and the chevron reads through it. */
+/* One 28px line per job: the command, its duration, the stop control, and the
+   chevron; the kind and state show in the row's hover card. The row button's
+   overlay covers the whole line, so the line highlights as one row; the stop
+   control sits above the overlay and the chevron reads through it. */
 .rowLine {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
+  min-height: 28px;
+  box-sizing: border-box;
   padding: 4px 6px;
   border-radius: var(--dsw-radius-sm);
 }
@@ -106,7 +110,7 @@
 .row {
   display: flex;
   flex: 1;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   min-width: 0;
   padding: 0;
@@ -137,41 +141,21 @@ button.row:focus-visible {
   flex: none;
   place-items: center;
   width: 16px;
-  height: 18px;
-}
-
-.main {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.label,
-.secondary {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  height: 20px;
 }
 
 .label {
+  flex: 1;
   font-size: 13px;
-  line-height: 18px;
-}
-
-.secondary {
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 12px;
-  line-height: 17px;
+  line-height: 20px;
 }
 
 .duration {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 /* The trailing column; a row without output keeps it empty so the durations
@@ -192,7 +176,8 @@ button.row:focus-visible {
   transform: rotate(180deg);
 }
 
-/* Two-press kill: a plain glyph like the row's other trailing icons, with a 24px target. */
+/* Two-press kill: a plain glyph like the row's other trailing icons, with a 24px
+   target that overhangs the 20px line, so a running row keeps its 28px. */
 .stop {
   position: relative;
   z-index: 1;
@@ -203,7 +188,7 @@ button.row:focus-visible {
   justify-content: center;
   min-width: 24px;
   height: 24px;
-  margin: 0 -4px;
+  margin: -2px -4px;
   padding: 0;
   border: 0;
   border-radius: var(--dsw-radius-xs);

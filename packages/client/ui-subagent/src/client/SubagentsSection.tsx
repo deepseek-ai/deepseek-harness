@@ -1,5 +1,6 @@
 /** Session panel section listing the current Session's subagents. */
 import { useMemo } from 'react'
+import { HoverCardGroup } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
 import type {} from '@deepseek-ai/dsh-client-ui-session-panel/client'
@@ -60,17 +61,21 @@ export function SubagentsSection({
   if (catalog === undefined || (catalog.state !== 'error' && catalog.entries.length === 0)) return null
   return (
     <div className={css.sectionBody} data-subagents-section="">
-      <CatalogTree
-        rootSessionId={sessionId}
-        catalog={catalog}
-        catalogs={catalogs}
-        summaries={summaries}
-        openChild={openChild}
-        openChildAside={openChildAside}
-        prepareLevel={prepareLevel}
-        onOpened={dismissOverlay}
-        t={t}
-      />
+      {/* Moving between rows swaps their hover cards without another dwell. */}
+      <HoverCardGroup>
+        <CatalogTree
+          rootSessionId={sessionId}
+          catalog={catalog}
+          catalogs={catalogs}
+          summaries={summaries}
+          openChild={openChild}
+          openChildAside={openChildAside}
+          prepareLevel={prepareLevel}
+          onOpened={dismissOverlay}
+          dense
+          t={t}
+        />
+      </HoverCardGroup>
     </div>
   )
 }

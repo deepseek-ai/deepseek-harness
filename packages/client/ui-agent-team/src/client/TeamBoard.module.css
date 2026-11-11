@@ -34,7 +34,8 @@
   gap: 8px;
   width: 100%;
   min-width: 0;
-  padding: 5px 6px;
+  min-height: 28px;
+  padding: 4px 6px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   background: transparent;

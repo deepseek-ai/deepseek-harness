@@ -173,6 +173,24 @@ function enableTooltips(): void {
 }
 
 /**
+ * Rest the pointer on a Session panel row past the hover card's 500ms dwell and
+ * read the card's parts in order, then leave it.
+ * @param row - the row's treeitem.
+ * @returns the card's lines, or null while no card shows.
+ */
+async function hoverDetailsOf(row: HTMLElement): Promise<string[] | null> {
+  vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
+  const anchor = row.parentElement as HTMLElement
+  fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
+  await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+  const card = document.querySelector('[data-hover-details]')
+  const lines = card === null ? null : [...card.children].map(child => child.textContent ?? '')
+  fireEvent.pointerLeave(anchor, { pointerType: 'mouse' })
+  await act(async () => { await vi.advanceTimersByTimeAsync(400) })
+  return lines
+}
+
+/**
  * The two surfaces as the real page composes them: the breadcrumb switcher
  * (child sessions, lineage slot) and the Session panel section listing the
  * Session's own subagents. The section sees the same Session the lineage renders.
@@ -208,7 +226,8 @@ describe('SubagentHeaderLineage', () => {
     expect(row.getAttribute('aria-label')).toMatch(new RegExp(`^${CHILD}`))
   })
 
-  it('shows agent names in place of Session ids while navigation keeps the Session id', () => {
+  it('shows agent names in place of Session ids while navigation keeps the Session id', async () => {
+    vi.useFakeTimers()
     const external = 'external-id' as SessionId
     const input = props(catalog({
       entries: [
@@ -219,9 +238,10 @@ describe('SubagentHeaderLineage', () => {
     }), {}, { [CHILD]: { ...summary(CHILD, 1), running: true } })
     render(<HeaderCatalog {...input} />)
     const named = screen.getByRole('treeitem', { name: /^Review the diff reviewer/ })
-    expect(within(named).getByText('Review the diff').compareDocumentPosition(within(named).getByText('reviewer'))
-      & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The panel row shows one line; its hover card names the agent as the owner.
+    expect(within(named).queryByText('reviewer')).toBeNull()
     expect(within(named).queryByText(CHILD)).toBeNull()
+    expect(await hoverDetailsOf(named)).toEqual(['Review the diff', '负责人：reviewer', '正在运行 · 可继续'])
     const undescribed = screen.getByRole('treeitem', { name: /^checker/ })
     expect(within(undescribed).getAllByText('checker')).toHaveLength(1)
     expect(within(undescribed).queryByText(GRANDCHILD)).toBeNull()
@@ -714,7 +734,8 @@ describe('SubagentHeaderLineage', () => {
 describe('SubagentsSection', () => {
 
 
-  it('shows the description above the Session id and opens the row without a description toggle', () => {
+  it('shows the description on one line, the Session id in its hover card, and opens the row without a description toggle', async () => {
+    vi.useFakeTimers()
     const description = 'Check the construction and all bounds. '.repeat(20).trim()
     const input = props(catalog({
       entries: [{ id: CHILD, mode: 'continuable', label: description, activity: 'running' }],
@@ -723,8 +744,8 @@ describe('SubagentsSection', () => {
     render(<HeaderCatalog {...input} dismissOverlay={dismissOverlay} />)
     const row = screen.getByRole('treeitem', { name: new RegExp(CHILD) })
     const primary = within(row).getByText(description)
-    const id = within(row).getByText(CHILD)
-    expect(primary.compareDocumentPosition(id) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(row).queryByText(CHILD)).toBeNull()
+    expect((await hoverDetailsOf(row))?.slice(0, 2)).toEqual([description, `负责人：${CHILD}`])
     expect(row.getAttribute('aria-label')).toMatch(/^Check the construction/)
     expect(primary.tagName).toBe('SPAN')
     expect(primary.getAttribute('aria-expanded')).toBeNull()
@@ -906,11 +927,9 @@ describe('SubagentsSection', () => {
     render(<HeaderCatalog {...input} />)
 
     const runningRow = screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分10秒/ })
-    const runningMetrics = within(runningRow)
-    const tokenMetric = runningMetrics.getByText('4.6K tok')
-    const durationMetric = runningMetrics.getByText('1分10秒')
-    expect(tokenMetric.parentElement).toBe(durationMetric.parentElement)
-    expect(tokenMetric.nextElementSibling).toBe(durationMetric)
+    // The row keeps only the compact duration; the tokens and exact duration show in its hover card.
+    expect(within(runningRow).queryByText('4.6K tok')).toBeNull()
+    expect(within(runningRow).getByText('1分10秒')).toBeTruthy()
     const finishedRow = screen.getByRole('treeitem', { name: /finished.*已完成.*123 tok · 1小时02分03秒/ })
     expect(finishedRow.querySelector('[data-state="done"]')).not.toBeNull()
     const interruptedRow = screen.getByRole('treeitem', { name: /interrupted.*当前未运行.*123M tok · 6秒/ })
@@ -931,6 +950,11 @@ describe('SubagentsSection', () => {
     expect(screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分11秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /finished.*已完成.*123 tok · 1小时02分03秒/ })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /interrupted.*当前未运行.*123M tok · 6秒/ })).toBeTruthy()
+    // Hovering lets the clock run, so the running row's card is read last.
+    expect(await hoverDetailsOf(finishedRow)).toEqual(['finished', '负责人：finished', '已完成 · 可继续', '123 tok1小时02分03秒'])
+    const live = await hoverDetailsOf(screen.getByRole('treeitem', { name: /^running/ }))
+    expect(live?.slice(0, 3)).toEqual(['running', '负责人：running', '正在运行 · 可继续'])
+    expect(live?.[3]).toMatch(/^4\.6K tok1分1\d秒$/)
   })
 
 
@@ -1441,6 +1465,37 @@ describe('breadcrumb switcher', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     await act(async () => { await Promise.resolve() })
     expect(document.activeElement).toBe(switcher)
+  })
+
+  it('keeps the two-line rows in the menu, with whichever measures each child has', async () => {
+    const tokensOnly = 'tokens-only' as SessionId
+    const durationOnly = 'duration-only' as SessionId
+    const input = props(catalog({
+      entries: [
+        { id: CHILD, mode: 'continuable', label: 'worker', name: 'worker-agent', activity: 'inactive' },
+        { id: tokensOnly, mode: 'continuable', label: 'tokens', activity: 'inactive' },
+        { id: durationOnly, mode: 'continuable', label: 'duration', activity: 'inactive' },
+      ],
+    }), {}, {
+      [CHILD]: { ...summary(CHILD, 1), parentId: PARENT, origin: 'subagent' },
+      [tokensOnly]: { ...summary(tokensOnly, 1), parentId: PARENT, origin: 'subagent', projectionValues: {
+        tokenUsage: { uncachedInputTokens: 1_200, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      } },
+      [durationOnly]: { ...summary(durationOnly, 1), parentId: PARENT, origin: 'subagent', projectionValues: {
+        subagentTiming: { settledMs: 3_000 },
+      } },
+    })
+    render(<HeaderCatalog {...input} sessionId={CHILD} lineageSessionId={CHILD} />)
+    fireEvent.click(screen.getByRole('button', { name: /^切换子智能体：/ }))
+    await act(async () => { await Promise.resolve() })
+    const menu = within(screen.getByRole('dialog'))
+    const worker = menu.getByRole('treeitem', { name: /^worker/ })
+    expect(within(worker).getByText('worker-agent')).toBeTruthy()
+    expect(within(worker).queryByText(/tok|秒/)).toBeNull()
+    const tokens = menu.getByRole('treeitem', { name: /^tokens/ })
+    expect([within(tokens).getByText('1.2K tok').nextElementSibling]).toEqual([null])
+    const duration = menu.getByRole('treeitem', { name: /^duration/ })
+    expect(within(duration).getByText('3秒').previousElementSibling).toBeNull()
   })
 
   it('moves focus into an open menu with ArrowDown once its rows have loaded', () => {

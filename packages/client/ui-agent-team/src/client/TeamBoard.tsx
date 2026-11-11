@@ -4,7 +4,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TeamProjection, TeamTaskView, TeamTaskId } from '@deepseek-ai/dsh-agent-team/client'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import {
-  IconChevronDownOutlineRegular,
+  HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular,
   StateDot, Tooltip, type StateDotState,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -55,23 +55,37 @@ function TaskRow({ task, rootId, expanded, onToggle, t }: Pick<TeamBoardProps, '
   const owner = task.ownerName ?? task.ownerId ?? t('unowned')
   const blocked = task.status === 'pending' && !task.ready
   const detailsId = `team-task-${rootId}-${task.id}`
+  const state = blocked ? 'warning' : dotStates[task.status]
+  const status = blocked ? t('blocked') : t(statusKeys[task.status])
+  // An expanded row already shows its details, so its hover card stays closed.
   return (
     <li className={css.task} data-team-task={task.id} data-status={task.status} data-expanded={expanded}>
-      <Tooltip label={task.subject} onlyWhenClipped disabled={expanded} delayMs={500} portal side="top">
-        <button
-          type="button"
-          className={css.taskRow}
-          aria-expanded={expanded}
-          aria-controls={detailsId}
-          onClick={onToggle}
-        >
-          <span className={css.glyph} role="img" aria-label={blocked ? t('blocked') : t(statusKeys[task.status])}>
-            <StateDot state={blocked ? 'warning' : dotStates[task.status]} />
-          </span>
-          <span className={css.subject}>{task.subject}</span>
-          <span className={css.chevron} aria-hidden><IconChevronDownOutlineRegular size={14} /></span>
-        </button>
-      </Tooltip>
+      <HoverCard
+        grouped
+        disabled={expanded}
+        anchor={(
+          <button
+            type="button"
+            className={css.taskRow}
+            aria-expanded={expanded}
+            aria-controls={detailsId}
+            onClick={onToggle}
+          >
+            <span className={css.glyph} role="img" aria-label={status}>
+              <StateDot state={state} />
+            </span>
+            <span className={css.subject}>{task.subject}</span>
+            <span className={css.chevron} aria-hidden><IconChevronDownOutlineRegular size={14} /></span>
+          </button>
+        )}
+        content={(
+          <HoverDetails
+            title={task.subject}
+            lines={[t('hover.owner', { name: owner }), ...task.description ? [task.description] : []]}
+            status={{ state, label: status }}
+          />
+        )}
+      />
       {expanded && (
         <div className={css.details} id={detailsId} data-team-task-details>
           {task.description && <p className={css.description}>{task.description}</p>}
@@ -105,16 +119,19 @@ export function TeamBoard({ sessionId, useProjection, t }: TeamBoardProps) {
         <div className={css.error} role="alert"><StateDot state="error" />{t('failure', { message: team.failure })}</div>
       )}
       {tasks.length > 0 && (
-        <ul className={css.tasks}>
-          {tasks.map(task => (
-            <TaskRow
-              key={task.id} task={task} rootId={sessionId}
-              expanded={expandedTaskId === task.id}
-              onToggle={() => { setExpandedTaskId(current => current === task.id ? null : task.id) }}
-              t={t}
-            />
-          ))}
-        </ul>
+        // Moving between rows swaps their hover cards without another dwell.
+        <HoverCardGroup>
+          <ul className={css.tasks}>
+            {tasks.map(task => (
+              <TaskRow
+                key={task.id} task={task} rootId={sessionId}
+                expanded={expandedTaskId === task.id}
+                onToggle={() => { setExpandedTaskId(current => current === task.id ? null : task.id) }}
+                t={t}
+              />
+            ))}
+          </ul>
+        </HoverCardGroup>
       )}
     </div>
   )

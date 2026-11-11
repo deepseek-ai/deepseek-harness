@@ -349,8 +349,8 @@ describe('web e2e: agent teamwork panel', () => {
     })))
     expect(primaryStyles.map(style => style.fontSize)).toEqual(['13px', '13px'])
     expect(primaryStyles[1]).toEqual(primaryStyles[0])
-    expect(await member.getByText('team-panel-researcher', { exact: true })
-      .evaluate(element => getComputedStyle(element).fontSize)).toBe('12px')
+    // The member's name moves from the row to its hover card.
+    expect(await member.getByText('team-panel-researcher', { exact: true }).count()).toBe(0)
     const memberHover = member.locator(':scope > div')
     for (const target of [member, memberHover]) {
       expect(await target.evaluate((element) => {
@@ -358,7 +358,7 @@ describe('web e2e: agent teamwork panel', () => {
         return [style.paddingTop, style.paddingBottom]
       })).toEqual(['4px', '4px'])
     }
-    expect(await member.evaluate(element => getComputedStyle(element).minHeight)).toBe('40px')
+    expect(await member.evaluate(element => getComputedStyle(element).minHeight)).toBe('28px')
     expect(await member.evaluate((element) => {
       const style = getComputedStyle(element)
       return { left: style.paddingLeft, right: style.paddingRight, gap: style.gap }
@@ -371,8 +371,8 @@ describe('web e2e: agent teamwork panel', () => {
     expect(await taskHover.evaluate((element) => {
       const style = getComputedStyle(element)
       return [style.paddingTop, style.paddingBottom]
-    })).toEqual(['5px', '5px'])
-    expect(await taskHover.evaluate(element => element.getBoundingClientRect().height)).toBe(30)
+    })).toEqual(['4px', '4px'])
+    expect(await taskHover.evaluate(element => element.getBoundingClientRect().height)).toBe(28)
     expect(await taskHover.evaluate((element) => {
       const style = getComputedStyle(element)
       return { left: style.paddingLeft, right: style.paddingRight, gap: style.gap, margin: style.margin }
@@ -500,27 +500,24 @@ describe('web e2e: agent teamwork panel', () => {
       }
       const row = section.getByRole('treeitem', { name: /Researcher/u })
       const primary = row.getByText(RESEARCHER_DESCRIPTION, { exact: true })
-      const secondary = row.getByText('team-panel-researcher', { exact: true })
       expect(await row.getByRole('button').count()).toBe(0)
-      expect(await primary.evaluate((element) => {
-        const style = getComputedStyle(element)
-        return {
-          tag: element.tagName, clipped: element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight,
-          whiteSpace: style.whiteSpace, overflowWrap: style.overflowWrap,
-        }
-      })).toEqual({ tag: 'SPAN', clipped: false, whiteSpace: 'normal', overflowWrap: 'anywhere' })
-      const primaryBounds = await primary.boundingBox()
-      const secondaryBounds = await secondary.boundingBox()
-      expect(primaryBounds).not.toBeNull()
-      expect(secondaryBounds).not.toBeNull()
-      expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
+      // The row keeps one line at every width: the description clips, and the name shows in its hover card.
+      expect(await primary.evaluate(element => ({ tag: element.tagName, whiteSpace: getComputedStyle(element).whiteSpace })))
+        .toEqual({ tag: 'SPAN', whiteSpace: 'nowrap' })
+      expect(await row.getByText('team-panel-researcher', { exact: true }).count()).toBe(0)
+      expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await primary.hover()
+      const card = page.locator('[data-hover-details]')
+      await card.waitFor()
+      expect(await card.evaluate(element => [...element.children].slice(0, 2).map(child => child.textContent)))
+        .toEqual([RESEARCHER_DESCRIPTION, 'Owner: team-panel-researcher'])
+      expect(await card.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        return rect.left >= 0 && rect.right <= window.innerWidth
+      })).toBe(true)
       const beforeClick = page.url()
       await primary.click()
       expect(page.url()).toBe(beforeClick)
-      expect(await page.getByRole('tooltip', { name: RESEARCHER_DESCRIPTION, exact: true }).count()).toBe(0)
-      expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-      expect(await secondary.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
-      await secondary.hover()
       expect(await page.getByRole('tooltip').count()).toBe(0)
       await tasksHeading.click()
       expect(await panel.count()).toBe(1)
@@ -575,7 +572,7 @@ describe('web e2e: agent teamwork panel', () => {
     const emptyRow = board.locator(`[data-team-task="${completed.id}"]`)
     onTestFinished(() => page.setViewportSize(viewport))
     // Constrain the panel so closed and expanded task rows both exercise its scrollbar.
-    await page.setViewportSize({ width: viewport.width, height: 540 })
+    await page.setViewportSize({ width: viewport.width, height: 500 })
     await showSharedTasksSection(page)
     await row.waitFor()
     expect(await board.locator('[data-team-task-details], article').count()).toBe(0)

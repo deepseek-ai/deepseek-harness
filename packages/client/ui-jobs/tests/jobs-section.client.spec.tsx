@@ -328,7 +328,7 @@ describe('JobsSection rows', () => {
 
   it('keeps the trailing column on a row without output, with no chevron and no row button', () => {
     const view = render(<JobsSection {...props([job({ status: 'completed', finishedAt: 1_700_000_000_001 })])} />)
-    const line = view.container.querySelector('li > div') as HTMLElement
+    const line = view.container.querySelector('[data-job-row]') as HTMLElement
     expect(within(line).queryByRole('button')).toBeNull()
     expect(line.lastElementChild?.getAttribute('aria-hidden')).toBe('true')
     expect(line.lastElementChild?.childElementCount).toBe(0)
@@ -539,6 +539,26 @@ it('renders the Russian settled-count copy', () => {
 })
 
 describe('JobsSection hover', () => {
+  it('shows the command, kind, state, and duration in a hover card after 500ms, and the kind and state to assistive technology', () => {
+    vi.useFakeTimers({ now: 1_700_000_010_000 })
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
+    try {
+      const view = render(<JobsSection {...props([outputJob()])} />)
+      const row = view.container.querySelector<HTMLElement>('[data-job-row]')!
+      const button = within(row).getByRole('button', { name: zh['row.expandAria'].replace('{label}', 'pnpm run build') })
+      expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe('bash · 运行中')
+      const anchor = row.parentElement as HTMLElement
+      fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(499) })
+      expect(document.querySelector('[data-hover-details]')).toBeNull()
+      act(() => { vi.advanceTimersByTime(1) })
+      const card = document.querySelector('[data-hover-details]') as HTMLElement
+      expect([...card.children].map(child => child.textContent)).toEqual(['pnpm run build', 'bash', '运行中', '10秒'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reveals a clipped command on row hover instead of native titles, and names the stop control after 500ms', () => {
     vi.useFakeTimers()
     try {
@@ -547,7 +567,7 @@ describe('JobsSection hover', () => {
       const label = view.container.querySelector<HTMLElement>('[data-job-label]')!
       Object.defineProperty(label, 'scrollWidth', { value: 300, configurable: true })
       Object.defineProperty(label, 'clientWidth', { value: 200, configurable: true })
-      const row = label.closest('li')!.firstElementChild as HTMLElement
+      const row = label.closest<HTMLElement>('[data-job-row]')!
       fireEvent.pointerEnter(row)
       // The suite's matchMedia answers reduced motion, so the command jumps to its far edge.
       expect(label.scrollLeft).toBe(100)

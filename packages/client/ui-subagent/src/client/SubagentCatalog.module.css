@@ -154,8 +154,10 @@
   min-width: 0;
 }
 
+/* One 28px line per row: the name clips, and its owner, state, and tokens show in the row's hover card. */
 .sectionBody .row {
   gap: 8px;
+  min-height: 28px;
   padding: 4px 6px;
 }
 
@@ -166,52 +168,64 @@
 
 .sectionBody .rowActivitySlot {
   width: 16px;
-  height: 18px;
+  height: 20px;
 }
 
 .sectionBody .disclosure,
 .sectionBody .disclosureSpace {
   width: 16px;
-  height: 18px;
-}
-
-/* The tree's spine sits on the status column's center. */
-.sectionBody .children {
-  --branch-anchor-y: 13px;
-  margin-left: 14px;
-}
-
-.sectionBody .children > .node > .row::before {
-  width: 9px;
-}
-
-.sectionBody .children > .node > .row:has(> .disclosureSpace)::before {
-  width: 33px;
+  height: 20px;
 }
 
 .sectionBody .label {
-  line-height: 18px;
+  overflow: hidden;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sectionBody .metrics {
-  grid-template-rows: 18px 17px;
+.sectionBody .duration {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
-.sectionBody .metricToken {
-  line-height: 18px;
+/* The tree's spine sits on the status column's center, and leaves a parent row
+   just below its 6px dot. Each row sits in its hover card's anchor wrapper. */
+.sectionBody .children {
+  --branch-anchor-y: 14px;
+  margin-left: 14px;
 }
 
-.sectionBody .metricDuration {
-  line-height: 17px;
+.sectionBody .children::before {
+  top: -10px;
+  height: 10px;
 }
 
-/* In the panel's columns the arrow's 24px target centers on the trailing column. */
+.sectionBody .children > .node > :first-child > .row::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--branch-anchor-y) - 0.25px);
+  left: -3px;
+  width: 9px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.sectionBody .children > .node > :first-child > .row:has(> .disclosureSpace)::before {
+  width: 33px;
+}
+
+/* In the panel's columns the arrow's 24px target centers on the trailing column
+   and overhangs the 20px line, so the row keeps its 28px. */
 .sectionBody .sidebarButton,
 .sectionBody .sidebarSpace {
   align-self: center;
   width: 24px;
   height: 24px;
-  margin: 0 -4px;
+  margin: -2px -4px;
 }
 
 .node {

@@ -1,7 +1,8 @@
 /**
  * Job row geometry as CSS text: CSS Modules resolve to class-name maps in the
  * component suite, so only the stylesheet proves that the chevron leaves its
- * presses to the row button, including once the open chevron rotates.
+ * presses to the row button, including once the open chevron rotates, and that
+ * a row keeps one 28px line.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -19,5 +20,13 @@ describe('JobsSection.module.css', () => {
   it('lets presses on the chevron reach the row button beneath it', () => {
     expect(rule('.chevron')).toMatch(/pointer-events:\s*none/)
     expect(rule('.chevronOpen')).toMatch(/transform:\s*rotate\(180deg\)/)
+  })
+
+  it('keeps a job on one 28px line, with the stop target overhanging it', () => {
+    expect(rule('.rowLine')).toMatch(/min-height:\s*28px/)
+    expect(rule('.rowLine')).toMatch(/padding:\s*4px 6px/)
+    expect(rule('.label')).toMatch(/line-height:\s*20px/)
+    expect(rule('.stop')).toMatch(/height:\s*24px/)
+    expect(rule('.stop')).toMatch(/margin:\s*-2px -4px/)
   })
 })

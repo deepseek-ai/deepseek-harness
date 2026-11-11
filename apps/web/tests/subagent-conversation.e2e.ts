@@ -481,37 +481,39 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     }
   })
 
-  it('shows complete descriptions and names without hover at desktop and touch widths', async () => {
+  it('shows each subagent on one line and its name, state, and measures in a hover card', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-subagent-catalog-labels'))
-    const originalViewport = page.viewportSize()!
     const originalUrl = page.url()
     try {
-      for (const width of [originalViewport.width, 390]) {
-        await page.setViewportSize({ ...originalViewport, width })
-        const panel = await showSubagentsSection(page)
-        const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
-        const primary = row.getByText(LABEL, { exact: true })
-        const secondary = row.getByText(CHILD_NAME, { exact: true })
-        const primaryBounds = await primary.boundingBox()
-        const secondaryBounds = await secondary.boundingBox()
-        expect(primaryBounds).not.toBeNull()
-        expect(secondaryBounds).not.toBeNull()
-        expect(primaryBounds!.y + primaryBounds!.height).toBeLessThanOrEqual(secondaryBounds!.y)
-        for (const label of [primary, secondary]) {
-          expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth
-            && element.scrollHeight <= element.clientHeight)).toBe(true)
-        }
-        expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${CHILD_NAME} `)
-        expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
-        await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
-        expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
-        expect(page.url()).toBe(originalUrl)
-        expect(await page.getByRole('tooltip').filter({ hasText: LABEL }).count()).toBe(0)
-        expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
-        await dismissSessionPanel(page)
-      }
+      const panel = await showSubagentsSection(page)
+      const row = panel.getByRole('treeitem', { name: new RegExp(LABEL) })
+      const primary = row.getByText(LABEL, { exact: true })
+      // The row holds one 28px line; the name stays in its accessible name.
+      expect(await row.evaluate(element => element.getBoundingClientRect().height)).toBe(28)
+      expect(await primary.evaluate(element => getComputedStyle(element).whiteSpace)).toBe('nowrap')
+      expect(await row.getByText(CHILD_NAME, { exact: true }).count()).toBe(0)
+      expect(await row.getAttribute('aria-label')).toContain(`${LABEL} ${CHILD_NAME} `)
+      expect(await row.getByRole('button', { name: /description/u }).count()).toBe(0)
+      await row.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).waitFor()
+      expect(await row.getByRole('button', { name: `Open ${LABEL} in sidebar`, exact: true }).count()).toBe(1)
+      await primary.hover()
+      const card = page.locator('[data-hover-details]')
+      await card.waitFor()
+      expect(await card.evaluate(element => [...element.children].map(child => child.textContent).slice(0, 3)))
+        .toEqual([LABEL, `Owner: ${CHILD_NAME}`, 'completed · continuable'])
+      // The panel sits at the window's end, so the card opens on the row's start side, inside the viewport.
+      const placement = await card.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const row = document.querySelector('[data-subagents-section] [role="treeitem"]')!.getBoundingClientRect()
+        return { left: bounds.left >= 0, beforeRow: bounds.right <= row.left }
+      })
+      expect(placement).toEqual({ left: true, beforeRow: true })
+      expect(page.url()).toBe(originalUrl)
+      expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
+      await page.locator('[data-composer-input]').first().hover()
+      await card.waitFor({ state: 'detached' })
+      await dismissSessionPanel(page)
     } finally {
-      await page.setViewportSize(originalViewport)
       await page.locator('[data-composer-input]').first().hover()
     }
   })
@@ -624,7 +626,8 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       const dotBounds = dot.getBoundingClientRect()
       const slot = dot.parentElement!.getBoundingClientRect()
       const horizontal = getComputedStyle(row, '::before')
-      const node = row.parentElement!
+      // The row sits in its hover card's anchor wrapper inside the tree node.
+      const node = row.closest('[role="group"] > *')!
       const spine = getComputedStyle(node, '::before')
       const stroke = Number.parseFloat(horizontal.borderTopWidth)
       const colorProbe = document.createElement('span')
@@ -671,7 +674,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     )
     await compareOrRefreshGolden(TREE_EXPECTED, snapshot, MODE)
     expect(apiCalls.filter(path => path === '/api/session/projections')).toHaveLength(catalogReads)
-    await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).getByText(grandchildId, { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).getByText(NESTED_LABEL, { exact: true }).click()
     await page.getByText(NESTED_PROMPT).waitFor()
     await hierarchy.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true }).waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
@@ -847,7 +850,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       await captureStableAria(page, '[role="tree"][aria-label="Subagent sessions"]', scaffold.workspaceCwd),
       MODE,
     )
-    await nestedRow.getByText(grandchildId, { exact: true }).click()
+    await nestedRow.getByText(NESTED_LABEL, { exact: true }).click()
     await page.getByText(NESTED_PROMPT).waitFor()
     expect(await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).isEnabled()).toBe(true)
     const hierarchy = page.getByRole('navigation', { name: 'Session hierarchy' })
@@ -868,7 +871,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .getByRole('treeitem', { name: /Ask a research subagent to/ })
     await parentSession.click()
     await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(ONE_SHOT_LABEL) })
-      .getByText(oneShotId, { exact: true }).click()
+      .getByText(ONE_SHOT_LABEL, { exact: true }).click()
     await page.getByText('One-shot tasks do not accept follow-ups; review the full execution record here.').waitFor()
     expect(scaffold.ctx.agents.get(oneShotId)).toBeUndefined()
   })
@@ -879,7 +882,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       .getByRole('treeitem', { name: /Ask a research subagent to/ })
       .click()
     await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
-      .getByText(CHILD_NAME, { exact: true }).click()
+      .getByText(LABEL, { exact: true }).click()
     await page.getByRole('textbox', { name: 'Message or run a task, / commands, @ files or sessions' }).waitFor()
     const forkResponse = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/session/fork')
@@ -908,7 +911,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     const sessions = page.getByRole('tree', { name: 'Sessions' })
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
     await (await showSubagentsSection(page)).getByRole('treeitem', { name: new RegExp(LABEL) })
-      .getByText(CHILD_NAME, { exact: true }).click()
+      .getByText(LABEL, { exact: true }).click()
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor()
     expect(scaffold.ctx.agents.get(childId)).toBeUndefined()
 
@@ -926,7 +929,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await sessions.getByRole('treeitem', { name: /Ask a research subagent to/ }).click()
     await sessionPanelToggle(page).press('Enter')
     await page.locator(SUBAGENTS_SECTION).getByRole('treeitem', { name: new RegExp(LABEL) })
-      .getByText(CHILD_NAME, { exact: true }).click()
+      .getByText(LABEL, { exact: true }).click()
     const input = page.locator('[data-composer-input][contenteditable="true"]').first()
     await input.waitFor()
     const promptResponse = page.waitForResponse(response =>
@@ -972,7 +975,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: `Expand ${LABEL} descendants`, exact: true }).click()
     await page.getByRole('treeitem', { name: new RegExp(NESTED_LABEL) }).waitFor()
     expect(await rootHeader.textContent()).toBe(progress)
-    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(CHILD_NAME, { exact: true }).click()
+    await page.getByRole('treeitem', { name: new RegExp(LABEL) }).getByText(LABEL, { exact: true }).click()
     const switcher = page.getByRole('button', { name: `Switch subagent: ${LABEL}`, exact: true })
     await switcher.click()
     const panel = page.locator('[data-subagent-panel]')
@@ -1110,7 +1113,7 @@ describe('web e2e: migration-required subagent catalog', () => {
       expect(observe.mock.calls.some(([id]) => id === childId || id === grandchildId)).toBe(false)
       expect(projections).not.toHaveBeenCalled()
 
-      await childRow.getByText(childId, { exact: true }).click()
+      await childRow.getByText(childLabel, { exact: true }).click()
       await page.getByRole('button', { name: `Switch subagent: ${childLabel}`, exact: true }).waitFor()
       await showSessionPanel(page)
       const grandchildRow = tree.getByRole('treeitem', { name: new RegExp(grandchildLabel) })

@@ -7,7 +7,8 @@ import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/c
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronRightOutlineRegular, IconRefreshOutlineRegular, IconCheckOutlineRegular, StateDot, Tooltip,
+  HoverCard, HoverDetails, IconCheckOutlineRegular, IconChevronRightOutlineRegular, IconClockOutlineRegular, IconDatabaseOutlineRegular,
+  IconRefreshOutlineRegular, StateDot, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { NS } from './locales.ts'
@@ -45,6 +46,8 @@ interface CatalogRowsProps {
   refreshProjection: (parentSessionId: SessionId) => void
   toggleBranch: (childSessionId: SessionId) => void
   closeCatalog: () => void
+  /** One-line rows whose name, owner, state, and measures show in a hover card. */
+  dense: boolean
 }
 
 /**
@@ -218,7 +221,7 @@ function catalogProgress(entries: SubagentCatalogSnapshot['entries'], summaries:
 /** Render one catalog level and recurse only through explicitly expanded rows. */
 function CatalogRows({
   parentSessionId, currentSessionId, catalog, catalogs, summaries, expanded, level,
-  openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, t,
+  openChild, openChildAside, refreshProjection, toggleBranch, closeCatalog, dense, t,
 }: CatalogRowsProps & { t: TranslateNS<typeof NS> }) {
   const [now, setNow] = useState(() => Date.now())
   const running = catalog.entries.some(entry => entry.activity === 'running')
@@ -292,6 +295,7 @@ function CatalogRows({
         const metrics = [tokenMetric, durationMetric?.exact]
           .filter(value => value !== undefined)
           .join(' · ')
+        const dotState = entry.activity === 'running' ? 'ongoing' : completed ? 'done' : 'idle'
 
         const open = (): void => {
           if (external) return
@@ -322,44 +326,45 @@ function CatalogRows({
           toggleBranch(entry.id)
         }
 
-        return (
-          <div key={entry.id} className={css.node}>
-            <div
-              role="treeitem"
-              tabIndex={external ? -1 : 0}
-              aria-disabled={external || undefined}
-              aria-level={level}
-              aria-current={isCurrent || undefined}
-              aria-label={[primaryLabel, secondary, metrics].filter(value => value !== '').join(' ')}
-              {...canExpand ? { 'aria-expanded': isExpanded } : {}}
-              className={css.row}
-              onClick={open}
-              onKeyDown={handleKey}
-            >
-              {!canExpand
-                ? reserveDisclosure && <span className={css.disclosureSpace} />
-                : (
-                  <button
-                    type="button"
-                    tabIndex={-1}
-                    className={`${css.disclosure} ${isExpanded ? css.disclosureOpen : ''}`}
-                    aria-label={t(isExpanded ? 'branch.collapse' : 'branch.expand', { label: primaryLabel })}
-                    onClick={toggle}
-                  >
-                    <IconChevronRightOutlineRegular />
-                  </button>
+        const row = (
+          <div
+            role="treeitem"
+            tabIndex={external ? -1 : 0}
+            aria-disabled={external || undefined}
+            aria-level={level}
+            aria-current={isCurrent || undefined}
+            aria-label={[primaryLabel, secondary, metrics].filter(value => value !== '').join(' ')}
+            {...canExpand ? { 'aria-expanded': isExpanded } : {}}
+            className={css.row}
+            onClick={open}
+            onKeyDown={handleKey}
+          >
+            {!canExpand
+              ? reserveDisclosure && <span className={css.disclosureSpace} />
+              : (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className={`${css.disclosure} ${isExpanded ? css.disclosureOpen : ''}`}
+                  aria-label={t(isExpanded ? 'branch.collapse' : 'branch.expand', { label: primaryLabel })}
+                  onClick={toggle}
+                >
+                  <IconChevronRightOutlineRegular />
+                </button>
+              )}
+            <div className={css.clickarea}>
+              <span className={css.rowActivitySlot}>
+                <StateDot state={dotState} />
+              </span>
+              <span className={css.content}>
+                <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
+                {!dense && secondaryLabel !== undefined && (
+                  <span className={css.secondaryLabel}>{secondaryLabel}</span>
                 )}
-              <div className={css.clickarea}>
-                <span className={css.rowActivitySlot}>
-                  <StateDot state={entry.activity === 'running' ? 'ongoing' : completed ? 'done' : 'idle'} />
-                </span>
-                <span className={css.content}>
-                  <span className={`${css.label} ${isCurrent ? css.currentLabel : ''}`}>{primaryLabel}</span>
-                  {secondaryLabel !== undefined && (
-                    <span className={css.secondaryLabel}>{secondaryLabel}</span>
-                  )}
-                </span>
-                {metrics !== '' && (
+              </span>
+              {dense
+                ? durationMetric !== undefined && <span className={css.duration}>{durationMetric.compact}</span>
+                : metrics !== '' && (
                   <span className={css.metrics}>
                     {tokenMetric !== undefined && <span className={css.metricToken}>{tokenMetric}</span>}
                     {durationMetric !== undefined && (
@@ -367,32 +372,48 @@ function CatalogRows({
                     )}
                   </span>
                 )}
-                {isCurrent
-                  ? (
-                    <span className={`${css.sidebarSpace} ${css.currentCheck}`} aria-hidden data-subagent-current>
-                      <IconCheckOutlineRegular size={16} />
-                    </span>
-                  )
-                  : external ? <span className={css.sidebarSpace} /> : (
-                    <Tooltip label={t('open.sidebar')} delayMs={500} side="bottom" align="end">
-                      <button
-                        type="button"
-                        className={css.sidebarButton}
-                        aria-label={t('open.sidebar.aria', { label: primaryLabel })}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
-                          closeCatalog()
-                        }}
-                        onKeyDown={(event) => { event.stopPropagation() }}
-                      >
-                        <IconChevronRightOutlineRegular />
-                      </button>
-                    </Tooltip>
-                  )}
-              </div>
+              {isCurrent
+                ? (
+                  <span className={`${css.sidebarSpace} ${css.currentCheck}`} aria-hidden data-subagent-current>
+                    <IconCheckOutlineRegular size={16} />
+                  </span>
+                )
+                : external ? <span className={css.sidebarSpace} /> : (
+                  <Tooltip label={t('open.sidebar')} delayMs={500} side="bottom" align="end">
+                    <button
+                      type="button"
+                      className={css.sidebarButton}
+                      aria-label={t('open.sidebar.aria', { label: primaryLabel })}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        openChildAside({ parentSessionId, childSessionId: entry.id, mode: entry.mode })
+                        closeCatalog()
+                      }}
+                      onKeyDown={(event) => { event.stopPropagation() }}
+                    >
+                      <IconChevronRightOutlineRegular />
+                    </button>
+                  </Tooltip>
+                )}
             </div>
+          </div>
+        )
+        const details = (
+          <HoverDetails
+            title={primaryLabel}
+            lines={secondaryLabel === undefined ? [] : [t('hover.owner', { name: secondaryLabel })]}
+            status={{ state: dotState, label: [activity, mode].filter(value => value !== undefined).join(' · ') }}
+            facts={[
+              ...tokenMetric === undefined ? [] : [{ icon: <IconDatabaseOutlineRegular />, label: tokenMetric }],
+              ...durationMetric === undefined ? [] : [{ icon: <IconClockOutlineRegular />, label: durationMetric.exact }],
+            ]}
+          />
+        )
+
+        return (
+          <div key={entry.id} className={css.node}>
+            {dense ? <HoverCard grouped anchor={row} content={details} /> : row}
             {!isExpanded && !external && !requiresOpening && childCatalog?.state === 'error' && (
               <div className={css.error} role="alert">
                 <span>{t('load.error')}</span>
@@ -417,6 +438,7 @@ function CatalogRows({
                   refreshProjection={refreshProjection}
                   toggleBranch={toggleBranch}
                   closeCatalog={closeCatalog}
+                  dense={dense}
                   t={t}
                 />
               </div>
@@ -499,6 +521,8 @@ export interface CatalogTreeProps {
   onOpened: () => void
   /** Focus the first row on mount, as a keyboard-opened popover does. */
   focusFirst?: boolean
+  /** One-line rows whose name, owner, state, and measures show in a hover card, as the Session panel lists them. */
+  dense?: boolean
   t: TranslateNS<typeof NS>
 }
 
@@ -511,7 +535,7 @@ export interface CatalogTreeProps {
  */
 export function CatalogTree({
   rootSessionId, currentSessionId, catalog, catalogs, summaries,
-  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, t,
+  openChild, openChildAside, prepareLevel, onOpened, focusFirst = false, dense = false, t,
 }: CatalogTreeProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<SessionId>>(() => new Set())
   const treeRef = useRef<HTMLDivElement>(null)
@@ -568,6 +592,7 @@ export function CatalogTree({
         refreshProjection={prepareLevel}
         toggleBranch={toggleBranch}
         closeCatalog={onOpened}
+        dense={dense}
         t={t}
       />
     </div>

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JobsSnapshot, JobView, ObservedJob } from '@deepseek-ai/dsh-api-job-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
-  IconChevronDownOutlineRegular, IconStopFillRegular, MarqueeText, StateDot, type StateDotState, TerminalBlock,
-  type TerminalBlockLabels, Tooltip, useHoverMarquee,
+  HoverCard, HoverCardGroup, HoverDetails, IconChevronDownOutlineRegular, IconClockOutlineRegular, IconStopFillRegular, MarqueeText,
+  StateDot, type StateDotState, TerminalBlock, type TerminalBlockLabels, Tooltip, useHoverMarquee,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime, PropsStore, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { createJobsSectionStore } from './jobs-store.ts'
@@ -205,13 +205,14 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
   const duration = formatDuration(elapsed, t)
   const labelRef = useRef<HTMLSpanElement>(null)
   const marquee = useHoverMarquee(labelRef)
+  const summaryId = useId()
+  const state = detail ?? status
+  // The row shows the command alone; the kind and state reach assistive technology here and sighted users in the hover card.
   const body = (
     <>
       <span className={css.glyph}><StateDot state={dotState(job)} /></span>
-      <span className={css.main}>
-        <MarqueeText ref={labelRef} className={css.label} data-job-label="">{job.label}</MarqueeText>
-        <span className={css.secondary}>{`${job.kind} · ${detail ?? status}`}</span>
-      </span>
+      <MarqueeText ref={labelRef} className={css.label} data-job-label="">{job.label}</MarqueeText>
+      <span id={summaryId} className={css.visuallyHidden}>{`${job.kind} · ${state}`}</span>
       <span className={css.duration}>{duration}</span>
     </>
   )
@@ -220,49 +221,68 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
     : kill?.state === 'failed' ? t('kill.failed') : t('kill.stop', { label: job.label })
   return (
     <li className={css.item}>
-      {/* A command its cell clips crawls into view while the pointer rests on the row. */}
-      <div className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine} onPointerEnter={marquee.enter} onPointerLeave={marquee.leave}>
-        {observable
-          ? (
-            <button
-              type="button"
-              className={css.row}
-              aria-expanded={expanded}
-              aria-label={t(expanded ? 'row.collapseAria' : 'row.expandAria', { label: job.label })}
-              onClick={onToggle}
-            >
-              {body}
-            </button>
-          )
-          : <span className={css.row}>{body}</span>}
-        {kill !== undefined
-          ? (
-            <Tooltip label={killTitle} side="bottom" align="end" delayMs={500} portal>
-              <button
-                type="button"
-                className={
-                  kill.state === 'armed'
-                    ? `${css.stop} ${css.stopArmed}`
-                    : kill.state === 'failed' ? `${css.stop} ${css.stopFailed}` : css.stop
-                }
-                data-kill-state={kill.state}
-                disabled={kill.state === 'pending'}
-                aria-label={killTitle}
-                onClick={kill.onPress}
-              >
-                <IconStopFillRegular size={12} />
-                {/* The armed press must be legible without hover: the button
-                    widens into a labeled confirm pill instead of a tint only. */}
-                {kill.state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
-              </button>
-            </Tooltip>
-          )
-          : null}
-        {/* The row button's overlay takes presses here too; a row without output keeps the column empty. */}
-        <span className={css.chevron} aria-hidden="true">
-          {observable ? <IconChevronDownOutlineRegular size={14} className={expanded ? css.chevronOpen : undefined} /> : null}
-        </span>
-      </div>
+      <HoverCard
+        grouped
+        content={(
+          <HoverDetails
+            title={job.label}
+            lines={[job.kind]}
+            status={{ state: dotState(job), label: state }}
+            facts={[{ icon: <IconClockOutlineRegular />, label: duration }]}
+          />
+        )}
+        anchor={(
+          // A command its cell clips crawls into view while the pointer rests on the row.
+          <div
+            className={observable ? `${css.rowLine} ${css.rowInteractive}` : css.rowLine}
+            data-job-row=""
+            onPointerEnter={marquee.enter}
+            onPointerLeave={marquee.leave}
+          >
+            {observable
+              ? (
+                <button
+                  type="button"
+                  className={css.row}
+                  aria-expanded={expanded}
+                  aria-label={t(expanded ? 'row.collapseAria' : 'row.expandAria', { label: job.label })}
+                  aria-describedby={summaryId}
+                  onClick={onToggle}
+                >
+                  {body}
+                </button>
+              )
+              : <span className={css.row}>{body}</span>}
+            {kill !== undefined
+              ? (
+                <Tooltip label={killTitle} side="bottom" align="end" delayMs={500} portal>
+                  <button
+                    type="button"
+                    className={
+                      kill.state === 'armed'
+                        ? `${css.stop} ${css.stopArmed}`
+                        : kill.state === 'failed' ? `${css.stop} ${css.stopFailed}` : css.stop
+                    }
+                    data-kill-state={kill.state}
+                    disabled={kill.state === 'pending'}
+                    aria-label={killTitle}
+                    onClick={kill.onPress}
+                  >
+                    <IconStopFillRegular size={12} />
+                    {/* The armed press must be legible without hover: the button
+                        widens into a labeled confirm pill instead of a tint only. */}
+                    {kill.state === 'armed' ? <span className={css.stopLabel}>{t('kill.confirmAction')}</span> : null}
+                  </button>
+                </Tooltip>
+              )
+              : null}
+            {/* The row button's overlay takes presses here too; a row without output keeps the column empty. */}
+            <span className={css.chevron} aria-hidden="true">
+              {observable ? <IconChevronDownOutlineRegular size={14} className={expanded ? css.chevronOpen : undefined} /> : null}
+            </span>
+          </div>
+        )}
+      />
       {expanded && view !== undefined
         ? (
           <div className={css.panel}>
@@ -414,29 +434,32 @@ export function JobsSection({ sessionId, useJobs, watchRows, observe, killJob, u
   )
 
   return (
-    // The section's heading names the region; a list name would repeat it.
-    <ul className={css.list} data-jobs-section="">
-      {liveRows.map(item)}
-      {settledRows.length > 0
-        ? (
-          <li className={css.sectionHeader}>
-            <button
-              type="button"
-              className={css.sectionToggle}
-              aria-expanded={settledExpanded}
-              onClick={() => { actions.settledOpened(!settledExpanded) }}
-            >
-              {t('section.settledCount', { count: settledRows.length })}
-              <IconChevronDownOutlineRegular size={14} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
-            </button>
-            <button type="button" className={css.sectionClear} onClick={clearSettled}>
-              {t('section.clear')}
-            </button>
-          </li>
-        )
-        : null}
-      {settledExpanded ? settledRows.map(item) : null}
-    </ul>
+    // Moving between rows swaps their hover cards without another dwell.
+    <HoverCardGroup>
+      {/* The section's heading names the region; a list name would repeat it. */}
+      <ul className={css.list} data-jobs-section="">
+        {liveRows.map(item)}
+        {settledRows.length > 0
+          ? (
+            <li className={css.sectionHeader}>
+              <button
+                type="button"
+                className={css.sectionToggle}
+                aria-expanded={settledExpanded}
+                onClick={() => { actions.settledOpened(!settledExpanded) }}
+              >
+                {t('section.settledCount', { count: settledRows.length })}
+                <IconChevronDownOutlineRegular size={14} className={settledExpanded ? `${css.sectionChevron} ${css.sectionChevronOpen}` : css.sectionChevron} />
+              </button>
+              <button type="button" className={css.sectionClear} onClick={clearSettled}>
+                {t('section.clear')}
+              </button>
+            </li>
+          )
+          : null}
+        {settledExpanded ? settledRows.map(item) : null}
+      </ul>
+    </HoverCardGroup>
   )
 }
 
