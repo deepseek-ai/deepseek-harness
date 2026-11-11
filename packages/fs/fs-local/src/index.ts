@@ -13,7 +13,8 @@ import { watch } from 'chokidar'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import z from '@deepseek-ai/schemastery'
-import { FileSystem, FsError, FsVersion } from '@deepseek-ai/dsh-fs'
+import { FileSystem, FsError, type FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   FsDeleteOutcome,
   FsMoveOutcome,
@@ -388,7 +389,7 @@ export class LocalFileSystem extends FileSystem {
    * concurrent unlink between rename and stat; fall back to a sentinel version. */
   private versionAfterWrite(after: { version: FsVersion } | null, target: FsTarget): FsVersion {
     if (after) return after.version
-    return FsVersion(`missing:${target.targetKey}`)
+    return brandString<FsVersion>(`missing:${target.targetKey}`)
   }
 }
 

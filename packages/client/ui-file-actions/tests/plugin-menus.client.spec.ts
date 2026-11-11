@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 /** File-operation contributions survive removal of application-opening providers. */
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply } from '../src/client/index.ts'
 import type { FileActionSource } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -35,7 +36,7 @@ it('contributes file and image operations without open-in-app and withdraws them
     expect(ctx.slots.entries('contextMenu.icon').map(entry => entry.options.key)).toEqual([
       'file-actions.copy', 'file-actions.download', 'file-actions.save',
     ])
-    const file = registry.resolve({ kind: 'file', value: { sessionId: SessionId('files'), path: 'image.png' } })
+    const file = registry.resolve({ kind: 'file', value: { sessionId: brandString<SessionId>('files'), path: 'image.png' } })
     await file.ready
     expect(file.source.getSnapshot().map(action => action.id)).toEqual([
       'file-actions.file/copyImage', 'file-actions.file/download',
@@ -45,13 +46,13 @@ it('contributes file and image operations without open-in-app and withdraws them
       await source.read!(new AbortController().signal)
       return { status: 'requested' }
     })
-    const downloading = registry.resolve({ kind: 'file', value: { sessionId: SessionId('files'), path: 'report.txt' } })
+    const downloading = registry.resolve({ kind: 'file', value: { sessionId: brandString<SessionId>('files'), path: 'report.txt' } })
     await downloading.ready
     expect(downloading.source.getSnapshot().map(action => action.id)).toEqual(['file-actions.file/download'])
     downloading.select('file-actions.file/download')
     await vi.waitFor(() => { expect(notify).toHaveBeenCalledWith('menu.downloadStarted', true, undefined) })
     expect(save).toHaveBeenCalledOnce()
-    expect(readBytes).toHaveBeenCalledWith(SessionId('files'), 'report.txt', {}, expect.any(AbortSignal))
+    expect(readBytes).toHaveBeenCalledWith(brandString<SessionId>('files'), 'report.txt', {}, expect.any(AbortSignal))
     save.mockRestore()
     const image = registry.resolve({ kind: 'image', value: { url: 'https://example.com/image.png' } })
     await image.ready

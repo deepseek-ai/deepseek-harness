@@ -14,7 +14,8 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { IconBranchOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionProjectionValues } from '@deepseek-ai/dsh-api-session-controller/types'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { NS } from './locales.ts'
 
 export const name = 'liveshare-viewer-session-row'
@@ -31,7 +32,7 @@ function ViewerForkMarker({ sessionId, useSessions, t }: PropsRuntime<'sidebar.s
       || value.origin !== 'fork' || value.workspaceReadOnly !== true) return undefined
     return typeof value.sourceSessionId === 'string' ? value.sourceSessionId : ''
   })
-  const sourceTitle = useSessions(list => lineage ? list.byId[SessionId(lineage)]?.title : undefined)
+  const sourceTitle = useSessions(list => lineage ? list.byId[brandString<SessionId>(lineage)]?.title : undefined)
   if (lineage === undefined) return null
   const label = sourceTitle ? t('viewer.row.forkSource', { title: sourceTitle }) : t('viewer.row.fork')
   return <Tooltip label={label}><span><IconBranchOutlineRegular size={14} /></span></Tooltip>

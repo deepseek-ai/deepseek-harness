@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象负责激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 提供方为此接口提供原生执行。
+各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象负责激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 和 Windows 提供方负责各自平台的原生操作。
 
 ## 概述
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
+挂载 [macOS 提供方](../cua-macos/README.zh.md)或 [Windows 提供方](../cua-windows/README.zh.md)以启用对应平台的原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
 `cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中按 scoped REPL 语句运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，通过 `inspect(...values)` 展示选中的文字和截图；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 

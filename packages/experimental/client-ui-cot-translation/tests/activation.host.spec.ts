@@ -8,13 +8,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createSessionTestController } from '../../../api/session-controller/tests/test-remote.ts'
 import Translator from '@deepseek-ai/dsh-experimental-translator'
-import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQuery from '@deepseek-ai/dsh-session-query'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, expect, it, vi } from 'vitest'
 import CotTranslationController from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Real stored-session reads; this fixture does not provide full-text search. */
 class ReadOnlySessionQuery extends SessionQuery {
@@ -73,7 +74,7 @@ async function fixture(origin?: 'subagent') {
   const ui = ctx.plugin(CotTranslationController, {})
   await ui
 
-  const id = SessionId('saved-conversation')
+  const id = brandString<SessionId>('saved-conversation')
   const original = [
     { type: 'turn/start' as const, seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     { type: 'turn/end' as const, seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' as const } } },
@@ -81,7 +82,7 @@ async function fixture(origin?: 'subagent') {
   await using writer = await ctx.sessionPersistence.create({
     version: SESSION_FORMAT_VERSION, id, createdAt: 1, cwd: root, isSeeded: false,
     delegationDepth: origin === undefined ? 0 : 1,
-    ...origin === undefined ? {} : { origin, parentSession: SessionId('parent-conversation') },
+    ...origin === undefined ? {} : { origin, parentSession: brandString<SessionId>('parent-conversation') },
   })
   await writer.append(original)
   await writer.flush()

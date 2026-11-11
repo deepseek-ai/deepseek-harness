@@ -2,7 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedInbox, unsupportedModel } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /**
  * Build an Agent whose behavior beyond its identity, context and Session is unused.
@@ -12,7 +13,7 @@ import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-ses
  * @returns the Agent.
  */
 export function agentFor(ctx: Context, id: string, options: { cwd?: string; subagent?: boolean } = {}): Agent {
-  const sessionId = SessionId(id)
+  const sessionId = brandString<SessionId>(id)
   const session = Session.create(sessionId, [], {
     version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 0, isSeeded: false,
     ...options.cwd === undefined ? {} : { cwd: options.cwd },

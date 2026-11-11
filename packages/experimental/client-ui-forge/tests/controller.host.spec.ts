@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ForgeFailure, ForgeProvider, ForgeReadiness } from '@deepseek-ai/dsh-experimental-forge'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import { appendPluginRecord, SessionId } from '@deepseek-ai/dsh-session'
+import { appendPluginRecord, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import ForgePanelController from '../src/index.ts'
@@ -16,6 +16,7 @@ import {
   rejectionOf, repository, scratch, sendPrompt, shellTurn, snapshot, startStep, startTurn,
 } from './harness.ts'
 import type { Bench, BenchOptions, Follower } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -694,7 +695,7 @@ describe('forgePanel change request diffs', () => {
     await expect(paths()).resolves.toEqual(['src/a.ts'])
     opened.provider.patches.set(7, PATCH.replaceAll('src/a.ts', 'src/b.ts'))
     await expect(paths()).resolves.toEqual(['src/a.ts'])
-    const other = opened.ctx.sessions.create(SessionId('forge-panel-other'), { meta: { cwd: repo } })
+    const other = opened.ctx.sessions.create(brandString<SessionId>('forge-panel-other'), { meta: { cwd: repo } })
     opened.ctx.forgeSession.track(other, pullUrl(7))
     await expect(paths(other)).resolves.toEqual(['src/a.ts'])
     expect(opened.provider.diffs).toEqual([7, 7])
@@ -1697,7 +1698,7 @@ describe('forgePanel leaving a worktree', () => {
     const opened = await open(repo, {}, { worktrees: true })
     await expect(opened.ctx.forgePanel.continueInProject(opened.session, signal)).rejects.toMatchObject({ code: 'forgePanel/no-worktree' })
     const created = await startInWorktree(opened)
-    const unloaded = opened.ctx.sessions.create(SessionId('forge-panel-unloaded'), { meta: { cwd: created.path } })
+    const unloaded = opened.ctx.sessions.create(brandString<SessionId>('forge-panel-unloaded'), { meta: { cwd: created.path } })
     recordWorktree(unloaded, created)
     const release = occupy(opened)
 
@@ -1822,7 +1823,7 @@ describe('forgePanel actions', () => {
     // The refresh found the same state, which the panel already published.
     const refreshed = follower.states.at(-1)
     expect(refreshed?.checkout.state).toBe('none')
-    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null }])
+    expect(refreshed?.changeRequests).toEqual([{ url: 'https://unserved.test/a/b/pull/3', origin: 'created', ref: null, update: null, snapshot: null, reviewRevision: 0 }])
     expect(opened.sandbox.calls.length).toBeGreaterThan(inspections)
     expect(opened.provider.fetches).toEqual([])
     expect(opened.provider.probes).toEqual([])
@@ -2060,6 +2061,10 @@ describe('forgePanel configuration', () => {
     [{ maxBranches: 2.5 }, 'forge-panel: maxBranches must be a positive integer'],
     [{ maxCachedDiffBytes: 0 }, 'forge-panel: maxCachedDiffBytes must be a positive integer'],
     [{ maxCommits: 0 }, 'forge-panel: maxCommits must be a positive integer'],
+    [{ lensTimeoutMs: 0 }, 'forge-panel: lensTimeoutMs must be a positive integer no greater than 2147483647'],
+    [{ maxLensReadBytes: 0 }, 'forge-panel: maxLensReadBytes must be a positive integer'],
+    [{ maxCachedLensBytes: -1 }, 'forge-panel: maxCachedLensBytes must be a positive integer'],
+    [{ maxAnnotationsPerFile: 1.5 }, 'forge-panel: maxAnnotationsPerFile must be a positive integer'],
     [{ testPaths: ['**/*.spec.*', ' '] }, 'forge-panel: testPaths entries must not be empty'],
     [{ interfacePaths: [''] }, 'forge-panel: interfacePaths entries must not be empty'],
     [{ worktreePrefix: '-dsh/' }, prefix],

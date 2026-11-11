@@ -7,7 +7,7 @@ import {
   SessionLogOffset,
   SessionSeq,
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
 } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import {
@@ -16,10 +16,11 @@ import {
   subagentCatalogProjectionDefinition,
 } from '../src/catalog.ts'
 import type { SubagentCatalogState } from '../src/catalog.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const header: SessionHeader = {
   version: SESSION_FORMAT_VERSION,
-  id: SessionId('catalog-parent'),
+  id: brandString<SessionId>('catalog-parent'),
   createdAt: 0,
   isSeeded: false,
 }
@@ -45,7 +46,7 @@ function fact(
     time: 0,
     data: {
       version: 0,
-      childId: SessionId(childId),
+      childId: brandString<SessionId>(childId),
       childCreatedAt,
       ...descriptor,
     },
@@ -59,7 +60,7 @@ describe('subagent catalog projection', () => {
       await ctx.plugin(SessionStore)
       const parent = ctx.sessions.create(header.id)
       const before = Date.now()
-      establishExternalCatalogChild(parent, SessionId('external'), 'External work', 'agent-1')
+      establishExternalCatalogChild(parent, brandString<SessionId>('external'), 'External work', 'agent-1')
       const events = parent.snapshotEvents()
       expect(events).toHaveLength(1)
       expect(events[0]).toMatchObject({
@@ -89,7 +90,7 @@ describe('subagent catalog projection', () => {
       parent.append('subagent/catalog', fact(0, 'first', 1, { mode: 'one-shot' }).data)
       const first = ctx.sessionProjections.snapshot(parent)
       expect(first.values.subagentCatalog).toEqual([
-        { id: SessionId('first'), createdAt: 1, mode: 'one-shot' },
+        { id: brandString<SessionId>('first'), createdAt: 1, mode: 'one-shot' },
       ])
       changes.mockClear()
       parent.append('session/title', { title: 'Parent', messageSeqs: [], source: { kind: 'user' } })
@@ -123,19 +124,19 @@ describe('subagent catalog projection', () => {
     expect(JSON.stringify(first)).toBe(checkpoint)
     expect(subagentCatalogProjectionDefinition.wire.view(first)).toHaveLength(64)
     expect(subagentCatalogProjectionDefinition.wire.view(restored).map(entry => entry.id))
-      .toEqual(Array.from({ length: 130 }, (_, i) => SessionId(`child-${i}`)))
+      .toEqual(Array.from({ length: 130 }, (_, i) => brandString<SessionId>(`child-${i}`)))
   })
 
   it.each([0, 1] as const)('reads known catalog modes at payload version %s', (version) => {
     const events: SessionEvent[] = [
       { type: 'subagent/catalog', seq: SessionSeq(0), time: 0,
-        data: { version, childId: SessionId('once'), childCreatedAt: 1, mode: 'one-shot' } },
+        data: { version, childId: brandString<SessionId>('once'), childCreatedAt: 1, mode: 'one-shot' } },
       { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,
-        data: { version, childId: SessionId('ongoing'), childCreatedAt: 2, mode: 'continuable', label: 'child' } },
+        data: { version, childId: brandString<SessionId>('ongoing'), childCreatedAt: 2, mode: 'continuable', label: 'child' } },
     ]
     expect(subagentCatalogProjectionDefinition.wire.view(fold(events))).toEqual([
-      { id: SessionId('once'), createdAt: 1, mode: 'one-shot' },
-      { id: SessionId('ongoing'), createdAt: 2, mode: 'continuable', label: 'child' },
+      { id: brandString<SessionId>('once'), createdAt: 1, mode: 'one-shot' },
+      { id: brandString<SessionId>('ongoing'), createdAt: 2, mode: 'continuable', label: 'child' },
     ])
   })
 
@@ -145,7 +146,7 @@ describe('subagent catalog projection', () => {
       fact(1, 'child-a', 1, { mode: 'one-shot', label: 'once' }),
       fact(2, 'child-d', 3, { mode: 'continuable', label: 'later' }),
       { type: 'subagent/catalog', seq: SessionSeq(3), time: 0,
-        data: { version: 1, childId: SessionId('unreadable'), childCreatedAt: 4, mode: 'unknown' } },
+        data: { version: 1, childId: brandString<SessionId>('unreadable'), childCreatedAt: 4, mode: 'unknown' } },
     ]
     const state = fold(events)
 
@@ -157,10 +158,10 @@ describe('subagent catalog projection', () => {
       { id: 'bad', createdAt: 1, mode: 'continuable' },
     ])).toThrow()
     expect(view).toEqual([
-      { id: SessionId('child-b'), createdAt: 1, mode: 'one-shot' },
-      { id: SessionId('child-a'), createdAt: 1, mode: 'one-shot', label: 'once' },
-      { id: SessionId('child-d'), createdAt: 3, mode: 'continuable', label: 'later' },
-      { id: SessionId('unreadable'), createdAt: 4, mode: 'unknown' },
+      { id: brandString<SessionId>('child-b'), createdAt: 1, mode: 'one-shot' },
+      { id: brandString<SessionId>('child-a'), createdAt: 1, mode: 'one-shot', label: 'once' },
+      { id: brandString<SessionId>('child-d'), createdAt: 3, mode: 'continuable', label: 'later' },
+      { id: brandString<SessionId>('unreadable'), createdAt: 4, mode: 'unknown' },
     ])
   })
 
@@ -221,18 +222,18 @@ describe('external catalog membership', () => {
   it('restores external leaves alongside local and unknown children', () => {
     const entry: SessionEvent<'subagent/catalog'> = {
       type: 'subagent/catalog', seq: SessionSeq(0), time: 0,
-      data: { version: 2, childId: SessionId('external'), childCreatedAt: 1, mode: 'external', label: 'Review' },
+      data: { version: 2, childId: brandString<SessionId>('external'), childCreatedAt: 1, mode: 'external', label: 'Review' },
     }
     const unknown: SessionEvent<'subagent/catalog'> = {
       type: 'subagent/catalog', seq: SessionSeq(3), time: 0,
-      data: { version: 1, childId: SessionId('unreadable'), childCreatedAt: 3, mode: 'unknown' },
+      data: { version: 1, childId: brandString<SessionId>('unreadable'), childCreatedAt: 3, mode: 'unknown' },
     }
     const state = fold([entry, fact(1, 'local', 2, { mode: 'continuable', label: 'Implement' }), unknown])
     const restored = subagentCatalogProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(state)))
     expect(subagentCatalogProjectionDefinition.wire.view(restored)).toEqual([
-      { id: SessionId('external'), createdAt: 1, mode: 'external', label: 'Review' },
-      { id: SessionId('local'), createdAt: 2, mode: 'continuable', label: 'Implement' },
-      { id: SessionId('unreadable'), createdAt: 3, mode: 'unknown' },
+      { id: brandString<SessionId>('external'), createdAt: 1, mode: 'external', label: 'Review' },
+      { id: brandString<SessionId>('local'), createdAt: 2, mode: 'continuable', label: 'Implement' },
+      { id: brandString<SessionId>('unreadable'), createdAt: 3, mode: 'unknown' },
     ])
     expect(subagentCatalogProjectionDefinition.wire.view(fold([entry]))[0]).toMatchObject({ mode: 'external' })
     const view = subagentCatalogProjectionDefinition.wire.view(restored)
@@ -251,16 +252,16 @@ describe('named catalog membership', () => {
       const historical: SessionEvent<'subagent/catalog'>[] = [
         fact(0, 'legacy-local', 1, { mode: 'continuable', label: 'Legacy' }),
         { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,
-          data: { version: 1, childId: SessionId('legacy-unknown'), childCreatedAt: 2, mode: 'unknown' } },
+          data: { version: 1, childId: brandString<SessionId>('legacy-unknown'), childCreatedAt: 2, mode: 'unknown' } },
         { type: 'subagent/catalog', seq: SessionSeq(2), time: 0,
-          data: { version: 2, childId: SessionId('legacy-external'), childCreatedAt: 3, mode: 'external' } },
+          data: { version: 2, childId: brandString<SessionId>('legacy-external'), childCreatedAt: 3, mode: 'external' } },
       ]
       const suffix: SessionEvent<'subagent/catalog'>[] = [
         { type: 'subagent/catalog', seq: SessionSeq(3), time: 0,
-          data: { version: 3, childId: SessionId('reviewer'), childCreatedAt: 4,
+          data: { version: 3, childId: brandString<SessionId>('reviewer'), childCreatedAt: 4,
             mode: 'continuable', label: 'Review', name: 'reviewer' } },
         { type: 'subagent/catalog', seq: SessionSeq(4), time: 0,
-          data: { version: 3, childId: SessionId('auditor'), childCreatedAt: 5, mode: 'external', name: 'auditor' } },
+          data: { version: 3, childId: brandString<SessionId>('auditor'), childCreatedAt: 5, mode: 'external', name: 'auditor' } },
       ]
       const checkpoint = { subagentCatalog: { ver: 6, seq: SessionSeq(2), val: {
         inheritedEventCount: 0, head: { values: historical.map(event => event.data) },
@@ -287,18 +288,18 @@ describe('named catalog membership', () => {
   it('restores version-3 names beside unnamed historical children', () => {
     const named: SessionEvent<'subagent/catalog'>[] = [
       { type: 'subagent/catalog', seq: SessionSeq(1), time: 0,
-        data: { version: 3, childId: SessionId('reviewer'), childCreatedAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' } },
+        data: { version: 3, childId: brandString<SessionId>('reviewer'), childCreatedAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' } },
       { type: 'subagent/catalog', seq: SessionSeq(2), time: 0,
-        data: { version: 3, childId: SessionId('auditor'), childCreatedAt: 3, mode: 'external', label: 'Audit', name: 'auditor' } },
+        data: { version: 3, childId: brandString<SessionId>('auditor'), childCreatedAt: 3, mode: 'external', label: 'Audit', name: 'auditor' } },
     ]
     const state = fold([fact(0, 'historical', 1, { mode: 'continuable', label: 'Old work' }), ...named])
     const view = subagentCatalogProjectionDefinition.wire.view(
       subagentCatalogProjectionDefinition.stateSchema.parse(JSON.parse(JSON.stringify(state))),
     )
     expect(view).toEqual([
-      { id: SessionId('historical'), createdAt: 1, mode: 'continuable', label: 'Old work' },
-      { id: SessionId('reviewer'), createdAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' },
-      { id: SessionId('auditor'), createdAt: 3, mode: 'external', label: 'Audit', name: 'auditor' },
+      { id: brandString<SessionId>('historical'), createdAt: 1, mode: 'continuable', label: 'Old work' },
+      { id: brandString<SessionId>('reviewer'), createdAt: 2, mode: 'continuable', label: 'Review', name: 'reviewer' },
+      { id: brandString<SessionId>('auditor'), createdAt: 3, mode: 'external', label: 'Audit', name: 'auditor' },
     ])
     expect(subagentCatalogProjectionDefinition.wire.viewSchema.parse(view)).toEqual(view)
     expect(subagentCatalogProjectionDefinition.wire.viewSchema.safeParse([{ ...view[1], name: 'Bad name' }]).success).toBe(false)

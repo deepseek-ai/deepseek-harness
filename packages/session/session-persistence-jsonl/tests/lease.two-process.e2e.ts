@@ -14,9 +14,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SESSION = 'two-process-lease'
 
@@ -48,9 +49,9 @@ describe('two-process write lock (built lib)', () => {
       const mine = ctx.sessionPersistence
 
       // Excluded while the other process's descriptor holds the kernel lock.
-      await expect(mine.open(SessionId(SESSION), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
+      await expect(mine.open(brandString<SessionId>(SESSION), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
       // Reads are unaffected across processes.
-      const reader = await mine.open(SessionId(SESSION), 'read')
+      const reader = await mine.open(brandString<SessionId>(SESSION), 'read')
       expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
       await reader.close()
 
@@ -58,7 +59,7 @@ describe('two-process write lock (built lib)', () => {
       // the process, so takeover succeeds without any waiting period.
       holder.kill('SIGKILL')
       await exited
-      const taken = await mine.open(SessionId(SESSION), 'write')
+      const taken = await mine.open(brandString<SessionId>(SESSION), 'write')
       await taken.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
       expect((await taken.read()).events.map(event => event.seq)).toEqual([0, 1, 2])
       await taken.close()

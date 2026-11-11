@@ -1,10 +1,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import { createMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HistoryController } from '../src/history/controller.ts'
 import { WebController } from '../src/web/controller.ts'
 import { installSessionReadTestServices } from './test-remote.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: Context[] = []
 const aborters: AbortController[] = []
@@ -20,7 +21,7 @@ async function fixture() {
   installSessionReadTestServices(ctx)
   const history = new HistoryController(ctx)
   const web = new WebController(ctx, history, (observation) => { observation[Symbol.dispose]() })
-  const session = ctx.sessions.create(SessionId('history-target'), { meta: { cwd: '/history-test' } })
+  const session = ctx.sessions.create(brandString<SessionId>('history-target'), { meta: { cwd: '/history-test' } })
   const abort = new AbortController()
   aborters.push(abort)
   const address = { kind: 'session' as const, sessionId: session.id }
@@ -155,7 +156,7 @@ describe('HistoryController passive reads', () => {
   it('maps missing subagent Follow reads through the Address error', async () => {
     const f = await fixture()
     const stream = f.web.follow({ address: {
-      kind: 'subagent', parentSessionId: f.session.id, childSessionId: SessionId('missing-child'), mode: 'continuable',
+      kind: 'subagent', parentSessionId: f.session.id, childSessionId: brandString<SessionId>('missing-child'), mode: 'continuable',
     } }, f.abort.signal)[Symbol.asyncIterator]()
     await expect(stream.next()).rejects.toMatchObject({ code: 'subagent/not-found' })
   })

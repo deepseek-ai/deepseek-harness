@@ -5,7 +5,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
 import { SessionResources } from '@deepseek-ai/dsh-experimental-browser-use-runtime'
 import { createMcpToolDefinition } from '@deepseek-ai/dsh-mcp-client'
 import { z } from 'zod'
@@ -96,7 +97,7 @@ export function apply(ctx: Context, input: Config): void {
     z.url().refine(value => /^(?:https?|wss?):/u.test(value), 'Expected an HTTP(S) or WS(S) endpoint').parse(config.cdpEndpoint)
   }
   ctx.effect(function* () {
-    yield ctx.browserUse.register(BrowserUseProviderName('stagehand-native'))
+    yield ctx.browserUse.register(brandString<BrowserUseProviderName>('stagehand-native'))
     const resources = new SessionResources<BrowserResource>(ctx, {
       label: 'stagehand-native',
       exclusive: config.mode === 'attach',

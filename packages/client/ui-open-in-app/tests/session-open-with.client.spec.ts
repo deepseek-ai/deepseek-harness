@@ -3,11 +3,12 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { MenuRegistry } from '@deepseek-ai/dsh-client-ui-context-menu/src/client/registry.ts'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { OpenInAppController } from '../src/client/controller.ts'
 import { registerSessionOpenWith } from '../src/client/session-open-with.ts'
 import { en, zh, NS } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function bench(apps: readonly string[] | null = ['finder', 'cursor'], cwd: string | undefined = '/captured') {
   const ctx = new Context()
@@ -19,7 +20,7 @@ function bench(apps: readonly string[] | null = ['finder', 'cursor'], cwd: strin
   const registry = new MenuRegistry(failed)
   onTestFinished(() => { registry.dispose() })
   ctx.provide('contextMenus', { register: registry.register.bind(registry) } as never)
-  const sessionId = SessionId('captured'), mainId = SessionId('main')
+  const sessionId = brandString<SessionId>('captured'), mainId = brandString<SessionId>('main')
   const row = { id: sessionId, ...(cwd === undefined ? {} : { cwd }), displayTitle: 'Captured', running: false, blank: false, updatedAt: 1, retainedBy: {} }
   const list = createSnapshotStore<SessionListState>({ ids: [sessionId, mainId], byId: {
     [sessionId]: row, [mainId]: { ...row, id: mainId, cwd: '/main', retainedBy: { mainView: 1 } },

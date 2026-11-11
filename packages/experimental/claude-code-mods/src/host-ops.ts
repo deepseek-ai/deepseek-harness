@@ -14,8 +14,9 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type { CommandDefinition } from '@deepseek-ai/dsh-commands'
 import type { FileSystem, FsTarget } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-error'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { WorkingDirectoryService } from '@deepseek-ai/dsh-working-directory'
@@ -359,7 +360,7 @@ export function createHostOps(options: HostOpsOptions): OpTable<AgentBinding> {
       const registry = ctx.get('tools')
       if (registry === undefined) throw new Error('$.tool.call needs a tool registry (dsh-tools), which this deployment did not compose')
       const { tool, tool_use_id: _ignored, agentId: _agent, ...args } = record(input)
-      const callId = ToolCallId(`mod-${randomUUID()}`)
+      const callId = brandString<ToolCallId>(`mod-${randomUUID()}`)
       // The pipeline raises `tool.call` for this call from the calling mod, so only earlier mods see it.
       options.callOrigins.set(callId, context.mod)
       try {

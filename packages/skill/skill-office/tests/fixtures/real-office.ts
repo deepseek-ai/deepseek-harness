@@ -1,7 +1,8 @@
 /** Shared model configuration and context assertions for real Office workflows. */
 import { expect } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ImageBlock } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 
 /** @returns Model provider patches for the configured development or official API. */
 export function officeModelPatches() {
@@ -73,6 +74,6 @@ export function officeImages(events: readonly SessionEvent[]): ImageBlock[] {
 export function expectNoRenderContext(events: readonly SessionEvent[]): void {
   const calls = officeCalls(events)
   expect(calls.filter(call => call.name === 'office_render'), JSON.stringify(calls)).toEqual([])
-  const messages = Session.create(SessionId('office-context'), events).deriveMessages()
+  const messages = Session.create(brandString<SessionId>('office-context'), events).deriveMessages()
   expect(JSON.stringify(messages)).not.toMatch(/Render the saved deliverable/)
 }

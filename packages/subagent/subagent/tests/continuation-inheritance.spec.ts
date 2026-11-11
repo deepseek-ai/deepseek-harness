@@ -17,7 +17,7 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { subagentManager } from './manager-internals.ts'
@@ -28,6 +28,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -55,7 +56,7 @@ async function setup(script: Script) {
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
 

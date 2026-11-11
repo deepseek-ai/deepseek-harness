@@ -5,15 +5,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import type { SubagentCapabilities, SubagentProvider, SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
-import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
+import { WorkflowEngine } from '@deepseek-ai/dsh-workflow'
 import type { WorkflowResult, WorkflowRun, WorkflowStartRequest } from '@deepseek-ai/dsh-workflow'
 import * as toolRalph from '../src/index.ts'
 
@@ -33,7 +35,7 @@ class StubEngine extends WorkflowEngine {
     const result = new Promise<WorkflowResult>((resolve) => { this.settle = resolve })
     this.onStart?.()
     return {
-      id: WorkflowRunId(`ralph-${this.requests.length}`),
+      id: brandString<WorkflowRunId>(`ralph-${this.requests.length}`),
       meta: request.meta,
       result,
       cancel: (reason?: string) => {
@@ -95,7 +97,7 @@ async function setup(options?: SetupOptions) {
   if (options?.config?.maxHandoffChars !== undefined) config.maxHandoffChars = options.config.maxHandoffChars
   if (options?.config?.maxResultChars !== undefined) config.maxResultChars = options.config.maxResultChars
   const fiber = await ctx.plugin(toolRalph, config)
-  const parent = { id: SessionId('caller'), options: {} } as Agent
+  const parent = { id: brandString<SessionId>('caller'), options: {} } as Agent
   return { ctx, engine: ctx.workflowEngine as StubEngine, parent, fiber }
 }
 
@@ -106,7 +108,7 @@ function execute(
 ): Promise<ToolExecutionResult> {
   return executeToolFixture(ctx, {
     signal: extra?.signal ?? testToolSignal,
-    callId: ToolCallId('ralph-call'),
+    callId: brandString<ToolCallId>('ralph-call'),
     name: 'ralph',
     arguments: args,
     ...extra?.agent === undefined ? {} : { agent: extra.agent },

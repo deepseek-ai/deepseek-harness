@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { FsError, type FsTargetKey, type FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { LocalFileSystem } from '@deepseek-ai/dsh-fs-local'
 import { SessionMediaReferences } from '../src/media-references.ts'
 
@@ -176,7 +177,7 @@ describe('SessionMediaReferences /api/file', () => {
     expect(read).not.toHaveBeenCalled()
     expect((await route.call(join(root, 'missing'), { method: 'HEAD' })).status).toBe(404)
     expect((await route.call(root, { method: 'HEAD' })).status).toBe(403)
-    vi.spyOn(route.fs, 'stat').mockResolvedValue({ type: 'file', version: FsVersion('v1') })
+    vi.spyOn(route.fs, 'stat').mockResolvedValue({ type: 'file', version: brandString<FsVersion>('v1') })
     expect((await route.call(path, { method: 'HEAD' })).headers.get('content-length')).toBeNull()
   })
 
@@ -220,9 +221,9 @@ describe('SessionMediaReferences /api/file', () => {
 
   it('reads opaque remote targets through ctx.fs and preserves provider failures', async () => {
     const route = await mount()
-    const target = { targetKey: FsTargetKey('opaque-remote-id'), displayPath: '/remote/photo.png' }
+    const target = { targetKey: brandString<FsTargetKey>('opaque-remote-id'), displayPath: '/remote/photo.png' }
     vi.spyOn(route.fs, 'resolve').mockResolvedValue(target)
-    vi.spyOn(route.fs, 'stat').mockResolvedValue({ type: 'file', version: FsVersion('r1') })
+    vi.spyOn(route.fs, 'stat').mockResolvedValue({ type: 'file', version: brandString<FsVersion>('r1') })
     const read = vi.spyOn(route.fs, 'readBytes').mockResolvedValue(PNG_BYTES)
     expect(await responseBytes(await route.call('/remote/photo.png'))).toEqual(PNG_BYTES)
     expect(read).toHaveBeenCalledWith(target, expect.any(AbortSignal), DEFAULT_LIMIT)

@@ -6,10 +6,11 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import { launchWebScaffold, seedSession, watchConsole, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const ALT = 'Rewritten chart'
 const chart = (width: number, color: string): string =>
@@ -17,7 +18,7 @@ const chart = (width: number, color: string): string =>
 
 /** Build one closed session whose reply shows `{{cwd}}/chart.svg`. */
 function chartFixture(title: string): string {
-  const session = Session.create(SessionId('markdown-image-refresh-source'))
+  const session = Session.create(brandString<SessionId>('markdown-image-refresh-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Draw the chart.' }],

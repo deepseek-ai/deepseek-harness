@@ -46,6 +46,7 @@
     "@deepseek-ai/dsh-error": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~"
   },
   "devDependencies": {

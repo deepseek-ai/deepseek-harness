@@ -71,7 +71,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-experimental-cot-translation-bundle',
       '@deepseek-ai/dsh-creation-recommendations',
       '@deepseek-ai/dsh-cua-bundle',
-      '@deepseek-ai/dsh-experimental-cua-macos',
+      '@deepseek-ai/dsh-cua-macos',
       '@deepseek-ai/dsh-cua-windows',
       '@deepseek-ai/dsh-cua',
       '@deepseek-ai/dsh-experimental-forge-bundle',

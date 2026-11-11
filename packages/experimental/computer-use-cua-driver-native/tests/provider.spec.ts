@@ -5,10 +5,11 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import * as NativeProvider from '../src/index.ts'
 import { catalog, fixture, resetFixture } from './fixtures/cua-driver.ts'
 
@@ -32,7 +33,7 @@ afterEach(async () => {
 function execute(rawName: string, args: Record<string, unknown> = {}) {
   return executeToolFixture(ctx, {
     name: `cua_driver_native__${rawName}`,
-    callId: ToolCallId('native-test'),
+    callId: brandString<ToolCallId>('native-test'),
     arguments: args,
     signal: new AbortController().signal,
   })
@@ -55,7 +56,7 @@ describe('Cua Driver native provider', () => {
   })
 
   it('rejects another provider before importing or creating a native runtime', async () => {
-    const release = ctx.computerUse.register(ComputerUseProviderName('another-driver'))
+    const release = ctx.computerUse.register(brandString<ComputerUseProviderName>('another-driver'))
     await expect(ctx.plugin(NativeProvider)).rejects.toThrow('already registered')
     expect(fixture.creates).toBe(0)
     expect(ctx.computerUse.providerName).toBe('another-driver')
@@ -146,7 +147,7 @@ describe('Cua Driver native provider', () => {
       },
     })
     const result = executeToolFixture(ctx, {
-      name: 'unrelated', callId: ToolCallId('unrelated'), arguments: {}, signal: controller.signal,
+      name: 'unrelated', callId: brandString<ToolCallId>('unrelated'), arguments: {}, signal: controller.signal,
     })
     try {
       const signal = await started.promise
@@ -187,7 +188,7 @@ describe('Cua Driver native provider', () => {
         expect(ctx.tools.schemas()).toEqual([])
       })
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
-      expect(() => ctx.computerUse.register(ComputerUseProviderName('replacement'))).toThrow('already registered')
+      expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
       callSettled.resolve({ content: [{ type: 'text', text: 'late native completion' }] })
       await shutdownStarted.promise
       expect(ctx.computerUse.providerName).toBe('cua-driver-native')
@@ -257,6 +258,6 @@ describe('Cua Driver native provider', () => {
     expect(ctx.tools.schemas()).toEqual([])
     expect(ctx.computerUse.providerName).toBe('cua-driver-native')
     expect(fixture.destroys).toBe(0)
-    expect(() => ctx.computerUse.register(ComputerUseProviderName('replacement'))).toThrow('already registered')
+    expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
   })
 })

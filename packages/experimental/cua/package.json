@@ -105,14 +105,15 @@
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/schemastery": "workspace:~",
     "zod": "4.6.6",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-typert-protocol": "workspace:*",
-    "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-storage-domain": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-computer-use": "workspace:*",
     "@deepseek-ai/dsh-working-directory": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-native": "workspace:*",
     "@deepseek-ai/dsh-tool-executor-ptc": "workspace:*",
@@ -162,7 +163,6 @@
     "@testing-library/react": "^16.1.0",
     "@deepseek-ai/dsh-loader-smoke": "workspace:*",
     "@deepseek-ai/dsh-util-values": "workspace:*",
-    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-storage": "workspace:*",
     "@deepseek-ai/dsh-storage-json": "workspace:*",
     "@deepseek-ai/dsh-client-ui-user-questions": "workspace:*",

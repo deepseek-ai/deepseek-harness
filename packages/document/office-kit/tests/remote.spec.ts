@@ -3,10 +3,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceFiles } from '@deepseek-ai/dsh-api-workspace-files'
 import type { FileSystem, FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
-import { OfficeKitError, OfficeKitKey, type OfficeKitResult } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { OfficeKitError, type OfficeKitKey, type OfficeKitResult } from '../src/index.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import OfficeKit from '../src/index.ts'
@@ -23,12 +24,12 @@ vi.mock('@deepseek-ai/dsh-home-paths', async (original) => {
 })
 expectDefaultOutputsUntouched(home)
 
-const scope = { sessionId: SessionId('document-test'), workspaceRoot: '/workspace' }
+const scope = { sessionId: brandString<SessionId>('document-test'), workspaceRoot: '/workspace' }
 const source = { absolutePath: '/workspace/report.DOCX', version: 'source-v1', bytes: 4 }
 const rawSource = { ...source, data: new Uint8Array([80, 75, 3, 4]) }
 const wireSource = { ...source, offset: 0, eof: true, data: rawSource.data }
 let generation: OfficeKit['generation']
-const cacheKey = OfficeKitKey('test-result')
+const cacheKey = brandString<OfficeKitKey>('test-result')
 const pdf = new Uint8Array([37, 80, 68, 70, 45])
 let ctx: Context
 const target = { targetKey: 'office-source' as FsTarget['targetKey'], displayPath: source.absolutePath }

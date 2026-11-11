@@ -257,6 +257,25 @@ export class GitHubProvider implements ForgeProvider {
     return await readComparison(async (args, operation) => await this.read(args, operation), ref.repository, base, head, signal)
   }
 
+  /**
+   * Find the merge base through the compare API. The request names the second page of one commit per page, which
+   * carries the merge base but not the changed files GitHub lists only on the first page.
+   */
+  async mergeBase(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure> {
+    const { host, owner, name } = checkedRepository(ref)
+    const failure = this.hostFailure(host)
+    if (failure !== undefined) return failure
+    for (const commit of [base, head]) {
+      if (!isCommit(commit)) throw new Error(`forge-github: invalid commit ${JSON.stringify(commit)}`)
+    }
+    const output = await this.read([
+      'api', '--hostname', host, '--jq', '.merge_base_commit.sha', `repos/${owner}/${name}/compare/${base}...${head}?page=2&per_page=1`,
+    ], signal)
+    if (typeof output !== 'string') return output
+    const commit = output.trim()
+    return isCommit(commit) ? commit.toLowerCase() : { code: 'unavailable', message: 'unexpected GitHub response to the merge base read' }
+  }
+
   /** Read the viewer's viewed marks through GraphQL, at most `maxViewedFiles`, every page at `headSha`. */
   async viewedFiles(ref: ChangeRequestRef, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | ForgeFailure> {
     const failure = this.hostFailure(checkedRepository(ref).host)

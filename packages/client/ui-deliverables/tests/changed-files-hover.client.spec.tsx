@@ -4,16 +4,17 @@ import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ChangedFiles } from '../src/client/ChangedFiles.tsx'
 import { ChangesDiffStore } from '../src/client/changes-diff.ts'
 import { changesDiffUrl } from '../src/changes.ts'
 import { en } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
-const sessionId = SessionId('hover-session')
+const sessionId = brandString<SessionId>('hover-session')
 const files = ['main.ts', 'second.ts'].map(path => ({ path, display: path, added: 1, deleted: 1 }))
 
 function mount(fileCount = 2) {

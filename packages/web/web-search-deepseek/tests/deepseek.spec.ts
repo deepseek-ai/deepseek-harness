@@ -11,7 +11,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
 import {
   DeepSeekSearchProvider,
@@ -23,6 +23,7 @@ import type { AnthropicResponse } from '@deepseek-ai/dsh-web-search-deepseek/src
 
 /** Construct the provider over a fixed options value; production passes a live thunk. */
 import type { DeepSeekSearchProviderOptions } from '@deepseek-ai/dsh-web-search-deepseek'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchProvider =>
   new DeepSeekSearchProvider(() => options)
@@ -768,7 +769,7 @@ describe('web-search-deepseek account route selection', () => {
         resolveToken: async (url: string) => { asked.push(url); return 'account-token' },
       } as DeepSeekAccount)
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
-      const session = ctx.sessions.create(SessionId(`web-search-account-${provider ?? 'none'}`))
+      const session = ctx.sessions.create(brandString<SessionId>(`web-search-account-${provider ?? 'none'}`))
       session.append('turn/start', { turn: 1 })
       session.append('request/context', { provider: provider ?? 'deepseek-account', model: 'deepseek-v4-flash' })
       const agent = { session } as Agent
@@ -804,7 +805,7 @@ describe('web-search-deepseek account route selection', () => {
       const account: Pick<DeepSeekAccount, 'resolveToken' | 'rejectToken'> = { resolveToken: async () => current, rejectToken }
       ctx.provide('deepseekAccount', account as DeepSeekAccount)
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
-      const session = ctx.sessions.create(SessionId('web-search-account-late-401'))
+      const session = ctx.sessions.create(brandString<SessionId>('web-search-account-late-401'))
       session.append('turn/start', { turn: 1 })
       session.append('request/context', { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
       const error = await rejectedWebError(ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' })))
@@ -980,7 +981,7 @@ describe('web-search-deepseek search readiness', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
-    const session = ctx.sessions.create(SessionId('web-search-unreadable-grant'))
+    const session = ctx.sessions.create(brandString<SessionId>('web-search-unreadable-grant'))
     session.append('turn/start', { turn: 1 })
     session.append('request/context', { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
     const failure = await rejectedWebError(ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' })))
@@ -1009,7 +1010,7 @@ describe('web-search-deepseek on any model route', () => {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(deepseekPlugin, config)
-      const session = ctx.sessions.create(SessionId(`web-search-route-${route}`))
+      const session = ctx.sessions.create(brandString<SessionId>(`web-search-route-${route}`))
       session.append('turn/start', { turn: 1 })
       session.append('request/context', { provider: route, model: 'gpt-5' })
       const search = ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' }))

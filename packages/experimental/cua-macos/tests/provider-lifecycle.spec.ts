@@ -27,8 +27,8 @@ import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { LlmAdapter, LlmError, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { LlmAdapter, LlmError, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -37,6 +37,7 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import * as NativeProvider from '../src/index.ts'
 import { NativeError, type NativeClient } from '@deepseek-ai/dsh-cua/native-client'
 import type { NativeBuildSpec } from '../src/native-build.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const native = vi.hoisted(() => ({
   connect: vi.fn<typeof import('../src/shared-native.ts')['createSharedNativeChannel']>(),
@@ -161,10 +162,10 @@ async function setup(model?: { provider: string; model: string }, ptc = false) {
   } else await ctx.plugin(Subprocess, [])
   const provider = await ctx.plugin(NativeProvider, config)
   await mountAgentLoopTestHarness(ctx)
-  const handle = await ctx.agents.create({ sessionId: SessionId('native-lifecycle'), meta: { cwd: process.cwd() }, ...model ? { agentOptions: model } : {} })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('native-lifecycle'), meta: { cwd: process.cwd() }, ...model ? { agentOptions: model } : {} })
   let index = 0
   const execute = (method = 'listApps', params: Record<string, unknown> = {}, signal = new AbortController().signal) => executeToolFixture(ctx, {
-    agent: handle.agent, signal, callId: ToolCallId(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
+    agent: handle.agent, signal, callId: brandString<ToolCallId>(`lifecycle-${++index}`), name: 'cua', arguments: { method, params },
   })
   return { ctx, provider, handle, execute }
 }
@@ -180,7 +181,7 @@ async function executeProgram(
     }))
   }
   const execute = name === 'run_code' ? executeModelToolFixture : executeToolFixture
-  return execute(f.ctx, { agent: f.handle.agent, callId: ToolCallId('keyboard-run'), name,
+  return execute(f.ctx, { agent: f.handle.agent, callId: brandString<ToolCallId>('keyboard-run'), name,
     arguments: { code, description }, signal })
 }
 
@@ -362,7 +363,7 @@ it('closes the native connection after a held-key cleanup failure and reuses tha
 it('rejects a relative helper path before publishing computer-use operations', async () => {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await expect(NativeProvider.apply(ctx, { ...config, allowedApps: [], helperPath: 'relative-helper' })).rejects.toThrow('helperPath must be absolute')
+  await expect(NativeProvider.apply(ctx, { ...config, allowedApps: [], helperPath: 'relative-helper' })).rejects.toThrow('macOS CUA helperPath must be absolute')
 })
 
 it.each(['Allow for this session', 'Deny'])('obtains %s before a stopped application can launch', async (choice) => {
@@ -427,7 +428,7 @@ it('correlates a native request with its logged tool invocation', async () => {
   const apps = [{ name: 'Editor', isRunning: true, pid: 101 }]
   native.request.mockResolvedValueOnce(apps)
   expect((await f.execute()).value).toEqual(apps)
-  expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('listApps', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
 
 it('merges startup capabilities into runtime native fields', async () => {
@@ -442,7 +443,7 @@ it('merges startup capabilities into runtime native fields', async () => {
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
       'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
     ] })
-  expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), ToolCallId('lifecycle-1'))
+  expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })
 
 it('sends native diagnostics to the Host logger without changing the tool result', async () => {
@@ -582,9 +583,9 @@ it('joins helper cleanup already started by Agent disposal when the provider unl
 it('reports failed cleanup after waiting for other owners and releasing their Agent effects', async () => {
   const f = await setup()
   await f.execute()
-  const other = await f.ctx.agents.create({ sessionId: SessionId('native-lifecycle-other') })
+  const other = await f.ctx.agents.create({ sessionId: brandString<SessionId>('native-lifecycle-other') })
   await executeToolFixture(f.ctx, {
-    agent: other.agent, signal: new AbortController().signal, callId: ToolCallId('other-owner'),
+    agent: other.agent, signal: new AbortController().signal, callId: brandString<ToolCallId>('other-owner'),
     name: 'cua', arguments: { method: 'listApps', params: {} },
   })
   const failure = new Error('native range observation failed')
@@ -629,7 +630,7 @@ it('names the missing field of a request that matches none of its accepted forms
 it('names an unknown top-level request key', async () => {
   const f = await setup()
   const result = await executeToolFixture(f.ctx, {
-    agent: f.handle.agent, signal: new AbortController().signal, callId: ToolCallId('extra-key'), name: 'cua',
+    agent: f.handle.agent, signal: new AbortController().signal, callId: brandString<ToolCallId>('extra-key'), name: 'cua',
     arguments: { method: 'listApps', params: {}, extra: 1 },
   })
   expect(result.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: arguments: Unrecognized key: "extra"' }])
@@ -641,7 +642,7 @@ it('rejects malformed and unowned operations before acquiring a helper', async (
   expect(malformed.isError).toBe(true)
   expect(malformed.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   const unowned = await executeToolFixture(f.ctx, {
-    signal: new AbortController().signal, callId: ToolCallId('unowned'), name: 'cua', arguments: { method: 'listApps', params: {} },
+    signal: new AbortController().signal, callId: brandString<ToolCallId>('unowned'), name: 'cua', arguments: { method: 'listApps', params: {} },
   })
   expect(unowned.isError).toBe(true)
   expect(unowned.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
@@ -668,13 +669,13 @@ it('supplies configured resource bounds and clears registrations on unload', asy
   native.request.mockResolvedValueOnce({ appHandle: 'app-one', windowId: null, snapshotId: 's', tree: 'Window', truncated: false,
     windows: [{ windowId: '7', appName: 'Fixture', title: 'Window', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
   await f.execute('getState', { appHandle: 'app-one' })
-  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), ToolCallId('lifecycle-2'))
+  expect(native.request).toHaveBeenLastCalledWith('getState', { appHandle: 'app-one', maxElements: 64, maxDepth: 8 }, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-2'))
   await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 2, toX: 3, toY: 4, relative: true })
-  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), ToolCallId('lifecycle-3'))
+  expect(native.request).toHaveBeenLastCalledWith('drag', expect.objectContaining({ durationMs: 200, steps: 10 }), expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-3'))
   await f.execute('paste', { appHandle: 'app-one', text: 'hello', format: 'text' })
-  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), ToolCallId('lifecycle-4'))
+  expect(native.request).toHaveBeenLastCalledWith('paste', expect.objectContaining({ maxClipboardBytes: 8192, pasteReadTimeoutMs: 1000, maxElements: 64, maxDepth: 8 }), expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-4'))
   await f.execute('findApps', { query: 'Fixture' })
-  expect(native.request).toHaveBeenLastCalledWith('findApps', { query: 'Fixture', maxAppMatches: 20 }, expect.any(AbortSignal), ToolCallId('lifecycle-5'))
+  expect(native.request).toHaveBeenLastCalledWith('findApps', { query: 'Fixture', maxAppMatches: 20 }, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-5'))
   await f.provider.dispose()
   expect(f.ctx.tools.schemas()).toEqual([])
   expect(native.dispose).toHaveBeenCalledTimes(1)
@@ -1183,7 +1184,7 @@ async function hoverFixture(requireApproval = true) {
     : { answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] })
   let index = 0
   const call = (agent: typeof f.handle.agent, method: string, params: Record<string, unknown>) => executeToolFixture(f.ctx, {
-    agent, signal: new AbortController().signal, callId: ToolCallId(`hover-${++index}`), name: 'cua', arguments: { method, params },
+    agent, signal: new AbortController().signal, callId: brandString<ToolCallId>(`hover-${++index}`), name: 'cua', arguments: { method, params },
   })
   const select = async (agent = f.handle.agent) => {
     native.request.mockResolvedValueOnce({ appHandle: 'app-one', name: 'Fixture', running: true,
@@ -1223,7 +1224,7 @@ it('requires an explicit system-pointer request on every move and asks only once
 it('keeps refusals and grants separate and forgets a closed session on reopen', async () => {
   const f = await hoverFixture()
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)
-  const { agent } = await f.ctx.agents.create({ sessionId: SessionId('other-mouse-session') })
+  const { agent } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('other-mouse-session') })
   expect(JSON.stringify((await f.call(agent, 'mouseMove', physicalHover)).content)).toContain('APP_ACCESS_REQUIRED')
   await f.select(agent)
   f.ask.mockResolvedValueOnce({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
@@ -1299,7 +1300,7 @@ it('allows only the explicitly requested physical move when approval is disabled
 
 it.each([true, false])('rejects a delegated pointer move before asking or dispatching with approval=%s', async (approval) => {
   const f = await hoverFixture(approval)
-  const { agent } = await f.ctx.agents.create({ sessionId: SessionId('delegated-mouse-session'),
+  const { agent } = await f.ctx.agents.create({ sessionId: brandString<SessionId>('delegated-mouse-session'),
     meta: { origin: 'subagent', parentSession: f.handle.agent.id } })
   // This case starts with application access already granted to the child.
   const selectAnswer = vi.spyOn(f.ctx.userQuestions, 'ask')

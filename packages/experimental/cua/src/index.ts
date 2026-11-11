@@ -6,7 +6,7 @@ import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
@@ -29,6 +29,7 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 export { CuaAccess } from './access.ts'
 export type { CuaStartupCapabilities } from './types.ts'
@@ -250,7 +251,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     return owner
   }
   ctx.effect(function* () {
-    yield ctx.computerUse.register(ComputerUseProviderName('dsh-cua'))
+    yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
     yield async () => {
       lifetime.abort()
       const permissions = Promise.allSettled([access.dispose()])
