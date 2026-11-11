@@ -1,6 +1,5 @@
 /** DeepSeek Files API upload reuse, invalidation, and quota recovery. @module dsh-llm-deepseek/file-store */
 
-import { addAbortListener } from 'node:events'
 import { timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { LlmError } from '@deepseek-ai/dsh-llm'
@@ -57,6 +56,7 @@ interface SharedUpload {
   promise: Promise<DeepSeekFileReference>
   settled: boolean
   waiters: number
+  onUploadTimeout?: () => void
 }
 
 /** The Files resource's parent URL identifies the upload namespace. */
@@ -100,6 +100,7 @@ function waitForUpload(operation: SharedUpload, signal: AbortSignal | undefined)
   return new Promise<DeepSeekFileReference>((resolve, reject) => {
     const abort = (): void => {
       const reason = abortReason(signal)
+      if (timeoutOf(signal, FILES_API_TIMEOUT)) operation.onUploadTimeout?.()
       release(reason)
       reject(reason)
     }
@@ -211,7 +212,7 @@ export class DeepSeekFileStore {
       waiters: 0,
       promise: undefined as never,
     }
-    shared.promise = this.ensureUploadedOnce(version, connection, policy, scope, controller.signal).then((value) => {
+    shared.promise = this.ensureUploadedOnce(version, connection, policy, scope, shared).then((value) => {
       shared.settled = true
       return value
     }, (error: unknown) => {
@@ -230,8 +231,9 @@ export class DeepSeekFileStore {
     connection: DeepSeekFileConnection,
     policy: DeepSeekFilePolicy,
     scope: DeepSeekUploadRecord['scope'],
-    signal: AbortSignal,
+    shared: SharedUpload,
   ): Promise<DeepSeekFileReference> {
+    const signal = shared.controller.signal
     const now = this.now()
     const marginMs = policy.refreshMarginSeconds * 1_000
     const cached = await this.index.get(scope, version.variantId, now, marginMs)
@@ -242,18 +244,18 @@ export class DeepSeekFileStore {
       signal.throwIfAborted()
       const previous = this.backoffs.get(scope)
       // Count overlapping uploads from one failure interval once, even if an aborted transport never settles.
-      using _listener = addAbortListener(signal, () => {
-        if (!timeoutOf(signal, FILES_API_TIMEOUT) || this.backoffs.get(scope) !== previous) return
+      shared.onUploadTimeout = () => {
+        if (this.backoffs.get(scope) !== previous) return
         const interval = previous ? previous.interval * 2n : 1n
         this.backoffs.set(scope, { interval, remaining: interval })
-      })
+      }
       const remote = await client.upload({
         data: version.data,
         mediaType: version.mediaType,
         filename: filename(version),
         expiresAfterSeconds: policy.expiresAfterSeconds,
         signal,
-      })
+      }).finally(() => { delete shared.onUploadTimeout })
       if (remote.bytes !== version.data.byteLength) {
         throw new LlmError('DeepSeek Files API upload response does not match the submitted image.', 'INVALID_RESPONSE')
       }

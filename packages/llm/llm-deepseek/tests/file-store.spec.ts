@@ -108,8 +108,32 @@ describe('DeepSeekFileStore', () => {
     await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
     const fresh = { ...VERSION, variantId: brandString<ImageVariantId>(`sha256:${'d'.repeat(64)}`) }
     await expire(fresh)
-    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
-    await expect(store.ensureUploaded(fresh, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    // Two independent requests race for the last skip. The other must upload.
+    const competing = await Promise.allSettled([
+      store.ensureUploaded(fresh, CONNECTION, POLICY), store.ensureUploaded(fresh, CONNECTION, POLICY),
+    ])
+    expect(competing).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({ code: 'TIMEOUT' }) }),
+      expect.objectContaining({ status: 'fulfilled', value: expect.objectContaining({ uploaded: true }) }),
+    ]))
+  })
+
+  it('does not count a Files deadline reached before the upload starts', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-files-index-timeout-'))
+    roots.push(dir)
+    const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
+    const lookup = Promise.withResolvers<undefined>()
+    vi.spyOn(index, 'get').mockReturnValueOnce(lookup.promise)
+    const remote = uploadFetch()
+    const store = new DeepSeekFileStore({ index, fetch: remote.fetchImpl, now: () => NOW })
+    const controller = new AbortController()
+    const pending = store.ensureUploaded(VERSION, CONNECTION, POLICY, controller.signal)
+    const reason = new TimeoutReason(FILES_API_TIMEOUT, 20_000)
+    controller.abort(reason)
+    lookup.resolve(undefined)
+    await expect(pending).rejects.toBe(reason)
+    await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).resolves.toMatchObject({ uploaded: true })
+    expect(remote.uploads()).toBe(1)
   })
 
   it('counts overlapping timeouts once and keeps an abandoned response from clearing backoff', async () => {
@@ -252,7 +276,7 @@ describe('DeepSeekFileStore', () => {
     expect(remote.uploads()).toBe(1)
   })
 
-  it('keeps a shared upload alive while another waiter remains', async () => {
+  it.each([new Error('cancel one upload waiter'), new TimeoutReason(FILES_API_TIMEOUT, 20_000)])('keeps a shared upload alive after one waiter exits with %s', async (reason) => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-file-store-'))
     roots.push(dir)
     const index = new DeepSeekUploadIndex(join(dir, 'index.json'))
@@ -275,11 +299,13 @@ describe('DeepSeekFileStore', () => {
     await vi.waitFor(() => {
       expect(fetchImpl).toHaveBeenCalledTimes(1)
     })
-    const reason = new Error('cancel one upload waiter')
     controller.abort(reason)
 
     await expect(cancelled).rejects.toBe(reason)
     expect(uploadSignal?.aborted).toBe(false)
+    if (reason instanceof TimeoutReason) {
+      await expect(store.ensureUploaded(VERSION, CONNECTION, POLICY)).rejects.toMatchObject({ code: 'TIMEOUT' })
+    }
     complete?.(new Response(JSON.stringify({
       id: 'file-api-shared',
       type: 'file',
