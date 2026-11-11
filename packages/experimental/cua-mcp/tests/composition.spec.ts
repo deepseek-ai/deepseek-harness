@@ -353,21 +353,27 @@ describe('Computer Use MCP composition', () => {
   })
 
   it('ends a program that cannot be interrupted on reset without waiting for the runtime to stop it', async () => {
-    // A cancelled program gets a minute to settle before the runtime stops its process; releasing the environment
-    // ends that wait, so this reset settles long before it.
-    const { ctx, run, client, adapter } = await setup({ stopGraceMs: 60_000 })
+    // A cancelled program gets ten minutes to settle before the runtime stops its process, longer than any test
+    // budget: this reset answers only because releasing the environment ends that wait.
+    const { ctx, run, client, adapter } = await setup({ stopGraceMs: 600_000 })
+    const pid = lastJson(await run('globalThis.kept = 1; inspect(process.pid)')) as number
+    // The looping process below is stopped even when the reset fails to stop it.
+    onTestFinished(() => {
+      try { process.kill(pid, 'SIGKILL') } catch (_error: unknown) { /* The reset already ended the process. */ }
+    })
     const observed: PromiseWithResolvers<void> = Promise.withResolvers()
     ctx.on('session/event', (candidate, event) => {
-      if (candidate === adapter.agent.session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-mcp-1') observed.resolve()
+      if (candidate === adapter.agent.session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-mcp-2') observed.resolve()
     })
     // The program enters its loop as soon as the nested call's result reaches it, before any later message.
-    const looping = run('globalThis.kept = 1; await cua.getCapabilities(); while (true) {}')
+    const looping = run('await cua.getCapabilities(); while (true) {}')
     await observed.promise
     const reset = await client.callTool({ name: 'cua_reset', arguments: {} })
     expect(reset.isError).not.toBe(true)
     const cancelled = await looping
     expect(cancelled.isError).toBe(true)
     expect(texts(cancelled).join('\n')).toContain('tool call aborted')
+    expect(() => process.kill(pid, 0)).toThrow()
     expect(lastJson(await run('inspect(JSON.stringify({ kept: globalThis.kept ?? null }))'))).toEqual({ kept: null })
   })
 
