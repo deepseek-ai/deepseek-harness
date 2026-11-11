@@ -9,8 +9,8 @@
   en: c0bca87ff2983e2e
   zh: da83dd66b8feafab
 /deepseek-ai-dsh-cua-mcp/summary:
-  en: 08c550e9cdf1c5de
-  zh: 5e650a6ea6dc9cd2
+  en: bc050868d6516402
+  zh: b87be90c2ad7fe19
 /deepseek-ai-dsh-cua-mcp/table-of-contents:
   en: dcb583a860af8206
   zh: 0a0d02b6e7e4e0b6
@@ -21,17 +21,17 @@
   en: ce44d68f2ede2c0f
   zh: 1d7bbd8a9aabc7f5
 /deepseek-ai-dsh-cua-mcp/use-this-package/connect-a-client:
-  en: 71984217de74d42d
-  zh: 5aa6d28626d124b2
+  en: 8308577134696075
+  zh: aa27c4800a873b62
 /deepseek-ai-dsh-cua-mcp/use-this-package/what-you-get:
-  en: 31115b6ef69a1964
-  zh: 5a26c6e071e2b2c2
+  en: 11c55df694f08e58
+  zh: a6b66516a28475f3
 /deepseek-ai-dsh-cua-mcp/configuration:
-  en: 8996e07a265596a5
-  zh: 8cf79827c51f2a2d
+  en: 7689db06c0c64653
+  zh: f767dc00a098f125
 /deepseek-ai-dsh-cua-mcp/understand-the-implementation:
-  en: 8a7400d61cf36e8b
-  zh: 309a8eb9eed62a28
+  en: 946b7fcbe0f3ace9
+  zh: 6beda3efdc0eba08
 /deepseek-ai-dsh-cua-mcp/further-exploration:
   en: 0328a9b46caad949
   zh: a20731d490d5412a
@@ -42,17 +42,17 @@
   en: 75ba5b40dac5fdbc
   zh: 690d784248b15542
 /deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/what-the-model-sees:
-  en: 15b1420b7a13c50d
-  zh: 072189c2f84a7772
+  en: b4b85192e7287a64
+  zh: 82457adbaa7c2454
 /deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/token-effect:
-  en: 80328f91c62930e2
-  zh: 7dbb1993a006764d
+  en: 935f7985cabc65aa
+  zh: 9748bbd2154ba2b6
 /deepseek-ai-dsh-cua-mcp/model-experience/external-harness-model/kv-cache-effect:
-  en: 2c22520787915229
-  zh: 21dafc45d1a4bc0d
+  en: 0b0c63281111993b
+  zh: 45716a56b5a5ad12
 /deepseek-ai-dsh-cua-mcp/known-limitations-and-deferred-work:
-  en: faa70bd5dfd6d4d6
-  zh: 9bf93d899911b2dc
+  en: 0206239281e5e167
+  zh: 30ce3a937c8e875d
 /deepseek-ai-dsh-cua-mcp/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 8ec3e73528ddb1a6

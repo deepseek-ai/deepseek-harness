@@ -1,7 +1,9 @@
 /** A real Loader composition: the MCP connection runs retained Computer Use programs through a fixture desktop. */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createInterface } from 'node:readline'
+import { PassThrough } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -13,6 +15,7 @@ import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import { CuaConfig, installCua } from '@deepseek-ai/dsh-cua'
+import type { NativeChannelFactory } from '@deepseek-ai/dsh-cua/native-client'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
@@ -27,10 +30,10 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import { Client, InMemoryTransport, type CallToolResult } from '@modelcontextprotocol/client'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createNativeFixture } from '../../../../snapshots/session/cua-run-code/native-channel.mjs'
 import type { ConsentMode } from '../src/consent.ts'
-import { createCuaMcpServer } from '../src/server.ts'
+import { createCuaMcpServer, type CuaMcpServer } from '../src/server.ts'
 
 /** The elicitation fields the consent tests inspect; the SDK's own form type stays behind its request handler. */
 interface ElicitationRequest {
@@ -44,14 +47,41 @@ interface SetupOptions {
   granted?: boolean
   /** Mount the CUA provider row; false composes a Host without Computer Use. */
   provider?: boolean
+  /** Hold the fixture desktop's cancellation acknowledgements back this long, as a native operation that is slow to stop does. */
+  cancellationAcknowledgementMs?: number
   /** Elicitation handler of the client; omission advertises no elicitation capability. */
   elicit?: (request: ElicitationRequest) => Promise<{ action: 'accept' | 'decline' | 'cancel'; content?: Record<string, string> }>
 }
 
-type Block = CallToolResult['content'][number]
-
 function texts(result: CallToolResult): string[] {
   return result.content.flatMap(block => block.type === 'text' ? [block.text] : [])
+}
+
+/** Forward a native channel's replies, delaying each cancellation acknowledgement and reporting its late delivery. */
+function delayCancellation(create: NativeChannelFactory, delayMs: number, delivered: () => void): NativeChannelFactory {
+  return (owner, config) => {
+    const channel = create(owner, config)
+    const stdout = new PassThrough()
+    void (async () => {
+      const held: Promise<void>[] = []
+      for await (const line of createInterface({ input: channel.stdout })) {
+        if (!line.includes('NATIVE_CANCELLED')) {
+          stdout.write(`${line}\n`)
+          continue
+        }
+        held.push(new Promise((resolve) => {
+          setTimeout(() => {
+            stdout.write(`${line}\n`)
+            delivered()
+            resolve()
+          }, delayMs)
+        }))
+      }
+      await Promise.all(held)
+      stdout.end()
+    })()
+    return { ...channel, stdout }
+  }
 }
 
 function lastJson(result: CallToolResult): unknown {
@@ -76,7 +106,10 @@ async function setup(options: SetupOptions = {}) {
     cua: {
       inject: ['computerUse', 'subprocess', 'tools', 'systemPrompt', 'agents'], Config: CuaConfig,
       apply(owner: Context, config: CuaConfig) {
-        installCua(owner, config, { helperPath: process.execPath, createChannel: native.createChannel,
+        installCua(owner, config, { helperPath: process.execPath,
+          createChannel: options.cancellationAcknowledgementMs === undefined
+            ? native.createChannel
+            : delayCancellation(native.createChannel, options.cancellationAcknowledgementMs, () => { native.events.push('cancellation-acknowledged') }),
           getGuidance: () => 'Fixture CUA guidance: select test.fixture and operate window 7.',
           capabilities: { platform: 'macos', methods: ['getCapabilities', 'getApp', 'getState', 'click', 'screenshot'],
             appLevelAccessibility: true, keyboard: ['app'], browser: false, coordinateSpace: 'screenshot-pixels' },
@@ -108,7 +141,17 @@ async function setup(options: SetupOptions = {}) {
   for (const entry of ctx.loader.entries()) await entry.fiber?.await()
 
   const lifetime = new AbortController()
-  const adapter = await createCuaMcpServer(ctx, { consent: options.consent ?? 'allow', cwd: directory, signal: lifetime.signal })
+  // The server is created from a fiber of its own, as the profile frontend creates it, so a test can unload that owner.
+  const created = Promise.withResolvers<CuaMcpServer>()
+  const frontend = await ctx.plugin({
+    name: 'cua-mcp-composition-frontend',
+    inject: ['agents', 'agentPresets', 'tools', 'systemPrompt', 'attachments'],
+    apply(owner: Context) {
+      createCuaMcpServer(owner, { consent: options.consent ?? 'allow', cwd: directory, signal: lifetime.signal })
+        .then(created.resolve, created.reject)
+    },
+  })
+  const adapter = await created.promise
   const client = new Client({ name: 'composition', version: '1' }, options.elicit === undefined ? {} : { capabilities: { elicitation: {} } })
   const elicitations: ElicitationRequest[] = []
   if (options.elicit !== undefined) {
@@ -132,15 +175,15 @@ async function setup(options: SetupOptions = {}) {
   // The native registration requires a description; tests name their programs unless they supply one.
   const run = (code: string, extra: { description?: string; timeoutMs?: number } = {}, signal?: AbortSignal) =>
     client.callTool({ name: 'cua_run_code', arguments: { code, description: 'Test program', ...extra } }, signal === undefined ? {} : { signal })
-  return { ctx, native, directory, adapter, client, elicitations, run, lifetime }
+  return { ctx, native, directory, adapter, frontend, client, elicitations, run, lifetime }
 }
 
 describe('Computer Use MCP composition', () => {
-  it('serves two tools, prefixes the first program result with the API reference, and retains program state', async () => {
-    const { ctx, native, client, run, adapter } = await setup()
-    expect(client.getInstructions()).toContain('cua_run_code')
+  it('serves three tools, returns the API reference on request, and retains program state in the workspace', async () => {
+    const { ctx, native, client, run, adapter, directory } = await setup()
+    expect(client.getInstructions()).toContain('Start every conversation by calling cua_get_api_reference')
     const listed = await client.listTools()
-    expect(listed.tools.map(tool => tool.name)).toEqual(['cua_run_code', 'cua_reset'])
+    expect(listed.tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_run_code', 'cua_reset'])
     // The MCP tool is the Agent's registration: name, description, and parameters field for field.
     const registered = ctx.tools.schemas(adapter.agent).find(tool => tool.name === 'cua_run_code')
     if (registered === undefined) throw new Error('the provider registered no cua_run_code for the connection Agent')
@@ -149,31 +192,38 @@ describe('Computer Use MCP composition', () => {
     const { sandbox_permissions: escalationMode, justification, ...served } = properties
     expect(escalationMode).toBeDefined()
     expect(justification).toBeDefined()
-    expect(listed.tools[0]).toMatchObject({
+    expect(listed.tools[1]).toMatchObject({
       name: registered.name, description: registered.description, inputSchema: { ...schema, properties: served },
     })
     expect(registered.parameters).toMatchObject({ required: expect.arrayContaining(['code', 'description']) as string[] })
     expect(registered.description.length).toBeGreaterThan(1000)
 
-    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
-      + 'await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid }), await win.getScreenshot())', { description: 'Open the fixture' })
-    expect(first.isError).not.toBe(true)
-    const [reference, ...rest] = first.content
-    expect(reference).toMatchObject({ type: 'text' })
-    const referenceText = (reference as Extract<Block, { type: 'text' }>).text
+    // The reference is the provider's guidance for the connection Agent, served before any program has run.
+    const reference = await client.callTool({ name: 'cua_get_api_reference', arguments: {} })
+    expect(reference.isError).not.toBe(true)
+    expect(reference.content).toHaveLength(1)
+    const referenceText = texts(reference)[0] ?? ''
     expect(referenceText.startsWith('## cua API reference')).toBe(true)
     expect(referenceText).not.toContain('execution rules')
     expect(referenceText).toContain('Fixture CUA guidance: select test.fixture and operate window 7.')
     expect(referenceText).toContain('Maximum click holdMs: 5000 ms.')
-    const result = JSON.parse((rest[0] as Extract<Block, { type: 'text' }>).text) as { visits: number; window: number; pid: number }
+    expect(native.calls).toEqual([])
+
+    const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); '
+      + 'await win.getAccessibilityTree(); await win.click("0"); '
+      + 'inspect(JSON.stringify({ visits, window: win.windowId, pid: process.pid, cwd: process.cwd() }), await win.getScreenshot())', { description: 'Open the fixture' })
+    expect(first.isError).not.toBe(true)
+    // A program result is the program's own output: the inspected text, then the screenshot the program observed.
+    const result = JSON.parse(texts(first)[0] ?? '') as { visits: number; window: number; pid: number; cwd: string }
     expect(result).toMatchObject({ visits: 1, window: 7 })
     expect(result.pid).not.toBe(process.pid)
-    // The inspected screenshot follows the program text as the image the program observed; nothing else is emitted.
-    const image = rest[1]
+    // Programs start in the directory the connection's Agent was created in.
+    expect(result.cwd).toBe(await realpath(directory))
+    const image = first.content[1]
     if (image?.type !== 'image') throw new Error(`expected an image block, got ${JSON.stringify(image)}`)
     expect(image.mimeType).toMatch(/^image\//)
     expect(Buffer.from(image.data, 'base64').length).toBeGreaterThan(0)
-    expect(rest).toHaveLength(2)
+    expect(first.content).toHaveLength(2)
     expect(native.state).toMatchObject({ count: 1, openedChannels: 1, closedChannels: 0 })
 
     const second = await run('globalThis.visits++; await win.getAccessibilityTree(); await win.click("0"); inspect(JSON.stringify({ visits, sameWindow: win.windowId === 7, pid: process.pid }))')
@@ -201,7 +251,8 @@ describe('Computer Use MCP composition', () => {
     expect(lastJson(b)).toEqual(['a', 'b'])
     const failed = await run('throw new Error("boom")')
     expect(failed.isError).toBe(true)
-    expect(texts(failed).join('\n')).toContain('boom')
+    // The client marks the error; the text is DSH's failure message without its `Error: ` prefix.
+    expect(texts(failed)[0]).toMatch(/^code run failed \(exception\): .*boom/s)
     const controller = new AbortController()
     const hanging = run('await new Promise(resolve => setTimeout(resolve, 60_000))', {}, controller.signal)
     setTimeout(() => { controller.abort() }, 100)
@@ -210,10 +261,10 @@ describe('Computer Use MCP composition', () => {
     // Argument validation belongs to the DSH executor: a program without the required description is refused there.
     const invalid = await client.callTool({ name: 'cua_run_code', arguments: { code: '1' } })
     expect(invalid.isError).toBe(true)
-    expect(texts(invalid).join('\n')).toMatch(/description/)
+    expect(texts(invalid)).toEqual(['invalid arguments: missing required property "description"'])
   })
 
-  it('resets the program environment while keeping the native connection, then repeats the reference', async () => {
+  it('resets the program environment while keeping the native connection and the API reference', async () => {
     const { native, run, client } = await setup()
     const first = await run('globalThis.visits = 1; var app = await cua.getApp("test.fixture"); inspect(process.pid)')
     const pid = lastJson(first) as number
@@ -221,13 +272,45 @@ describe('Computer Use MCP composition', () => {
     expect(reset.isError).not.toBe(true)
     expect(texts(reset)[0]).toContain('Program environment cleared')
     const next = await run('inspect(JSON.stringify({ visits: globalThis.visits ?? null, hasApp: typeof app !== "undefined", pid: process.pid }))')
-    expect(next.content).toHaveLength(2)
-    expect(texts(next)[0]).toContain('## cua API reference')
+    expect(next.content).toHaveLength(1)
     const state = lastJson(next) as { visits: null; hasApp: boolean; pid: number }
     expect(state).toMatchObject({ visits: null, hasApp: false })
     expect(state.pid).not.toBe(pid)
     expect(() => process.kill(pid, 0)).toThrow()
     expect(native.state).toMatchObject({ openedChannels: 1, closedChannels: 0 })
+    expect(texts(await client.callTool({ name: 'cua_get_api_reference', arguments: {} }))[0]).toContain('## cua API reference')
+  })
+
+  it('cancels an in-flight program and waits for its nested call to settle before a disposed Agent releases anything', async () => {
+    // The native operation takes 200 ms to acknowledge cancellation, so the cancelled call stays in flight that long.
+    const { ctx, native, run, adapter, frontend } = await setup({ cancellationAcknowledgementMs: 200 })
+    const opened = await run('var app = await cua.getApp("test.fixture"); var win = await app.getWindow(7); await win.getAccessibilityTree(); inspect("ready")')
+    expect(opened.isError).not.toBe(true)
+    const { session } = adapter.agent
+    const order: string[] = []
+    ctx.on('session/event', (candidate, event) => {
+      if (candidate === session && event.type === 'tool/ptc-dispatch' && event.data.rootCallId === 'cua-mcp-2') order.push('nested call recorded')
+    })
+    const reported = vi.spyOn(ctx.logger, 'error')
+    const held = native.holdNextClick()
+    const program = run('await win.click("0")')
+    await held
+    // The fiber that owns the Agent unloads while the call is in flight; nothing has closed or drained the server.
+    await frontend.dispose()
+    order.push('Agent disposed')
+    // The call was cancelled, its native operation acknowledged the cancellation, and its nested call was
+    // recorded, all before the Agent released its native connection and closed its Session.
+    expect(native.events).toEqual(['native-cancelled', 'cancellation-acknowledged', 'native-close'])
+    expect(order).toEqual(['nested call recorded', 'Agent disposed'])
+    const result = await program
+    expect(result.isError).toBe(true)
+    expect(texts(result).join('\n')).toContain('tool call aborted')
+    expect(ctx.agents.list()).toHaveLength(0)
+    const interrupted = session.snapshotEvents()
+      .filter(event => (event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch') && event.data.rootCallId === 'cua-mcp-2')
+    expect(interrupted.map(event => event.type)).toEqual(['tool/ptc-dispatch-start', 'tool/ptc-dispatch'])
+    expect(interrupted[1]?.data).toMatchObject({ name: 'cua', isError: true })
+    expect(reported).not.toHaveBeenCalled()
   })
 
   it('forwards application consent to the client as an elicitation and records a refusal', async () => {
@@ -263,9 +346,12 @@ describe('Computer Use MCP composition', () => {
     expect(texts(refused).join('\n')).toContain('DSH_CUA_CONSENT=allow')
   })
 
-  it('serves only cua_reset on a Host without a CUA provider and releases the connection Agent on disposal', async () => {
+  it('lists no program tool on a Host without a CUA provider and releases the connection Agent on disposal', async () => {
     const { ctx, run, client, adapter } = await setup({ provider: false })
-    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_reset'])
+    expect((await client.listTools()).tools.map(tool => tool.name)).toEqual(['cua_get_api_reference', 'cua_reset'])
+    const reference = await client.callTool({ name: 'cua_get_api_reference', arguments: {} })
+    expect(reference.isError).toBe(true)
+    expect(texts(reference)[0]).toContain('no active CUA provider')
     // No registration exists for the Agent, so the call is refused as an unknown tool before it reaches the executor.
     const result = await run('1')
     expect(result.isError).toBe(true)

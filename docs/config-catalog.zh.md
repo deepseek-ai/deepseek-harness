@@ -894,7 +894,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-cua-mcp`
 
 - `inject`: `cmdlineArgs` · `appReady` · `appExit` · `profileContext` · `agents` · `agentPresets` · `tools` · `systemPrompt` · `attachments`
-- `source`: [`packages/experimental/cua-mcp/src/index.ts:22`](../packages/experimental/cua-mcp/src/index.ts)
+- `source`: [`packages/experimental/cua-mcp/src/index.ts:25`](../packages/experimental/cua-mcp/src/index.ts)
 
 ```ts config-catalog
 /** Connection policy configurable from the profile patch. */
@@ -904,6 +904,12 @@ export interface Config {
    * this session without a human; `elicit` forwards each request to the MCP client as a form elicitation.
    */
   consent: ConsentMode
+  /**
+   * Absolute directory the connection's Agent works in: its programs start there, and it is their
+   * `workspace-write` root. Startup creates it when missing; a relative path or a directory that cannot be
+   * created is reported on stderr and ends the process with exit code 1.
+   */
+  workspace: string
 }
 
 /** Who decides application and pointer consent for the connection's Agent. */

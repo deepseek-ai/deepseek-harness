@@ -62,11 +62,23 @@ describe('cua-mcp bundle', () => {
   it('pins the file-effect boundary of every shipped CLI mode for program processes', () => {
     const policy = row('sandbox-policy')?.config as { mode: unknown; workspaceRoot: unknown }
     const approval = row('approval')?.config as { policy: unknown }
-    expect(interpolate({ process: { env: {}, cwd: () => '/work' } }, policy.mode)).toBe('workspace-write')
-    expect(interpolate({ process: { env: { DSH_PERMISSION_MODE: 'danger-full-access' }, cwd: () => '/work' } }, policy.mode)).toBe('danger-full-access')
-    expect(interpolate({ process: { env: {}, cwd: () => '/work' } }, policy.workspaceRoot)).toBe('/work')
+    expect(interpolate({ process: { env: {} } }, policy.mode)).toBe('workspace-write')
+    expect(interpolate({ process: { env: { DSH_PERMISSION_MODE: 'danger-full-access' } } }, policy.mode)).toBe('danger-full-access')
     expect(interpolate({ process: { env: {} } }, approval.policy)).toBe('ask')
     expect(interpolate({ process: { env: { DSH_PERMISSION_MODE: 'danger-full-access' } } }, approval.policy)).toBe('never')
+  })
+
+  it('keeps programs in a workspace inside the Harness home unless DSH_CUA_WORKSPACE names another directory', () => {
+    const dshHomePath = (...segments: string[]) => ['/home/me/.dsh', ...segments].join('/')
+    // The directory the client launched the server from is never the workspace.
+    const launched = { env: {}, cwd: () => '/' }
+    const pinned = { env: { DSH_CUA_WORKSPACE: '/projects/desk' }, cwd: () => '/' }
+    // The frontend row sets the Agent's working directory, which is a program's workspace-write root; the policy
+    // row's root is the fallback for calls without a Session, so both rows resolve the same directory.
+    for (const value of [(row('cua-mcp')?.config as { workspace: unknown }).workspace, (row('sandbox-policy')?.config as { workspaceRoot: unknown }).workspaceRoot]) {
+      expect(interpolate({ process: launched, dshHomePath }, value)).toBe('/home/me/.dsh/cua-mcp/workspace')
+      expect(interpolate({ process: pinned, dshHomePath }, value)).toBe('/projects/desk')
+    }
   })
 
   it('mounts the macOS provider only on Darwin, with a fixed screenshot target and the PTC raw-tool preset', () => {

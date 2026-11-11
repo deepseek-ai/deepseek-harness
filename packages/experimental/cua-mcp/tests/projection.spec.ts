@@ -1,4 +1,4 @@
-/** Result projection: text passes through, deferred screenshots become inline images, failures keep isError. */
+/** Result projection: text passes through, screenshots become inline images, failures keep isError without DSH's error prefix. */
 import { describe, expect, it, vi } from 'vitest'
 import type { AttachmentStore, ImageAttachmentRef, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -29,9 +29,8 @@ describe('tool result projection', () => {
     const { attachments, readImageRequest, readImage } = store()
     const signal = new AbortController().signal
     const target = { width: 40, height: 20, maxBytes: 1024 }
-    const result = await projectToolResult(success, deferred, { attachments, target: () => target }, signal, ['## reference'])
+    const result = await projectToolResult(success, deferred, { attachments, target: () => target }, signal)
     expect(result).toEqual({ content: [
-      { type: 'text', text: '## reference' },
       { type: 'text', text: '{"visits":1}' },
       { type: 'text', text: '{"windowId":7}' },
       { type: 'image', data: Buffer.from([9, 8]).toString('base64'), mimeType: 'image/jpeg' },
@@ -56,13 +55,19 @@ describe('tool result projection', () => {
     expect(result).not.toHaveProperty('isError')
   })
 
-  it('keeps the failure text and flag of a failed execution', async () => {
+  it('keeps the flag of a failed execution and reports its message once, without the DSH error prefix', async () => {
     const { attachments } = store()
     const failure: ToolExecutionResult = {
       isError: true, error: { message: 'code run failed (exception): boom', info: { name: 'CodeRunFailedError', code: 'CODE_RUN_FAILED' } },
-      content: [{ type: 'text', text: 'Error: code run failed (exception): boom' }],
+      // The failure rendering, then output the program displayed before it failed; only the rendering carries the prefix.
+      content: [{ type: 'text', text: 'Error: code run failed (exception): boom' }, { type: 'text', text: 'Error: shown by the program' }],
     }
-    expect(await projectToolResult(failure, [], { attachments, target: () => undefined }, new AbortController().signal))
-      .toEqual({ content: [{ type: 'text', text: 'Error: code run failed (exception): boom' }], isError: true })
+    expect(await projectToolResult(failure, [], { attachments, target: () => undefined }, new AbortController().signal)).toEqual({
+      content: [{ type: 'text', text: 'code run failed (exception): boom' }, { type: 'text', text: 'Error: shown by the program' }], isError: true,
+    })
+    // A successful program that displays the same words keeps them.
+    const shown: ToolExecutionResult = { isError: false, value: 'ok', content: [{ type: 'text', text: 'Error: code run failed (exception): boom' }] }
+    expect(await projectToolResult(shown, [], { attachments, target: () => undefined }, new AbortController().signal))
+      .toEqual({ content: [{ type: 'text', text: 'Error: code run failed (exception): boom' }] })
   })
 })

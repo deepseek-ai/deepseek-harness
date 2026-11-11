@@ -12,33 +12,34 @@ export interface ScreenshotDelivery {
   readonly target: (image: ImageAttachmentRef) => ImageRequestTarget | undefined
 }
 
-/** One text block preceding the projected result. */
+/** One projected text block. */
 function text(value: string): CallToolResult['content'][number] {
   return { type: 'text', text: value }
 }
 
 /**
- * Project a settled `cua_run_code` or `cua_reset` outcome onto an MCP call result.
- * Result text keeps the model-facing rendering; images the program inspected, and any image a nested call
- * deferred, follow it in emission order as inline Base64 blocks of the version the program observed, so pixel
- * coordinates in the program's text match the delivered image. Other block kinds are named, not rendered.
+ * Project a settled `cua_run_code` outcome onto an MCP call result.
+ * Result text keeps the model-facing rendering, except that a failure's message drops DSH's `Error: ` prefix because
+ * `isError` already marks it. Images the program inspected, and any image a nested call deferred, follow in
+ * emission order as inline Base64 blocks of the version the program observed, so pixel coordinates in the
+ * program's text match the delivered image. Other block kinds are named, not rendered.
  * @param result - Settled DSH execution outcome.
  * @param deferred - Deferred context messages the execution produced, in order.
  * @param delivery - Attachment store and the provider's request target.
  * @param signal - Cancels pending image reads.
- * @param preface - Text blocks placed before the projected result, such as the API reference.
  * @returns The MCP result; `isError` mirrors the DSH outcome.
  */
 export async function projectToolResult(
-  result: ToolExecutionResult, deferred: readonly UserMessage[], delivery: ScreenshotDelivery,
-  signal: AbortSignal, preface: readonly string[] = [],
+  result: ToolExecutionResult, deferred: readonly UserMessage[], delivery: ScreenshotDelivery, signal: AbortSignal,
 ): Promise<CallToolResult> {
-  const content: CallToolResult['content'] = preface.map(text)
+  const content: CallToolResult['content'] = []
+  const failure = result.isError ? result.error.message : undefined
   const blocks: ContentBlock[] = [...result.content, ...deferred.flatMap(message => message.content)]
   for (const block of blocks) {
     switch (block.type) {
       case 'text':
-        content.push(text(block.text))
+        // A client that renders isError results adds its own error marker, which DSH's rendering of the message would repeat.
+        content.push(text(failure !== undefined && block.text === `Error: ${failure}` ? failure : block.text))
         break
       case 'image': {
         const target = delivery.target(block.attachment)

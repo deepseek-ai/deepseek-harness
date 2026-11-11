@@ -44,7 +44,9 @@
         backend: json
 
     # Program processes: the dedicated CUA runtime launches under the same
-    # file-effect boundary as every shipped CLI mode.
+    # file-effect boundary as every shipped CLI mode. A program's workspace-write
+    # root is its Agent's working directory, which the cua-mcp row sets to the
+    # workspace below; this row's root covers calls without a Session.
     - id: subprocess
       name: '@deepseek-ai/dsh-subprocess-local'
 
@@ -55,7 +57,7 @@
       name: '@deepseek-ai/dsh-sandbox-policy'
       config:
         mode: !!js process.env.DSH_PERMISSION_MODE ?? 'workspace-write'
-        workspaceRoot: !!js process.cwd()
+        workspaceRoot: !!js process.env.DSH_CUA_WORKSPACE ?? dshHomePath('cua-mcp', 'workspace')
 
     - id: approval
       name: '@deepseek-ai/dsh-user-approval'
@@ -121,7 +123,11 @@
 
     # DSH_CUA_CONSENT=allow grants application and pointer access without a human;
     # the default forwards each request to the MCP client as an elicitation.
+    # DSH_CUA_WORKSPACE is the directory programs start in and may write under
+    # workspace-write; the default stays inside the Harness home whatever
+    # directory the client started the server in.
     - id: cua-mcp
       name: '@deepseek-ai/dsh-cua-mcp'
       config:
         consent: !!js process.env.DSH_CUA_CONSENT ?? 'elicit'
+        workspace: !!js process.env.DSH_CUA_WORKSPACE ?? dshHomePath('cua-mcp', 'workspace')

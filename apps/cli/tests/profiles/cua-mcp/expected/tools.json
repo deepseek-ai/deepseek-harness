@@ -1,5 +1,20 @@
 [
   {
+    "name": "cua_get_api_reference",
+    "title": "Computer use API reference",
+    "description": "Return the complete `cua` API reference that every cua_run_code program must follow: methods, signatures, and operating rules. Call it before the first cua_run_code program of a conversation, and again whenever the reference is no longer in your context or a program fails on an unknown `cua` method. It only reads: nothing on the desktop or in the program environment changes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "cua_run_code",
     "title": "Computer use program",
     "description": "Run a TypeScript program to observe and operate desktop applications. The global cua object is ready to use; retain application and window objects across calls. Only tools.cua is available inside the program. Call other session tools directly. Use inspect(...values) to display selected text and images. The program contains TypeScript REPL statements; only erasable syntax is accepted, with no enum or namespaces. Type annotations are advisory. Top-level declarations and await are supported; top-level return is not supported. Use inspect(...values) to display output. Do not use console. Variables, functions, and imported modules remain in memory for this Agent across calls. Use await import(...) for modules. Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. Timeout and cancellation results say whether retained variables were preserved or cleared. Restart, sandbox changes, output overflow, or process failure clears them. Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. Approved sandbox escalations use a fresh environment and discard its variables afterward. Do not redeclare existing let, const, or class names; reuse mutable bindings or choose new names. Await tools and cleanup before returning; unfinished tools reject. After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. Await child-process completion before returning; raw output belongs to the active evaluation. Each program starts in the Session's current directory. Running programs keep their initial directory. A sandbox escalation approves this complete program for one execution only. Nested tools retain their own policies and approvals. Request wider access only after evidence of a denial. Earlier effects may already have completed: inspect them before explicitly retrying. Programs are never replayed automatically.",
@@ -34,7 +49,7 @@
   {
     "name": "cua_reset",
     "title": "Reset computer use program state",
-    "description": "Discard the program environment of this connection: every variable, import, and application or window object held by earlier cua_run_code calls. A running cua_run_code program is cancelled. Application access grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment and its result repeats the `cua` API reference. Use it when a declaration conflicts with an earlier call or the environment has become unusable.",
+    "description": "Discard the program environment of this connection: every variable, import, and application or window object held by earlier cua_run_code calls. A running cua_run_code program is cancelled. Application access grants and the desktop applications themselves are unaffected; the next cua_run_code call starts a fresh environment. Use it when a declaration conflicts with an earlier call or the environment has become unusable.",
     "inputSchema": {
       "type": "object",
       "properties": {}

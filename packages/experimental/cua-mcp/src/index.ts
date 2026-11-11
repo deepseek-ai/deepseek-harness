@@ -1,13 +1,16 @@
 /**
- * The Computer Use MCP stdio application: the standalone cua-mcp profile's frontend, serving the Agent's
- * `cua_run_code` registration and `cua_reset` to an external MCP client. Help exits without claiming stdio; a
- * served connection owns one Agent, created before the transport opens, until the client closes stdin.
+ * The Computer Use MCP stdio application: the standalone cua-mcp profile's frontend, serving the `cua` API
+ * reference, the Agent's `cua_run_code` registration, and `cua_reset` to an external MCP client. Help exits
+ * without claiming stdio; a served connection owns one Agent, created in the configured workspace before the
+ * transport opens, until the client closes stdin.
  * @module @deepseek-ai/dsh-cua-mcp
  */
+import { mkdir } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-app-boot'
-import { exitOnStdinEnd, parseCmdline } from '@deepseek-ai/dsh-cmdline'
+import { exitOnStdinEnd, internals, parseCmdline } from '@deepseek-ai/dsh-cmdline'
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { Command } from 'commander'
 import type { ConsentMode } from './consent.ts'
@@ -25,18 +28,42 @@ export interface Config {
    * this session without a human; `elicit` forwards each request to the MCP client as a form elicitation.
    */
   consent: ConsentMode
+  /**
+   * Absolute directory the connection's Agent works in: its programs start there, and it is their
+   * `workspace-write` root. Startup creates it when missing; a relative path or a directory that cannot be
+   * created is reported on stderr and ends the process with exit code 1.
+   */
+  workspace: string
 }
 
-/** Validate the consent mode; the bundle patch maps `DSH_CUA_CONSENT` onto it. */
+/** Validate the consent mode and require a workspace; the bundle patch maps `DSH_CUA_CONSENT` and `DSH_CUA_WORKSPACE` onto them. */
 export const Config: Schema<Partial<Config>, Config> = Schema.object({
   consent: Schema.union([Schema.const('allow'), Schema.const('elicit')]).default('elicit'),
+  workspace: Schema.string().required(),
 })
 
 /**
- * Accept the profile invocation and serve MCP over stdio once the launcher commits readiness; help exits before
- * anything starts. Stdin EOF ends the process through the launcher's bounded shutdown.
+ * Create the directory a served connection works in.
+ * @param workspace - Configured workspace path.
+ * @returns After the directory exists.
+ * @throws Error naming the configured path when it is relative or the directory cannot be created.
+ */
+async function prepareWorkspace(workspace: string): Promise<void> {
+  if (!isAbsolute(workspace)) {
+    throw new Error(`the workspace ${JSON.stringify(workspace)} is not an absolute directory path; set DSH_CUA_WORKSPACE to an absolute path`)
+  }
+  await mkdir(workspace, { recursive: true }).catch((error: unknown) => {
+    throw new Error(`the workspace directory ${JSON.stringify(workspace)} cannot be created (${String(error)}); set DSH_CUA_WORKSPACE to a writable location`, { cause: error })
+  })
+}
+
+/**
+ * Accept the profile invocation and, once the launcher commits readiness, create the workspace and serve MCP over
+ * stdio; help exits before anything starts. A startup failure, including a relative workspace path or a workspace
+ * directory that cannot be created, is reported on stderr and ends the process with exit code 1. Stdin EOF ends the
+ * process through the launcher's bounded shutdown.
  * @param ctx - Profile context carrying the command line, readiness, exit request, and profile identity.
- * @param config - Validated consent mode.
+ * @param config - Validated consent mode and workspace directory.
  * @throws Error when the plugin runs outside the dsh profile launcher.
  */
 export function apply(ctx: Context, config: Config): void {
@@ -49,8 +76,9 @@ export function apply(ctx: Context, config: Config): void {
     .description('Serve DeepSeek Harness Computer Use to an MCP client over stdio.')
     .addHelpText('after', `
 Examples:
-  ${commandName}                        serve one MCP client until it closes stdin
-  DSH_CUA_CONSENT=allow ${commandName}  grant application access without a human
+  ${commandName}                          serve one MCP client until it closes stdin
+  DSH_CUA_CONSENT=allow ${commandName}    grant application access without a human
+  DSH_CUA_WORKSPACE=/work ${commandName}  start programs in /work and let them write there
 `)
   let accepted: true | undefined
   program.action(() => { accepted = true })
@@ -62,14 +90,16 @@ Examples:
     let adapter: Promise<CuaMcpServer> | undefined
     let opening: Promise<void> | undefined
     const stopReady = ready.onReady(() => {
-      // The Agent exists, with the provider's tools registered for it, before the client can list or call anything.
-      adapter = createCuaMcpServer(ctx, { consent: config.consent, cwd: profile.cwd, signal: lifetime.signal })
+      // The workspace exists, and then the Agent with the provider's tools registered for it, before the client can
+      // list or call anything.
+      adapter = prepareWorkspace(config.workspace)
+        .then(() => createCuaMcpServer(ctx, { consent: config.consent, cwd: config.workspace, signal: lifetime.signal }))
       opening = adapter.then(created => created.server.connect(new StdioServerTransport()))
       void opening.catch((error: unknown) => {
-        if (!lifetime.signal.aborted) {
-          ctx.logger.error('MCP startup failed: %s', error)
-          exit(1)
-        }
+        if (lifetime.signal.aborted) return
+        // The profile mounts no log sink, and stdout belongs to the protocol: stderr is the only place a client or its user sees this.
+        internals.stderr.write(`dsh: MCP startup failed: ${error instanceof Error ? error.message : String(error)}\n`)
+        exit(1)
       })
     })
     return async () => {
