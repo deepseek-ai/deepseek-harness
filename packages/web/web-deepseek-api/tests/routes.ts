@@ -1,4 +1,8 @@
-/** A stand-in model service publishing DeepSeek route credentials the way the route plugins do. */
+/**
+ * A stand-in model service publishing DeepSeek route credentials the way the route plugins do. It reimplements their
+ * publication over the plugins' config resolvers, so `composition.spec.ts`, which boots the real route plugins through
+ * the Loader, is what covers the production path.
+ */
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRefConfigured, resolveCredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'

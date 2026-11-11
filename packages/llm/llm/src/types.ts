@@ -356,8 +356,8 @@ export interface RouteCredential {
   readonly reference?: string
   /**
    * Whether {@link resolve} would release a credential for `endpoint`, checked
-   * without reading the credential's value, validating it, or contacting the
-   * destination. Store failures reject.
+   * without validating the credential or contacting the destination; the owner
+   * may read its store to answer. Store failures reject.
    * @param endpoint - absolute URL the credential would be sent to.
    * @returns whether a credential is configured for that destination.
    */

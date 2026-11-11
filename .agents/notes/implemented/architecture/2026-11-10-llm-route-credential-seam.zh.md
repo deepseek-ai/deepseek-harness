@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-llm` 拥有 Service Definition。`LlmAdapter.routeCredential(provider)` 发布一个 `RouteCredential`：路由的 `kind`（可合并扩展，已声明 `api-key` 与 `account`）、解析后的 `baseURL`、用于诊断的可选凭据 `reference`、不读取值的存在性检查 `configured(endpoint)`，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`；授权包含协议 `headers`、供以其他方式呈现凭据的目标使用的裸 `value`，以及可选的 HTTP 401 `reject()`。`LlmRuntime.routeCredential(provider)` 转发给拥有该路由的适配器；未注册的路由回答 `undefined`，配置无法解析的路由则传播适配器的失败。适配器每次调用读取一代配置，与每次模型请求相同。
+`@deepseek-ai/dsh-llm` 拥有 Service Definition。`LlmAdapter.routeCredential(provider)` 发布一个 `RouteCredential`：路由的 `kind`（可合并扩展，已声明 `api-key` 与 `account`）、解析后的 `baseURL`、用于诊断的可选凭据 `reference`、不校验凭据、不联系目的地的存在性检查 `configured(endpoint)`，以及返回 `RouteCredentialGrant` 的 `resolve(endpoint, signal)`；授权包含协议 `headers`、供以其他方式呈现凭据的目标使用的裸 `value`，以及可选的 HTTP 401 `reject()`。`LlmRuntime.routeCredential(provider)` 转发给拥有该路由的适配器；未注册的路由回答 `undefined`，配置无法解析的路由则传播适配器的失败。适配器每次调用读取一代配置，与每次模型请求相同。
 
 `@deepseek-ai/dsh-llm-deepseek` 不读取任何凭据。`DeepSeekAdapterOptions.resolveAuth(connection, endpoint)` 返回授权或 `undefined`；`missingCredential(connection, provider)` 命名没有凭据时请求的失败，默认为 `MISSING_CREDENTIAL`；`credential` 声明发布的种类、引用和存在性检查。列表缓存以端点和凭据请求头的哈希划分作用域。
 
