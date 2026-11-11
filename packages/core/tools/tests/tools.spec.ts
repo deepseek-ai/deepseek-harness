@@ -2212,7 +2212,7 @@ describe('ToolRuntime', () => {
       return fail(exec.signal)
     })
 
-    const result = await executeToolFixture(ctx, { signal: controller.signal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: controller.signal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.error?.info).toEqual(info)
   })
@@ -2222,7 +2222,7 @@ describe('ToolRuntime', () => {
     ctx.tools.register(echoTool)
     ctx.on('tools/execute', async () => { throw new DOMException('wrapper stopped', 'AbortError') })
 
-    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
+    const result = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.error).toEqual({ message: 'wrapper stopped' })
   })
 

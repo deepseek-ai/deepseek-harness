@@ -117,7 +117,7 @@ describe('Cua Driver native provider', () => {
     await ctx.plugin(NativeProvider)
     const controller = new AbortController()
     const result = executeToolFixture(ctx, {
-      name: 'cua_driver_native__click', callId: ToolCallId('native-cancel'), arguments: { pid: 9, window_id: 7 }, signal: controller.signal,
+      name: 'cua_driver_native__click', callId: brandString<ToolCallId>('native-cancel'), arguments: { pid: 9, window_id: 7 }, signal: controller.signal,
     })
     await called.promise
     controller.abort(new Error('Stop clicking'))
