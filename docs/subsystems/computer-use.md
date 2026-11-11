@@ -6,7 +6,7 @@ Computer use lets a model observe and operate the local desktop through a config
 
 [Computer Use](../../packages/experimental/cua-bundle/README.md) is an optional experimental bundle for macOS and Windows.
 
-The [macOS provider](../../packages/experimental/cua-macos/README.md) and the [Windows provider](../../packages/experimental/cua-windows/README.md) use the [shared CUA service](../../packages/experimental/cua/README.md) to enforce application consent.
+Both native providers use the [shared CUA library](../../packages/experimental/cua/README.md#use-this-package) to check configured and saved application grants. When a decision is needed, the library asks the user through User Questions.
 
 The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit system requests, and application revocation. Its [permission page](../../packages/experimental/cua/README.md) projects these controls; app/window operations enforce the provider's consent policy before dispatch.
 
@@ -21,14 +21,16 @@ The [shared object API](../../packages/experimental/cua/README.md) uses `connect
 
 ## Choose a provider
 
-Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. Both Cua Driver providers are experimental public npm packages and require explicit activation.
+Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. The Computer Use bundle selects the native provider for the host platform. Custom compositions can also mount a provider directly.
 
 | Provider | Runtime |
 |---|---|
+| [macOS CUA](../../packages/experimental/cua-macos/README.md) | Swift helper using macOS Accessibility |
+| [Windows CUA](../../packages/experimental/cua-windows/README.md) | .NET helper using Windows UI Automation |
 | [Cua Driver MCP](../../packages/experimental/computer-use-cua-driver-mcp/README.md) | An already installed `cua-driver` executable connected through MCP |
 | [Cua Driver native](../../packages/experimental/computer-use-cua-driver-native/README.md) | The platform-native runtime installed with the npm dependency |
 
-Each provider supplies its upstream tool catalog. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
+The two Cua Driver providers expose their upstream tool catalogs. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
 
 ## Lifetime and desktop sharing
 

@@ -9,10 +9,16 @@ description: "更新直接依赖和配置中引用的 macOS Computer Use 提供�
 
 ## 变更
 
-macOS 提供方的包名改为 `@deepseek-ai/dsh-cua-macos`，Cordis 插件名改为 `cua-macos`。Computer Use 组合使用配置行 ID `cua-macos` 挂载该包。只启用组合的配置档会自动使用新包。
+Computer Use 组合会自动加载改名后的 macOS 提供方。直接依赖或覆盖配置使用的名称如下。
+
+| 名称 | 旧值 | 新值 |
+|---|---|---|
+| npm 包 | `@deepseek-ai/dsh-experimental-cua-macos` | `@deepseek-ai/dsh-cua-macos` |
+| Cordis 插件 | `experimental-cua-macos` | `cua-macos` |
+| 组合配置行 ID | `cua` | `cua-macos` |
 
 ## 迁移
 
-1. 将直接依赖和导入中的 `@deepseek-ai/dsh-experimental-cua-macos` 替换为 `@deepseek-ai/dsh-cua-macos`，并更新锁文件。如果自定义 Cordis 配置的 `name` 引用了旧包，也要更新。
-2. 如果主目录或配置档的 `cordis.patch.yml` 及其他覆盖配置指向组合提供的 macOS 后端，将 `id: cua` 改为 `id: cua-macos`。保留完整的 `config`，包括已设置的 `agentPreset`、`helperPath` 和 `sourceSigning`。自定义组合中自行指定的 ID 可以继续使用。
+1. 后续版本使用新包名发布。将直接依赖和导入改为 `@deepseek-ai/dsh-cua-macos`，并更新锁文件。如果自定义 Cordis 配置的 `name` 引用了旧包，也要更新。
+2. 如果主目录或配置档的 `cordis.patch.yml` 及其他覆盖配置指向组合提供的 macOS 后端，将 `id: cua` 改为 `id: cua-macos`。保留完整的 `config`，包括已设置的 `agentPreset`、`helperPath` 和 `sourceSigning`。如果仍指向组合的旧配置行，Loader 会提示 `patch: entry cua not found` 并跳过这条覆盖配置。如果其他配置也没有指定 `sourceSigning`，源码构建会使用默认的临时签名，重新构建 helper 后，macOS 可能再次要求授权。自定义组合可以保留自行指定的配置行 ID。
 3. 在 macOS 上启用 Computer Use 后，运行 `dsh --profile web --dump-config`，将 `web` 换成实际使用的配置档。检查 `cua-macos` 行是否加载了新包，以及各项配置是否符合预期。

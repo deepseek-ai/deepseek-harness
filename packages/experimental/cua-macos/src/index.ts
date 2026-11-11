@@ -68,7 +68,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
     acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
-    if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
+    if (!isAbsolute(config.helperPath)) throw new Error('macOS CUA helperPath must be absolute')
     installCua(ctx, config, { helperPath: config.helperPath, ...backend })
     return
   }

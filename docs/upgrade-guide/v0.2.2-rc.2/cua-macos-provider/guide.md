@@ -9,10 +9,16 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-The macOS provider package is now `@deepseek-ai/dsh-cua-macos` and its Cordis plugin name is `cua-macos`. The Computer Use bundle mounts it under the entry ID `cua-macos`. A profile that only enables the bundle picks up the new package automatically.
+The Computer Use bundle picks up the renamed macOS provider automatically. Direct dependencies and overrides use the following names.
+
+| Name | Previous | New |
+|---|---|---|
+| npm package | `@deepseek-ai/dsh-experimental-cua-macos` | `@deepseek-ai/dsh-cua-macos` |
+| Cordis plugin | `experimental-cua-macos` | `cua-macos` |
+| Bundle entry ID | `cua` | `cua-macos` |
 
 ## Migration
 
-1. Replace direct dependencies and imports of `@deepseek-ai/dsh-experimental-cua-macos` with `@deepseek-ai/dsh-cua-macos` and update your lockfile. In custom Cordis compositions, update the provider's `name` if it references the old package.
-2. In home or profile `cordis.patch.yml` and other overlays targeting the bundled provider, change `id: cua` to `id: cua-macos`. Keep the whole existing `config`, including any `agentPreset`, `helperPath` or `sourceSigning` values. Independently chosen IDs in custom compositions can stay as configured.
+1. New versions are published under the new npm name. Update direct dependencies and imports to `@deepseek-ai/dsh-cua-macos` and refresh your lockfile. In custom Cordis compositions, update the provider's `name` if it references the old package.
+2. In home or profile `cordis.patch.yml` and other overlays targeting the bundled provider, change `id: cua` to `id: cua-macos`. Keep the whole existing `config`, including any `agentPreset`, `helperPath` or `sourceSigning` values. If an overlay still targets the old bundle entry, the Loader warns `patch: entry cua not found` and skips that override. Source builds then use the default ad-hoc signature unless another entry supplies `sourceSigning`. macOS may ask for permission again after the helper is rebuilt. Custom compositions can keep their own entry IDs.
 3. On macOS with Computer Use enabled, run `dsh --profile web --dump-config` (substitute your profile). Check that the `cua-macos` entry loads the new package and has your expected configuration.

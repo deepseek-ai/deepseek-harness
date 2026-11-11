@@ -6,7 +6,7 @@
 
 [Computer Use](../../packages/experimental/cua-bundle/README.zh.md) 是适用于 macOS 和 Windows 的可选实验性插件组合。
 
-[macOS 后端](../../packages/experimental/cua-macos/README.zh.md)和 [Windows 后端](../../packages/experimental/cua-windows/README.zh.md)都通过[共享 CUA 服务](../../packages/experimental/cua/README.zh.md)检查应用访问授权。
+两个原生提供方都通过[共享 CUA 库](../../packages/experimental/cua/README.zh.md#use-this-package)检查配置中指定或已保存的应用授权。需要用户决定时，共享库通过 User Questions 询问用户。
 
 CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申请和应用授权撤销。[权限页面](../../packages/experimental/cua/README.zh.md)投影这些控件；app/window 操作在分派前执行 provider 的授权检查。
 
@@ -21,14 +21,16 @@ CUA provider 通过 `ctx.cuaAccess` 提供系统权限状态、用户主动申�
 
 ## 选择提供方
 
-在同一组合中挂载 [`dsh-computer-use`](../../packages/computer-use/computer-use/README.zh.md) 和一个提供方。两个 Cua Driver 提供方都是公开发布到 npm 的实验性包，均需显式启用。
+在同一组合中挂载 [`dsh-computer-use`](../../packages/computer-use/computer-use/README.zh.md) 和一个提供方。Computer Use 组合会按宿主平台选择原生提供方。自定义组合也可以直接挂载提供方。
 
 | 提供方 | 运行时 |
 |---|---|
+| [macOS CUA](../../packages/experimental/cua-macos/README.zh.md) | 使用 macOS 辅助功能的 Swift helper |
+| [Windows CUA](../../packages/experimental/cua-windows/README.zh.md) | 使用 Windows UI Automation 的 .NET helper |
 | [Cua Driver MCP](../../packages/experimental/computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 连接已安装的 `cua-driver` 可执行文件 |
 | [Cua Driver 原生](../../packages/experimental/computer-use-cua-driver-native/README.zh.md) | 随 npm 依赖安装的平台原生运行时 |
 
-各提供方提供上游工具目录。共享服务只注册名称，并拒绝任何第二个提供方，包括使用相同名称的另一个实例。服务不包含通用桌面操作方法或模型控制的选择器。
+两个 Cua Driver 提供方公开各自的上游工具目录。共享服务只注册名称，并拒绝任何第二个提供方，包括使用相同名称的另一个实例。服务不包含通用桌面操作方法或模型控制的选择器。
 
 ## 生命周期和桌面共享
 
