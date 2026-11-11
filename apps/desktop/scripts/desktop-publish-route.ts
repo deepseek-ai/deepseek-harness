@@ -50,8 +50,8 @@ export function resolveDesktopPublishRoute(
   if (diagnostic) throw new Error(diagnostic)
   const jobs = jobsSchema.parse(jobsValue)
   const routes = desktopPublishRunnersSchema.parse(routesValue)
-  const workflows = desktopPackageWorkflows[source.target]
-  if (run.repository.full_name !== repository || source.repository !== repository || !workflows.includes(run.path)
+  const workflow = desktopPackageWorkflows[source.target]
+  if (run.repository.full_name !== repository || source.repository !== repository || run.path !== workflow
     || source.runId !== String(run.id) || source.attempt !== String(run.run_attempt)
     || source.workflowCommit !== run.head_sha
     || source.qualification !== (source.target === 'win-x64' ? 'signed' : 'notarized')) {

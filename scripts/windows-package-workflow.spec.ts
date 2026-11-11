@@ -7,7 +7,7 @@ import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/desktop-package-windows-x64.yml'), 'utf8')) as {
+const workflow = yaml.load(readFileSync(resolve(root, '.github/workflows/windows-package.yml'), 'utf8')) as {
   on: Record<string, { inputs: Record<string, { type?: string; required?: boolean; default?: string; description?: string }> }>
   permissions: Record<string, string>
   concurrency: { group: string; 'cancel-in-progress': boolean }

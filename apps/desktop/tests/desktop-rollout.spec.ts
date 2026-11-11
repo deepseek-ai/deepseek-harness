@@ -244,7 +244,7 @@ it('routes without package binaries only for the explicit metadata-only reader a
   try {
     const env = { RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: join(f.root, 'config'),
       DESKTOP_PACKAGE_SELECTION: JSON.stringify({ runnerName: 'runner',
-        run: { id: 42, run_attempt: 1, head_sha: f.manifest.source.workflowCommit, path: '.github/workflows/desktop-package-macos-arm64.yml',
+        run: { id: 42, run_attempt: 1, head_sha: f.manifest.source.workflowCommit, path: '.github/workflows/macos-package.yml',
           conclusion: 'success', event: 'workflow_dispatch', repository: { full_name: 'owner/repo' } },
         jobs: [{ name: 'package', runner_name: 'runner', conclusion: 'success', labels: ['self-hosted', 'dsh-runner'] }],
         routes: { runner: { label: 'dsh-runner', target: 'mac-arm64' } },
@@ -278,7 +278,7 @@ it('runs the real route CLI without gh and emits the selected route and preset',
     if (address === null || typeof address === 'string') throw new Error('expected TCP listener')
     const output = join(f.root, 'route-output')
     const selection = { runnerName: 'runner',
-      run: { id: 42, run_attempt: 1, head_sha: f.manifest.source.workflowCommit, path: '.github/workflows/desktop-package-macos-arm64.yml',
+      run: { id: 42, run_attempt: 1, head_sha: f.manifest.source.workflowCommit, path: '.github/workflows/macos-package.yml',
         conclusion: 'success', event: 'workflow_dispatch', repository: { full_name: 'owner/repo' } },
       jobs: [{ name: 'package', runner_name: 'runner', conclusion: 'success', labels: ['self-hosted', 'dsh-runner'] }],
       routes: { runner: { label: 'dsh-runner', target: 'mac-arm64' } },

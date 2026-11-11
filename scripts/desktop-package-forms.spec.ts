@@ -4,7 +4,7 @@ import yaml from 'js-yaml'
 import { expect, it } from 'vitest'
 
 it('presents common packaging fields in the same order with the same defaults', () => {
-  const workflows = ['desktop-package-macos-arm64.yml', 'desktop-package-macos-x64.yml', 'desktop-package-windows-x64.yml'].map(name =>
+  const workflows = ['macos-package.yml', 'macos-intel-package.yml', 'windows-package.yml'].map(name =>
     yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows', name), 'utf8')) as {
       on: { workflow_dispatch: { inputs: Record<string, Record<string, unknown>> } }
     })

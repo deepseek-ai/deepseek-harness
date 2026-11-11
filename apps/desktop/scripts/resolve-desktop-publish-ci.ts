@@ -9,7 +9,7 @@ const positiveId = z.string().regex(/^[1-9]\d*$/u)
 const inputsSchema = z.object({ package_run_id: positiveId, package_run_attempt: z.union([positiveId, z.literal('')]).optional() })
 const runSchema = z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive(),
   head_sha: z.string().regex(/^[a-f0-9]{40}$/u), status: z.literal('completed'), conclusion: z.string(),
-  event: z.literal('workflow_dispatch'), path: z.enum(Object.values(desktopPackageWorkflows).flat()),
+  event: z.literal('workflow_dispatch'), path: z.enum(Object.values(desktopPackageWorkflows)),
   repository: z.object({ full_name: z.string() }) })
 const jobsSchema = z.object({ jobs: z.array(z.object({
   name: z.string(), run_attempt: z.number().int().positive(), runner_name: z.string().nullable(), conclusion: z.string().nullable(),
@@ -57,7 +57,7 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   const routes = desktopPublishRunnersSchema.parse(routesValue)
   const route = routes[runnerName]
   const target = (Object.keys(desktopPackageWorkflows) as Array<keyof typeof desktopPackageWorkflows>)
-    .find(name => desktopPackageWorkflows[name].includes(run.path))!
+    .find(name => desktopPackageWorkflows[name] === run.path)!
   if (!route || !route.target.includes(target)) throw new Error('desktop publish: original machine has no configured publishing route')
   if (new Set(Object.values(routes).map(value => value.label)).size !== Object.keys(routes).length) {
     throw new Error('desktop publish: each configured machine needs its own unique runner label')
