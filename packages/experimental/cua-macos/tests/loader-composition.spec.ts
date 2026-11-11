@@ -13,9 +13,9 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
-import LlmRuntime, { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -25,6 +25,7 @@ import * as NativeProvider from '../src/index.ts'
 import { createCuaApi } from '@deepseek-ai/dsh-cua/api'
 import type { CuaElementId } from '@deepseek-ai/dsh-cua/api'
 import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
 const element = (id: string): CuaElementId => id as CuaElementId
@@ -50,7 +51,7 @@ class VisualModel extends LlmAdapter {
     const operation = calls[this.requests.length]
     this.requests.push(options)
     if (operation) {
-      const call = { type: 'tool-call' as const, id: ToolCallId(`native-${this.requests.length}`), name: 'cua', arguments: JSON.stringify(operation) }
+      const call = { type: 'tool-call' as const, id: brandString<ToolCallId>(`native-${this.requests.length}`), name: 'cua', arguments: JSON.stringify(operation) }
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'block-end', index: 0, block: call }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
@@ -101,7 +102,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   for (const entry of context.loader.entries()) await entry.fiber?.await()
   const model = new VisualModel()
   context.llm.registerAdapter(['native-fixture'], model)
-  const handle = await context.agents.create({ sessionId: SessionId('native-loader'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
+  const handle = await context.agents.create({ sessionId: brandString<SessionId>('native-loader'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const agent = handle.agent
   const idle: PromiseWithResolvers<void> = Promise.withResolvers()
   const stop = context.on('agent/status', ({ agent: subject, status }) => {
@@ -139,7 +140,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   expect(toolCalls[3]?.data.arguments).toBe(JSON.stringify(calls[3]))
 
   const direct = await executeToolFixture(context, { agent, signal: new AbortController().signal,
-    callId: ToolCallId('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
+    callId: brandString<ToolCallId>('programmatic-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(direct.isError).toBe(false)
   expect(direct.value).toMatchObject({ mimeType: 'image/png', data: png })
@@ -148,7 +149,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     ['activate-first', true, 42, '99'], ['activate-repeat', false, 9, '7'],
   ] as const) {
     const activated = await executeToolFixture(context, {
-      agent, signal: new AbortController().signal, callId: ToolCallId(callId), name: 'cua',
+      agent, signal: new AbortController().signal, callId: brandString<ToolCallId>(callId), name: 'cua',
       arguments: { method: 'activate', params: { appHandle: 'fixture-app' } },
     })
     expect(activated.isError).toBe(false)
@@ -167,7 +168,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   let objectCall = 0
   const objectApi = (owner: typeof agent) => createCuaApi(async (operation) => {
     const result = await executeToolFixture(context, { agent: owner, signal: new AbortController().signal,
-      callId: ToolCallId(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
+      callId: brandString<ToolCallId>(`retained-object-${++objectCall}`), name: 'cua', arguments: operation })
     if (result.isError) throw new Error(JSON.stringify(result.content))
     const image = result.content.find(block => block.type === 'image')
     if (image !== undefined) {
@@ -188,7 +189,7 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
     { appHandle: retainedApp.appHandle, windowId: '7', maxElements: 100000, maxDepth: 50 },
     { appHandle: retainedApp.appHandle, windowId: '7', maxElements: 5000, maxDepth: 50 },
   ])
-  const peer = await context.agents.create({ sessionId: SessionId('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
+  const peer = await context.agents.create({ sessionId: brandString<SessionId>('native-loader-peer'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const peerApp = await objectApi(peer.agent).getApp('test.fixture')
   const peerWindow = await peerApp.getWindow('7')
   expect(peerApp.appHandle).not.toBe(retainedApp.appHandle)
@@ -214,15 +215,15 @@ it.skipIf(process.platform === 'win32')('shares one application between retained
   await peer.dispose()
   expect((await readEvents()).filter(event => event.event === 'exit')).toHaveLength(1)
 
-  const next = await context.agents.create({ sessionId: SessionId('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
+  const next = await context.agents.create({ sessionId: brandString<SessionId>('native-loader-next'), agentOptions: { provider: 'native-fixture', model: 'vision' } })
   const stale = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
-    callId: ToolCallId('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
+    callId: brandString<ToolCallId>('stale-window'), name: 'cua', arguments: { method: 'screenshot', params: { appHandle: 'fixture-app', windowId: '7' } },
   })
   expect(stale.isError).toBe(true)
   expect(JSON.stringify(stale.content)).toContain('APP_ACCESS_REQUIRED')
   expect((await readEvents()).filter(event => event.event === 'start')).toHaveLength(1)
   const selected = await executeToolFixture(context, { agent: next.agent, signal: new AbortController().signal,
-    callId: ToolCallId('select-new-task'), name: 'cua', arguments: { method: 'getApp', params: { selector: 'test.fixture' } },
+    callId: brandString<ToolCallId>('select-new-task'), name: 'cua', arguments: { method: 'getApp', params: { selector: 'test.fixture' } },
   })
   expect(selected.isError).toBe(false)
   const starts = (await readEvents()).filter(event => event.event === 'start')

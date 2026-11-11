@@ -5,12 +5,13 @@
  */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, MessageId, type UserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type MessageId, type UserMessage } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyOwnedError, SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { ScheduleId } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { createRRuleScheduleRecord } from '../src/domain.ts'
 import { ScheduleRuntime, type ScheduleRuntimeLimits } from '../src/runtime.ts'
 import type { ScheduleTask } from '../src/storage.ts'
@@ -32,7 +33,7 @@ function task(
   rrule = 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1',
   fields: Partial<ScheduleTask> = {},
 ): ScheduleTask {
-  return seededTask(createRRuleScheduleRecord(ScheduleId('task'), 'Task', 'Do work', rrule, Date.now()), target, fields)
+  return seededTask(createRRuleScheduleRecord(brandString<ScheduleId>('task'), 'Task', 'Do work', rrule, Date.now()), target, fields)
 }
 
 async function setup(tasks: ScheduleTask[], limits = LIMITS, options: Parameters<typeof harness>[0] = {}) {
@@ -104,7 +105,7 @@ function keepCreatedSessionsBusy(test: Awaited<ReturnType<typeof setup>>): void 
 }
 
 it('delivers to a designated Session and retains an ended receipt', async () => {
-  const tasks = [task({ kind: 'session', sessionId: SessionId('target') })]
+  const tasks = [task({ kind: 'session', sessionId: brandString<SessionId>('target') })]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, 'target')
   test.agents.set('target', agent)
@@ -112,13 +113,13 @@ it('delivers to a designated Session and retains an ended receipt', async () => 
   await vi.advanceTimersByTimeAsync(1000)
   expect(agent.followup).toHaveBeenCalledOnce()
   expect(tasks[0]).toMatchObject({
-    status: 'ended', involvedSessionIds: [SessionId('target')],
-    lastDelivery: { targetSessionId: SessionId('target'), scheduledAt: '2026-09-16T00:00:01.000Z' },
+    status: 'ended', involvedSessionIds: [brandString<SessionId>('target')],
+    lastDelivery: { targetSessionId: brandString<SessionId>('target'), scheduledAt: '2026-09-16T00:00:01.000Z' },
   })
 })
 
 it.each(['Web', 'persistence'] as const)('creates a new-once Session when %s reports that its reserved id is absent', async (source) => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   const tasks = [task({ kind: 'new_once', sessionId: reserved, create: { cwd: '/work' } })]
   const test = await setup(tasks)
   test.resolve.mockRejectedValueOnce(source === 'Web'
@@ -131,7 +132,7 @@ it.each(['Web', 'persistence'] as const)('creates a new-once Session when %s rep
 })
 
 it.each(['new_once', 'new'] as const)('keeps a stored %s task and reports failure when its Host cannot create Sessions', async (kind) => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   const original = task(kind === 'new' ? { kind, create: {} } : { kind, sessionId: reserved, create: {} })
   const tasks = [original]
   const test = await setup(tasks, LIMITS, { sessionController: false })
@@ -185,7 +186,7 @@ it('runs per-occurrence tasks immediately in fresh Sessions without moving their
 })
 
 it('delivers the latest missed occurrence once and keeps the next occurrence on its time', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target }, 'DTSTART:20260916T000001Z\nRRULE:FREQ=MINUTELY;COUNT=5')]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
@@ -210,7 +211,7 @@ it('delivers the latest missed occurrence once and keeps the next occurrence on 
 })
 
 it('keeps minutely occurrences on time when each Session flush takes time', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target }, 'DTSTART:20260916T000001Z\nRRULE:FREQ=MINUTELY;COUNT=4')]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
@@ -227,7 +228,7 @@ it('keeps minutely occurrences on time when each Session flush takes time', asyn
 })
 
 it('holds only the occurrence that falls inside the interval of a manual run', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target }, 'DTSTART:20260916T000101Z\nRRULE:FREQ=MINUTELY;COUNT=3')]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
@@ -245,16 +246,16 @@ it('holds only the occurrence that falls inside the interval of a manual run', a
 })
 
 it('delivers two tasks of one Session in one message again after a manual run held one of them', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const rrule = 'DTSTART:20260916T000101Z\nRRULE:FREQ=MINUTELY;COUNT=2'
   const tasks = ['first', 'second'].map(id => seededTask(
-    createRRuleScheduleRecord(ScheduleId(id), id, 'Do work', rrule, Date.now()), { kind: 'session', sessionId: target },
+    createRRuleScheduleRecord(brandString<ScheduleId>(id), id, 'Do work', rrule, Date.now()), { kind: 'session', sessionId: target },
   ))
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
   test.agents.set(target, agent)
   vi.setSystemTime('2026-09-16T00:00:46Z')
-  expect(await test.runtime.runNow(ScheduleId('first'))).toMatchObject({ admitted: true })
+  expect(await test.runtime.runNow(brandString<ScheduleId>('first'))).toMatchObject({ admitted: true })
   await vi.advanceTimersByTimeAsync(15_000)
   // At 00:01:01 only the second task is outside its interval; the first follows at 00:01:46.
   expect(agent.followup).toHaveBeenCalledTimes(2)
@@ -304,7 +305,7 @@ it('admits a manual run of a new-Session task while its earlier launch still run
 })
 
 it('wakes the idle earlier Session of a new-Session task and still launches the due occurrence', async () => {
-  const previous = SessionId('previous')
+  const previous = brandString<SessionId>('previous')
   const earlier = createUserMessage({ content: [{ type: 'text', text: 'Do work' }], source: { kind: 'schedule' } })
   const receipt = {
     scheduledAt: '2026-09-15T23:59:01.000Z', deliveredAt: '2026-09-15T23:59:01.000Z',
@@ -329,10 +330,10 @@ it('wakes the idle earlier Session of a new-Session task and still launches the 
 })
 
 it('falls through from an unavailable restart receipt to a fresh execution', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const receipt = {
     scheduledAt: '2026-09-15T23:59:00.000Z', deliveredAt: '2026-09-15T23:59:00.000Z',
-    messageId: MessageId('unavailable-receipt'), targetSessionId: target,
+    messageId: brandString<MessageId>('unavailable-receipt'), targetSessionId: target,
   }
   const recovering = task({ kind: 'session', sessionId: target }, undefined, {
     lastDelivery: receipt,
@@ -347,7 +348,7 @@ it('falls through from an unavailable restart receipt to a fresh execution', asy
 })
 
 it('refuses a manual execution whose target Session resolves after shutdown starts', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target }, 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY')]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
@@ -363,7 +364,7 @@ it('refuses a manual execution whose target Session resolves after shutdown star
 })
 
 it.each(['session', 'new_once', 'new'] as const)('refuses a manual execution whose %s target Session is archived', async (kind) => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task(kind === 'new' ? { kind, create: {} }
     : kind === 'new_once' ? { kind, sessionId: target, create: {} } : { kind, sessionId: target },
   'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY', {
@@ -384,7 +385,7 @@ it.each(['session', 'new_once', 'new'] as const)('refuses a manual execution who
 })
 
 it.each(['session', 'new_once', 'new'] as const)('keeps a due %s task while its target Session is archived and delivers after unarchiving', async (kind) => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task(kind === 'new' ? { kind, create: {} }
     : kind === 'new_once' ? { kind, sessionId: target, create: {} } : { kind, sessionId: target }, undefined,
   kind === 'new' ? { pendingDelivery: { targetSessionId: target } } : {})]
@@ -409,7 +410,7 @@ it.each(['session', 'new_once', 'new'] as const)('keeps a due %s task while its 
 })
 
 it('runs a per-occurrence task in a fresh Session while its earlier reminder waits in an archived Session', async () => {
-  const previous = SessionId('previous')
+  const previous = brandString<SessionId>('previous')
   const earlier = createUserMessage({ content: [{ type: 'text', text: 'Do work' }], source: { kind: 'schedule' } })
   const receipt = {
     scheduledAt: '2026-09-15T22:00:00.000Z', deliveredAt: '2026-09-15T22:00:00.000Z',
@@ -431,7 +432,7 @@ it('runs a per-occurrence task in a fresh Session while its earlier reminder wai
 })
 
 it('reuses a pending per-run identity and forwards both optional creation fields', async () => {
-  const reserved = SessionId('pending')
+  const reserved = brandString<SessionId>('pending')
   const tasks = [task({ kind: 'new', create: { cwd: '/work', agentPreset: 'minimal' } }, undefined, {
     pendingDelivery: { targetSessionId: reserved },
   })]
@@ -444,7 +445,7 @@ it('reuses a pending per-run identity and forwards both optional creation fields
 })
 
 it('reuses a pending new-Session identity for a later manual retry', async () => {
-  const reserved = SessionId('pending-manual')
+  const reserved = brandString<SessionId>('pending-manual')
   const tasks = [task({ kind: 'new', create: {} }, 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY', {
     pendingDelivery: { targetSessionId: reserved },
   })]
@@ -456,7 +457,7 @@ it('reuses a pending new-Session identity for a later manual retry', async () =>
 })
 
 it('retries a failed receipt write in the Session that the first attempt created', async () => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   const tasks = [task({ kind: 'new_once', sessionId: reserved, create: { cwd: '/work' } })]
   const test = await setup(tasks)
   test.commit.mockRejectedValueOnce(new Error('task write failed'))
@@ -472,7 +473,7 @@ it('retries a failed receipt write in the Session that the first attempt created
 })
 
 it.each(['Web', 'persistence'] as const)('creates no Session when the reserved identity has a %s ownership error', async (source) => {
-  const reserved = SessionId('pending')
+  const reserved = brandString<SessionId>('pending')
   const tasks = [task({ kind: 'new', create: {} }, undefined, { pendingDelivery: { targetSessionId: reserved } })]
   const test = await setup(tasks)
   const warn = vi.spyOn(test.ctx.logger, 'warn')
@@ -507,7 +508,7 @@ it('retries in the created Session whose Agent did not resolve after creation', 
 })
 
 it('keeps the timer of a failed member that restoration moved back into the future', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target })]
   const test = await setup(tasks)
   test.resolve.mockImplementationOnce(async () => {
@@ -525,9 +526,9 @@ it('keeps the timer of a failed member that restoration moved back into the futu
 })
 
 it('creates no Session for a new-target task that a clock rollback made future before its target resolution', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const fresh = seededTask(createRRuleScheduleRecord(
-    ScheduleId('fresh'), 'Fresh', 'Do work', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now(),
+    brandString<ScheduleId>('fresh'), 'Fresh', 'Do work', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now(),
   ), { kind: 'new', create: {} })
   const tasks = [task({ kind: 'session', sessionId: target }), fresh]
   const test = await setup(tasks)
@@ -547,7 +548,7 @@ it('creates no Session for a new-target task that a clock rollback made future b
 })
 
 it('delivers the latest occurrence after a target resolution that spans several periods and advances past it', async () => {
-  const target = SessionId('target')
+  const target = brandString<SessionId>('target')
   const tasks = [task({ kind: 'session', sessionId: target }, 'DTSTART:20260916T000001Z\nRRULE:FREQ=MINUTELY')]
   const test = await setup(tasks)
   const agent = agentFor(test.ctx, target)
@@ -565,7 +566,7 @@ it('delivers the latest occurrence after a target resolution that spans several 
 })
 
 it('joins a created Session to the Workspace at its directory and names it after the task', async () => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   const tasks = [task({ kind: 'new_once', sessionId: reserved, create: { cwd: '/work' } })]
   const test = await setup(tasks)
   const placed = await placement(test)
@@ -591,7 +592,7 @@ it('names each per-occurrence Session with its launch minute in the task time zo
 })
 
 it('delivers to the Session that an earlier delivery attempt created and keeps its title', async () => {
-  const reserved = SessionId('pending')
+  const reserved = brandString<SessionId>('pending')
   const tasks = [task({ kind: 'new', create: { cwd: '/work' } }, undefined, { pendingDelivery: { targetSessionId: reserved } })]
   const test = await setup(tasks)
   const placed = await placement(test)
@@ -607,7 +608,7 @@ it('delivers to the Session that an earlier delivery attempt created and keeps i
 })
 
 it('leaves a created Session outside every Workspace when no Workspace owns its directory', async () => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   const tasks = [task({ kind: 'new_once', sessionId: reserved, create: { cwd: '/elsewhere' } })]
   const test = await setup(tasks)
   const placed = await placement(test)
@@ -619,10 +620,10 @@ it('leaves a created Session outside every Workspace when no Workspace owns its 
 })
 
 it('delivers when the Workspace join and the naming of a created Session fail', async () => {
-  const reserved = SessionId('reserved')
+  const reserved = brandString<SessionId>('reserved')
   // Title cleaning removes the zero-width space that task validation keeps, so the title service rejects the name.
   const record = createRRuleScheduleRecord(
-    ScheduleId('task'), '\u200B', 'Do work', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now(),
+    brandString<ScheduleId>('task'), '\u200B', 'Do work', 'DTSTART:20260916T000001Z\nRRULE:FREQ=DAILY;COUNT=1', Date.now(),
   )
   const tasks = [seededTask(record, { kind: 'new_once', sessionId: reserved, create: { cwd: '/missing' } })]
   const test = await setup(tasks)

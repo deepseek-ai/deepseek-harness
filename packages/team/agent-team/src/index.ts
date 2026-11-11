@@ -11,7 +11,7 @@ import { TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { teamProjectionDefinition, type TeamProjectionState } from './projection.ts'
 import { TeamTaskBoard } from './task-board.ts'
-import { TeamTaskId } from './types.ts'
+import type { TeamTaskId } from './types.ts'
 import type {
   Config,
   CreateTeamTaskRequest,

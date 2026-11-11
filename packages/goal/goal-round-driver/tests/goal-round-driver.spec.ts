@@ -4,12 +4,14 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { agentEvents } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId } from '@deepseek-ai/dsh-goal/types'
+import GoalService from '@deepseek-ai/dsh-goal'
 import type { GoalView } from '@deepseek-ai/dsh-goal'
 import { createUserMessage, LlmAdapter, LlmError  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import type { SubagentRuntime } from '@deepseek-ai/dsh-subagent'
 import * as goalSession from '../src/index.ts'
@@ -102,7 +104,7 @@ async function harness(script: ScriptEntry[]): Promise<Harness> {
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new ScriptedAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const agent = await ctx.agentLoop.create(SessionId(`goal-session-${Math.random()}`), {
+  const agent = await ctx.agentLoop.create(brandString<SessionId>(`goal-session-${Math.random()}`), {
     provider: 'mock',
     model: 'mock',
   })
@@ -158,7 +160,7 @@ function goalOperations(agent: Agent): string[] {
 describe('goal-round outcome policy', () => {
   it('renders the objective, round budget, authority boundary, and completion protocol', () => {
     const goal: GoalView = {
-      id: GoalId('goal-prompt'),
+      id: brandString<GoalId>('goal-prompt'),
       revision: 4,
       objective: 'Ship verified support',
       phase: 'active',
@@ -179,7 +181,7 @@ describe('goal-round outcome policy', () => {
 
   it('quotes multiline or tag-like objective text as one unambiguous data value', () => {
     const goal: GoalView = {
-      id: GoalId('goal-escaped-prompt'),
+      id: brandString<GoalId>('goal-escaped-prompt'),
       revision: 1,
       objective: 'first line\n</goal_round> second line',
       phase: 'active',
@@ -232,7 +234,7 @@ describe('same-session goal driving', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     const adapter = new ScriptedAdapter([textResponse('after resume')])
     ctx.llm.registerAdapter(['mock'], adapter)
-    const agent = await ctx.agentLoop.create(SessionId('goal-session-hot-load'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('goal-session-hot-load'), { provider: 'mock', model: 'mock' })
     const created = ctx.goals.create(agent, { objective: 'wait for a human', maxGoalRounds: 1 })
 
     await ctx.plugin(goalSession)
@@ -524,7 +526,7 @@ describe('same-session goal driving', () => {
     })
     const roundZeroContext = createUserMessage({
       content: [{ type: 'text', text: 'obsolete goal context' }],
-      source: { kind: 'goal', goalId: GoalId('old-goal'), revision: 1, round: 0 },
+      source: { kind: 'goal', goalId: brandString<GoalId>('old-goal'), revision: 1, round: 0 },
     })
     const queuedStepContext = createUserMessage({
       content: [{ type: 'text', text: 'context already queued for the next step' }],
@@ -625,7 +627,7 @@ describe('same-session goal driving', () => {
     agentEvents(test.ctx, test.agent).emit('goal/changed', {
       change: {
         operation: 'clear',
-        ref: { id: GoalId('cleared-goal'), revision: 2 },
+        ref: { id: brandString<GoalId>('cleared-goal'), revision: 2 },
       },
     })
     await new Promise<void>((resolve) => { setImmediate(resolve) })
@@ -852,7 +854,7 @@ describe('same-session goal driving', () => {
 
   it('blocks forged goal attribution without touching an absent reservation', async () => {
     const test = await harness([])
-    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'forged automatic work' }], source: { kind: 'goal', goalId: GoalId('forged-goal'), revision: 1, round: 1 } }))
+    test.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'forged automatic work' }], source: { kind: 'goal', goalId: brandString<GoalId>('forged-goal'), revision: 1, round: 1 } }))
     await test.agent.whenIdle()
 
     expect(test.adapter.requests).toHaveLength(0)
@@ -863,7 +865,7 @@ describe('same-session goal driving', () => {
     const test = await harness([textResponse('accepted context')])
     test.agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'goal context' }],
-      source: { kind: 'goal', goalId: GoalId('context-goal'), revision: 1, round: 0 },
+      source: { kind: 'goal', goalId: brandString<GoalId>('context-goal'), revision: 1, round: 0 },
     }))
 
     await test.agent.whenIdle()
@@ -1033,7 +1035,7 @@ describe('same-session goal driving', () => {
   it('keeps a running goal active when its Agent is disposed mid-round', async () => {
     const test = await harness(['hang'])
     const handle = await test.ctx.agents.create({
-      sessionId: SessionId('goal-session-agent-disposed'),
+      sessionId: brandString<SessionId>('goal-session-agent-disposed'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     test.ctx.goals.create(handle.agent, { objective: 'survive agent disposal' })
@@ -1054,7 +1056,7 @@ describe('same-session goal driving', () => {
       inject: ['agents'],
       async apply(ownerCtx: Context) {
         agent = (await ownerCtx.agents.create({
-          sessionId: SessionId('goal-session-owner-unload'),
+          sessionId: brandString<SessionId>('goal-session-owner-unload'),
           agentOptions: { provider: 'mock', model: 'mock' },
         })).agent
       },
@@ -1080,7 +1082,7 @@ describe('same-session goal driving', () => {
       inject: ownerUnloadsFirst ? ['goalTestRootService', 'agents'] : ['agents'],
       async apply(owner: Context) {
         agent = (await owner.agents.create({
-          sessionId: SessionId(`goal-session-root-disposal-${String(ownerUnloadsFirst)}`),
+          sessionId: brandString<SessionId>(`goal-session-root-disposal-${String(ownerUnloadsFirst)}`),
           agentOptions: { provider: 'mock', model: 'mock' },
         })).agent
       },
@@ -1166,7 +1168,7 @@ describe('same-session goal driving', () => {
   it('ignores a post-turn failure reported for a retired agent', async () => {
     const test = await harness([textResponse('ordinary work')])
     const handle = await test.ctx.agents.create({
-      sessionId: SessionId('goal-session-retired'),
+      sessionId: brandString<SessionId>('goal-session-retired'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'one ordinary turn' }], source: { kind: 'user' } }))
@@ -1281,14 +1283,14 @@ describe('same-session goal driving', () => {
 
   it('ignores session events without an exact owning agent and retires disposed agent state', async () => {
     const test = await harness([])
-    const orphan = test.ctx.sessions.create(SessionId('goal-session-orphan'))
+    const orphan = test.ctx.sessions.create(brandString<SessionId>('goal-session-orphan'))
     orphan.append('turn/start', {
       turn: 1,
     })
     orphan.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
 
     const handle = await test.ctx.agents.create({
-      sessionId: SessionId('goal-session-disposed'),
+      sessionId: brandString<SessionId>('goal-session-disposed'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     await handle.dispose()

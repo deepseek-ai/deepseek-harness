@@ -7,7 +7,8 @@ import { z } from 'zod'
 import type { Context } from '@deepseek-ai/cordis'
 import { HarnessError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-tools'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { isPluginStopping } from '@deepseek-ai/dsh-action-cards'
 import type { ActionCardFields, ActionCardProposalOf, ActionCardResult } from '@deepseek-ai/dsh-action-cards'
@@ -250,7 +251,7 @@ class PersonalizedPages {
     const card: PageCard = { callId: proposal.callId, phase: 'creating', bundleName, ...location.data }
     this.record(agent, card)
     const abort = new AbortController()
-    const childId = SessionId(randomUUID())
+    const childId = brandString<SessionId>(randomUUID())
     const done = this.generate(agent, childId, proposal, card, sourceDirectory, directory, bundleName, abort.signal)
       .finally(() => { this.jobs.delete(key) })
     this.jobs.set(key, { parent: agent, childId, card, abort, done })

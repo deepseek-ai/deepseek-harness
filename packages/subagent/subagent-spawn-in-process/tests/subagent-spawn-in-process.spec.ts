@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { Context, symbols, type EffectMeta } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
@@ -13,6 +13,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, maxTokensResponse, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as spawn from '../src/index.ts'
 import { STRUCTURED_OUTPUT_TOOL } from '@deepseek-ai/dsh-subagent'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -32,7 +33,7 @@ async function setup(script: Script) {
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(spawn, { providerName: 'spawn' })
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent, adapter }
 }
 
@@ -221,7 +222,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     expect(typeof provider.prepareContinuable).toBe('function')
     const spec = await provider.prepareContinuable!({
       cwd: process.cwd(),
-      sessionId: SessionId('continuable-child'),
+      sessionId: brandString<SessionId>('continuable-child'),
       parent,
       signal: new AbortController().signal,
     })
@@ -233,7 +234,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     const { ctx } = await setup([textResponse('x')])
     // A parent WITH a cwd (config agents have none, so create one explicitly).
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('cwd-parent-session'),
+      sessionId: brandString<SessionId>('cwd-parent-session'),
       meta: { cwd: '/tmp/parent-workspace' },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
@@ -249,7 +250,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     const { ctx } = await setup([textResponse('explicit model child')])
     // A parent with NO model (its own turns would need one supplied per-request).
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('modelless-parent-session'),
+      sessionId: brandString<SessionId>('modelless-parent-session'),
       agentOptions: {},
     })
     // The request supplies the child's model explicitly.
@@ -316,7 +317,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(spawn, { providerName: 'spawn' })
     ctx.llm.registerAdapter(['mock'], adapter)
-    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
     const controller = new AbortController()
     const run = await start(ctx, 'spawn', {
       prompt: [{ type: 'text', text: 'q' }],
@@ -344,7 +345,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(spawn, { providerName: 'spawn' })
-    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
     const parentEffects = parent.ctx.fiber.getEffects().length
     const published: string[] = []
     ctx.on('session/created', () => void published.push('session/created'))
@@ -376,7 +377,7 @@ describe('dsh-subagent-spawn-in-process', () => {
     const { ctx } = await setup([])
     // A handle-owned parent we can dispose (config agents dispose with the loop fiber).
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('doomed-s'),
+      sessionId: brandString<SessionId>('doomed-s'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     await parentHandle.dispose()
@@ -397,7 +398,7 @@ describe('dsh-subagent-spawn-in-process', () => {
   it('parent disposal during the child setup transaction prevents every publication notification', async () => {
     const { ctx } = await setup([])
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('setup-race-parent-session'),
+      sessionId: brandString<SessionId>('setup-race-parent-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const published: string[] = []

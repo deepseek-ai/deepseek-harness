@@ -31,6 +31,9 @@
     "src"
   ],
   "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-llm": "workspace:*",

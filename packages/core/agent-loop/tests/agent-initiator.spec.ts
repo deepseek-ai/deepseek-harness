@@ -5,9 +5,10 @@ import { Context, type Fiber } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import LlmRuntime, { createUserMessage, ToolCallId, LlmAdapter  } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { createUserMessage, type ToolCallId, LlmAdapter  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
@@ -135,8 +136,8 @@ describe('AgentLoop initiator scope', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     ctx.llm.registerAdapter(['mock'], adapter)
 
-    const a = await ctx.agentLoop.create(SessionId('a'), { provider: 'mock', model: 'mock' })
-    const b = await ctx.agentLoop.create(SessionId('b'), { provider: 'mock', model: 'mock' })
+    const a = await ctx.agentLoop.create(brandString<SessionId>('a'), { provider: 'mock', model: 'mock' })
+    const b = await ctx.agentLoop.create(brandString<SessionId>('b'), { provider: 'mock', model: 'mock' })
     const idleA = waitForIdle(ctx, a)
     const idleB = waitForIdle(ctx, b)
     send(a, 'a')
@@ -159,7 +160,7 @@ describe('AgentLoop initiator scope', () => {
       textResponse('second done'),
     ])
     const { ctx } = await harness(adapter)
-    const agent = await ctx.agentLoop.create(SessionId('signal-owner'), { provider: 'mock', model: 'mock' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('signal-owner'), { provider: 'mock', model: 'mock' })
     let signals: AbortSignal[] = []
     let preStepSignals: AbortSignal[] = []
     const capture = (signal: AbortSignal | undefined): void => {
@@ -241,7 +242,7 @@ describe('AgentLoop initiator scope', () => {
       execute: async (_args, exec) => {
         if (exec.agent === undefined) throw new Error('parent agent missing')
         const handle = await exec.agent.ctx.agents.create({
-          sessionId: SessionId('child-session'),
+          sessionId: brandString<SessionId>('child-session'),
           agentOptions: { provider: 'mock', model: 'mock' },
 
           setup: (agentCtx, childAgent) => {
@@ -269,7 +270,7 @@ describe('AgentLoop initiator scope', () => {
     }))
 
     const parentHandle = await ctx.agents.create({
-      sessionId: SessionId('parent-session'),
+      sessionId: brandString<SessionId>('parent-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const idle = waitForIdle(ctx, parentHandle.agent)
@@ -319,7 +320,7 @@ describe('AgentLoop initiator scope', () => {
 
     const direct = await executeToolFixture(ctx, {
       signal: testToolSignal,
-      callId: ToolCallId('direct'),
+      callId: brandString<ToolCallId>('direct'),
       name: 'agentless-probe',
       arguments: {},
     })
@@ -327,7 +328,7 @@ describe('AgentLoop initiator scope', () => {
     expect(directAmbient).toBeUndefined()
 
     const handle = await ctx.agents.create({
-      sessionId: SessionId('transport-session'),
+      sessionId: brandString<SessionId>('transport-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const idle = waitForIdle(ctx, handle.agent)
@@ -356,7 +357,7 @@ describe('AgentLoop initiator scope', () => {
     const oldService = ctx.agents
     adapter.agents = oldService
     const oldHandle = await ctx.agents.create({
-      sessionId: SessionId('before-restart-session'),
+      sessionId: brandString<SessionId>('before-restart-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const oldAgent = oldHandle.agent
@@ -372,7 +373,7 @@ describe('AgentLoop initiator scope', () => {
     adapter.agents = ctx.agents
 
     const newHandle = await ctx.agents.create({
-      sessionId: SessionId('after-restart-session'),
+      sessionId: brandString<SessionId>('after-restart-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const newAgent = newHandle.agent
@@ -399,7 +400,7 @@ describe('AgentLoop initiator scope', () => {
     const service = ctx.agents
     adapter.agents = service
     const handle = await ctx.agents.create({
-      sessionId: SessionId('root-dispose-session'),
+      sessionId: brandString<SessionId>('root-dispose-session'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const agent = handle.agent

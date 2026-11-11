@@ -4,9 +4,10 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { FileReference, FolderReference } from '../src/client/FileReference.tsx'
 import { en } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
@@ -16,7 +17,7 @@ function props(openFile: Props['openFile']): Props {
   return {
     node: { id: 'file', start: 0, end: 14, data: { path: 'docs/a b.md', label: 'a b.md' } },
     raw: '@"docs/a b.md"', interactive: true, openFile, t: makeTranslate(en),
-    useContextMenu: contextMenuHook(), sessionId: SessionId('original'),
+    useContextMenu: contextMenuHook(), sessionId: brandString<SessionId>('original'),
     resolveFilePath: path => `/workspace/${path}`,
   } as Props
 }

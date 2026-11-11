@@ -31,7 +31,7 @@ const [
   { default: SubagentRuntime },
   JsonlSessionPersistence,
   { HarnessSdkJsonRpcServer },
-  { SessionId },
+  { brandString },
 ] = await Promise.all([
   load("vendor/cordis/lib/index.js"),
   load("packages/core/agent-loop/lib/index.js"),
@@ -39,7 +39,7 @@ const [
   load("packages/subagent/subagent/lib/index.js"),
   load("packages/session/session-persistence-jsonl/lib/index.js"),
   load("packages/sdk/server/lib/index.js"),
-  load("packages/core/session/lib/index.js"),
+  load("packages/util/brand/lib/index.js"),
 ]);
 
 const storageRoot = await mkdtemp(join(tmpdir(), "jsonrpc-built-scope-"));
@@ -57,7 +57,7 @@ try {
     notify(method, params) { notifications.push({ method, params }); },
   });
   const parent = await ctx.agents.create({
-    sessionId: SessionId("built-parent"),
+    sessionId: brandString("built-parent"),
     meta: { cwd: storageRoot },
     agentOptions: { model: "test" },
   });
@@ -69,7 +69,7 @@ try {
   });
   const run = await ctx.subagents.startActivation({
     provider: "built-local",
-    childId: SessionId("built-child"),
+    childId: brandString("built-child"),
     label: "built scope carrier",
     delivery: "caller",
     parent: parent.agent, prompt: [{ type: "text", text: "Use the unavailable test model." }],

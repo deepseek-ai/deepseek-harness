@@ -3,8 +3,7 @@ import { act, cleanup, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeTranslate, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ScheduleDeleteResult, ScheduleCatalogEntry as ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
-import { ScheduleId } from '@deepseek-ai/dsh-schedule'
+import type { ScheduleDeleteResult, ScheduleCatalogEntry as ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-ui-renderer/src/client/bind.ts'
 import { createCatalogSource, type CatalogInjected } from '../src/client/catalog-source.ts'
@@ -15,6 +14,7 @@ import { SessionScheduleHover, type SessionScheduleHoverProps } from '../src/cli
 import { en, zh } from '../src/client/locales.ts'
 import css from '../src/client/SessionScheduleMark.module.css'
 import { pinSystemZone } from './zone-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SESSION = 'hover-session' as SessionId
 const OTHER_SESSION = 'other-hover-session' as SessionId
@@ -44,7 +44,7 @@ function record(
   title?: string,
 ): ScheduleCatalogEntry {
   return { kind: 'rrule',
-    id: ScheduleId(id),
+    id: brandString<ScheduleId>(id),
     title: title ?? prompt,
     prompt,
     rrule: 'DTSTART;TZID=UTC:20260825T120000\nRRULE:FREQ=MINUTELY;INTERVAL=5',
@@ -63,7 +63,7 @@ function sourceFor(
   return createCatalogSource<ScheduleCatalogEntry>({
     list,
     remove: async (): Promise<RemoteResult<ScheduleDeleteResult>> =>
-      ({ ok: true, value: { id: ScheduleId('unused'), deleted: true } }),
+      ({ ok: true, value: { id: brandString<ScheduleId>('unused'), deleted: true } }),
     subscribeChanged: () => () => {},
     subscribeReset: () => () => {},
   })

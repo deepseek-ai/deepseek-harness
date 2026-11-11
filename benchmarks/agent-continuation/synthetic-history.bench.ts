@@ -2,7 +2,8 @@
 import { expect, it } from 'vitest'
 import { createSystemMessage } from '@deepseek-ai/dsh-llm'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { syntheticHistory as browserHistory } from '../long-session-browser/synthetic-history.ts'
 import { syntheticHistory } from './workload.ts'
 
@@ -15,7 +16,7 @@ for (const [name, generate] of [
   it(name + ' seed preserves a protected head when the next prompt replaces it', () => {
     const events = parseSessionLog(generate())
     expect(events.slice(0, 4).map(event => event.type)).toEqual(['turn/start', 'step/start', 'system/message', 'user/message'])
-    const session = Session.create(SessionId(header.id), events)
+    const session = Session.create(brandString<SessionId>(header.id), events)
     const head = session.surface.nodes[0]!
     expect(session.eventAt(head)).toMatchObject({ type: 'system/message', data: { turn: 1, step: 1, message: { role: 'system', content: [] } } })
     const history = session.deriveMessages()
@@ -25,7 +26,7 @@ for (const [name, generate] of [
     const replacement = session.append('system/message', {
       turn, step: 1, message: createSystemMessage('Next synthetic prompt'),
     }, { surfaceOp: { op: 'replace', startSeq: head, endSeq: head }, sourceEventSeqs: [head] })
-    const restored = Session.create(SessionId(header.id), parseSessionLog([
+    const restored = Session.create(brandString<SessionId>(header.id), parseSessionLog([
       JSON.stringify(header), ...session.snapshotEvents().map(event => JSON.stringify(event)),
     ].join('\n')))
     expect(restored.surface.nodes[0]).toBe(replacement.seq)

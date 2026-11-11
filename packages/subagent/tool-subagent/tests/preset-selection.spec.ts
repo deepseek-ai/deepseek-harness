@@ -12,7 +12,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import AgentPresets from '@deepseek-ai/dsh-agent-preset-registry'
 import SubagentRuntime, { applyChildComposition } from '@deepseek-ai/dsh-subagent'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -21,6 +21,7 @@ import * as tool from '../src/index.ts'
 import { SubagentPresetSelection } from '../src/preset-selection.ts'
 import { mountScriptedProvider, type Config as ProviderConfig } from './scripted-provider.ts'
 import { callSubagent, text } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -157,7 +158,7 @@ describe('spawn preset selection', () => {
     const { ctx, provider } = await setup(config)
     await provider.dispose()
     await mountSpawn(ctx, 'custom-spawn')
-    const parent = await ctx.agents.create({ sessionId: SessionId('missing-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('missing-child-preset') })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, { ...args, ...selection }, { agent: parent.agent })
     expect(result.isError).toBe(true)
@@ -175,7 +176,7 @@ describe('spawn preset selection', () => {
     await ctx.agentPresets.register({
       id: 'reviewer', plugins: [{ name: 'cordis:missing-plugin' }],
     })
-    const parent = await ctx.agents.create({ sessionId: SessionId('broken-child-preset') })
+    const parent = await ctx.agents.create({ sessionId: brandString<SessionId>('broken-child-preset') })
     const sessions = ctx.sessions.list()
     const result = await callSubagent(ctx, args, { agent: parent.agent })
     expect(result.isError).toBe(true)
@@ -195,7 +196,7 @@ describe('spawn preset selection', () => {
       }],
     })
     const handle = await ctx.agents.create({
-      sessionId: SessionId('self-selecting-preset'),
+      sessionId: brandString<SessionId>('self-selecting-preset'),
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'self') },
     })
     const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'self_delegate')
@@ -219,7 +220,7 @@ describe('spawn preset selection', () => {
     for (const id of [first, second]) {
       const other = id === 'alpha' ? 'beta' : 'alpha'
       const handle = await ctx.agents.create({
-        sessionId: SessionId(`mutually-selecting-${id}`),
+        sessionId: brandString<SessionId>(`mutually-selecting-${id}`),
         setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, id) },
       })
       const schema = ctx.tools.schemas(handle.agent).find(schema => schema.name === 'peer_delegate')
@@ -239,7 +240,7 @@ describe('spawn preset selection', () => {
       }))
     }
     const create = (id: string, preset: string) => ctx.agents.create({
-      sessionId: SessionId(id),
+      sessionId: brandString<SessionId>(id),
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, preset) },
     })
     const [standard, moving] = await Promise.all([
@@ -284,7 +285,7 @@ describe('spawn preset selection', () => {
     const adapter = new MockAdapter([textResponse('Ready.')])
     ctx.llm.registerAdapter(['mock'], adapter)
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('switch-ready'),
+      sessionId: brandString<SessionId>('switch-ready'),
       agentOptions: { provider: 'mock', model: 'mock' },
       setup: async (owner) => { await ctx.agentPresets.mount(owner, 'planning') },
     })
@@ -310,13 +311,13 @@ describe('spawn preset selection', () => {
         name: 'cordis:subagentTool', config: { provider: 'custom-spawn', agentPreset: 'reviewer' },
       }] })
       const create = (id: string) => ctx.agents.create({
-        sessionId: SessionId(id),
+        sessionId: brandString<SessionId>(id),
         setup: async (owner) => { await ctx.agentPresets.mount(owner, 'delegating') },
       })
       const parent = await create('restricted-parent')
       const peer = await create('unrestricted-peer')
       const subject = mode === 'agent restriction' ? parent : await ctx.agents.create({
-        sessionId: SessionId('restricted-child'),
+        sessionId: brandString<SessionId>('restricted-child'),
         setup: owner => applyChildComposition(owner, parent.agent, {
           ...mode === 'selected historical filter' ? { agentPreset: 'delegating' } : {},
           toolFilter: { deny: ['subagent'] },
@@ -355,7 +356,7 @@ describe('spawn preset selection', () => {
     expect(definition).toBeDefined()
     await lease[Symbol.asyncDispose]()
     const handle = await ctx.agents.create({
-      sessionId: SessionId('retry-preset'),
+      sessionId: brandString<SessionId>('retry-preset'),
       agentOptions: { provider: 'mock', model: 'mock' },
       setup: async (agentCtx) => { await ctx.agentPresets.mount(agentCtx, 'writer') },
     })

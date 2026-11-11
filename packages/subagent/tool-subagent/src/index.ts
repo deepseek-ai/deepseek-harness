@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { AgentOptions } from '@deepseek-ai/dsh-agent'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   assertSubagentMaxDepth,
@@ -89,12 +89,12 @@ export const Config: z<Config> = z.object({
   agentOptions: z.object({
     provider: z.string(),
     model: z.string(),
-    reasoningEffort: z.string().min(1) as z<ReturnType<typeof ReasoningEffortId> | undefined>,
+    reasoningEffort: z.string().min(1) as z<ReasoningEffortId | undefined>,
     maxTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER),
   }).default(undefined as unknown as {
     provider: string
     model: string
-    reasoningEffort: ReturnType<typeof ReasoningEffortId>
+    reasoningEffort: ReasoningEffortId
     maxTokens: number
   }),
   agentPreset: z.string().min(1),

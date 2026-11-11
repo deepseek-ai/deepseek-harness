@@ -7,6 +7,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { TerminalBackendCleanupError, TerminalError } from './error.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -144,7 +145,7 @@ export class TerminalSessionService extends Service {
     const backendSignal = signal === undefined
       ? spawnReservation.signal
       : AbortSignal.any([signal, spawnReservation.signal])
-    const sessionId = TerminalSessionId(`pty-${++this.nextId}`)
+    const sessionId = brandString<TerminalSessionId>(`pty-${++this.nextId}`)
     let session: TerminalBackendSession | undefined
     let cleanupFailure: { error: unknown } | undefined
     try {

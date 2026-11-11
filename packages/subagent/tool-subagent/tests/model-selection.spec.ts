@@ -3,13 +3,14 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SubagentRuntime, { resolveChildAgentOptions } from '@deepseek-ai/dsh-subagent'
 import type { SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import * as mock from './scripted-provider.ts'
@@ -23,20 +24,20 @@ import { callSubagent, modelSelectionSetupAgent, setup, text } from './harness.t
 
 const REASONING = {
   efforts: [
-    { id: ReasoningEffortId('low'), name: 'Low' },
-    { id: ReasoningEffortId('high'), name: 'High' },
+    { id: brandString<ReasoningEffortId>('low'), name: 'Low' },
+    { id: brandString<ReasoningEffortId>('high'), name: 'High' },
   ],
-  defaultEffort: ReasoningEffortId('high'),
+  defaultEffort: brandString<ReasoningEffortId>('high'),
 } as const
 
 function parentWithRoute(
   options: Agent['options'] = {
     provider: 'alpha',
     model: 'parent-model',
-    reasoningEffort: ReasoningEffortId('high'),
+    reasoningEffort: brandString<ReasoningEffortId>('high'),
   },
 ): Agent {
-  const id = SessionId('parent-with-route')
+  const id = brandString<SessionId>('parent-with-route')
   return { id, options, session: Session.create(id) } as unknown as Agent
 }
 
@@ -216,7 +217,7 @@ describe('dsh-tool-subagent model selection', () => {
     ctx.llm.registerAdapter(['alpha', 'other-provider'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
     const discover = (args: unknown) => executeToolFixture(ctx, {
-      callId: ToolCallId('default-model-discovery'), name: 'list_subagent_models',
+      callId: brandString<ToolCallId>('default-model-discovery'), name: 'list_subagent_models',
       arguments: args, agent: parent, signal: new AbortController().signal,
     })
     expect(text(await discover({}))).toContain('alpha')
@@ -258,7 +259,7 @@ describe('dsh-tool-subagent model selection', () => {
       agentOptions: {
         provider: 'alpha',
         model: 'configured-model',
-        reasoningEffort: ReasoningEffortId('high'),
+        reasoningEffort: brandString<ReasoningEffortId>('high'),
         maxTokens: 321,
       },
     }, { onStart: (request) => { requests.push(request) } })
@@ -325,12 +326,12 @@ describe('dsh-tool-subagent model selection', () => {
           agentOptions: {
             provider: 'alpha',
             model: source === 'configured' ? 'parent-model' : 'configured-model',
-            reasoningEffort: ReasoningEffortId('high'),
+            reasoningEffort: brandString<ReasoningEffortId>('high'),
           },
         },
       }, { onStart: (request) => { requests.push(request) } })
       ctx.llm.registerAdapter(['alpha'], new MockAdapter([], {
-        ...REASONING, defaultEffort: ReasoningEffortId('low'),
+        ...REASONING, defaultEffort: brandString<ReasoningEffortId>('low'),
       }))
       const resolve = vi.spyOn(ctx.llm, 'resolveCallConfig')
       const result = await callSubagent(ctx, {
@@ -372,7 +373,7 @@ describe('dsh-tool-subagent model selection', () => {
     const ctx = await setup({
       provider: 'mock',
       withModelSelection: true,
-      agentOptions: { reasoningEffort: ReasoningEffortId('high') },
+      agentOptions: { reasoningEffort: brandString<ReasoningEffortId>('high') },
     }, { onStart: (request) => { requests.push(request) } })
     ctx.llm.registerAdapter(['current-provider'], new MockAdapter([], REASONING))
     const parent = modelSelectionSetupAgent(ctx)
@@ -478,12 +479,12 @@ describe('dsh-tool-subagent model selection', () => {
       agentOptions: {
         provider: 'alpha',
         model: 'parent-model',
-        reasoningEffort: ReasoningEffortId('high'),
+        reasoningEffort: brandString<ReasoningEffortId>('high'),
       },
     }, { onStart: () => { starts += 1 } })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], {
-      efforts: [{ id: ReasoningEffortId('low'), name: 'Low' }],
-      defaultEffort: ReasoningEffortId('low'),
+      efforts: [{ id: brandString<ReasoningEffortId>('low'), name: 'Low' }],
+      defaultEffort: brandString<ReasoningEffortId>('low'),
     }))
 
     const result = await callSubagent(
@@ -528,7 +529,7 @@ describe('dsh-tool-subagent model selection', () => {
       agentOptions: {
         provider: 'alpha',
         model: 'fast-model',
-        reasoningEffort: ReasoningEffortId('high'),
+        reasoningEffort: brandString<ReasoningEffortId>('high'),
       },
     })
 
@@ -570,7 +571,7 @@ describe('dsh-tool-subagent model selection', () => {
     })
     expect(allowed.isError, text(allowed)).toBe(false)
     expect(requests[0]?.agentOptions).toEqual({
-      provider: 'alpha', model: 'fast-model', reasoningEffort: ReasoningEffortId('low'),
+      provider: 'alpha', model: 'fast-model', reasoningEffort: brandString<ReasoningEffortId>('low'),
     })
 
     const denied = await callSubagent(ctx, {

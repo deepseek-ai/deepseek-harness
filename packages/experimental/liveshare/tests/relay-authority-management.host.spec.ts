@@ -2,10 +2,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import { Peer } from '@deepseek-ai/dsh-client-connection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { FsTargetKey } from '@deepseek-ai/dsh-fs'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { FsTargetKey } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ShareAccessStateFrame, TunnelRegistrationToken, TunnelRequestToken, TunnelWorkerEvent } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
@@ -57,8 +58,8 @@ async function fixture(mode: 'view' | 'write') {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  const session = Session.create(SessionId('source'), [], { version: SESSION_FORMAT_VERSION,
-    id: SessionId('source'), cwd: directory, createdAt: 0, isSeeded: false })
+  const session = Session.create(brandString<SessionId>('source'), [], { version: SESSION_FORMAT_VERSION,
+    id: brandString<SessionId>('source'), cwd: directory, createdAt: 0, isSeeded: false })
   const unsupported = (): never => { throw new Error('this fixture does not drive the Inbox') }
   const key: Omit<Agent, 'ctx'> = { id: session.id, session, status: 'running', options: {},
     model: { current: () => undefined, select: () => {} },
@@ -74,7 +75,7 @@ async function fixture(mode: 'view' | 'write') {
   for (const name of ['read', 'write']) ctx.effect(() => ctx.tools.register(defineTool({ name, description: 'Use a file',
     parameters: { file_path: { type: 'string', required: true } },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] }, execute: delegated })))
-  const root = { targetKey: FsTargetKey('root'), displayPath: directory }
+  const root = { targetKey: brandString<FsTargetKey>('root'), displayPath: directory }
   let holdOpen = false
   // A held read blocks while resolving its target, after admission and before the deployment's read runs.
   const fs: ForkEnforcementFs = {
@@ -134,7 +135,7 @@ async function fixture(mode: 'view' | 'write') {
     stateLegacyUploadSwitch: (value: boolean) => { legacyUploadSwitch = value },
     releaseOpen: () => { release.resolve(undefined) },
     startRead: (turn = 1) => { session.append('turn/start', { turn }); holdOpen = true; const reading = executeOneTool(ctx, { name: 'read',
-      arguments: { file_path: join(directory, 'file') }, callId: ToolCallId(`external-read-${turn}`),
+      arguments: { file_path: join(directory, 'file') }, callId: brandString<ToolCallId>(`external-read-${turn}`),
       agent, signal: new AbortController().signal }); pending.push(reading); return reading } }
 }
 

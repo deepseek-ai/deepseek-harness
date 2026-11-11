@@ -37,6 +37,7 @@
     "@deepseek-ai/dsh-sandbox-policy": "workspace:*"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime": "workspace:*",
     "@deepseek-ai/dsh-timeout": "workspace:*",
     "@deepseek-ai/cordis": "workspace:~",

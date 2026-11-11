@@ -7,15 +7,22 @@ import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
-  ScheduleId, createAfterScheduleRecord, createAtScheduleRecord, createEveryScheduleRecord,
-  createDailyScheduleRecord, createWeeklyScheduleRecord, createCronScheduleRecord, createRRuleScheduleRecord,
+  createAfterScheduleRecord,
+  createAtScheduleRecord,
+  createEveryScheduleRecord,
+  createDailyScheduleRecord,
+  createWeeklyScheduleRecord,
+  createCronScheduleRecord,
+  createRRuleScheduleRecord,
 } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { agentFor, harness, storedUnit } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
 const NOW = Date.parse('2026-09-16T00:00:00.000Z')
-const id = ScheduleId('retained')
+const id = brandString<ScheduleId>('retained')
 const cron = createCronScheduleRecord(id, 'Audit', { expression: '0 9 1 * 1', time_zone: 'UTC' }, NOW, 'Audit')
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(NOW) })
@@ -188,10 +195,10 @@ it('normalizes the edited row while leaving another old row untouched in the sam
   expect(rows.untouched).toEqual(second)
   await test.ctx.fiber.dispose()
   const reopened = await saved.open()
-  expect(await reopened.service.view({ id: ScheduleId('untouched') })).toMatchObject({
+  expect(await reopened.service.view({ id: brandString<ScheduleId>('untouched') })).toMatchObject({
     ...second.record, target: { kind: 'session', sessionId: 'other' },
   })
-  await reopened.service.edit({ id: ScheduleId('untouched'), action: 'update', patch: { title: 'Now edited' } })
+  await reopened.service.edit({ id: brandString<ScheduleId>('untouched'), action: 'update', patch: { title: 'Now edited' } })
   const current = storedUnit(await readFile(saved.file, 'utf8'))
   expect(current.unit).toEqual({ name: 'schedule', version: 2 })
   expect(current.tables.tasks.untouched).not.toHaveProperty('sessionId')

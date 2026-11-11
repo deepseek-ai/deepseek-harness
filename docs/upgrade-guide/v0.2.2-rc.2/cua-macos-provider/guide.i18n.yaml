@@ -1,0 +1,16 @@
+# Bilingual-pair consistency record for guide.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/cua-macos-provider/guide.md
+/:
+  en: 0419f932938cec69
+  zh: 1a4d3945c3b66da0
+/macos-computer-use-provider-name:
+  en: d3fe214de2ce524a
+  zh: 876e90563dc6103a
+/macos-computer-use-provider-name/change:
+  en: 432f8ef79c654833
+  zh: 1bfaa713017b2cdc
+/macos-computer-use-provider-name/migration:
+  en: 863f01f83fa63c0c
+  zh: 4eb05fdbe8993470

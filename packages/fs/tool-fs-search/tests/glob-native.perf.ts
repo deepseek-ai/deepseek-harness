@@ -14,8 +14,9 @@ import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 
@@ -51,7 +52,7 @@ async function measure(): Promise<void> {
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(search, { sampleOverCapGlobResults: true })
     const harness = await mountAgentLoopTestHarness(ctx)
-    const agent = await harness.create(SessionId('native-glob-perf'), {}, { cwd: root })
+    const agent = await harness.create(brandString<SessionId>('native-glob-perf'), {}, { cwd: root })
     const samplesMs: number[] = []
     let outputHash: string | undefined
     for (let sample = 0; sample < SAMPLES; sample++) {
@@ -60,7 +61,7 @@ async function measure(): Promise<void> {
       const batch = await ctx.tools.execute({
         agent,
         signal,
-        calls: [{ type: 'tool-call', id: ToolCallId(`glob-${sample}`), name: 'glob', arguments: JSON.stringify({ pattern: `${TARGET}/*.ts` }) }],
+        calls: [{ type: 'tool-call', id: brandString<ToolCallId>(`glob-${sample}`), name: 'glob', arguments: JSON.stringify({ pattern: `${TARGET}/*.ts` }) }],
       })
       const elapsed = performance.now() - start
       const result = batch.results[0]?.result

@@ -10,8 +10,9 @@ import { afterEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -76,7 +77,7 @@ class PassthroughSandbox extends SandboxProvider {
 }
 
 async function agent(ctx: Context, cwd: string): Promise<Agent> {
-  const id = SessionId('persistent-pwsh-loader-agent')
+  const id = brandString<SessionId>('persistent-pwsh-loader-agent')
   const scope = ctx.plugin(() => {})
   const session = Session.create(id, [], {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd, isSeeded: false,
@@ -221,7 +222,7 @@ describe.skipIf(!hasPwsh)('persistent pwsh through a real cordis.yml Loader comp
       timeline.label(id)
       return executeToolFixture(context!, {
         signal,
-        callId: ToolCallId(id),
+        callId: brandString<ToolCallId>(id),
         name: 'pwsh',
         arguments: { command },
         agent: owner,

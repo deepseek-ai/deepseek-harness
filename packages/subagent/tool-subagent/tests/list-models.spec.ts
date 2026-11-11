@@ -4,10 +4,8 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import {
-  ToolCallId,
-  LlmAdapter,
-  ReasoningEffortId,
+import { type ToolCallId,
+  LlmAdapter, type ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
@@ -19,13 +17,14 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as tool from '../src/index.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class CatalogAdapter extends LlmAdapter {
   constructor(private readonly empty = false) {
@@ -53,10 +52,10 @@ class CatalogAdapter extends LlmAdapter {
       description: 'Focused work.',
       reasoning: {
         efforts: [
-          { id: ReasoningEffortId('low'), name: 'Low' },
-          { id: ReasoningEffortId('high'), name: 'High', description: 'Quality first.' },
+          { id: brandString<ReasoningEffortId>('low'), name: 'Low' },
+          { id: brandString<ReasoningEffortId>('high'), name: 'High', description: 'Quality first.' },
         ],
-        defaultEffort: ReasoningEffortId('high'),
+        defaultEffort: brandString<ReasoningEffortId>('high'),
       },
     })
   }
@@ -81,7 +80,7 @@ async function setupListTool(routes = [
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('discovery-parent') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('discovery-parent') })
   callingAgents.set(ctx, agent)
   return ctx
 }
@@ -99,7 +98,7 @@ let counter = 0
 function call(ctx: Context, args: unknown, signal = testToolSignal) {
   return executeToolFixture(ctx, {
     signal,
-    callId: ToolCallId(`list-models-${++counter}`),
+    callId: brandString<ToolCallId>(`list-models-${++counter}`),
     name: 'list_subagent_models',
     arguments: args,
     ...callingAgents.has(ctx) ? { agent: callingAgents.get(ctx)! } : {},
@@ -150,8 +149,8 @@ describe('list_subagent_models', () => {
 
   it('keeps discovery registration and disposal local to each tool scope', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const first = await ctx.agents.create({ sessionId: SessionId('first-discovery-owner') })
-    const second = await ctx.agents.create({ sessionId: SessionId('second-discovery-owner') })
+    const first = await ctx.agents.create({ sessionId: brandString<SessionId>('first-discovery-owner') })
+    const second = await ctx.agents.create({ sessionId: brandString<SessionId>('second-discovery-owner') })
     const config = { provider: 'mock', modelDiscovery: true }
     const firstOwner = await first.agent.ctx.plugin(tool, config)
     const secondOwner = await second.agent.ctx.plugin(tool, config)
@@ -186,7 +185,7 @@ describe('list_subagent_models', () => {
     const parentContext = await setup({ provider: 'mock', withModelSelection: true, hostSelectionEnabled: false })
     const agent = modelSelectionSetupAgent(parentContext)
     const result = await executeToolFixture(parentContext, {
-      signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('missing-parent-route'),
       name: 'list_subagent_models', arguments: {}, agent,
     })
     expect(result.isError).toBe(true)
@@ -198,7 +197,7 @@ describe('list_subagent_models', () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('recorded-routes'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('recorded-routes'),
       name: 'list_subagent_models', arguments: {}, agent: modelSelectionSetupAgent(ctx),
     })
     expect(result.isError).toBe(false)
@@ -355,7 +354,7 @@ describe('list_subagent_models', () => {
     const listModels = vi.spyOn(adapter, 'listModels')
     ctx.llm.registerAdapter(['alpha'], adapter)
     const result = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('parent-only-discovery'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('parent-only-discovery'),
       name: 'list_subagent_models', arguments: { provider: 'alpha' }, agent: modelSelectionSetupAgent(ctx),
     })
     expect(result.isError).toBe(false)

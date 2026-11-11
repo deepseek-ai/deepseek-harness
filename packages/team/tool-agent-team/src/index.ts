@@ -4,10 +4,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
-import { TeamTaskId } from '@deepseek-ai/dsh-agent-team'
-import type { TeamTaskView } from '@deepseek-ai/dsh-agent-team'
+import type { TeamTaskId, TeamTaskView } from '@deepseek-ai/dsh-agent-team'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { InferValue, ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Cordis plugin name. */
 export const name = 'tool-agent-team'
@@ -133,7 +133,7 @@ export function apply(ctx: Context, config: Config = {}): void {
       const task = await ctx.agentTeams.createTask(caller, {
         subject: args.subject,
         description: args.description,
-        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(brandString<TeamTaskId>) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
       }, exec.signal)
       return withOwnerName(task)
@@ -192,7 +192,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     isConcurrencySafe: () => true,
     execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_get')
-      const task = ctx.agentTeams.getTask(caller, TeamTaskId(args.task_id))
+      const task = ctx.agentTeams.getTask(caller, brandString<TeamTaskId>(args.task_id))
       return Promise.resolve(withOwnerName(task))
     },
   }), { when: ({ agent }) => enabled(agent) })
@@ -218,14 +218,14 @@ export function apply(ctx: Context, config: Config = {}): void {
     output: jsonOutput(TASK_VIEW_SCHEMA),
     async execute(args, exec) {
       const caller = callingAgent(exec.agent, 'team_task_update')
-      const taskId = TeamTaskId(args.task_id)
+      const taskId = brandString<TeamTaskId>(args.task_id)
       const task = await ctx.agentTeams.updateTask(caller, {
         taskId,
         expectedRevision: args.expected_revision,
         action: args.action,
         ...args.subject === undefined ? {} : { subject: args.subject },
         ...args.description === undefined ? {} : { description: args.description },
-        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(TeamTaskId) },
+        ...args.blocked_by === undefined ? {} : { blockedBy: args.blocked_by.map(brandString<TeamTaskId>) },
         ...args.write_scopes === undefined ? {} : { writeScopes: args.write_scopes },
         ...args.owner === undefined ? {} : { owner: await ctx.subagents.resolveName(caller, args.owner, exec.signal) },
       }, exec.signal)
