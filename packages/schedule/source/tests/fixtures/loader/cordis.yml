@@ -17,7 +17,6 @@
 - name: '@deepseek-ai/dsh-storage-domain'
   config:
     backend: json
-- name: '@deepseek-ai/dsh-source'
 - id: schedule
   name: '@deepseek-ai/dsh-schedule'
 - name: ./world.ts

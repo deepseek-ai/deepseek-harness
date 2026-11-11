@@ -44,11 +44,11 @@ await first.dispose()
 await second.dispose()
 ```
 
-For task delivery, mount both `@deepseek-ai/dsh-source` and `@deepseek-ai/dsh-schedule`, with Schedule's normal storage and Session dependencies. A composing plugin injects `automationTasks` and its task service (`schedule` for this receiver), then calls `ctx.automationTasks.connect(source, taskId)` for an `AutomationSource<AutomationCandidate>`. The task service receives `{ text }` output; intermediate sources can use any typed output instead. One source can connect to several tasks, and several sources can connect to the same task.
+For task delivery, a composing plugin injects `schedule` and calls `ctx.schedule.connectSource(source, taskId)` for an `AutomationSource<AutomationCandidate>` and an existing `ScheduleId`. This package is a library, not a plugin to mount. Schedule's readiness includes the connection operation; no separate receiver registration is needed. One source can connect to several tasks, and several sources can connect to the same task.
 
-The composing plugin owns its sources and connections through `ctx.effect()`. Stop and drain producers before releasing dependent sources or task storage. A composite source disconnects its own upstream subscriptions; it does not dispose borrowed upstream instances. A receiver must not await its own connection's disposal from inside that receiver, because disposal waits for the call to return.
+The composing plugin owns its sources through `ctx.effect()`; Schedule automatically owns each task connection in the calling context. A generator effect can yield the returned `connection.dispose` directly to order its cleanup with the sources it owns. Stop and drain producers before releasing dependent sources or task storage. A composite source disconnects its own upstream subscriptions; it does not dispose borrowed upstream instances. A receiver must not await its own connection's disposal from inside that receiver, because disposal waits for the call to return.
 
-Output waits for all receivers, even when one fails. Receivers can run concurrently, and consecutive outputs can overlap unless the producer serializes them. A `SOURCE_DELIVERY_FAILED` error retains all receiver failures in its aggregate cause. Some receivers may already have committed; neither the source nor the task router retries the whole output. A task connection captures its receiver registration and rejects after that registration unloads instead of silently switching to a replacement.
+Output waits for all receivers, even when one fails. Receivers can run concurrently, and consecutive outputs can overlap unless the producer serializes them. A `SOURCE_DELIVERY_FAILED` error retains all receiver failures in its aggregate cause. Some receivers may already have committed; neither the source nor Schedule retries the whole output. A task connection captures one Schedule runtime and rejects after it unloads instead of silently switching to a replacement.
 
 -----
 
@@ -60,7 +60,7 @@ Output waits for all receivers, even when one fails. Receivers can run concurren
 
 Sources communicate through instance-owned subscription sets and typed callbacks. The base class tracks accepted calls before invoking receivers, so disconnection and source disposal can wait for them. It owns no polling cadence, recurrence evaluator, source factory, or dependency-graph interpreter. Subclasses stop external producers and drain input before disposing their output subscriptions.
 
-The dynamically mounted task router connects final source output to the registered task service. Sources that communicate only with other sources do not use this service. The task service retains ownership of task lookup, active-state checks, delivery limits, target Session activation, and durable acknowledgement. See [source.ts](src/source.ts) for subscriptions and [index.ts](src/index.ts) for task connections.
+Sources communicate directly with other sources. Schedule connects final source output to its existing tasks and owns task lookup, active-state checks, delivery limits, target Session activation, and durable acknowledgement. See [source.ts](src/source.ts) for subscriptions and [Schedule](../schedule/README.md#source-delivery) for task connections.
 
 </details>
 

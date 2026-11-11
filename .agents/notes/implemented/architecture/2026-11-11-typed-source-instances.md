@@ -10,7 +10,7 @@ Observing an event and deciding whether to emit it can require the same local st
 
 ## Decision
 
-[`AutomationSource<T>`](../../../../packages/schedule/source/README.md) represents one output-producing instance. Concrete classes own observation, input methods, timing, and condition evaluation. They compose through typed object references and asynchronous subscriptions; the same class can have multiple independent instances. Source-to-source data is not constrained to task text. The task router only connects final `{ text }` candidates to an installed task receiver and does not create, look up, or schedule sources.
+[`AutomationSource<T>`](../../../../packages/schedule/source/README.md) represents one output-producing instance. Concrete classes own observation, input methods, timing, and condition evaluation. They compose through typed object references and asynchronous subscriptions; the same class can have multiple independent instances. Source-to-source data is not constrained to task text. Schedule directly connects final `{ text }` candidates to existing tasks through its ready service. Source classes do not require a separate router, task-id registry, or receiver registration.
 
 Subscription disposal stops accepting new calls and drains accepted calls. A composite source owns its subscriptions, not borrowed upstream instances. Fan-out waits for every receiver and reports aggregate failure without implying rollback. These obligations preserve task-storage lifetime through pending delivery and keep one failing subscriber from suppressing unrelated subscribers.
 
@@ -22,7 +22,9 @@ This supersedes the provider/trigger implementation split in the [event-triggere
 
 **An instance-address registry and persistent dependency graph.** No current source composition requires serialization or string lookup. Direct references retain input types and avoid defining graph scheduling, routing loops, unknown-payload validation, or reconnection semantics before a consumer needs them.
 
-**A source factory service wrapping Cordis scopes.** Cordis already owns plugin effects. Adding another creation and scope mechanism would duplicate that ownership without a source-specific operation; only task delivery needs a mounted service shared with the task store.
+**A source factory service wrapping Cordis scopes.** Cordis already owns plugin effects. Adding another creation and scope mechanism would duplicate that ownership without a source-specific operation; task delivery uses the existing Schedule service that owns its store.
+
+**A separate task router with receiver registration.** Readiness of two services does not order a receiver registration performed by another injection child. A composer can become active before that child registers the receiver. Keeping the connection operation on Schedule makes task delivery available with Schedule itself, without requiring a router in existing timed-only compositions.
 
 ## Consequences
 

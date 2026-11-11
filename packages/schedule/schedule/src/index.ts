@@ -4,7 +4,8 @@ import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type {} from '@deepseek-ai/dsh-source'
+import { SourceError, type AutomationCandidate, type SourceConnection } from '@deepseek-ai/dsh-source'
+import type { AutomationSource } from '@deepseek-ai/dsh-source/source'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -17,11 +18,11 @@ import { scheduleDomain, scheduleTaskSchema, type ScheduleTask } from './storage
 import { deliveryHistoryPage } from './delivery-history.ts'
 import { createScheduleRecord, updateScheduleRecord } from './update.ts'
 import {
-  ScheduleInputError, ScheduleId, MIN_EVERY_INTERVAL_SECONDS,
+  ScheduleInputError, ScheduleId as toScheduleId, MIN_EVERY_INTERVAL_SECONDS,
 } from './domain.ts'
 import type {
   ScheduleCatalogEntry, ScheduleCreateRequest, ScheduleDeleteInactiveResult, ScheduleDeliveryHistoryRequest,
-  ScheduleDeliveryHistoryResult, ScheduleEditRequest, ScheduleEditResult, ScheduleListRequest,
+  ScheduleDeliveryHistoryResult, ScheduleEditRequest, ScheduleEditResult, ScheduleId, ScheduleListRequest,
   ScheduleListResult, SchedulePatch, ScheduleRecord, ScheduleRunRequest, ScheduleRunResult, ScheduleSessionCreateSpec,
   ScheduleTarget, ScheduleTargetRequest, ScheduleViewRequest, ScheduleViewResult,
 } from './types.ts'
@@ -238,7 +239,6 @@ export class ScheduleService extends TypertRemoteService {
   private chain: Promise<unknown> = Promise.resolve()
   private notifications: Promise<void> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
-  private sourceReceiver: (() => Promise<void>) | undefined
   private resolveWebAgent: ((sessionId: SessionId) => Promise<Agent>) | undefined
   private stopping = false
 
@@ -257,7 +257,10 @@ export class ScheduleService extends TypertRemoteService {
         }
         // Resume overdue tasks when the Web activation provider becomes ready.
         this.runtime?.requestDrive()
-        return () => { this.resolveWebAgent = undefined }
+        return async () => {
+          await this.chain
+          this.resolveWebAgent = undefined
+        }
       })
     })
     this.limits = {
@@ -290,10 +293,9 @@ export class ScheduleService extends TypertRemoteService {
       let cleanup: () => Promise<void>
       try {
         cleanup = ctx.effect(() => async () => {
-          await this.sourceReceiver?.()
           this.stopping = true
+          await this.chain // Finish accepted deliveries before stopping their runtime and closing storage.
           await this.runtime?.dispose()
-          await this.chain // The chain contains failures after returning them to their callers.
           await this.notifications // Each notice contains its own delivery failure.
           await domain.close()
         })
@@ -316,18 +318,6 @@ export class ScheduleService extends TypertRemoteService {
           if (this.resolveWebAgent === undefined) throw new Error('schedule: no Session activation provider')
           return this.resolveWebAgent(sessionId)
         })
-      ctx.inject(['automationTasks'], (sourceCtx) => {
-        sourceCtx.effect(() => {
-          const dispose = sourceCtx.automationTasks.registerReceiver({
-            deliver: (id, candidate) => runtime.deliverSource(ScheduleId(id), candidate),
-          })
-          this.sourceReceiver = dispose
-          return async () => {
-            await dispose()
-            if (this.sourceReceiver === dispose) this.sourceReceiver = undefined
-          }
-        })
-      })
       runtime.requestDrive()
       return cleanup
     })
@@ -358,6 +348,33 @@ export class ScheduleService extends TypertRemoteService {
 
   async [Service.init](): Promise<void> {
     await this.initialized
+  }
+
+  /**
+   * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
+   * @param source - Source of observed data accompanying the task's stored instruction.
+   * @param id - Task identity rechecked on every delivery inside the management FIFO.
+   * @returns A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing
+   * the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.
+   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection
+   * rejects output after its runtime stops and never rebinds to a replacement Schedule service.
+   */
+  connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection {
+    const runtime = this.runtime
+    if (this.stopping || runtime === undefined) {
+      throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
+    }
+    const dispose = this.ctx.effect(() => {
+      const connection = source.subscribe((candidate) => {
+        if (this.stopping) {
+          return Promise.reject(new SourceError('The connected Schedule runtime has stopped. Recreate the source connection.',
+            'SOURCE_TASK_RECEIVER_UNAVAILABLE'))
+        }
+        return runtime.deliverSource(id, candidate)
+      })
+      return () => connection.dispose()
+    })
+    return { dispose }
   }
 
   /** Read effective delivery limits without loading or activating a task.
@@ -398,7 +415,7 @@ export class ScheduleService extends TypertRemoteService {
     actorSessionId?: SessionId,
     signal?: AbortSignal,
   ): Promise<ScheduleCatalogEntry> {
-    const id = ScheduleId(`schedule-${randomUUID()}`)
+    const id = toScheduleId(`schedule-${randomUUID()}`)
     const now = Date.now()
     const record = createScheduleRecord(id, request.title, request.prompt, request.timing, now)
     const target = await this.resolveTarget(request.target ?? { kind: 'new_once' }, signal)

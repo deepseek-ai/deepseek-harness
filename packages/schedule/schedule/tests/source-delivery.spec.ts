@@ -1,12 +1,12 @@
 /** Source delivery shares task admission, durable acknowledgement, and disposal with Schedule management. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Fiber } from '@deepseek-ai/cordis'
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import AutomationTaskRouter, { type AutomationCandidate, type AutomationTaskId } from '@deepseek-ai/dsh-source'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-source'
 import { AutomationSource } from '@deepseek-ai/dsh-source/source'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import ScheduleService from '../src/index.ts'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
 import {
   agentFor, boundTask, gatedScheduleBackend, harness, seededTask, seedTasks, taskTable, type HarnessAgent,
@@ -39,11 +39,9 @@ function stored(fields: Partial<ScheduleTask> = {}): ScheduleTask {
 }
 
 async function setup(task: ScheduleTask | undefined = stored(), options: Parameters<typeof harness>[0] = {}) {
-  let routerFiber: Fiber | undefined
   const test = await harness({
     ...options,
-    beforeService: async (ctx, facility) => {
-      routerFiber = await ctx.plugin(AutomationTaskRouter)
+    beforeService: async (_ctx, facility) => {
       if (task !== undefined) await seedTasks(facility, [task])
     },
   })
@@ -52,13 +50,40 @@ async function setup(task: ScheduleTask | undefined = stored(), options: Paramet
   test.resolve.mockResolvedValue({ agent })
   const source = new InputSource()
   sources.push(source)
-  test.ctx.automationTasks.connect(source, brandString<AutomationTaskId>(ID))
-  return { ...test, source, agent, routerFiber: routerFiber! }
+  test.service.connectSource(source, ID)
+  return { ...test, source, agent }
 }
 
 function rejected(code: string) {
   return { code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ code })] } }
 }
+
+it('connects an earlier composer when Schedule becomes ready', async () => {
+  const source = new InputSource()
+  sources.push(source)
+  let composer: Fiber | undefined
+  const test = await harness({
+    onContext: (ctx) => {
+      composer = ctx.plugin({
+        name: 'source-composer-ordering',
+        inject: ['schedule'],
+        apply(ctx: Context) {
+          ctx.schedule.connectSource(source, ID)
+        },
+      })
+      expect(composer.state).toBe(FiberState.PENDING)
+    },
+    beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) },
+  })
+  active.push(test)
+  const agent = agentFor(test.ctx, TARGET)
+  test.resolve.mockResolvedValue({ agent })
+  expect(test.fiber.state).toBe(FiberState.ACTIVE)
+  await expect(composer!.await()).resolves.toMatchObject({ state: FiberState.ACTIVE })
+  await source.publish(INPUT)
+  expect(agent.followup).toHaveBeenCalledOnce()
+  expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+})
 
 it('delivers source input beside the stored prompt and commits a receipt without consuming the occurrence', async () => {
   const initial = stored()
@@ -300,7 +325,101 @@ it('deletes a task only after an accepted source delivery commits its receipt', 
   }
 })
 
-it.each(['schedule', 'router'] as const)('drains accepted source work while the %s plugin unloads', async (owner) => {
+it('automatically detaches and drains a connection owned by an unloading consumer', async () => {
+  const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
+  active.push(test)
+  const agent = agentFor(test.ctx, TARGET)
+  test.resolve.mockResolvedValue({ agent })
+  const source = new InputSource()
+  sources.push(source)
+  let scoped: ScheduleService | undefined
+  const consumer = await test.ctx.plugin({
+    inject: ['schedule'],
+    apply(ctx: Context) {
+      scoped = ctx.schedule
+      scoped.connectSource(source, ID)
+    },
+  })
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const work = source.publish(INPUT)
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    closing = Promise.resolve(consumer.dispose())
+    release.resolve(undefined)
+    await work
+    await closing
+    expect(() => scoped!.connectSource(source, ID)).toThrowError(
+      expect.objectContaining({ code: 'INACTIVE_EFFECT' }),
+    )
+    const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
+    const observation = source.subscribe(observed)
+    await source.publish('after consumer unload')
+    await observation.dispose()
+    expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'after consumer unload' })
+    expect(agent.followup).toHaveBeenCalledOnce()
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+  } finally {
+    release.resolve(undefined)
+    await work
+    await closing
+  }
+})
+
+it('keeps an old source connection bound to its stopped runtime after Schedule is replaced', async () => {
+  const test = await setup()
+  await test.fiber.dispose()
+  await test.ctx.plugin(ScheduleService)
+  await expect(test.source.publish(INPUT)).rejects.toMatchObject(rejected('SOURCE_TASK_RECEIVER_UNAVAILABLE'))
+  expect(() => test.service.connectSource(test.source, ID)).toThrowError(
+    expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
+  )
+  const replacementSource = new InputSource()
+  sources.push(replacementSource)
+  const connection = test.ctx.schedule.connectSource(replacementSource, ID)
+  await replacementSource.publish(INPUT)
+  await connection.dispose()
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+})
+
+it('finishes source deliveries already queued behind another delivery before stopping their runtime', async () => {
+  const test = await setup()
+  const secondId = ScheduleId('queued-source-task')
+  await taskTable(test.ctx).put(secondId, boundTask(TARGET,
+    createAfterScheduleRecord(secondId, 'Second task', 3600, Date.now(), 'Second task')))
+  const second = new InputSource()
+  sources.push(second)
+  test.service.connectSource(second, secondId)
+  const queued = Promise.withResolvers<undefined>()
+  second.subscribe(async () => { queued.resolve(undefined) })
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const firstWork = test.source.publish(INPUT)
+  let secondWork: Promise<void> | undefined
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    secondWork = second.publish('Queued source input')
+    await queued.promise
+    closing = Promise.resolve(test.fiber.dispose())
+    release.resolve(undefined)
+    await firstWork
+    await secondWork
+    await closing
+    expect(test.agent.followup).toHaveBeenCalledTimes(2)
+  } finally {
+    release.resolve(undefined)
+    await firstWork
+    await secondWork
+    await closing
+  }
+})
+
+it('drains accepted source work before Schedule closes storage', async () => {
   const test = await setup()
   const entered = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
@@ -312,7 +431,7 @@ it.each(['schedule', 'router'] as const)('drains accepted source work while the 
   try {
     await entered.promise
     let disposed = false
-    closing = Promise.resolve((owner === 'schedule' ? test.fiber : test.routerFiber).dispose())
+    closing = Promise.resolve(test.fiber.dispose())
       .then(() => { disposed = true })
     expect(disposed).toBe(false)
     expect(close).not.toHaveBeenCalled()
@@ -320,8 +439,7 @@ it.each(['schedule', 'router'] as const)('drains accepted source work while the 
     await work
     await closing
     await expect(test.source.publish('after unload')).rejects.toMatchObject(rejected('SOURCE_TASK_RECEIVER_UNAVAILABLE'))
-    if (owner === 'schedule') expect(close).toHaveBeenCalledOnce()
-    else expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+    expect(close).toHaveBeenCalledOnce()
   } finally {
     release.resolve(undefined)
     await work

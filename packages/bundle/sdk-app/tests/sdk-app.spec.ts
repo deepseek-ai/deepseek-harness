@@ -28,8 +28,7 @@ describe('dsh-sdk-app bundle', () => {
       config: { personaPrefix: 'You are a coding agent powered by the {{model}} model.' },
     })
     const rows = patches.flatMap(patch => patch.insert ?? [])
-    expect(rows.filter(row => row.id === 'automation-tasks'
-      && row.name === '@deepseek-ai/dsh-source' && row.disabled !== true)).toHaveLength(1)
+    expect(rows.some(row => row.name === '@deepseek-ai/dsh-source')).toBe(false)
     expect(rows.find(row => row.id === 'sdk-app-startup')?.name).toBe('@deepseek-ai/dsh-sdk-app')
     expect(rows.find(row => row.id === 'sdk-jsonrpc-server')?.inject).toEqual(['sdkAppStartup', 'loader'])
   })

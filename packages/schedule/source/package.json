@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-source",
-  "description": "Typed source instances with asynchronous subscriptions and durable automation-task delivery",
+  "description": "Typed source instances with asynchronous subscriptions for automation input",
   "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
@@ -39,9 +39,6 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-error": "workspace:*"
-  },
-  "dependencies": {
-    "@deepseek-ai/dsh-brand": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",

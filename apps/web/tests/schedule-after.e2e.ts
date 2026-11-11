@@ -967,7 +967,6 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     // The delivered composition carries the Schedule service and its task page;
     // the clock stays preset-level, so no Host row declares it.
     for (const row of [
-      { id: 'automation-tasks', name: '@deepseek-ai/dsh-source' },
       { id: 'schedule', name: '@deepseek-ai/dsh-schedule' },
       { id: 'ui-schedule', name: '@deepseek-ai/dsh-client-ui-schedule' },
     ]) {

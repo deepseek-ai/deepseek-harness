@@ -713,14 +713,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Reconciles mcp-client instances against its volatile servers configuration, aggregates their connection statuses, and serves restart and probe to management surfaces.',
   },
   {
-    key: 'automationTasks',
-    pkg: 'source',
-    title: 'Source-to-task delivery',
-    mode: 'core',
-    consumers: ['schedule'],
-    note: 'Connects typed source-instance output to the registered task receiver and drains accepted deliveries on removal.',
-  },
-  {
     key: 'schedule',
     pkg: 'schedule',
     title: 'Host scheduled messages',

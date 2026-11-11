@@ -16,7 +16,5 @@
 - insert:
     - id: source-recording-adapter
       name: './recording-adapter.ts'
-    - id: source-task-router
-      name: '@deepseek-ai/dsh-source'
     - id: source-task-input
       name: './source-task-input.ts'

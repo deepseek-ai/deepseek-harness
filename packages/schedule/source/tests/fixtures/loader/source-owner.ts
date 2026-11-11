@@ -1,8 +1,8 @@
 /** Loader-owned subscriptions connecting two borrowed source instances to a stored automation task. */
 import type { Context } from '@deepseek-ai/cordis'
-import { brandString } from '@deepseek-ai/dsh-brand'
+import type {} from '@deepseek-ai/dsh-schedule'
 import { AutomationSource } from '@deepseek-ai/dsh-source/source'
-import type { AutomationCandidate, AutomationTaskId, SourceConnection } from '@deepseek-ai/dsh-source'
+import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-source'
 import type { ObservationSource } from './world.ts'
 
 class CombinedObservation extends AutomationSource<AutomationCandidate> {
@@ -41,8 +41,8 @@ class CombinedObservation extends AutomationSource<AutomationCandidate> {
 
 /** Test composition name. */
 export const name = 'source-composition-owner'
-/** Task receiver and borrowed producer instances must exist before connecting. */
-export const inject = ['automationTasks', 'sourceComposition']
+/** Schedule and borrowed producer instances must exist before connecting. */
+export const inject = ['schedule', 'sourceComposition']
 
 /**
  * Bind the two concrete instances through a composite to their stored task.
@@ -52,9 +52,8 @@ export function apply(ctx: Context): void {
   const world = ctx.sourceComposition
   ctx.effect(function* () {
     const composite = new CombinedObservation(world.left, world.right)
+    const connection = ctx.schedule.connectSource(composite, world.task.id)
+    yield connection.dispose
     yield () => composite.dispose()
-    const taskId = brandString<AutomationTaskId>(world.task.id)
-    const connection = ctx.automationTasks.connect(composite, taskId)
-    yield () => connection.dispose()
   }, 'source-composition.subscriptions()')
 }

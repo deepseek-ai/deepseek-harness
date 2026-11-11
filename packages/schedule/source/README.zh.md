@@ -44,11 +44,11 @@ await first.dispose()
 await second.dispose()
 ```
 
-需要投递到任务时，同时挂载 `@deepseek-ai/dsh-source` 和 `@deepseek-ai/dsh-schedule`，并保留 Schedule 正常使用的存储与 Session 依赖。组合插件注入 `automationTasks` 及其任务服务（这里的接收者使用 `schedule`），对 `AutomationSource<AutomationCandidate>` 调用 `ctx.automationTasks.connect(source, taskId)`。任务服务接收 `{ text }` 输出；中间 source 可以使用任意具有类型约束的输出。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
+需要投递到任务时，组合插件注入 `schedule`，针对 `AutomationSource<AutomationCandidate>` 和已有 `ScheduleId` 调用 `ctx.schedule.connectSource(source, taskId)`。本包是库，不是需要挂载的插件。Schedule 就绪即表示可以建立连接，不需要另外注册接收者。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
 
-组合插件通过 `ctx.effect()` 拥有 source 和连接。在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
+组合插件通过 `ctx.effect()` 拥有 source；Schedule 自动在调用方 context 中拥有任务连接。generator effect 可以直接 yield 返回的 `connection.dispose`，将其清理顺序与自有 source 排列在一起。在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
 
-输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和任务路由器都不会重试整次输出。任务连接捕获当次接收者注册，注册卸载后会拒绝投递，不会自动切换到替代实例。
+输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和 Schedule 都不会重试整次输出。任务连接捕获一个 Schedule runtime，其卸载后会拒绝投递，不会自动切换到替代实例。
 
 -----
 
@@ -60,7 +60,7 @@ await second.dispose()
 
 source 通过实例拥有的订阅集合和具有类型约束的回调通信。基类在调用接收者之前记录已接收的调用，因此断开连接和销毁 source 都能等待这些调用。基类不拥有轮询频率、重复规则求值器、source 工厂或依赖图解释器。子类先停止外部生产者并排空输入，再销毁输出订阅。
 
-动态挂载的任务路由器把最终 source 输出连接到已注册的任务服务。仅与其他 source 通信的实例不使用这个服务。任务服务继续拥有任务查找、活动状态检查、投递限流、目标 Session 激活和持久化确认。订阅实现见 [source.ts](src/source.ts)，任务连接实现见 [index.ts](src/index.ts)。
+source 直接与其他 source 通信。Schedule 把最终 source 输出连接到已有任务，并拥有任务查找、活动状态检查、投递限流、目标 Session 激活和持久化确认。订阅实现见 [source.ts](src/source.ts)，任务连接见 [Schedule](../schedule/README.zh.md#source-delivery)。
 
 </details>
 

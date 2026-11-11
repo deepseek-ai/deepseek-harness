@@ -554,27 +554,6 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
-    key: 'automationTasks',
-    summary: 'Connects source output to stored automation tasks; source-to-source subscriptions need no router.',
-    description: 'Connects source output to stored automation tasks; source-to-source subscriptions need no router.',
-    methods: [
-      {
-        signature: 'registerReceiver(receiver: AutomationTaskReceiver): () => Promise<void>',
-        description: 'Install the task service\'s delivery endpoint as a Cordis-owned effect.',
-        parameters: [{ name: 'receiver', description: 'Task service responsible for admission, delivery, and durable acknowledgement.' }],
-        returns: 'Disposer that rejects new deliveries and awaits accepted deliveries before storage can close.',
-        throws: ['SourceError with SOURCE_TASK_RECEIVER_DUPLICATE while another receiver is registered.'],
-      },
-      {
-        signature: 'connect(source: AutomationSource<AutomationCandidate>, taskId: AutomationTaskId): SourceConnection',
-        description: 'Subscribe a task to a source instance. Multiple sources can feed one task and one source can feed multiple tasks.',
-        parameters: [{ name: 'source', description: 'Source whose output is ready for delivery, rather than an intermediate observation value.' }, { name: 'taskId', description: 'Task identity interpreted by the registered task service.' }],
-        returns: 'Connection owned by the composing plugin; dispose it before releasing the task service.',
-        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if no task service is installed. Later receiver removal rejects output through the source\'s aggregate failure; an existing connection never silently rebinds.'],
-      },
-    ],
-  },
-  {
     key: 'browserUse',
     summary: 'Owns one optional provider registration in the shared browser-use service.',
     description: 'Owns one optional provider registration in the shared browser-use service.',
@@ -2830,6 +2809,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.',
     description: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.\n\n`sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.',
     methods: [
+      {
+        signature: 'connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection',
+        description: 'Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.',
+        parameters: [{ name: 'source', description: 'Source of observed data accompanying the task\'s stored instruction.' }, { name: 'id', description: 'Task identity rechecked on every delivery inside the management FIFO.' }],
+        returns: 'A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.',
+        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection rejects output after its runtime stops and never rebinds to a replacement Schedule service.'],
+      },
       {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',
         description: 'Read effective delivery limits without loading or activating a task.',
@@ -6101,14 +6087,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'AutomationSource',
     declaration: 'export abstract class AutomationSource<T> {\n    subscribe(receive: SourceReceiver<T>): SourceConnection;\n    dispose(): Promise<void>;\n}',
-  },
-  {
-    name: 'AutomationTaskId',
-    declaration: 'export type AutomationTaskId = Branded<\'AutomationTaskId\'>;',
-  },
-  {
-    name: 'AutomationTaskReceiver',
-    declaration: 'export interface AutomationTaskReceiver {\n    deliver(taskId: AutomationTaskId, candidate: AutomationCandidate): Promise<void>;\n}',
   },
   {
     name: 'BackendRegistry',

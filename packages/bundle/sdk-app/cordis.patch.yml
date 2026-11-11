@@ -64,8 +64,6 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
-    - id: automation-tasks
-      name: '@deepseek-ai/dsh-source'
     - id: schedule
       name: '@deepseek-ai/dsh-schedule'
       inject: [sdkSessionActivation]

@@ -33,9 +33,6 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: workspace:*
         version: link:packages/core/agent
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:*
-        version: link:packages/util/brand
       '@deepseek-ai/dsh-browser-use':
         specifier: workspace:*
         version: link:packages/browser-use/browser-use
@@ -14553,10 +14550,6 @@ importers:
         version: link:../../workspace/workspace
 
   packages/schedule/source:
-    dependencies:
-      '@deepseek-ai/dsh-brand':
-        specifier: workspace:*
-        version: link:../../util/brand
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

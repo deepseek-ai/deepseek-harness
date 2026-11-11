@@ -1,8 +1,4 @@
 /** Typed source subscriptions and automation-task delivery values. */
-import type { Branded } from '@deepseek-ai/dsh-brand'
-
-/** Identity interpreted by the registered automation-task service. */
-export type AutomationTaskId = Branded<'AutomationTaskId'>
 
 /**
  * A receiver owns its state and resolves only after accepting the value.
@@ -26,25 +22,11 @@ export interface AutomationCandidate {
   readonly text: string
 }
 
-/** Task delivery is acknowledged by persistence, not by model completion. */
-export interface AutomationTaskReceiver {
-  /**
-   * Deliver additional input to an active task, preserving its scheduled occurrence.
-   * @param taskId - Stored task identity.
-   * @param candidate - Source-produced input.
-   * @returns Resolves after durable inbox acknowledgement and the task's delivery record commit.
-   * @throws If the task is missing, inactive, busy, or delivery fails. A failure may follow partial persistence;
-   * callers must not retry automatically.
-   */
-  deliver(taskId: AutomationTaskId, candidate: AutomationCandidate): Promise<void>
-}
-
-/** Handling-relevant failures from source subscriptions and task routing. */
+/** Handling-relevant failures from source subscriptions and task delivery. */
 export type SourceErrorCode =
   | 'SOURCE_CLOSED'
   | 'SOURCE_DELIVERY_FAILED'
   | 'SOURCE_TASK_RECEIVER_UNAVAILABLE'
-  | 'SOURCE_TASK_RECEIVER_DUPLICATE'
   | 'SOURCE_TASK_UNAVAILABLE'
   | 'SOURCE_TASK_BUSY'
   | 'SOURCE_TASK_INACTIVE'

@@ -11,7 +11,7 @@ Schedule 独立于 Session 的激活状态存储宿主任务。同一管理 API 
 
 `SourceReceiver<T>` 异步消费具有类型约束的值。`SourceConnection.dispose()` 立即停止接收新值，并排空已接收的调用。source 的销毁也等待连接已经断开但仍在执行的调用。多接收者投递等待每个接收者，并聚合失败，不回滚或自动重放。中间输出仅存在于进程内，不是模型输入。
 
-`AutomationTaskRouter` 通过已注册的 `AutomationTaskReceiver`，把 `AutomationSource<AutomationCandidate>` 的输出连接到 `AutomationTaskId`。只有最终任务输出要求 `{ text: string }`。Schedule 接收者在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义失败码和消息格式；已存储的定时任务继续使用既有求值器。
+`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`，并返回归调用方 context 所有的 `SourceConnection`。消费者声明 `schedule` 依赖；同步连接 API 随服务一起就绪，不向远端暴露。只有最终任务输出要求 `{ text: string }`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；已存储的定时任务继续使用既有求值器。
 
 <a id="durable-tasks"></a>
 ## 持久任务
@@ -154,34 +154,6 @@ Session 收件箱持久化先于任务回执写入，因此两份存储之间崩
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
-<a id="ctxautomationtasks--automationtaskrouter"></a>
-
-### `ctx.automationTasks` — `AutomationTaskRouter`
-
-Connects source output to stored automation tasks; source-to-source subscriptions need no router.
-
-```ts cordis-catalog
-/**
- * Install the task service's delivery endpoint as a Cordis-owned effect.
- * @param receiver - Task service responsible for admission, delivery, and durable acknowledgement.
- * @returns Disposer that rejects new deliveries and awaits accepted deliveries before storage can close.
- * @throws SourceError with SOURCE_TASK_RECEIVER_DUPLICATE while another receiver is registered.
- */
-registerReceiver(receiver: AutomationTaskReceiver): () => Promise<void>
-
-/**
- * Subscribe a task to a source instance. Multiple sources can feed one task and one source can feed multiple tasks.
- * @param source - Source whose output is ready for delivery, rather than an intermediate observation value.
- * @param taskId - Task identity interpreted by the registered task service.
- * @returns Connection owned by the composing plugin; dispose it before releasing the task service.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if no task service is installed. Later receiver
- * removal rejects output through the source's aggregate failure; an existing connection never silently rebinds.
- */
-connect(source: AutomationSource<AutomationCandidate>, taskId: AutomationTaskId): SourceConnection
-```
-
-Source: [`packages/schedule/source/src/index.ts`](../../packages/schedule/source/src/index.ts)
-
 <a id="ctxschedule--scheduleservice"></a>
 
 ### `ctx.schedule` — `ScheduleService`
@@ -191,6 +163,17 @@ Shared management service; reads and management writes never activate a Session,
 `sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.
 
 ```ts cordis-catalog
+/**
+ * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
+ * @param source - Source of observed data accompanying the task's stored instruction.
+ * @param id - Task identity rechecked on every delivery inside the management FIFO.
+ * @returns A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing
+ * the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection
+ * rejects output after its runtime stops and never rebinds to a replacement Schedule service.
+ */
+connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection
+
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.
  */

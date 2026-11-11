@@ -382,13 +382,13 @@ describe('package payload constraints', () => {
     } })).toContainEqual(expect.stringContaining('exports["./run-code"] must expose'))
   })
 
-  it('publishes the typed source class separately from its Loader entry', () => {
+  it('publishes the typed source class separately from its bundled error entry', () => {
     const dir = 'packages/schedule/source'
     const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
     expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
     expect(manifest.peerDependencies).toHaveProperty('@deepseek-ai/dsh-error', 'workspace:*')
     expect(manifest.devDependencies).toHaveProperty('@deepseek-ai/dsh-error', 'workspace:*')
-    expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-error')
+    expect(manifest).not.toHaveProperty(['dependencies', '@deepseek-ai/dsh-error'])
     expect(checkWorkspaceManifest({ dir, manifest: {
       ...manifest, files: manifest.files!.filter(file => file !== 'lib/types/**/*.js'),
     } })).toContainEqual(expect.stringContaining('package.json files must be'))
