@@ -11,7 +11,7 @@ Schedule stores Host tasks independently of Session activation. One management A
 
 `SourceReceiver<T>` consumes a typed value asynchronously. `SourceConnection.dispose()` stops accepting values immediately and drains accepted calls. Source disposal also drains calls whose connections have already detached. Fan-out awaits every receiver and aggregates failures without rollback or automatic replay. Intermediate output is process-local, not model input.
 
-`ScheduleService.connectSource(source, id)` connects `AutomationSource<AutomationCandidate>` output directly to a `ScheduleId` and returns a caller-context-owned `SourceConnection`. Consumers declare a `schedule` dependency; the synchronous connection API is ready with the service and is not exposed remotely. Only final task output requires `{ text: string }`. Schedule checks active status and delivery admission inside its mutation FIFO, delivers the stored instruction with the extra source data, and commits its receipt after Session persistence. It preserves the task's timing and status. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns connection cleanup, failure codes, and message framing; stored timing tasks continue to use their existing evaluator.
+`ScheduleService.connectSource(source, id)` connects `AutomationSource<AutomationCandidate>` output directly to a `ScheduleId` and returns a caller-context-owned native Cordis `Disposable<void | Promise<void>>`. Its first invocation drains accepted calls; repeated invocations return void rather than joining pending cleanup. Await the first result or owner disposal, and yield the exact function when transferring ownership into a generator effect. Consumers declare a `schedule` dependency; the synchronous connection API is ready with the service and is not exposed remotely. Only final task output requires `{ text: string }`. Schedule checks active status and delivery admission inside its mutation FIFO, delivers the stored instruction with the extra source data, and commits its receipt after Session persistence. It preserves the task's timing and status. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns connection cleanup, failure codes, and message framing; stored timing tasks continue to use their existing evaluator.
 
 <a id="durable-tasks"></a>
 ## Durable tasks
@@ -167,12 +167,15 @@ Shared management service; reads and management writes never activate a Session,
  * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
  * @param source - Source of observed data accompanying the task's stored instruction.
  * @param id - Task identity rechecked on every delivery inside the management FIFO.
- * @returns A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing
- * the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection
- * rejects output after its runtime stops and never rebinds to a replacement Schedule service.
+ * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
+ * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
+ * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
+ * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
+ * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
+ * output after its runtime stops and never rebinds to a replacement Schedule service.
  */
-connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection
+connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>
 
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.

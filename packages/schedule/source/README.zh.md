@@ -46,7 +46,9 @@ await second.dispose()
 
 需要投递到任务时，组合插件注入 `schedule`，针对 `AutomationSource<AutomationCandidate>` 和已有 `ScheduleId` 调用 `ctx.schedule.connectSource(source, taskId)`。本包是库，不是需要挂载的插件。Schedule 就绪即表示可以建立连接，不需要另外注册接收者。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
 
-组合插件通过 `ctx.effect()` 拥有 source；Schedule 自动在调用方 context 中拥有任务连接。generator effect 可以直接 yield 返回的 `connection.dispose`，将其清理顺序与自有 source 排列在一起。在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
+组合插件通过 `ctx.effect()` 拥有 source；Schedule 自动在调用方 context 中拥有任务连接。`connectSource` 同步返回原始 Cordis disposer 函数，而不是 `SourceConnection` 对象。generator effect 直接 yield 该 `disconnect` 函数，不要包装它，以安排它与自有 source 的清理顺序。等待首次调用即可排空已接收工作；后续调用不执行操作，也不会再次等待正在进行的排空。
+
+在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
 
 输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和 Schedule 都不会重试整次输出。任务连接捕获一个 Schedule runtime，其卸载后会拒绝投递，不会自动切换到替代实例。
 

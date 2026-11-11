@@ -372,7 +372,6 @@ Every package below exports a Cordis plugin that a bundle patch can name in a Lo
 | Package | Config | Description |
 |---|---|---|
 | `@deepseek-ai/dsh-schedule` | yes | Host-wide durable reminders with shared management and delivery to existing or new Sessions |
-| `@deepseek-ai/dsh-source` | no | Typed source instances with asynchronous subscriptions and durable automation-task delivery |
 | `@deepseek-ai/dsh-tool-schedule` | no | Model-facing scheduled task tools (schedule_create, schedule_list, schedule_view, schedule_edit) over the Host ctx.schedule service |
 
 ## sdk

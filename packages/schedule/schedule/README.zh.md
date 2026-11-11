@@ -183,11 +183,13 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 <a id="source-delivery"></a>
 ### Source 投递
 
-插件声明 `schedule` 依赖，并调用 `ctx.schedule.connectSource(source, id)`，将 [`dsh-source`](../source/README.zh.md) 实例连接到已有活动任务。这个同步、同进程 API 在 Schedule 就绪时即可使用，不是 Remote 方法。返回的连接归调用方的 Cordis context 所有，因此卸载消费者会断开连接并排空已接受调用，但不销毁 source。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
+插件声明 `schedule` 依赖，并调用 `ctx.schedule.connectSource(source, id)`，将 [`dsh-source`](../source/README.zh.md) 实例连接到已有活动任务。这个同步、同进程 API 在 Schedule 就绪时即可使用，不是 Remote 方法。它返回归调用方 context 所有的原生 Cordis disposer，因此卸载消费者会断开订阅并排空已接受调用，但不销毁 source。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
+
+通过 `const disconnect = ctx.schedule.connectSource(source, id)` 同步取得 disposer，不要 await 连接创建。首次调用立即断开订阅，并返回排空已接受调用的 Promise。重复调用返回 `undefined`，即使首次调用仍未完成；等待清理应 await 首次结果或所属插件的销毁。generator effect 可以通过 `yield disconnect` 转移原生句柄本身的所有权并安排清理顺序。这个一次性 disposer 不同于直接 source 订阅返回的 `SourceConnection.dispose()`，后者的重复调用会等待同一批工作。
 
 source、手动与定时投递共用单任务准入：复用目标共用执行槽，所有目标共用各自的最小投递间隔。因此，source 投递可能延迟后续到期投递，但不改变任务存储的 `scheduledAt`。`new_once` 目标的首次 source 投递可以在原定时发生时点之前创建预留 Session；确认后，后续投递复用该 Session。`new` 目标每次 source 投递创建一个 Session，创建时间也可能早于原定时发生时点。
 
-任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝，执行占用或最小间隔拒绝准入时以 `SOURCE_TASK_BUSY` 拒绝。目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；Schedule 和 source 多接收者投递都不自动重试。Schedule 在关闭存储之前停止接受新工作，并排空已接受的投递。运行时停止后仍保留的连接以 `SOURCE_TASK_RECEIVER_UNAVAILABLE` 拒绝投递，不会重新绑定到替换后的 Schedule 服务。连接和中间 source 状态不存入任务记录。
+任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝，执行占用或最小间隔拒绝准入时以 `SOURCE_TASK_BUSY` 拒绝。创建连接时，已销毁 source 的 `SOURCE_CLOSED` 和失活调用方 context 的 Cordis `INACTIVE_EFFECT` 均原样传播。目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；Schedule 和 source 多接收者投递都不自动重试。Schedule 在关闭存储之前停止接受新工作，并排空已接受的投递。运行时停止后仍保留的连接以 `SOURCE_TASK_RECEIVER_UNAVAILABLE` 拒绝投递，不会重新绑定到替换后的 Schedule 服务。连接和中间 source 状态不存入任务记录。
 
 </details>
 

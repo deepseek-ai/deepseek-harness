@@ -2810,11 +2810,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.\n\n`sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.',
     methods: [
       {
-        signature: 'connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection',
+        signature: 'connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>',
         description: 'Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.',
         parameters: [{ name: 'source', description: 'Source of observed data accompanying the task\'s stored instruction.' }, { name: 'id', description: 'Task identity rechecked on every delivery inside the management FIFO.' }],
-        returns: 'A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.',
-        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection rejects output after its runtime stops and never rebinds to a replacement Schedule service.'],
+        returns: 'The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining accepted calls; repeated calls return void, even while draining. Await the first result or the owner\'s disposal to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.',
+        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects output after its runtime stops and never rebinds to a replacement Schedule service.'],
       },
       {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',

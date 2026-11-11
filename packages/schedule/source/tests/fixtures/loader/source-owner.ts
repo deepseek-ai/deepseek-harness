@@ -52,8 +52,8 @@ export function apply(ctx: Context): void {
   const world = ctx.sourceComposition
   ctx.effect(function* () {
     const composite = new CombinedObservation(world.left, world.right)
-    const connection = ctx.schedule.connectSource(composite, world.task.id)
-    yield connection.dispose
+    const disconnect = ctx.schedule.connectSource(composite, world.task.id)
+    yield disconnect
     yield () => composite.dispose()
   }, 'source-composition.subscriptions()')
 }

@@ -2,9 +2,9 @@
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
-import { Context, Service } from '@deepseek-ai/cordis'
+import { Context, Service, type Disposable } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SourceError, type AutomationCandidate, type SourceConnection } from '@deepseek-ai/dsh-source'
+import { SourceError, type AutomationCandidate } from '@deepseek-ai/dsh-source'
 import type { AutomationSource } from '@deepseek-ai/dsh-source/source'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
@@ -354,17 +354,20 @@ export class ScheduleService extends TypertRemoteService {
    * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
    * @param source - Source of observed data accompanying the task's stored instruction.
    * @param id - Task identity rechecked on every delivery inside the management FIFO.
-   * @returns A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing
-   * the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.
-   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection
-   * rejects output after its runtime stops and never rebinds to a replacement Schedule service.
+   * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
+   * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
+   * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
+   * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
+   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
+   * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
+   * output after its runtime stops and never rebinds to a replacement Schedule service.
    */
-  connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection {
+  connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>> {
     const runtime = this.runtime
     if (this.stopping || runtime === undefined) {
       throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
     }
-    const dispose = this.ctx.effect(() => {
+    return this.ctx.effect(() => {
       const connection = source.subscribe((candidate) => {
         if (this.stopping) {
           return Promise.reject(new SourceError('The connected Schedule runtime has stopped. Recreate the source connection.',
@@ -374,7 +377,6 @@ export class ScheduleService extends TypertRemoteService {
       })
       return () => connection.dispose()
     })
-    return { dispose }
   }
 
   /** Read effective delivery limits without loading or activating a task.

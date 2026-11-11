@@ -75,8 +75,8 @@ export function apply(ctx: Context): void {
         scope.effect(function* () {
           yield scope.on('schedule/resolve-agent', (sessionId, next) => sessionId === agent.id ? Promise.resolve(agent) : next())
           const combined = new CombinedSamples(left, right)
-          const connection = scope.schedule.connectSource(combined, id)
-          yield connection.dispose
+          const disconnect = scope.schedule.connectSource(combined, id)
+          yield disconnect
           yield () => combined.dispose()
           yield async () => { await Promise.all([left.dispose(), right.dispose()]) }
         }, 'source-snapshot.connections()')

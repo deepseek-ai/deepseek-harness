@@ -11,7 +11,7 @@ Schedule 独立于 Session 的激活状态存储宿主任务。同一管理 API 
 
 `SourceReceiver<T>` 异步消费具有类型约束的值。`SourceConnection.dispose()` 立即停止接收新值，并排空已接收的调用。source 的销毁也等待连接已经断开但仍在执行的调用。多接收者投递等待每个接收者，并聚合失败，不回滚或自动重放。中间输出仅存在于进程内，不是模型输入。
 
-`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`，并返回归调用方 context 所有的 `SourceConnection`。消费者声明 `schedule` 依赖；同步连接 API 随服务一起就绪，不向远端暴露。只有最终任务输出要求 `{ text: string }`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；已存储的定时任务继续使用既有求值器。
+`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`，并返回归调用方 context 所有的原生 Cordis `Disposable<void | Promise<void>>`。首次调用排空已接受调用；重复调用返回 void，不等待尚未完成的清理。应等待首次结果或所属插件的销毁，并在将所有权转移给 generator effect 时 yield 该函数本身。消费者声明 `schedule` 依赖；同步连接 API 随服务一起就绪，不向远端暴露。只有最终任务输出要求 `{ text: string }`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执。它保留任务的时间规则和状态。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；已存储的定时任务继续使用既有求值器。
 
 <a id="durable-tasks"></a>
 ## 持久任务
@@ -167,12 +167,15 @@ Shared management service; reads and management writes never activate a Session,
  * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
  * @param source - Source of observed data accompanying the task's stored instruction.
  * @param id - Task identity rechecked on every delivery inside the management FIFO.
- * @returns A caller-context-owned connection; disposing it detaches and drains accepted calls without disposing
- * the source. Consumers declare a Schedule dependency, and their plugin unload disposes the connection automatically.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable. An existing connection
- * rejects output after its runtime stops and never rebinds to a replacement Schedule service.
+ * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
+ * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
+ * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
+ * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
+ * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
+ * output after its runtime stops and never rebinds to a replacement Schedule service.
  */
-connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): SourceConnection
+connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>
 
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.

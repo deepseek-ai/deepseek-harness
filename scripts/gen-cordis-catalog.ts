@@ -1068,6 +1068,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   AgentPreset: 'discovered preset record is owned by packages/preset/agent-preset-registry/README.md',
   AgentPresetRoster: 'path-free preset roster is owned by packages/preset/agent-preset-registry/README.md',
   PresetDefinition: 'declarative configuration is owned by packages/preset/agent-preset/README.md',
+  Disposable: 'one-shot effect disposer function is owned by vendor/cordis/src/fiber.ts',
   AsyncDisposable: 'TypeScript explicit resource management interface',
   AgentPresetDocument: 'preset composition view is owned by packages/preset/agent-preset-registry/README.md',
   AgentPresetComposition: 'flattened composition rows are owned by packages/preset/agent-preset-registry/README.md',

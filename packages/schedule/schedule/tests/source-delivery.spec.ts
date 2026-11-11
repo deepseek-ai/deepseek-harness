@@ -325,6 +325,101 @@ it('deletes a task only after an accepted source delivery commits its receipt', 
   }
 })
 
+it('returns a one-shot task disconnection whose first call and owner disposal drain accepted input', async () => {
+  const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
+  active.push(test)
+  const agent = agentFor(test.ctx, TARGET)
+  test.resolve.mockResolvedValue({ agent })
+  const source = new InputSource()
+  sources.push(source)
+  let disconnect: ReturnType<ScheduleService['connectSource']> | undefined
+  const consumer = await test.ctx.plugin({
+    inject: ['schedule'],
+    apply(ctx: Context) { disconnect = ctx.schedule.connectSource(source, ID) },
+  })
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
+  const work = source.publish(INPUT)
+  let first: void | Promise<void> = undefined
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    first = disconnect!()
+    expect(first).toBeInstanceOf(Promise)
+    let drained = false
+    void Promise.resolve(first).then(() => { drained = true }, () => {})
+    const repeated = disconnect!()
+    expect(repeated).toBeUndefined()
+    closing = Promise.resolve(consumer.dispose()).then(() => {
+      expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+    })
+    await repeated
+    expect(drained).toBe(false)
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
+    release.resolve(undefined)
+    await first
+    await work
+    await closing
+    expect(drained).toBe(true)
+    const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
+    const subscription = source.subscribe(observed)
+    await source.publish('after disconnection')
+    await subscription.dispose()
+    expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'after disconnection' })
+    expect(agent.followup).toHaveBeenCalledOnce()
+  } finally {
+    release.resolve(undefined)
+    await work
+    await first
+    await closing
+    await consumer.dispose()
+  }
+})
+
+it('orders the native task disconnection after a later yielded cleanup', async () => {
+  const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
+  active.push(test)
+  const agent = agentFor(test.ctx, TARGET)
+  test.resolve.mockResolvedValue({ agent })
+  const source = new InputSource()
+  sources.push(source)
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const consumer = await test.ctx.plugin({
+    inject: ['schedule'],
+    apply(ctx: Context) {
+      ctx.effect(function* () {
+        const disconnect = ctx.schedule.connectSource(source, ID)
+        yield disconnect
+        yield async () => { entered.resolve(undefined); await release.promise }
+      })
+    },
+  })
+  const closing = consumer.dispose()
+  try {
+    await entered.promise
+    await source.publish(INPUT)
+    expect(agent.followup).toHaveBeenCalledOnce()
+    release.resolve(undefined)
+    await closing
+    await source.publish('after ordered cleanup')
+    expect(agent.followup).toHaveBeenCalledOnce()
+  } finally {
+    release.resolve(undefined)
+    await closing
+  }
+})
+
+it('preserves the closed source error when acquiring a task subscription', async () => {
+  const test = await setup()
+  await test.source.dispose()
+  expect(() => test.service.connectSource(test.source, ID)).toThrowError(
+    expect.objectContaining({ code: 'SOURCE_CLOSED' }),
+  )
+  expect(test.agent.followup).not.toHaveBeenCalled()
+})
+
 it('automatically detaches and drains a connection owned by an unloading consumer', async () => {
   const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
   active.push(test)
@@ -378,9 +473,9 @@ it('keeps an old source connection bound to its stopped runtime after Schedule i
   )
   const replacementSource = new InputSource()
   sources.push(replacementSource)
-  const connection = test.ctx.schedule.connectSource(replacementSource, ID)
+  const disconnect = test.ctx.schedule.connectSource(replacementSource, ID)
   await replacementSource.publish(INPUT)
-  await connection.dispose()
+  await disconnect()
   expect(test.agent.followup).toHaveBeenCalledOnce()
   expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
 })
