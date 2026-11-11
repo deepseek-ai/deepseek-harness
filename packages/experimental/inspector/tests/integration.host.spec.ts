@@ -371,10 +371,10 @@ describe('experimental Inspector real Worker', () => {
   })
 
   it('cancels Client Runtime work when the Worker deadline expires', async () => {
-    // The evaluation that must still succeed after the timeout shares this
-    // deadline, so the deadline needs headroom above one Client Runtime round
-    // trip under instrumented CI load. The never-settling promise below makes
-    // the deadline fire regardless of its value.
+    // The follow-up evaluation shares this deadline, so it must exceed one real
+    // Client Runtime round trip under concurrent CI load and stay below
+    // CDP_CALL_TIMEOUT_MS and the 5 s default test budget. The never-settling
+    // promise makes the deadline fire regardless of its value.
     const deadlineMs = 1_000
     inspector = await startInspector({ port: 0, captureFetch: false, clientRuntimeTimeoutMs: deadlineMs })
     client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Timeout Client' })
