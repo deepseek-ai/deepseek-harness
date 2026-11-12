@@ -977,6 +977,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cuaPrograms',
+    summary: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    description: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    methods: [
+      {
+        signature: 'release(agent: Agent): Promise<void>',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
+        parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
+        returns: 'Completion after the process has exited and its output has drained.',
+        throws: ['When the process cleanup fails.'],
+      },
+      {
+        signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
+        description: 'Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured. A host that forwards screenshots outside a model request reads the same request version with it, so the image a caller sees matches the coordinate space the provider mapped.',
+        parameters: [{ name: 'image', description: 'Durable screenshot attachment from a `cua` result.' }],
+        returns: 'The fixed target, or undefined when the Agent\'s model route selects the delivered version.',
+      },
+    ],
+  },
+  {
     key: 'deepseekAccount',
     summary: 'Account login, credentials, and client-safe Remote operations.',
     description: 'Account login, credentials, and client-safe Remote operations.',
@@ -1626,7 +1646,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forgeSession',
     summary: 'Session-scoped change request bindings.',
-    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
     methods: [
       {
         signature: 'changeRequests(session: Session): SessionChangeRequest[]',
@@ -2327,7 +2347,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     methods: [
       {
-        signature: 'readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())',
+        signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
         description: 'Changes whenever engine, font, or conversion configuration is replaced.',
         parameters: [],
       },
@@ -2489,12 +2509,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read current plugins, including why a row cannot be changed through the profile patch.',
         parameters: [],
         returns: 'Current runtime entries with persistent patch targets.',
+        throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
         signature: '@Remote listBundles(): Promise<BundleInfo[]>',
         description: 'Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names. A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.',
         parameters: [],
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
+        throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or installation manifest cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
         signature: '@Remote async registries(): Promise<PluginRegistries>',
@@ -2692,11 +2714,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'ptcRuntime',
     summary: 'Registers one `ctx.ptcRuntime` implementation.',
-    description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
+    description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects, with PtcRuntimeError. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
     methods: [
       {
         signature: 'abstract readonly language: string',
-        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tool-executor-ptc` presents; the TypeScript backend is released, the Python backend is experimental and private (not published).',
+        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tool-executor-ptc` presents. The shipped Node backend reports `\'typescript\'`.',
         parameters: [],
       },
       {
@@ -2723,7 +2745,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve supported options and provider defaults before execution.',
         parameters: [{ name: 'request', description: 'Program, bindings, cancellation and optional execution choices.' }],
         returns: 'Complete directory, deadline and supported authority for run.',
-        throws: ['When an explicit choice is invalid or unsupported by this provider.'],
+        throws: ['When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.'],
       },
       {
         signature: 'abstract run(spec: PtcRunSpec): Promise<PtcRunResult>',
@@ -4564,7 +4586,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Ask the scoped answerer waterfall and wait for the user\'s answer.\n\nWhen a caller supplies an agent, human interaction is valid only for the exact live instance of an ordinary Session. Explicit subagent origin rejects delegated callers; historical ordinary forks may retain parent metadata and still ask normally.',
         parameters: [{ name: 'request', description: 'Questions, owner agent, and abort signal.' }],
         returns: 'The answer chosen or typed by the human.',
-        throws: ['{UserQuestionError} code `ASK_ABORTED` when the supplied signal is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, or `DELEGATED_CALLER` when that live agent has subagent origin.'],
+        throws: ['{UserQuestionError} code `ASK_ABORTED` when the supplied signal is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, `DELEGATED_CALLER` when that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the original message, when an answerer fails with a value that is not a `HarnessError`; a coded `HarnessError` from an answerer keeps its `name` and `code`.'],
       },
     ],
   },
@@ -8526,7 +8548,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteError',
-    declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {\n    readonly isDSHRemoteError: true;\n    constructor(readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
+    declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {\n    readonly isDSHRemoteError: true;\n    constructor(override readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
   {
     name: 'RemoteErrorCode',
@@ -10737,6 +10759,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type WorkflowAgentOutcome = \'completed\' | \'failed\' | \'cancelled\';',
   },
   {
+    name: 'WorkflowErrorCode',
+    declaration: 'export type WorkflowErrorCode = \'SCRIPT_PARSE\' | \'META_INVALID\' | \'INVALID_ARGUMENT\' | \'UNSUPPORTED_OPTION\' | \'UNSUPPORTED_SCHEMA\' | \'AGENT_CAP\' | \'ITEM_CAP\' | \'AGENT_START\' | \'AGENT_RESULT\' | \'RESULT_UNSERIALIZABLE\' | \'CANCELLED\' | \'RUN_FAILED\';',
+  },
+  {
     name: 'WorkflowMeta',
     declaration: 'export interface WorkflowMeta {\n    name: string;\n    description: string;\n    whenToUse?: string;\n    phases?: WorkflowPhase[];\n}',
   },
@@ -10746,11 +10772,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkflowResult',
-    declaration: 'export interface WorkflowResult {\n    value: unknown;\n    stopReason: WorkflowStopReason;\n    error?: string;\n    agentsStarted: number;\n}',
+    declaration: 'export interface WorkflowResult {\n    value: unknown;\n    stopReason: WorkflowStopReason;\n    error?: string;\n    errorCode?: WorkflowErrorCode;\n    agentsStarted: number;\n}',
   },
   {
     name: 'WorkflowResultInfo',
-    declaration: 'export interface WorkflowResultInfo {\n    stopReason: WorkflowStopReason;\n    error?: string;\n    agentsStarted: number;\n}',
+    declaration: 'export interface WorkflowResultInfo {\n    stopReason: WorkflowStopReason;\n    error?: string;\n    errorCode?: WorkflowErrorCode;\n    agentsStarted: number;\n}',
   },
   {
     name: 'WorkflowRun',

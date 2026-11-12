@@ -8,12 +8,13 @@ import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import UserQuestions from '@deepseek-ai/dsh-user-questions'
-import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { LlmAdapter, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished } from 'vitest'
 import { createCuaApi } from '@deepseek-ai/dsh-cua/api'
 import sharp from 'sharp'
 import * as Provider from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class ImageAdapter extends LlmAdapter {
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
@@ -36,11 +37,11 @@ it.skipIf(!helperPath || !selector)('admits real application screenshots through
   ctx.on('user-questions/request', async () => ({ answers: [{ id: 'cua-app-access', selected: ['Allow for this session'] }] }))
   await ctx.plugin(Provider, { helperPath: helperPath!, agentPreset: false })
   ctx.llm.registerAdapter(['desktop-test'], new ImageAdapter())
-  const owner = await ctx.agents.create({ sessionId: SessionId('desktop-screenshot'), agentOptions: { provider: 'desktop-test', model: 'vision' } })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('desktop-screenshot'), agentOptions: { provider: 'desktop-test', model: 'vision' } })
   let sequence = 0
   const dispatch: Parameters<typeof createCuaApi>[0] = async (operation) => {
     const batch = await ctx.tools.execute({ agent: owner.agent, signal: new AbortController().signal,
-      calls: [{ type: 'tool-call', id: ToolCallId(`desktop-${++sequence}`), name: 'cua', arguments: JSON.stringify(operation) }] })
+      calls: [{ type: 'tool-call', id: brandString<ToolCallId>(`desktop-${++sequence}`), name: 'cua', arguments: JSON.stringify(operation) }] })
     expect(batch.results).toHaveLength(1)
     const result = batch.results[0]!.result
     expect(result.isError, JSON.stringify(result.content)).toBe(false)

@@ -2,10 +2,11 @@
 
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { TeamModePane, TeamModeToggle, type TeamModePaneProps, type TeamModeToggleProps } from '../src/client/TeamModeToggle.tsx'
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
@@ -13,7 +14,7 @@ type TestProps = TeamModePaneProps & TeamModeToggleProps
 
 function props(enabled: boolean | undefined, selectTeamMode = vi.fn(async () => null as string | null), child?: 'addressed' | 'listed', requestedModel: boolean | 'loading' = false): TestProps {
   return {
-    sessionId: SessionId('root'),
+    sessionId: brandString<SessionId>('root'),
     useSession: (select: (value: { subagent: object | null }) => unknown) => select({ subagent: child === 'addressed' ? {} : null }),
     useSessions: (select: (value: { byId: object }) => unknown) => select({ byId: child === 'listed' ? { root: { origin: 'subagent' } } : {} }),
     useProjection: (key: string) => key === 'modelSelection'

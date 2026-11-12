@@ -2,7 +2,9 @@
 import { existsSync, writeFileSync } from 'node:fs'
 import { setTimeout } from 'node:timers/promises'
 import type { Context } from '@deepseek-ai/cordis'
-import { LlmAdapter, ToolCallId, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { LlmAdapter, type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 
 class NestedAdapter extends LlmAdapter {
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
@@ -21,7 +23,7 @@ class NestedAdapter extends LlmAdapter {
       answer = 'nested child result'
     } else if (!options.messages.some(message => message.role === 'tool')) {
       const args = JSON.stringify({ description: 'nested fork', prompt: 'nested-child-task' })
-      const id = ToolCallId('nested-fork')
+      const id = brandString<ToolCallId>('nested-fork')
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name: 'subagent_fork', argumentsDelta: args }
       yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name: 'subagent_fork', arguments: args } }

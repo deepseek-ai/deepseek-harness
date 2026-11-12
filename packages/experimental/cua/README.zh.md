@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象负责激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 提供方为此接口提供原生执行。
+各提供方通过 `installCua` 安装应用/窗口对象 API；调用方通过 `connectCua` 连接。`cua` API 负责发现应用，`CuaApp` 对象负责激活选定的应用并枚举其窗口。`CuaApp` 与 `CuaWindow` 都扩展 `CuaSurface`；显式窗口对象负责截图和指针输入。macOS 和 Windows 提供方负责各自平台的原生操作。
 
 ## 概述
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-挂载 [macOS 提供方](../cua-macos/README.zh.md)以在 macOS 上启用原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
+挂载 [macOS 提供方](../cua-macos/README.zh.md)或 [Windows 提供方](../cua-windows/README.zh.md)以启用对应平台的原生操作。外部 PTC 宿主从 `@deepseek-ai/dsh-cua/bridge` 导入 `connectCua`，并提供当前 `tools.cua` 绑定。源码组合与原生组件准备由提供方负责。
 
 `cua_run_code` 为每个 agent（智能体）在独立的持久 Node 环境中按 scoped REPL 语句运行 TypeScript。程序开始前即可使用全局 `cua` 对象；`tools` 中只有 `cua`。其他普通工具在程序外直接调用。使用顶层 `await`，通过 `inspect(...values)` 展示选中的文字和截图；顶层 `return` 无效。工具接受与 `run_code` 相同的超时和沙箱控制参数。运行时重启会自动重建 `cua`，但其他变量和已选择的应用对象需要重新创建。
 
@@ -45,7 +45,7 @@ kind: "package-reference"
 
 通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
 
-`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，并确认当前模型支持图片输入。图片接入或保存失败会拒绝调用。
+`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 
@@ -101,7 +101,7 @@ Computer Use 详情页的权限卡片、组件列表和来源信息使用 l3 边
 
 `agentPreset` 默认为 `ptc`：匹配的 Agent 获得原始 `cua` 工具和 PTC 指引，其他已组合的 preset 只获得 `cua_run_code` 及其指引，包括标准、创造、极简和自定义 preset。基础注册的所有者使用 `agent/created`、`agent-preset/selected` 事件和 Agent 自有作用域，也处理提供方加载前已存在的 Agent。它按定义对象的身份同步替换每组工具及提示词；程序服务不可用时只撤回程序工具定义，保留原始工具的注册。Agent 销毁会移除其注册并释放保留环境，提供方卸载还会释放专用 CUA 运行时。未组合 preset 的 Agent 不获得这两个工具。在独立组合中设置 `agentPreset: false` 可全局注册原始 `cua` 工具。Host 负责权限、本机连接和取消；preset 定义保持不变。
 
-`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。
+`cua_run_code` 复用 PTC 程序工具工厂，由 CUA 提供方持有一个隔离的 Node 运行时。每个 Agent 通过自己的 `stateOwner` 选择独立的保留进程。CUA 在该运行时注册环境初始化程序，为每个新进程安装一次 `cua`，包括临时提权执行。初始化程序的所属作用域只依赖运行时，程序工具的依赖重载时仍保留这项注册。先销毁程序工具并等待其执行结束，再注销初始化程序并关闭运行时。工厂只绑定私有 `cua` 操作工具，保留嵌套策略检查、guard、日志、取消和截图交付。私有工具不会出现在模型可直接调用的工具列表中。该运行时存在期间，提供方发布 `ctx.cuaPrograms`：`release(agent)` 就是运行时对该 Agent 的 owner release，因此其程序进程退出，仍在运行的程序以中止失败，下一次程序在新进程中由初始化程序重新创建 `cua`，应用授权和本机连接则保留；释放结算之前运行时会拒绝该 Agent 的程序，因此由调用方把它们挡在后面；`screenshotRequestTarget(image)` 返回已配置的 `screenshotTarget` 为某张已存储截图选定的请求图片目标，使在模型请求之外转发截图的宿主交付程序观察到的那一版。
 
 [操作 schema](src/protocol.ts) 定义模型参数，以及 Host 补充的请求字段。[原生观察](src/native-observation.ts) 解析窗口回复的私有字段，更新坐标记录后返回公开结果。原生实现在执行时检查目标身份、窗口几何、资源上限和操作系统访问条件。授权存储独立于原生协议保存持久许可。
 

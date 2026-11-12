@@ -4,9 +4,10 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { afterEach, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineTool, TOOL_ABORTED_BEFORE_DISPATCH, ToolActivationError } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
@@ -23,7 +24,7 @@ async function setup() {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  const agent = { id: SessionId('activation') } as Agent
+  const agent = { id: brandString<SessionId>('activation') } as Agent
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) }, { inject: ['tools'] }))
   const controller = new AbortController()
@@ -33,7 +34,7 @@ async function setup() {
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     async execute() { calls++; return 'done' },
   })
-  const input = { agent, name: tool.name, arguments: {}, callId: ToolCallId('call'), signal: controller.signal }
+  const input = { agent, name: tool.name, arguments: {}, callId: brandString<ToolCallId>('call'), signal: controller.signal }
   const execute = (overrides: Partial<ToolExecutionInput> = {}): Promise<ToolExecutionResult> =>
     executeToolFixture(ctx, { ...input, ...overrides })
   const resolve = () => ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: controller.signal })
@@ -71,7 +72,7 @@ it('keeps admissions specific to the requesting agent', async () => {
   const h = await setup()
   h.ctx.tools.register(h.tool, { when: () => true })
   const toolSet = await h.resolve()
-  const other = { id: SessionId('other') } as Agent
+  const other = { id: brandString<SessionId>('other') } as Agent
   expect((await h.execute({ agent: other, toolSet })).error?.info?.code).toBe('UNKNOWN_TOOL')
   expect(h.calls()).toBe(0)
 })

@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
-import { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-hmr'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
@@ -140,7 +141,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
 
   async function agent(preset = 'standard', cwd = workspace): Promise<AgentHandle> {
     const handle = await ctx.agents.create({
-      sessionId: SessionId(`optional-${preset}-${randomUUID()}`), meta: { cwd, agentPreset: preset },
+      sessionId: brandString<SessionId>(`optional-${preset}-${randomUUID()}`), meta: { cwd, agentPreset: preset },
       agentOptions: { provider: 'bundle-test', model: 'scripted' },
       setup: scoped => ctx.agentPresets.mount(scoped, preset).then(() => undefined),
     })
@@ -234,7 +235,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('loads the actual badge asset only while its bundle is selected', async () => {
     const owner = await agent()
     const load = (callId: string) => executeToolFixture(ctx, {
-      callId: ToolCallId(callId), name: 'skill', arguments: { name: 'dsh-badge' },
+      callId: brandString<ToolCallId>(callId), name: 'skill', arguments: { name: 'dsh-badge' },
       agent: owner.agent, signal: new AbortController().signal,
     })
     expect((await load('badge-before')).isError).toBe(true)

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
-import { Session, SessionId, SessionLogOffset, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
+import { Session, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import MessageFeedbackService from '../src/index.ts'
 import type {
@@ -15,6 +15,7 @@ import {
   setupHarness,
   type TestHarness,
 } from './helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const harnesses: TestHarness[] = []
 
@@ -55,7 +56,7 @@ describe('MessageFeedbackService public contract', () => {
 
   it('returns session-not-found only for a definite persistence miss', async () => {
     const { ctx, persistence } = await harness()
-    const missing = SessionId('missing-session')
+    const missing = brandString<SessionId>('missing-session')
     await expect(ctx.messageFeedback.list({ sessionId: missing })).resolves.toEqual({
       ok: false,
       error: { code: 'session-not-found', sessionId: missing },
@@ -70,7 +71,7 @@ describe('MessageFeedbackService public contract', () => {
 
   it('rechecks live ownership before returning a cold catalog miss', async () => {
     const { ctx, persistence } = await harness()
-    const sessionId = SessionId('catalog-live-race')
+    const sessionId = brandString<SessionId>('catalog-live-race')
     const listed = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     persistence.onStat = async () => {
@@ -90,7 +91,7 @@ describe('MessageFeedbackService public contract', () => {
 
   it('returns session-not-found from mutations and conflicts on an observed version for an absent item', async () => {
     const { ctx, persistence } = await harness()
-    const missing = SessionId('missing-mutations')
+    const missing = brandString<SessionId>('missing-mutations')
     const missingMessage = 'missing-message' as MessageId
     await expect(ctx.messageFeedback.put({
       sessionId: missing,
@@ -579,7 +580,7 @@ describe('canonical message feedback history', () => {
     const messageId = parent.assistantMessageIds[0]
     const parentItem = expectItem(await ctx.messageFeedback.put({ sessionId: parent.session.id, messageId, rating: 'positive', ifVersion: null }))
     const seed = persistence.durable.get(parent.session.id)!.events
-    const childId = SessionId('feedback-child')
+    const childId = brandString<SessionId>('feedback-child')
     const child = Session.create(childId, seed, {
       ...parent.session.header, id: childId, isSeeded: true, parentSession: parent.session.id,
     }, SessionLogOffset(seed.length))
@@ -592,7 +593,7 @@ describe('canonical message feedback history', () => {
 
   it('flushes live feedback with the target and retries durability without a duplicate event', async () => {
     const { ctx, persistence } = await harness()
-    const session = ctx.sessions.create(SessionId('live-log'))
+    const session = ctx.sessions.create(brandString<SessionId>('live-log'))
     const fixture = appendMessageFixture(session)
     const before = session.snapshotEvents().length
     const failure = new Error('disk unavailable')
@@ -616,7 +617,7 @@ describe('canonical message feedback history', () => {
   it.each(['missing-tail', 'different-tail', 'different-lifecycle'] as const)(
     'rejects a live checkpoint with %s and closes its verification handle', async (kind) => {
       const { ctx, persistence } = await harness()
-      const session = ctx.sessions.create(SessionId('mismatched-checkpoint'))
+      const session = ctx.sessions.create(brandString<SessionId>('mismatched-checkpoint'))
       const fixture = appendMessageFixture(session)
       ctx.on('session/flush', () => {
         const events = [...session.snapshotEvents()]
@@ -634,7 +635,7 @@ describe('canonical message feedback history', () => {
 
   it('verifies an empty live no-op and captures its checkpoint before concurrent appends', async () => {
     const { ctx, persistence } = await harness()
-    const session = ctx.sessions.create(SessionId('checkpoint-prefix'))
+    const session = ctx.sessions.create(brandString<SessionId>('checkpoint-prefix'))
     ctx.on('session/flush', () => { persistence.persist(session) })
     await expect(ctx.messageFeedback.delete({ sessionId: session.id, messageId: 'absent' as MessageId, ifVersion: staleVersion() }))
       .resolves.toEqual({ ok: true, value: { absent: true } })
@@ -648,7 +649,7 @@ describe('canonical message feedback history', () => {
 
   it('rejects an unowned durability checkpoint and closes cold handles on failures', async () => {
     const { ctx, persistence } = await harness()
-    const live = ctx.sessions.create(SessionId('no-flush-owner'))
+    const live = ctx.sessions.create(brandString<SessionId>('no-flush-owner'))
     const fixture = appendMessageFixture(live)
     await expect(ctx.messageFeedback.put({ sessionId: live.id, messageId: fixture.assistantMessageIds[0], rating: 'positive', ifVersion: null }))
       .rejects.toThrow(/no durability listener participated/u)

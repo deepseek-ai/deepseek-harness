@@ -14,7 +14,8 @@ import {
   type ConversationViewDefinition, type ConversationViewNode, type ToolResultNode, type TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
-import { createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ScheduleId, ScheduleCatalogEntry } from '@deepseek-ai/dsh-schedule/client'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
@@ -138,7 +139,7 @@ function result(seq: number, callId: string, text: string, isError = false, turn
     turn,
     step: 1,
     message: createToolResultMessage({
-      callId: ToolCallId(callId),
+      callId: brandString<ToolCallId>(callId),
       content: [{ type: 'text', text }],
       isError,
     }),

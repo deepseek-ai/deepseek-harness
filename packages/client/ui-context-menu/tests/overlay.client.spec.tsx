@@ -8,11 +8,12 @@ import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { MenuItemButton } from '@deepseek-ai/dsh-client-ui-primitives'
 import { ShortcutRegistry } from '../../shortcuts/src/client/registry.ts'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createMenuStore } from '../src/client/store.ts'
 import { MenuOverlay } from '../src/client/View.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import type { ContextMenuTarget } from '../src/client/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
@@ -21,7 +22,7 @@ it('renders legacy Session actions before data contributions and restores More f
   const close = () => { store.actions.close() }
   const useStore = bindSnapshotSelector(store)
   const view = render(<>
-    <button onClick={() => { store.actions.open({ kind: 'session', value: { sessionId: SessionId('clicked'), displayTitle: 'Clicked' } }, { x: 20, y: 30 }) }}>More</button>
+    <button onClick={() => { store.actions.open({ kind: 'session', value: { sessionId: brandString<SessionId>('clicked'), displayTitle: 'Clicked' } }, { x: 20, y: 30 }) }}>More</button>
     <MenuOverlay t={key => key === 'back' ? 'Back' : 'Failed'} useCatalog={select => select([])} useStore={useStore} actions={store.actions} close={close} select={run}
       renderSlot={(_key, owner: object) => {
         const { target, dismiss } = owner as { target: ContextMenuTarget; dismiss: () => void }
@@ -49,7 +50,7 @@ it('renders legacy Session actions before data contributions and restores More f
 it('renders disabled, grouped and nested data actions and keeps feedback after menu dismissal', () => {
   vi.useFakeTimers()
   const store = createMenuStore().create(), select = vi.fn()
-  store.actions.open({ kind: 'session', value: { sessionId: SessionId('clicked'), displayTitle: 'Clicked' } }, { x: 20, y: 30 })
+  store.actions.open({ kind: 'session', value: { sessionId: brandString<SessionId>('clicked'), displayTitle: 'Clicked' } }, { x: 20, y: 30 })
   store.actions.items([
     { id: 'plain', label: 'Open' },
     { id: 'blocked', label: 'Unavailable', disabled: true, danger: true, separatorBefore: true },
@@ -113,7 +114,7 @@ it('dispatches captured icon keys in rows, submenus and footers and retires rend
   } })
   const view = runtime.renderRoot()
   const open = () => { runtime.ctx.contextMenus.open({ kind: 'session', value: {
-    sessionId: SessionId('icons'), displayTitle: 'Icons',
+    sessionId: brandString<SessionId>('icons'), displayTitle: 'Icons',
   } }, { x: 20, y: 30 }) }
   act(open)
   await waitFor(() => { expect(view.getAllByTestId('plugin-icon')).toHaveLength(2) })
@@ -138,7 +139,7 @@ it('tracks configured shortcuts for nested and footer actions without invoking c
     defaults: { 'desktop:macos': { code: 'KeyG', modifiers: ['primary', 'alt'] } },
     regions: ['page'], modals: [], resolve: resolveCommand })
   const store = createMenuStore().create()
-  store.actions.open({ kind: 'session', value: { sessionId: SessionId('captured'), displayTitle: 'Captured' } }, { x: 30, y: 40 })
+  store.actions.open({ kind: 'session', value: { sessionId: brandString<SessionId>('captured'), displayTitle: 'Captured' } }, { x: 30, y: 40 })
   store.actions.items([
     { id: 'rename', label: 'Rename', commandId },
     { id: 'missing', label: 'Unknown command', commandId: 'absent' as ShortcutCommandId },

@@ -8,7 +8,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ToolExecution, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import { resolveRgPath, runRipgrep } from '@deepseek-ai/dsh-tool-fs-search'
 
@@ -24,7 +25,7 @@ describe('lazy packaged-ripgrep resolution', () => {
   it('fails the first search call with SEARCH_FAILED instead of failing module load', async () => {
     // The resolution rejects before any spawn, so no subprocess service is needed.
     const controller = new AbortController()
-    const callId = ToolCallId('missing-platform-package')
+    const callId = brandString<ToolCallId>('missing-platform-package')
     const exec: ToolExecution = {
       signal: controller.signal,
       name: 'glob',

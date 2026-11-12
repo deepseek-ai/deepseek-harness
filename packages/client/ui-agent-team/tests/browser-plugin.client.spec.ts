@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { TeamModePane, TeamModeToggle, type TeamModePaneInjected } from '../src/client/TeamModeToggle.tsx'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -10,6 +10,7 @@ import { TeamCommandRow } from '../src/client/TeamCommandRow.tsx'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected } from '../src/client/TeamDisableConfirmation.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function bench() {
   const ctx = new Context()
@@ -84,7 +85,7 @@ describe('task-board browser plugin', () => {
     expect(entry()!.inject).toBeUndefined()
     expect(page()).toMatchObject({ options: { key: 'agent-team' }, locale: 'agent-team' })
     const injected = page()!.inject as (sessionId: SessionId) => Record<string, unknown>
-    const value: object = injected(SessionId('chosen-session'))
+    const value: object = injected(brandString<SessionId>('chosen-session'))
     const mode = value as TeamModePaneInjected
     setEnabled.mockResolvedValueOnce({ ok: true, value: undefined })
     await expect(mode.selectTeamMode(true)).resolves.toBeNull()
@@ -103,12 +104,12 @@ describe('task-board browser plugin', () => {
     mode.requestDisableConfirmation()
     expect(request.getSnapshot()).toEqual({ sessionId: 'chosen-session' })
     expect(setEnabled).toHaveBeenCalledTimes(beforeConfirmation)
-    overlay.cancelDisable(SessionId('other-session'))
+    overlay.cancelDisable(brandString<SessionId>('other-session'))
     expect(request.getSnapshot()).toEqual({ sessionId: 'chosen-session' })
     setEnabled.mockResolvedValueOnce({ ok: true, value: undefined })
-    await expect(overlay.disableTeam(SessionId('chosen-session'))).resolves.toBeNull()
+    await expect(overlay.disableTeam(brandString<SessionId>('chosen-session'))).resolves.toBeNull()
     expect(setEnabled).toHaveBeenLastCalledWith('chosen-session', false)
-    overlay.cancelDisable(SessionId('chosen-session'))
+    overlay.cancelDisable(brandString<SessionId>('chosen-session'))
     expect(request.getSnapshot()).toBeNull()
     mode.requestDisableConfirmation()
     await b.fiber.dispose()

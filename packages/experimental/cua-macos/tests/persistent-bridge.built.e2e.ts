@@ -11,17 +11,18 @@ import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deep
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, type ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import { PtcImage } from '@deepseek-ai/dsh-ptc-runtime'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import Subprocess from '@deepseek-ai/dsh-subprocess-local'
 import { expect, it } from 'vitest'
 import * as Cua from '../src/index.ts'
 import { installNativeFixture, startFixtureHost } from './native-fixture.ts'
 import { Request } from '@deepseek-ai/dsh-cua/protocol'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const bridge = fileURLToPath(new URL('../../cua/lib/bridge.js', import.meta.url))
 const bootstrap = join(dirname(fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-ptc-runtime-node/package.json'))), 'lib/persistent-process.js')
@@ -56,7 +57,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
       await ctx.loader.resolve(entry).fiber!.await()
       await mountAgentLoopTestHarness(ctx)
       ctx.llm.registerAdapter(['bridge-fixture'], new VisualAdapter())
-      const handle = await ctx.agents.create({ sessionId: SessionId('external-cua-project'), agentOptions: { provider: 'bridge-fixture', model: 'vision' } })
+      const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('external-cua-project'), agentOptions: { provider: 'bridge-fixture', model: 'vision' } })
       let count = 0
       let images = 0
       const calls: Array<{ phase: string; method: string }> = []
@@ -66,7 +67,7 @@ it.skipIf(process.platform === 'win32' || !existsSync(bridge) || !existsSync(boo
           const operation = Request.parse(args)
           calls.push({ phase, method: operation.method })
           const result = await executeToolFixture(ctx, { agent: handle.agent, signal: new AbortController().signal,
-            callId: ToolCallId(`external-cua-${++count}`), name: 'cua', arguments: operation })
+            callId: brandString<ToolCallId>(`external-cua-${++count}`), name: 'cua', arguments: operation })
           if (result.isError) throw new Error(result.error.message)
           images += result.content.filter(block => block.type === 'image').length
           const image = result.content.find(block => block.type === 'image')

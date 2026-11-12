@@ -1112,6 +1112,76 @@ describe('bubblewrap preparation script', () => {
     // Ubuntu removes superseded versions from its live package pool.
     expect(script).not.toMatch(/https?:\/\/[^/'"\s]+\/ubuntu(?:-ports)?\/pool\//u)
   })
+
+  it('verifies the archive against the pinned digest', () => {
+    const script = readFileSync(resolve(root, 'scripts/prepare-ci-bubblewrap.sh'), 'utf8')
+
+    expect(script).toMatch(/^readonly BUBBLEWRAP_SHA256='[0-9a-f]{64}'$/mu)
+    expect(script).toContain('acquire_verified_archive "$BUBBLEWRAP_URL" "$BUBBLEWRAP_SHA256" "$archive"')
+  })
+
+  // Ephemeral runners share a `~` layout: GitHub-hosted runners and Blacksmith
+  // (whose runners register as self-hosted but keep /home/runner as HOME). The
+  // in-house `vm-backup` pool keeps `~/.cache` on a different, persistent
+  // layout, so lanes that can select it must not restore or save this cache.
+  // `ci-master.yml` prepares bubblewrap only on lanes that can select the
+  // persistent runners, and the manual benchmark matrix includes their 64/96-core
+  // rows, so neither carries cache steps.
+  const hostedOnly = "vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'"
+  const cachedJobs = new Map<string, string | undefined>([
+    ['ci.yml:node-24-coverage', hostedOnly],
+    ['ci.yml:node-24-consumers', hostedOnly],
+    ['ci.yml:node-compat', hostedOnly],
+    ['e2e.yml:e2e', undefined],
+  ])
+
+  it.each(['ci.yml', 'ci-master.yml', 'e2e.yml'])(
+    '%s caches the verified archive only on the lanes that run on ephemeral runners',
+    (name) => {
+      const script = readFileSync(resolve(root, 'scripts/prepare-ci-bubblewrap.sh'), 'utf8')
+      expect(script).toContain('readonly BUBBLEWRAP_CACHE_DIR="${HOME}/.cache/dsh-ci/bubblewrap"')
+      const cache = {
+        path: '~/.cache/dsh-ci/bubblewrap',
+        key: "bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}",
+      }
+      const workflow = loadWorkflow('.github/workflows/' + name)
+      if (!isRecord(workflow.jobs)) throw new TypeError(`${name} must define jobs`)
+
+      let preparations = 0
+      for (const [jobName, job] of Object.entries(workflow.jobs)) {
+        if (!isRecord(job) || !Array.isArray(job.steps)) continue
+        const steps = job.steps.filter(isRecord)
+        const preparation = steps.findIndex(step =>
+          typeof step.run === 'string' && step.run.includes('bash scripts/prepare-ci-bubblewrap.sh'))
+        if (preparation < 0) continue
+        preparations += 1
+        const key = `${name}:${jobName}`
+        if (!cachedJobs.has(key)) {
+          expect(
+            steps.filter(step => typeof step.uses === 'string' && step.uses.startsWith('actions/cache/')),
+            key,
+          ).toEqual([])
+          continue
+        }
+        const guard = cachedJobs.get(key)
+        const cacheHit = "steps.bubblewrap-cache.outputs.cache-hit != 'true'"
+        expect(steps[preparation - 1]).toEqual({
+          name: 'Restore verified bubblewrap archive',
+          id: 'bubblewrap-cache',
+          ...(guard === undefined ? {} : { if: guard }),
+          uses: 'actions/cache/restore@v6.1.0',
+          with: cache,
+        })
+        expect(steps[preparation + 1]).toEqual({
+          name: 'Save verified bubblewrap archive',
+          if: guard === undefined ? cacheHit : `(${guard}) && ${cacheHit}`,
+          uses: 'actions/cache/save@v6.1.0',
+          with: cache,
+        })
+      }
+      expect(preparations).toBeGreaterThan(0)
+    },
+  )
 })
 
 describe('DeepSeek e2e workflow', () => {

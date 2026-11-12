@@ -14,8 +14,8 @@ import type { ScopeKey, ScopeLayer } from '@deepseek-ai/dsh-scope'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
-import { CommandId } from './brand.ts'
-import type { CommandDefinitionId } from './brand.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandDefinitionId, CommandId } from './brand.ts'
 import type {
   CommandDescriptor,
   CommandExecution,
@@ -445,7 +445,7 @@ export class CommandRuntime extends TypertRemoteService {
   /** Mint the next pairing id (monotonic; instance-token-prefixed so a resumed log never repeats one). */
   private mintCommandId(): CommandId {
     this.commandSeq += 1
-    return CommandId(`cmd-${this.instanceToken}-${this.commandSeq}`)
+    return brandString<CommandId>(`cmd-${this.instanceToken}-${this.commandSeq}`)
   }
 
   /**

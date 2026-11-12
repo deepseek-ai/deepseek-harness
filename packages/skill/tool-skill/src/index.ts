@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type UserMessage } from '@deepseek-ai/dsh-session'
 import {
@@ -18,6 +18,7 @@ import {
   isSkillName,
   isUserInvocable,
   renderSkillContent,
+  SkillError,
   type SkillInvocationSource,
   type SkillSummary,
 } from '@deepseek-ai/dsh-skill'
@@ -129,7 +130,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     },
     async execute(args, exec) {
       if (!isSkillName(args.name)) {
-        throw new Error(`invalid skill name "${args.name}"`)
+        throw new ToolArgsError([`invalid skill name "${args.name}"`])
       }
       // The agent is its own scope key, so the lookup resolves the layered
       // registry exactly as this agent's composition sees it.
@@ -137,17 +138,17 @@ export function apply(ctx: Context, config: Config = {}): void {
       const lookup = { cwd, signal: exec.signal, scope: exec.agent }
       const summary = (await ctx.skills.list(lookup)).find(skill => skill.name === args.name)
       if (!summary) {
-        throw new Error(`skill "${args.name}" is unknown or no longer available`)
+        throw new SkillError(`skill "${args.name}" is unknown or no longer available`, 'SKILL_NOT_FOUND')
       }
       if (!isModelInvocable(summary)) {
-        throw new Error(`skill "${args.name}" is not available for model invocation`)
+        throw new SkillError(`skill "${args.name}" is not available for model invocation`, 'SKILL_NOT_MODEL_INVOCABLE')
       }
       const skill = await ctx.skills.get(args.name, lookup)
       if (!skill) {
-        throw new Error(`skill "${args.name}" is unknown or no longer available`)
+        throw new SkillError(`skill "${args.name}" is unknown or no longer available`, 'SKILL_NOT_FOUND')
       }
       if (!isModelInvocable(skill)) {
-        throw new Error(`skill "${args.name}" is not available for model invocation`)
+        throw new SkillError(`skill "${args.name}" is not available for model invocation`, 'SKILL_NOT_MODEL_INVOCABLE')
       }
       return {
         name: skill.name,

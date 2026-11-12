@@ -22,10 +22,6 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./brand": {
-      "types": "./lib/types/brand.d.ts",
-      "default": "./lib/types/brand.js"
-    },
     "./message": {
       "types": "./lib/types/message.d.ts",
       "default": "./lib/types/message.js"

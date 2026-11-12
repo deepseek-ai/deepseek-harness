@@ -29,6 +29,8 @@ Compose this service when an interactive UI should let users drive agent-side be
 
 ### Registering a command
 
+Import `CommandDefinitionId` and `CommandId` as types from `@deepseek-ai/dsh-commands/types`. Use `brandString<T>()` from `@deepseek-ai/dsh-brand` to brand an admitted string; it neither validates nor generates ids.
+
 A plugin registers a command with `ctx.commands.register()`: a lowercase name, a discovery description, an optional `input` hint, and a handler. An optional branded `definitionId` gives the definition a stable, plugin-namespaced identity for adapters; it is independent of display copy and execution `commandId`. The effective descriptor carries only the selected definition's identity, so a scoped override never inherits the shadowed registration's identity.
 
 ```text
@@ -82,8 +84,8 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `CommandRuntime` service: registration, scoping, dispatch, lifecycle events |
-| [`src/types.ts`](src/types.ts) | Command definition, descriptor, execution, and result types |
-| [`src/brand.ts`](src/brand.ts) | Stable command-definition identities and per-execution lifecycle ids |
+| [`src/types.ts`](src/types.ts) | Public type entry: identity re-exports, descriptors, execution, and results |
+| [`src/brand.ts`](src/brand.ts) | Command identity definitions and compatibility constructors |
 | [`src/builtin.ts`](src/builtin.ts) | First-party identity and token resolution for Host and Client adapters |
 
 ### Lifecycle events

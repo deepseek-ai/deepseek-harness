@@ -4,12 +4,13 @@ import { realpathSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import { SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { mountRuntime } from './setup.ts'
 import type { Config } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup(mode: 'read-only' | 'workspace-write' = 'read-only', executionMode: NonNullable<Config['executionMode']> = 'persistent-in-memory') {
   const root = realpathSync.native(await mkdtemp(join(homedir(), '.dsh-persistent-sandbox-')))
@@ -92,7 +93,7 @@ it.skipIf(process.platform === 'win32').each([
   const extra = join(root, 'extra')
   await mkdir(extra)
   const target = join(extra, 'memory.txt')
-  const session = ctx.sessions.create(SessionId('first-launch-grants'), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>('first-launch-grants'), { meta: { cwd } })
   const request = { bindings: [], stateOwner: owner }
   const remove = change === 'remove' ? ctx.sandboxPolicy.registerWritableRoot(session, extra) : undefined
   const spawn = vi.spyOn(ctx.subprocess, 'spawn')
@@ -151,7 +152,7 @@ it('cancels a pending confinement operation before spawning', async () => {
 
 it('clears a registered live REPL through the file-policy setter before starting under the new mode', async () => {
   const { ctx, cwd, runtime, owner } = await setup('workspace-write')
-  const session = ctx.sessions.create(SessionId('retained-policy-change'), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>('retained-policy-change'), { meta: { cwd } })
   const run = (program: string) => runtime.run(runtime.resolve({
     program, bindings: [], stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
   }))
@@ -170,7 +171,7 @@ it('clears a registered live REPL through the file-policy setter before starting
 
 it('keeps a one-shot wider policy separate from standing variables and subsequent writes', async () => {
   const { ctx, cwd, runtime, owner } = await setup()
-  const session = ctx.sessions.create(SessionId('temporary-policy'), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>('temporary-policy'), { meta: { cwd } })
   const standing = ctx.sandboxPolicy.resolve({ session })
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner: owner, sandboxPolicy: standing }))
   expect((await run('const retained = 7; retained')).value).toBe(7)
@@ -188,7 +189,7 @@ it('keeps a one-shot wider policy separate from standing variables and subsequen
 
 it('preserves the current execution context for bindings in a reused REPL', async () => {
   const { ctx, cwd, runtime, owner } = await setup('workspace-write')
-  const session = ctx.sessions.create(SessionId('binding-context'), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>('binding-context'), { meta: { cwd } })
   const context = new AsyncLocalStorage<string>()
   const run = (program: string) => runtime.run(runtime.resolve({ program, stateOwner: owner,
     sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),
@@ -200,7 +201,7 @@ it('preserves the current execution context for bindings in a reused REPL', asyn
 
 it.each(['per-call', 'persistent-in-memory'] as const)('cancels active %s execution after a synchronous policy change', async (executionMode) => {
   const { ctx, cwd, runtime, owner } = await setup('workspace-write', executionMode)
-  const session = ctx.sessions.create(SessionId(`active-${executionMode}`), { meta: { cwd } })
+  const session = ctx.sessions.create(brandString<SessionId>(`active-${executionMode}`), { meta: { cwd } })
   const entered = Promise.withResolvers<undefined>()
   const pending = runtime.run(runtime.resolve({ program: 'await tools.ready({}); await new Promise(() => {})',
     stateOwner: owner, sandboxPolicy: ctx.sandboxPolicy.resolve({ session }),

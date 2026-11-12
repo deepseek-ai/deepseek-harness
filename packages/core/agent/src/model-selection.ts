@@ -5,7 +5,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Model, AgentOptions, PreStepDecision } from './runtime-types.ts'
 import type { ModelSelection } from './types.ts'
 import { boundContextSummary, createUserMessage, type ContextFormed } from '@deepseek-ai/dsh-llm'
-import { ReasoningEffortId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import type { Session, EpochHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { z } from 'zod'
@@ -62,7 +63,7 @@ function selectionOfHeader({ config, adapterDefaults }: EpochHeader): ModelSelec
 const selectionSchema = z.object({
   provider: z.string().min(1),
   model: z.string().min(1),
-  reasoningEffort: z.string().min(1).transform(ReasoningEffortId).exactOptional(),
+  reasoningEffort: z.string().min(1).transform(brandString<ReasoningEffortId>).exactOptional(),
 }).nullable()
 
 /**

@@ -1,6 +1,6 @@
 /** Complete-log continuation projection, including recovery and publication. */
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SessionId, SessionSeq, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionSeq, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session/types'
@@ -9,6 +9,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { continuationProjectionDefinition as definition } from '../src/continuation.ts'
 import { paginate } from '../src/history.ts'
 import { continuationTurn as turn } from '../../../client/ui-conversation/tests/continuation-fixture.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const failed = (code: string): TurnEndReason => ({ kind: 'error', error: { code, message: code } })
 function fold(events: readonly SessionEvent[]) {
@@ -87,7 +88,7 @@ it('publishes a complete-log result independently of the visible page and releas
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   const fiber = await ctx.sessionProjections.register(definition)
-  const session = ctx.sessions.create(SessionId('continued'))
+  const session = ctx.sessions.create(brandString<SessionId>('continued'))
   expect(ctx.sessionProjections.snapshot(session).values.conversationContinuation).toBeNull()
   const history: SessionEvent[] = []
   ctx.on('session/event', (_session, event) => { history.push(event) })
@@ -125,7 +126,7 @@ it('restores valid, absent and outdated checkpoints through the registry', async
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.sessionProjections.register(definition)
-  const session = ctx.sessions.create(SessionId('restored'))
+  const session = ctx.sessions.create(brandString<SessionId>('restored'))
   const log = events(failed('SERVER'))
   const checkpoint = { conversationContinuation: { ver: 4, seq: SessionSeq(2), val: fold(log.slice(0, 3)) } }
   const restore = (rows: typeof checkpoint | Record<string, never>, tail: readonly SessionEvent[], base: number) =>

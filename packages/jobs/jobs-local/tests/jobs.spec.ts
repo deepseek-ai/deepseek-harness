@@ -2,19 +2,20 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import type { ScopeKey } from '@deepseek-ai/dsh-scope'
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
 import type {
   JobErrorCode, JobEvent, JobEventFilter, JobHandle, JobHooks, JobKind, JobOutcome, JobOutputSource, JobSpec, JobView,
 } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry, { type Config as JobsConfig } from '@deepseek-ai/dsh-jobs-local'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 vi.mock('node:crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:crypto')>()
@@ -33,7 +34,7 @@ declare module '@deepseek-ai/dsh-jobs' {
 const agentScopeDisposers = new WeakMap<Agent, () => Promise<void>>()
 
 function stubAgent(ctx: Context, rawId: string, presetScope?: ScopeKey): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const scopeFiber = ctx.plugin(() => {})
   // `presetScope` reproduces what `agentPresets.compose` does: the agent gets
   // its own key parented to the standing mount's, so the registry's chain walk
@@ -314,7 +315,7 @@ describe('LocalJobRegistry.start', () => {
     ctx.jobs.start(oldTask.spec)
 
     await liveAgent(ctx, 'other-session')
-    expect(() => ctx.jobs.start({ ...producer().spec, owner: SessionId('other-session') })).not.toThrow()
+    expect(() => ctx.jobs.start({ ...producer().spec, owner: brandString<SessionId>('other-session') })).not.toThrow()
 
     // The session id resolves to whichever agent is live now; a replacement
     // instance starts with its own bucket even while the old job runs on.
@@ -417,9 +418,9 @@ describe('LocalJobRegistry reads and settlement', () => {
 
   it('throws for unknown job ids', async () => {
     const ctx = await harness()
-    expect(() => ctx.jobs.read(JobId('bash-99'))).toThrow('unknown job bash-99')
-    expect(() => ctx.jobs.get(JobId('bash-99'))).toThrow('unknown job bash-99')
-    expect(() => ctx.jobs.get(JobId('bash-99'))).toThrow(expect.objectContaining(jobError('JOB_NOT_FOUND')))
+    expect(() => ctx.jobs.read(brandString<JobId>('bash-99'))).toThrow('unknown job bash-99')
+    expect(() => ctx.jobs.get(brandString<JobId>('bash-99'))).toThrow('unknown job bash-99')
+    expect(() => ctx.jobs.get(brandString<JobId>('bash-99'))).toThrow(expect.objectContaining(jobError('JOB_NOT_FOUND')))
   })
 
   it('announces settlement once with containment across listeners', async () => {
@@ -715,7 +716,7 @@ describe('LocalJobRegistry.remove', () => {
     const id = ctx.jobs.start(p.spec)
     expect(() => { ctx.jobs.remove(id, owner.id) }).toThrow(`job ${id} is still running`)
     expect(() => { ctx.jobs.remove(id) }).toThrow('belongs to another session')
-    expect(() => { ctx.jobs.remove(JobId('bash-99'), owner.id) }).toThrow('unknown job bash-99')
+    expect(() => { ctx.jobs.remove(brandString<JobId>('bash-99'), owner.id) }).toThrow('unknown job bash-99')
     p.settle({ status: 'completed' })
     await tick()
     ctx.jobs.remove(id, owner.id)
@@ -765,9 +766,9 @@ describe('LocalJobRegistry owner isolation', () => {
     const ctx = new Context()
     await ctx.plugin(LocalJobRegistry)
     ctx.jobs.attachController('test-controller')
-    expect(() => ctx.jobs.start({ ...producer().spec, owner: SessionId('a') }))
+    expect(() => ctx.jobs.start({ ...producer().spec, owner: brandString<SessionId>('a') }))
       .toThrow('background job ownership requires the agent registry')
-    expect(() => ctx.jobs.start({ ...producer().spec, owner: SessionId('a') }))
+    expect(() => ctx.jobs.start({ ...producer().spec, owner: brandString<SessionId>('a') }))
       .toThrow(expect.objectContaining(jobError('JOB_OWNER_REGISTRY_UNAVAILABLE')))
     // The failed registration mutated nothing: no stored job.
     expect(ctx.jobs.list()).toEqual([])
@@ -904,7 +905,7 @@ describe('LocalJobRegistry owner cleanup', () => {
       return ctx.jobs.start({
         kind: 'bash',
         label,
-        owner: SessionId('owner'),
+        owner: brandString<SessionId>('owner'),
         run: () => ({
           cancel() { cancels.push(label); settle({ status: 'killed' }) },
           done: new Promise<JobOutcome>((resolve) => { settle = resolve }),
@@ -1159,7 +1160,7 @@ describe('LocalJobRegistry events', () => {
 
   it('announces an unowned job to every session filter, since every caller can see it', async () => {
     const ctx = await harness()
-    const seen = collect(ctx, { owner: SessionId('anyone') }, ['registered'])
+    const seen = collect(ctx, { owner: brandString<SessionId>('anyone') }, ['registered'])
     const id = ctx.jobs.start(producer().spec)
     expect(seen).toMatchObject([{ type: 'registered', job: { id } }])
     expect((seen[0] as { job: JobView }).job.owner).toBeUndefined()
@@ -1319,7 +1320,7 @@ describe('LocalJobRegistry output ring', () => {
     const id = ctx.jobs.start(p.spec)
     expect(() => ctx.jobs.readAt(id, -1)).toThrow(/invalid output read offset/)
     expect(() => ctx.jobs.readAt(id, 0.5)).toThrow(/invalid output read offset/)
-    expect(() => ctx.jobs.readAt(JobId('bash-99'), 0)).toThrow(/unknown job/)
+    expect(() => ctx.jobs.readAt(brandString<JobId>('bash-99'), 0)).toThrow(/unknown job/)
   })
 
   it('keeps the spill file each source currently reports as job metadata, beyond any chunk', async () => {
@@ -1572,7 +1573,7 @@ describe('owned job Session lifecycle records', () => {
     const p = producer({ owner, cancel: () => { p.settle({ status: 'killed' }) } })
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
     try {
-      const toolCall = { callId: ToolCallId('root:ptc:1'), rootCallId: ToolCallId('root') }
+      const toolCall = { callId: brandString<ToolCallId>('root:ptc:1'), rootCallId: brandString<ToolCallId>('root') }
       const id = ctx.jobs.start({ ...p.spec, toolCall })
       p.job().append('unread output')
       await Promise.resolve()

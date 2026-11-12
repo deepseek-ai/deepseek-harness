@@ -47,7 +47,7 @@ const result = await ctx.ptcRuntime.run(spec)
 <a id="choose-a-backend"></a>
 ### Choose a backend
 
-Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. The private [`dsh-experimental-ptc-runtime-python`](../../experimental/ptc-runtime-python/README.md) provider executes Python in a fresh CPython subprocess without file confinement. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
+Backends expose `language` and `isolation` as diagnostic descriptors; neither grants authority or proves confinement. [`dsh-ptc-runtime-node`](../ptc-runtime-node/README.md) executes erasable TypeScript in a fresh managed Node process under the resolved sandbox policy. `sandboxMode` advertises a provider's deployment file-policy mode, or is absent when that capability is unsupported.
 
 For the optional [Node in-memory mode](../ptc-runtime-node/README.md#persistent-repl), pass the same `stateOwner` object across runs and await `release(owner)` at the owner's end. Different object identities never share an environment; omitted owners use a temporary environment. Stateless providers ignore ownership. Calls for one retained owner must not overlap.
 
@@ -59,7 +59,7 @@ Binding-global and error-class names are language-portable: they must match `[A-
 
 ### What can go wrong
 
-Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal.
+Failures arrive as `result.error` with an orthogonal `kind`: `exception`, `timeout`, `abort`, `worker-exit`, `invalid-output`, `output-limit`, `protocol` or `sandbox-unavailable`. Providers return applicable `result.sandbox` facts separately from success or failure. Invalid or unsupported execution options fail during `resolve`; `run` rejects caller misuse, such as unresolved inputs, invalid binding names or a call after disposal. Contract misuse rejects with `PtcRuntimeError`: `PTC_RUNTIME_INVALID_ARGUMENT` for an invalid request or spec, `PTC_RUNTIME_UNAVAILABLE` after disposal or while a retained environment's cleanup is incomplete, and `PTC_RUNTIME_CONFLICT` for a concurrent run for one owner or a retained environment launched under another sandbox policy.
 
 -----
 
@@ -111,7 +111,6 @@ Read these when the package-level contract is not enough. They move from the PTC
 
 - [PTC mode Agent Note](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) — how the tool registry consumes `ctx.ptcRuntime` and presents `run_code` to the model.
 - [Node process backend](../ptc-runtime-node/README.md) — the shipped TypeScript execution backend.
-- [Experimental Python backend](../../experimental/ptc-runtime-python/README.md) — the private CPython subprocess provider and its fd-3 protocol.
 - [PTC runtime subsystem reference](../../../docs/subsystems/ptc-runtime.md) — request/result vocabulary, bindings, and the `ctx.ptcRuntime` cordis surface.
 - [Capability seams](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) — the Service Definition / Service Provider / Consumer split.
 
@@ -135,7 +134,7 @@ These limits define what the seam cannot do; they are current package constraint
 
 - **`run()` is one-shot** — `output` arrives only on the resolved `PtcRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
 - **Retained memory is disposable**: providers may keep state for an explicit owner; restart, release, and provider-specific failures discard it. Programs, binding calls and results remain logged by consumers; live objects are neither serialized nor replayed.
-- **Providers have different confinement capabilities** — the shipped Node provider enforces a resolved file policy, while the private experimental Python provider rejects an explicit policy. No container provider is supplied.
+- **No container provider is supplied** — the shipped Node provider enforces the resolved file policy through the composed sandbox backend.
 - **No uniform binding byte cap applies across providers** — each provider owns its transport limits; a binding can still allocate memory before its result reaches those limits.
 
 <a id="dev-note"></a>

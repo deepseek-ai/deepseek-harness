@@ -2,8 +2,9 @@
 import { memo, type ComponentProps } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { ActionCardDecision, ActionCardResult, ActionCardView } from '@deepseek-ai/dsh-action-cards/types'
 import { ActionCard, ActionCardTail, FoldedText } from '../src/client/Card.tsx'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -13,11 +14,11 @@ import type { ActionCardBodyProps, RegisteredBody } from '../src/client/registry
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 type CardProps = ComponentProps<typeof ActionCard>
-const callId = ToolCallId('card-1')
+const callId = brandString<ToolCallId>('card-1')
 const proposal = { callId, turn: 3, action: 'test_action', title: 'Counter', brief: 'Keep my task count visible.', details: { value: 'a' } }
 
 function props(bodies: ReadonlyMap<string, RegisteredBody> = new Map(), decision?: ActionCardDecision, chinese = false): CardProps {
-  return { proposal, decision, sessionId: SessionId('session-1'),
+  return { proposal, decision, sessionId: brandString<SessionId>('session-1'),
     act: vi.fn(async (): Promise<ActionCardResult | undefined> => ({ status: 'settled', decision: { callId, action: 'test_action', phase: 'dismissed' } })),
     bind: vi.fn(() => (key: string) => `body:${key}`),
     useBodies: selector => selector(bodies),
@@ -33,7 +34,7 @@ it('places the card admitted in its turn once the turn has ended with an answer,
   const tail = (end: typeof ended | undefined): Tail => ({ ...value, useProjection: () => view,
     turn: { turn: 3, start: undefined, end, status: end === undefined ? 'open' : 'closed', steps: [],
       data: { get: turnData, source: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }) } } })
-  const card = (id: string, turn: number) => ({ ...proposal, callId: ToolCallId(id), turn })
+  const card = (id: string, turn: number) => ({ ...proposal, callId: brandString<ToolCallId>(id), turn })
   const { rerender } = render(<ActionCardTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
   view = { decisions: {}, proposals: { earlier: card('earlier', 2) } }
@@ -49,7 +50,7 @@ it('places the card admitted in its turn once the turn has ended with an answer,
   turnData.mockReturnValueOnce({ closing: null })
   rerender(<ActionCardTail {...tail(ended)} />)
   expect(screen.queryByRole('region')).toBeNull()
-  view = { ...view, decisions: { a: { callId: ToolCallId('a'), action: 'test_action', phase: 'dismissed' } } }
+  view = { ...view, decisions: { a: { callId: brandString<ToolCallId>('a'), action: 'test_action', phase: 'dismissed' } } }
   rerender(<ActionCardTail {...tail(ended)} />)
   expect(screen.getByRole('status').textContent).toBe(en.dismissed)
   // A call id naming an inherited object member reads no decision.

@@ -58,7 +58,7 @@ agent 可以在会话期间发现并加载 skill。当 `skill` 工具可见时�
 
 ### 可观察的成功与失败
 
-加载列出的 skill 会返回其完整指令；无论加载来自工具还是用户的显式调用，模型看到的都是同一种规范形态。无效名称会报告 `Error: invalid skill name "<name>"`，未知名称会报告该 skill 未知或已不可用，被禁用模型调用的 skill 会报告其不可用于模型调用。如果从未发布过目录，并且发现完整且不存在模型可调用 skill，或 `skill` 工具被隐藏或遮蔽，则会整体省略目录；目录发布后，无论可见性丧失——`skill` 工具被隐藏或被同名作用域工具遮蔽——还是删除全部 skill，都会改为追加空目录来停用旧名称。
+加载列出的 skill 会返回其完整指令；无论加载来自工具还是用户的显式调用，模型看到的都是同一种规范形态。无效名称会报告 `Error: invalid arguments: invalid skill name "<name>"`，未知名称会报告该 skill 未知或已不可用，被禁用模型调用的 skill 会报告其不可用于模型调用。如果从未发布过目录，并且发现完整且不存在模型可调用 skill，或 `skill` 工具被隐藏或遮蔽，则会整体省略目录；目录发布后，无论可见性丧失——`skill` 工具被隐藏或被同名作用域工具遮蔽——还是删除全部 skill，都会改为追加空目录来停用旧名称。
 
 -----
 
@@ -229,7 +229,7 @@ Load referenced resources only as needed.
 
 #### 模型看到什么
 
-无效或陈旧选择会精确返回 `Error: invalid skill name "<name>"`、`Error: skill "<name>" is unknown or no longer available` 或 `Error: skill "<name>" is not available for model invocation`。提供方抛出的查找文本取决于数据，并套用同一个 `Error: <message>` 包装层。
+无效或陈旧选择会精确返回：`Error: invalid arguments: invalid skill name "<name>"`，对应带 `INVALID_ARGS` 的 `ToolArgsError`；`Error: skill "<name>" is unknown or no longer available` 与 `Error: skill "<name>" is not available for model invocation`，对应带 `SKILL_NOT_FOUND` 与 `SKILL_NOT_MODEL_INVOCABLE` 的 `SkillError`。提供方抛出的查找文本取决于数据，并套用同一个 `Error: <message>` 包装层。
 
 #### Token 影响
 

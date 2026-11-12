@@ -28,7 +28,7 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
 
-const helperBundle = 'node_modules/@deepseek-ai/dsh-experimental-cua-macos/native/bin/darwin-arm64/generation/DSH Computer Use.app'
+const helperBundle = 'node_modules/@deepseek-ai/dsh-cua-macos/native/bin/darwin-arm64/generation/DSH Computer Use.app'
 function machO(path: string): void {
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, Buffer.from('cffaedfe00000000', 'hex'))

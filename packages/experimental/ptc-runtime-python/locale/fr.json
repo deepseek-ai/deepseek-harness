@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Exécution Python PTC",
-    "description": "Exécutez du code d’appel d’outil de programmation dans les sous-processus CPython."
-  }
-}

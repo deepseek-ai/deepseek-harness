@@ -80,6 +80,7 @@ const manifest: PreviewFixtureManifest = {
   version: PREVIEW_FIXTURE_MANIFEST_VERSION,
   defaultFixture: fixtures[0]?.id ?? null,
   fixtures,
+  links: [],
 }
 writeFileSync(
   join(dirname(outputFile), PREVIEW_FIXTURE_MANIFEST_FILE),

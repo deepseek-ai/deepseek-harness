@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-working-directory'
 import { FiberState, type Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
+import { type ReasoningEffortId, contentHasImage, createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageId, MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session, SessionId, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
@@ -36,7 +36,7 @@ import type { LifecycleEmitter } from './lifecycle.ts'
 import { ROOT_AGENT_NAME, SiblingNameReservations, agentAddress, joinAgentPath, parentAgentPath } from './names.ts'
 import type { SiblingNameReservation } from './names.ts'
 import type { SubagentCatalogEntry, SubagentIdentityProjection } from './projection-types.ts'
-import { SubagentRunId } from './types.ts'
+import type { SubagentRunId } from './types.ts'
 import type {
   ContinuableCreateRequest, ContinuableCreateSpec, SubagentInterruptAuthority,
   SubagentActivationSpec, SubagentActivation, SubagentMemberNames, SubagentStartRequest, SubagentRun,
@@ -836,7 +836,9 @@ export class SubagentManager {
           child.session.append('subagent/descriptor', create.descriptor)
           appendDelegatedPolicyOverrides(child.session, create.delegatedPolicies)
           const workingDirectory = childCtx.get('workingDirectory')
-          if (workingDirectory === undefined) throw new Error('local subagents require the working-directory service')
+          if (workingDirectory === undefined) {
+            throw new SubagentError('local subagents require the working-directory service', 'WORKING_DIRECTORY_UNAVAILABLE')
+          }
           await workingDirectory.set(child, create.cwd, inputs.signal)
         }
         if (inputs.composition.agentPreset === undefined) await applyChildComposition(childCtx, create?.parent, inputs.composition)
@@ -878,7 +880,7 @@ export class SubagentManager {
     const activation: Activation = {
       releaseSlot,
       childId,
-      runId: SubagentRunId(randomUUID()),
+      runId: brandString<SubagentRunId>(randomUUID()),
       provider,
       ...resource,
       root,
@@ -1216,7 +1218,16 @@ export class SubagentManager {
       using source = await this.observeContinuation(childId, signal)
       this.assertAdmitting(root)
       const ownEvents = source.events.slice(source.inheritedEventCount)
-      const descriptor = foldSubagentDescriptor(ownEvents)
+      let descriptor: ReturnType<typeof foldSubagentDescriptor>
+      try {
+        descriptor = foldSubagentDescriptor(ownEvents)
+      } catch (error: unknown) {
+        throw new SubagentError(
+          `subagent "${childId}" has a corrupt continuation descriptor and cannot be resumed; choose a different target`,
+          'NOT_RESUMABLE',
+          { cause: error },
+        )
+      }
       if (descriptor === undefined || descriptor.mode !== 'continuable') {
         throw new SubagentError(
           `subagent "${childId}" has no supported continuation state and cannot be resumed; choose a different target`,
@@ -1242,7 +1253,7 @@ export class SubagentManager {
             ...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
             ...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
             ...descriptor.agentReasoningEffort !== undefined
-              ? { reasoningEffort: ReasoningEffortId(descriptor.agentReasoningEffort) }
+              ? { reasoningEffort: brandString<ReasoningEffortId>(descriptor.agentReasoningEffort) }
               : {},
           },
           composition: {

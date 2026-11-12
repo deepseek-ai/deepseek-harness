@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId, ReasoningEffortId } from '@deepseek-ai/dsh-llm/types'
 import { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -22,7 +23,7 @@ import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
 import * as mock from './scripted-provider.ts'
 import type { Config as toolConfig } from '../src/index.ts'
 import * as tool from '../src/index.ts'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   callSubagent,
   disposeSetupProvider,
@@ -116,13 +117,13 @@ describe('dsh-tool-subagent', () => {
     const ctx = await setup({ provider: 'mock' })
     expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
-      callId: ToolCallId('subagent-first'),
+      callId: brandString<ToolCallId>('subagent-first'),
       name: 'subagent',
       arguments: { description: 'do work', prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
     expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
-      callId: ToolCallId('subagent-second'),
+      callId: brandString<ToolCallId>('subagent-second'),
       name: 'subagent',
       arguments: { description: 'do work', prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
@@ -165,9 +166,9 @@ describe('dsh-tool-subagent', () => {
     const names = ctx.tools.schemas().map(s => s.name).filter(n => n.startsWith('subagent')).sort()
     expect(names).toEqual(['subagent', 'subagent_acp'])
 
-    const parent = (await ctx.agents.create({ sessionId: SessionId('multi-provider-parent') })).agent
-    const viaSpawn = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c-spawn'), name: 'subagent', arguments: { description: 'd', prompt: 'p' }, agent: parent })
-    const viaAcp = await executeToolFixture(ctx, { signal: testToolSignal, callId: ToolCallId('c-acp'), name: 'subagent_acp', arguments: { description: 'd', prompt: 'p' }, agent: parent })
+    const parent = (await ctx.agents.create({ sessionId: brandString<SessionId>('multi-provider-parent') })).agent
+    const viaSpawn = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c-spawn'), name: 'subagent', arguments: { description: 'd', prompt: 'p' }, agent: parent })
+    const viaAcp = await executeToolFixture(ctx, { signal: testToolSignal, callId: brandString<ToolCallId>('c-acp'), name: 'subagent_acp', arguments: { description: 'd', prompt: 'p' }, agent: parent })
     expect(text(viaSpawn)).toMatch(/^started subagent /)
     expect(text(viaAcp)).toMatch(/^started subagent /)
   })
@@ -242,6 +243,7 @@ describe('dsh-tool-subagent', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('changed while resolving the child LLM route')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'PROVIDER_CHANGED' })
     expect(oldStart).not.toHaveBeenCalled()
     expect(replacementStart).not.toHaveBeenCalled()
   })
@@ -251,14 +253,14 @@ describe('dsh-tool-subagent', () => {
     const ctx = await setup({
       provider: 'mock',
       withModelSelection: true,
-      agentOptions: { reasoningEffort: ReasoningEffortId('high'), maxTokens: 321 },
+      agentOptions: { reasoningEffort: brandString<ReasoningEffortId>('high'), maxTokens: 321 },
       maxDepth: 'provider-managed',
     }, {
       agentRouteDefaults: { provider: 'alpha', model: 'child-model' },
       onStart: (request) => { seen = request },
     })
     ctx.llm.registerAdapter(['alpha'], new MockAdapter([], {
-      efforts: [{ id: ReasoningEffortId('high'), name: 'High' }],
+      efforts: [{ id: brandString<ReasoningEffortId>('high'), name: 'High' }],
     }))
 
     await callSubagent(ctx, {
@@ -284,7 +286,7 @@ describe('dsh-tool-subagent', () => {
       parentAgentOptions: {
         provider: 'alpha',
         model: 'child-model',
-        reasoningEffort: ReasoningEffortId('high'),
+        reasoningEffort: brandString<ReasoningEffortId>('high'),
       },
       maxDepth: 'provider-managed',
     }, {
@@ -322,7 +324,7 @@ describe('dsh-tool-subagent', () => {
       start: async (request) => {
         seen = request
         return {
-          id: SessionId('bare-child'),
+          id: brandString<SessionId>('bare-child'),
           result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
           dispose: async () => {},
         }
@@ -342,6 +344,7 @@ describe('dsh-tool-subagent', () => {
     const result = await callSubagent(ctx, { description: 'd', prompt: 'p' }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('registers when the provider appears LATER — no load-order requirement (Loader starts siblings concurrently)', async () => {
@@ -408,8 +411,8 @@ describe('dsh-tool-subagent', () => {
     const ctx = await setup({ provider: 'mock' })
     await ctx.plugin(tool, { provider: 'mock', toolName: 'subagent_fork' })
     const unrelated = await setup({ provider: 'mock', toolName: 'other_delegate' })
-    const parent = (await ctx.agents.create({ sessionId: SessionId('guidance-parent') })).agent
-    const peer = (await ctx.agents.create({ sessionId: SessionId('guidance-peer') })).agent
+    const parent = (await ctx.agents.create({ sessionId: brandString<SessionId>('guidance-parent') })).agent
+    const peer = (await ctx.agents.create({ sessionId: brandString<SessionId>('guidance-peer') })).agent
     const showSpawn = parent.ctx.tools.restrict({ deny: ['subagent'] })
     expect(await delegationGuidance(ctx, parent)).toEqual([
       'Start independent delegations with `subagent_fork` together in one assistant message and continue useful work while they run. When only waiting for their results remains, end your turn instead of sleeping or polling; the next result starts a new turn. Collect the subagent results required to complete the task before giving the user a final answer.\n\nBash, formatters, code generators, and scripts can overwrite concurrent edits without conflict detection; coordinate their changes explicitly. The agent integrating the work must review the final diff and run relevant tests.',
@@ -592,7 +595,7 @@ describe('dsh-tool-subagent', () => {
       start: async (request) => {
         seen = request
         return {
-          id: SessionId('capture2-child'),
+          id: brandString<SessionId>('capture2-child'),
           result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
           dispose: async () => {},
         }
@@ -654,7 +657,7 @@ describe('dsh-tool-subagent', () => {
       start: async (request) => {
         seen = request
         return {
-          id: SessionId('capture4-child'),
+          id: brandString<SessionId>('capture4-child'),
           result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
           dispose: async () => {},
         }
@@ -693,18 +696,18 @@ describe('dsh-tool-subagent local activation', () => {
       textResponse('continuable answer'),
     ], modelSelection ? {
       efforts: [
-        { id: ReasoningEffortId('low'), name: 'Low' },
-        { id: ReasoningEffortId('high'), name: 'High' },
+        { id: brandString<ReasoningEffortId>('low'), name: 'Low' },
+        { id: brandString<ReasoningEffortId>('high'), name: 'High' },
       ],
-      defaultEffort: ReasoningEffortId('low'),
+      defaultEffort: brandString<ReasoningEffortId>('low'),
     } : undefined))
-    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'mock', model: 'mock' })
     return { ctx, parent }
   }
 
   it.each([undefined, 'high'] as const)('starts the explicitly selected parent model with effort %s', async (effort) => {
     const { ctx, parent } = await continuableSetup(true)
-    parent.options.reasoningEffort = ReasoningEffortId('high')
+    parent.options.reasoningEffort = brandString<ReasoningEffortId>('high')
     let child: Agent | undefined
     ctx.on('subagent/start', (info) => { child = ctx.agents.get(info.id) })
     const result = await callSubagent(ctx, {
@@ -722,7 +725,7 @@ describe('dsh-tool-subagent local activation', () => {
     const { ctx } = await continuableSetup()
     expect(new ToolExecutionPipeline(ctx).executionMode({
       signal: testToolSignal,
-      callId: ToolCallId('subagent-continuable'),
+      callId: brandString<ToolCallId>('subagent-continuable'),
       name: 'subagent',
       arguments: { description: 'do work', prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
@@ -760,10 +763,10 @@ describe('dsh-tool-subagent local activation', () => {
     // No Task was created for the continuable child.
 
     await vi.waitFor(() => {
-      expect(ctx.agents.get(SessionId(childId!))).toBeUndefined()
+      expect(ctx.agents.get(brandString<SessionId>(childId!))).toBeUndefined()
     }, { timeout: 5_000 })
     // The child id names a durable session carrying its continuation descriptor.
-    const loaded = await loadStoredSession(ctx.sessionPersistence, SessionId(childId!))
+    const loaded = await loadStoredSession(ctx.sessionPersistence, brandString<SessionId>(childId!))
     expect(loaded.events.some(event => event.type === 'subagent/descriptor')).toBe(true)
     expect(loaded.events.some(event => event.type === 'assistant/message')).toBe(true)
   })
@@ -781,7 +784,7 @@ describe('dsh-tool-subagent local activation', () => {
     expect(duplicate.isError).toBe(true)
     expect(text(duplicate)).toContain('agent name "reviewer" is already used by another subagent you created')
     await vi.waitFor(() => {
-      expect(ctx.agents.get(SessionId(childId!))).toBeUndefined()
+      expect(ctx.agents.get(brandString<SessionId>(childId!))).toBeUndefined()
     }, { timeout: 5_000 })
   })
 
@@ -800,8 +803,8 @@ describe('dsh-tool-subagent local activation', () => {
     const releasePreparations = Promise.withResolvers<undefined>()
     const cancelled = new AbortController()
     let preparationCount = 0
-    let cancelledChildId: ReturnType<typeof SessionId> | undefined
-    let survivingChildId: ReturnType<typeof SessionId> | undefined
+    let cancelledChildId: SessionId | undefined
+    let survivingChildId: SessionId | undefined
     ctx.subagents.registerProvider({
       name: 'gated',
       capabilities: { agentOptions: false, agentPreset: false, outputSchema: true, depthLimit: true },
@@ -824,7 +827,7 @@ describe('dsh-tool-subagent local activation', () => {
 
     const execute = (callId: string, description: string, signal: AbortSignal) => executeToolFixture(ctx, {
       signal,
-      callId: ToolCallId(callId),
+      callId: brandString<ToolCallId>(callId),
       name: 'subagent_gated',
       arguments: { description, prompt: 'work' },
       agent: parent,
@@ -872,7 +875,7 @@ describe('depth budget configuration', () => {
       start: async (request) => {
         requests.push(request)
         return {
-          id: SessionId(`capture-child-${requests.length}`),
+          id: brandString<SessionId>(`capture-child-${requests.length}`),
           result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
           dispose: async () => {},
         }
@@ -915,7 +918,7 @@ describe('depth budget configuration', () => {
       start: async (request) => {
         requests.push(request)
         return {
-          id: SessionId('external-child'),
+          id: brandString<SessionId>('external-child'),
           result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
           dispose: async () => {},
         }

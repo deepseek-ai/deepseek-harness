@@ -3,11 +3,13 @@ import * as NativeToolExecutor from '@deepseek-ai/dsh-tool-executor-native'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { Session, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 
@@ -25,8 +27,8 @@ const testToolSignal = new AbortController().signal
 
 /** A parent Agent backed by a real Session — the tool reads `agent.session`. */
 function agentWithSession(id = 'parent-1'): Agent & { session: Session } {
-  const session = Session.create(SessionId(id))
-  return { id: SessionId(id), session } as Agent & { session: Session }
+  const session = Session.create(brandString<SessionId>(id))
+  return { id: brandString<SessionId>(id), session } as Agent & { session: Session }
 }
 
 async function setup(allowParallelInProgress: boolean): Promise<Context> {
@@ -44,7 +46,7 @@ function callTodo(ctx: Context, args: unknown, over: { agent?: Agent | undefined
   const agent = 'agent' in over ? over.agent : agentWithSession()
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name: 'todo_write',
     arguments: args,
     ...agent ? { agent } : {},
@@ -157,6 +159,7 @@ describe('dsh-tool-todo', () => {
       const result = await callTodo(ctx, { todos: parallel }, { agent })
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('at most one task may be in_progress')
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
       // A rejected call must not reach the durable log.
       expect(agent.session.snapshotEvents().some(e => e.type === 'todo/write')).toBe(false)
     })
@@ -198,6 +201,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(fragment)
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('rejects a non-agent caller (the list has no owning session)', async () => {
@@ -205,6 +209,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos: [{ content: 'a', status: 'pending' }] }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('owning agent session')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('presents the call with a stable title and the list as raw input', async () => {
@@ -243,7 +248,7 @@ describe('dsh-tool-todo', () => {
 
 describe('todo/write event', () => {
   it('appends the whole-list snapshot and isolates the log from later mutation', () => {
-    const session = Session.create(SessionId('t1'))
+    const session = Session.create(brandString<SessionId>('t1'))
     session.append('turn/start', { turn: 1 })
     const todos: TodoItem[] = [
       { content: 'plan the work', status: 'in_progress' },
@@ -264,7 +269,7 @@ describe('todo/write event', () => {
   })
 
   it('is last-write-wins: the current list is the most recent todo/write', () => {
-    const session = Session.create(SessionId('t2'))
+    const session = Session.create(brandString<SessionId>('t2'))
     session.append('turn/start', { turn: 1 })
     session.append('todo/write', { todos: [{ content: 'first', status: 'pending' }] })
     session.append('todo/write', { todos: [
@@ -280,7 +285,7 @@ describe('todo/write event', () => {
   })
 
   it('does not add a derived message or surface node', () => {
-    const session = Session.create(SessionId('t3'))
+    const session = Session.create(brandString<SessionId>('t3'))
     session.append('turn/start', { turn: 1 })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'q' }], source: { kind: 'user' },
@@ -293,11 +298,11 @@ describe('todo/write event', () => {
   })
 
   it('round-trips through a seeded replay identically without surface metadata', () => {
-    const original = Session.create(SessionId('t4'))
+    const original = Session.create(brandString<SessionId>('t4'))
     original.append('turn/start', { turn: 1 })
     original.append('todo/write', { todos: [{ content: 'only', status: 'completed' }] })
     original.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const replayed = Session.create(SessionId('t4-replay'), original.snapshotEvents())
+    const replayed = Session.create(brandString<SessionId>('t4-replay'), original.snapshotEvents())
 
     expect(replayed.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos)
       .toEqual([{ content: 'only', status: 'completed' }])

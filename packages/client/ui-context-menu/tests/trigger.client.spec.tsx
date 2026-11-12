@@ -4,13 +4,14 @@ import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createPortal } from 'react-dom'
 import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply, inject } from '../src/client/index.ts'
 import { createContextMenuBindings } from '../src/client/trigger.ts'
 import type { ContextMenuTriggerProps, ContextMenuTarget } from '../src/client/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
-const target = (id: string): ContextMenuTarget => ({ kind: 'session', value: { sessionId: SessionId(id), displayTitle: id } })
+const target = (id: string): ContextMenuTarget => ({ kind: 'session', value: { sessionId: brandString<SessionId>(id), displayTitle: id } })
 
 it('binds targets in loops, captures deferred identity before focus changes it, and composes existing handlers', () => {
   const open = vi.fn(), previous = vi.fn(), clicked = vi.fn()

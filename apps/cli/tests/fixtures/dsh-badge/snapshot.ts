@@ -1,9 +1,10 @@
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { fileURLToPath } from 'node:url'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-tools'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -25,7 +26,7 @@ const ctx = await boot('dsh-badge-snapshot', rootConfigPath, [
 ])
 
 try {
-  const agentId = SessionId('dsh-badge-snapshot')
+  const agentId = brandString<SessionId>('dsh-badge-snapshot')
   const session = ctx.sessions.create(agentId, { meta: { cwd: process.cwd() } })
   const agent: Agent = {
     ctx,
@@ -54,7 +55,7 @@ try {
     : undefined
   const summary = (await ctx.skills.list()).find(skill => skill.name === 'dsh-badge')
   const result = await executeToolFixture(ctx, {
-    callId: ToolCallId('dsh-badge-snapshot'),
+    callId: brandString<ToolCallId>('dsh-badge-snapshot'),
     name: 'skill',
     arguments: { name: 'dsh-badge' },
     signal: new AbortController().signal,

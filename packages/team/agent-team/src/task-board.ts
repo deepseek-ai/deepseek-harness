@@ -9,7 +9,8 @@ import type { TeamJournal } from './journal.ts'
 import type { TeamState } from './projection.ts'
 import { assertTaskGraphCandidate, TeamTaskGraphError } from './task-graph.ts'
 import type { TeamTaskGraphViolation } from './task-graph.ts'
-import { TeamTaskId } from './types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { TeamTaskId } from './types.ts'
 import type {
   CreateTeamTaskRequest,
   TeamTaskSnapshot,
@@ -60,7 +61,7 @@ export class TeamTaskBoard {
       if (active >= this.maxTasks) {
         throw new TeamError(`Team task limit ${this.maxTasks} reached`, 'TEAM_TASK_LIMIT')
       }
-      const id = TeamTaskId(`task-${state.nextTaskNumber}`)
+      const id = brandString<TeamTaskId>(`task-${state.nextTaskNumber}`)
       if (state.tasks.some(task => task.id === id)) {
         throw new TeamError('Team task id space exhausted', 'TEAM_TASK_LIMIT')
       }
