@@ -67,6 +67,15 @@ async function cuaPrompts(ctx: Context, agent: Agent): Promise<string[]> {
     .filter(section => section.name === 'computer-use:dsh-cua').map(section => section.text)
 }
 
+/** Mount the preset registry with one `ptc` preset in a composition that started without them. */
+async function mountPtcRegistry(ctx: Context) {
+  const registry = await ctx.plugin(AgentPresets, { default: 'ptc' })
+  const declaration = await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
+    yield await owner.agentPresets.register({ id: 'ptc', plugins: [] })
+  } })
+  return { registry, declaration }
+}
+
 it.each([
   { executionMode: 'per-call' },
   { executionMode: 'persistent-in-memory' },
@@ -133,18 +142,13 @@ it('gives Agents a program tool in a composition without a preset registry', asy
   expect(ctx.get('cuaPrograms')).toBeUndefined()
 })
 
-it('switches the tool form when the preset registry loads and unloads', async () => {
-  const { ctx } = await setup(false)
+it('switches the tool form when the preset registry loads, unloads, and loads again', async () => {
+  const { ctx, create } = await setup(false)
   await ctx.plugin(provider, {})
   const early = await ctx.agents.create({ sessionId: brandString<SessionId>('registry-early') })
   expect(ctx.tools.get('cua_run_code', early.agent)).toBeDefined()
-  const registry = await ctx.plugin(AgentPresets, { default: 'ptc' })
-  await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
-    yield await owner.agentPresets.register({ id: 'ptc', plugins: [] })
-  } })
-  const ptc = await ctx.agents.create({
-    sessionId: brandString<SessionId>('registry-ptc'), setup: async (owner) => { await ctx.agentPresets.mount(owner, 'ptc') },
-  })
+  const { registry, declaration } = await mountPtcRegistry(ctx)
+  const ptc = await create('registry-ptc', 'ptc')
   expect(ctx.tools.get('cua', ptc.agent)).toBeDefined()
   expect(ctx.tools.get('cua_run_code', ptc.agent)).toBeUndefined()
   expect(ctx.tools.get('cua_run_code', early.agent)).toBeDefined()
@@ -153,6 +157,36 @@ it('switches the tool form when the preset registry loads and unloads', async ()
   await expect.poll(() => ctx.tools.get('cua_run_code', ptc.agent)).toBeDefined()
   expect(ctx.tools.get('cua', ptc.agent)).toBeUndefined()
   expect(await cuaPrompts(ctx, ptc.agent)).toEqual([programPrompt])
+  // A registry mounted again holds no composition for an Agent created under the previous one.
+  await ctx.plugin(AgentPresets, { default: 'ptc' })
+  await expect.poll(() => declaration.state).toBe(FiberState.ACTIVE)
+  const remounted = await create('registry-remounted', 'ptc')
+  expect(ctx.tools.get('cua', remounted.agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', remounted.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua_run_code', ptc.agent)).toBeDefined()
+  expect(ctx.tools.get('cua', ptc.agent)).toBeUndefined()
+})
+
+it('keeps other Agents current when one registration fails as the preset registry unloads', async () => {
+  const { ctx, create } = await setup(false)
+  const mounted = await ctx.plugin(provider, {})
+  const { registry } = await mountPtcRegistry(ctx)
+  const failing = await create('unload-failing', 'ptc')
+  const other = await create('unload-other', 'ptc')
+  expect(ctx.tools.get('cua', failing.agent)).toBeDefined()
+  expect(ctx.tools.get('cua', other.agent)).toBeDefined()
+  const warn = vi.spyOn(mounted.ctx.logger, 'warn').mockImplementation(() => {})
+  const section = vi.spyOn(ctx.systemPrompt, 'section').mockImplementationOnce(() => { throw new Error('program prompt failed') })
+  onTestFinished(() => { section.mockRestore(); warn.mockRestore() })
+  await registry.dispose()
+  await expect.poll(() => ctx.tools.get('cua_run_code', other.agent)).toBeDefined()
+  expect(warn.mock.calls).toEqual([['CUA tool scope update failed: Error: program prompt failed']])
+  expect(ctx.tools.get('cua', failing.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua_run_code', failing.agent)).toBeUndefined()
+  // The registry's next load retries the Agent whose registration failed.
+  await ctx.plugin(AgentPresets, { default: 'ptc' })
+  await expect.poll(() => ctx.tools.get('cua_run_code', failing.agent)).toBeDefined()
+  expect(await cuaPrompts(ctx, failing.agent)).toEqual([programPrompt])
 })
 
 it('selects one CUA transport for existing and new Agents and removes both on unload', async () => {

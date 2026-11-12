@@ -103,11 +103,9 @@ var cua = connectCua(() => tools.cua);
     let program: ToolDefinition | undefined
     let programs: Fiber | undefined
     let closing = false
-    // The optional preset registry while it is mounted; without it no Agent runs the configured preset. The
-    // initial read classifies Agents created before the subscription below first runs.
-    let presets: Context['agentPresets'] | undefined = base.get('agentPresets')
+    // The preset registry is optional; while none is mounted no Agent runs the configured preset.
     const modeOf = (agent: Agent): 'raw' | 'program' =>
-      presets?.composedPreset(agent.ctx) === config.agentPreset ? 'raw' : 'program'
+      base.get('agentPresets')?.composedPreset(agent.ctx) === config.agentPreset ? 'raw' : 'program'
     const sync = (agent: Agent): void => {
       const mode = modeOf(agent)
       const definition = mode === 'raw' ? tool : program
@@ -126,6 +124,11 @@ var cua = connectCua(() => tools.cua);
       entry.current = { definition, remove }
     }
     const syncAll = (): void => { for (const agent of base.agents.list()) sync(agent) }
+    // A preset or registry change updates each Agent separately, so one failed registration leaves the others current.
+    const resync = (agent: Agent): void => {
+      try { sync(agent) } catch (error) { base.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
+    }
+    const resyncAll = (): void => { for (const agent of base.agents.list()) resync(agent) }
     base.effect(function* () {
       yield async () => { await Promise.all([...scopes.values()].map(({ scope }) => scope.dispose())) }
       const runtimeCtx = base.isolate('ptcRuntime')
@@ -187,16 +190,11 @@ var cua = connectCua(() => tools.cua);
       })
       yield base.on('agent-preset/selected', (id) => {
         const agent = base.agents.get(id)
-        if (agent === undefined) return
-        try { sync(agent) } catch (error) { base.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
+        if (agent !== undefined) resync(agent)
       })
       yield base.inject(['agentPresets'], (registry) => {
-        registry.effect(() => () => {
-          presets = undefined
-          if (!closing) syncAll()
-        }, 'cua.preset-registry')
-        presets = registry.agentPresets
-        syncAll()
+        registry.effect(() => () => { if (!closing) resyncAll() }, 'cua.preset-registry')
+        resyncAll()
       }).dispose
       yield () => {
         closing = true
