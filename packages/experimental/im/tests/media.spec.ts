@@ -40,7 +40,7 @@ const GIF_BYTES = new TextEncoder().encode('GIF89a-rest')
 const TEXT_BYTES = new TextEncoder().encode('plain text')
 
 interface FakeHttp {
-  get(url: string, init: { signal?: AbortSignal }): Promise<unknown>
+  get(url: string, init: { signal?: AbortSignal; redirect?: RequestRedirect; timeout?: number }): Promise<unknown>
 }
 
 interface FakeStore {
@@ -448,6 +448,19 @@ describe('ImMediaStore.read', () => {
     }
     await expect(storeWith([imageMessage(12)], { http: abortAware }).read(CHAT.key, '12.1', AbortSignal.abort(new Error('gone'))))
       .rejects.toThrow('gone')
+  })
+
+  it('asks the transport to reach the admitted URL only, inside the media deadline', async () => {
+    const asked: { redirect?: RequestRedirect; timeout?: number }[] = []
+    const recording: FakeHttp = {
+      get: async (_src, init) => {
+        asked.push({ redirect: init.redirect, timeout: init.timeout })
+        return { headers: { get: () => 'image/png' }, arrayBuffer: async () => PNG_BYTES.slice().buffer }
+      },
+    }
+    await storeWith([imageMessage(12)], { http: recording }).read(CHAT.key, '12.1')
+    // Without `redirect: 'error'` the transport follows a 302 to any host, which is the address the admission refused.
+    expect(asked).toEqual([{ redirect: 'error', timeout: 30000 }])
   })
 
   it('reads the entries of a merged forward before resolving its picture', async () => {

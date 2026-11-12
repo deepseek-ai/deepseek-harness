@@ -56,7 +56,7 @@ kind: "package-reference"
 | `maxRecords` | `10000` | 每个聊天保留的最大消息记录数，以及保留的最大发送回执数 |
 | `maxInputBytes` | 256 KiB | 单条入库消息或投递记录的最大 UTF-8 字节数 |
 | `retryIntervalMs` | 5 秒 | 重新派发待处理消息、重试待完成投递以及清理过期记录的定时间隔 |
-| `media.download` / `media.maxBytes` / `media.maxItems` | `true` / 10 MiB / 9 | 是否将入站图片与文件下载为附件，以及单条字节上限与单条消息下载数量上限 |
+| `media.download` / `media.maxBytes` / `media.maxItems` / `media.timeoutMs` | `true` / 10 MiB / 9 / 30 秒 | 是否将入站图片与文件下载为附件、单条字节上限、单条消息下载数量上限，以及单次入站抓取的截止时间 |
 | `media.source.file` / `media.source.internal` | `false` / `false` | 收到的消息是否可让本机抓取 `file:` 源，以及是否可抓取主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 源 |
 | `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 秒 | 为另一执行世界的文件内联字节时的大小上限，以及单次发送超时时间 |
 | `tools.readOnly` / `tools.maxReadBytes` / `tools.maxHistoryItems` / `tools.fileDir` | `false` / 64 KiB / 50 / `.dsh/im` | 是否仅注册只读工具、单次工具返回最大字节数、`im_history` 单页最大条数，以及 `im_read_file` 暂存下载文件的会话内相对目录 |
@@ -105,7 +105,7 @@ kind: "package-reference"
 
 消息正文中的媒体元素会被替换为聊天内稳定的标签，如 `[图片 #12.1]` 或 `[文件 #12.2 report.pdf]`。当 `format` 传入 `media: true` 时，符合限制的图片会下载到附件存储中，并作为 `image` 内容块追加在文本块之后；其余每种符合限制的元素（文件、语音、视频）按原样存为附件，并作为 `file` 内容块追加，由请求装配投影为只读保存路径。
 
-源由消息的发送者而不是读取它的会话决定，因此除非 `media.source` 接受，下载会在任何 I/O 之前被拒绝：`file:` 元素（本机路径）与主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 元素都不会被抓取，而是在会话文本里记为跳过。内联的 `data:`/`base64:` 源与本部署自己的 `satori:` 资源始终放行。
+源由消息的发送者而不是读取它的会话决定，因此除非 `media.source` 接受，下载会在任何 I/O 之前被拒绝：`file:` 元素（本机路径）与主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 元素都不会被抓取，而是在会话文本里记为跳过。内联的 `data:`/`base64:` 源与本部署自己的 `satori:` 资源始终放行。随后的抓取只连向被放行的那个地址——3xx 记为跳过而不是跟随，解析不出的主机名直接拒绝——整次下载在 `media.timeoutMs`（默认 30 秒）截止。
 
 `forward` 元素渲染为一行：还没有读到条目时是 `[合并转发 #id]`，读到之后是带预览的 `[合并转发 #id: 名字: 内容 …]`。对已存引用调用 `im_read` 会通过一次平台读把它展开，因此不必改写存储记录也能读到里面的条目；对里面的标签调用 `im_read_image` 或 `im_read_file` 走的是同一次读，转发对话里的图片与文件正是这样才落到媒体引用能取到的位置。条目里嵌套的转发单独占一行 `[合并转发 #id]`，跟在它后面的条目缩进在它之下——平台一次就把整棵树返回了。
 

@@ -49,6 +49,7 @@ export const Config = z.object({
     download: z.boolean().default(true),
     maxBytes: z.natural().min(1).default(10485760),
     maxItems: z.natural().min(1).max(50).default(9),
+    timeoutMs: z.natural().min(1).default(30000),
     source: z.object({
       file: z.boolean().default(false),
       internal: z.boolean().default(false),

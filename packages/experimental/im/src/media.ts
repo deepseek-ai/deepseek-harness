@@ -386,11 +386,16 @@ export class ImMediaStore {
   /**
    * Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms, refused past
    * `media.maxBytes` while they are read. A `file:` source, and an http(s) one on a non-public address, is refused
-   * before any I/O unless `media.source` accepts it.
+   * before any I/O unless `media.source` accepts it; the fetch that follows reaches only the admitted URL (it follows
+   * no redirect) and ends at `media.timeoutMs`.
    */
   private async fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
-    await admitMediaSource(src, this.config.media.source, this.resolveHost)
-    this.fetcher ??= createResourceFetcher(this.ctx, { maxBytes: this.config.media.maxBytes })
+    await admitMediaSource(src, this.config.media.source, this.resolveHost, this.config.media.timeoutMs)
+    this.fetcher ??= createResourceFetcher(this.ctx, {
+      maxBytes: this.config.media.maxBytes,
+      redirect: 'error',
+      timeout: this.config.media.timeoutMs,
+    })
     return this.fetcher(src, signal ?? new AbortController().signal)
   }
 }

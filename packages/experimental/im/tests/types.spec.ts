@@ -31,7 +31,7 @@ describe('dsh-im contracts', () => {
     // A received message fetches what the platform hands it: a chat member's `file:` source and an internal address
     // are both off unless the deployment turns them on.
     expect(config.media).toEqual({
-      download: true, maxBytes: 10485760, maxItems: 9, source: { file: false, internal: false },
+      download: true, maxBytes: 10485760, maxItems: 9, timeoutMs: 30000, source: { file: false, internal: false },
     })
     expect(config.send).toEqual({ maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
     expect(config.tools).toEqual({

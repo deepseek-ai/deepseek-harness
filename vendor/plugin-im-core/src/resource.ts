@@ -374,12 +374,20 @@ export interface ResourceFetchPolicy {
    * member decides how much memory this process buffers.
    */
   maxBytes?: number
+  /**
+   * How the transport treats a 3xx answer (`RequestInit.redirect`). A caller that admitted the source before fetching it
+   * passes `'error'`: the connection reaches the admitted URL only, so a redirect cannot carry it to a host the caller
+   * refused. The `satori:` internal route answers its own 3xx and is unaffected.
+   */
+  redirect?: RequestRedirect
+  /** Deadline of the whole fetch, body included; the transport aborts and the call rejects when it passes. */
+  timeout?: number
 }
 
 /**
  * `PrepareContext.fetch` backed by `ctx.http` (http(s), `satori:` via the core fetch hook) and data:/base64: decoding.
  * @param ctx - the context whose `http` service resolves the non-inline forms.
- * @param policy - how much one resource may weigh; an over-limit one rejects with {@link ResourceTooLargeError}.
+ * @param policy - how much one resource may weigh, where it may be redirected to, and how long it may take.
  * @returns the fetch of one prepare pass.
  */
 export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy = {}): PrepareContext['fetch'] {
@@ -398,7 +406,12 @@ export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy 
 
     // `ctx.http` runs the `http/fetch` waterfall, which is what resolves `satori:` internal URLs (plugin-im-core's
     // own hook) and `file:` sources; `responseType` keeps the raw `Response` so the bytes and headers stay ours.
-    const response = await http.get(src, { responseType: (raw: globalThis.Response) => raw, signal })
+    const response = await http.get(src, {
+      responseType: (raw: globalThis.Response) => raw,
+      signal,
+      ...policy.redirect === undefined ? {} : { redirect: policy.redirect },
+      ...policy.timeout === undefined ? {} : { timeout: policy.timeout },
+    })
     return {
       data: await readBounded(response, policy.maxBytes, src),
       mime: mimeOf(response.headers.get('content-type')),

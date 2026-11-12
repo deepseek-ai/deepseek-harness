@@ -484,7 +484,7 @@ export type Config = LocalConfig
 ## `@deepseek-ai/dsh-client-connection`
 
 - `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:105`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -1920,6 +1920,8 @@ export interface ImConfig {
     maxBytes: number
     /** Maximum resources downloaded for one message (default 9). */
     maxItems: number
+    /** Deadline of one inbound fetch, body and address lookup included, ms (default 30 s). */
+    timeoutMs: number
     /**
      * Sources a received message may make this host fetch. A message is written by a chat member, not by the session
      * that reads it, so the two sources that reach past the platform are off by default.
@@ -1947,6 +1949,8 @@ export interface ImConfig {
     maxReadBytes: number
     /** Maximum messages of one `im_history` page (default 50). */
     maxHistoryItems: number
+    /** Maximum members one `im_members` call lists, across platform pages (default 200). */
+    maxMembers: number
     /**
      * Session-relative directory `im_read_file` writes a downloaded file into (default
      * `.dsh/im`); the path a chat file is staged at stays inside the working directory so
