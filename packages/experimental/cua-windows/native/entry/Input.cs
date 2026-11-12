@@ -96,6 +96,8 @@ internal static class Input
     {
         Windows.RequireForeground(app, window, context);
         var key = ResolveKey(name, includeModifiers: true);
+        if (key.Modifiers.Length != 0)
+            throw new NativeFailure("UNSUPPORTED", "This key requires modifiers in the target keyboard layout; send each modifier and the base key separately");
         var down = direction == "down";
         if (((Win32.GetAsyncKeyState(key.Key) & 0x8000) != 0) == down) return false;
         Send(Keyboard(key.Key, flags: (key.Extended ? 1u : 0) | (down ? 0u : 2u)));
