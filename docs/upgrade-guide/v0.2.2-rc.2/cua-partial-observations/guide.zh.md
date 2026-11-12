@@ -8,7 +8,7 @@ description: "macOS CUA 返回带标记的部分 AX 观察，并区分观察失�
 
 ## 变更
 
-此前，macOS `getState` 在一个遍历元素失效时会以 `STALE_SNAPSHOT` 拒绝整次 AX 读取。现在返回可读节点，在 `tree` 中标记每个不可用分支，并设置 `hasUnreadableElements: true`。标记没有元素 ID，分支内容未知。`truncated` 仍独立表示遍历上限。未遇到不可读节点或子项列表条目时，macOS 省略 `hasUnreadableElements`；其他 provider 也可以省略此字段。
+此前，macOS `getState` 在一个遍历元素失效时会以 `STALE_SNAPSHOT` 拒绝整次 AX 读取。现在返回可读节点，在 `tree` 中用 `[One child could not be read.]` 标记每个不可用分支，并设置 `hasUnreadableElements: true`。标记没有元素 ID，分支内容未知。`truncated` 仍独立表示遍历上限。未遇到不可读节点或子项列表条目时，macOS 省略 `hasUnreadableElements`；其他 provider 也可以省略此字段。
 
 观察准备阶段的失效 AX 对象导致请求范围无法确定时，返回 `AX_OBSERVATION_UNAVAILABLE`。发现未解析的窗口或 sheet 时遇到这类对象，读取会失败，不发布空的完整快照。观察期间 AX 返回 `cannotComplete` 时，返回 `AX_COMMUNICATION_FAILED`。权限、应用或窗口身份、取消及其他错误仍会拒绝读取。输入操作使用过期或不匹配的快照时，仍返回 `STALE_SNAPSHOT`。
 

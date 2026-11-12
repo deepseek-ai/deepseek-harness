@@ -23,8 +23,8 @@ enum AXTreeProjection {
         }
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        var pending = roots.entries.enumerated().reversed().map { (element: $0.element, level: 0, depth: 0, path: String($0.offset)) }
-        while let (entry, level, depth, path) = pending.popLast() {
+        var pending = roots.entries.reversed().map { (element: $0, level: 0, depth: 0) }
+        while let (entry, level, depth) = pending.popLast() {
             try checkCancellation()
             let hash = entry.map { CFHash($0) }
             if let element = entry, let hash, visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
@@ -41,7 +41,7 @@ enum AXTreeProjection {
             do { observation = try read(element) }
             catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
                 hasUnreadableElements = true
-                lines.append(String(repeating: "  ", count: level) + "- [unavailable branch \(path): invalidUIElement; contents unknown]")
+                lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: true))
                 continue
             }
             var node = observation.text
@@ -70,12 +70,11 @@ enum AXTreeProjection {
             if children.hasUnreadableElements { hasUnreadableElements = true }
             if children.elementLimitReached { elementLimitReached = true }
             if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: childLevel, positioned: false)) }
-            for (childIndex, child) in children.entries.enumerated().reversed() {
-                pending.append((child, childLevel, depth + 1, "\(path).\(childIndex)"))
+            for child in children.entries.reversed() {
+                pending.append((child, childLevel, depth + 1))
             }
         }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
-        if hasUnreadableElements { lines.append("Accessibility observation incomplete: unavailable branches have unknown contents and no element IDs. Use a screenshot to inspect them.") }
         if elementLimitReached || depthLimitReached { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
         return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed,
                             focusedWindowID: focusedWindowID, truncated: elementLimitReached || depthLimitReached, hasUnreadableElements: hasUnreadableElements)

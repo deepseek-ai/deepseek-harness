@@ -628,7 +628,7 @@ describe('application and window observations', () => {
     const app = await f.api.getApp('Editor')
     await app.getAccessibilityTree()
     await app.pressKey('Return')
-    const tree = '- [0] AXButton "Save"\n- [unavailable branch 0.1: invalidUIElement; contents unknown]'
+    const tree = '- [0] AXButton "Save"\n[One child could not be read.]'
     f.dispatch.mockResolvedValueOnce(state({ tree, hasUnreadableElements: true }))
     await expect(app.getAccessibilityTree()).resolves.toBe(tree)
     await app.invoke(element('0'))

@@ -8,7 +8,7 @@ English | [中文](guide.zh.md)
 
 ## Change
 
-macOS `getState` previously rejected an entire AX read with `STALE_SNAPSHOT` when one traversed element became invalid. It now returns readable nodes, marks each unavailable branch in `tree`, and sets `hasUnreadableElements: true`. Markers have no element IDs; their contents are unknown. `truncated` still describes traversal limits independently. macOS omits `hasUnreadableElements` when no unreadable node or child-list entry was encountered; other providers may also omit the field.
+macOS `getState` previously rejected an entire AX read with `STALE_SNAPSHOT` when one traversed element became invalid. It now returns readable nodes, marks each unavailable branch in `tree` with `[One child could not be read.]`, and sets `hasUnreadableElements: true`. Markers have no element IDs; their contents are unknown. `truncated` still describes traversal limits independently. macOS omits `hasUnreadableElements` when no unreadable node or child-list entry was encountered; other providers may also omit the field.
 
 An invalid AX object that prevents resolving the requested observation scope returns `AX_OBSERVATION_UNAVAILABLE`. Encountering such an object while discovering an unresolved window or sheet rejects the read instead of publishing an empty complete snapshot. An AX `cannotComplete` failure during observation returns `AX_COMMUNICATION_FAILED`. Permission, application/window identity, cancellation and other errors still reject the read. `STALE_SNAPSHOT` remains the error for expired or mismatched snapshots used by input operations.
 

@@ -188,7 +188,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (partialObservation) {
         partialObservation = false
         return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
-          tree: 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  - [unavailable branch 0.1: invalidUIElement; contents unknown]\n  - AXStaticText "Readable sibling"\nAccessibility observation incomplete: unavailable branches have unknown contents and no element IDs. Use a screenshot to inspect them.',
+          tree: 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  [One child could not be read.]\n  - AXStaticText "Readable sibling"',
           elements: [], windows: windows(), truncated: false, hasUnreadableElements: true }
       }
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {

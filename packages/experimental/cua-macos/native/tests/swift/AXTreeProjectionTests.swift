@@ -38,9 +38,8 @@ private func project(_ roots: [AXUIElement], maxElements: Int = 20, maxDepth: In
     AX scope=window offsets=UTF-16
     - AXWindow "Window"
       - [0] AXButton "Before"
-      - [unavailable branch 0.1: invalidUIElement; contents unknown]
+      [One child could not be read.]
       - [1] AXButton "After"
-    Accessibility observation incomplete: unavailable branches have unknown contents and no element IDs. Use a screenshot to inspect them.
     """)
     #expect(result.elements.map { $0["elementId"].string } == ["0", "1"])
     #expect(result.indexed.count == 2)
@@ -55,7 +54,7 @@ private func project(_ roots: [AXUIElement], maxElements: Int = 20, maxDepth: In
         throw NativeFailure(code: "NATIVE_ERROR", message: "read AXRole", accessibilityError: AXError.invalidUIElement.rawValue)
     }
     #expect(result.hasUnreadableElements)
-    #expect(result.tree.contains("[unavailable branch 0: invalidUIElement; contents unknown]"))
+    #expect(result.tree == "AX scope=window offsets=UTF-16\n[One child could not be read.]")
     #expect(result.indexed.isEmpty)
     #expect(result.elements.isEmpty)
 }
@@ -99,7 +98,7 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
     }
     #expect(reads == 2)
     #expect(result.hasUnreadableElements && result.truncated)
-    #expect(result.tree.components(separatedBy: "[unavailable branch").count == 2)
+    #expect(result.tree.components(separatedBy: "[One child could not be read.]").count == 2)
     #expect(result.tree.contains("maxElements=2"))
 }
 
@@ -139,7 +138,7 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
     ])])
 }
 
-@Test func rangeGapsAndInvalidNodesShareOneCompletenessFlag() throws {
+@Test func rangeGapsAndInvalidNodesShareOneMarkerAndCompletenessFlag() throws {
     let nodes = (1...4).map { AXUIElementCreateApplication(Int32($0)) }
     let result = try project([nodes[0]]) { element in
         if CFEqual(element, nodes[0]) {
@@ -152,8 +151,14 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
         return readNode("AXButton", title: CFEqual(element, nodes[1]) ? "Before" : "After")
     }
     #expect(result.hasUnreadableElements && !result.truncated)
-    #expect(result.tree.contains("[One child could not be read.]"))
-    #expect(result.tree.contains("[unavailable branch 0.2: invalidUIElement; contents unknown]"))
+    #expect(result.tree == """
+    AX scope=window offsets=UTF-16
+    - AXWindow
+      - [0] AXButton "Before"
+      [One child could not be read.]
+      [One child could not be read.]
+      - [1] AXButton "After"
+    """)
     #expect(result.elements.map { $0["elementId"].string } == ["0", "1"])
     #expect(CFEqual(try #require(result.indexed[0]), nodes[1]))
     #expect(CFEqual(try #require(result.indexed[1]), nodes[3]))
