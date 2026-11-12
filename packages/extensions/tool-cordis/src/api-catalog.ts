@@ -2069,7 +2069,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'list\') list(): Promise<OwnerShareList>',
-        description: 'Refresh titles and Liveshare server authority, then list this host\'s shares.',
+        description: 'List this host\'s shares, refreshing titles and Liveshare server authority when this host owns the state.',
         parameters: [],
         returns: 'Every share this host publishes.',
       },

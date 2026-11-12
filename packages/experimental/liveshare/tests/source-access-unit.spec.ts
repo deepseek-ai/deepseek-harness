@@ -93,6 +93,7 @@ function harness(options: Options = {}) {
     invalidateRelayAccess: vi.fn(),
   }
   const state = { disposed: false }
+  const turnIsViewerDriven = vi.fn(() => true)
   const access = createSourceAccess({
     ctx: base,
     ownerShares,
@@ -100,9 +101,10 @@ function harness(options: Options = {}) {
     relay,
     disposed: () => state.disposed,
     accessChanged: vi.fn(),
+    turnIsViewerDriven,
   } as never)
   return {
-    access, base, ownerShares, forks, relay, state,
+    access, base, ownerShares, forks, relay, state, turnIsViewerDriven,
     live, agents, scope, tools, fs, sandboxPolicy, registered, scoped, session, typertLookup,
   }
 }
@@ -281,7 +283,7 @@ describe('source layer installation refusals', () => {
 })
 
 describe('turn and tool helpers', () => {
-  it('stops the running turn of a share that ends, whoever started it', () => {
+  it('stops the running turn of a share that ends when the share started it', () => {
     const h = harness()
     h.access.cancelShareTurn('absent')
     h.ownerShares.set('share-1', share())
@@ -291,6 +293,15 @@ describe('turn and tool helpers', () => {
     // A share that is not being served by a running Session stops nothing.
     h.live.status = 'idle'
     h.access.cancelShareTurn('share-1')
+    expect(h.live.cancel).not.toHaveBeenCalled()
+  })
+
+  it('leaves a turn the owner started running when a share ends its grant', () => {
+    const h = harness()
+    h.ownerShares.set('share-1', share())
+    h.turnIsViewerDriven.mockReturnValue(false)
+    h.access.cancelShareTurn('share-1')
+    expect(h.turnIsViewerDriven).toHaveBeenCalledWith('session-1')
     expect(h.live.cancel).not.toHaveBeenCalled()
   })
 
