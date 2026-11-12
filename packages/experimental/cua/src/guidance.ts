@@ -3,6 +3,8 @@ const hoverSignature = 'mouseMove(target: string | [number, number], options?: {
 
 const dragSignature = "drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean })"
 
+const mouseHeading = '## Simulated mouse'
+
 /** System-prompt section that carries the CUA operation guidance for one Agent. */
 export const CUA_PROMPT_SECTION_NAME = 'computer-use:dsh-cua'
 
@@ -38,7 +40,7 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - setValue(elementId: string, value: JsonValue) -> ActionResult — write a control value.
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
-## Simulated mouse
+${mouseHeading}
 Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
 - ${hoverSignature} -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
@@ -64,7 +66,11 @@ Raw tools use { method, params }: include appHandle for app calls and windowId f
 export function withSystemPointerGuidance(guidance: string): string {
   const signature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean })'
   const systemDrag = dragSignature.replace('relative?: boolean', 'relative?: boolean, useSystemPointer?: boolean')
-  return `${guidance.replace(hoverSignature, signature).replace(dragSignature, systemDrag)}
+  const mouseGuidance = `${mouseHeading}
+Leave useSystemPointer unset for ordinary mouseMove and drag calls, even after the user grants mouse control. Prefer an advertised accessibility action, selectText for a text range, or a window-directed drag. If the result is unclear, inspect the target before trying another gesture. Request useSystemPointer: true only when the user explicitly asks to use the system pointer or the task requires it and no pointer-free action can achieve the intended effect.
 
-Use win.mouseMove(target, { useSystemPointer: true }) or win.drag(from, to, { useSystemPointer: true }) only when the task requires the system pointer. System drag presses, moves, and releases the selected mouse button in the unobscured foreground window. Omit the option for ordinary window-directed drag. Inspect the application after dispatch before deciding whether to try another route. The first explicit request asks for session permission unless approval is disabled. Approval or refusal applies to moves and drags until the session closes or DSH restarts. Pass true on each physical gesture. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
+win.drag(from, to, { useSystemPointer: true }) presses, moves, and releases the selected button in the unobscured foreground window. The first explicit system-pointer request interrupts the user for session permission unless approval is disabled. Moves and drags share the decision until the session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
+  return guidance.replace(mouseHeading, mouseGuidance)
+    .replace(hoverSignature, signature)
+    .replace(dragSignature, systemDrag)
 }

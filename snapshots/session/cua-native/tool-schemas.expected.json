@@ -492,7 +492,7 @@
                         "description": "Opaque string defined by the platform provider, valid for at least the lifetime of one snapshot."
                       },
                       "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "description": "Omit by default, including after approval. Set true only when the task requires control of the system pointer.",
                         "type": "boolean"
                       }
                     },
@@ -532,7 +532,7 @@
                         "const": false
                       },
                       "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "description": "Omit by default, including after approval. Set true only when the task requires control of the system pointer.",
                         "type": "boolean"
                       }
                     },
@@ -575,7 +575,7 @@
                         "description": "Use integer thousandths of the window width and height, from 0 to 999."
                       },
                       "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "description": "Omit by default, including after approval. Set true only when the task requires control of the system pointer.",
                         "type": "boolean"
                       }
                     },
@@ -1304,7 +1304,7 @@
                         "minimum": 0
                       },
                       "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "description": "Omit by default, including after approval. Set true only when the task requires control of the system pointer.",
                         "type": "boolean"
                       }
                     },
@@ -1383,7 +1383,7 @@
                         "maximum": 999
                       },
                       "useSystemPointer": {
-                        "description": "Request use of the system pointer. The Host checks permission before dispatch.",
+                        "description": "Omit by default, including after approval. Set true only when the task requires control of the system pointer.",
                         "type": "boolean"
                       }
                     },
