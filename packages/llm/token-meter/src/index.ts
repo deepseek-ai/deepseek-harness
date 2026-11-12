@@ -128,6 +128,19 @@ export class TokenMeter extends Service {
   }
 
   /**
+   * Read the route of the request that produced the latest assistant message.
+   * A request that failed before recording an assistant message leaves it unchanged.
+   * @param session - Session whose durable history is read.
+   * @returns a detached provider/model pair, or `undefined` before any assistant message or when no request header preceded it.
+   */
+  answeredRoute(session: Session): { provider: string; model: string } | undefined {
+    const { prices, measurement } = this._sync(session)
+    if (measurement.anchor === null) return undefined
+    const config = this._cachedHeader(prices, measurement.anchor.headerSeq)?.config
+    return config === undefined ? undefined : { provider: config.provider, model: config.model }
+  }
+
+  /**
    * Measure current request pressure and surface through the durable tail.
    *
    * The effective envelope's routed provider/model selects the request-image

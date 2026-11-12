@@ -46,7 +46,7 @@ const price = ctx.tokenMeter.estimateMessage(message)
 
 ### 会话投影
 
-token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端投影单元和一个仅供宿主使用的单元。Host 消费方调用 `ctx.tokenMeter.contextPressure(session)` 同步读取提供方报告的最新提示词规模和路由容量；注册句柄保留在内部。`tokenUsage` 携带完整持久日志中的 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 与 `cacheWriteTokens`。最终 assistant 消息样本会替换同一次尝试的流式用量；`llm/retry-started` 会结束该替换范围，因此同一步骤中的重试会贡献另一次计费用量。`contextPressure` 携带可选 `pressureTokens`（提供方报告的最新提示词规模）、可选 `projectedTokens`（下一个请求的提示词将花费多少）与来自最新一条 `request/context` 记录的可选 `contextWindow`。`contextBreakdown` 携带启发式 `systemTokens`、`toolsTokens` 与 `messageTokens`——上下文的构成，而非提供方计费规模。卸载插件会移除全部四个键。仅宿主使用的 `tokenMeasurement` 保存请求头引用、未结束的步骤，以及最近一次成功调用的用量和输出价格。它不保存消息数组、工具定义、附件数据或价格缓存。计量历史有误时，只记录首次失败的位置，其他投影更新和检查点仍可继续；`measure()` 在该事件处报告原有错误，不提交价格或推进读取位置。状态版本 2 会丢弃旧版计量记录，再从日志重建。
+token-meter 通过必需的 `ctx.sessionProjections` 服务注册三个客户端投影单元和一个仅供宿主使用的单元。Host 消费方调用 `ctx.tokenMeter.contextPressure(session)` 同步读取提供方报告的最新提示词规模和路由容量，调用 `ctx.tokenMeter.answeredRoute(session)` 读取产生最新助手消息的那次请求的提供方与模型；注册句柄保留在内部。`tokenUsage` 携带完整持久日志中的 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 与 `cacheWriteTokens`。最终 assistant 消息样本会替换同一次尝试的流式用量；`llm/retry-started` 会结束该替换范围，因此同一步骤中的重试会贡献另一次计费用量。`contextPressure` 携带可选 `pressureTokens`（提供方报告的最新提示词规模）、可选 `projectedTokens`（下一个请求的提示词将花费多少）与来自最新一条 `request/context` 记录的可选 `contextWindow`。`contextBreakdown` 携带启发式 `systemTokens`、`toolsTokens` 与 `messageTokens`——上下文的构成，而非提供方计费规模。卸载插件会移除全部四个键。仅宿主使用的 `tokenMeasurement` 保存请求头引用、未结束的步骤，以及最近一次成功调用的用量和输出价格。它不保存消息数组、工具定义、附件数据或价格缓存。计量历史有误时，只记录首次失败的位置，其他投影更新和检查点仍可继续；`measure()` 在该事件处报告原有错误，不提交价格或推进读取位置。状态版本 2 会丢弃旧版计量记录，再从日志重建。
 
 图片省略重新计算现有节点的价格，同时保留此前的用量锚点。固定引用启发式规则不计入 `offloaded` 元数据，因此一次省略决定不改变 `contextBreakdown` 或标量启发式总量，按路由的测量则把所选图片的视觉价格换成占位文本价格。
 

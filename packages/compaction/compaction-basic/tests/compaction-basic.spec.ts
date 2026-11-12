@@ -1544,7 +1544,7 @@ describe('default one-shot summarizer', () => {
 
   it('resolves the latest routed provider/model before the AgentOptions pair', async () => {
     const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, 'routed')
-    const session = conversation(1)
+    const session = Session.create(brandString<SessionId>('unanswered-route'))
     session.append('request/header', {
       header: { config: { provider: 'routed', model: 'routed' } },
       reason: 'initial',
@@ -1554,6 +1554,31 @@ describe('default one-shot summarizer', () => {
     expect(output.model).toBe('routed')
     expect(adapter.lastOptions?.provider).toBe('routed')
     expect(adapter.lastOptions?.model).toBe('routed')
+  })
+
+  it('summarizes on the route that last answered, with its policy, after a later request got no response', async () => {
+    const { ctx, adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }], undefined, MODEL, {
+      auto: false,
+      maxTokens: 111,
+      modelPolicies: [
+        { provider: MODEL, model: MODEL, maxTokens: 222 },
+        { provider: 'unanswered', model: 'unanswered', maxTokens: 333 },
+      ],
+    })
+    const unanswered = new ScriptedAdapter([{ type: 'text', text: 'wrong route' }])
+    ctx.llm.registerAdapter(['unanswered'], unanswered)
+    const session = conversation(1)
+    session.append('request/header', {
+      header: { config: { provider: 'unanswered', model: 'unanswered' } },
+      reason: 'change',
+    })
+
+    const output = await compact.runSummarize(promptInput('history'), agent(session, 'fallback'))
+
+    expect(session.requestHeader()?.config.model).toBe('unanswered')
+    expect(output).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
+    expect(adapter.lastOptions).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
+    expect(unanswered.lastOptions).toBeUndefined()
   })
 
   it('records the model actually dispatched after one-shot stream routing', async () => {

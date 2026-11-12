@@ -10,7 +10,6 @@ import { CompactionEngine, ManualCompactionError } from '@deepseek-ai/dsh-compac
 import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compaction'
 import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/types'
@@ -28,7 +27,7 @@ import {
   selectCompactableRange,
 } from './region.ts'
 import { summarizeWithLlm } from './summarizer.ts'
-import type { SummarizationInput, SummaryResult } from './summarizer.ts'
+import type { SummarizationInput, SummaryResult, SummaryRoute } from './summarizer.ts'
 import type {
   BasicCompactionConfig,
   ModelCompactPolicyConfig,
@@ -45,15 +44,16 @@ export type {
   ResolvedTargetPolicy,
 } from './types.ts'
 
+/** Detach a route that names both provider and model; any other value is no route. */
+function completeRoute(route: { provider?: string; model?: string } | undefined): SummaryRoute | undefined {
+  if (route?.provider === undefined || route.provider.length === 0
+    || route.model === undefined || route.model.length === 0) return undefined
+  return { provider: route.provider, model: route.model }
+}
+
 /** Resolve the exact provider/model durably routed for the latest request. */
-function routedTarget(
-  session: Session,
-): Pick<LlmCallConfig, 'provider' | 'model'> | undefined {
-  const config = session.requestHeader()?.config
-  if (config === undefined || config.provider.length === 0 || config.model.length === 0) {
-    return undefined
-  }
-  return { provider: config.provider, model: config.model }
+function routedTarget(session: Session): SummaryRoute | undefined {
+  return completeRoute(session.requestHeader()?.config)
 }
 
 /**
@@ -66,15 +66,19 @@ function reservedCompletionTokens(header: EpochHeader, defaultMaxTokens: number 
   return header.config.maxTokens ?? defaultMaxTokens ?? 0
 }
 
-/** Resolve the conversation target used to select an optional policy override. */
+/**
+ * Resolve the route that summarizes the conversation and selects its policy
+ * override. The route that last answered has held this history; the latest
+ * header may name a route whose only request overflowed.
+ * @param agent - supplies the latest header and the live fallback options.
+ * @param answered - route of the request that produced the latest assistant message.
+ * @returns the first complete route among `answered`, the latest header, and the agent options.
+ */
 function conversationTarget(
   agent: Agent,
-): Pick<LlmCallConfig, 'provider' | 'model'> | undefined {
-  const routed = routedTarget(agent.session)
-  if (routed !== undefined) return routed
-  if (agent.options.provider === undefined || agent.options.provider.length === 0
-    || agent.options.model === undefined || agent.options.model.length === 0) return undefined
-  return { provider: agent.options.provider, model: agent.options.model }
+  answered: SummaryRoute | undefined,
+): SummaryRoute | undefined {
+  return completeRoute(answered) ?? routedTarget(agent.session) ?? completeRoute(agent.options)
 }
 
 const thresholdRatioSchema = z.number()
@@ -261,9 +265,12 @@ export class BasicCompactionEngine extends CompactionEngine {
    * Summarize the replayed conversation region through a direct one-shot
    * `ctx.llm.stream()` call whose prefix reuses the conversation's own system
    * prompt, tools, and messages so the provider's KV cache is not invalidated.
+   * Without a configured summary target the call goes to the route that
+   * produced the latest assistant message, then the latest request header,
+   * then the agent options. A model selected for a later request is not used.
    * Override this sole hook for a template or remote summarizer.
    * @param input - replayed conversation prefix (system, tools, and leading messages) to condense.
-   * @param agent - supplies routed-model history, fallback model, and session id.
+   * @param agent - supplies the session history, fallback model, and session id.
    * @param signal - optional cancellation forwarded to the adapter.
    * @returns safe text summary blocks and the exact auxiliary call envelope and output.
    */
@@ -272,11 +279,11 @@ export class BasicCompactionEngine extends CompactionEngine {
     agent: Agent,
     signal?: AbortSignal,
   ): Promise<SummaryResult> {
-    const target = conversationTarget(agent)
+    const target = conversationTarget(agent, this.ctx.tokenMeter.answeredRoute(agent.session))
     const config = target === undefined
       ? this.config
       : resolveTargetPolicy(this.config, target)
-    return summarizeWithLlm(this.ctx, config, input, agent, signal)
+    return summarizeWithLlm(this.ctx, config, input, agent, target, signal)
   }
 
   /**

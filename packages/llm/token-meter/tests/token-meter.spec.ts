@@ -389,6 +389,40 @@ describe('replay anchors and surface folds', () => {
     expect(switchedBack.surfaceDeltaTokens).toBe(0)
   })
 
+  it('reports the route of the latest assistant message, unchanged by later unanswered headers', () => {
+    const service = meter()
+    const session = Session.create(brandString<SessionId>('answered-route'))
+    expect(service.answeredRoute(session)).toBeUndefined()
+
+    appendHeader(session, header('alpha'))
+    expect(service.answeredRoute(session)).toBeUndefined()
+
+    appendSuccessfulCall(session, header('alpha'))
+    expect(service.answeredRoute(session)).toEqual({ provider: 'mock', model: 'alpha' })
+
+    appendHeader(session, header('beta'))
+    expect(session.requestHeader()?.config.model).toBe('beta')
+    const unanswered = service.answeredRoute(session)
+    expect(unanswered).toEqual({ provider: 'mock', model: 'alpha' })
+    expect(service.answeredRoute(session)).not.toBe(unanswered)
+
+    appendSuccessfulCall(session, header('beta'), { turn: 1, step: 2 })
+    expect(service.answeredRoute(session)).toEqual({ provider: 'mock', model: 'beta' })
+  })
+
+  it('reports no answered route for an assistant message without a preceding header', () => {
+    const service = meter()
+    const session = Session.create(brandString<SessionId>('headerless-answer'))
+    session.append('step/start', { turn: 1, step: 1 })
+    session.append('assistant/message', {
+      stream: [],
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({ content: [{ type: 'text', text: 'answer' }], source: { provider: 'mock', model: 'mock' } }),
+    }, { surfaceOp: 'append' })
+    expect(service.answeredRoute(session)).toBeUndefined()
+  })
+
   it('invalidates usage for any canonical envelope change or explicit override', () => {
     const service = meter()
     const session = Session.create(brandString<SessionId>('envelope'))

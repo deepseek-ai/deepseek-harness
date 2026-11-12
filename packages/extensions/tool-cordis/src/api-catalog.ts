@@ -4341,6 +4341,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'context pressure; fields remain absent until their source events are recorded.',
       },
       {
+        signature: 'answeredRoute(session: Session): { provider: string; model: string } | undefined',
+        description: 'Read the route of the request that produced the latest assistant message. A request that failed before recording an assistant message leaves it unchanged.',
+        parameters: [{ name: 'session', description: 'Session whose durable history is read.' }],
+        returns: 'a detached provider/model pair, or `undefined` before any assistant message or when no request header preceded it.',
+      },
+      {
         signature: 'measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement',
         description: 'Measure current request pressure and surface through the durable tail.\n\nThe effective envelope\'s routed provider/model selects the request-image pricing every node is priced under: a route whose adapter declares image pricing charges each retained image its visual tokens plus its model-visible text, while other routes keep the fixed heuristic. Provider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full route-priced anchor; otherwise the complete envelope and surface are repriced. The anchor includes all surface nodes immediately before the assistant message, including inputs admitted after step/start.\n\n`requestHeader` replaces the latest logged envelope for pressure and node pricing; the node set always describes the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
         parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }],
