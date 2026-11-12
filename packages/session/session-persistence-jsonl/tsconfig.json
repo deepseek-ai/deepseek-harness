@@ -42,9 +42,6 @@
       "path": "../session-format-v3-to-v4"
     },
     {
-      "path": "../../util/brand"
-    },
-    {
       "path": "../session-persistence-sqlite"
     }
   ]
