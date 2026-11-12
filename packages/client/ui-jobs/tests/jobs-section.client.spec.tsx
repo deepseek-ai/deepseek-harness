@@ -539,7 +539,7 @@ it('renders the Russian settled-count copy', () => {
 })
 
 describe('JobsSection hover', () => {
-  it('shows the command, kind, state, and duration in a hover card after 500ms, and the kind and state to assistive technology', () => {
+  it('shows the kind, state, and duration without the command in a hover card after 500ms, and the kind and state to assistive technology', () => {
     vi.useFakeTimers({ now: 1_700_000_010_000 })
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
     try {
@@ -553,7 +553,35 @@ describe('JobsSection hover', () => {
       expect(document.querySelector('[data-hover-details]')).toBeNull()
       act(() => { vi.advanceTimersByTime(1) })
       const card = document.querySelector('[data-hover-details]') as HTMLElement
-      expect([...card.children].map(child => child.textContent)).toEqual(['pnpm run build', 'bash', '运行中', '10秒'])
+      expect([...card.children].map(child => child.textContent)).toEqual(['bash', '运行中', '10秒'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the hover card closed while the pointer rests on the stop control, and closes an open one there', () => {
+    vi.useFakeTimers({ now: 1_700_000_010_000 })
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(any-hover: hover)' })))
+    try {
+      const view = render(<JobsSection {...props([job()])} />)
+      const anchor = (view.container.querySelector<HTMLElement>('[data-job-row]')!).parentElement as HTMLElement
+      const stop = screen.getByRole('button', { name: zh['kill.stopAria'].replace('{label}', 'pnpm run build') })
+      // Entering the row at the stop control reaches the anchor first, then the control.
+      fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
+      fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(document.querySelector('[data-hover-details]')).toBeNull()
+      expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(zh['kill.stop'])
+      fireEvent.pointerLeave(stop, { pointerType: 'mouse' })
+      fireEvent.pointerLeave(anchor, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(1000) })
+      // A card the row opened closes once the pointer reaches the stop control.
+      fireEvent.pointerEnter(anchor, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(document.querySelector('[data-hover-details]')).not.toBeNull()
+      fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(document.querySelector('[data-hover-details]')).toBeNull()
     } finally {
       vi.useRealTimers()
     }

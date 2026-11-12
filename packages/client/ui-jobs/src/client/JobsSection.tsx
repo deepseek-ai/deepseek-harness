@@ -206,6 +206,8 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
   const labelRef = useRef<HTMLSpanElement>(null)
   const marquee = useHoverMarquee(labelRef)
   const summaryId = useId()
+  // The stop control names its action in its own tooltip, so the row's hover card stays closed while the pointer is on it.
+  const [onStop, setOnStop] = useState(false)
   const state = detail ?? status
   // The row shows the command alone; the kind and state reach assistive technology here and sighted users in the hover card.
   const body = (
@@ -216,17 +218,18 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
       <span className={css.duration}>{duration}</span>
     </>
   )
-  // The tooltip names the action alone: the label is the whole command, which can run to many lines, and the row's
-  // hover card already shows it; the accessible name keeps the command to tell the rows' buttons apart.
+  // The tooltip names the action alone, since the command can run to many lines; the accessible name keeps the command
+  // to tell the rows' buttons apart.
   const killTitle = kill?.state === 'armed' ? t('kill.confirm') : kill?.state === 'failed' ? t('kill.failed') : t('kill.stop')
   const killName = kill?.state === 'armed' || kill?.state === 'failed' ? killTitle : t('kill.stopAria', { label: job.label })
   return (
     <li className={css.item}>
+      {/* The card leaves the command out: it can run to many lines, and the row's output panel shows it in full. */}
       <HoverCard
         grouped
+        disabled={onStop && kill !== undefined}
         content={(
           <HoverDetails
-            title={job.label}
             lines={[job.kind]}
             status={{ state: dotState(job), label: state }}
             facts={[{ icon: <IconClockOutlineRegular />, label: duration }]}
@@ -267,6 +270,8 @@ function JobItem({ job, view, expanded, now, onToggle, kill, t }: {
                     data-kill-state={kill.state}
                     disabled={kill.state === 'pending'}
                     aria-label={killName}
+                    onPointerEnter={() => { setOnStop(true) }}
+                    onPointerLeave={() => { setOnStop(false) }}
                     onClick={kill.onPress}
                   >
                     <IconStopFillRegular size={12} />

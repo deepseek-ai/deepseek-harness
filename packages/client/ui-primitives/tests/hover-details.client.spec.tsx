@@ -26,4 +26,10 @@ describe('HoverDetails', () => {
     const view = render(<HoverDetails title="sleep 30" />)
     expect((view.container.querySelector('[data-hover-details]') as HTMLElement).children).toHaveLength(1)
   })
+
+  it('starts with the lines when the title is omitted', () => {
+    const view = render(<HoverDetails lines={['bash']} status={{ state: 'ongoing', label: 'running' }} />)
+    expect([...(view.container.querySelector('[data-hover-details]') as HTMLElement).children].map(child => child.textContent))
+      .toEqual(['bash', 'running'])
+  })
 })

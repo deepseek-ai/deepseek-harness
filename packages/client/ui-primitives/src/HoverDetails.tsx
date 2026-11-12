@@ -6,8 +6,12 @@ import css from './HoverDetails.module.css'
 
 /** What a row's hover card says about it. */
 export interface HoverDetailsProps {
-  /** The full name of what the row shows; it wraps instead of clipping. */
-  readonly title: ReactNode
+  /**
+   * The full name of what the row shows; it wraps instead of clipping. Omit it
+   * when the name can run long, such as a command, and the row's own view
+   * shows it in full.
+   */
+  readonly title?: ReactNode
   /** Lines in secondary type under the title, such as the owner; each stops after six lines. */
   readonly lines?: readonly ReactNode[]
   /** The state, after its dot. */
@@ -19,14 +23,14 @@ export interface HoverDetailsProps {
 /**
  * Render the details of one summary-panel row for its HoverCard, on the card's
  * dark surface in both themes: the title, secondary lines, the state, and the
- * measures. Empty parts render nothing.
+ * measures. Absent or empty parts render nothing.
  * @param props - title, lines, state, and measures.
  * @returns the card body.
  */
 export function HoverDetails({ title, lines = [], status, facts = [] }: HoverDetailsProps): ReactNode {
   return (
     <div className={css.details} data-hover-details="">
-      <div className={css.title}>{title}</div>
+      {title !== undefined && <div className={css.title}>{title}</div>}
       {lines.map((line, index) => <div key={index} className={css.line}>{line}</div>)}
       {status !== undefined && (
         <div className={css.status}>
