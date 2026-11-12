@@ -147,7 +147,7 @@ Below `@deepseek-ai/dsh-im`, `@deepseek-ai/cordis-plugin-im-core` and `@deepseek
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`ImService`](src/index.ts) wires the per-concern modules and retains its own service context so agents created during tool calls belong to the host scope rather than the caller's scope. On startup it opens the `im_messages`, `im_sessions`, and `im_receipts` storage domains, starts recovery for pending deliveries, subscribes to `satori/receive`, `send`, and `interaction/button`, registers the `im_*` tools, and starts the periodic `retryIntervalMs` timer, whose first tick dispatches the messages a previous run left pending (the plugins that listen to `im/message` mount after this service).
+[`ImService`](src/index.ts) wires the per-concern modules and retains its own service context so agents created during tool calls belong to the host scope rather than the caller's scope. On startup it opens the `im_messages`, `im_sessions`, and `im_receipts` storage domains, starts recovery for pending deliveries, subscribes to `satori/receive`, `send`, and `interaction/button`, registers the `im_*` tools, and starts the periodic `retryIntervalMs` timer. It dispatches nothing until the composition is complete — under a Loader, once the Loader has no import or lifecycle task left; composed by hand, on the next macrotask — because the plugins that listen to `im/message` mount after this service: frames that arrive meanwhile are stored and acknowledged, and they are dispatched together with the messages a previous run left pending.
 
 | Module | Role |
 |---|---|

@@ -118,6 +118,8 @@ export class ImIntake {
   /** A pass was requested while one was running. */
   private more = false
   private disposed = false
+  /** Dispatch is held until the composition is complete ({@link hold}, {@link release}); frames are still stored. */
+  private held = false
 
   constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost) {}
 
@@ -283,9 +285,25 @@ export class ImIntake {
     return bounded
   }
 
+  /**
+   * Hold every dispatch until {@link release}. Receiving goes on — each frame is stored and acknowledged — but no
+   * message reaches `im/message`, so a command a previous process left pending, or one arriving while the plugins that
+   * listen to `im/message` are still starting, is not settled as an ordinary message by whoever listens first.
+   */
+  hold(): void {
+    this.held = true
+  }
+
+  /** End a {@link hold} and dispatch everything stored meanwhile. */
+  release(): void {
+    if (!this.held) return
+    this.held = false
+    this.pump()
+  }
+
   /** Kick the pump (new message, startup re-dispatch, retry timer). Never throws. */
   pump(): void {
-    if (this.disposed) return
+    if (this.disposed || this.held) return
     if (this.active) {
       this.more = true
       return

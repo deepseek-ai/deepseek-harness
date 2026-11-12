@@ -145,7 +145,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，恢复待处理投递，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器；上一次运行留下的待处理消息由该定时器的第一个周期派发（监听 `im/message` 的插件在本服务之后挂载）。
+[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，恢复待处理投递，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器。由于监听 `im/message` 的插件在本服务之后挂载，组装完成之前它不派发任何消息——在 Loader 下指 Loader 不再有待完成的导入或生命周期任务，手工组装时指下一个宏任务：其间到达的帧照常入库并确认，与上一次运行留下的待处理消息一起派发。
 
 | 模块 | 职责 |
 |---|---|

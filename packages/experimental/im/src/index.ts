@@ -45,6 +45,23 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Single-process IM host; module wiring only — behaviour lives in the per-concern modules. */
+/** What the IM host needs of the Loader that composed its context: the signal that every entry has settled. */
+interface Composition {
+  await(): Promise<void>
+}
+
+/**
+ * The Loader of a context, when one composed it. `dsh-im` does not depend on the Loader package, so the service is
+ * looked up by name and recognised by the one method it needs.
+ * @param ctx - the context the IM host runs in.
+ * @returns the Loader, or undefined for a context composed by hand.
+ */
+function composition(ctx: Context): Composition | undefined {
+  const loader: unknown = (ctx as unknown as { get(name: string): unknown }).get('loader')
+  if (loader === null || typeof loader !== 'object') return undefined
+  return typeof (loader as Partial<Composition>).await === 'function' ? loader as Composition : undefined
+}
+
 export class ImService extends Service implements ImApi {
   static inject = ['satori', 'agents', 'sessions', 'sessionPersistence', 'storageDomain', 'attachments']
   static Config = Config
@@ -163,9 +180,24 @@ export class ImService extends Service implements ImApi {
         })
       })
     }
-    // Messages a previous run stored are dispatched from the first tick rather than at the end of this load: this
-    // service finishes loading before the plugins that listen to `im/message` (routing strategies, session commands)
-    // start, so an eager pass would hand a pending command to the default dispatcher as an ordinary message.
+    // Nothing is dispatched until the composition is complete: this service finishes loading before the plugins that
+    // listen to `im/message` (routing strategies, session commands) start, so a pass now — for a message a previous
+    // run stored, or for a frame that arrives meanwhile — would hand a pending command to the default dispatcher as an
+    // ordinary message. Under a Loader, complete means it has no import or lifecycle task left; without one (plugins
+    // composed by hand, as tests do), the next macrotask stands in, after the plugin calls of the current one.
+    this.intake.hold()
+    const loader = composition(ctx)
+    if (loader === undefined) {
+      setTimeout(() => { this.intake.release() }, 0)
+    } else {
+      void loader.await().then(
+        () => { this.intake.release() },
+        (error: unknown) => {
+          ctx.logger.warn('IM dispatch starts although the composition did not settle: %s', String(error))
+          this.intake.release()
+        },
+      )
+    }
     this.timer = setInterval(() => {
       this.intake.pump()
       this.sessions.retry()

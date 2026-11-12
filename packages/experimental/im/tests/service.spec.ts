@@ -77,6 +77,17 @@ function deliver(bot: FakeAdapter, message: InboundMessage): Promise<void> {
   return bot.receive(bot.session({ type: 'message', id: message.id, timestamp: message.time, message }))
 }
 
+/**
+ * Install a stand-in for a service this package does not type (the Loader), through the Context API's untyped name
+ * overload: the typed `provide` demands the real service class.
+ * @param ctx - context the stand-in is provided on.
+ * @param name - service name.
+ * @param value - the stand-in.
+ */
+function provideByName(ctx: Context, name: string, value: unknown): void {
+  ctx.provide(name, value)
+}
+
 afterEach(async () => {
   for (const harness of booted.splice(0)) await harness.base.ctx.fiber.dispose().catch(() => {})
 })
@@ -307,6 +318,29 @@ describe('ImService facade', () => {
     })
     await vi.waitFor(() => { expect(service.store.pending()).toHaveLength(0) })
     expect(seen).toEqual([ImMessageKey('fake:bot', 'm-pending')])
+  })
+
+  it('holds every dispatch until the Loader that composed it has settled, then dispatches what it stored', async () => {
+    // Under a Loader the plugins that listen to `im/message` may start long after the maintenance interval first
+    // fires; the Loader settling, not a tick, is what says the composition is complete.
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => { settle = resolve })
+    const { base, bot, service } = await mount({
+      retryIntervalMs: 1,
+      beforeMount: async (ctx) => { provideByName(ctx, 'loader', { await: () => settled }) },
+    })
+    const seen: string[] = []
+    base.ctx.on('im/message', async (event) => {
+      seen.push(event.message.key)
+      return { kind: 'handled', by: 'probe' }
+    })
+    // A frame arriving meanwhile is stored and acknowledged, but nobody hears it yet.
+    await deliver(bot, inbound('m-early'))
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(service.store.pending()).toHaveLength(1)
+    expect(seen).toEqual([])
+    settle()
+    await vi.waitFor(() => { expect(seen).toEqual([ImMessageKey('fake:bot', 'm-early')]) })
   })
 
   it('unmounts its service when the plugin is disposed', async () => {
