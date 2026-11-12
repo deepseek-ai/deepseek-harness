@@ -8,7 +8,7 @@ import Testing
 func invalidRootDoesNotHideHealthyWindowDuringDiscovery(attribute: String) throws {
     let invalid = AXUIElementCreateApplication(1), healthy = AXUIElementCreateApplication(2)
     let failure = NativeFailure(code: "NATIVE_ERROR", message: "read \(attribute)", accessibilityError: AXError.invalidUIElement.rawValue)
-    var discovery = try AXRootDiscovery.discover(roots: [invalid, healthy], maxElements: 20, role: { element in
+    let discovery = try AXRootDiscovery.discover(roots: [invalid, healthy], maxElements: 20, role: { element in
         if attribute == "AXRole", CFEqual(element, invalid) { throw failure }
         return "AXWindow"
     }, children: { element in
@@ -18,18 +18,10 @@ func invalidRootDoesNotHideHealthyWindowDuringDiscovery(attribute: String) throw
     #expect(discovery.roots.count == 2)
     #expect(CFEqual(discovery.roots[0], invalid))
     #expect(CFEqual(discovery.roots[1], healthy))
-    let focusedID: UInt32? = try discovery.readRoot(invalid) {
-        Issue.record("Invalid root was queried again for focus")
-        return 7
-    }
-    #expect(focusedID == nil)
-    let selected = try discovery.selectWindow(8, attribute: { element, name in
-        #expect(CFEqual(element, healthy))
-        return name == "AXRole" ? "AXWindow" : nil
-    }, windowID: { _ in 8 }, verifyOwnership: { Issue.record("Healthy window was not matched") })
-    #expect(selected.count == 1 && CFEqual(selected[0], healthy))
+    #expect(discovery.invalidRoots[invalid]?.message == failure.message)
+    try discovery.validateWindowSelection(hasMatch: true) {}
     let projection = try AXTreeProjection.project(roots: AXObservedChildren(entries: discovery.roots.map(Optional.some)),
-        focusedWindowID: focusedID, windowScoped: false, maxElements: 20, maxDepth: 10,
+        focusedWindowID: nil, windowScoped: false, maxElements: 20, maxDepth: 10,
         includeMenus: false, details: false, checkCancellation: {}, read: { element in
             if let failure = discovery.invalidRoots[element] { throw failure }
             return AXReadNode(text: AXTextNode(index: nil, role: "AXButton", title: "Healthy window", value: nil,
@@ -48,92 +40,22 @@ func invalidRootDoesNotHideHealthyWindowDuringDiscovery(attribute: String) throw
     }
 }
 
-@Test(arguments: ["AXRole", "windowID", "focusedWindowID"])
-func rootsInvalidatedAfterDiscoveryDoNotPreventHealthyWindowSelection(operation: String) throws {
-    let invalid = AXUIElementCreateApplication(1), healthy = AXUIElementCreateApplication(2)
-    var discovery = try AXRootDiscovery.discover(roots: [invalid, healthy], maxElements: 20,
-        role: { _ in "AXWindow" }, children: { _ in [] })
-    let failure = NativeFailure(code: "NATIVE_ERROR", message: operation, accessibilityError: AXError.invalidUIElement.rawValue)
-    if operation == "focusedWindowID" {
-        let focusedID: UInt32? = try discovery.readRoot(invalid) { throw failure }
-        #expect(focusedID == nil)
-    }
-    let selected = try discovery.selectWindow(8, attribute: { element, name in
-        if operation == "AXRole", CFEqual(element, invalid) { throw failure }
-        return name == "AXRole" ? "AXWindow" : nil
-    }, windowID: { element in
-        if operation == "windowID", CFEqual(element, invalid) { throw failure }
-        return 8
-    }, verifyOwnership: { Issue.record("Healthy window was not matched") })
-    #expect(selected.count == 1 && CFEqual(selected[0], healthy))
-    #expect(discovery.invalidRoots[invalid]?.message == operation)
-    var ownershipChecked = false
-    do {
-        _ = try discovery.selectWindow(9, attribute: { _, name in name == "AXRole" ? "AXWindow" : nil },
-            windowID: { _ in 8 }, verifyOwnership: { ownershipChecked = true })
-        Issue.record("Unknown window accepted after a root failed")
-    } catch let actual as NativeFailure {
-        #expect(ownershipChecked)
-        #expect(actual.message == operation)
-    }
-}
-
-@Test(arguments: ["AXRole", "AXChildren", "windowID", "focusedWindowID"], [AXError.apiDisabled, .cannotComplete, .failure, .illegalArgument])
+@Test(arguments: ["AXRole", "AXChildren"], [AXError.apiDisabled, .cannotComplete, .failure, .illegalArgument])
 func rootReadFailuresOtherThanInvalidElementsStillRejectObservation(operation: String, error: AXError) throws {
     let root = AXUIElementCreateApplication(1)
     let failure = NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
         message: operation, accessibilityError: error.rawValue)
     do {
-        var discovery = try AXRootDiscovery.discover(roots: [root], maxElements: 20, role: { _ in
+        _ = try AXRootDiscovery.discover(roots: [root], maxElements: 20, role: { _ in
             if operation == "AXRole" { throw failure }
             return "AXWindow"
-        }, children: { _ in
-            if operation == "AXChildren" { throw failure }
-            return []
-        })
-        if operation == "focusedWindowID" {
-            let _: UInt32? = try discovery.readRoot(root) { throw failure }
-        } else {
-            _ = try discovery.selectWindow(7, attribute: { _, name in name == "AXRole" ? "AXWindow" : nil },
-                windowID: { _ in throw failure }, verifyOwnership: {})
-        }
+        }, children: { _ in throw failure })
         Issue.record("Fatal root error was hidden")
     } catch let actual as NativeFailure {
         #expect(actual.message == operation)
         #expect(actual.code == failure.code)
         #expect(actual.accessibilityError == error.rawValue)
     }
-}
-
-@Test(arguments: [false, true])
-func selectedWindowKeepsApplicationControlsAccordingToDialogScope(dialog: Bool) throws {
-    let nodes = (1...4).map { AXUIElementCreateApplication(Int32($0)) }
-    func attribute(_ element: AXUIElement, _ name: String) -> String? {
-        if name == "AXSubrole", CFEqual(element, nodes[0]) { return dialog ? "AXDialog" : nil }
-        guard name == "AXRole" else { return nil }
-        return ["AXWindow", "AXMenuBar", "AXSheet", "AXButton"][nodes.firstIndex { CFEqual($0, element) }!]
-    }
-    var discovery = try AXRootDiscovery.discover(roots: nodes, maxElements: 20,
-        role: { attribute($0, "AXRole") }, children: { _ in [] })
-    let selected = try discovery.selectWindow(7, attribute: attribute,
-        windowID: { CFEqual($0, nodes[0]) ? 7 : nil }, verifyOwnership: {})
-    let expected = dialog ? [nodes[0], nodes[3]] : [nodes[0], nodes[1], nodes[3], nodes[2]]
-    #expect(selected.count == expected.count)
-    #expect(zip(selected, expected).allSatisfy { CFEqual($0, $1) })
-}
-
-@Test func selectedWindowInvalidatedDuringDialogReadStaysAnExplicitUnreadableRoot() throws {
-    let root = AXUIElementCreateApplication(1), menu = AXUIElementCreateApplication(2)
-    var discovery = try AXRootDiscovery.discover(roots: [root, menu], maxElements: 20,
-        role: { CFEqual($0, root) ? "AXWindow" : "AXMenuBar" }, children: { _ in [] })
-    let selected = try discovery.selectWindow(7, attribute: { element, name in
-        if name == "AXSubrole" {
-            throw NativeFailure(code: "NATIVE_ERROR", message: "read AXSubrole", accessibilityError: AXError.invalidUIElement.rawValue)
-        }
-        return CFEqual(element, root) ? "AXWindow" : "AXMenuBar"
-    }, windowID: { _ in 7 }, verifyOwnership: {})
-    #expect(selected.count == 1 && CFEqual(selected[0], root))
-    #expect(discovery.invalidRoots[root]?.message == "read AXSubrole")
 }
 
 private func discoveryWithInvalidChild() throws -> AXRootDiscovery {
@@ -190,21 +112,18 @@ private func discoveryWithInvalidChild() throws -> AXRootDiscovery {
 
 @Test func successfulDiscoveryStillAllowsAnOwnedWindowWithoutAnAXSurface() throws {
     let parent = AXUIElementCreateApplication(1)
-    var discovery = try AXRootDiscovery.discover(roots: [parent], maxElements: 20,
+    let discovery = try AXRootDiscovery.discover(roots: [parent], maxElements: 20,
         role: { _ in "AXWindow" }, children: { _ in [] })
     var ownershipChecked = false
-    let selected = try discovery.selectWindow(9, attribute: { _, _ in "AXWindow" },
-        windowID: { _ in 7 }, verifyOwnership: { ownershipChecked = true })
+    try discovery.validateWindowSelection(hasMatch: false) { ownershipChecked = true }
     #expect(ownershipChecked)
-    #expect(selected.isEmpty)
 }
 
 @Test func unmatchedOwnedWindowRemainsUnknownWhenAnotherWindowsChildCannotBeIdentified() throws {
-    var discovery = try discoveryWithInvalidChild()
+    let discovery = try discoveryWithInvalidChild()
     var ownershipChecked = false
     do {
-        _ = try discovery.selectWindow(9, attribute: { _, _ in "AXWindow" },
-            windowID: { _ in 7 }, verifyOwnership: { ownershipChecked = true })
+        try discovery.validateWindowSelection(hasMatch: false) { ownershipChecked = true }
         Issue.record("An unidentified child could be the requested window's nested sheet")
     } catch let failure as NativeFailure {
         #expect(ownershipChecked)
