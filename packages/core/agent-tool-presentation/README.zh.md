@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### PTC 模式需要什么
 
-选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`）报告 `language: 'typescript'`；[`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md)提供已发布的提供方。PTC 子插件在运行时可用时拒绝其他语言。在运行时首次可用之前，此兼容选择器会保留继承的执行器。若需要在 preset 激活时拒绝缺少运行时的配置，请直接挂载 `dsh-tool-executor-ptc`。
+选择 `ptc` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`）报告 `language: 'typescript'`；[`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md)提供已发布的提供方。运行时可用后，PTC 子插件保持选中，并在提示词组装与执行时拒绝不支持的语言，不回落到继承的执行器。在运行时首次可用之前，此兼容选择器会保留继承的执行器。若需要在 preset 激活时拒绝缺少运行时的配置，请直接挂载 `dsh-tool-executor-ptc`。
 
 ### 每个 agent 只声明一次呈现方式
 

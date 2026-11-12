@@ -1,6 +1,6 @@
 ---
 kind: upgrade-guide
-description: "自定义 Python PTC 组合必须将已移除的运行时包替换为 Node 提供方，并使用 TypeScript 程序。"
+description: "Python PTC 运行时包、外部提供方、SDK 渲染器和 Python 专属绑定 API 均已移除，须迁移到 TypeScript PTC。"
 ---
 
 # 移除 Python PTC
@@ -9,7 +9,7 @@ description: "自定义 Python PTC 组合必须将已移除的运行时包替换
 
 ## 变更
 
-`@deepseek-ai/dsh-experimental-ptc-runtime-python` 不再发布，也不再包含于本仓库。选择该包的自定义组合必须迁移到 [`@deepseek-ai/dsh-ptc-runtime-node`](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)。已发布 profile 已经选择 Node 提供方。`dsh-tool-executor-ptc` 也移除了对报告 `language: 'python'` 的外部 `PtcRuntime` 提供方的支持：使用非 TypeScript 提供方挂载执行器或创建 `/run-code` 工具会以 `ToolContextUnavailableError` / `TOOL_CONTEXT_UNAVAILABLE` 失败。该包不再导出 `jsonSchemaToPy` 或 `renderToolsSdkPy`。
+`@deepseek-ai/dsh-experimental-ptc-runtime-python` 不再发布，也不再包含于本仓库。选择该包的自定义组合必须迁移到 [`@deepseek-ai/dsh-ptc-runtime-node`](../../../../packages/ptc-runtime/ptc-runtime-node/README.zh.md)。已发布 profile 已经选择 Node 提供方。`dsh-tool-executor-ptc` 也移除了对报告 `language: 'python'` 的外部 `PtcRuntime` 提供方的支持：通过已选中的执行器组装提示词、执行程序，或使用非 TypeScript 提供方创建 `/run-code` 工具，会以 `ToolContextUnavailableError` / `TOOL_CONTEXT_UNAVAILABLE` 失败。该包不再导出 `jsonSchemaToPy` 或 `renderToolsSdkPy`。
 
 ## 迁移
 

@@ -98,10 +98,10 @@ export const inject = ['tools', 'systemPrompt', 'ptcRuntime']
 
 /**
  * Select PTC execution in the mounting scope.
+ * Schema projection and execution reject unsupported runtime languages.
  * @param ctx - context owning this executor's selection and lifetime.
  * @param config - timeout-based subcall allowance and concurrency limits.
  */
 export function apply(ctx: Context, config: Config): void {
-  requirePtcRuntime(ctx)
   ctx.tools.setExecutor(new PtcExecutor(ctx, config))
 }

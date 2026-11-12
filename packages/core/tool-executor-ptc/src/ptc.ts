@@ -70,7 +70,7 @@ const TYPESCRIPT_FUNCTION_FLAVOR = runCodeFlavor('TypeScript', TYPESCRIPT_OUTPUT
 /**
  * Read the active runtime, rejecting missing providers and unsupported languages.
  * @param ctx - executor context containing the runtime provider.
- * @returns the runtime with a supported SDK language.
+ * @returns the mounted TypeScript provider.
  */
 export function requirePtcRuntime(ctx: Context): PtcRuntime {
   const runtime = ctx.get('ptcRuntime')
@@ -93,12 +93,7 @@ export function requireRuntimeLanguage(runtime: PtcRuntime): PtcRuntime {
   return runtime
 }
 
-/**
- * The `description` parameter's model-facing description: language-independent
- * (the UI label contract is the same for every runtime), shared between the
- * static spec and the language-aware `parameters` getter so the two emissions
- * can never drift.
- */
+/** The shared UI-label description for the static spec and program-format-aware parameters getter. */
 const RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION
   = 'Clear, concise description of what this program does in active voice, '
     + '5-10 words (shown in the UI). '

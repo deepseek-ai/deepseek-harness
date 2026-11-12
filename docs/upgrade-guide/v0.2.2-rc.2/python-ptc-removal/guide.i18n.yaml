@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.2/python-ptc-removal/guide.md
 /:
-  en: dbdbb46d75c3dab6
-  zh: 046691366a3298da
+  en: eeeb758cea41904d
+  zh: 975ffc19b580300a
 /python-ptc-removal:
   en: 3677e4a2744450dc
   zh: 014c2c5dc75b8bae
 /python-ptc-removal/change:
-  en: 2515b072f293cefc
-  zh: 08121def05e691d0
+  en: 6679d90f28c99bde
+  zh: cb8cbe999f35271a
 /python-ptc-removal/migration:
   en: 30c656266535fb91
   zh: 326190403ef56a5e

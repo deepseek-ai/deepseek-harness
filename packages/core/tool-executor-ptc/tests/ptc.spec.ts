@@ -542,17 +542,30 @@ describe('mode-aware wire contribution', () => {
     await expect(systemPrompt.assemble()).rejects.toThrow(/requires a PTC runtime/)
   })
 
-  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s before mounting, assembly, or execution', async (language) => {
-    const { ctx, runtime, tools, systemPrompt } = await setup({ mode: 'ptc', runtime: { language } })
+  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s through the mounted plugin without native fallback', async (language) => {
+    const ctx = new Context()
     onTestFinished(async () => { await ctx.fiber.dispose() })
+    provideWorkingDirectoryFixture(ctx)
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    await ctx.plugin(FakeRuntime, { language })
+    const runtime = ctx.ptcRuntime as FakeRuntime
+    const calls = registerEcho(ctx)
+    const selection = ctx.plugin(PtcToolExecutor)
+    await selection.await()
     const error = { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }
-    expect(() => { PtcToolExecutor.apply(ctx, PtcToolExecutor.Config({})) }).toThrow(expect.objectContaining(error))
-    await expect(systemPrompt.assemble()).rejects.toThrow(expect.objectContaining(error))
-    const result = await tools.execute({
+    await expect(ctx.systemPrompt.assemble()).rejects.toThrow(expect.objectContaining(error))
+    const result = await executeCall(ctx, {
       signal: testToolSignal, callId: brandString<ToolCallId>('unsupported-language'),
       name: RUN_CODE_NAME, arguments: { code: 'program', description: 'Try an unsupported runtime' },
     })
     expect(result).toMatchObject({ isError: true, error: { info: error } })
+    const direct = await executeCall(ctx, {
+      signal: testToolSignal, callId: brandString<ToolCallId>('no-native-fallback'),
+      name: 'echo', arguments: { value: 'must not execute' },
+    })
+    expect(direct).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+    expect(calls).toEqual([])
     expect(runtime.lastRequest).toBeUndefined()
   })
 
