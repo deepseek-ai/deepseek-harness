@@ -57,13 +57,17 @@ it.each<[string, DingtalkState['account'], string]>([
   expect(zhOf(presentAccount({ account }).detail)).toBe(detail)
 })
 
-it('asks before signing out', () => {
+it('offers another sign-in while connected and asks before signing out', () => {
   let shown = presentAccount(CONNECTED)
   expect(shown).toMatchObject({ phase: 'connected', status: say('status.connected'), badge: say('badge.connected') })
-  expect(shown.buttons).toMatchObject([{
-    label: say('action.signOut'), command: SIGN_OUT,
-    confirm: { title: say('signOut.title'), body: say('signOut.body'), label: say('action.signOut') },
-  }])
+  expect(shown.buttons).toMatchObject([
+    { label: say('action.addAccount'), command: SIGN_IN },
+    {
+      label: say('action.signOut'), command: SIGN_OUT,
+      confirm: { title: say('signOut.title'), body: say('signOut.body'), label: say('action.signOut') },
+    },
+  ])
+  expect(shown.buttons[0]).not.toHaveProperty('confirm')
   shown = presentAccount({ ...CONNECTED, operation: { id: OP, kind: 'sign-out', phase: 'signing-out', cancellable: false } })
   expect(shown).toMatchObject({ status: say('step.signing-out'), buttons: [] })
 })

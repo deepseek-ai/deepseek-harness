@@ -52,7 +52,7 @@ dsh plugin --profile web remove @deepseek-ai/dsh-dingtalk
 | 操作 | 效果 |
 |---|---|
 | `check` | dws 或其技能缺失时先下载，再重新检查账号；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
-| `sign-in` | 运行 `auth login --no-browser --format json`，等待用户在这台电脑的浏览器中授权，然后检查 dws 是否报告该账号已登录 |
+| `sign-in` | 运行 `auth login --no-browser --format json`，等待用户在这台电脑的浏览器中授权，然后检查 dws 是否报告该账号已登录。已连接的区块以“登录其他组织”再次提供它：dws 按组织和用户各保存一个账号，用另一个账号授权会新增该账号，用当前账号授权只刷新它；随后的检查显示 dws 报告为当前的账号 |
 | `sign-out` | 用户确认后，对最近一次检查发现的账号运行 `auth logout --profile <corpId>:<userId>`，这也会让用户自己的终端退出该账号，然后重新检查 |
 | 取消 | 在登录等待授权时取消它，或在检查下载时取消下载，并等待命令或下载停止；其他步骤会被忽略 |
 
@@ -167,7 +167,7 @@ Scripts in the DingTalk skill call `dws` by name; start only the commands that r
 
 - 仅支持 macOS 和 Windows x64。固定的 Linux 归档未经验证，release 中的 Windows arm64 归档没有固定。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `dws` 的命令都会因为那里没有这个路径而失败。
-- 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，以及这台电脑上其他运行 dws 的程序，没有 DSH 专用的账号，也没有账号选择。
+- 插件使用 CLI 的默认配置。在 DSH 中登录或退出登录会影响用户自己的终端，以及这台电脑上其他运行 dws 的程序，没有 DSH 专用的账号。页面只显示 dws 报告为当前的账号，不提供在已保存账号之间选择；在终端执行 `dws profile switch` 可以更换当前账号。
 - 从插件页面登录需要运行 DSH 的这台电脑上的浏览器，因为 CLI 的授权回调监听 `127.0.0.1`。
 - 插件不设置 `DWS_CHANNEL`，在只允许已登记渠道访问 CLI 的组织中未经验证。
 - 除非同时设置了 `binDir` 和 `skillsDir`，第一次检查需要能访问 GitHub 或 Gitee，成功之前没有 `dingtalk` skill；Gitee 镜像可能比 release 晚几天。下载源必须发送 `Content-Length`。

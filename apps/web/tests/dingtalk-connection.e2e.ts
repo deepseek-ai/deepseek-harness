@@ -16,20 +16,26 @@ const authUrl = (attempt: number) => `${AUTH_PAGE}?e2e=${String(attempt)}&state=
 
 // The stand-in keeps its sign-in in state.json beside itself. auth login prints a
 // new authorization link alone on an indented stderr line for each attempt and
-// waits until the test marks the page visited; auth logout accepts only the
-// signed-in account's profile.
+// waits until the test marks the page visited; its second successful sign-in
+// makes a second organization's account current, as the stand-in's own rule;
+// auth logout accepts only the current account's profile.
 const DWS = `#!/usr/bin/env node
 const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const dir = __dirname
 const statePath = join(dir, 'state.json')
-const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { signedIn: false, attempts: 0 }
+const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { signedIn: false, attempts: 0, logins: 0 }
+const ACCOUNTS = [
+  { corp_id: 'corp-e2e', corp_name: 'E2E 组织', user_id: 'user-e2e', user_name: 'E2E 用户' },
+  { corp_id: 'corp-e2e-2', corp_name: '第二个 E2E 组织', user_id: 'user-e2e-2', user_name: '第二个 E2E 用户' },
+]
+const current = () => ACCOUNTS[Math.min(state.logins, ACCOUNTS.length) - 1]
 const save = () => { writeFileSync(statePath, JSON.stringify(state)) }
 const json = (value) => JSON.stringify(value, null, 2) + '\\n'
 switch (process.argv.slice(2).join(' ')) {
   case 'auth status --format json':
     process.stdout.write(json(state.signedIn
-      ? { success: true, authenticated: true, corp_id: 'corp-e2e', corp_name: 'E2E 组织', user_id: 'user-e2e', user_name: 'E2E 用户' }
+      ? { success: true, authenticated: true, ...current() }
       : { success: true, authenticated: false, message: '未登录' }))
     break
   case 'auth login --no-browser --format json': {
@@ -44,13 +50,14 @@ switch (process.argv.slice(2).join(' ')) {
         process.exitCode = 2
       } else {
         state.signedIn = true
+        state.logins += 1
         save()
         process.stdout.write(json({ success: true, message: '登录成功' }))
       }
     }, 50)
     break
   }
-  case 'auth logout --profile corp-e2e:user-e2e':
+  case state.signedIn ? 'auth logout --profile ' + current().corp_id + ':' + current().user_id : 'auth logout':
     state.signedIn = false
     save()
     process.stdout.write('[OK] 已清除认证信息\\n')
@@ -102,7 +109,7 @@ describe.skipIf(process.platform === 'win32')('web e2e: DingTalk plugin account'
     if (binDir !== undefined) await rm(binDir, { recursive: true, force: true })
   })
 
-  it('reports a failed sign-in without its output, connects on retry, and signs out after confirmation', async () => {
+  it('reports a failed sign-in without its output, connects on retry, signs in to another organization, and signs out after confirmation', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-dingtalk-connection'))
     await page.getByRole('navigation', { name: '全局面板' }).getByRole('button', { name: '插件', exact: true }).click()
     const panel = page.locator('[data-plugin-panel]')
@@ -127,6 +134,14 @@ describe.skipIf(process.platform === 'win32')('web e2e: DingTalk plugin account'
     expect(opened.map(popup => popup.url())).toEqual([authUrl(1), authUrl(2)])
     await section.getByText('已登录为 E2E 组织 的 E2E 用户。可以在对话中直接请 Agent 使用钉钉。', { exact: true }).waitFor({ timeout: 10_000 })
     await page.getByText('钉钉已连接', { exact: true }).waitFor({ timeout: 10_000 })
+
+    // Signing in again while connected adds another organization's account; the section shows the account dws then reports.
+    await rm(join(binDir, 'auth-visited'))
+    await section.getByRole('button', { name: '登录其他组织', exact: true }).click()
+    await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('connecting')
+    await expect.poll(() => section.getAttribute('data-connector-account'), { timeout: 20_000 }).toBe('connected')
+    expect(opened.map(popup => popup.url())).toEqual([authUrl(1), authUrl(2), authUrl(3)])
+    await section.getByText('已登录为 第二个 E2E 组织 的 第二个 E2E 用户。可以在对话中直接请 Agent 使用钉钉。', { exact: true }).waitFor({ timeout: 10_000 })
 
     await section.getByRole('button', { name: '退出登录', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '退出钉钉登录？' })

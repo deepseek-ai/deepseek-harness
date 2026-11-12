@@ -52,7 +52,7 @@ The Plugins page drives these operations through the connector account registry,
 | Operation | Effect |
 |---|---|
 | `check` | Downloads dws and its skills while either is missing, then checks the account again; each browser that opens the Web app starts one when no operation runs |
-| `sign-in` | Runs `auth login --no-browser --format json`, waits for the user to authorize in a browser on this computer, then checks that dws reports the account signed in |
+| `sign-in` | Runs `auth login --no-browser --format json`, waits for the user to authorize in a browser on this computer, then checks that dws reports the account signed in. The connected section offers it again as signing in to another organization: dws keeps one account per organization and user, so authorizing with another account adds it, and authorizing with the current one refreshes it; the check then shows the account dws reports as current |
 | `sign-out` | After the user confirms, runs `auth logout --profile <corpId>:<userId>` for the account the last check found, which also signs it out of the user's own terminal, then checks again |
 | Cancel | Cancels a sign-in while it waits for authorization, or a check while it downloads, and waits for the command or download to stop; other steps are ignored |
 
@@ -167,7 +167,7 @@ The system prompt does not change; finishing the installation, loading or unload
 
 - Only macOS and Windows x64 are supported. The pinned Linux archives are unverified, and the release's Windows arm64 archive is not pinned.
 - Commands must run on this Host. When a composition runs them elsewhere, such as over SSH, the plugin still loads, and each command that runs `dws` fails because the path does not exist there.
-- The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal and other programs that run dws on this computer, and there is no DSH-private account or account picker.
+- The plugin uses the CLI's default configuration. Signing in or out from DSH affects the user's own terminal and other programs that run dws on this computer, and there is no DSH-private account. The page shows only the account dws reports as current and offers no picker among the saved accounts; `dws profile switch` in the terminal changes the current account.
 - Sign-in from the plugin page needs a browser on the computer that runs DSH, because the CLI's authorization callback listens on `127.0.0.1`.
 - The plugin sets no `DWS_CHANNEL`, and it is unverified with organizations that restrict CLI access to registered channels.
 - Unless `binDir` and `skillsDir` are both set, the first check needs network access to GitHub or Gitee, and the `dingtalk` skill is absent until it succeeds; the Gitee mirror can lag a release by days. Download sources must send `Content-Length`.

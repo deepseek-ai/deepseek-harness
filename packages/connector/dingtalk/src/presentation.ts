@@ -96,17 +96,19 @@ export function presentAccount(view: DingtalkState): ConnectorAccountDisplay {
         buttons: [{ label: text('action.connect'), command: SIGN_IN, variant: 'primary' }], connect: SIGN_IN,
         detail: text('detail.disconnected'), notes: [], ...failure,
       }
-    /* jscpd:ignore-start -- CLI app plugins that sign out offer the same confirmed sign-out button. */
     case 'connected':
       return {
         phase: 'connected', status: text('status.connected'), badge: text('badge.connected'),
-        buttons: [{
-          label: text('action.signOut'), command: SIGN_OUT,
-          confirm: { title: text('signOut.title'), body: text('signOut.body'), label: text('action.signOut') },
-        }],
+        buttons: [
+          // dws keeps several accounts; another sign-in adds one and makes it the current account.
+          { label: text('action.addAccount'), command: SIGN_IN },
+          {
+            label: text('action.signOut'), command: SIGN_OUT,
+            confirm: { title: text('signOut.title'), body: text('signOut.body'), label: text('action.signOut') },
+          },
+        ],
         detail: connectedDetail(account), notes: [], ...failure,
       }
-    /* jscpd:ignore-end */
     /* v8 ignore next -- closed account state union */
     default: return assertNever(account)
   }
