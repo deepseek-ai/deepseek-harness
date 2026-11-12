@@ -10,7 +10,7 @@ import Testing
         range.contains(17) ? .unreadable : .values(Array(nodes[range]))
     }
     #expect(children.incomplete)
-    #expect(children.elements == Array(nodes[..<17]) + Array(nodes[18...]))
+    #expect(children.entries == Array(nodes[..<17]) + [nil] + Array(nodes[18...]))
     #expect(requests > 0)
 }
 
@@ -21,7 +21,7 @@ import Testing
         #expect(range.upperBound <= 4)
         return range.upperBound > 2 ? .unreadable : .values(Array(repeating: node, count: range.count))
     }
-    #expect(limited.elements == [node, node])
+    #expect(limited.entries == [node, node])
     #expect(limited.incomplete)
     #expect(requests == 0)
 
@@ -29,11 +29,11 @@ import Testing
         Issue.record("Recovery called AX after exhausting the observation budget")
         return .unreadable
     }
-    #expect(exhausted.elements.isEmpty)
+    #expect(exhausted.entries.isEmpty)
     #expect(exhausted.incomplete)
 }
 
-@Test func aChangedRangeDiscardsEarlierChildrenAndOtherErrorsPropagate() {
+@Test func aChangedRangeRetainsReadableReferencesAndOtherErrorsPropagate() {
     let node = AXUIElementCreateApplication(1)
     var requests = 10
     let changed = AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { range in
@@ -41,7 +41,8 @@ import Testing
         return range.lowerBound == 0 ? .values([node]) : .unavailable
     }
     #expect(changed.incomplete)
-    #expect(changed.elements.isEmpty)
+    #expect(changed.entries == [node])
+    #expect(changed.parentIncomplete)
     #expect(throws: CancellationError.self) {
         try AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { _ in throw CancellationError() }
     }
@@ -51,6 +52,6 @@ import Testing
     let node = AXUIElementCreateApplication(1)
     var requests = 1
     let recovered = AXObservedChildren.readRanges(count: 1, limit: 1, requests: &requests) { _ in .values([node]) }
-    #expect(recovered.elements == [node])
+    #expect(recovered.entries == [node])
     #expect(!recovered.incomplete)
 }

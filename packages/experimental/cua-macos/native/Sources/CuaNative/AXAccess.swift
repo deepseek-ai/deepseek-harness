@@ -134,7 +134,7 @@ final class AXAccess {
             if error == .failure { return .unreadable }
             if absent(error) || error == .illegalArgument { return .unavailable }
             guard error == .success else { throw failure(error, "read AXChildren range") }
-            guard let values, CFArrayGetCount(values) == range.count else { return .unavailable }
+            guard let values, CFArrayGetCount(values) <= range.count else { return .unavailable }
             return .values(try childValues(values, attribute: "AXChildren"))
         }
     }
@@ -571,14 +571,16 @@ final class AXAccess {
         func observedChildren(_ parent: AXUIElement, _ value: @autoclosure () throws -> CFTypeRef?, duringDiscovery: Bool = false) throws -> AXObservedChildren {
             if let cached = discovery[parent] { return cached }
             do {
-                return try AXObservedChildren(elements: childValues(value(), attribute: "AXChildren"), incomplete: false)
+                return try AXObservedChildren(entries: childValues(value(), attribute: "AXChildren"))
             } catch let error as NativeFailure where error.attribute == "AXChildren" && error.accessibilityError == AXError.failure.rawValue {
                 let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests)
                 if duringDiscovery { discovery[parent] = children }
                 return children
             }
         }
-        var roots = try observedChildren(app, attribute(app, "AXChildren"), duringDiscovery: true).elements
+        let appChildren = try observedChildren(app, attribute(app, "AXChildren"), duringDiscovery: true)
+        var roots = appChildren.entries.compactMap { $0 }
+        let appRootCount = roots.count
         func appendUnique(_ element: AXUIElement) {
             if !roots.contains(where: { CFEqual($0, element) }) { roots.append(element) }
         }
@@ -591,7 +593,7 @@ final class AXAccess {
             cursor += 1
             let role = try string(root, "AXRole")
             guard role == "AXWindow" || role == "AXSheet" else { continue }
-            for child in try observedChildren(root, attribute(root, "AXChildren"), duringDiscovery: true).elements where roots.count < maxElements {
+            for case let child? in try observedChildren(root, attribute(root, "AXChildren"), duringDiscovery: true).entries where roots.count < maxElements {
                 if try string(child, "AXRole") == "AXSheet" { appendUnique(child) }
             }
         }
@@ -610,8 +612,9 @@ final class AXAccess {
             }
             if matches.isEmpty {
                 _ = try NativePlatform.ownedWindow(identity.pid, requested)
-                if discovery.values.contains(where: \.incomplete) { throw failure(.failure, "locate window in incomplete AXChildren") }
-                return AXProjection(tree: "", elements: [], indexed: [:], focusedWindowID: focusedID, truncated: false)
+                let incomplete = discovery.values.contains(where: \.incomplete)
+                let tree = incomplete ? "[Window discovery incomplete. Some children could not be read.]" : ""
+                return AXProjection(tree: tree, elements: [], indexed: [:], focusedWindowID: focusedID, truncated: incomplete)
             }
             let dialog = try matches.contains { root in
                 let role = try string(root, "AXRole")
@@ -626,7 +629,6 @@ final class AXAccess {
             }
             if !dialog { roots.append(contentsOf: anonymousSheets) }
         }
-        if roots.isEmpty && discovery[app]?.incomplete == true { throw failure(.failure, "read application AXChildren") }
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
         var elementLimitReached = false
@@ -637,22 +639,36 @@ final class AXAccess {
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        var pending = roots.reversed().map { (element: $0, level: 0, depth: 0) }
+        let rootEntries: [AXUIElement?]
+        if requested == nil {
+            rootEntries = appChildren.entries + roots.dropFirst(appRootCount)
+            unreportedParents.remove(app)
+            if appChildren.parentIncomplete { lines.append("[Some children of AXApplication could not be read.]") }
+        } else {
+            rootEntries = roots
+        }
+        var pending = rootEntries.reversed().map { (element: $0, level: 0, depth: 0) }
         func enqueueChildren(_ parent: AXUIElement, observation: AXNodeObservation, level: Int, depth: Int) throws {
             let children = try observedChildren(parent, observation.attribute("AXChildren"))
             if children.incomplete {
                 childrenMissing = true
                 unreportedParents.remove(parent)
+            }
+            if children.parentIncomplete {
                 lines.append(String(repeating: "  ", count: level) + "[Some children of " + observation.role + " could not be read.]")
             }
-            for child in children.elements.reversed() { pending.append((child, level, depth)) }
+            for child in children.entries.reversed() { pending.append((child, level, depth)) }
         }
-        while let (element, level, depth) = pending.popLast() {
+        while let (entry, level, depth) = pending.popLast() {
             try cancellation.check()
+            guard depth <= maxDepth else { depthLimitReached = true; continue }
+            guard let element = entry else {
+                lines.append(String(repeating: "  ", count: level) + "[One child could not be read.]")
+                continue
+            }
             let hash = CFHash(element)
             if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
             guard count < maxElements else { elementLimitReached = true; break }
-            guard depth <= maxDepth else { depthLimitReached = true; continue }
             visited[hash, default: []].append(element)
             count += 1
             let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
