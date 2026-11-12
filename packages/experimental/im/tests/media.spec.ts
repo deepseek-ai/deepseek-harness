@@ -451,7 +451,7 @@ describe('ImMediaStore.read', () => {
   })
 
   it('asks the transport to reach the admitted URL only, inside the media deadline', async () => {
-    const asked: { redirect?: RequestRedirect; timeout?: number }[] = []
+    const asked: { redirect?: RequestRedirect | undefined; timeout?: number | undefined }[] = []
     const recording: FakeHttp = {
       get: async (_src, init) => {
         asked.push({ redirect: init.redirect, timeout: init.timeout })
