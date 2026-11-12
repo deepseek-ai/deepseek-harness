@@ -1,7 +1,7 @@
 /** Model-facing guidance enumerates the full available object API without unavailable operations. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
@@ -30,6 +30,18 @@ it('keeps exactly three ordered operation headings', () => {
 it('prefixes concise platform guidance before the shared catalog', () => {
   expect(GUIDANCE.startsWith(`${PLATFORM_GUIDANCE}\n\nUse cua`)).toBe(true)
   expect(PLATFORM_GUIDANCE).not.toContain('##')
+})
+
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a system-pointer prompt', (catalog) => {
+  const instructions = withSystemPointerGuidance(catalog)
+  expect(catalog.split('- mouseMove(')[0]).toContain('Leave useSystemPointer unset')
+  expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
+  expect(instructions).toContain('The question interrupts the user.')
+  expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
+  const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
+  expect(drag).toContain('useSystemPointer?: boolean')
+  expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
+  expect(COMMON_GUIDANCE).not.toContain('window-directed drag')
 })
 
 it('states the macOS accessibility, keyboard, and mouse levels', () => {

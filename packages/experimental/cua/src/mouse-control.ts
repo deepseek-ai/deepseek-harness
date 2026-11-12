@@ -21,7 +21,7 @@ export class MouseControl {
   resolve(agent: Agent, requested: boolean): { useSystemPointer: boolean; prepare?: (signal: AbortSignal) => Promise<void> } {
     if (!requested) return { useSystemPointer: false }
     if (agent.session.header.origin === 'subagent') {
-      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', "Delegated tasks cannot move the user's pointer. Use AX hover, click, or performAction. If the task requires a physical hover, report that step in your final result for the main task.")
+      throw new NativeError('MOUSE_CONTROL_UNAVAILABLE', "Delegated tasks cannot move the user's pointer. Use a window-directed action or report the required system-pointer gesture to the main task.")
     }
     if (!this.requireApproval || this.decisions.get(agent) === true) return { useSystemPointer: true }
     return { useSystemPointer: true, prepare: signal => this.approve(agent, signal) }
@@ -58,6 +58,6 @@ export class MouseControl {
         throw error
       }
     }
-    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer movement for this session. No input was sent. Use pointer-free actions.')
+    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer moves and drags for this session. No input was sent. Use pointer-free actions.')
   }
 }

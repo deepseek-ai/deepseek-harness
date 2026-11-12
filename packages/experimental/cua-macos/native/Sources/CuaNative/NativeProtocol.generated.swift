@@ -6,7 +6,7 @@ enum NativeProtocol {
         "activate": ["appHandle"],
         "applicationIcons": ["paths"],
         "click": ["appHandle", "clickCount", "elementId", "holdMs", "modifiers", "mouseButton", "snapshotId", "windowId", "x", "y"],
-        "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "windowId"],
+        "drag": ["appHandle", "durationMs", "fromX", "fromY", "modifiers", "mouseButton", "snapshotId", "steps", "toX", "toY", "useSystemPointer", "windowId"],
         "findApps": ["maxAppMatches", "query"],
         "getApp": ["selector"],
         "getCapabilities": [],
