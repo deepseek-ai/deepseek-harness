@@ -4,6 +4,9 @@ import { StagehandClientCreateConfigSchema } from '@browserbasehq/stagehand'
 import type { ModelConfig, Page, StagehandBrowser } from '@browserbasehq/stagehand'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
+import { StagehandError } from './error.ts'
+
+export { StagehandDrainError } from './error.ts'
 
 /** Profile-owned model settings accepted by the pinned Stagehand SDK. */
 export interface StagehandModelConfig {
@@ -67,9 +70,6 @@ export const browserInputs = {
 /** Closed set of native browser operations. */
 export type BrowserMethod = keyof typeof browserInputs
 
-/** SDK requests did not drain before their connection Worker terminated. */
-export class StagehandDrainError extends Error {}
-
 /** Native browser operations and SDK cleanup owned by one live Session. */
 export interface NativeBrowserRuntime {
   /**
@@ -131,7 +131,7 @@ export async function openNativeBrowser(config: NativeBrowserConfig): Promise<Na
           const result = await stagehand.act(args.instruction, {
             page: await selectPage(browser, args.pageId), timeout: config.operationTimeoutMs,
           })
-          if (!result.data.success) throw new Error(result.data.message)
+          if (!result.data.success) throw new StagehandError(result.data.message, 'STAGEHAND_ACT_FAILED')
           return textResult(result)
         }
         case 'observe': {
@@ -159,7 +159,7 @@ async function selectPage(browser: StagehandBrowser, pageId: string | undefined)
   const page = pageId === undefined
     ? await browser.context.activePage()
     : (await browser.context.pages()).find(candidate => candidate.pageId === pageId)
-  if (page === undefined) throw new Error('Stagehand browser tab is unavailable; list tabs to select a current pageId')
+  if (page === undefined) throw new StagehandError('Stagehand browser tab is unavailable; list tabs to select a current pageId', 'STAGEHAND_TAB_NOT_FOUND')
   return page
 }
 

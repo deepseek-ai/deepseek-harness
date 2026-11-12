@@ -292,6 +292,7 @@
       "@deepseek-ai/dsh-client-ui-session/client": ["./packages/client/ui-session/src/client"],
       "@deepseek-ai/dsh-client-ui-session-status": ["./packages/client/ui-session-status/src"],
       "@deepseek-ai/dsh-client-ui-session-status/client": ["./packages/client/ui-session-status/src/client"],
+      "@deepseek-ai/dsh-client-ui-session-status/types": ["./packages/client/ui-session-status/src/types.ts"],
       "@deepseek-ai/dsh-client-connection": ["./packages/client/connection/src"],
       "@deepseek-ai/dsh-client-file-upload": ["./packages/client/file-upload/src"],
       "@deepseek-ai/dsh-client-file-upload/client": ["./packages/client/file-upload/src/client/index.ts"],

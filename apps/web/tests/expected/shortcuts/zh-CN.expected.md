@@ -54,6 +54,9 @@
       - listitem:
         - button "修改关闭当前页面／窗口快捷键"
         - text: 关闭当前页面／窗口 ⌥ ⌘ W
+      - listitem:
+        - button "修改切换已读/未读快捷键"
+        - text: 切换已读/未读 ⇧ ⌘ U
   - region "消息输入":
     - heading "消息输入" [level=3]
     - list:

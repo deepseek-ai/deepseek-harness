@@ -96,22 +96,16 @@ Controller 将来源计数与每个活跃代的引用共同管理。每个来源
 | --- | --- | --- |
 | `running` | `boolean` 或 `undefined` | 最新已知的 Session 运行事实；缺少基线不表示已确认 idle |
 | `pendingInteraction` | `SessionPendingInteraction` 或 `undefined` | 领域拥有的有效请求；没有待处理请求时缺失 |
-| `completionUnread` | `boolean` | 已观察到停止、但尚未确认的 UI 提醒 |
+| `completionUnread` | `boolean` | 宿主阅读记录带有手动未读标记或尚未确认的完成轮次 |
+| `completionFailed` | `boolean` | Session 未读，且最近完成的轮次以执行错误结束 |
 
 来源计数以 `SessionListState.byId[id].retainedBy` 为准；UI 状态读取它以执行确认策略，不维护另一套引用注册表。标题、Workspace 关联、历史、队列和投影数据保留在各自的既有所有者中。
 
 待处理领域在 `ui-session` 中保留 `SessionPendingInteractionMap`、请求身份、优先级、发布清理函数与卸载委托，`ui-session` 以只读的 `ctx.uiSession.pendingInteractions` 发布每个 Session 的有效请求。统一状态包含同一个有效请求对象，不复制请求，也不创建第二套待处理注册表。Workspace 状态指示器与 Conversation composer 选择读取 `useSessionStatus`，不再分别读取 `useSessionPendingInteraction` 和 `useCompletedSessionIds` 钩子。
 
-完成跟踪订阅已有 `api-session/status` 事件，避免 running 到 idle 的变化在合批目录快照中丢失。Host 列表行（`ids`）建立初始与重连的 running 基线；目录合成行与 retained 行保留独立观察到的状态。pending 状态下的空目录不能证明 Session 已消失。更新规则如下：
+运行跟踪订阅已有 `api-session/status` 事件，避免 running 到 idle 的变化在合批目录快照中丢失。Host 列表行（`ids`）建立初始与重连的 running 基线；目录合成行与 retained 行保留独立观察到的状态。pending 状态下的空目录不能证明 Session 已消失；移除 Session 时清除其运行基线，待处理请求的清理仍属于请求领域。
 
-- 初始 idle 基线不产生完成提醒。
-- 观察到 running 时清除旧提醒，并记录运行基线。
-- 从已知 running 变为 idle 时，仅在 Session 没有主视图持有的情况下设置 `completionUnread`。
-- 获得主视图持有时清除提醒；无关来源的 retain 不清除提醒。
-- 释放主视图持有不会为更早的一次停止补造提醒。
-- 移除 Session 时清除其完成提醒与运行基线；待处理请求的清理仍属于请求领域。
-
-提醒表示观察到的一次停止，不代表任务成功，也不代表某条排队消息完成。即使全局面板暂时隐藏 Conversation，主视图所有权仍保持基于选择的确认语义。本设计不提供 `ui-session/view-presence` 事件、已挂载 Provider 索引或 Provider 挂载时的隐式确认。
+完成提醒跟随[宿主内存中的会话阅读状态](../feature/2026-10-23-session-reading-memory.zh.md)所述的宿主阅读记录，该记录取代本记录早先的前端本地提醒规则：运行变化和主视图持有都不会设置或清除提醒，可见的主视图只在正文到达后确认完成的轮次。提醒表示完成的一个轮次，不代表任务成功，也不代表某条排队消息完成。即使全局面板暂时隐藏 Conversation，主视图所有权仍保持基于选择的确认语义。本设计不提供 `ui-session/view-presence` 事件、已挂载 Provider 索引或 Provider 挂载时的隐式确认。
 
 Session Controller 发布运行与引用来源事实，但不拥有完成提醒集合、`consumeCompletion` 方法或待处理交互展示。引用获取不执行完成提醒业务逻辑。
 
