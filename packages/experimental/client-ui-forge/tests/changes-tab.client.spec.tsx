@@ -2464,7 +2464,7 @@ describe('ChangesTab review threads', () => {
   it.each(['head', 'patch'] as const)('drops pending context when the change request %s changes', async (changed) => {
     const m = mount({ source })
     await settle()
-    const text = deferred<RemoteResult<string>>()
+    const text = Promise.withResolvers<RemoteResult<string>>()
     m.faces.changeRequestText.mockReturnValueOnce(text.promise)
     const section = m.section('src/app.ts')
     fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
