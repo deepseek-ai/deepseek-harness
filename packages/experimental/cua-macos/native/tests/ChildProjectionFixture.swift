@@ -34,7 +34,7 @@ import ApplicationServices
         group.setAccessibilityElement(true)
         group.setAccessibilityRole(.group)
         group.setAccessibilityChildren([NSTextField(labelWithString: "Nested child")])
-        bad.childList = [before, NSNull(), after, group]
+        bad.childList = [before, NSNull(), after, group, NSDate(timeIntervalSince1970: 0)]
         good.orderBack(nil)
         bad.orderBack(nil)
         app.finishLaunching()
@@ -59,10 +59,13 @@ import ApplicationServices
         let partial = try project(bad)
         try check(!partial.truncated && partial.incomplete, "Unreadable children must only set incomplete")
         let lines = partial.tree.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-        guard let gap = lines.firstIndex(of: "[One child could not be read.]"), gap > 0, gap + 1 < lines.count else {
-            throw NativeFailure(code: "FIXTURE", message: "Missing positional marker in the partial tree")
+        let gaps = lines.indices.filter { lines[$0] == "[One child could not be read.]" }
+        guard let left = lines.firstIndex(where: { $0.contains("AXButton") && $0.contains("\"Before gap\"") }),
+              let right = lines.firstIndex(where: { $0.contains("AXButton") && $0.contains("\"After gap\"") }) else {
+            throw NativeFailure(code: "FIXTURE", message: "Missing controls in the partial tree")
         }
-        try check(lines[gap - 1].contains("AXButton \"Before gap\"") && lines[gap + 1].contains("AXButton \"After gap\""), "Missing siblings around the positional marker")
+        try check(gaps.count == 2 && left < gaps[0] && gaps[0] < right && right < gaps[1],
+                  "NSNull and the non-element range value must keep their sibling positions")
         for title in ["Before gap", "After gap"] {
             guard let raw = partial.elements.first(where: { $0["title"].string == title })?["elementId"].string,
                   let index = Int(raw), let element = partial.indexed[index] else {
@@ -75,6 +78,15 @@ import ApplicationServices
         try check(bad.pressed == ["Before gap", "After gap"], "Both buttons must receive AXPress")
         let limited = try project(bad, depth: 1)
         try check(limited.truncated && limited.incomplete && limited.tree.contains("maxDepth=1"), "Traversal and AX failures must report both flags")
+        app.setAccessibilityChildren([good])
+        app.setAccessibilityWindows([good])
+        app.setAccessibilityFocusedWindow(good)
+        let unexposed = try project(bad)
+        try check(unexposed.tree.isEmpty && !unexposed.incomplete, "Exhaustive discovery should report an AX-less window")
+        good.childList = [NSNull()]
+        let uncertain = try project(bad)
+        try check(uncertain.incomplete && !uncertain.truncated && uncertain.indexed.isEmpty,
+                  "Partial window discovery must not expose controls from another window")
         print("Passed real AX range recovery, sibling actions, window scoping and independent observation flags.")
     }
 
