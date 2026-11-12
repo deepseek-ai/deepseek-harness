@@ -20,7 +20,7 @@ describe('dsh-sdk-app bundle', () => {
     const patches = yaml.load(
       readFileSync(resolve(root, manifest.dsh!.bundle!.patch!), 'utf8'),
       { schema: entryListSchema },
-    ) as Array<{ id?: string; disabled?: boolean; insert?: Array<{ id?: string; disabled?: boolean; inject?: string[]; name?: string }> }>
+    ) as Array<{ id?: string; disabled?: boolean; insert?: Array<{ id?: string; inject?: string[]; name?: string }> }>
     expect(patches.find(patch => patch.id === 'hmr')).toMatchObject({ disabled: true })
     expect(patches.find(patch => patch.id === 'tool-plugin-manager')).toMatchObject({ disabled: false })
     expect(patches.find(patch => patch.id === 'session-title-llm')).toMatchObject({ disabled: true })

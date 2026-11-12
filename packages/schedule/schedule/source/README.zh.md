@@ -44,13 +44,13 @@ await first.dispose()
 await second.dispose()
 ```
 
-需要投递到任务时，组合插件注入 `schedule`，针对 `AutomationSource<AutomationCandidate>` 和已有 `ScheduleId` 调用 `ctx.schedule.connectSource(source, taskId)`。本入口不是 Loader 插件，没有 `apply` 或默认导出；正常挂载 Schedule 包，并从该子路径导入 class。Schedule 就绪即表示可以建立连接，不需要另外注册接收者。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。
+需要投递到任务时，组合插件注入 `schedule`，针对 `AutomationSource<AutomationCandidate>` 和已有 `ScheduleId` 调用 `ctx.schedule.connectSource(source, taskId)`。本入口不是 Loader 插件，没有 `apply` 或默认导出；正常挂载 Schedule 包，并从该子路径导入 class。Schedule 就绪即表示可以建立连接，不需要另外注册接收者。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。在 Schedule 就绪前或停止期间调用 `connectSource` 会抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`；调用方必须声明 `schedule` 依赖，并在就绪后重试。Schedule 不自动重试。
 
 组合插件通过 `ctx.effect()` 拥有 source；Schedule 自动在调用方 context 中拥有任务连接。`connectSource` 同步返回原始 Cordis disposer 函数，而不是 `SourceConnection` 对象。直接 `source.subscribe` 返回 `SourceConnection`，其 `dispose()` 每次调用都会等待同一批已接受工作；任务连接的首次调用返回排空已接受工作的 Promise；等待该结果或所属插件的销毁，后续调用不执行操作，也不会加入正在进行的排空。generator effect 直接 yield 该 `disconnect` 函数，不要包装它，以安排它与自有 source 的清理顺序。
 
-在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的销毁，因为销毁需要等待这次调用返回。
+在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的 `dispose()` 或当前发起 emit 的 source 的 `dispose()`；两者都会等待这次调用返回并自等死锁。
 
-输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和 Schedule 都不会重试整次输出。任务连接捕获一个 Schedule runtime，其卸载后会拒绝投递，不会自动切换到替代实例。
+输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和 Schedule 都不会重试整次输出。任务连接捕获一个 Schedule runtime，其卸载后会拒绝投递，不会自动切换到替代实例。source fan-out 以 `SOURCE_DELIVERY_FAILED` 报告该拒绝。声明 `schedule` 依赖，并在有效 runtime 上重新创建连接；Schedule 不自动重试或重新绑定。
 
 -----
 
@@ -101,5 +101,5 @@ source 订阅不会改变请求前缀。任务投递通过 Schedule 服务追加
 
 - source 实例、连接和中间状态仅存在于进程内。插件必须明确拥有需要持久化的观测状态，并在重启后重建组合。
 - 组合通过代码完成。本入口不提供 source 编辑器、持久化依赖图、内置观测实现或通用轮询与重试策略。
-- source 的所有者在发布之前限制观测大小与输出速率。本 API 完整保留候选文本，不做截断，也不设置入口级大小上限。
-- Schedule 的 source 连接只接受已存在的活动任务，并保留其时间规则。这种连接不替换已存储的时间模型，也不创建纯事件任务。
+- source 的所有者在发布之前限制观测大小与输出速率。本 API 完整保留候选文本，不做截断，也不设置入口级大小上限。持续以共享间隔发布的 source 可以无限推迟定时投递；它必须为定时工作留出容量。
+- Schedule 的 source 连接只接受已存在的活动任务，并保留其时间规则。这种连接不替换已存储的时间模型，也不创建纯事件任务。正在执行、处于最小间隔内或正在恢复未完成投递的任务会以 `SOURCE_TASK_BUSY` 拒绝本次候选投递；source fan-out 以 `SOURCE_DELIVERY_FAILED` 报告该拒绝。任务不会存储或排队该候选，恢复持有的是上一条收件箱投递。生产者负责重试与限速。

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FiberState, type Context, type Fiber } from '@deepseek-ai/cordis'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { AutomationCandidate } from '../src/source-types.ts'
 import { AutomationSource } from '../src/source.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -11,7 +12,7 @@ import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
 import {
   agentFor, boundTask, gatedScheduleBackend, harness, seededTask, seedTasks, taskTable, type HarnessAgent,
 } from './harness.ts'
-import { MemoryMediaPool } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
+import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
 
 class InputSource extends AutomationSource<AutomationCandidate> {
   publish(text: string): Promise<void> {
@@ -50,13 +51,107 @@ async function setup(task: ScheduleTask | undefined = stored(), options: Paramet
   test.resolve.mockResolvedValue({ agent })
   const source = new InputSource()
   sources.push(source)
-  test.service.connectSource(source, ID)
-  return { ...test, source, agent }
+  const disconnect = test.service.connectSource(source, ID)
+  return { ...test, source, agent, disconnect }
 }
 
 function rejected(code: string) {
   return { code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ code })] } }
 }
+
+it('rejects source connection acquisition while the constructed service awaits its domain', async () => {
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const memory = new MemoryStorageBackend(new MemoryMediaPool())
+  const source = new InputSource()
+  sources.push(source)
+  const subscribe = vi.spyOn(source, 'subscribe')
+  let ctx: Context | undefined
+  const opening = harness({
+    direct: true,
+    onContext: (context) => { ctx = context },
+    backend: {
+      close: () => memory.close(),
+      kv: {
+        open: async (descriptor) => {
+          if (descriptor.name === scheduleDomain.name) {
+            entered.resolve(undefined)
+            await release.promise
+          }
+          return memory.kv.open(descriptor)
+        },
+      },
+    },
+  })
+  try {
+    await entered.promise
+    expect(ctx!.schedule).toBeInstanceOf(ScheduleService)
+    expect(ctx!.storageDomain.get(scheduleDomain.name)).toBeUndefined()
+    expect(() => ctx!.schedule.connectSource(source, ID)).toThrowError(
+      expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
+    )
+    expect(subscribe).not.toHaveBeenCalled()
+    release.resolve(undefined)
+    const test = await opening
+    const disconnect = test.service.connectSource(source, ID)
+    expect(subscribe).toHaveBeenCalledOnce()
+    await disconnect()
+  } finally {
+    release.resolve(undefined)
+    try { await opening } finally { await ctx?.fiber.dispose() }
+  }
+})
+
+it('delivers one source independently to two tasks and detaches only the selected connection', async () => {
+  const test = await setup()
+  const secondId = ScheduleId('second-source-task')
+  await taskTable(test.ctx).put(secondId, boundTask(TARGET,
+    createAfterScheduleRecord(secondId, 'Inspect the second build', 3600, Date.now(), 'Second build')))
+  const disconnectSecond = test.service.connectSource(test.source, secondId)
+  await test.source.publish('shared observation')
+  expect(test.agent.followup).toHaveBeenCalledTimes(2)
+  const firstReceipt = taskTable(test.ctx).get(ID)!.lastDelivery!
+  const secondTask = taskTable(test.ctx).get(secondId)!
+  expect(firstReceipt.messageId).not.toBe(secondTask.lastDelivery!.messageId)
+  expect(test.agent.followup.mock.calls.map(([message]) => message.content)).toEqual([
+    [{ type: 'text', text: expect.stringContaining('schedule_id_json: "source-task"') }],
+    [{ type: 'text', text: expect.stringContaining('schedule_id_json: "second-source-task"') }],
+  ])
+  await disconnectSecond()
+  vi.setSystemTime(Date.now() + 60_000)
+  await test.source.publish('still connected to the first task')
+  expect(test.agent.followup).toHaveBeenCalledTimes(3)
+  expect(taskTable(test.ctx).get(ID)!.lastDelivery!.messageId).not.toBe(firstReceipt.messageId)
+  expect(taskTable(test.ctx).get(secondId)).toEqual(secondTask)
+  expect(taskTable(test.ctx).get(ID)!.deliveryHistory.records).toHaveLength(2)
+})
+
+it('shares one task admission across two sources without disconnecting the other source', async () => {
+  const test = await setup()
+  const second = new InputSource()
+  sources.push(second)
+  test.service.connectSource(second, ID)
+  await test.source.publish('first source input')
+  const firstTask = taskTable(test.ctx).get(ID)
+  await expect(second.publish('too early second input')).rejects.toMatchObject(rejected('SOURCE_TASK_BUSY'))
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  expect(taskTable(test.ctx).get(ID)).toEqual(firstTask)
+  vi.setSystemTime(Date.now() + 60_000)
+  await second.publish('accepted second input')
+  expect(test.agent.followup).toHaveBeenCalledTimes(2)
+  await test.disconnect()
+  const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
+  const observation = test.source.subscribe(observed)
+  await test.source.publish('detached first source remains usable')
+  await observation.dispose()
+  expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'detached first source remains usable' })
+  expect(test.agent.followup).toHaveBeenCalledTimes(2)
+  vi.setSystemTime(Date.now() + 60_000)
+  await second.publish('second source remains connected')
+  expect(test.agent.followup).toHaveBeenCalledTimes(3)
+  expect(taskTable(test.ctx).get(ID)!.deliveryHistory.records).toHaveLength(3)
+  expect(new Set(test.agent.followup.mock.calls.map(([message]) => message.id)).size).toBe(3)
+})
 
 it('connects an earlier composer when Schedule becomes ready', async () => {
   const source = new InputSource()
@@ -176,6 +271,78 @@ it('defers a timed occurrence thirty seconds after source delivery until their s
     'occurrence_at: 2026-09-16T00:00:30.000Z',
     'reminder_prompt_json: "Inspect the build"',
   ].join('\n') }])
+})
+
+it('keeps the timed occurrence while source input wins several consecutive admission floors', async () => {
+  const record = createAfterScheduleRecord(ID, 'Inspect the build', 30, Date.now(), 'Build check')
+  const test = await setup(boundTask(TARGET, record))
+  const started: Promise<void>[] = []
+  const failures: unknown[] = []
+  const timers = [60_000, 120_000, 180_000].map((delay, index) => setTimeout(() => {
+    started.push(test.source.publish(`source at floor ${index + 1}`).catch((error: unknown) => { failures.push(error) }))
+  }, delay))
+  try {
+    await test.source.publish('initial source input')
+    for (let floor = 1; floor <= 3; floor++) {
+      await vi.advanceTimersByTimeAsync(60_000)
+      await Promise.all(started)
+      expect(failures).toEqual([])
+      expect(test.agent.followup).toHaveBeenCalledTimes(floor + 1)
+      expect(taskTable(test.ctx).get(ID)).toMatchObject({
+        record, status: 'active',
+        lastDelivery: { scheduledAt: new Date(Date.now()).toISOString(), deliveredAt: new Date(Date.now()).toISOString() },
+      })
+      expect(test.agent.followup.mock.calls[floor]![0].content).toEqual([
+        { type: 'text', text: expect.stringContaining(`source_input_json: "source at floor ${floor}"`) },
+      ])
+    }
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(test.agent.followup).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(test.agent.followup).toHaveBeenCalledTimes(5)
+    expect(taskTable(test.ctx).get(ID)).toMatchObject({
+      record, status: 'ended',
+      lastDelivery: { scheduledAt: record.scheduledAt, deliveredAt: '2026-09-16T00:04:00.000Z' },
+    })
+    expect(test.agent.followup.mock.calls[4]![0].content).toEqual([
+      { type: 'text', text: expect.not.stringContaining('source_input_json:') },
+    ])
+  } finally {
+    for (const timer of timers) clearTimeout(timer)
+    await Promise.all(started)
+  }
+})
+
+it('recovers the last queued identity without delivering the newly refused source candidate', async () => {
+  const test = await setup()
+  await test.source.publish('previously accepted source input')
+  const previous = test.agent.followup.mock.calls[0]![0]
+  const saved = taskTable(test.ctx).get(ID)
+  await test.disconnect()
+  await test.fiber.dispose()
+  const inbox = createInboxStub()
+  inbox.append('next-step', previous)
+  const remove = vi.spyOn(inbox, 'remove')
+  const idle = Promise.withResolvers<undefined>()
+  const followup = vi.fn((message: Parameters<HarnessAgent['followup']>[0]): void => { inbox.append('next-turn', message) })
+  test.resolve.mockResolvedValue({ agent: { ...test.agent, inbox, followup, whenIdle: () => idle.promise } })
+  vi.setSystemTime(Date.now() + 60_000)
+  try {
+    await test.ctx.plugin(ScheduleService)
+    const disconnect = test.ctx.schedule.connectSource(test.source, ID)
+    await expect(test.source.publish('current candidate must not be delivered')).rejects.toMatchObject(
+      rejected('SOURCE_TASK_BUSY'),
+    )
+    expect(remove).toHaveBeenCalledExactlyOnceWith(previous.id)
+    expect(followup).toHaveBeenCalledExactlyOnceWith(previous)
+    expect(inbox.nextStep).toEqual([])
+    expect(inbox.nextTurn).toEqual([previous])
+    expect(taskTable(test.ctx).get(ID)).toEqual(saved)
+    expect(test.flush).toHaveBeenCalledTimes(2)
+    await disconnect()
+  } finally {
+    idle.resolve(undefined)
+  }
 })
 
 it('keeps the execution slot while the target Agent is busy beyond the minimum interval', async () => {

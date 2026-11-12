@@ -122,7 +122,7 @@ Remote 路由提供 `create`、`list`、`catalog`、`view`、`history`、`edit`�
 <a id="saved-delivery-records"></a>
 ## 已保存投递记录
 
-回执记录 `scheduledAt`、`deliveredAt`、`messageId` 和 `targetSessionId`；它确认持久 Session 收件箱写入，而非模型完成。定时投递的回执 `scheduledAt` 是所投递发生时点的目标时间。手动与 source 投递的该字段是在目标解析后、入队前采样的时间，而非任务已存发生时点。`deliveredAt` 在 Session 持久化确认后采样。已保存记录还可含不可变的已发送 `prompt`。旧回执缺少目标 id 时，在任何重新指定目标的编辑之前使用已解析的可复用目标，因此后续目标不会重写其历史。 回执既没有显式目的地也没有已知复用目标时，拒绝解码；新默认预留不能证明历史目的地。
+回执记录 `scheduledAt`、`deliveredAt`、`messageId` 和 `targetSessionId`；它确认持久 Session 收件箱写入，而非模型完成。定时投递的回执 `scheduledAt` 是所投递发生时点的目标时间。手动与 source 投递的该字段是在目标解析后、入队前采样的时间，而非任务已存发生时点。`deliveredAt` 在 Session 持久化确认后采样。已保存记录还可在 `prompt` 字段携带任务已存指令快照；该值是投递时的 `task.record.prompt`，不是完整已发送消息，且不包含投递时追加的 framing 与 source 数据。旧回执缺少目标 id 时，在任何重新指定目标的编辑之前使用已解析的可复用目标，因此后续目标不会重写其历史。 回执既没有显式目的地也没有已知复用目标时，拒绝解码；新默认预留不能证明历史目的地。
 
 新任务从已知的空历史开始。旧行没有 `deliveryHistory` 时，暴露其最新回执（如有），并设置 `earlierRecordsUnavailable: true`；不会编造丢失的历史或指令快照。省略的 `earlierRecordsPruned` 读为 false。消息 id 重复，或最新保存记录与 `lastDelivery` 不一致，均拒绝解码。
 

@@ -11,7 +11,8 @@ export type SourceReceiver<T> = (value: T) => Promise<void>
 export interface SourceConnection {
   /**
    * Stop accepting values immediately and await already accepted calls. Repeated calls await the same work.
-   * A receiver must not await disposal of its own connection from inside an accepted call.
+   * A receiver must not await disposal of its own connection or the current emitter's source disposal from inside
+   * an accepted call; either waits for that call to return.
    */
   dispose(): Promise<void>
 }

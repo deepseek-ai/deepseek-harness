@@ -408,9 +408,12 @@ export interface ScheduleDeliveryReceipt {
   readonly targetSessionId: SessionId
 }
 
-/** Saved inbox delivery with its immutable sent prompt when recorded by this Host. */
+/** Saved inbox delivery with the task's stored instruction snapshot when recorded by this Host. */
 export interface ScheduleDeliveryRecord extends ScheduleDeliveryReceipt {
-  /** Prompt sent for this occurrence; unavailable for legacy receipts. */
+  /**
+   * Stored task instruction snapshot for this occurrence, excluding delivery-added framing and source data;
+   * unavailable for legacy receipts.
+   */
   readonly prompt?: string
 }
 
