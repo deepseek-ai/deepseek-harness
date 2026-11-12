@@ -5,9 +5,14 @@ import ApplicationServices
 @MainActor private final class ChildFixtureWindow: NSWindow {
     var childList: [Any]?
     var pressed: [String] = []
+    var inputLog: URL?
 
     override func accessibilityChildren() -> [Any]? { childList ?? super.accessibilityChildren() }
-    @objc func press(_ sender: NSButton) { pressed.append(sender.title) }
+    @objc func press(_ sender: NSButton) {
+        pressed.append(sender.title)
+        if sender.title == "Identify as open panel" { setAccessibilityIdentifier("open-panel") }
+        if let inputLog { try! JSONEncoder().encode(pressed).write(to: inputLog, options: .atomic) }
+    }
 
     func button(_ title: String) -> NSButton {
         let button = NSButton(title: title, target: self, action: #selector(press(_:)))
@@ -26,6 +31,8 @@ import ApplicationServices
             return window
         }
         let good = makeWindow(), bad = makeWindow()
+        good.title = "Healthy target"
+        bad.title = "Partial target"
         defer { bad.close(); good.close() }
         good.childList = [good.button("Healthy window")]
         let before = bad.button("Before gap"), after = bad.button("After gap")
@@ -38,6 +45,27 @@ import ApplicationServices
         good.orderBack(nil)
         bad.orderBack(nil)
         app.finishLaunching()
+
+        if let path = CommandLine.arguments.dropFirst().first {
+            bad.inputLog = URL(fileURLWithPath: path)
+            before.frame = NSRect(x: 10, y: 15, width: 100, height: 28)
+            after.frame = NSRect(x: 120, y: 55, width: 100, height: 28)
+            bad.childList?.append(bad.button("Identify as open panel"))
+            app.setActivationPolicy(.regular)
+            bad.makeKeyAndOrderFront(nil)
+            app.activate(ignoringOtherApps: true)
+            let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp, .leftMouseDown]) { event in
+                if bad.pressed.contains("Identify as open panel") {
+                    bad.pressed.append("Unexpected input")
+                    try! JSONEncoder().encode(bad.pressed).write(to: URL(fileURLWithPath: path), options: .atomic)
+                }
+                return event
+            }
+            defer { if let monitor { NSEvent.removeMonitor(monitor) } }
+            print("READY"); fflush(stdout)
+            app.run()
+            return
+        }
 
         let access = AXAccess(timeout: 3, cancellation: CancellationLatch())
         let identity = try NativePlatform.identity(getpid())
@@ -87,7 +115,33 @@ import ApplicationServices
         let uncertain = try project(bad)
         try check(uncertain.hasUnreadableElements && !uncertain.truncated && uncertain.indexed.isEmpty,
                   "Partial window discovery must not expose controls from another window")
-        print("Passed real AX range recovery, sibling actions, window scoping and independent observation flags.")
+        let goodID = UInt32(good.windowNumber), badID = UInt32(bad.windowNumber)
+        app.setAccessibilityWindows([good, bad])
+        var exhausted = AXChildRecoveryBudget(maxElements: 0, timeout: 0)
+        let exact = try access.windowElement(badID, owner: identity, budget: &exhausted)
+        try check(exact == badRoot, "An earlier window's unreadable children blocked an exact ID")
+
+        app.setAccessibilityWindows([good])
+        bad.setAccessibilityRole(.sheet)
+        for children: [Any] in [[bad, NSNull()], [NSNull(), bad]] {
+            good.childList = children
+            var budget = AXChildRecoveryBudget(maxElements: 16, timeout: 3)
+            let sheet = try access.windowElement(badID, owner: identity, budget: &budget)
+            try check(sheet == badRoot && budget.requests < 16, "A recovered sheet was lost at the gap")
+            let left = budget.requests
+            _ = try access.windowElement(goodID, owner: identity, budget: &budget)
+            try check(budget.requests == left, "An exact window consumed additional recovery requests")
+            for (requests, time): (Int, Float) in [(1, 3), (16, 0)] {
+                var insufficient = AXChildRecoveryBudget(maxElements: requests, timeout: time)
+                do {
+                    _ = try access.windowElement(badID, owner: identity, budget: &insufficient)
+                    throw NativeFailure(code: "FIXTURE", message: "Unseen sheet accepted after recovery exhausted")
+                } catch let failure as NativeFailure where failure.code == "WINDOW_UNAVAILABLE" {
+                    try check(failure.message.contains("No input was dispatched. Read fresh state"), failure.message)
+                }
+            }
+        }
+        print("Passed AX range recovery, sibling actions, exact window and recovered sheet selection, and recovery budgets.")
     }
 
     private static func check(_ condition: Bool, _ message: String) throws {

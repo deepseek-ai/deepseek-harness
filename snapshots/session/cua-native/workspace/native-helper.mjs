@@ -125,6 +125,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let generation = 0
   let observationChanged = false
   let malformedScreenshot = false
+  let incompleteInputTargets = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
@@ -243,6 +244,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
+    if (method === 'pressKey' && params.key === 'F6') incompleteInputTargets = true
+    if (incompleteInputTargets && method === 'typeText') refuse('PANEL_NOT_READY', 'File panel recipient discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
     if (method === 'pressKey' && params.key === 'F8') application.panelVisibility = 'visible'
     if (method === 'pressKey' && params.key === 'F7' && application.panelVisibility !== 'closed') application.panelVisibility = 'hidden'
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
@@ -250,6 +253,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
     if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = '99' }
     if (method === 'paste') {
+      if (incompleteInputTargets) refuse('UNSUPPORTED', 'Paste menu discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text
       return { dispatched: true }

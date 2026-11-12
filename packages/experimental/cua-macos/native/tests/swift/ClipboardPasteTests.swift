@@ -1,5 +1,6 @@
 // Each clipboard case owns a named pasteboard rather than touching the user's clipboard.
 import AppKit
+import ApplicationServices
 import Foundation
 import Testing
 @testable import CuaNative
@@ -133,4 +134,43 @@ import Testing
         Issue.record("Unsupported Paste command completed successfully")
     } catch let error as NativeFailure { #expect(error.code == "UNSUPPORTED") }
     #expect(board.string(forType: .string) == "original")
+}
+
+/// Search and clipboard transaction run together. The synthetic menu owns no desktop input.
+@Test @MainActor func pasteRequiresOneCommandAcrossAllRecoveredBranches() async throws {
+    let root = AXUIElementCreateApplication(10)
+    let first = AXUIElementCreateApplication(11)
+    let other = AXUIElementCreateApplication(12)
+    let cases: [(AXObservedChildren, Set<AXUIElement>, String?)] = [
+        (.init(entries: [first, other]), [first], nil),
+        (.init(entries: [other, first, first]), [first], nil),
+        (.init(entries: [first, nil]), [first], "incomplete"),
+        (.init(entries: [nil, first]), [first], "incomplete"),
+        (.init(entries: [first, nil, other]), [first, other], "ambiguous"),
+        (.init(entries: [first], parentIncomplete: true), [first], "incomplete"),
+        (.init(entries: [first], elementLimitReached: true), [first], "incomplete"),
+    ]
+    for (list, commands, reason) in cases {
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        #expect(board.setString("original", forType: .string))
+        var received: [AXUIElement] = []
+        do {
+            try await ClipboardPaste(pasteboard: board).perform(text: "payload", format: "text", maxBytes: 1024,
+                readTimeout: .seconds(1)) { ownership in
+                let command = try AXAccess.pasteCommand(in: root, maxElements: 10, maxDepth: 2,
+                    matches: commands.contains, children: { $0 == root ? list : .init() })
+                try ownership()
+                received.append(command)
+                #expect(board.string(forType: .string) == "payload")
+            }
+            #expect(reason == nil)
+        } catch let error as NativeFailure {
+            #expect(error.code == "UNSUPPORTED")
+            #expect(error.message.contains(try #require(reason)))
+            #expect(error.message.contains("No input was dispatched. Read fresh state"))
+        }
+        #expect(received == (reason == nil ? [first] : []))
+        #expect(board.string(forType: .string) == "original")
+    }
 }
