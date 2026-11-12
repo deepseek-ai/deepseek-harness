@@ -1,38 +1,46 @@
-// Bounded AX traversal publishes only fully read nodes and marks unavailable branches.
+// Bounded AX traversal publishes read nodes and marks unavailable nodes or child-list entries.
 import ApplicationServices
 import Foundation
 
 struct AXReadNode {
     var text: AXTextNode
-    let children: [AXUIElement]
+    let children: AXObservedChildren
 }
 
 enum AXTreeProjection {
-    static func project(roots: [AXUIElement], focusedWindowID: UInt32?, windowScoped: Bool,
+    static func project(roots: AXObservedChildren, focusedWindowID: UInt32?, windowScoped: Bool,
                         maxElements: Int, maxDepth: Int, includeMenus: Bool, details: Bool,
                         checkCancellation: () throws -> Void, read: (AXUIElement) throws -> AXReadNode) throws -> AXProjection {
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
-        var elementLimitReached = false
+        var elementLimitReached = roots.elementLimitReached
         var depthLimitReached = false
         var menusCollapsed = false
-        var incomplete = false
+        var hasUnreadableElements = roots.hasUnreadableElements
         var lines = ["AX scope=\(windowScoped ? "window" : "application") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
+        if roots.parentIncomplete {
+            lines.append(windowScoped ? AXTextFormatter.incompleteDiscovery : AXTextFormatter.unreadableChildLine(level: 0, positioned: false))
+        }
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
-        var pending = roots.enumerated().reversed().map { (element: $0.element, level: 0, depth: 0, path: String($0.offset)) }
-        while let (element, level, depth, path) = pending.popLast() {
+        var pending = roots.entries.enumerated().reversed().map { (element: $0.element, level: 0, depth: 0, path: String($0.offset)) }
+        while let (entry, level, depth, path) = pending.popLast() {
             try checkCancellation()
-            let hash = CFHash(element)
-            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
+            let hash = entry.map { CFHash($0) }
+            if let element = entry, let hash, visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
             guard count < maxElements else { elementLimitReached = true; break }
             guard depth <= maxDepth else { depthLimitReached = true; continue }
-            visited[hash, default: []].append(element)
             count += 1
+            guard let element = entry, let hash else {
+                hasUnreadableElements = true
+                lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: true))
+                continue
+            }
+            visited[hash, default: []].append(element)
             let observation: AXReadNode
             do { observation = try read(element) }
             catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
-                incomplete = true
+                hasUnreadableElements = true
                 lines.append(String(repeating: "  ", count: level) + "- [unavailable branch \(path): invalidUIElement; contents unknown]")
                 continue
             }
@@ -57,14 +65,19 @@ enum AXTreeProjection {
                 }
                 if node.role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; continue }
             }
-            for (childIndex, child) in observation.children.enumerated().reversed() {
-                pending.append((child, transparent ? level : level + 1, depth + 1, "\(path).\(childIndex)"))
+            let childLevel = transparent ? level : level + 1
+            let children = observation.children
+            if children.hasUnreadableElements { hasUnreadableElements = true }
+            if children.elementLimitReached { elementLimitReached = true }
+            if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: childLevel, positioned: false)) }
+            for (childIndex, child) in children.entries.enumerated().reversed() {
+                pending.append((child, childLevel, depth + 1, "\(path).\(childIndex)"))
             }
         }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
-        if incomplete { lines.append("Accessibility observation incomplete: unavailable branches have unknown contents and no element IDs. Use a screenshot to inspect them.") }
-        let truncated = elementLimitReached || depthLimitReached
-        if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedWindowID, truncated: truncated, incomplete: incomplete)
+        if hasUnreadableElements { lines.append("Accessibility observation incomplete: unavailable branches have unknown contents and no element IDs. Use a screenshot to inspect them.") }
+        if elementLimitReached || depthLimitReached { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
+        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed,
+                            focusedWindowID: focusedWindowID, truncated: elementLimitReached || depthLimitReached, hasUnreadableElements: hasUnreadableElements)
     }
 }

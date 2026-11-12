@@ -10,6 +10,7 @@
     { "path": "../../core/agent" },
     { "path": "../../core/tools" },
     { "path": "../../core/system-prompt" },
+    { "path": "../../util/error" },
     { "path": "../../mcp/mcp-client" },
     { "path": "../../subprocess/subprocess" },
     { "path": "../../util/values" },

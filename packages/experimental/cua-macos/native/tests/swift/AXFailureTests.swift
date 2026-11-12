@@ -74,6 +74,7 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
             Issue.record("Batch attribute accepted an accessibility failure")
         } catch let error as NativeFailure {
             #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
+            #expect(error.attribute == "AXTitle")
             #expect(error.accessibilityError == code.rawValue)
             #expect(error.message.contains("AXTitle"))
             #expect(error.message.contains(String(code.rawValue)))

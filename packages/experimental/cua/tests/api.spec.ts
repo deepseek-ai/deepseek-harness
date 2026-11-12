@@ -629,7 +629,7 @@ describe('application and window observations', () => {
     await app.getAccessibilityTree()
     await app.pressKey('Return')
     const tree = '- [0] AXButton "Save"\n- [unavailable branch 0.1: invalidUIElement; contents unknown]'
-    f.dispatch.mockResolvedValueOnce(state({ tree, incomplete: true }))
+    f.dispatch.mockResolvedValueOnce(state({ tree, hasUnreadableElements: true }))
     await expect(app.getAccessibilityTree()).resolves.toBe(tree)
     await app.invoke(element('0'))
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: {

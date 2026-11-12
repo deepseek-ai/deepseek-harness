@@ -209,7 +209,7 @@ actor AXWorker {
         }
         return NativeFailure(code: code,
                              message: "Accessibility observation failed: \(failure.message). Read fresh state or use a screenshot; do not repeat input automatically",
-                             accessibilityError: failure.accessibilityError)
+                             accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
 
     func execute(_ method: String, params: RequestParameters, catalog: ApplicationCatalogSnapshot, installed: InstalledApplication? = nil,
@@ -341,11 +341,13 @@ actor AXWorker {
             for observed in observedWindows where window == nil || observed.windowID == window {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
-            return .result(.object(["appHandle": .string(handle),
+            var state: [String: JSONValue] = ["appHandle": .string(handle),
                 "windowId": window.map { .string(String($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
-                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated), "incomplete": .bool(projection.incomplete)]))
+                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]
+            if projection.hasUnreadableElements { state["hasUnreadableElements"] = .bool(true) }
+            return .result(.object(state))
         case "screenshot":
             trace?.mark("screen-permission.begin")
             try NativePlatform.requireScreenRecording()

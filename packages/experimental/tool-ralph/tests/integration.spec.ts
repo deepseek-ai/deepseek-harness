@@ -284,6 +284,7 @@ describe('dsh-tool-ralph over the real spawn and sandboxed PTC stack', () => {
       const result = await pending
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('Ralph workflow was cancelled')
+      expect(result.isError && result.error.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
       expect(outcomes).toEqual(['cancelled'])
       expect(ctx.agents.get(children[0]!.id)).toBeUndefined()
     } finally {

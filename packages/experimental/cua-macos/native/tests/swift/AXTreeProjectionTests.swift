@@ -7,12 +7,12 @@ import Testing
 private func readNode(_ role: String, title: String? = nil, children: [AXUIElement] = []) -> AXReadNode {
     AXReadNode(text: AXTextNode(index: nil, role: role, title: title, value: nil, description: nil,
         actions: role == "AXButton" ? ["AXPress"] : [], enabled: true, valueWritable: nil,
-        selectionWritable: nil, selected: nil, selectedRange: nil, selectedText: nil), children: children)
+        selectionWritable: nil, selected: nil, selectedRange: nil, selectedText: nil), children: AXObservedChildren(entries: children.map(Optional.some)))
 }
 
 private func project(_ roots: [AXUIElement], maxElements: Int = 20, maxDepth: Int = 10,
                      check: () throws -> Void = {}, read: (AXUIElement) throws -> AXReadNode) throws -> AXProjection {
-    try AXTreeProjection.project(roots: roots, focusedWindowID: nil, windowScoped: true,
+    try AXTreeProjection.project(roots: AXObservedChildren(entries: roots.map(Optional.some)), focusedWindowID: nil, windowScoped: true,
         maxElements: maxElements, maxDepth: maxDepth, includeMenus: false, details: false,
         checkCancellation: check, read: read)
 }
@@ -32,7 +32,7 @@ private func project(_ roots: [AXUIElement], maxElements: Int = 20, maxDepth: In
         }
     }
     #expect(visited == [0, 1, 2, 3, 4])
-    #expect(result.incomplete)
+    #expect(result.hasUnreadableElements)
     #expect(!result.truncated)
     #expect(result.tree == """
     AX scope=window offsets=UTF-16
@@ -54,7 +54,7 @@ private func project(_ roots: [AXUIElement], maxElements: Int = 20, maxDepth: In
     let result = try project([AXUIElementCreateApplication(1)]) { _ in
         throw NativeFailure(code: "NATIVE_ERROR", message: "read AXRole", accessibilityError: AXError.invalidUIElement.rawValue)
     }
-    #expect(result.incomplete)
+    #expect(result.hasUnreadableElements)
     #expect(result.tree.contains("[unavailable branch 0: invalidUIElement; contents unknown]"))
     #expect(result.indexed.isEmpty)
     #expect(result.elements.isEmpty)
@@ -98,7 +98,7 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
         throw NativeFailure(code: "NATIVE_ERROR", message: "read AXRole", accessibilityError: AXError.invalidUIElement.rawValue)
     }
     #expect(reads == 2)
-    #expect(result.incomplete && result.truncated)
+    #expect(result.hasUnreadableElements && result.truncated)
     #expect(result.tree.components(separatedBy: "[unavailable branch").count == 2)
     #expect(result.tree.contains("maxElements=2"))
 }
@@ -106,27 +106,27 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
 @Test func normalTreesRetainDepthAndMenuOmissionsWithoutClaimingFailure() throws {
     let root = AXUIElementCreateApplication(1), child = AXUIElementCreateApplication(2)
     let result = try project([root], maxDepth: 0) { _ in readNode("AXWindow", children: [child]) }
-    #expect(result.truncated && !result.incomplete)
+    #expect(result.truncated && !result.hasUnreadableElements)
     #expect(result.tree.contains("maxDepth=0"))
     let menu = try project([root]) { _ in readNode("AXMenuBarItem", title: "File", children: [child]) }
-    #expect(!menu.truncated && !menu.incomplete)
+    #expect(!menu.truncated && !menu.hasUnreadableElements)
     #expect(menu.tree.contains("Menu contents omitted; request includeMenus=true to expand."))
 }
 
 @Test func completeProjectionPreservesElementDiagnosticsAndExpandedMenus() throws {
     let root = AXUIElementCreateApplication(1), field = AXUIElementCreateApplication(2)
     var reads = 0
-    let result = try AXTreeProjection.project(roots: [root, root], focusedWindowID: 7, windowScoped: false,
+    let result = try AXTreeProjection.project(roots: AXObservedChildren(entries: [root, root]), focusedWindowID: 7, windowScoped: false,
         maxElements: 10, maxDepth: 10, includeMenus: true, details: true, checkCancellation: {}) { element in
         reads += 1
         if CFEqual(element, root) { return readNode("AXMenuBarItem", title: "File", children: [field]) }
         return AXReadNode(text: AXTextNode(index: nil, role: "AXTextField", title: "Name", value: "abc", description: "Label",
             actions: [], enabled: true, valueWritable: true, selectionWritable: true, selected: false,
             selectedRange: CFRange(location: 1, length: 1), selectedText: "b", identifier: "name",
-            bounds: WindowBounds(x: 10, y: 20, width: 100, height: 30)), children: [root])
+            bounds: WindowBounds(x: 10, y: 20, width: 100, height: 30)), children: AXObservedChildren(entries: [root]))
     }
     #expect(reads == 2)
-    #expect(!result.incomplete && !result.truncated)
+    #expect(!result.hasUnreadableElements && !result.truncated)
     #expect(result.focusedWindowID == 7)
     #expect(result.tree.hasPrefix("AX scope=application offsets=UTF-16 bounds=global-points"))
     #expect(result.tree.contains("selection=[1,1] selectedText=\"b\""))
@@ -137,4 +137,52 @@ func otherAXFailuresStillRejectTheObservation(code: AXError) throws {
         "actions": .array([]), "enabled": .bool(true), "valueWritable": .bool(true), "selectionWritable": .bool(true),
         "selected": .bool(false), "selectedText": .string("b"), "selectedRange": .array([.number(1), .number(1)]),
     ])])
+}
+
+@Test func rangeGapsAndInvalidNodesShareOneCompletenessFlag() throws {
+    let nodes = (1...4).map { AXUIElementCreateApplication(Int32($0)) }
+    let result = try project([nodes[0]]) { element in
+        if CFEqual(element, nodes[0]) {
+            return AXReadNode(text: readNode("AXWindow").text,
+                children: AXObservedChildren(entries: [nodes[1], nil, nodes[2], nodes[3]]))
+        }
+        if CFEqual(element, nodes[2]) {
+            throw NativeFailure(code: "NATIVE_ERROR", message: "read node attributes", accessibilityError: AXError.invalidUIElement.rawValue)
+        }
+        return readNode("AXButton", title: CFEqual(element, nodes[1]) ? "Before" : "After")
+    }
+    #expect(result.hasUnreadableElements && !result.truncated)
+    #expect(result.tree.contains("[One child could not be read.]"))
+    #expect(result.tree.contains("[unavailable branch 0.2: invalidUIElement; contents unknown]"))
+    #expect(result.elements.map { $0["elementId"].string } == ["0", "1"])
+    #expect(CFEqual(try #require(result.indexed[0]), nodes[1]))
+    #expect(CFEqual(try #require(result.indexed[1]), nodes[3]))
+}
+
+@Test func unreadableChildSlotsConsumeTheNodeBudgetWithoutReceivingIDs() throws {
+    let root = AXUIElementCreateApplication(1), child = AXUIElementCreateApplication(2)
+    let result = try project([root], maxElements: 2) { element in
+        #expect(CFEqual(element, root))
+        return AXReadNode(text: readNode("AXWindow").text, children: AXObservedChildren(entries: [nil, child]))
+    }
+    #expect(result.hasUnreadableElements && result.truncated)
+    #expect(result.tree.contains("[One child could not be read.]"))
+    #expect(result.indexed.isEmpty && result.elements.isEmpty)
+}
+
+@Test func unknownRootDiscoveryAndUnknownChildPositionsRemainVisible() throws {
+    let root = AXUIElementCreateApplication(1), child = AXUIElementCreateApplication(2)
+    let result = try AXTreeProjection.project(roots: AXObservedChildren(entries: [root], parentIncomplete: true),
+        focusedWindowID: nil, windowScoped: true, maxElements: 20, maxDepth: 10, includeMenus: false, details: false,
+        checkCancellation: {}, read: { element in
+            if CFEqual(element, root) {
+                return AXReadNode(text: readNode("AXWindow").text,
+                    children: AXObservedChildren(entries: [child], parentIncomplete: true))
+            }
+            return readNode("AXButton", title: "Known child")
+        })
+    #expect(result.hasUnreadableElements && !result.truncated)
+    #expect(result.tree.contains(AXTextFormatter.incompleteDiscovery))
+    #expect(result.tree.contains("[Child list incomplete.]"))
+    #expect(result.elements.map { $0["elementId"].string } == ["0"])
 }
