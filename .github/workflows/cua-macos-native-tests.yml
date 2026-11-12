@@ -22,3 +22,4 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 packages/experimental/cua-macos/native/tests/test_swift.py
+      - run: python3 packages/experimental/cua-macos/native/tests/test_ax_projection.py
