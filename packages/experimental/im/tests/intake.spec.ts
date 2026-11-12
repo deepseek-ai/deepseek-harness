@@ -370,7 +370,7 @@ describe('ImIntake admission', () => {
     // The longest body the intake still admits: one more character and it is acknowledged without dispatching.
     let length = 0
     while (inputBytes(draftOf(bot, shaped(length + 1), source, 'platform')) + DELIVERY_ENVELOPE_BYTES <= maxInputBytes) length++
-    await deliver(bot, `${'0123abcd'.repeat(4)}`, shaped(length))
+    await deliver(bot, '0123abcd'.repeat(4), shaped(length))
     await intake.idle()
     const [message] = dispatched
     expect(message).toBeDefined()
