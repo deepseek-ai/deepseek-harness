@@ -78,6 +78,12 @@ export interface UserRef {
   role?: 'owner' | 'admin' | 'member'
 }
 
+/** One page of a chat's member list; `next` is the cursor of the page after it. */
+export interface MembersPage {
+  data: UserRef[]
+  next?: string
+}
+
 export interface MessageRef {
   id: string
   chat: ChatRef

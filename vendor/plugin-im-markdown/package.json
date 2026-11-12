@@ -37,11 +37,14 @@
     "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/cordis-plugin-im-core": "workspace:~",
     "@deepseek-ai/satori-element": "workspace:~",
+    "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4"
   },
   "dependencies": {
+    "hast-util-raw": "~9.1.1",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
+    "mdast-util-to-hast": "^13.2.1",
     "micromark-extension-gfm": "^3.0.0"
   },
   "publishConfig": {

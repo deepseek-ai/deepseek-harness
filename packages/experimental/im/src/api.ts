@@ -5,8 +5,8 @@
  */
 import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
 import type {
-  Bot, ButtonEvent, ChatRef, CheckEvent, Element, Fragment, InboundMessage, MessageHandle, MessageStream,
-  RenderReport, SelectEvent, SendOptions, StreamOptions, UserRef,
+  Bot, ButtonEvent, ChatRef, CheckEvent, Element, Fragment, InboundMessage, MembersPage, MessageHandle,
+  MessageStream, RenderReport, SelectEvent, SendOptions, StreamOptions, UserRef,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
@@ -322,6 +322,8 @@ export interface ImConfig {
     maxReadBytes: number
     /** Maximum messages of one `im_history` page (default 50). */
     maxHistoryItems: number
+    /** Maximum members one `im_members` call lists, across platform pages (default 200). */
+    maxMembers: number
     /**
      * Session-relative directory `im_read_file` writes a downloaded file into (default
      * `.dsh/im`); the path a chat file is staged at stays inside the working directory so
@@ -556,6 +558,11 @@ export interface ImApi {
    * other message, which gives it a sequence number and keeps a later read of it local.
    */
   readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
+  /**
+   * One page of the people a chat lists as its members: the id a mention addresses and the name to show. The platform
+   * decides the page size; `cursor` is the previous page's `next`.
+   */
+  members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage>
   /** Read-only diagnostics. */
   status(): ImStatus
 }

@@ -19,7 +19,7 @@ import {
   type CardModeConfig, type CardPayload,
 } from '../src/modes/card.ts'
 import {
-  cardCodeSpan, cardElementId, cardFence, escapeCardText, normalizeCardMarkdown, prefixLines, textMarkdown,
+  cardCodeSpan, cardElementId, cardFence, cardLink, escapeCardText, normalizeCardMarkdown, prefixLines, textMarkdown,
 } from '../src/modes/card-markdown.ts'
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -124,8 +124,9 @@ describe('card markdown escaping', () => {
 
   it('unwraps bare URLs into explicit links and keeps newlines as <br>', () => {
     expect(textMarkdown('see https://example.com/a_b. done\nnext')).toBe(
-      'see [https\\://example.com/a\\_b](https://example.com/a_b). done<br>next')
-    expect(textMarkdown('https://example.com', false)).toBe('https\\://example.com')
+      'see [https://example.com/a&#95;b](https://example.com/a_b). done<br>next')
+    // A label carries no backslash escape: the card renders `\:` as those two characters.
+    expect(textMarkdown('https://example.com', false)).toBe('https://example.com')
   })
 
   it('keeps code verbatim, because the platform decodes no entity inside code', () => {
@@ -155,6 +156,14 @@ describe('card markdown escaping', () => {
     expect(normalizeCardMarkdown('run `cat <name> | x` now')).toBe('run `cat <name> | x` now')
     expect(normalizeCardMarkdown('run ``a`<name>`` now')).toBe('run ``a`<name>`` now')
     expect(normalizeCardMarkdown('`` `x` and <at id=all> ``')).toBe('`` `x` and <at id=all> ``')
+  })
+
+  it('shows a bare URL as a link label without the serializer’s URL escape', () => {
+    // The GFM text serializer escapes the `:` of URL-shaped text; a label is never autolinked, so that backslash was
+    // the only thing the reader saw (`https\://example.com/b`).
+    expect(textMarkdown('see https://example.com/b?x=1&y=2 now')).toBe(
+      'see [https://example.com/b?x=1&#38;y=2](https://example.com/b?x=1&y=2) now')
+    expect(cardLink('', 'https://example.com/b')).toBe('[https://example.com/b](https://example.com/b)')
   })
 
   it('element ids: e + 15 base32 chars, deterministic', () => {

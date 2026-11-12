@@ -29,6 +29,13 @@ export interface ImHistoryInput {
   /** Page size; bounded by `config.tools.maxHistoryItems`. */
   limit?: number
 }
+/** `im_members` arguments. */
+export interface ImMembersInput {
+  /** Chat to list; defaults to the caller's home chat. */
+  chat?: string
+  /** Keep only members whose name carries this text (case-insensitive). */
+  query?: string
+}
 /** `im_send` arguments. */
 export interface ImSendInput {
   /** Chat to publish into; defaults to the caller's home chat. */
@@ -95,6 +102,15 @@ export const imHistoryParameters = {
   limit: { type: 'integer', description: 'Page size, within the operator-configured history limit.' },
 } as const satisfies ParameterSchemaSpec
 
+/** `im_members` parameters. */
+export const imMembersParameters = {
+  ...{ chat: chatParameter },
+  query: {
+    type: 'string',
+    description: 'Keep only members whose name carries this text; use it instead of paging a large chat by hand.',
+  },
+} as const satisfies ParameterSchemaSpec
+
 /** `im_send` parameters. */
 export const imSendParameters = {
   ...{ chat: chatParameter },
@@ -155,6 +171,16 @@ export const errorValue = {
   },
 } as const satisfies ValueSchemaSpec
 
+/** One person a message mentions: the id a publication addresses and the name the platform showed. */
+export const mentionValue = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', required: true, description: 'Platform user id the mention addresses.' },
+    name: { type: 'string', description: 'Display name the platform showed for it.' },
+  },
+} as const satisfies ValueSchemaSpec
+
 /** One message as the IM tools show it. */
 export const messageValue = {
   type: 'object',
@@ -168,6 +194,10 @@ export const messageValue = {
     self: { type: 'boolean', required: true },
     time: { type: 'integer', required: true },
     text: { type: 'string', required: true },
+    mentions: {
+      type: 'array', items: mentionValue, required: true,
+      description: 'People this message mentions; a mention of the bot itself is not listed.',
+    },
     quote: { type: 'string', description: 'Quoted message key.' },
     thread: { type: 'string', description: 'Thread the message belongs to.' },
     media: {
@@ -199,6 +229,38 @@ export const imHistoryOutput = {
         messages: { type: 'array', items: messageValue, required: true },
         chat: { type: 'string', required: true },
         total: { type: 'integer', required: true, description: 'Messages this page holds.' },
+      },
+    },
+    errorValue,
+  ],
+} as const satisfies ValueSchemaSpec
+
+/** `im_members` result: the people a chat lists, with the markdown that mentions each of them. */
+export const imMembersOutput = {
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        chat: { type: 'string', required: true },
+        members: {
+          type: 'array', required: true,
+          description: 'Members in platform order, stopped at the configured bound.',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', required: true, description: 'Platform user id a mention addresses.' },
+              name: { type: 'string', description: 'Display name the platform shows for them.' },
+              mention: {
+                type: 'string', required: true,
+                description: 'Markdown that mentions this person; paste it into a message to notify them.',
+              },
+            },
+          },
+        },
+        total: { type: 'integer', required: true, description: 'Members this answer holds.' },
+        more: { type: 'boolean', required: true, description: 'Whether the chat lists further members.' },
       },
     },
     errorValue,

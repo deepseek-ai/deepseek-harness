@@ -62,7 +62,9 @@ import { degradationScore } from './degradation.ts'
 import type { RenderReport } from './fallback.ts'
 import { type InternalRouteCallback, InternalRouter } from './internal.ts'
 import type { Mode, TransformResult } from './mode.ts'
-import { type ChatRef, type InboundMessage, type Login, type MessageRef, Status, type Target, type User } from './protocol.ts'
+import {
+  type ChatRef, type InboundMessage, type Login, type MembersPage, type MessageRef, Status, type Target, type User,
+} from './protocol.ts'
 import {
   createResourceFetcher, MemoryResourceCache, type PrepareContext, prepare, type Prepared, type ResolvedResource,
   type ResourceKind, type ResourceRef,
@@ -856,6 +858,11 @@ export abstract class Bot<C = unknown> {
 
   getMessage?(chat: ChatRef, id: string): Promise<InboundMessage>
   getMessageList?(chat: ChatRef, cursor?: string, limit?: number): Promise<{ data: InboundMessage[]; next?: string }>
+  /**
+   * The people a chat lists as its members, each with the id a mention addresses. One page of at most `limit`
+   * members, from where `cursor` points (the previous page's {@link MembersPage.next}).
+   */
+  members?(chat: ChatRef, cursor?: string, limit?: number): Promise<MembersPage>
   createReaction?(message: MessageRef, emoji: string): Promise<void>
   deleteReaction?(message: MessageRef, emoji: string): Promise<void>
   /** `satori:` internal URLs from decode. */

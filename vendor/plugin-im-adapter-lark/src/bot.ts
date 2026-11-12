@@ -28,9 +28,10 @@
 import { type Context } from '@deepseek-ai/cordis'
 import { type Http } from '@deepseek-ai/cordis-plugin-http'
 import {
-  Adapter, type ChatRef, createEditDriver, type InboundMessage, Inject, type MessageHandle, type MessageRef, type Mode,
-  type PlatformError, type PrepareContext, type ResolvedResource, type ResourceKind, type ResourceRef, type SendContext,
-  type SentPart, type Session, type StreamDriver, type Target, type User,
+  Adapter, type ChatRef, createEditDriver, type InboundMessage, Inject, type MembersPage, type MessageHandle,
+  type MessageRef, type Mode, type PlatformError, type PrepareContext, type ResolvedResource, type ResourceKind,
+  type ResourceRef, type SendContext, type SentPart, type Session, type StreamDriver, type Target, type User,
+  type UserRef,
 } from '@deepseek-ai/cordis-plugin-im-core'
 import { type LarkHttp, type LarkMessageListQuery, LarkApi } from './api/client.ts'
 import { type LarkChatKind, type LarkRawEvent, readLarkReferrer } from './api/events.ts'
@@ -43,7 +44,7 @@ import { createCardMode } from './modes/card.ts'
 import { createPostMode } from './modes/post.ts'
 import { uploadResource } from './prepare.ts'
 import { deleteSentPart, editMessagePayload, sendMessagePayload } from './send.ts'
-import type { Message } from './types/index.ts'
+import type { Im, Message } from './types/index.ts'
 import { WsClient } from './ws.ts'
 
 /** Mode ids: rich-text `post` and interactive `card`. */
@@ -433,6 +434,32 @@ export class LarkBot extends Adapter<LarkConfig, LarkModes> {
     const result: { data: InboundMessage[]; next?: string } = { data }
     if (page.has_more && page.page_token) result.next = page.page_token
     return result
+  }
+
+  /**
+   * Read one page of a chat's members, addressed by `open_id` — the id a mention carries.
+   *
+   * The platform bounds a page at 100; a member it reports without an id (an unreadable outsider) is skipped, since
+   * nothing can address it.
+   *
+   * @param chat - chat the caller is allowed to read.
+   * @param cursor - `page_token` of the previous page.
+   * @param limit - page size, 1–100 (default 50).
+   * @returns the members with the cursor of the next page, when there is one.
+   */
+  override async members(chat: ChatRef, cursor?: string, limit = 50): Promise<MembersPage> {
+    const query: Im.Chat.Members.GetQuery = {
+      member_id_type: 'open_id',
+      page_size: Math.min(Math.max(limit, 1), 100),
+    }
+    if (cursor !== undefined) query.page_token = cursor
+    const page = await this.api.getChatMembers(chat.id, query)
+    const data: UserRef[] = []
+    for (const member of page.items ?? []) {
+      if (!member.member_id) continue
+      data.push({ id: member.member_id, ...member.name ? { name: member.name } : {} })
+    }
+    return page.has_more && page.page_token ? { data, next: page.page_token } : { data }
   }
 
   /**

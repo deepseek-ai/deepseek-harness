@@ -74,6 +74,7 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
       "tools": {
         "fileDir": ".dsh/im",
         "maxHistoryItems": 50,
+        "maxMembers": 200,
         "maxReadBytes": 65536,
         "readOnly": false,
       },

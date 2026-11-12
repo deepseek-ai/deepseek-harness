@@ -438,6 +438,27 @@ export class LarkApi {
     })
   }
 
+  /**
+   * Read one page of a chat's members (`GET /im/v1/chats/{chat_id}/members`), addressed by `open_id` unless
+   * `member_id_type` says otherwise.
+   *
+   * @param chatId - chat to read.
+   * @param query - `member_id_type`, `page_size` (1–100) and `page_token`.
+   * @param signal - cancellation.
+   * @returns the page as the platform shaped it: `items`, a `page_token` while `has_more`.
+   */
+  async getChatMembers(
+    chatId: string,
+    query: Im.Chat.Members.GetQuery = {},
+    signal?: AbortSignal,
+  ): Promise<Im.Chat.Members.GetResponse> {
+    return await this.answer<Im.Chat.Members.GetResponse>(
+      'GET',
+      `/im/v1/chats/${encodeURIComponent(chatId)}/members`,
+      { params: queryOf(query), signal },
+    )
+  }
+
   // -------------------------------------------------------------------------------------------------------------
   // Uploads and resources
 

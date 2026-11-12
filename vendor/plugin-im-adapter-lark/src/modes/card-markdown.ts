@@ -5,7 +5,9 @@
  * Why a separate escaper from the post one. Card markdown (JSON 2.0 `markdown` component) is the broadest Lark
  * dialect: CommonMark + GFM plus an HTML-ish tag allow-list (`<at>`, `<font>`, `<br>`, `<hr>`, `<link>`, `<person>`,
  * `<text_tag>`, `<local_datetime>`, `<raw>`, `<a>`). The platform renders any allowed tag it finds — so a model that
- * writes `<at id=all>` inside plain text would ping the whole group. The rules are:
+ * writes `<at id=all>` inside plain text would ping the whole group. There is no underline: a markdown component
+ * shows `<u>文本</u>` as those literal characters (2026-11-11, a real card), which is why the card mode registers no
+ * `u` and underlined content resolves to the post mode. The rules are:
  * - **user text goes through `mdast-util-to-markdown`**, the CommonMark/GFM writer: it escapes the markdown syntax of
  *   literal text (`\ * _ ~ ` [ ] # | >`, line-start block markers) and keeps a code span or fence verbatim, with a
  *   delimiter longer than any backtick run of its body;
@@ -100,6 +102,26 @@ export function splitUrls(text: string): { text: string; url: boolean }[] {
   return out
 }
 
+/** Characters that would end a link label or open a tag, in the entity forms the platform decodes in markdown text. */
+const LABEL_ENTITIES: Readonly<Record<string, string>> = {
+  '&': '&#38;', '<': '&#60;', '>': '&#62;', '[': '&#91;', ']': '&#93;', '\\': '&#92;',
+  '`': '&#96;', '*': '&#42;', '_': '&#95;', '~': '&#126;',
+}
+
+/**
+ * A link label: the URL a link shows, or the text inside one.
+ *
+ * The GFM text serializer escapes the `:` of URL-shaped text so plain text cannot become an autolink, but a card
+ * renders that backslash to the reader (`https\://example.com/b`), and a label is never autolinked. Labels therefore
+ * use the entity forms instead — the platform decodes them in markdown text — and write no backslash at all.
+ *
+ * @param text - the label text.
+ * @returns the label markdown.
+ */
+export function linkLabel(text: string): string {
+  return text.replace(/[&<>[\]\\`*_~]/g, char => LABEL_ENTITIES[char] ?? char)
+}
+
 /**
  * Markdown of one `text` element: escaped, newlines as {@link CARD_BREAK}, and — unless `linkify` is false (text
  * inside a link label) — every bare URL unwrapped into an explicit `[url](url)` link (dsh autolink semantics).
@@ -107,8 +129,8 @@ export function splitUrls(text: string): { text: string; url: boolean }[] {
 export function textMarkdown(text: string, linkify = true): string {
   const runs = linkify ? splitUrls(text) : [{ text, url: false }]
   return runs.map(run => run.url
-    ? `[${escapeCardText(run.text)}](${escapeLinkHref(run.text)})`
-    : escapeCardText(run.text)).join('').replace(/\r?\n/g, CARD_BREAK)
+    ? `[${linkLabel(run.text)}](${escapeLinkHref(run.text)})`
+    : linkify ? escapeCardText(run.text) : linkLabel(run.text)).join('').replace(/\r?\n/g, CARD_BREAK)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -154,7 +176,7 @@ export function escapeLinkHref(href: string): string {
 
 /** A link; a label equal to the URL (or empty) shows the URL itself, never an autolink in angle brackets. */
 export function cardLink(label: string, href: string): string {
-  return `[${label || escapeCardText(href)}](${escapeLinkHref(href)})`
+  return `[${label || linkLabel(href)}](${escapeLinkHref(href)})`
 }
 
 /** Card-markdown mention: `<at id=ou_x></at>` or `<at id=all></at>`; ids are restricted to `[\w-]`. */

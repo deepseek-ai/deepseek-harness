@@ -34,7 +34,9 @@ describe('dsh-im contracts', () => {
       download: true, maxBytes: 10485760, maxItems: 9, source: { file: false, internal: false },
     })
     expect(config.send).toEqual({ maxMediaBytes: 10485760, operationTimeoutMs: 30000 })
-    expect(config.tools).toEqual({ readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' })
+    expect(config.tools).toEqual({
+      readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im',
+    })
     expect(config.retentionMs).toBe(30 * 86400000)
     expect(parse({}).sources).toEqual([])
     expect(() => parse({ sources: [{ id: 'x' }] })).toThrow()
@@ -59,7 +61,7 @@ describe('dsh-im contracts', () => {
   it('exposes the constants plugins rely on', () => {
     expect(STOP_BUTTON_PREFIX).toBe('dsh:stop:')
     expect(IM_TOOLS).toEqual([
-      'im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
+      'im_read', 'im_history', 'im_members', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
     ])
     expect(imSendParameters.text).toMatchObject({ type: 'string', required: true })
     expect(imReadImageParameters.id).toMatchObject({ type: 'string', required: true })

@@ -182,14 +182,14 @@ const corpus: Case[] = [
     xml: '<message><p>see <img src="a.png" alt="x"/> here</p></message>',
   },
   {
-    name: 'inline html becomes literal text',
+    name: 'inline html of the vocabulary becomes an element',
     markdown: 'a <b>raw</b> c',
-    xml: '<message><p>a &lt;b&gt;raw&lt;/b&gt; c</p></message>',
+    xml: '<message><p>a <b>raw</b> c</p></message>',
   },
   {
-    name: 'block html becomes literal text lines',
+    name: 'html no element stands for keeps its text',
     markdown: '<div>\nraw\n</div>',
-    xml: '<message><p>&lt;div&gt;<br/>raw<br/>&lt;/div&gt;</p></message>',
+    xml: '<message><p>raw</p></message>',
   },
   {
     name: 'hard break',
@@ -245,6 +245,76 @@ const corpus: Case[] = [
     name: 'inline formatting inside a table cell and a list item',
     markdown: '| h |\n| - |\n| **b** |\n\n- *i* and [a](https://e.x)',
     xml: '<message><table><tr><th><p>h</p></th></tr><tr><td><p><b>b</b></p></td></tr></table><ul><li><p><i>i</i> and <a href="https://e.x">a</a></p></li></ul></message>',
+  },
+  {
+    name: 'literal html gives markdown the elements it has no syntax for',
+    markdown: '<u>下划线</u> <spoiler>剧透</spoiler>',
+    xml: '<message><p><u>下划线</u> <spoiler>剧透</spoiler></p></message>',
+  },
+  {
+    name: 'html spellings resolve through the tag aliases',
+    markdown: '<strong>粗</strong> <em>斜</em> <del>删</del> <ins>下</ins> <spl>透</spl>',
+    xml: '<message><p><b>粗</b> <i>斜</i> <s>删</s> <u>下</u> <spoiler>透</spoiler></p></message>',
+  },
+  {
+    name: 'a mention addresses its id and shows the name it wraps',
+    markdown: 'hi <at user_id="ou_x">张三</at> and <at id="ou_y">李四</at>',
+    xml: '<message><p>hi <at id="ou_x" type="user" name="张三"/> and <at id="ou_y" type="user" name="李四"/></p></message>',
+  },
+  {
+    name: 'a self-closing mention owns no following text',
+    markdown: 'hi <at id=ou_x /> there',
+    xml: '<message><p>hi <at id="ou_x" type="user"/> there</p></message>',
+  },
+  {
+    name: 'the vocabulary decides which attributes survive',
+    markdown: '<span color="red">红</span>',
+    xml: '<message><p><span color="red">红</span></p></message>',
+  },
+  {
+    name: 'html nests inside its own elements',
+    markdown: '<u><b>粗下划线</b></u>',
+    xml: '<message><p><u><b>粗下划线</b></u></p></message>',
+  },
+  {
+    name: 'an emoji keeps the id it addresses and the name it shows',
+    markdown: '<emoji id="smile">笑脸</emoji>',
+    xml: '<message><p><emoji id="smile" name="笑脸"/></p></message>',
+  },
+  {
+    name: 'an interactive element is not authorable: its text stays',
+    markdown: '<button type="action" id="stop">点我</button>',
+    xml: '<message><p>点我</p></message>',
+  },
+  {
+    name: 'an element missing its required attribute keeps its text',
+    markdown: '<a>无 href 的链接</a>',
+    xml: '<message><p>无 href 的链接</p></message>',
+  },
+  {
+    name: 'block-level html joins the blocks around it',
+    markdown: '- 一\n\n<details><summary>题</summary>正文</details>',
+    xml: '<message><ul><li><p>一</p></li></ul><details><summary>题</summary><p>正文</p></details></message>',
+  },
+  {
+    name: 'an html table is a table',
+    markdown: '<table><tr><td>a</td></tr></table>',
+    xml: '<message><table><tr><td><p>a</p></td></tr></table></message>',
+  },
+  {
+    name: 'a block element on a line of its own is that block',
+    markdown: '<small>小字说明</small>',
+    xml: '<message><small>小字说明</small></message>',
+  },
+  {
+    name: 'a block element inside a sentence keeps its text',
+    markdown: '前 <small>小字</small> 后',
+    xml: '<message><p>前 小字 后</p></message>',
+  },
+  {
+    name: 'a list item outside a list keeps its text',
+    markdown: '<li>孤儿项</li>',
+    xml: '<message><p>孤儿项</p></message>',
   },
 ]
 
@@ -302,6 +372,32 @@ describe('fromMarkdown: element trees', () => {
     expect(header.every(cell => cell.attrs.align === undefined)).toBe(true)
     expect(body.every(cell => cell.attrs.align === undefined)).toBe(true)
   })
+
+  it('keeps a mention addressable and shows the name it wraps', () => {
+    const [paragraph] = convert('hi <at user_id="ou_x">张三</at>')
+    const mention = paragraph!.children[1]!
+    expect(mention.type).toBe('at')
+    expect(mention.attrs).toEqual({ type: 'user', id: 'ou_x', name: '张三' })
+  })
+
+  it('cannot author the interactive half of the vocabulary', () => {
+    const source = '<button type="action" id="stop">b</button><input type="checkbox"/>'
+      + '<select><option value="1">o</option></select><form name="f"><p>x</p></form>'
+      + '<fallback><case><p>c</p></case></fallback><raw platform="lark" type="card">{}></raw>'
+    const seen: string[] = []
+    const walk = (nodes: readonly { type: string; children: unknown[] }[]) => {
+      for (const node of nodes) {
+        seen.push(node.type)
+        walk((node.children ?? []) as readonly { type: string; children: unknown[] }[])
+      }
+    }
+    walk(convert(source))
+    for (const tag of ['button', 'input', 'select', 'option', 'form', 'fallback', 'case', 'raw']) {
+      expect(seen).not.toContain(tag)
+    }
+    // Their text is what a reader gets instead.
+    expect(seen.filter(tag => tag === 'text').length).toBeGreaterThan(0)
+  })
 })
 
 // ---- text conservation ---------------------------------------------------------------------------------------------
@@ -309,13 +405,16 @@ describe('fromMarkdown: element trees', () => {
 /**
  * mdast leaf text: everything the source says in words, before any rendering decision. A `footnoteReference` has no
  * leaf text of its own, and the converter keeps it visible as the literal `[^label]` marker — the one place where the
- * tree adds characters the source does not spell out.
+ * tree adds characters the source does not spell out. Raw HTML contributes its text and its tags are markup, so they
+ * are stripped here: the reader sees what a tag wraps, never the tag.
  */
 function sourceText(nodes: readonly RootContent[] | readonly { type: string; [key: string]: any }[]): string {
   let out = ''
   for (const node of nodes as readonly { type: string; value?: string; label?: string; identifier?: string; children?: any[] }[]) {
-    if (node.type === 'text' || node.type === 'inlineCode' || node.type === 'code' || node.type === 'html') {
+    if (node.type === 'text' || node.type === 'inlineCode' || node.type === 'code') {
       out += node.value ?? ''
+    } else if (node.type === 'html') {
+      out += String(node.value ?? '').replace(/<[^>]*>/g, '')
     } else if (node.type === 'footnoteReference') {
       out += `[^${node.label ?? node.identifier}]`
     } else if (Array.isArray(node.children)) {
@@ -325,12 +424,18 @@ function sourceText(nodes: readonly RootContent[] | readonly { type: string; [ke
   return out
 }
 
-/** Every text run in the produced element tree. */
+/**
+ * Every text run in the produced element tree, plus the labels an element carries in `name` instead of children
+ * (`<at user_id="ou_x">张三</at>` shows 张三 without holding it as content).
+ */
 function treeText(nodes: readonly { type: string; attrs: Record<string, any>; children: any[] }[]): string {
   let out = ''
   for (const node of nodes) {
     if (node.type === 'text') out += String(node.attrs.content ?? '')
-    else if (Array.isArray(node.children)) out += treeText(node.children)
+    else {
+      if (node.type === 'at' || node.type === 'emoji' || node.type === 'channel') out += String(node.attrs.name ?? '')
+      if (Array.isArray(node.children)) out += treeText(node.children)
+    }
   }
   return out
 }

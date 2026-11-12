@@ -7,7 +7,7 @@
  */
 import { Context, Service } from '@deepseek-ai/cordis'
 import { toText } from '@deepseek-ai/cordis-plugin-im-core'
-import type { Bot, Fragment, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
+import type { Bot, Fragment, MembersPage, MessageStream, StreamOptions } from '@deepseek-ai/cordis-plugin-im-core'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-attachment'
@@ -267,6 +267,21 @@ export class ImService extends Service implements ImApi {
     const source = admit([...this.sources.values()], bot.id, message)
     if (source === undefined) throw new ImError('access', `Message ${id} of chat ${chat} is admitted by no source.`)
     return await this.store.put(draftOf(bot, message, source, 'platform'), 'none')
+  }
+
+  /**
+   * One page of the people a chat lists as its members: the id a mention addresses and the name to show.
+   * @param chat - chat whose members are listed; its bot answers the platform request.
+   * @param cursor - `page_token` of the previous page.
+   * @param limit - page-size hint; the platform bounds it.
+   * @returns the page the adapter read.
+   */
+  async members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage> {
+    const bot = this.bot(chat)
+    const record = this.chat(chat)
+    if (record === undefined) throw new ImError('access', `Chat ${chat} was never admitted, so its members cannot be listed.`)
+    if (bot.members === undefined) throw new ImError('unavailable', `Bot ${bot.id} cannot list the members of a chat.`)
+    return await bot.members(record.ref, cursor, limit)
   }
 
   /**

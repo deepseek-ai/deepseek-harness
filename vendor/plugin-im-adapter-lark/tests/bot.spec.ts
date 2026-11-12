@@ -165,6 +165,24 @@ describe('LarkBot shell', () => {
     expect((await bot.render(group, [h('p', h('span', { color: 'info' }, 'blue')), h('small', 'note')])).mode).toBe('card')
   })
 
+  it('reads a chat\'s members by open id and skips a member it cannot address', async () => {
+    const { bot, calls } = await mount({}, {
+      '/open-apis/im/v1/chats/oc_probe/members': () => Response.json({
+        code: 0,
+        data: {
+          items: [{ member_id: 'ou_a', name: '张三', member_id_type: 'open_id' }, { name: 'no id' }],
+          has_more: true,
+          page_token: 'p2',
+        },
+      }),
+    })
+    const page = await bot.members({ id: 'oc_probe', type: 'group' })
+    // The id a mention addresses is the `open_id`, and a member reported without one addresses nobody.
+    expect(page.data).toEqual([{ id: 'ou_a', name: '张三' }])
+    expect(page.next).toBe('p2')
+    expect(calls.filter(call => call.path.endsWith('/members'))).toHaveLength(1)
+  })
+
   it('scopes uploads to the application, not the chat', async () => {
     const { bot } = await mount()
     expect(bot.resourceScope(group, 'image')).toBe('cli_lark')

@@ -4,7 +4,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { createRenderReport, h, type Fragment } from '@deepseek-ai/cordis-plugin-im-core'
+import { createRenderReport, h, type Fragment, type MembersPage } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -146,6 +146,15 @@ class FakeIm {
     if (fetched === undefined) throw new ImError('access', `Chat ${chat} holds no message ${id}.`)
     return fetched
   }
+
+  /** Members the platform lists, by chat; a chat it cannot list reports the platform's own refusal. */
+  readonly membersByChat = new Map<ImChatKey, { id: string; name?: string }[]>()
+
+  async members(chat: ImChatKey): Promise<MembersPage> {
+    const data = this.membersByChat.get(chat)
+    if (data === undefined) throw new ImError('unavailable', `Bot fake:bot cannot list the members of ${chat}.`)
+    return { data }
+  }
 }
 
 /** One tool call's arguments and caller. */
@@ -257,7 +266,7 @@ describe('im tool registration', () => {
 
   it('registers only the read tools when the preset is read-only', async () => {
     const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
-    expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_read_image', 'im_read_file'])
+    expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_members', 'im_read_image', 'im_read_file'])
   })
 
   it('keeps the read tools parallel and the publishing tools exclusive', async () => {
@@ -350,6 +359,36 @@ describe('im_read and im_history', () => {
     }))
     const read = value(await mounted.call('im_read', { message: '4' }))
     expect(read.message).toMatchObject({ thread: 't-1', quote: 'fake:bot|m1', media: ['[图片 #4.1 猫]'] })
+  })
+
+  it('reports the people a read message mentioned, without the bot itself', async () => {
+    const mounted = await mount()
+    mounted.im.history.messages.push(message(4, {
+      mentions: { self: true, all: false, users: [{ id: 'fake:bot', name: 'bot' }, { id: 'ou_a', name: '张三' }] },
+    }))
+    const read = value(await mounted.call('im_read', { message: '4' }))
+    expect(read.message).toMatchObject({ mentions: [{ id: 'ou_a', name: '张三' }] })
+  })
+
+  it('lists a chat\'s members with the markdown that mentions each of them', async () => {
+    const mounted = await mount()
+    mounted.im.membersByChat.set(CHAT, [{ id: 'ou_a', name: '张三' }, { id: 'ou_b' }])
+    expect(value(await mounted.call('im_members', {}))).toMatchObject({
+      chat: CHAT,
+      total: 2,
+      more: false,
+      members: [
+        { id: 'ou_a', name: '张三', mention: '<at user_id="ou_a">张三</at>' },
+        { id: 'ou_b', mention: '<at user_id="ou_b"></at>' },
+      ],
+    })
+    // The query narrows the answer to the members a session is looking for, in the platform's own order.
+    expect((value(await mounted.call('im_members', { query: '张' })).members as unknown[])).toHaveLength(1)
+  })
+
+  it('reports a platform that cannot list the members of a chat', async () => {
+    const mounted = await mount()
+    expect(value(await mounted.call('im_members', {}))).toMatchObject({ status: 'error', code: 'unavailable' })
   })
 
   it('reports an unknown message as a declared error', async () => {

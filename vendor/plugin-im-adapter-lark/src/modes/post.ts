@@ -554,6 +554,8 @@ export function createPostMode(config: PostModeConfig = {}): Mode<PostTypes> {
     .register('b', (el, ctx) => wrapChildren('**', '**', ctx, el))
     .register('i', (el, ctx) => wrapChildren('*', '*', ctx, el))
     .register('s', (el, ctx) => wrapChildren('~~', '~~', ctx, el))
+    // A post `md` node renders `<u>…</u>` (2026-11-11, a real message), while the card markdown dialect has no
+    // underline and shows the tag itself — which is what sends underlined content to this mode.
     .register('u', (el, ctx) => wrapChildren('<u>', '</u>', ctx, el))
     .register('code', (el, ctx) => raw(codeSpan(ctx.text(el.children))))
     .register('a', (el, ctx) => {

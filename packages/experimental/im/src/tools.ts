@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { h, type Element } from '@deepseek-ai/cordis-plugin-im-core'
+import { h, type Element, type MembersPage } from '@deepseek-ai/cordis-plugin-im-core'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { defineTool, type ToolRunContext } from '@deepseek-ai/dsh-tools'
@@ -31,20 +31,21 @@ import {
 import { ImError } from './error.ts'
 import { imageAttachmentSchema, mediaLabel, mediaRefs, type ImMediaStore } from './media.ts'
 import {
-  imHistoryOutput, imHistoryParameters, imReadFileOutput, imReadFileParameters, imReadImageOutput, imReadImageParameters,
-  imReadOutput, imReadParameters, imReplyParameters, imSendFileParameters, imSendOutput, imSendParameters,
+  imHistoryOutput, imHistoryParameters, imMembersOutput, imMembersParameters, imReadFileOutput, imReadFileParameters,
+  imReadImageOutput, imReadImageParameters, imReadOutput, imReadParameters, imReplyParameters, imSendFileParameters,
+  imSendOutput, imSendParameters,
 } from './schema.ts'
 import { grantChain, operationId } from './send.ts'
 
 /** Names of the IM tools the service registers (`config.tools.readOnly` drops the publishing ones). */
 export const IM_TOOLS = [
-  'im_read', 'im_history', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
+  'im_read', 'im_history', 'im_members', 'im_send', 'im_reply', 'im_send_file', 'im_read_image', 'im_read_file',
 ] as const
 /** One registered IM tool name. */
 export type ImToolName = typeof IM_TOOLS[number]
 
 /** What the tools need from the service. */
-export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage'> {
+export interface ImToolHost extends Pick<ImApi, 'send' | 'readMessage' | 'members'> {
   /** The two session lookups of the caller guard and the grant chain. */
   readonly sessions: Pick<ImSessions, 'of' | 'get'>
   readonly history: ImHistory
@@ -131,6 +132,20 @@ export function applyTools(ctx: Context, im: ImToolHost, config: ImConfig): void
         ? im.history.before(chat, args.before ?? Number.MAX_SAFE_INTEGER, limit)
         : im.history.after(chat, args.after, limit)
       return Promise.resolve({ chat, messages: messages.map(viewOf), total: messages.length })
+    }),
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'im_members',
+    description: 'List the people a chat you may read has as members, each with the markdown that mentions them: a'
+      + ' mention addresses the platform user id and shows the name. Filter with query rather than paging by hand.',
+    parameters: imMembersParameters,
+    output: { schema: imMembersOutput, render },
+    isConcurrencySafe: () => true,
+    execute: (args, exec) => run(async () => {
+      const { record } = caller(im, exec)
+      const chat = chatOf(im, record, args.chat)
+      return await roster(im, chat, args.query, config)
     }),
   }))
 
@@ -326,6 +341,58 @@ async function messageOf(im: ImToolHost, chat: ImChatKey, value: string): Promis
   return await im.readMessage(chat, splitKey(message.key).id)
 }
 
+/** One chat member as `im_members` reports it. */
+interface MemberView {
+  id: string
+  name?: string
+  mention: string
+}
+
+/**
+ * The markdown that mentions one person. A mention addresses a platform user id and shows a name, so the chat reads a
+ * name while the platform notifies the person; markdown parses this tag into the vocabulary's `at` element.
+ *
+ * @param member - the member to address.
+ * @returns the ready-to-paste mention.
+ */
+function mentionSyntax(member: { id: string; name?: string }): string {
+  const id = member.id.replace(/[^\w-]/g, '')
+  const name = (member.name ?? '').replace(/[<>&"]/g, '')
+  return `<at user_id="${id}">${name}</at>`
+}
+
+/**
+ * Page through one chat's members, keeping the ones `query` names, up to the configured bound.
+ *
+ * @param im - host slice holding the member read.
+ * @param chat - chat whose members are listed.
+ * @param query - case-insensitive text a member's name must carry; absent keeps every member.
+ * @param config - operator configuration (`tools.maxMembers`).
+ * @returns the members, and whether the bound left some out.
+ */
+async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined, config: ImConfig) {
+  const bound = config.tools.maxMembers
+  const needle = query?.trim().toLowerCase() ?? ''
+  const members: MemberView[] = []
+  let cursor: string | undefined
+  for (;;) {
+    const page: MembersPage = await im.members(chat, cursor)
+    let full = false
+    for (const member of page.data) {
+      const name = member.name ?? ''
+      if (needle && !name.toLowerCase().includes(needle)) continue
+      if (members.length === bound) {
+        full = true
+        break
+      }
+      members.push({ id: member.id, ...name ? { name } : {}, mention: mentionSyntax(member) })
+    }
+    if (full) return { chat, members, total: members.length, more: true }
+    if (page.next === undefined) return { chat, members, total: members.length, more: false }
+    cursor = page.next
+  }
+}
+
 
 /** One message as the tools show it (media labels stay usable with `im_read_image`). */
 interface MessageView {
@@ -337,6 +404,7 @@ interface MessageView {
   self: boolean
   time: number
   text: string
+  mentions: { id: string; name?: string }[]
   quote?: string
   thread?: string
   media: string[]
@@ -353,6 +421,7 @@ interface SendView {
 
 /** One stored message in the tool-facing form. */
 function viewOf(message: ImMessage): MessageView {
+  const { bot } = splitKey(message.chat.key)
   return {
     key: message.key,
     seq: message.seq,
@@ -362,6 +431,10 @@ function viewOf(message: ImMessage): MessageView {
     self: message.sender.self,
     time: message.time,
     text: message.text,
+    // The bot's own mention is how the message addressed it, not a person a reply can address.
+    mentions: message.mentions.users
+      .filter(user => user.id !== bot)
+      .map(user => ({ id: user.id, ...user.name === undefined ? {} : { name: user.name } })),
     ...message.quote === undefined ? {} : { quote: message.quote.key },
     ...message.thread === undefined ? {} : { thread: message.thread.id },
     media: mediaRefs(message).map(ref => mediaLabel(ref)),
@@ -480,6 +553,9 @@ function guidance(im: ImToolHost, record: ImSessionRecord, config: ImConfig): st
       + 'the platform could not render natively.')
     parts.push('A publication carries only what you pass it: im_send and im_reply publish their own text and inline '
       + 'images, and im_send_file publishes the file at the path you name.')
+    parts.push('To notify one person, write the mention in your markdown: <at user_id="ou_…">张三</at>. It addresses'
+      + ' the platform user id and shows the name, and plain "@张三" text notifies nobody. im_members lists the people'
+      + ' of a chat with that exact markdown for each of them, and a read message reports the ids it mentioned.')
   }
   parts.push('Media arrives as a label such as [图片 #12.1] or [文件 #12.2 report.pdf]; im_read_image with an image id '
     + 'shows exactly that image of the chat, and im_read_file with any media id saves that element into your workspace '

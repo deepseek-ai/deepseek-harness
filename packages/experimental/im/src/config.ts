@@ -62,6 +62,7 @@ export const Config = z.object({
     readOnly: z.boolean().default(false),
     maxReadBytes: z.natural().min(1).default(65536),
     maxHistoryItems: z.natural().min(1).max(200).default(50),
+    maxMembers: z.natural().min(1).max(1000).default(200),
     fileDir: z.string().default('.dsh/im'),
   }),
   defaultDispatch: z.union([Dispatcher, z.const(undefined)]),
