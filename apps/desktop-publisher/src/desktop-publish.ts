@@ -62,10 +62,11 @@ function same(left: DesktopObjectDigest | null, right: DesktopObjectDigest | nul
 }
 
 function version(contents: string, remote = false): string {
+  let parsed: { version: string } | undefined
   try {
-    const parsed = z.object({ version: z.string() }).parse(load(contents))
-    if (valid(parsed.version) !== null) return parsed.version
-  } catch (_error) { /* Discard parser error details, which may include raw remote YAML. */ }
+    parsed = z.object({ version: z.string() }).parse(load(contents))
+  } catch (_parseError) { /* Discard parser error details, which may include raw remote YAML. */ }
+  if (parsed !== undefined && valid(parsed.version) !== null) return parsed.version
   throw new DesktopPublishError(remote ? 'verification-failed' : 'invalid-plan',
     `desktop publish: invalid ${remote ? 'remote' : 'planned'} channel version`)
 }

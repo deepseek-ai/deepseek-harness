@@ -127,3 +127,22 @@ it('classifies corrupted remote channel metadata separately from an invalid loca
   await expect(publishDesktopRelease(f.plan, f.operations)).rejects.toMatchObject({ code: 'verification-failed' })
   expect(f.writes).toEqual([])
 })
+
+it.each(['version: [private-feed', 'version: 42\n', 'version: invalid-private-version\n'])(
+  'rejects invalid channel metadata without exposing its contents: %s', async (contents) => {
+    for (const remote of [false, true]) {
+      const f = fixture()
+      const plan: DesktopUploadPlan = remote ? f.plan : {
+        ...f.plan,
+        artifacts: f.plan.artifacts.map(artifact => artifact.channelMetadata ? { ...artifact, contents } : artifact),
+      }
+      if (remote) f.objects.set('feed/nightly.yml', observed(contents))
+      await expect(publishDesktopRelease(plan, f.operations)).rejects.toMatchObject({
+        code: remote ? 'verification-failed' : 'invalid-plan',
+        message: `desktop publish: invalid ${remote ? 'remote' : 'planned'} channel version`,
+      })
+      expect(f.writes).toEqual([])
+      expect(f.tags()).toBe(0)
+    }
+  },
+)
