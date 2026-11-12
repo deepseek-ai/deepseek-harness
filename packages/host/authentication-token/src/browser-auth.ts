@@ -2,14 +2,15 @@
 
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { PeerId } from '@deepseek-ai/dsh-typert-protocol'
-import { CONNECT_PATH, type ConnectionInteractions } from './connect-protocol.ts'
+import { CONNECT_PATH } from '@deepseek-ai/dsh-client-connection'
+import type { ConnectionInteractions } from './types.ts'
 import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import type {
   ConnectionIndexRequest,
   ConnectionIndexResponse,
   ConnectionTrustRequest,
-} from './rpc.ts'
+} from './types.ts'
 
 const AUTH_RECORD_KEY = credentialKey('client-connection', 'browser-session')
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000
@@ -98,11 +99,11 @@ function storedSecret(record: CredentialRecord | undefined): Buffer | undefined 
   if (record === undefined) return undefined
   if (record.kind !== 'grant' || !isRecord(record.payload)
     || record.payload.version !== STORED_SECRET_VERSION) {
-    throw new Error('client-connection: browser-session credential record has an unsupported format')
+    throw new Error('host-authentication-token: browser-session credential record has an unsupported format')
   }
   const secret = canonicalSecret(record.payload.secret)
   if (secret === undefined) {
-    throw new Error('client-connection: browser-session credential record has an invalid secret')
+    throw new Error('host-authentication-token: browser-session credential record has an invalid secret')
   }
   return secret
 }
@@ -193,14 +194,14 @@ async function initializeSecret(credentials: CredentialProvider): Promise<Buffer
   })
   const secret = storedSecret(record)
   if (secret === undefined) {
-    throw new Error('client-connection: browser-session credential record was not created')
+    throw new Error('host-authentication-token: browser-session credential record was not created')
   }
   return secret
 }
 
 /**
  * Process launch-token exchange and persistent signed-cookie verification.
- * Connection loads the credential provider's signing secret during activation
+ * The Token plugin loads the credential provider's signing secret during activation
  * and retains it for synchronous request authentication.
  */
 export class BrowserAuth {
@@ -216,14 +217,14 @@ export class BrowserAuth {
     this.maxAgeMilliseconds = maxAgeDays * DAY_MILLISECONDS
     if (!Number.isSafeInteger(this.maxAgeMilliseconds)
       || !Number.isSafeInteger(Date.now() + this.maxAgeMilliseconds)) {
-      throw new Error('client-connection: cookieMaxAgeDays exceeds the safe timestamp range')
+      throw new Error('host-authentication-token: cookieMaxAgeDays exceeds the safe timestamp range')
     }
   }
 
   /**
    * Initialize browser authentication and create its durable signing secret
    * when this Harness home has none.
-   * @param processOwner - root application context retaining one token across Connection reloads.
+   * @param processOwner - root application context retaining one token across Token plugin reloads.
    * @param credentials - persistent credential provider for the Web profile.
    * @param maxAgeDays - positive absolute browser-cookie lifetime in days.
    * @returns initialized authentication owner with the process owner's launch token.

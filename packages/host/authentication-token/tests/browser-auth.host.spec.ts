@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { PeerId } from '@deepseek-ai/dsh-typert-protocol'
 import { BrowserAuth } from '../src/browser-auth.ts'
-import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/rpc.ts'
+import type { ConnectionIndexRequest, ConnectionIndexResponse } from '../src/types.ts'
 import { RecordCredentials } from './browser-credentials.ts'
 
 function signedCookie(store: RecordCredentials, name: string, payload: unknown): string {
@@ -49,7 +49,7 @@ function response(): { value: ConnectionIndexResponse; state: ResponseState } {
 }
 
 function credentials(store: RecordCredentials): CredentialProvider {
-  return store as unknown as CredentialProvider
+  return store
 }
 
 function createAuth(
@@ -350,21 +350,21 @@ describe('BrowserAuth', () => {
   it('fails loud on an invalid owner record instead of replacing it', async () => {
     const unsupported = new RecordCredentials()
     unsupported.record = { kind: 'api-key', key: 'not-a-cookie-secret' }
-    await expect(createAuth(unsupported)).rejects.toThrow(/unsupported format/u)
+    await expect(createAuth(unsupported)).rejects.toThrow('host-authentication-token: browser-session credential record has an unsupported format')
 
     const malformed = new RecordCredentials()
     malformed.record = { kind: 'grant', payload: { version: 1, secret: 'short' } }
-    await expect(createAuth(malformed)).rejects.toThrow(/invalid secret/u)
+    await expect(createAuth(malformed)).rejects.toThrow('host-authentication-token: browser-session credential record has an invalid secret')
 
     const nonString = new RecordCredentials()
     nonString.record = { kind: 'grant', payload: { version: 1, secret: 42 } }
-    await expect(createAuth(nonString)).rejects.toThrow(/invalid secret/u)
+    await expect(createAuth(nonString)).rejects.toThrow('host-authentication-token: browser-session credential record has an invalid secret')
 
     const discarded = new RecordCredentials()
     discarded.discardWrites = true
-    await expect(createAuth(discarded)).rejects.toThrow(/was not created/u)
+    await expect(createAuth(discarded)).rejects.toThrow('host-authentication-token: browser-session credential record was not created')
 
     await expect(createAuth(new RecordCredentials(), Number.MAX_SAFE_INTEGER))
-      .rejects.toThrow(/safe timestamp range/u)
+      .rejects.toThrow('host-authentication-token: cookieMaxAgeDays exceeds the safe timestamp range')
   })
 })

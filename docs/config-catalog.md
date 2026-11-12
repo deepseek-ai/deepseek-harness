@@ -222,7 +222,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-gateway`
 
 - `inject`: `typert` · `remoteAccess`
-- `source`: [`packages/api/gateway/src/index.ts:158`](../packages/api/gateway/src/index.ts)
+- `source`: [`packages/api/gateway/src/index.ts:157`](../packages/api/gateway/src/index.ts)
 
 ```ts config-catalog
 /** Gateway transport configuration. */
@@ -497,8 +497,7 @@ export type Config = LocalConfig
 
 ## `@deepseek-ai/dsh-client-connection`
 
-- `inject`: `credentials`
-- `source`: [`packages/client/connection/src/index.ts:96`](../packages/client/connection/src/index.ts)
+- `source`: [`packages/client/connection/src/index.ts:92`](../packages/client/connection/src/index.ts)
 
 ```ts config-catalog
 /** Browser authentication, request limits, and connection recovery configuration. */
@@ -512,8 +511,6 @@ export interface ConnectionConfig {
    * an entry here. A non-canonical or non-bare authority fails plugin load.
    */
   trustedHosts?: string[]
-  /** Absolute browser and API cookie lifetime in days. Default: 30. */
-  cookieMaxAgeDays?: number
   /** Maximum buffered JSON body for every `/api` request. Default: 300 MiB. */
   maxRequestBodyBytes?: number
 }
@@ -1783,6 +1780,40 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-hooks-codex -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-authentication-desktop -->
+<a id="deepseek-aidsh-host-authentication-desktop"></a>
+
+## `@deepseek-ai/dsh-host-authentication-desktop`
+
+- `inject`: `connection` · `connection.authentication`
+- `source`: [`packages/host/authentication-desktop/src/index.ts:12`](../packages/host/authentication-desktop/src/index.ts)
+
+```ts config-catalog
+/** In-memory startup input supplied by the Desktop process owner. */
+export interface Config {
+  /** Read the credential already validated on the private parent IPC channel. */
+  readSecret: () => string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-authentication-desktop -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-authentication-token -->
+<a id="deepseek-aidsh-host-authentication-token"></a>
+
+## `@deepseek-ai/dsh-host-authentication-token`
+
+- `inject`: `connection` · `connection.authentication` · `credentials`
+- `source`: [`packages/host/authentication-token/src/index.ts:16`](../packages/host/authentication-token/src/index.ts)
+
+```ts config-catalog
+/** Default browser and API cookie lifetime. */
+export interface Config {
+  /** Absolute cookie lifetime in days; default 30. */
+  cookieMaxAgeDays: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-host-authentication-token -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-host-directory-picker-browse -->
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
@@ -1821,8 +1852,8 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-host-open-in-app`
 
-- `inject`: `webServer` · `connection` · `subprocess`
-- `source`: [`packages/host/open-in-app/src/index.ts:50`](../packages/host/open-in-app/src/index.ts)
+- `inject`: `webServer` · `subprocess`
+- `source`: [`packages/host/open-in-app/src/index.ts:46`](../packages/host/open-in-app/src/index.ts)
 
 ```ts config-catalog
 /** Open-in-app host configuration. */
@@ -1890,7 +1921,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-host-webserver`
 
-- `source`: [`packages/host/webserver/src/index.ts:97`](../packages/host/webserver/src/index.ts)
+- `source`: [`packages/host/webserver/src/index.ts:171`](../packages/host/webserver/src/index.ts)
 
 ```ts config-catalog
 /** Web server listen, TLS, and response-compression config. */
@@ -4818,7 +4849,7 @@ export interface WebRuntimeConfig {
 export interface Config {
   /** Permit default-browser handoff after the Loader tree settles; an SSH launch suppresses it. */
   openBrowser: boolean
-  /** Print the URL line on activation; a non-interactive layer can turn it off. */
+  /** Print the URL lines on activation; a non-interactive layer can turn them off. */
   printUrl: boolean
   /**
    * Register the `DSH_WEB_URL` bash variable naming this GUI. A one-shot
