@@ -44,10 +44,10 @@ async function settle(): Promise<void> {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
 }
 
-/** The reference the chat face hands out for a retained Session, with the signal that releases it. */
+/** The reference the chat face hands out for a retained Session, with the release the chat tab calls on it. */
 interface Retained {
   readonly reference: SessionReference
-  readonly signal: AbortSignal
+  readonly release: ReturnType<typeof vi.fn<() => void>>
 }
 
 /** A chat face that records every call, connects to `S1`, and fills a draft at once. */
@@ -55,10 +55,11 @@ function chatFace() {
   const retained: Retained[] = []
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
-    retain: vi.fn<ReviewChatFace['retain']>((sessionId, signal) => {
-      // Only the identity the chat tab hands back to the face is supplied.
-      const reference = { sessionId } as SessionReference
-      retained.push({ reference, signal })
+    retain: vi.fn<ReviewChatFace['retain']>((sessionId) => {
+      // Only the identity the chat tab hands back to the face and the release it calls are supplied.
+      const release = vi.fn<() => void>()
+      const reference = { sessionId, release } as Pick<SessionReference, 'sessionId' | 'release'> as SessionReference
+      retained.push({ reference, release })
       return reference
     }),
     stage: vi.fn<ReviewChatFace['stage']>(),
@@ -113,7 +114,7 @@ describe('ReviewChat start', () => {
     await settle()
     expect(b.chat.connect).toHaveBeenCalledOnce()
     expect(b.chat.retain).toHaveBeenCalledOnce()
-    expect(b.chat.retain).toHaveBeenCalledWith(S1, b.retained[0]?.signal)
+    expect(b.chat.retain).toHaveBeenCalledWith(S1)
     expect(b.chat.stage).toHaveBeenCalledWith(S1, URL7)
     expect(b.props.onConversation).toHaveBeenCalledWith(S1)
     expect(b.chat.fill).toHaveBeenCalledOnce()
@@ -147,7 +148,7 @@ describe('ReviewChat conversation', () => {
     const b = renderChat({ sessionId: S1 })
     expect(b.chat.connect).not.toHaveBeenCalled()
     expect(b.chat.retain).toHaveBeenCalledOnce()
-    expect(b.chat.retain).toHaveBeenCalledWith(S1, b.retained[0]?.signal)
+    expect(b.chat.retain).toHaveBeenCalledWith(S1)
     expect(b.chat.stage).toHaveBeenCalledWith(S1, URL7)
     expect(b.chat.fill).toHaveBeenCalledOnce()
     expect(b.chat.fill).toHaveBeenCalledWith(b.retained[0]?.reference, { kind: 'reference', frame: b.props.frame })
@@ -194,8 +195,9 @@ describe('ReviewChat conversation', () => {
     expect(b.props.onConversation).not.toHaveBeenCalled()
 
     act(() => { b.slot().onWorkspaceSession(S2) })
-    expect(b.chat.retain).toHaveBeenLastCalledWith(S2, b.retained[1]?.signal)
-    expect(b.retained[0]?.signal.aborted).toBe(true)
+    expect(b.chat.retain).toHaveBeenLastCalledWith(S2)
+    expect(b.retained[0]?.release).toHaveBeenCalledOnce()
+    expect(b.retained[1]?.release).not.toHaveBeenCalled()
     expect(b.chat.stage).toHaveBeenLastCalledWith(S1, null)
     expect(b.props.onConversation).toHaveBeenCalledWith(S2)
 
@@ -205,7 +207,7 @@ describe('ReviewChat conversation', () => {
     // The moved draft already names the change request.
     expect(b.chat.fill).toHaveBeenCalledOnce()
     b.view.unmount()
-    expect(b.retained[1]?.signal.aborted).toBe(true)
+    expect(b.retained[1]?.release).toHaveBeenCalledOnce()
   })
 })
 

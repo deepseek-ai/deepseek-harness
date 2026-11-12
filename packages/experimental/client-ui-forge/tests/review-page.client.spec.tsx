@@ -126,7 +126,8 @@ function renderPage(threads: readonly ForgeReviewThread[] = []) {
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
     // Only the identity the chat tab hands back to the face is supplied.
-    retain: vi.fn<ReviewChatFace['retain']>(sessionId => ({ sessionId }) as SessionReference),
+    retain: vi.fn<ReviewChatFace['retain']>(sessionId =>
+      ({ sessionId, release: () => {} }) as Pick<SessionReference, 'sessionId' | 'release'> as SessionReference),
     stage: vi.fn<ReviewChatFace['stage']>(),
     fill: vi.fn<ReviewChatFace['fill']>(async () => {}),
     openInMain: vi.fn<ReviewChatFace['openInMain']>(),
@@ -342,7 +343,7 @@ describe('ReviewPage detail', () => {
     expect(b.chat.connect).toHaveBeenCalledWith(reviewed(7))
     await settle()
     expect(b.store.getSnapshot().conversations).toEqual({ [URL7]: S1 })
-    expect(b.chat.retain).toHaveBeenCalledWith(S1, expect.any(AbortSignal))
+    expect(b.chat.retain).toHaveBeenCalledWith(S1)
     expect(b.conversations.at(-1)?.headline).toBe('Review demo #7')
     expect(b.view.container.querySelector('[data-review-conversation]')).not.toBeNull()
     b.chat.connect.mockReturnValueOnce(new Promise<SessionId | undefined>(() => {}))
@@ -361,7 +362,7 @@ describe('ReviewPage detail', () => {
     expect(b.chat.retain).toHaveBeenCalledOnce()
     expect(b.chat.stage).toHaveBeenCalledWith(S1, URL7)
     expect(b.chat.fill).toHaveBeenCalledOnce()
-    expect(b.chat.fill).toHaveBeenCalledWith({ sessionId: S1 }, { kind: 'reference', frame: reviewed(7) })
+    expect(b.chat.fill).toHaveBeenCalledWith(expect.objectContaining({ sessionId: S1 }), { kind: 'reference', frame: reviewed(7) })
     const [quotedIn, quoted] = vi.mocked(b.props.quoteReview).mock.calls[0] ?? []
     expect(quotedIn).toBe(S1)
     expect(quoted?.source).toMatchObject({ kind: 'change', url: URL7 })

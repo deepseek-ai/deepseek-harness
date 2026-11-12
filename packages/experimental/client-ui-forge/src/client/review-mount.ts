@@ -158,7 +158,7 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       const chosen = workspaces.find(item => folderName(item.path) === name) ?? workspaces[0]
       return chosen === undefined ? undefined : await ctx.uiWorkspace.connectWorkspace(chosen.workspaceId)
     },
-    retain: (sessionId, signal) => ctx.sessions.retain(sessionId, { source: 'forgeReview', signal }),
+    retain: sessionId => ctx.sessions.retain(sessionId, { source: 'forgeReview' }),
     stage: (sessionId, url) => { void remote.reviewStage(sessionId, url).then(result => settled(result, 'reviewPage.chat.stageFailed')) },
     fill: async (reference, draft) => {
       await reference.ready.then(() => {

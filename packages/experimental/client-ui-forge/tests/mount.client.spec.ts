@@ -284,7 +284,7 @@ async function base() {
       return fiber.ctx
     }),
     // A reference to a retained Session whose opening has settled; only its identity and readiness are supplied.
-    retain: vi.fn((sessionId: SessionId, _options: { readonly source: string; readonly signal?: AbortSignal }) =>
+    retain: vi.fn((sessionId: SessionId, _options: { readonly source: string }) =>
       ({ sessionId, ready: Promise.resolve() })),
   }
   ctx.provide('sessions', sessions)
@@ -1664,9 +1664,8 @@ describe('mountForgePanel review page chat', () => {
 
   it('retains the conversation as a review reference, opens it in the main view, and asks for its worktree', async () => {
     const f = await chatFace()
-    const signal = new AbortController().signal
-    expect(f.chat.retain(S1, signal)).toMatchObject({ sessionId: S1 })
-    expect(f.sessions.retain).toHaveBeenCalledWith(S1, { source: 'forgeReview', signal })
+    expect(f.chat.retain(S1)).toMatchObject({ sessionId: S1 })
+    expect(f.sessions.retain).toHaveBeenCalledWith(S1, { source: 'forgeReview' })
     f.chat.openInMain(S1)
     expect(f.uiWorkspace.openSession).toHaveBeenCalledWith(S1)
     f.chat.requestWorktree(S1)
@@ -1696,7 +1695,7 @@ describe('mountForgePanel review page chat', () => {
 
   it('quotes the change request into an empty draft once the conversation opens, and leaves a written draft alone', async () => {
     const f = await chatFace()
-    const reference = f.chat.retain(S1, new AbortController().signal)
+    const reference = f.chat.retain(S1)
     const empty = conversationInput(f, '  ')
     await f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
     expect(empty.setDraft).not.toHaveBeenCalled()
@@ -1713,7 +1712,7 @@ describe('mountForgePanel review page chat', () => {
 
   it('replaces the draft with a suggested prompt and quotes the change request after it, named by its URL before a status', async () => {
     const f = await chatFace()
-    const reference = f.chat.retain(S1, new AbortController().signal)
+    const reference = f.chat.retain(S1)
     const input = conversationInput(f, 'Look at the parser')
     await f.chat.fill(reference, { kind: 'prompt', frame: reviewed(7, null), text: 'Review this change request' })
     expect(input.setDraft).toHaveBeenCalledWith('Review this change request')
@@ -1725,7 +1724,7 @@ describe('mountForgePanel review page chat', () => {
 
   it.each(['no Session scope', 'no conversation'] as const)('fills nothing with %s', async (missing) => {
     const f = await chatFace()
-    const reference = f.chat.retain(S1, new AbortController().signal)
+    const reference = f.chat.retain(S1)
     const scope = f.sessions.scope(S1)
     assert(scope !== undefined)
     const get = vi.spyOn(scope, 'get').mockReturnValue(undefined)
@@ -1741,7 +1740,7 @@ describe('mountForgePanel review page chat', () => {
     const failure = new Error('closed')
     f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: Promise.reject(failure) })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await f.chat.fill(f.chat.retain(S1, new AbortController().signal), { kind: 'reference', frame: reviewed(7) })
+    await f.chat.fill(f.chat.retain(S1), { kind: 'reference', frame: reviewed(7) })
     expect(warn).toHaveBeenCalledWith('forge-panel: the review conversation did not open:', failure)
     await f.dispose()
   })

@@ -34,8 +34,8 @@ export interface ReviewChatFace {
    * @returns the Session, or undefined without any Workspace.
    */
   readonly connect: (frame: ForgeReviewChangeRequest) => Promise<SessionId | undefined>
-  /** Retain a Session while `signal` lasts. */
-  readonly retain: (sessionId: SessionId, signal: AbortSignal) => SessionReference
+  /** Retain a Session; the caller releases the returned reference. */
+  readonly retain: (sessionId: SessionId) => SessionReference
   /** Bind the change request to the Session at its next message, or forget the choice for null. */
   readonly stage: (sessionId: SessionId, url: string | null) => void
   /** Fill the draft of a retained Session once it opens; settles once the draft is filled or the Session failed to open. */
@@ -102,10 +102,9 @@ export interface ReviewConversation {
   readonly start: () => Promise<SessionReference | undefined>
 }
 
-/** The conversation the page retains, with the controller that releases it. */
+/** The conversation the page retains; releasing its reference ends the page's hold. */
 interface Held {
   readonly sessionId: SessionId
-  readonly controller: AbortController
   readonly reference: SessionReference
 }
 
@@ -132,10 +131,9 @@ export function useReviewConversation(
   // Retains synchronously: a Workspace the reader picks moves the draft to its blank as soon as the handler returns.
   const hold = useCallback((id: SessionId): void => {
     if (held.current?.sessionId === id) return
-    held.current?.controller.abort()
-    const controller = new AbortController()
-    const retained = chat.retain(id, controller.signal)
-    held.current = { sessionId: id, controller, reference: retained }
+    held.current?.reference.release()
+    const retained = chat.retain(id)
+    held.current = { sessionId: id, reference: retained }
     setReference({ sessionId: id, reference: retained })
   }, [chat])
   // A conversation that connects after the page stopped showing the change request is recorded but not retained.
@@ -144,7 +142,7 @@ export function useReviewConversation(
     alive.current = true
     return () => {
       alive.current = false
-      held.current?.controller.abort()
+      held.current?.reference.release()
       held.current = null
     }
   }, [])
