@@ -59,6 +59,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   productTelemetry: 'product-telemetry.md',
   productAnalytics: 'product-telemetry.md',
   connection: 'web-server.md',
+  remoteConnection: 'web-server.md',
   'connection.authentication': 'web-server.md',
   pluginManager: 'boot.md',
   actionCards: 'boot.md',
@@ -326,6 +327,10 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  RemoteConnectionStatus: 'web-server.md',
+  RemoteLoginId: 'web-server.md',
+  RemoteLoginTicket: 'web-server.md',
+  RemoteLoginState: 'web-server.md',
   AuthenticationProvider: '../../packages/client/connection/README.md#browser-authentication-and-request-trust',
   PeerId: 'typert.md',
   Principal: 'typert.md',

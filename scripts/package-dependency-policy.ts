@@ -87,6 +87,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
   // The tool registry and every subclass rely on `instanceof` against one HarnessError class.
   '@deepseek-ai/dsh-error': ['HarnessError'],
+  // The Remote plugin uses the injected credential service; its key helper follows that peer.
+  '@deepseek-ai/dsh-credentials': ['credentialKey'],
   // `instanceof` checks need the translator's own class instance.
   '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
   // Stateless; a safe classification would turn the forge panel's forge and worktree peers into dependencies.

@@ -1,0 +1,96 @@
+---
+description: "Remote login through a single-use QR code or a private tokenized link."
+kind: "package-reference"
+---
+
+# @deepseek-ai/dsh-client-remote-connection
+
+English | [中文](README.zh.md)
+
+## Summary
+
+The settings panel separates QR code login and link login. A signed-in owner can generate a one-use QR code or copy a tokenized URL to sign another browser into the same Host. QR redemption issues a Remote browser cookie; copied links continue to use the independent Token login. The QR code, countdown, and credential warning stack vertically; expiry appears as a warning banner. Credential warnings appear only after generation or successful copying. The login link displays its token and fades at the right edge. Clipboard outcomes use a shell toast that survives closing settings.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Authentication and failures](#authentication-and-failures)
+- [Replace the settings panel](#replace-the-settings-panel)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+
+## Use this package
+
+The Web bundle mounts this plugin. Its Host half requires `connection`, `connection.authentication`, `credentials`, `webServer`, and `webApp`; its Client half contributes the panel through `settings.section`. Removing the plugin removes its page, endpoints, outstanding invitation, and Remote Peer. Already-issued Remote cookies require this provider to be active; valid cookies can be used again after the plugin reloads with the same credential record. The settings panel supports all eight shipped UI languages; the anonymous login page supports English and Chinese. Both cards enclose their titles. QR actions share the title row on wide cards and stack at full width below the title on narrow cards. Panel actions use the shared `Button`'s compact size, and the login-link field matches their height. The copy button reserves its label width across copying and copied states so the link field stays in place. The expiry banner sits below the QR header and spans the card's content width. The scan/countdown row and credential warning have the same width. Regenerating a visible code replaces only the QR image with a spinner; the countdown, warning, and link controls stay in place. Cancelling closes the preview without a success message.
+
+The advertised application URL supports HTTP and HTTPS, must name a non-loopback address reachable by the phone, and must pass Connection's trusted-host checks. Configure the listener, optional certificate or reverse proxy, `publicUrl`, and trusted hosts through the existing [Web application](../../bundle/web-app/README.md) configuration. This plugin never changes the listening interface or discovers a network address. A reverse proxy must preserve the external Host, remove its configured path prefix, and protect its upstream connection. A plain HTTP listener issuing a cookie for an HTTP public URL omits `Secure`; HTTPS listeners and HTTPS public URLs behind a TLS-terminating proxy retain `Secure`. An HTTPS proxy must enforce HTTPS for its public origin. The settings panel allows HTTP login and reminds the user that HTTP transmits login credentials without encryption.
+
+`cookieMaxAgeDays` defaults to 30 and fixes each Remote cookie's absolute lifetime. `ticketLifetimeMs` defaults to 120000. `pollIntervalMs` defaults to 1000 and controls the settings panel's status checks while its code is displayed. Only one invitation is outstanding per plugin instance: generating another replaces the previous one, and cancelling an old invitation does not cancel its replacement.
+
+## Authentication and failures
+
+The QR contains an independently generated 256-bit credential in the URL fragment, never the process launch token. The public `remote-login` page removes the fragment and exchanges it with a same-origin POST. GET and HEAD do not redeem it. WebServer checks the request source before the anonymous route runs. Remote checks the advertised authority, consumes the credential once, and signs its own owner browser cookie. Redeemed, expired, cancelled, replaced, and pre-restart invitations cannot be exchanged again.
+
+Only an authenticated owner can create, inspect, or cancel invitations. The Host retains a digest of the credential, not its reusable plaintext. The public page has no authenticated application injections and sends no credential to third parties. An interrupted exchange may already have issued the cookie; the page offers a clean application link to check the result and never retries the one-use credential automatically.
+
+The owner-only `loginUrl()` method reads the Token entry published through `webserver/entry-url` and returns the advertised root with its process launch token in `?token=…`. A Host without Token authentication cannot provide this link; QR login remains available. Unlike the QR invitation, this link remains reusable until the Host process restarts. Copying it never creates, consumes, or replaces a QR invitation. The Client prefetches the URL only after deployment availability is confirmed, retains it in plugin memory, displays it with a fading right edge, and refreshes it on reconnection. A changed URL clears the previous copy-success state and notice. A failed link read changes the copy button to Retry without blocking QR creation; a refused clipboard write reports failure and leaves copying retryable without showing a success warning. Neither link reads nor copy outcomes are persisted or logged.
+
+Remote owns the persistent `client-remote-connection/browser-session` credential record. Its signing key and v1 cookie format are independent of Token; a cookie binds the listener protocol and normalized Host, carries fixed issue and expiry times, and uses `HttpOnly`, `SameSite=Strict`, and `Path=/`. Validation never renews it. Corrupt records fail activation rather than replacing the key. Preserve the record across restarts to retain valid logins; replacing or deleting it invalidates old cookies on the next activation.
+
+Remote also owns the root anonymous HTML. A trusted but unauthenticated GET receives the login document with HTTP 401; HEAD retains 401 without a body. The document exposes no Token value or private application injections. The Token form appears only when Token publishes an entry. Authenticated requests render the existing application with their actual Peer and no second credential check. Source rejection remains 403, and authentication failure without another successful provider remains 503.
+
+## Replace the settings panel
+
+The root-scoped, single `settings.remoteConnection.content` slot replaces the whole panel while retaining its one settings navigation entry. Every occupant receives `RemoteConnectionContentProps` from this package's `/client` type exports: `useRemoteConnection(selector)`, `create()`, `cancel()`, `reload()`, `useLoginLink(selector)`, `copyLink()`, `reloadLink()`, `dismissCopyNotice(sequence)`, and the settings shell's `close()`. The plugin owns invitation and link state across replacements, so switching views preserves the current invitation, countdown, and copy feedback. Actions report their outcomes through the state hooks. A replacement owns its rendering and localized copy; it may register its own `locale` namespace.
+
+Register a replacement component from your Client plugin with a lower priority than the default panel's `0`:
+
+```ts client
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { FunctionComponent } from 'react'
+import type { RemoteConnectionContentProps } from '@deepseek-ai/dsh-client-remote-connection/client'
+
+declare const CustomPanel: FunctionComponent<RemoteConnectionContentProps>
+
+export const inject = ['slots']
+
+export function apply(ctx: Context): void {
+  ctx.slots.inject('settings.remoteConnection.content', () => ctx.slots.register({
+    name: 'settings.remoteConnection.content',
+    priority: -1,
+  }, CustomPanel))
+}
+```
+
+`slots.inject` supports loading the replacement before the default plugin and re-registers it when the slot owner returns. Unloading the replacement restores the default panel and its current state; unloading the Remote connection plugin removes the content slot, stops polling, discards the link credential and copy notice immediately, and waits for outstanding reads, clipboard writes, and queued refreshes to settle. Only display `ticket.url` as a QR while `phase === 'pending'`: an uncertain operation may retain the ticket for recovery without permitting its display. Never persist or log either credential URL. Replacing this panel does not replace the anonymous login page or the Host invitation protocol.
+
+## Further Exploration
+
+- [Web server subsystem](../../../docs/subsystems/web-server.md) — browser services and settings contributions.
+- [Connection](../connection/README.md) — request-source policy, provider registration, and Peer ownership.
+
+## Model Experience
+
+None, as this package provides browser authentication and contributes no model input.
+
+#### KV Cache effect
+
+None; this package neither assembles nor sends model requests.
+
+## Known Limitations and Deferred Work
+
+- Before redemption, anyone with the QR can redeem it first. Expiry and single use limit exposure; they do not prevent credential forwarding or phishing. A previewer that executes JavaScript may consume the code.
+- Login belongs to the browser that completes the exchange. A scanner's embedded browser and an installed PWA may use different cookie stores. Clearing cookies, changing the Host authority, or cookie expiry requires signing in again.
+- The resulting browser has owner access. Remote cookies share one runtime Peer, with no per-device permission or revocation list. Cancelling a QR does not revoke an issued cookie. Cookie expiry rejects new requests and connections; it does not terminate an already-admitted WebSocket. Unloading Remote closes its shared Peer and connections, independently of Token connections.
+- The Host must remain running and reachable after the original browser closes. This plugin supplies neither tunnelling nor remote wake-up.
+
+### Dev Note
+
+<details>
+<summary>Working context for maintainers</summary>
+
+None.
+
+</details>

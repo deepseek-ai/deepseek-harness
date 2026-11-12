@@ -33,17 +33,19 @@ describe('icon sprite', () => {
     expect(sprite()).toBeNull()
   })
 
-  it('swaps in the active theme replacement and restores the default when the theme leaves', async () => {
+  it.each([SEARCH, 'dsw-icon-remote-connection-outline-medium'] as const)('replaces %s independently and restores its default when the theme leaves', async (id) => {
     const { theme, fiber, symbol } = await mount()
-    const dispose = theme.register({ id: 'skin', colorScheme: 'dark', tokens: {}, icons: { [SEARCH]: TWO_TONE } })
+    const gear = symbol('dsw-icon-settings-outline-medium')
+    const dispose = theme.register({ id: 'skin', colorScheme: 'dark', tokens: {}, icons: { [id]: TWO_TONE } })
     theme.setTheme('skin')
-    const replaced = symbol(SEARCH)!
+    const replaced = symbol(id)!
     expect(replaced.getAttribute('viewBox')).toBe('0 0 16 16')
     expect(replaced.hasAttribute('width') || replaced.hasAttribute('class')).toBe(false)
     expect(replaced.querySelector('circle')?.getAttribute('fill')).toBe('var(--dsw-alias-link)')
+    expect(symbol('dsw-icon-settings-outline-medium')).toBe(gear)
     const untouched = symbol('dsw-icon-plus-outline-regular')
     theme.setTheme('light')
-    expect(symbol(SEARCH)?.querySelector('circle')).toBeNull()
+    expect(symbol(id)?.querySelector('circle')).toBeNull()
     expect(symbol('dsw-icon-plus-outline-regular')).toBe(untouched)
     dispose()
     await fiber.dispose()

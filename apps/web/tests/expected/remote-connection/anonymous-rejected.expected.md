@@ -1,0 +1,8 @@
+- main:
+  - region "连接到此 Host":
+    - heading "连接到此 Host" [level=1]
+    - paragraph: 登录以继续
+    - text: 登录令牌或链接
+    - textbox "登录令牌或链接" [invalid]: {{invalid-token}}
+    - alert: 此登录令牌无效或已过期，请粘贴新的令牌后重试
+    - button "继续"

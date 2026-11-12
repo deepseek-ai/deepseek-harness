@@ -1,0 +1,40 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "include": [
+    "src/*.ts"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../connection/tsconfig.host.json"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
+      "path": "../../bundle/web-app"
+    },
+    {
+      "path": "../../credentials/credentials"
+    },
+    {
+      "path": "../../util/error"
+    }
+  ]
+}

@@ -163,6 +163,7 @@ flowchart TD
     pkg_client_locale["client-locale"]
     pkg_client_modules["client-modules"]
     pkg_client_product_analytics["client-product-analytics"]
+    pkg_client_remote_connection["client-remote-connection"]
     pkg_client_resources["client-resources"]
     pkg_client_script_realm["client-script-realm"]
     pkg_client_script_realm_iframe["client-script-realm-iframe"]

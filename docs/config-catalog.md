@@ -583,6 +583,27 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-product-analytics -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
+<a id="deepseek-aidsh-client-remote-connection"></a>
+
+## `@deepseek-ai/dsh-client-remote-connection`
+
+- `inject`: `connection` · `connection.authentication` · `credentials` · `webServer` · `webApp`
+- `source`: [`packages/client/remote-connection/src/index.ts:27`](../packages/client/remote-connection/src/index.ts)
+
+```ts config-catalog
+/** Deployment timing for QR login and its settings status. */
+export interface Config {
+  /** Absolute lifetime in days for Remote browser credentials; default 30. */
+  cookieMaxAgeDays: number
+  /** Invitation lifetime in milliseconds; expiry never renews an existing browser session. */
+  ticketLifetimeMs: number
+  /** Interval in milliseconds between the settings panel's status reads. */
+  pollIntervalMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-client-shortcuts -->
 <a id="deepseek-aidsh-client-shortcuts"></a>
 

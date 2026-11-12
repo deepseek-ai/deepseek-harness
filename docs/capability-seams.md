@@ -7,6 +7,8 @@ A service can be a core spine service, a swappable capability seam, a bundle/com
 
 ```mermaid
 flowchart LR
+  pkg_client_remote_connection["client-remote-connection"]
+  svc_remoteConnection["ctx.remoteConnection<br/>Remote browser login"]
   pkg_action_cards["action-cards"]
   svc_actionCards["ctx.actionCards<br/>Optional action cards"]
   pkg_creation_recommendations["creation-recommendations"]

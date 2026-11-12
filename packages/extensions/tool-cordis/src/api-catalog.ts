@@ -3182,6 +3182,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'remoteConnection',
+    summary: 'One outstanding invitation, issued by an owner and consumed by a new browser.',
+    description: 'One outstanding invitation, issued by an owner and consumed by a new browser.',
+    methods: [
+      {
+        signature: '@Remote status(id: RemoteLoginId | null): RemoteConnectionStatus',
+        description: 'Read prerequisites and the state of one invitation without disclosing its credential.',
+        parameters: [{ name: 'id', description: 'invitation to inspect, or null to inspect only deployment prerequisites.' }],
+        returns: 'deployment availability and invitation state, with the polling interval.',
+      },
+      {
+        signature: '@Remote create(): RemoteLoginTicket',
+        description: 'Authorize a new browser by generating a one-use login invitation; replaces any older invitation.',
+        parameters: [],
+        returns: 'the invitation credential and its fixed expiry.',
+      },
+      {
+        signature: '@Remote loginUrl(): string',
+        description: 'Read the advertised URL carrying the process launch token; QR invitations are unchanged.',
+        parameters: [],
+        returns: 'owner-only login URL, reusable until the Host process restarts; never persist or log it.',
+      },
+      {
+        signature: '@Remote cancel(id: RemoteLoginId): RemoteLoginState',
+        description: 'Cancel an unused invitation; this never revokes a browser session already issued.',
+        parameters: [{ name: 'id', description: 'invitation being cancelled; an older ID cannot cancel a replacement.' }],
+        returns: 'the invitation\'s final state, including used when a redemption won the race.',
+      },
+    ],
+  },
+  {
     key: 'sandbox',
     summary: 'Abstract process-sandbox service.',
     description: 'Abstract process-sandbox service. confine must return enforcing argv or fail closed at wrap or runner-execution time; silent unconfined passthrough is forbidden. Functional probes arbitrate multi-runner chains and may be skipped for a sole candidate, whose own refusal remains the fail-closed end.',
@@ -9364,6 +9395,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RemoteAccessRole<K extends RemoteAccessResourceKind> {\n    readonly name: string;\n    readonly resource: K;\n    readonly actions: readonly RemoteAccessAction[];\n}',
   },
   {
+    name: 'RemoteConnectionStatus',
+    declaration: 'export interface RemoteConnectionStatus {\n    readonly url: string;\n    readonly availability: \'available\' | RemoteConnectionUnavailable;\n    readonly ticket: RemoteLoginState;\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
+    name: 'RemoteConnectionUnavailable',
+    declaration: 'export type RemoteConnectionUnavailable = \'unreachable-host\' | \'untrusted-host\';',
+  },
+  {
     name: 'RemoteError',
     declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {\n    readonly isDSHRemoteError: true;\n    constructor(override readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
@@ -9382,6 +9421,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'RemoteEventHostInfo',
     declaration: 'export interface RemoteEventHostInfo {\n    readonly home: string;\n}',
+  },
+  {
+    name: 'RemoteLoginId',
+    declaration: 'export type RemoteLoginId = Branded<\'remote-login-id\'>;',
+  },
+  {
+    name: 'RemoteLoginState',
+    declaration: 'export type RemoteLoginState = \'none\' | \'pending\' | \'used\' | \'expired\' | \'cancelled\' | \'replaced\';',
+  },
+  {
+    name: 'RemoteLoginTicket',
+    declaration: 'export interface RemoteLoginTicket {\n    readonly id: RemoteLoginId;\n    readonly url: string;\n    readonly lifetimeMs: number;\n}',
   },
   {
     name: 'RemoteStream',

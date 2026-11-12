@@ -1,0 +1,11 @@
+- id: web-runtime
+  disabled: true
+- insert:
+    - id: qr-test-web-runtime
+      name: '@deepseek-ai/dsh-web-app'
+      inject: [webServer]
+      config:
+        openBrowser: false
+        printUrl: false
+        surfaceContext: false
+        publicUrl: !!js ctx.webServer.getOrigin().replace('127.0.0.1', 'qr-login.test')

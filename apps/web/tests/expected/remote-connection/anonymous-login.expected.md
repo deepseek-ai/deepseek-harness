@@ -1,0 +1,8 @@
+- main:
+  - region "连接到此 Host":
+    - heading "连接到此 Host" [level=1]
+    - paragraph: 登录以继续
+    - text: 登录令牌或链接
+    - textbox "登录令牌或链接"
+    - paragraph: 登录令牌位于此 Host 启动时输出的 URL 中
+    - button "继续"

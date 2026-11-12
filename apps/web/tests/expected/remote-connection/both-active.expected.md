@@ -1,0 +1,19 @@
+- region "远程连接":
+  - heading "远程连接" [level=2]
+  - region "二维码登录":
+    - heading "二维码登录" [level=3]
+    - button "生成新二维码"
+    - button "取消二维码"
+    - img "一次性登录二维码"
+    - paragraph:
+      - text: 扫码后直接登录
+      - timer: {{seconds}} 秒后过期
+    - paragraph: 请勿分享登录二维码
+    - paragraph: 二维码使用或过期前，持有它的人都可以登录，请勿传播
+  - region "链接登录":
+    - heading "链接登录" [level=3]
+    - paragraph: 复制登录链接，在另一台设备的浏览器中打开
+    - code: {{access-address}}?token={{login-token}}
+    - button "已复制"
+    - paragraph: 请勿公开分享登录链接
+    - paragraph: 持有此链接的人都可以直接登录，请仅发送给自己的设备，勿公开分享；重启服务后链接失效
