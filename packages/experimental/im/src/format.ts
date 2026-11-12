@@ -75,12 +75,17 @@ export function escapeText(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 }
 
-/** One-line preview of a merged forward: its id plus the first line of the preview it carries. */
-function forwardPreview(node: Element<'forward'>): string {
+/**
+ * One-line preview of a merged forward: its id plus the first line of the preview it carries.
+ * @param node - the forward element, which supplies the id.
+ * @param children - the entries to preview; the caller passes them already relabelled when the forward was expanded.
+ * @returns the preview line.
+ */
+function forwardPreview(node: Element<'forward'>, children: readonly Element[] = node.children): string {
   // The id is required by the vocabulary, but an unnormalized inbound forward may arrive without one.
   const attrs: { id?: unknown } = node.attrs
   const id = typeof attrs.id === 'string' ? attrs.id : ''
-  const preview = node.children.length ? oneLine(toText(node.children), PREVIEW_LIMIT) : ''
+  const preview = children.length ? oneLine(toText(children), PREVIEW_LIMIT) : ''
   return preview ? `[合并转发 #${id}: ${preview}]` : `[合并转发 #${id}]`
 }
 
@@ -90,7 +95,9 @@ function bodyOf(message: ImMessage): string {
   const relabel = (node: Element): Element => {
     const kind = mediaKindOf(node)
     if (kind) return h.text(mediaLabel(mediaRefAt(message, node, kind, ++index)))
-    if (node.type === 'forward') return h.text(forwardPreview(node))
+    // An expanded forward numbers the media of its entries as this walk reaches them, because `mediaRefs` reads the same
+    // tree in the same order: a label skipped here would name a different element to `im_read_image`.
+    if (node.type === 'forward') return h.text(forwardPreview(node, node.children.map(relabel)))
     return { ...node, children: node.children.map(relabel) }
   }
   return toText({ ...message.content, children: message.content.children.map(relabel) })
