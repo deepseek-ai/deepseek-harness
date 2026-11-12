@@ -477,6 +477,11 @@ describe('card structure', () => {
     expect(report.degraded).toEqual([expect.objectContaining({ tag: 'at', variant: 'all' })])
   })
 
+  it('never mentions everyone for a user whose id spells it', async () => {
+    const { payloads } = await render(h('p', h('at', { type: 'user', id: 'all', name: '所有人' }), ' hi'), { allowAtAll: false })
+    expect(elements(payloads[0])[0]!.content).toBe('@所有人 hi')
+  })
+
   it('media split into their own messages; non-opus audio becomes a file', async () => {
     const { payloads, report } = await render([
       h('p', 'before'), h('audio', { src: 'https://example.com/a.mp3', name: 'a.mp3' }), h('p', 'after'),

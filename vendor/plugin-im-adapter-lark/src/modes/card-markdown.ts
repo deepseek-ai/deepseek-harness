@@ -32,6 +32,7 @@ import { createHash } from 'node:crypto'
 import { gfmToMarkdown } from 'mdast-util-gfm'
 import { toMarkdown } from 'mdast-util-to-markdown'
 import type { Root, RootContent } from 'mdast'
+import { isEveryoneId } from './shared.ts'
 
 // ---------------------------------------------------------------------------------------------------------------
 // Text escaping
@@ -182,6 +183,8 @@ export function cardLink(label: string, href: string): string {
 /** Card-markdown mention: `<at id=ou_x></at>` or `<at id=all></at>`; ids are restricted to `[\w-]`. */
 export function cardMention(type: 'user' | 'all', id?: string): string {
   const target = type === 'all' ? 'all' : (id ?? '').replace(/[^\w-]/g, '')
+  // A `user` whose id spells everyone would mention everyone past the withheld `all` variant: no mention at all.
+  if (type === 'user' && isEveryoneId(target)) return ''
   return target ? `<at id=${target}></at>` : ''
 }
 

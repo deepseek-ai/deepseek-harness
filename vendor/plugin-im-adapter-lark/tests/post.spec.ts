@@ -242,6 +242,13 @@ describe('post inline content', () => {
     expect(report.degraded.map(entry => `${entry.tag}.${entry.variant}`)).toEqual(['at.all'])
   })
 
+  it('never mentions everyone for a user whose id spells it', async () => {
+    // Feishu reads `user_id="all"` as @everyone; a `user` mention carries no `all` variant for allowAtAll to withhold.
+    const { bot } = await mount({ allowAtAll: false })
+    const { payloads } = await bot.render(target, h('p', h('at', { type: 'user', id: 'all', name: '所有人' }), ' hi'))
+    expect(mdTexts(payloads[0])).toEqual(['@所有人 hi'])
+  })
+
   it('keeps a hard break inside one paragraph', async () => {
     const payload = await renderOne(h('p', 'first line', h('br'), 'second line'))
     expect(mdTexts(payload)).toEqual(['first line\\\nsecond line'])
