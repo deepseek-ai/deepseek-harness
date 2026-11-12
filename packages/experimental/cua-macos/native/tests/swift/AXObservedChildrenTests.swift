@@ -115,3 +115,19 @@ func failingListsUpToFiveReadIndividualItemsAndLongerListsSplitFirst(count: Int)
         }
     }
 }
+
+@Test func onlyASuccessfulCountCanConfirmAnEmptyChildList() throws {
+    let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
+    #expect(try access.recoveryChildCount(0, error: .success) == 0)
+    for error in [AXError.failure, .attributeUnsupported, .noValue, .notImplemented, .illegalArgument] {
+        #expect(try access.recoveryChildCount(0, error: error) == nil)
+    }
+    for error in [AXError.cannotComplete, .invalidUIElement, .apiDisabled] {
+        do {
+            _ = try access.recoveryChildCount(0, error: error)
+            Issue.record("An AX failure was interpreted as a child count")
+        } catch let failure as NativeFailure {
+            #expect(failure.accessibilityError == error.rawValue)
+        }
+    }
+}

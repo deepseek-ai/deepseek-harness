@@ -119,15 +119,19 @@ final class AXAccess {
         }
         return try array.map { try elementValue($0, name) }
     }
+    func recoveryChildCount(_ count: Int, error: AXError) throws -> Int? {
+        if error == .success { return count }
+        if absent(error) || error == .failure || error == .illegalArgument { return nil }
+        throw failure(error, "count AXChildren")
+    }
     private func recoverChildren(_ element: AXUIElement, limit: Int, requests: inout Int, deadline: ContinuousClock.Instant) throws -> AXObservedChildren {
         guard requests > 0, ContinuousClock.now < deadline else { return .unavailable }
         requests -= 1
         try prepare(element)
         var count = 0
         let error = AXUIElementGetAttributeValueCount(element, kAXChildrenAttribute as CFString, &count)
-        if absent(error) || error == .failure || error == .illegalArgument { return .unavailable }
-        guard error == .success else { throw failure(error, "count AXChildren") }
-        return try AXObservedChildren.readRanges(count: count, limit: limit, requests: &requests) { range in
+        guard let childCount = try recoveryChildCount(count, error: error) else { return .unavailable }
+        return try AXObservedChildren.readRanges(count: childCount, limit: limit, requests: &requests) { range in
             try cancellation.check()
             guard ContinuousClock.now < deadline else { return .positionsUnknown }
             var values: CFArray?
