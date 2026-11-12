@@ -4142,7 +4142,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-bash`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv` · `workingDirectory`
-- `source`: [`packages/shell/tool-bash/src/index.ts:40`](../packages/shell/tool-bash/src/index.ts)
+- `source`: [`packages/shell/tool-bash/src/index.ts:39`](../packages/shell/tool-bash/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the bash tool. */
@@ -4365,7 +4365,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-office`
 
 - `inject`: `tools` · `fs` · `workingDirectory` · `agents`
-- `source`: [`packages/document/tool-office/src/index.ts:40`](../packages/document/tool-office/src/index.ts)
+- `source`: [`packages/document/tool-office/src/index.ts:43`](../packages/document/tool-office/src/index.ts)
 
 ```ts config-catalog
 /** Activation skills and render bounds; lower deployment attachment limits take precedence. */
@@ -4407,7 +4407,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-pwsh`
 
 - `inject`: `tools` · `shell` · `systemPrompt` · `shellEnv` · `workingDirectory`
-- `source`: [`packages/shell/tool-pwsh/src/index.ts:57`](../packages/shell/tool-pwsh/src/index.ts)
+- `source`: [`packages/shell/tool-pwsh/src/index.ts:56`](../packages/shell/tool-pwsh/src/index.ts)
 
 ```ts config-catalog
 /** Configuration for the pwsh tool. */

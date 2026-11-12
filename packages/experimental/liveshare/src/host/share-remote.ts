@@ -69,7 +69,7 @@ export class LiveshareShares extends TypertRemoteService {
   }
 
   /**
-   * Refresh titles and Liveshare server authority, then list this host's shares.
+   * List this host's shares, refreshing titles and Liveshare server authority when this host owns the state.
    * @returns Every share this host publishes.
    */
   @Remote('list')

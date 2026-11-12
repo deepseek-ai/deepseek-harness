@@ -11,7 +11,7 @@ import { publishWebsiteCi, websiteApproval } from '@deepseek-ai/dsh-desktop-publ
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => {} }))
 afterEach(() => vi.restoreAllMocks())
 
-it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'put', 'uploaded', 'metadata', 'metadata-retry', 'stable', 'approval'] as const)('preserves publication recovery for %s', async (scenario) => {
+it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'put', 'uploaded', 'metadata', 'metadata-retry', 'stable', 'approval', 'missing-zone'] as const)('preserves publication recovery for %s', async (scenario) => {
   const root = await mkdtemp(join(tmpdir(), 'website-ci-'))
   try {
     const config = join(root, 'packaging')
@@ -22,7 +22,7 @@ it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'pu
     const credentialsFile = join(root, 'credentials.json')
     await writeFile(credentialsFile, JSON.stringify({ secretId: 'fixture-id', secretKey: 'fixture-key' }))
     await writeFile(join(config, 'publishing', 'production.json'), JSON.stringify({
-      bucket: 'production-123', origin: 'https://download.deepseek.com', credentialsFile,
+      edgeOneZoneId: scenario === 'missing-zone' ? undefined : 'zone-fixture', bucket: 'production-123', origin: 'https://download.deepseek.com', credentialsFile,
       githubApp: { clientId: 'app', privateKeyFile: join(root, 'app.pem') },
     }))
     const route = { runId: '12', attempt: '1', commit: 'a'.repeat(40), sourceRef: 'master', channel: scenario === 'stable' ? 'stable' : 'nightly',
@@ -38,7 +38,15 @@ it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'pu
     if (scenario === 'metadata-retry') await writeFile(join(records, 'state.json'), JSON.stringify({ approval, upload: 'upload-intent', uploadConfirmed: true }))
     const env = { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
-      DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_OUTPUT: join(root, 'output') }
+      DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-ignored', GITHUB_OUTPUT: join(root, 'output') }
+    if (scenario === 'missing-zone') {
+      await rm(credentialsFile)
+      for (const mode of ['upload', 'purge'] as const) {
+        await expect(publishWebsiteCi(mode, { ...env, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-legacy' }))
+          .rejects.toThrow('edgeOneZoneId in publishing/production.json')
+      }
+      return
+    }
     if (scenario === 'upload' || scenario === 'put' || scenario === 'uploaded' || scenario === 'metadata' || scenario === 'metadata-retry' || scenario === 'stable' || scenario === 'approval') {
       await writeFile(join(root, 'releases', '12', '1', manifest.files[0]!.name), 'x')
       if (scenario === 'upload' || scenario === 'put') await rm(join(records, 'state.json'))
@@ -89,6 +97,7 @@ it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'pu
             vi.spyOn(teo.v20220901.Client.prototype, 'DescribePurgeTasks').mockRejectedValue(new Error('unavailable'))
             await publishWebsiteCi('purge', env)
             expect(submit).toHaveBeenCalledOnce()
+            expect(submit.mock.calls[0]?.[0]).toMatchObject({ ZoneId: 'zone-fixture' })
             expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ purge: { jobId: 'new-job' } })
           }
         }
@@ -111,8 +120,9 @@ it.each(['accepted', 'unconfirmed', 'incomplete', 'wrong-journal', 'upload', 'pu
     const summary = join(root, 'summary.md')
     await publishWebsiteCi('purge', { RUNNER_NAME: 'mini', GITHUB_REPOSITORY: 'owner/repo', GITHUB_RUN_ID: '99',
       GITHUB_RUN_ATTEMPT: '1', DSH_PACKAGING_CONFIG_DIR: config, DESKTOP_PUBLISH_ROUTE: JSON.stringify(route),
-      DESKTOP_WEBSITE_APPROVAL: approval, DOWNLOAD_PROD_EO_ZONE_ID: 'zone-fixture', GITHUB_STEP_SUMMARY: summary })
+      DESKTOP_WEBSITE_APPROVAL: approval, GITHUB_STEP_SUMMARY: summary })
     expect(submit).toHaveBeenCalledOnce()
+    expect(submit.mock.calls[0]?.[0]).toMatchObject({ ZoneId: 'zone-fixture' })
     expect(query).toHaveBeenCalledTimes(2)
     expect(output.mock.calls.map(call => String(call[0])).join('')).toContain('::warning title=官网缓存刷新结果未确认::')
     expect(JSON.parse(await readFile(join(records, 'state.json'), 'utf8'))).toMatchObject({ upload: 'uploaded', purge: { status: 'unknown' } })
