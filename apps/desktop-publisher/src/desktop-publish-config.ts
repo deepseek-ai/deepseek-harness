@@ -9,6 +9,7 @@ const schema = z.strictObject({
   bucket: z.string().regex(/^[a-z0-9-]+-\d+$/u),
   origin: z.url().refine((value) => { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash }, 'expected an HTTPS origin'),
   credentialsFile: absolutePath,
+  edgeOneZoneId: z.string().regex(/^zone-[a-z0-9]+$/u).optional(),
   macOS: z.strictObject({ signingIdentity: z.string().min(1), teamId: z.string().regex(/^[A-Z0-9]{10}$/u) }).optional(),
   windows: z.strictObject({ certificateThumbprint: z.string().regex(/^[A-Fa-f0-9]{40}$/u) }).optional(),
   githubApp: z.strictObject({ clientId: singleLine, privateKeyFile: absolutePath }).optional(),
@@ -43,4 +44,14 @@ export async function readDesktopUploadCredentials(config: DesktopPublishConfig)
   } catch {
     throw new Error('desktop publish: cannot read valid upload credentials from the configured file')
   }
+}
+
+/**
+ * Require the configured EdgeOne destination before website upload or cache recovery.
+ * @param config Validated machine publication settings.
+ * @returns Configured EdgeOne zone identifier.
+ */
+export function requireDesktopEdgeOneZoneId(config: DesktopPublishConfig): string {
+  if (!config.edgeOneZoneId) throw new Error('website publication: configure edgeOneZoneId in publishing/production.json before uploading')
+  return config.edgeOneZoneId
 }
