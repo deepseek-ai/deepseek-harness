@@ -15,8 +15,9 @@ import {
 } from '../src/api.ts'
 import { Config } from '../src/config.ts'
 import { ImError } from '../src/error.ts'
-import { admit, draftOf, ImIntake, parseCommand } from '../src/intake.ts'
-import { ImStore } from '../src/store.ts'
+import { chatHeader } from '../src/dispatcher.ts'
+import { admit, DELIVERY_ENVELOPE_BYTES, draftOf, ImIntake, parseCommand } from '../src/intake.ts'
+import { ImStore, inputBytes } from '../src/store.ts'
 
 const contexts: Context[] = []
 
@@ -35,16 +36,17 @@ interface Harness {
 }
 
 /** A FakeAdapter bot plus a real store over an in-memory storage domain, wired like `ImService[Service.init]`. */
-async function boot(options: { config?: Partial<ImConfig>; pool?: MemoryMediaPool } = {}): Promise<Harness> {
+async function boot(options: { config?: Partial<ImConfig>; pool?: MemoryMediaPool; bot?: string } = {}): Promise<Harness> {
   const pool = options.pool ?? new MemoryMediaPool()
-  const { ctx, bot } = await mountFakeAdapter({ modes: { text: createTextMode() }, selfId: 'bot-user' })
+  const botId = options.bot ?? 'fake:bot'
+  const { ctx, bot } = await mountFakeAdapter({ modes: { text: createTextMode() }, selfId: 'bot-user', id: botId })
   contexts.push(ctx)
   await ctx.plugin(Storage)
   ctx.storage.backend.register('memory', new MemoryStorageBackend(pool))
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
   ctx.storage.mount('domain', facility)
   ctx.provide('storageDomain', facility)
-  const config = Config({ sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all' }], ...options.config })
+  const config = Config({ sources: [{ id: 'team', bot: botId, writable: true, store: 'all' }], ...options.config })
   const store = new ImStore(ctx, config)
   await store.start()
   const dispatched: ImMessage[] = []
@@ -348,6 +350,34 @@ describe('ImIntake admission', () => {
     await intake.idle()
     expect(dispatched[0]!.addressed).toBe(true)
     expect(dispatched[0]!.command).toEqual({ name: 'stop', rawInput: ' now' })
+  })
+
+  it('leaves room for the delivery of a message admitted at the very edge of maxInputBytes', async () => {
+    // Real Feishu identifiers, which every key, the chat header and the delivery id repeat: the intake reserves a fixed
+    // envelope for the delivery intent, and this pins that the reserve covers the default dispatcher's intent.
+    const maxInputBytes = 8192
+    const larkBot = 'lark:cli_a5f1e2d3c4b5a697'
+    const { bot, store, intake, dispatched } = await boot({ config: { maxInputBytes }, bot: larkBot })
+    const source = intake.config.sources[0]!
+    const chat = { id: `oc_${'a1b2c3d4'.repeat(4)}`, type: 'group' as const }
+    const shaped = (length: number) => inbound({
+      id: `om_${'e5f6a7b8'.repeat(4)}`,
+      chat,
+      sender: { id: `ou_${'c9d0e1f2'.repeat(4)}`, name: '张三' },
+      mentions: { self: true, all: false, users: [] },
+      content: h('message', h.text('字'.repeat(length))),
+    })
+    // The longest body the intake still admits: one more character and it is acknowledged without dispatching.
+    let length = 0
+    while (inputBytes(draftOf(bot, shaped(length + 1), source, 'platform')) + DELIVERY_ENVELOPE_BYTES <= maxInputBytes) length++
+    await deliver(bot, `${'0123abcd'.repeat(4)}`, shaped(length))
+    await intake.idle()
+    const [message] = dispatched
+    expect(message).toBeDefined()
+    expect(store.state(message!.key)?.dispatch).toBe('done')
+    // The intent `ImDispatcher.handle` records for it, measured the way `ImSessionHost.deliver` measures it.
+    const delivery = { id: message!.key, mode: 'steer', media: true, header: chatHeader(message!.chat), content: [message] }
+    expect(inputBytes(delivery)).toBeLessThanOrEqual(maxInputBytes)
   })
 
   it('acknowledges an input over maxInputBytes instead of leaving it unacknowledged', async () => {

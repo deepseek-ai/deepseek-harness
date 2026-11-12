@@ -29,11 +29,13 @@ const noop = () => {}
 const OWN_ENVELOPE_BYTES = 1024
 
 /**
- * Bytes the delivery intent of one stored message adds to it: its id, mode, media flags and the JSON around the
- * messages it repeats. A message admitted at the very edge of `maxInputBytes` would otherwise be stored, acknowledged
- * and then refused when it is delivered, which the intake reports as ignored.
+ * Bytes the delivery intent of one stored message adds to it: its id, mode, media flags, the chat header and the JSON
+ * around the messages it repeats, plus the fields the store adds to a draft. A message admitted at the very edge of
+ * `maxInputBytes` would otherwise be stored, acknowledged and then refused when it is delivered, which the intake
+ * reports as ignored. The default dispatcher's intent for a message with real Feishu identifiers adds about 240 bytes
+ * (pinned in `intake.spec.ts`); the reserve doubles that, for a routing plugin's longer header.
  */
-const DELIVERY_ENVELOPE_BYTES = 256
+export const DELIVERY_ENVELOPE_BYTES = 512
 
 /**
  * One own draft with only the head of its text that fits a byte budget.
