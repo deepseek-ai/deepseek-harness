@@ -8,7 +8,8 @@ import ApplicationServices
     var inputLog: URL?
 
     override func accessibilityChildren() -> [Any]? { childList ?? super.accessibilityChildren() }
-    @objc func paste(_ sender: NSMenuItem) { pressed.append(sender.title) }
+    var pasteCalls: [String] = []
+    @objc func paste(_ sender: NSMenuItem) { pasteCalls.append(sender.title) }
     @objc func press(_ sender: NSButton) {
         pressed.append(sender.title)
         if sender.title == "Identify as open panel" { setAccessibilityIdentifier("open-panel") }
@@ -23,10 +24,9 @@ import ApplicationServices
 }
 
 @MainActor private final class ChildFixtureMenu: NSMenu {
-    var gapFirst = false
     override func accessibilityChildren() -> [Any]? {
         let items = super.accessibilityChildren() ?? []
-        return gapFirst ? [NSNull()] + items : items + [NSNull()]
+        return [NSNull()] + items + [NSNull()]
     }
 }
 
@@ -102,19 +102,25 @@ import ApplicationServices
         var whole: CFTypeRef?
         try check(AXUIElementCopyAttributeValue(badRoot, kAXChildrenAttribute as CFString, &whole) == .failure, "AXChildren must return -25200")
 
-        // AppKit can vend a separate menu representation to other processes.
-        // Reading this application's own menu exercises the overridden AXChildren getter.
-        for scenario in ["before", "after", "duplicate"] {
-            edit.gapFirst = scenario == "before"
-            if scenario == "duplicate" { addPaste("Second Paste") }
-            do {
-                let command = try access.pasteCommand(getpid(), maxElements: 2000, maxDepth: 25)
-                try access.perform(command, "AXPress")
-                throw NativeFailure(code: "FIXTURE", message: "Dispatched Paste for " + scenario)
-            } catch let failure as NativeFailure where failure.code == "UNSUPPORTED" {
-                let reason = scenario == "duplicate" ? "ambiguous" : "incomplete"
-                try check(failure.message.contains(reason) && failure.message.contains("No input was dispatched"), failure.message)
-            }
+        guard let bar = try access.element(ownApp, "AXMenuBar") else { throw NativeFailure(code: "FIXTURE", message: "Missing menu bar") }
+        let menus = try access.children(bar).flatMap { try access.children($0) }
+        let failed = menus.contains { menu in
+            var children: CFTypeRef?
+            return AXUIElementCopyAttributeValue(menu, kAXChildrenAttribute as CFString, &children) == .failure
+        }
+        try check(failed, "The menu must reject bulk AXChildren with -25200")
+        // NSMenu exposes its actual menu items through count/range even when its whole attribute fails.
+        let paste = try access.pasteCommand(getpid(), maxElements: 2000, maxDepth: 25)
+        try access.perform(paste, "AXPress")
+        let pasteDeadline = Date().addingTimeInterval(3)
+        while bad.pasteCalls.isEmpty && Date() < pasteDeadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
+        try check(bad.pasteCalls == ["Paste"], "Unique recovered Paste command did not execute exactly once")
+        addPaste("Second Paste")
+        do {
+            _ = try access.pasteCommand(getpid(), maxElements: 2000, maxDepth: 25)
+            throw NativeFailure(code: "FIXTURE", message: "Selected a Paste command from an ambiguous menu")
+        } catch let failure as NativeFailure where failure.code == "UNSUPPORTED" {
+            try check(failure.message.contains("ambiguous") && failure.message.contains("No input was dispatched"), failure.message)
         }
         let complete = try project(good)
         try check(!complete.truncated && !complete.hasUnreadableElements && complete.tree.contains("Healthy window"), "An unrelated window reported missing children")
