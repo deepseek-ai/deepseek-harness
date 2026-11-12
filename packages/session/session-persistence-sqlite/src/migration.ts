@@ -1,9 +1,8 @@
 /** Exclusive legacy Session import with same-provider open sequencing. @module */
-import type { LimitFunction } from 'p-limit'
 import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import type { SessionAccess, SessionHandle, SessionPersistence, SessionPersistenceListOptions, SessionPersistenceOpenOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
-import type { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite'
+import type { SqliteLogs } from './sqlite.ts'
 
 /** Current logical history decoded from one immutable legacy artifact. */
 export interface LegacySessionSnapshot {
@@ -24,7 +23,7 @@ export interface PreparedLegacySession extends LegacySessionSnapshot {
 
 /** Historical reads used by the persistence service; no JSONL writes or live handles. */
 export interface JsonlBackend extends Pick<SessionPersistence, 'stat'> {
-  readonly listLimit: LimitFunction
+  readonly listLimit: <T>(operation: () => Promise<T>) => Promise<T>
   /** @param id - Session identity. @returns whether a physical legacy artifact exists. */
   hasStoredJsonl(id: SessionId): Promise<boolean>
   /** @param id - Session identity. @param signal - optional cancellation. @returns prepared logical prefix and commit. */

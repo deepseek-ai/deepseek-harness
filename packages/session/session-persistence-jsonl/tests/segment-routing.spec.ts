@@ -3,7 +3,7 @@ import pLimit from 'p-limit'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import { TracePersistence } from '../src/persistence.ts'
+import { TracePersistence } from '@deepseek-ai/dsh-session-persistence-sqlite'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -48,8 +48,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     },
   }
 })
-vi.mock('../src/win32.ts', async (importOriginal) => {
-  const windows = await importOriginal<typeof import('../src/win32.ts')>()
+vi.mock('@deepseek-ai/dsh-session-persistence-sqlite/src/win32.ts', async (importOriginal) => {
+  const windows = await importOriginal<typeof import('@deepseek-ai/dsh-session-persistence-sqlite/src/win32.ts')>()
   const actual = await import('node:fs/promises')
   return { ...windows, ensureDurableDirectoryWin32: (path: string) => actual.mkdir(path, { recursive: true }),
     publishNewFileWin32: (source: string, target: string) => actual.link(source, target) }

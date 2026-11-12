@@ -11,12 +11,11 @@ import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistence
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
-import { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite'
+import { SqliteLogs } from './sqlite.ts'
 import { SessionWriteLease } from './lease.ts'
-import { sessionDir } from './format.ts'
+import { sessionDir } from './paths.ts'
 import { LegacySessionMigration } from './migration.ts'
 import type { JsonlBackend } from './migration.ts'
-export type { JsonlBackend } from './migration.ts'
 
 const marker = z.object({ id: z.string().transform(SessionId), database: z.string() }).strict()
 

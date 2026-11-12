@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { SessionId, SessionStore } from '@deepseek-ai/dsh-session'
 import * as plugin from '../src/index.ts'
-import { SessionWriteLease } from '../src/lease.ts'
+import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
 import { sessionDir } from '../src/format.ts'
 
 async function fixture(_sqlite: boolean) {

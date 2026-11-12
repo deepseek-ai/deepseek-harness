@@ -16088,9 +16088,6 @@ importers:
       p-limit:
         specifier: 7.3.3
         version: 7.3.3
-      zod:
-        specifier: 4.6.6
-        version: 4.6.6
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:~

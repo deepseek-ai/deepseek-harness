@@ -47,8 +47,7 @@
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@deepseek-ai/schemastery": "workspace:~",
     "koffi": "3.1.1",
-    "p-limit": "7.3.3",
-    "zod": "4.6.6"
+    "p-limit": "7.3.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-session": "workspace:*",

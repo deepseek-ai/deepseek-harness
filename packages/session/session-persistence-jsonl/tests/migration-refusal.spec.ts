@@ -1,6 +1,6 @@
 /** Durable EOF refusals preserve historical generations and never fall back from the selected generation. */
 
-import type { JsonlBackend } from '../src/migration.ts'
+import type { JsonlBackend } from '@deepseek-ai/dsh-session-persistence-sqlite/src/migration.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'

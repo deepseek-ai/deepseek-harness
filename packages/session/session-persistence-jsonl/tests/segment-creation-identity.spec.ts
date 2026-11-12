@@ -7,7 +7,7 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq, SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionHeader, SessionEvent } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyExistsError, SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
-import { SessionWriteLease } from '../src/lease.ts'
+import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
 import { generationLogPath, toHeaderLine } from '../src/format.ts'
 import * as persistence from '../src/index.ts'
 

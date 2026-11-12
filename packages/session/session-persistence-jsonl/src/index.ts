@@ -8,8 +8,7 @@
 
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import '@deepseek-ai/dsh-session-persistence'
-import { TracePersistence } from './persistence.ts'
-import type { JsonlBackend, PreparedLegacySession } from './migration.ts'
+import { TracePersistence } from '@deepseek-ai/dsh-session-persistence-sqlite'
 import z from '@deepseek-ai/schemastery'
 import {
   createSessionFormatCatalogWithChildren,
@@ -60,6 +59,9 @@ import {
   type JsonlPhysicalIdentity,
   type PreparedJsonlMigration,
 } from './generation.ts'
+
+type JsonlBackend = ConstructorParameters<typeof TracePersistence>[3]
+type PreparedLegacySession = Awaited<ReturnType<JsonlBackend['prepare']>>
 
 export type { JsonlCompression } from './format.ts'
 
