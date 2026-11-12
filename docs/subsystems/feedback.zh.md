@@ -314,6 +314,38 @@ fork 种子可以包含父 Session 的反馈事件，但 payload 保留父级 `s
 - 弹窗不预先校验 `maxNoteBytes`；针对消息的超长描述在提交时以 `note-too-large` 失败，而不是在输入过程中。Session 级备注没有大小上限，`/feedback` 命令从来也没有。
 - `sessionFeedback.record` 只服务 live Session，否则回答 `session-not-found`；弹窗打开期间 Session 退役时，弹窗会报告该失败。
 
+## 导出日志中的反馈
+
+本节面向从导出日志中筛选已评价 Session 的使用方。默认 `FEEDBACK_ONLY` 模式下，[`session-telemetry-otel`](../../packages/session/session-telemetry-otel/README.zh.md) 把每个权威事件导出为一条名为 `session-log` 的 OTel 日志记录。Session 自身每产生一个新反馈事件，就释放截至该事件、尚未导出的日志前缀，因此导出数据也包含反馈之前的对话。
+
+| 记录字段 | 内容 |
+|---|---|
+| `session.id`、`sessionId` | 事件所在日志的 Session |
+| `session.format_version` | Session 日志格式版本 |
+| `event.type`、`event.seq` | 事件类型及其在 Session 日志中从 0 开始的位置 |
+| `session.parent_id`、`session.seed_length` | 仅 fork 携带；`event.seq` 小于 `session.seed_length` 的事件复制自父 Session |
+| `content` | JSON 字符串 `{ type, seq, time, data }`；`time` 为 Unix epoch 毫秒，`data` 为事件 payload |
+| Resource `user.id` | harness home 的[匿名用户 id](../../packages/identity/anonymous-user-id/README.zh.md) |
+
+| 事件 | 评价对象 | `data` | 含义 |
+|---|---|---|---|
+| `feedback/record` | 整个 Session | `text?`、`category?` | 一条不可变备注。`/feedback <text>` 只记录 `text`；Web 弹窗记录所选 `category` 和填写的 `text`，两者均可选；两个字段都缺失的记录也有效。 |
+| `feedback/message-put` | 一条 assistant 消息 | `sessionId`，以及含 `messageId`、`rating`、`note?`、`category?`、`version`、`createdAt`、`updatedAt` 的 `item` | 创建或编辑后的完整当前值 |
+| `feedback/message-delete` | 一条 assistant 消息 | `sessionId`、`messageId` | 撤回当前值 |
+
+按以下规则读取导出的反馈：
+
+1. 按 `session.id`、`session.format_version` 和 `event.seq` 去重；重启和冷快照可能再次导出同一前缀。
+2. 跳过复制自 fork 父 Session 的事件：`event.seq` 小于 `session.seed_length` 的事件，以及 `data.sessionId` 与 `session.id` 不同的消息事件。
+3. 按 `session.id` 和 `messageId` 取 `event.seq` 最大的事件作为当前消息反馈；该事件为 `feedback/message-delete` 时表示当前没有反馈。较早的 put 保留为编辑历史。
+4. 通过同一 Session 中 `data.message.id` 等于 `item.messageId` 的 `assistant/message` 事件定位被评价的回复；其 `data.turn` 及之前的事件可以还原当时的对话状态。
+
+服务和事件都不记录操作者，任何已组合的 Host 插件、运行时扩展或 Client 插件都可以调用 `sessionFeedback.record` 和 `messageFeedback.put`，或直接追加这些事件。因此导出日志的反馈字段中包含插件写入的状态，并且每次这类写入也会触发导出。以下值应视为插件写入，而非人工反馈：
+
+- `text` 可解析为 JSON 对象且含字符串成员 `namespace` 和 `type` 的 `feedback/record`；
+- `note` 匹配 `^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+:\s*[{[]`（斜杠分隔的名称后接序列化 JSON）的 `feedback/message-put`；
+- 反馈事件数远多于 assistant turn 数的 Session，使用前需人工复核。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>

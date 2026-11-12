@@ -314,6 +314,38 @@ Either unrecorded rating opens the Session's feedback dialog, the `feedback-dial
 - The dialog does not pre-check `maxNoteBytes`; an oversized description for a message fails on submit with `note-too-large` rather than while typing. A Session remark has no size bound, as the `/feedback` command never had one.
 - `sessionFeedback.record` serves live Sessions only and answers `session-not-found` otherwise; the dialog reports that failure when its Session retires while it is open.
 
+## Feedback in exported Session logs
+
+This section is for consumers that select rated Sessions from exported logs. In the default `FEEDBACK_ONLY` mode, [`session-telemetry-otel`](../../packages/session/session-telemetry-otel/README.md) exports each canonical event as one OTel log record named `session-log`. Each new feedback event of the Session itself releases the not-yet-exported log prefix that ends at that event, so the export also contains the conversation before the feedback.
+
+| Record field | Content |
+|---|---|
+| `session.id`, `sessionId` | Session whose log contains the event |
+| `session.format_version` | Session log format version |
+| `event.type`, `event.seq` | Event type and its zero-based position in the Session log |
+| `session.parent_id`, `session.seed_length` | Present only on forks; events with `event.seq` below `session.seed_length` were copied from the parent Session |
+| `content` | JSON string `{ type, seq, time, data }`; `time` is Unix epoch milliseconds and `data` is the event payload |
+| Resource `user.id` | [Anonymous user id](../../packages/identity/anonymous-user-id/README.md) of the harness home |
+
+| Event | Target | `data` | Meaning |
+|---|---|---|---|
+| `feedback/record` | Whole Session | `text?`, `category?` | One immutable remark. `/feedback <text>` records only `text`; the Web dialog records the selected `category` and the entered `text`, each optional; a record with neither field is valid. |
+| `feedback/message-put` | One assistant message | `sessionId`, and `item` with `messageId`, `rating`, `note?`, `category?`, `version`, `createdAt`, `updatedAt` | Complete current value after a creation or edit |
+| `feedback/message-delete` | One assistant message | `sessionId`, `messageId` | Retraction of the current value |
+
+Read exported feedback with these rules:
+
+1. Deduplicate by `session.id`, `session.format_version`, and `event.seq`; restarts and cold snapshots can export the same prefix again.
+2. Skip events copied from a fork parent: events whose `event.seq` is below `session.seed_length`, and message events whose `data.sessionId` differs from `session.id`.
+3. Take the event with the highest `event.seq` per `session.id` and `messageId` as the current message feedback; when that event is `feedback/message-delete`, the message has no current feedback. Earlier puts remain as edit history.
+4. Locate the rated reply through the `assistant/message` event in the same Session whose `data.message.id` equals `item.messageId`; its `data.turn` and the events before it reproduce the conversation state.
+
+The services and events record no actor, and any composed Host plugin, runtime extension, or Client plugin can call `sessionFeedback.record` and `messageFeedback.put` or append these events directly. Exported feedback fields therefore contain plugin-written state, and each such write also triggers an export. Treat these values as plugin writes, not human feedback:
+
+- a `feedback/record` whose `text` parses as a JSON object with string members `namespace` and `type`;
+- a `feedback/message-put` whose `note` matches `^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+:\s*[{[]` (a slash-separated name followed by serialized JSON);
+- a Session with far more feedback events than assistant turns, which needs manual review before use.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
