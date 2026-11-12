@@ -51,9 +51,11 @@ internal static class Input
         finally { foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == VkLeftWin ? 1u : 0))); }
     }
 
-    private static (ushort Key, bool Extended, string[] Modifiers) ResolveKey(string name)
+    private static (ushort Key, bool Extended, string[] Modifiers) ResolveKey(string name, bool includeModifiers = false)
     {
         var key = name.ToLowerInvariant();
+        if (includeModifiers && key is ("shift" or "ctrl" or "control" or "alt" or "win" or "fn"))
+            return (Modifier(KeyChord.NormalizeModifier(key)), key == "win", []);
         if (key.StartsWith("kp_", StringComparison.Ordinal))
         {
             var keypad = key[3..];
@@ -88,6 +90,16 @@ internal static class Input
         if ((mapped & 0x200) != 0) modifiers.Add("ctrl");
         if ((mapped & 0x400) != 0) modifiers.Add("alt");
         return ((ushort)(mapped & 0xFF), false, modifiers.ToArray());
+    }
+
+    internal static bool KeyEvent(AppState app, WindowState window, string name, string direction, RequestContext context)
+    {
+        Windows.RequireForeground(app, window, context);
+        var key = ResolveKey(name, includeModifiers: true);
+        var down = direction == "down";
+        if (((Win32.GetAsyncKeyState(key.Key) & 0x8000) != 0) == down) return false;
+        Send(Keyboard(key.Key, flags: (key.Extended ? 1u : 0) | (down ? 0u : 2u)));
+        return true;
     }
 
     internal static void Press(AppState app, WindowState window, string key, string[] modifiers, RequestContext context)
