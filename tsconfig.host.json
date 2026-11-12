@@ -191,6 +191,7 @@
     "apps/web/tests/thinking-markdown.e2e.ts",
     "apps/web/tests/math-rendering.e2e.ts",
     "apps/web/tests/markdown-cjk-strong.e2e.ts",
+    "apps/web/tests/markdown-cjk-strong-open.e2e.ts",
     "apps/web/tests/markdown-inline-code-links.e2e.ts",
     "apps/web/tests/clickable-links-gallery.e2e.ts",
     "apps/web/tests/queue-actions.e2e.ts",
