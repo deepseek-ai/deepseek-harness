@@ -3510,6 +3510,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'sessionStatus',
+    summary: 'Shared owner reading records; no reading operation changes model history.',
+    description: 'Shared owner reading records; no reading operation changes model history.',
+    methods: [
+      {
+        signature: '@Remote async mark(sessionId: SessionId, action: SessionReadAction): Promise<void>',
+        description: 'Update one Session; read positions advance only through Client-observed completions.',
+        parameters: [{ name: 'sessionId', description: 'Session identity.' }, { name: 'action', description: 'Explicit reminder change or automatic read-position acknowledgement.' }],
+        throws: ['RemoteError when closing, the Session is missing, or its metadata cannot be read.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<SessionReadFrame>',
+        description: 'Follow accessible reading records; every connection starts with a complete baseline.',
+        parameters: [{ name: 'signal', description: 'generation cancellation.' }],
+        returns: 'the baseline and whole-record changes, filtered by Session access.',
+        throws: ['RemoteError when the service is closing.'],
+      },
+    ],
+  },
+  {
     key: 'sessionTelemetry',
     summary: 'Loadable form of the backend contract: one implementation per context — the cordis `Service` registration under the `telemetry` key throws on a duplicate, cordis\' standard behavior.',
     description: 'Loadable form of the backend contract: one implementation per context — the cordis `Service` registration under the `telemetry` key throws on a duplicate, cordis\' standard behavior. A backend composes a SessionTelemetryCoordinator in its constructor to install the capture side.',
@@ -9305,6 +9325,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionQueuedItem',
     declaration: 'export interface SessionQueuedItem {\n    readonly id: MessageId;\n    readonly placement: \'queued\' | \'steering\' | \'context\';\n    readonly rpcId?: SessionRequestId;\n    readonly content: readonly JsonValue[];\n}',
+  },
+  {
+    name: 'SessionReadAction',
+    declaration: 'export type SessionReadAction = {\n    readonly type: \'unread\';\n} | {\n    readonly type: \'read\' | \'acknowledge\';\n    readonly throughTurn: number;\n};',
+  },
+  {
+    name: 'SessionReadFrame',
+    declaration: 'export type SessionReadFrame = {\n    readonly type: \'baseline\';\n    readonly items: readonly SessionReadState[];\n} | {\n    readonly type: \'changed\';\n    readonly state: SessionReadState;\n};',
+  },
+  {
+    name: 'SessionReadState',
+    declaration: 'export interface SessionReadState {\n    readonly sessionId: SessionId;\n    readonly completedTurn: number;\n    readonly failed: boolean;\n    readonly readTurn: number;\n    readonly manualUnread: boolean;\n}',
   },
   {
     name: 'SessionRecord',

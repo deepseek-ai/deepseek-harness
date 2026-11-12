@@ -6060,11 +6060,12 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       'useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean',
       'useWorkspaceAccess: (workspaceId: WorkspaceId, action: RemoteEndpoint) => boolean',
     ],
-    keyDomain: 'fixed by the owner\'s key table { [K in ToastKind]: ToastNotice<K> }, already taken: archivedNotOpenable, createFailed, defaultWorkspaceFailed, forkRequiresOpen, pinFailed, sessionIdCopied, sessionIdCopyFailed, shortcutForkFailed, unpinFailed',
+    keyDomain: 'fixed by the owner\'s key table { [K in ToastKind]: ToastNotice<K> }, already taken: archivedNotOpenable, createFailed, defaultWorkspaceFailed, forkRequiresOpen, pinFailed, readingFailed, sessionIdCopied, sessionIdCopyFailed, shortcutForkFailed, unpinFailed',
     hookContext: '',
     slotInject: '',
     declaredBy: 'an entry in \'shell.overlay\' (client-ui-workspace), so it exists while that entry is mounted',
     occupants: [
+      'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'readingFailed\'>> key \'readingFailed\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'sessionIdCopi… key \'sessionIdCopied\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'sessionIdCopy… key \'sessionIdCopyFailed\'',
       'client-ui-workspace ToastEntry<PropsRuntime<\'workspace.toast\', \'pinFailed\'>> key \'pinFailed\'',

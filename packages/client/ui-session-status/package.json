@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-session-status",
-  "description": "Client Session status table: running state, the effective pending interaction, and completion reminders",
+  "description": "Client Session status table over Host reading records: running state, the effective pending interaction, and read or unread reminders shared by clients of one Host",
   "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
@@ -18,9 +18,20 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./types": {
+      "types": "./lib/types/types.d.ts"
+    },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
+    },
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
     },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
@@ -28,7 +39,12 @@
   },
   "dsh": {
     "client": {
+      "external": [
+        "@deepseek-ai/dsh-api-gateway/client"
+      ],
       "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-api-remote-access",
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-client-ui-renderer",
@@ -42,20 +58,31 @@
     "watch": "tsdown --watch"
   },
   "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-deque": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "zod": "4.6.6"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remote-access": "workspace:*",
     "@deepseek-ai/dsh-api-remotes": "workspace:*",
     "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
     "@deepseek-ai/dsh-client-store": "workspace:*",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:*",
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:*",
     "@deepseek-ai/dsh-client-ui-session": "workspace:*",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:*",
     "@deepseek-ai/dsh-remote-mock": "workspace:*",
-    "@deepseek-ai/dsh-session": "workspace:*"
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-session-persistence": "workspace:*",
+    "@deepseek-ai/dsh-session-projection": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*"
   },
   "files": [
     "locale/*.json",
@@ -64,6 +91,11 @@
     "lib/types/**/*.d.ts",
     "lib/types/**/*.d.ts.map",
     "lib/**/*.js.map",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.d.ts.map",
     "src"
   ]
 }
