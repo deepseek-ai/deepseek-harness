@@ -508,6 +508,25 @@ final class AXAccess {
         guard let position = try attribute(element, "AXPosition") else { return nil }
         return try bounds(position: position, size: attribute(element, "AXSize"))
     }
+    func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget, forClick: Bool = false,
+                                  trace: ScreenshotTrace? = nil) throws -> (window: WindowInfo, element: AXUIElement?) {
+        var element: AXUIElement?
+        let window = try WindowGeometry.resolve(owner: identity, windowID: windowID, readWindow: { pid, id in
+            trace?.mark("window-info.begin")
+            let window = try NativePlatform.ownedWindow(pid, id)
+            trace?.mark("window-info.end")
+            return window
+        }) {
+            // Capture without Accessibility permission retains its CG/SCK checks.
+            guard forClick || AXIsProcessTrusted() else { return nil }
+            trace?.mark("ax-geometry.begin")
+            element = try windowElement(windowID, owner: identity, budget: &budget, requireComplete: forClick)
+            let bounds = try element.flatMap { try self.bounds($0) }
+            trace?.mark("ax-geometry.end")
+            return bounds
+        }
+        return (window, element)
+    }
     /// WindowServer IDs identify a window or sheet even when other branches are incomplete.
     func windowElement(_ id: UInt32, owner: ProcessIdentity, budget: inout AXChildRecoveryBudget, requireComplete: Bool) throws -> AXUIElement? {
         let app = AXUIElementCreateApplication(owner.pid)

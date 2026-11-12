@@ -173,28 +173,9 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to window \(source); read getAccessibilityTree on window \(windowID)")
         }
     }
-    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget, forClick: Bool = false,
-                                  trace: ScreenshotTrace? = nil) throws -> (window: WindowInfo, element: AXUIElement?) {
-        var element: AXUIElement?
-        let window = try WindowGeometry.resolve(owner: identity, windowID: windowID, readWindow: { pid, id in
-            trace?.mark("window-info.begin")
-            let window = try NativePlatform.ownedWindow(pid, id)
-            trace?.mark("window-info.end")
-            return window
-        }) {
-            // Capture without Accessibility permission retains its CG/SCK checks.
-            guard forClick || AXIsProcessTrusted() else { return nil }
-            trace?.mark("ax-geometry.begin")
-            element = try ax().windowElement(windowID, owner: identity, budget: &budget, requireComplete: forClick)
-            let bounds = try element.flatMap { try ax().bounds($0) }
-            trace?.mark("ax-geometry.end")
-            return bounds
-        }
-        return (window, element)
-    }
     private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget,
                                           forClick: Bool = false) throws -> (window: WindowInfo, element: AXUIElement?) {
-        let target = try coordinateWindow(identity, windowID, budget: &budget, forClick: forClick)
+        let target = try ax().coordinateWindow(identity, windowID, budget: &budget, forClick: forClick)
         try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: target.window.bounds)
         return target
     }
@@ -355,7 +336,7 @@ actor AXWorker {
             try NativePlatform.requireScreenRecording()
             trace?.mark("screen-permission.end")
             trace?.mark("geometry.before.begin")
-            let window = try coordinateWindow(identity, params.windowID(), budget: &recovery, trace: trace).window
+            let window = try ax().coordinateWindow(identity, params.windowID(), budget: &recovery, trace: trace).window
             trace?.mark("geometry.before.end")
             return .capture(CaptureTarget(appHandle: handle, process: identity, window: window, recovery: recovery))
         case "listActions":
@@ -524,7 +505,7 @@ actor AXWorker {
         try NativePlatform.requireScreenRecording()
         trace?.mark("geometry.after.begin")
         var recovery = target.recovery
-        let after = try coordinateWindow(identity, target.window.windowID, budget: &recovery, trace: trace).window
+        let after = try ax().coordinateWindow(identity, target.window.windowID, budget: &recovery, trace: trace).window
         trace?.mark("geometry.after.end")
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
         observedWindowBounds[target.appHandle, default: [:]][after.windowID] = after.bounds
