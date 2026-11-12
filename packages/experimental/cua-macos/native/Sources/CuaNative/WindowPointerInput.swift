@@ -207,14 +207,15 @@ final class WindowPointerInput {
             try checkCancellation()
             post(try event(.mouseMoved, at: start))
         }
+        let check = checkCancellation
         try await Self.postDrag(down: down, initialRelease: initialRelease, path: path,
                                 interval: Self.dragStepInterval(durationMs: durationMs, steps: steps),
-                                validate: { event in
+                                validate: { type, point in
             if useSystemPointer {
-                try await Self.checkSystemHit(route, at: event.location)
-                if event.type == Self.down(selected) { try Self.requireReleasedButtons() }
+                try await Self.checkSystemHit(route, at: point)
+                if type == Self.down(selected) { try Self.requireReleasedButtons() }
             }
-            try self.checkCancellation()
+            try check()
         }, post: post)
         try checkCancellation()
     }
@@ -229,22 +230,22 @@ final class WindowPointerInput {
 
     /// After a press, always post one release at the last posted point, even when validation or a wait fails.
     static func postDrag(down: CGEvent, initialRelease: CGEvent, path: [DragStep], interval: TimeInterval,
-                         validate: (CGEvent) async throws -> Void, post: (CGEvent) -> Void,
+                         validate: (CGEventType, CGPoint) async throws -> Void, post: (CGEvent) -> Void,
                          isolation: isolated (any Actor)? = #isolation) async throws {
-        try await validate(down)
+        try await validate(down.type, down.location)
         post(down)
         var release = initialRelease
         var failure: (any Error)?
         do {
             try await Task.sleep(for: .milliseconds(16))
             for step in path {
-                try await validate(step.movement)
+                try await validate(step.movement.type, step.movement.location)
                 post(step.movement)
                 release = step.release
                 try await Task.sleep(for: .seconds(interval))
             }
             try await Task.sleep(for: .milliseconds(50))
-            try await validate(release)
+            try await validate(release.type, release.location)
         } catch { failure = error }
         post(release)
         // The next input request must allow time for release processing even when this request was cancelled.

@@ -31,10 +31,11 @@ import Testing
         (path[1].movement, [down, path[0].movement, path[0].release]),
     ]
     for (blocked, expected) in interruptions {
+        let blockedType = blocked.type, blockedPoint = blocked.location
         var posted: [CGEvent] = []
         do {
             try await WindowPointerInput.postDrag(down: down, initialRelease: release, path: path, interval: 0,
-                validate: { if $0 === blocked { throw CancellationError() } }, post: { posted.append($0) })
+                validate: { if $0 == blockedType && $1 == blockedPoint { throw CancellationError() } }, post: { posted.append($0) })
             Issue.record("Interrupted drag completed")
         } catch { #expect(error is CancellationError) }
         #expect(posted.elementsEqual(expected, by: { $0 === $1 }))
