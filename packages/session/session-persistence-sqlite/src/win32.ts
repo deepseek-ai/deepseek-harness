@@ -8,7 +8,7 @@
  * and publish it with `MoveFileExW(..., MOVEFILE_WRITE_THROUGH)` without
  * replacement or cross-volume copy fallback.
  *
- * @module dsh-session-persistence/win32
+ * @module dsh-session-persistence-sqlite/win32
  */
 
 import { createHash } from 'node:crypto'

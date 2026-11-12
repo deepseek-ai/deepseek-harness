@@ -1,28 +1,22 @@
-/** SQLite row decoding uses the released format owner while preserving existing logical headers. @module */
+/** SQLite JSON decoding preserves logical Session records. @module */
 import { describe, expect, it } from 'vitest'
 import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { decodeHeader, decodeEvent } from '../src/codec.ts'
 
 const header = { version: SESSION_FORMAT_VERSION, id: SessionId('codec'), createdAt: 0, isSeeded: false }
 
 describe('SQLite header decoding', () => {
-  it('accepts catalog headers and existing logical headers with optional parent metadata', () => {
+  it('reads logical metadata and preserves optional parent metadata', () => {
     expect(decodeHeader(header)).toEqual({ ...header, delegationDepth: 0 })
     const parent = { ...header, parentSession: SessionId('parent'), origin: 'subagent' as const, delegationDepth: 1 }
-    expect(decodeHeader(sessionFormatCatalog.encodeCurrentHeader(parent, 0))).toEqual(parent)
+    expect(decodeHeader(parent)).toEqual(parent)
   })
 
-  it('refuses a physical header missing its required delegation depth', () => {
-    expect(() => decodeHeader({ type: 'session', ...header })).toThrow()
-  })
-
-  it('refuses malformed, unsupported and migration-required physical headers', () => {
-    expect(() => decodeHeader(null)).toThrow()
-    expect(() => decodeHeader({ ...header, version: 100 })).toThrow()
-    expect(() => decodeHeader({ type: 'session', ...header, version: 3, delegationDepth: 0 }))
-      .toThrow('requires a format migration')
-  })
+  it.each([null, { ...header, version: 100 }, { ...header, version: 3 }, { ...header, delegationDepth: -1 }])(
+    'refuses malformed or unsupported logical metadata %j', (value) => {
+      expect(() => decodeHeader(value)).toThrow()
+    },
+  )
 })
 
 describe('SQLite event decoding', () => {

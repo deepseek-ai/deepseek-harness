@@ -235,8 +235,6 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // The JSONL backend resolves its private verification Worker relative to
   // import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-session-persistence-jsonl': ['lib/worker.cjs'],
-  // Filesystem entry points share persistence error classes without loading native locks in the service entry.
-  '@deepseek-ai/dsh-session-persistence': ['lib/lease.js', 'lib/win32.js', 'lib/errors-*.js'],
   // The plugin market parses fetched indexes in a private Worker resolved
   // relative to import.meta.url; it is shipped without a public package subpath.
   '@deepseek-ai/dsh-plugin-market': ['lib/worker.cjs'],

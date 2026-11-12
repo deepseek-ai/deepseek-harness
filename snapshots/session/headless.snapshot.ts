@@ -1,5 +1,9 @@
 /** Recorded-session replay through the shipped headless `dsh` profile. */
 
+import { Context } from '@deepseek-ai/cordis'
+import * as persistencePlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
+import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { startHttpMcpFixture } from '../../packages/mcp/mcp-client/tests/http-fixture.ts'
 import { chmod, cp, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -17,7 +21,6 @@ import {
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
-  collectStoredSessionLogs,
   fixtureContext,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
@@ -193,6 +196,30 @@ function contextOf(logs: readonly string[]): NormalizeContext {
     cwd,
     cwdAliases: [cwd.split(sep).join('/')],
   }
+}
+
+/** Collect settled logical histories through the existing persistence service. */
+async function collectStoredSessionLogs(root: string): Promise<HarvestedLog[]> {
+  const ctx = new Context()
+  try {
+    await ctx.plugin(persistencePlugin, { root, compression: 'none' })
+    const logs: HarvestedLog[] = []
+    for (const snapshot of await ctx.sessionPersistence.list()) {
+      const handle = await ctx.sessionPersistence.open(snapshot.header.id, 'read')
+      try {
+        const { events } = await handle.read()
+        const header = sessionFormatCatalog.encodeCurrentHeader(
+          { ...handle.header, delegationDepth: handle.header.delegationDepth ?? 0 }, handle.inheritedEventCount,
+        )
+        const content = [header, ...events.map(event => sessionFormatCatalog.encodeCurrentEvent({
+          ...event, data: snapshotSessionFormatJson(event.data),
+        }))].map(record => JSON.stringify(record)).join('\n') + '\n'
+        logs.push({ id: handle.id, createdAt: handle.header.createdAt,
+          ...handle.header.parentSession === undefined ? {} : { parentSession: handle.header.parentSession }, content })
+      } finally { await handle.close() }
+    }
+    return logs
+  } finally { await ctx.fiber.dispose() }
 }
 
 async function persistedSessions(cwd: string): Promise<SessionLog[]> {

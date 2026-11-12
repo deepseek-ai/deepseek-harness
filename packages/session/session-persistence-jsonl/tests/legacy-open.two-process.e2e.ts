@@ -21,8 +21,8 @@ async function fixture() {
   const path = generationLogPath(root, header.cwd, id, header.version, 'none')
   const bytes = Buffer.from(JSON.stringify(toHeaderLine(header)) + '\n' + eventLines(oneTurnLog()) + '\n')
   await mkdir(dirname(path), { recursive: true }); await writeFile(path, bytes)
-  const launch = (access = 'read', pause = '') => {
-    const child = spawn(process.execPath, [opener, root, id, access, pause], { stdio: ['pipe', 'pipe', 'inherit'] })
+  const launch = (access = 'read', pause = '', target = id) => {
+    const child = spawn(process.execPath, [opener, root, target, access, pause], { stdio: ['pipe', 'pipe', 'inherit'] })
     const exited = new Promise<void>((resolve, reject) => {
       child.once('error', reject)
       child.once('exit', () => { resolve() })
@@ -41,6 +41,29 @@ async function fixture() {
   }
   return { root, id, path, bytes, launch }
 }
+
+it('initializes one database while two processes first open different Sessions', async () => {
+  const b = await fixture()
+  const otherId = SessionId('other-legacy-process'), otherHeader = meta(otherId)
+  const otherPath = generationLogPath(b.root, otherHeader.cwd, otherId, otherHeader.version, 'none')
+  await mkdir(dirname(otherPath), { recursive: true })
+  await writeFile(otherPath, JSON.stringify(toHeaderLine(otherHeader)) + '\n' + eventLines(oneTurnLog()) + '\n')
+  const first = b.launch('read', 'start'), second = b.launch('read', 'start', otherId)
+  expect(await Promise.all([first.status(), second.status()])).toEqual(['ready', 'ready'])
+  first.child.stdin.write('continue\n')
+  second.child.stdin.write('continue\n')
+  expect(await Promise.all([first.status(), second.status()])).toEqual(['opened', 'opened'])
+  first.child.stdin.end('close\n')
+  second.child.stdin.end('close\n')
+  await Promise.all([first.exited, second.exited])
+  const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
+  await ctx.plugin(persistence, { root: b.root, compression: 'none' })
+  for (const id of [b.id, otherId]) {
+    await using read = await ctx.sessionPersistence.open(id, 'read')
+    expect((await read.read()).events).toEqual(oneTurnLog())
+  }
+}, 30_000)
 
 it.each(['read', 'write'])('excludes another process during migration and hands off %s access', async (access) => {
   const b = await fixture()

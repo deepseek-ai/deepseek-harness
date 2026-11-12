@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq, type SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionAlreadyExistsError, SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
-import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence/lease'
+import { SessionWriteLease } from '../src/lease.ts'
+import { SessionWriteLease as SqliteWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
 import * as persistence from '../src/index.ts'
 
 async function fixture() {
@@ -78,8 +79,14 @@ it.each([1, 2])('releases both ownership locks when %i releases report failure',
     await release.call(this)
     if (failures > 0) { failures--; throw new Error('lease release failed') }
   })
+  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with its lease receiver.
+  const sqliteRelease = SqliteWriteLease.prototype.release
+  const sqliteFault = vi.spyOn(SqliteWriteLease.prototype, 'release').mockImplementation(async function (this: SqliteWriteLease) {
+    await sqliteRelease.call(this)
+    if (failures > 0) { failures--; throw new Error('lease release failed') }
+  })
   try { await expect(first.close()).rejects.toThrow(count === 1 ? 'lease release failed' : 'SQLite write ownership release failed') }
-  finally { fault.mockRestore() }
+  finally { fault.mockRestore(); sqliteFault.mockRestore() }
   const resumed = await b.open(header.id, 'write')
   await resumed.close()
 })
@@ -87,17 +94,18 @@ it.each([1, 2])('releases both ownership locks when %i releases report failure',
 it('preserves acquisition and rollback failures while releasing database ownership', async () => {
   const { a, b, header } = await fixture()
   const first = await a.create(header)
-  const acquire = SessionWriteLease.acquire.bind(SessionWriteLease)
+  const acquire = SqliteWriteLease.acquire.bind(SqliteWriteLease)
   const acquisitionFailure = new Error('artifact acquisition failed')
   const releaseFailure = new Error('shared lease rollback failed')
-  const fault = vi.spyOn(SessionWriteLease, 'acquire').mockImplementationOnce(async (...args) => {
+  const fault = vi.spyOn(SqliteWriteLease, 'acquire').mockImplementationOnce(async (...args) => {
     const shared = await acquire(...args)
     const release = shared.release.bind(shared)
     vi.spyOn(shared, 'release').mockImplementationOnce(async () => { await release(); throw releaseFailure })
     return shared
-  }).mockRejectedValueOnce(acquisitionFailure)
+  })
+  const artifactFault = vi.spyOn(SessionWriteLease, 'acquire').mockRejectedValueOnce(acquisitionFailure)
   try { await expect(first.flush()).rejects.toMatchObject({ errors: [acquisitionFailure, releaseFailure] }) }
-  finally { fault.mockRestore() }
+  finally { fault.mockRestore(); artifactFault.mockRestore() }
   const winner = await b.create(header)
   await winner.flush(); await winner.close(); await first.close()
 })

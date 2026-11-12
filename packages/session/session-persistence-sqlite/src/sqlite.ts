@@ -1,5 +1,5 @@
 /** SQLite event lists keyed by trace_uuid, projected through SessionPersistence handles. @module */
-import { LiveWriteBuffer } from '@deepseek-ai/dsh-session-persistence'
+import { LiveWriteBuffer } from './buffer.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Branded } from '@deepseek-ai/dsh-brand'
@@ -17,13 +17,12 @@ import { assertContiguous, materializeAppendBatch, validateStoredEvents, Session
   sessionFormatVersionRefusal } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionHandle, SessionHandleAppendOptions, SessionHandleFlushOptions,
   SessionHandleReadOptions, SessionPersistenceCreateOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
-import { decodeHeader, decodeEvent } from './codec.ts'
-import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence/lease'
-import { ensureDurableDirectoryWin32 } from '@deepseek-ai/dsh-session-persistence/win32'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import { sessionFormatCatalog, SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format-catalog'
+import { decodeHeader, decodeEvent, materializeHeader } from './codec.ts'
+import { SessionWriteLease } from './lease.ts'
+import { ensureDurableDirectoryWin32 } from './win32.ts'
+import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import { restoreReleasedV4Artifact } from '@deepseek-ai/dsh-session-format-v3-to-v4'
-import { sessionDir, encodeSessionHeader } from '@deepseek-ai/dsh-session-persistence'
+import { sessionDir } from './paths.ts'
 
 /** Private Segment storage database schema version; incompatible versions are refused, never reset. */
 export const SCHEMA_VERSION = 3
@@ -77,7 +76,7 @@ export interface SqliteLogsOptions {
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
-  readonly acquireCreationLease: (header: SessionHeader) => Promise<SessionWriteLease>
+  readonly acquireCreationLease: (header: SessionHeader) => Promise<{ release(): Promise<void> }>
   /** Report a background live-write failure; the Session's next durability barrier retries and rejects. */
   readonly report: (id: SessionId, error: unknown) => void
 }
@@ -158,7 +157,11 @@ export class SqliteLogs {
       if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return
       throw error
     }
-    if (records.some(record => record.endsWith('.json'))) {
+    if (!records.some(record => record.endsWith('.json'))) return
+    // Another initializer may have created the database while routing records were read.
+    try { await stat(this.path) }
+    catch (error: unknown) {
+      if (error === null || typeof error !== 'object' || !('code' in error) || error.code !== 'ENOENT') throw error
       throw new HarnessError('The Segment database is missing but routing records remain; restore the database before writing', 'SESSION_STORAGE_MISSING')
     }
   }
@@ -181,27 +184,16 @@ export class SqliteLogs {
     try {
       const opened = new DatabaseSync(this.path, { timeout: this.busyTimeoutMs })
       db = opened
-      const initial = this.schemaState(opened)
-      if (initial.version === 0 && initial.application === 0) {
-        await this.assertNewDatabase()
-        this.transaction(opened, () => {
-          const current = this.schemaState(opened)
-          /* v8 ignore next -- this initializer writes both pragmas in one transaction; a half-initialized header is external corruption. */
-          if (current.version === 0 && current.application === 0) {
-            const tables = opened.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all()
-            if (tables.length !== 0) throw new HarnessError('Refusing an unrelated SQLite database', 'SESSION_STORAGE_FORMAT')
-            this.createSchema(opened)
-            return
-          }
-          /* v8 ignore start -- another process can install an incompatible schema between the unlocked read and this transaction. */
-          if (current.version !== SCHEMA_VERSION || current.application !== APPLICATION_ID) {
-            throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
-          }
-          /* v8 ignore stop */
-        })
-      } else if (initial.version !== SCHEMA_VERSION || initial.application !== APPLICATION_ID) {
-        throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
-      }
+      this.transaction(opened, () => {
+        const current = this.schemaState(opened)
+        if (current.version === 0 && current.application === 0) {
+          const tables = opened.prepare("SELECT name FROM sqlite_schema WHERE type = 'table'").all()
+          if (tables.length !== 0) throw new HarnessError('Refusing an unrelated SQLite database', 'SESSION_STORAGE_FORMAT')
+          this.createSchema(opened)
+        } else if (current.version !== SCHEMA_VERSION || current.application !== APPLICATION_ID) {
+          throw new HarnessError('Unsupported SQLite persistence schema; database left intact', 'SESSION_STORAGE_FORMAT')
+        }
+      })
       opened.exec('PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;')
       return opened
     } catch (error: unknown) {
@@ -390,9 +382,8 @@ export class SqliteLogs {
     this.check()
     options?.signal?.throwIfAborted()
     const meta = { ...header }
-    // Same seeded/cut refusal as JSONL create; the encoded line is not stored.
-    encodeSessionHeader(meta, options?.inheritedEventCount,
-      (metadata, cut) => sessionFormatCatalog.encodeCurrentHeader(metadata, cut))
+    // Preserve the existing seeded/cut refusal before reserving a Session.
+    materializeHeader(meta, options?.inheritedEventCount)
     const inheritedCount = options?.inheritedEventCount ?? 0
     if (this.creating.has(meta.id) || this.pendingCreates.has(meta.id) || this.writers.has(meta.id)) {
       throw new SessionAlreadyExistsError(meta.id)
@@ -435,7 +426,7 @@ export class SqliteLogs {
    * @returns handle over the original stored identity.
    */
   async open(id: SessionId, access: SessionAccess, signal?: AbortSignal,
-    ownership?: Pick<SessionWriteLease, 'release'>): Promise<SqliteTrace> {
+    ownership?: { release(): Promise<void> }): Promise<SqliteTrace> {
     this.check(); signal?.throwIfAborted()
     const pending = this.pendingCreates.get(id)
     if (pending !== undefined) return this.admit(pending.header, access, pending.inheritedCount)
@@ -464,7 +455,7 @@ export class SqliteLogs {
    * @param header - legacy metadata identifying the artifact lock.
    * @returns database and artifact leases, retained until release or successful write-open transfer.
    */
-  acquireSessionLease(header: SessionHeader): Promise<Pick<SessionWriteLease, 'release'>> {
+  acquireSessionLease(header: SessionHeader): Promise<{ release(): Promise<void> }> {
     this.check()
     return this.acquireWriteLease(header, false)
   }
@@ -480,20 +471,20 @@ export class SqliteLogs {
   async importLegacy(header: SessionHeader, inheritedCount: SessionLogOffset,
     events: readonly SessionEvent[], signal?: AbortSignal): Promise<void> {
     this.check(); signal?.throwIfAborted()
-    const physicalHeader = encodeSessionHeader(header, inheritedCount,
-      (meta, count) => sessionFormatCatalog.encodeCurrentHeader(meta, count))
+    const storedHeader = materializeHeader(header, inheritedCount)
     const batch = materializeAppendBatch(events)
     assertContiguous(header.id, batch, 0)
-    const payloads = batch.map(event => JSON.stringify(sessionFormatCatalog.encodeCurrentEvent({
-      ...event, data: snapshotSessionFormatJson(event.data),
-    })))
+    const payloads = batch.map((event) => {
+      decodeEvent(event)
+      return JSON.stringify(event)
+    })
     const db = await this.database()
     this.check(); signal?.throwIfAborted()
     this.transaction(db, () => {
       if (this.row(db, header.id) !== undefined) throw new SessionAlreadyExistsError(header.id)
       const head = segmentId(randomUUID())
       db.prepare('INSERT INTO segments VALUES (?, NULL, NULL, 0)').run(head)
-      db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(physicalHeader), head, inheritedCount)
+      db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(header.id, JSON.stringify(storedHeader), head, inheritedCount)
       const insert = db.prepare('INSERT INTO events (segment_uuid, seq, payload) VALUES (?, ?, ?)')
       for (const [seq, payload] of payloads.entries()) insert.run(head, seq, payload)
     })
@@ -505,12 +496,12 @@ export class SqliteLogs {
   }
 
   /** Hold both database-wide Session ownership and the root's artifact/creation guards. */
-  private async acquireWriteLease(header: SessionHeader, created: boolean): Promise<Pick<SessionWriteLease, 'release'>> {
+  private async acquireWriteLease(header: SessionHeader, created: boolean): Promise<{ release(): Promise<void> }> {
     await this.database()
     const database = await realpath(this.path)
     const directory = join(`${database}.session-locks`, createHash('sha256').update(header.id).digest('hex'))
     const shared = await SessionWriteLease.acquire(directory, header.id)
-    let artifact: SessionWriteLease
+    let artifact: { release(): Promise<void> }
     try {
       artifact = created
         ? await this.acquireCreationLease(header)
@@ -540,7 +531,7 @@ export class SqliteLogs {
    * immediately before its first commit, so an unused create leaves no filesystem footprint.
    */
   private async admit(header: SessionHeader, access: SessionAccess, inheritedCount = 0, created = false,
-    ownership?: Pick<SessionWriteLease, 'release'>): Promise<SqliteTrace> {
+    ownership?: { release(): Promise<void> }): Promise<SqliteTrace> {
     if (access === 'write' && this.writers.has(header.id)) throw new SessionAlreadyOwnedError(header.id)
     let lease = access === 'write' && !created
       ? ownership ?? await this.acquireWriteLease(header, false)
@@ -657,9 +648,10 @@ export class SqliteLogs {
    */
   async append(header: SessionHeader, batch: readonly SessionEvent[]): Promise<void> {
     const db = await this.database()
-    const payloads = batch.map(event => JSON.stringify(sessionFormatCatalog.encodeCurrentEvent({
-      ...event, data: snapshotSessionFormatJson(event.data),
-    })))
+    const payloads = batch.map((event) => {
+      decodeEvent(event)
+      return JSON.stringify(event)
+    })
     this.transaction(db, () => {
       const row = this.ensureRow(db, header)
       assertContiguous(header.id, batch, row.event_count)
@@ -692,10 +684,9 @@ export class SqliteLogs {
         this.newSegment(db, head, cut.parent, cut.end)
       }
     }
-    const physicalHeader = encodeSessionHeader(header, SessionLogOffset(pending.inheritedCount),
-      (metadata, cut) => sessionFormatCatalog.encodeCurrentHeader(metadata, cut))
+    const storedHeader = materializeHeader(header, SessionLogOffset(pending.inheritedCount))
     db.prepare('INSERT INTO traces VALUES (?, ?, ?, ?)').run(
-      header.id, JSON.stringify(physicalHeader), head, pending.inheritedCount,
+      header.id, JSON.stringify(storedHeader), head, pending.inheritedCount,
     )
     row = this.row(db, header.id)
     if (row === undefined) throw new HarnessError('Committed Session metadata is unavailable', 'SESSION_STORAGE_CORRUPT')

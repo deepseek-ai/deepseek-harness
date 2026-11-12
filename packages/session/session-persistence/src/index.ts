@@ -161,15 +161,15 @@ export abstract class SessionPersistence extends Service {
   /**
    * Open an existing stored session.
    *
-   * A current Session supports `read` while another handle or process holds write ownership.
-   * The first open of a legacy Session, including `read`, imports it under exclusive ownership;
-   * an active legacy writer rejects that import. `write` retains single-writer ownership.
+   * `read` never takes ownership and works while another handle (or process)
+   * holds write ownership. `write` atomically claims single-writer ownership;
+   * an existing active owner rejects.
    * @param id - the stored session to open.
    * @param access - `read` or `write`.
    * @param options - optional cancellation.
    * @returns the open handle.
    * @throws {SessionPersistenceNotFoundError} when the session does not exist.
-   * @throws {SessionAlreadyOwnedError} when writing or legacy import conflicts with an active owner.
+   * @throws {SessionAlreadyOwnedError} for `write` when ownership is taken.
    */
   abstract open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle>
 
@@ -211,8 +211,3 @@ export abstract class SessionPersistence extends Service {
 }
 
 export default SessionPersistence
-
-export { LiveWriteBuffer } from './buffer.ts'
-export { encodeSessionHeader } from './header.ts'
-export type { HeaderLine } from './header.ts'
-export { encodeSegment, projectKey, projectDir, sessionDir } from './paths.ts'

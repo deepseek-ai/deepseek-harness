@@ -7,8 +7,6 @@ import { expect, it, onTestFinished } from 'vitest'
 import { z } from 'zod'
 import { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { snapshotSessionFormatJson } from '@deepseek-ai/dsh-session-format'
-import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
 import { SCHEMA_VERSION } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
@@ -196,7 +194,7 @@ it('recovers append positions from the event index without updating Trace or Seg
 })
 
 
-it('stores catalog physical rows and decodes source ranges in a selected suffix after reopening', async () => {
+it('stores logical JSON events and reads their source coordinates from an indexed suffix', async () => {
   const { root, logs, path, header, event } = await fixture()
   const ranged = { ...event(4), sourceEventSeqs: [SessionSeq(0), SessionSeq(1), SessionSeq(2)] }
   const batch = [event(0), event(1), event(2), event(3), ranged]
@@ -208,12 +206,10 @@ it('stores catalog physical rows and decodes source ranges in a selected suffix 
   try {
     const row = z.object({ payload: z.string() }).parse(db.prepare('SELECT payload FROM events WHERE seq = 4').get())
     const physical = z.object({ sourceEventSeqs: z.unknown() }).loose().parse(JSON.parse(row.payload))
-    expect(physical).toEqual(sessionFormatCatalog.encodeCurrentEvent({
-      ...ranged, data: snapshotSessionFormatJson(ranged.data),
-    }))
-    expect(physical.sourceEventSeqs).toEqual([[0, 2]])
+    expect(physical).toEqual(ranged)
+    expect(physical.sourceEventSeqs).toEqual([0, 1, 2])
     const stored = z.object({ header: z.string() }).parse(db.prepare('SELECT header FROM traces').get())
-    expect(JSON.parse(stored.header)).toEqual(sessionFormatCatalog.encodeCurrentHeader({ ...header, delegationDepth: 0 }, 0))
+    expect(JSON.parse(stored.header)).toEqual({ ...header, delegationDepth: 0 })
   } finally { db.close() }
   const reopened = sqliteLogs(path, root)
   onTestFinished(() => reopened.close())

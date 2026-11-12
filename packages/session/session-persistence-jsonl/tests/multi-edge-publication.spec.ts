@@ -205,7 +205,7 @@ describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) =
     contexts.splice(contexts.indexOf(ctx), 1)
     expect((await readdir(dirname(path))).filter(name => name !== 'session.lock').sort())
       .toEqual([basename(path)])
-    expect(importedRows(root, id)).toEqual([{ type: 'session', ...prepared.header }, ...prepared.events])
+    expect(importedRows(root, id)).toEqual([prepared.header, ...prepared.events])
     expect(await observe(path)).toEqual(source)
     const published = importedRows(root, id)
 

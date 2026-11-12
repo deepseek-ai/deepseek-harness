@@ -88,7 +88,7 @@ function createDecoder(
       rowIndex += 1
       let event: SessionFormatEvent
       try {
-        event = decodeReleasedV2Event(value, currentRow)
+        event = decodeEvent(value, currentRow)
       } catch (error: unknown) {
         const current = error instanceof SessionFormatError
           ? error
@@ -129,13 +129,7 @@ function createDecoder(
   }
 }
 
-/**
- * Decode one released V2 physical event independently of Session sequence framing.
- * @param value - untrusted physical row.
- * @param rowIndex - diagnostic row index.
- * @returns the logical event with source-event ranges expanded.
- */
-export function decodeReleasedV2Event(value: unknown, rowIndex = 0): SessionFormatEvent {
+function decodeEvent(value: unknown, rowIndex: number): SessionFormatEvent {
   const record = jsonRecord(value as SessionFormatJsonValue, `released v2 row ${rowIndex}`)
   const missing = EVENT_REQUIRED.find(key => !Object.hasOwn(record, key))
   if (missing !== undefined) throw new SessionFormatError(`released v2 row ${rowIndex} lacks required field ${missing}`)

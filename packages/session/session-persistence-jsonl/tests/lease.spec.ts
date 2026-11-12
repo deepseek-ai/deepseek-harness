@@ -27,8 +27,9 @@ import {
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlSessionPersistence from '../src/index.ts'
-import { LEASE_FILENAME, SessionWriteLease } from '@deepseek-ai/dsh-session-persistence/src/lease.ts'
-import type { SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite'
+import { LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
+import { SessionWriteLease as SqliteWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
+import type { SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import { sessionDir } from '../src/format.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -143,8 +144,8 @@ function lockPath(root: string, id: string, cwd = '/work'): string {
  * close(2) that freed the descriptor but returned EIO would.
  */
 function failReleaseOnce(): void {
-  const spy = vi.spyOn(SessionWriteLease.prototype, 'release')
-  spy.mockImplementationOnce(async function (this: SessionWriteLease) {
+  const spy = vi.spyOn(SqliteWriteLease.prototype, 'release')
+  spy.mockImplementationOnce(async function (this: SqliteWriteLease) {
     spy.mockRestore()
     await this.release()
     throw Object.assign(new Error('EIO: injected release failure'), { code: 'EIO' })

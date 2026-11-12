@@ -1,9 +1,0 @@
-version: 1
-scenario: sqlite-session-resume
-profile: sdk
-composition: default
-recording: authored
-header:
-  class: session-resume
-  changes: 1
-  promptChanges: 1

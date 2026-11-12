@@ -6,6 +6,7 @@ import { delimiter, join, relative, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it, vi, type TestContext } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
 
@@ -520,7 +521,7 @@ describe('runScenario', () => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
-          { type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } },
+          { type: 'turn/start', seq: 0, time: 9, data: { turn: 1 } },
         ],
       }],
     })
@@ -774,7 +775,7 @@ describe('runScenario', () => {
             data: {
               target: 'next-turn',
               start: 0,
-              inserted: [{ role: 'user', content: [{ type: 'text', text: 'durable marker' }] }],
+              inserted: [createUserMessage({ content: [{ type: 'text', text: 'durable marker' }], source: { kind: 'user' } })],
             },
           },
         ],
@@ -817,7 +818,7 @@ describe('runScenario', () => {
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
           { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title' } },
+          { type: 'session/title', seq: 2, time: 3, data: { title: 'Late title', messageSeqs: [], source: { kind: 'user' } } },
         ],
       }],
     })
@@ -842,7 +843,10 @@ describe('runScenario', () => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'turn/start', seq: 0, time: 1, data: { turn: 3 } },
+          { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
+          { type: 'turn/start', seq: 2, time: 3, data: { turn: 2 } },
+          { type: 'turn/end', seq: 3, time: 4, data: { turn: 2, reason: { kind: 'stop' } } },
+          { type: 'turn/start', seq: 4, time: 5, data: { turn: 3 } },
         ],
       }],
     })
@@ -859,7 +863,7 @@ describe('runScenario', () => {
     expect(result.sessionLogs[0]?.content).toContain('"turn":3')
   })
 
-  it('waitForTurnStart rejects missing, earlier, and malformed durable turns', { timeout: 20_000 }, async () => {
+  it('waitForTurnStart rejects missing, earlier, and closed durable turns', { timeout: 20_000 }, async () => {
     const missing = await scenario({})
     await expect(runScenario(
       { steps: [...boot, { op: 'waitForTurnStart', timeoutMs: 200 }] },
@@ -911,29 +915,6 @@ describe('runScenario', () => {
       { agent: AGENT, mode: 'replay', fixtureFile: closed.fixtureFile },
     )).rejects.toThrow(/did not persist turn\/start within 200ms/)
 
-    for (const turn of [undefined, 0]) {
-      const malformed = await scenario({
-        prompt: 'hang-until-cancel',
-        persistLogsOnCancel: true,
-        logs: [{
-          file: 'project/main/session.jsonl',
-          lines: [
-            { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-            { type: 'turn/start', seq: 0, time: 1, data: turn === undefined ? {} : { turn } },
-          ],
-        }],
-      })
-      await expect(runScenario(
-        {
-          steps: [
-            ...boot,
-            { op: 'promptAndCancel', text: 'hang' },
-            { op: 'waitForTurnStart' },
-          ],
-        },
-        { agent: AGENT, mode: 'replay', fixtureFile: malformed.fixtureFile },
-      )).rejects.toThrow('invalid persisted turn/start record')
-    }
   })
 
   it('waitForTurnEnd times out for a missing log and an open logged turn', { timeout: 20_000 }, async () => {
@@ -1063,7 +1044,7 @@ describe('runScenario', () => {
             { type: 'session', version: 0, id: 'child-1', createdAt: 2, parentSession: '{{SID}}', delegationDepth: 1 },
             { type: 'subagent/descriptor', seq: 0, time: 1, data: {} },
             { type: 'turn/start', seq: 1, time: 2, data: { turn: 1 } },
-            { type: 'request/header', seq: 2, time: 3, data: { header: {}, reason: 'initial' } },
+            { type: 'request/header', seq: 2, time: 3, data: { header: { config: { provider: 'fixture' } }, reason: 'initial' } },
             { type: 'turn/end', seq: 3, time: 4, data: { turn: 1, reason: { kind: 'completed' } } },
           ],
         },
@@ -1107,7 +1088,7 @@ describe('runScenario', () => {
           lines: [
             { type: 'session', version: 0, id: 'child-1', createdAt: 2, parentSession: '{{SID}}', delegationDepth: 1 },
             { type: 'turn/start', seq: 0, time: 1, data: { turn: 1, trigger: { kind: 'message' } } },
-            { type: 'request/header', seq: 1, time: 2, data: { header: {}, reason: 'initial' } },
+            { type: 'request/header', seq: 1, time: 2, data: { header: { config: { provider: 'fixture' } }, reason: 'initial' } },
             { type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
             { type: 'subagent/descriptor', seq: 3, time: 4, data: {} },
           ],
@@ -1141,7 +1122,7 @@ describe('runScenario', () => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title' } },
+          { type: 'session/title', seq: 1, time: 1, data: { title: 'Early title', messageSeqs: [], source: { kind: 'user' } } },
           { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
         ],
       }],
@@ -1168,7 +1149,7 @@ describe('runScenario', () => {
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
           { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
-          { type: 'user/message', seq: 2, time: 3, data: { content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } } },
+          { type: 'user/message', surfaceOp: 'append', seq: 2, time: 3, data: createUserMessage({ content: [{ type: 'text', text: 'late goal state' }], source: { kind: 'user' } }) },
         ],
       }],
     })
@@ -1191,7 +1172,7 @@ describe('runScenario', () => {
         file: 'project/main/session.jsonl',
         lines: [
           { type: 'session', version: 0, id: '{{SID}}', createdAt: 1, delegationDepth: 0 },
-          { type: 'user/message', seq: 1, time: 1, data: { content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } } },
+          { type: 'user/message', surfaceOp: 'append', seq: 1, time: 1, data: createUserMessage({ content: [{ type: 'text', text: 'early' }], source: { kind: 'user' } }) },
           { type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'aborted' } } },
         ],
       }],
@@ -1354,15 +1335,11 @@ describe('runScenario', () => {
       strayRootFile: true,
       strayBucketFile: true,
       logs: [
-        // File names chosen so readdir feeds the sort children-first AND
-        // parent-in-the-middle: the comparator then sees a parent on both
-        // sides of a pair, plus the same-createdAt (localeCompare) tiebreak.
         { file: 'b1/aa-child-c/session.jsonl', lines: [{ type: 'session', version: 0, id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
-        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: 'superseded-parent', createdAt: 1 }] },
+        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: '{{SID}}', createdAt: 1 }] },
         { file: 'b1/bb-parent/session.v1.jsonl', lines: [{ type: 'session', version: 1, id: '{{SID}}', createdAt: 900 }] },
         { file: 'b1/cc-child-a/session.jsonl', lines: [{ type: 'session', version: 0, id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
-        // Missing id/createdAt fall back to ''/0; earliest child by createdAt.
-        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, parentSession: '{{SID}}' }] },
+        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, id: 'earliest-child', createdAt: 100, parentSession: '{{SID}}' }] },
       ],
     })
     const result = await runScenario(
@@ -1371,19 +1348,20 @@ describe('runScenario', () => {
     )
     expect(result.sessionLogs.map(l => [l.id, l.createdAt])).toEqual([
       [result.sessionId, 900],
-      ['', 0],
+      ['earliest-child', 100],
       ['aaaaaaaa-0000-4000-8000-000000000000', 500],
       ['cccccccc-0000-4000-8000-000000000000', 500],
     ])
     expect(result.sessionLogs[1]?.parentSession).toBe(result.sessionId)
   })
 
-  it('rejects an empty persisted generation', { timeout: 20_000 }, async () => {
+  it('omits an empty persisted generation from the Session listing', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ logs: [{ file: 'b/empty/session.jsonl', lines: [] }] })
-    await expect(runScenario(
+    const result = await runScenario(
       { steps: boot },
       { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow('session.jsonl: session fixture is empty')
+    )
+    expect(result.sessionLogs).toEqual([])
   })
 
   it('rejects a persisted filename/header generation mismatch', { timeout: 20_000 }, async () => {
@@ -1393,7 +1371,7 @@ describe('runScenario', () => {
     await expect(runScenario(
       { steps: boot },
       { agent: AGENT, mode: 'replay', fixtureFile },
-    )).rejects.toThrow('filename declares Session format v1, header declares v0')
+    )).rejects.toThrow('session generation filename identifies v1, but its header identifies v0')
   })
 
   it('yields no logs when the sessions root vanished', { timeout: 20_000 }, async () => {

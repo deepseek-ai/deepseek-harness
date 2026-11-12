@@ -160,7 +160,7 @@ describe('V2 system prompts through current Session and JSONL persistence', () =
     expect((await readdir(directory)).filter(name => name.endsWith('.jsonl')).sort())
       .toEqual(['session.v2.jsonl'])
     const published = importedRows(root, id)
-    expect(published[0]).toMatchObject({ type: 'session', version: SESSION_FORMAT_VERSION, id })
+    expect(published[0]).toMatchObject({ version: SESSION_FORMAT_VERSION, id })
     expect(published.slice(1)).toEqual(prepared)
 
     const reopened = await mount()

@@ -57,14 +57,3 @@ it('classifies an unknown required event in a complete artifact as unsupported',
   await expect(reader.read()).rejects.toBeInstanceOf(SessionFormatUnsupportedError)
   await reader.close()
 })
-
-it.each([
-  ['session/title-llm-request', { messages: [{ id: 'title', role: 'user', source: { kind: '' }, content: [] }], messageSeqs: [0] }],
-  ['session-log-deepseek/delivery-accepted', { sessionFormatVersion: 4, throughSeq: 1, sessionId: 'v4' }],
-] as const)('rejects invalid native fields in a partial %s read', async (type, data) => {
-  const { logs, id, replace } = await fixture()
-  replace(1, type, data)
-  const reader = await logs.open(id, 'read')
-  await expect(reader.read(1, 1)).rejects.toBeInstanceOf(SessionPersistenceCorruptionError)
-  await reader.close()
-})

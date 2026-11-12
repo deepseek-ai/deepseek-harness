@@ -1,4 +1,4 @@
-import { LiveWriteBuffer } from '@deepseek-ai/dsh-session-persistence/src/buffer.ts'
+import { LiveWriteBuffer } from '@deepseek-ai/dsh-session-persistence-sqlite/src/buffer.ts'
 /** Provider-wide SQLite transaction failures across cached handles and durability barriers. @module */
 import { DatabaseSync } from 'node:sqlite'
 import { Context } from '@deepseek-ai/cordis'
@@ -11,7 +11,7 @@ import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import * as persistence from '../src/index.ts'
 import { SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import { sqliteLogs } from './fixtures/segments.ts'
-import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence/src/lease.ts'
+import { SessionWriteLease } from '../src/lease.ts'
 import { sessionDir } from '../src/format.ts'
 
 it.each(['commit', 'rollback'] as const)('isolates every SQLite handle after an unknown %s result and still releases them', async (operation) => {

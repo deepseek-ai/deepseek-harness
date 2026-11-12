@@ -8,8 +8,8 @@ import { expect, it, onTestFinished, vi } from 'vitest'
 import { SessionSeq, SessionLogOffset, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import type { SessionAccess, SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
-import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence/lease'
-import { SqliteLogs, SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite'
+import { SessionWriteLease } from '../src/lease.ts'
+import { SqliteLogs, SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import * as persistence from '../src/index.ts'
 import { JsonlReader } from '../src/reader.ts'
 import { eventLines, generationLogPath, sessionDir, toHeaderLine } from '../src/format.ts'
@@ -59,7 +59,12 @@ it.each(['none', 'zstd'] as const)('migrates a %s legacy read once, preserving i
   db = b.inspect()
   try {
     expect(db.prepare('SELECT parent_segment_uuid, base_seq FROM segments').all()).toEqual([{ parent_segment_uuid: null, base_seq: 0 }])
-    expect(db.prepare('SELECT inherited_count FROM traces').get()).toMatchObject({ inherited_count: b.inherited })
+    const traces = db.prepare('SELECT trace_uuid, header, tail_segment_uuid, inherited_count FROM traces').all()
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({ trace_uuid: b.header.id, inherited_count: b.inherited })
+    if (typeof traces[0]?.header !== 'string') throw new Error('Missing imported Session header')
+    expect(JSON.parse(traces[0].header)).toEqual({ ...b.header, delegationDepth: 0 })
+    expect(db.prepare('SELECT segment_uuid FROM segments').get()).toMatchObject({ segment_uuid: traces[0].tail_segment_uuid })
   } finally { db.close() }
   await using again = await (await b.mount()).sessionPersistence.open(b.header.id, 'read')
   expect((await again.read()).events).toEqual(b.events)

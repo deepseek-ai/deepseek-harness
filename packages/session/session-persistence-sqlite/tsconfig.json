@@ -27,13 +27,13 @@
       "path": "../session-format"
     },
     {
-      "path": "../session-format-catalog"
-    },
-    {
       "path": "../session-format-v3-to-v4"
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../../native/system/packages/entry"
     }
   ]
 }

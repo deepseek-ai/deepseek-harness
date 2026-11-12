@@ -43,8 +43,9 @@
     "@deepseek-ai/dsh-brand": "workspace:*",
     "@deepseek-ai/dsh-llm": "workspace:*",
     "@deepseek-ai/dsh-session-format": "workspace:*",
-    "@deepseek-ai/dsh-session-format-catalog": "workspace:*",
     "@deepseek-ai/dsh-session-format-v3-to-v4": "workspace:*",
-    "zod": "4.6.6"
+    "zod": "4.6.6",
+    "@deepseek-ai/node-addon-system": "workspace:~",
+    "koffi": "3.1.1"
   }
 }

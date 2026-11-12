@@ -49,8 +49,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     },
   }
 })
-vi.mock('@deepseek-ai/dsh-session-persistence/src/win32.ts', async (importOriginal) => {
-  const windows = await importOriginal<typeof import('@deepseek-ai/dsh-session-persistence/src/win32.ts')>()
+vi.mock('../src/win32.ts', async (importOriginal) => {
+  const windows = await importOriginal<typeof import('../src/win32.ts')>()
   const actual = await import('node:fs/promises')
   return { ...windows, ensureDurableDirectoryWin32: (path: string) => actual.mkdir(path, { recursive: true }),
     publishNewFileWin32: (source: string, target: string) => actual.link(source, target) }

@@ -6,6 +6,10 @@ import * as persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 const [root, id, access, pause] = process.argv.slice(2)
 const ctx = new Context()
 const commands = createInterface({ input: process.stdin })[Symbol.asyncIterator]()
+if (pause === 'start') {
+  process.stdout.write('ready\n')
+  await commands.next()
+}
 await ctx.plugin(persistence, { root, compression: 'none' })
 if (pause === 'pause') {
   const reader = Reflect.get(ctx.sessionPersistence, 'jsonl')

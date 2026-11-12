@@ -37,7 +37,7 @@ import type {
 import { validateStoredEvents } from '@deepseek-ai/dsh-session-persistence'
 import type { JsonlCompression } from './format.ts'
 import { generationLogFilename, logSuffix, SessionLogScanner } from './format.ts'
-import { publishNewFileWin32 } from '@deepseek-ai/dsh-session-persistence/win32'
+import { publishNewFileWin32 } from './win32.ts'
 import {
   compressZstdFrame,
   createZstdFrameDecoder,
