@@ -397,10 +397,17 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           }
         }
         if (report === undefined) return workspaceNavigation.openWorkspace(workspaceId, moveDraft)
-        // The receiver retains the Session before it returns, which the draft move needs.
         return workspaceNavigation.connectWorkspace(workspaceId).then((nextId) => {
-          report(nextId)
-          moveDraft(nextId)
+          // No await from here on, so nothing interleaves with the handover. The Session the draft leaves stays
+          // retained through it: `report` may release its own reference when it switches to `nextId`.
+          const source = sessionId === undefined || sessions.binding(sessionId) === undefined
+            ? undefined
+            : sessions.retain(sessionId, { source: 'controllerOperation' })
+          try {
+            if (report(nextId)) moveDraft(nextId)
+          } finally {
+            source?.release()
+          }
         })
       },
     }),

@@ -707,13 +707,87 @@ describe('Conversation inject API', () => {
     await b.runtime.sessions.add({ id: other, session: {} })
     b.connectWorkspace.mockResolvedValueOnce(other)
     const held: SessionReference[] = []
-    const report = vi.fn((id: SessionId) => { held.push(b.runtime.sessions.retain(id, { source: 'mainView' })) })
+    const report = vi.fn((id: SessionId) => {
+      held.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
+      return true
+    })
     await resident.selectWorkspace('workspace-3' as WorkspaceId, report)
     expect(report).toHaveBeenCalledWith(other)
     expect(b.opened).not.toHaveBeenCalledWith(other)
     expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('')
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('review this')
     for (const reference of held) reference.release()
+    await b.runtime.dispose()
+  })
+
+  it('moves the draft although the owner releases the Session it showed before while it takes the picked blank', async () => {
+    const b = await bench()
+    const source = 'handover-source' as SessionId
+    const target = 'handover-target' as SessionId
+    await b.runtime.sessions.add({ id: source, session: {} })
+    await b.runtime.sessions.add({ id: target, session: {} })
+    const shown = b.runtime.sessions.retain(source, { source: 'mainView' })
+    b.inputApi(source).actions.setDraft('carry over')
+    b.connectWorkspace.mockResolvedValueOnce(target)
+    const taken: SessionReference[] = []
+    await b.residentApi(source).selectWorkspace('workspace-5' as WorkspaceId, (id) => {
+      taken.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
+      shown.release()
+      return true
+    })
+    expect(b.inputApi(target).state.getSnapshot().draft).toBe('carry over')
+    // The handover's own hold on the source ended with it.
+    expect(b.runtime.sessions.binding(source)).toBeUndefined()
+    for (const reference of taken) reference.release()
+    await b.runtime.dispose()
+  })
+
+  it('changes nothing when the owner declines the picked blank', async () => {
+    const b = await bench()
+    b.inputApi(ROOT).actions.setDraft('stay here')
+    const other = 'declined-target' as SessionId
+    await b.runtime.sessions.add({ id: other, session: {} })
+    b.connectWorkspace.mockResolvedValueOnce(other)
+    const report = vi.fn((_id: SessionId) => false)
+    await b.residentApi(ROOT).selectWorkspace('workspace-6' as WorkspaceId, report)
+    expect(report).toHaveBeenCalledWith(other)
+    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('stay here')
+    expect(b.runtime.sessions.binding(other)).toBeUndefined()
+    expect(b.opened).not.toHaveBeenCalledWith(other)
+    await b.runtime.dispose()
+  })
+
+  it('offers the picked blank without retaining a source when no Session, or one no longer retained, started the pick', async () => {
+    const b = await bench()
+    const gone = 'released-source' as SessionId
+    const other = 'late-target' as SessionId
+    await b.runtime.sessions.add({ id: gone, session: {} })
+    await b.runtime.sessions.add({ id: other, session: {} })
+    b.connectWorkspace.mockResolvedValue(other)
+    const declined = vi.fn((_id: SessionId) => false)
+    await b.residentApi(gone).selectWorkspace('workspace-7' as WorkspaceId, declined)
+    expect(declined).toHaveBeenCalledWith(other)
+    expect(b.runtime.sessions.binding(gone)).toBeUndefined()
+
+    const taken: SessionReference[] = []
+    await b.residentApi(undefined).selectWorkspace('workspace-7' as WorkspaceId, (id) => {
+      taken.push(b.runtime.sessions.retain(id, { source: 'mainView' }))
+      return true
+    })
+    expect(taken.map(reference => reference.sessionId)).toEqual([other])
+    expect(b.opened).not.toHaveBeenCalledWith(other)
+    for (const reference of taken) reference.release()
+    await b.runtime.dispose()
+  })
+
+  it('rejects an embedded pick whose Workspace cannot connect without offering a Session', async () => {
+    const b = await bench()
+    b.inputApi(ROOT).actions.setDraft('kept')
+    b.connectWorkspace.mockRejectedValueOnce(new Error('preset missing'))
+    const report = vi.fn((_id: SessionId) => true)
+    await expect(b.residentApi(ROOT).selectWorkspace('workspace-8' as WorkspaceId, report)).rejects.toThrow('preset missing')
+    expect(report).not.toHaveBeenCalled()
+    expect(b.inputApi(ROOT).state.getSnapshot().draft).toBe('kept')
     await b.runtime.dispose()
   })
 

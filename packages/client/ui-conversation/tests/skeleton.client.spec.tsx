@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { contextMenuHook } from '@deepseek-ai/dsh-client-test-runtime'
 import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { Context } from '@deepseek-ai/cordis'
@@ -148,6 +148,8 @@ function mount(
     entryActions?: boolean
     /** Isolate header capability checks from the composer's required layout observers. */
     headerOnly?: boolean
+    /** Inputs an embedding owner adds to the content occurrence. */
+    contentInput?: Pick<ConversationContentInputProps, 'onWorkspaceSession' | 'headline'>
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -385,7 +387,7 @@ function mount(
     )) as ConversationContentProps['useFactorySlot']
     return (
       <FactoryViewsTestContext.Provider value={common}>
-        <ConversationContent {...({ ...common, ...runtimeProps, ...input, useFactorySlot })} />
+        <ConversationContent {...({ ...common, ...runtimeProps, ...input, ...options.contentInput, useFactorySlot })} />
       </FactoryViewsTestContext.Provider>
     )
   }) as ConversationSlotProps['renderFactorySlot']
@@ -914,6 +916,84 @@ describe('ConversationRoot resident composer', () => {
     expect(selectWorkspace).toHaveBeenCalledWith(wid('second'), undefined)
     expect(b.view.queryByText('Selected Folder')).toBeNull()
     expect(b.view.getByText('one')).toBeTruthy()
+    // Workspace navigation reports this failure; the content adds no notice of its own.
+    expect(screen.queryByText(/没能打开这个工作区/)).toBeNull()
+  })
+
+  describe('embedded Workspace pick', () => {
+    /** One pick in flight: the handover the content gave `selectWorkspace`, and how the connection settles. */
+    interface Pick {
+      readonly handOver: ((sessionId: SessionId) => boolean) | undefined
+      readonly fail: (error: unknown) => void
+    }
+
+    /** Mount a blank embedded occurrence whose picks settle when the test says. */
+    function embedded() {
+      const picks: Pick[] = []
+      const selectWorkspace = vi.fn((_workspaceId: WorkspaceId, handOver?: (sessionId: SessionId) => boolean) =>
+        new Promise<void>((_resolve, reject) => { picks.push({ handOver, fail: reject }) }))
+      const owner = vi.fn<(sessionId: SessionId) => void>()
+      const b = mount(
+        sessionSnapshotOf({ blank: true }),
+        [
+          { ...workspace('one'), sessionIds: [SID] },
+          { ...workspace('second'), title: 'Second Folder' },
+          { ...workspace('third'), title: 'Third Folder' },
+        ],
+        selectWorkspace,
+        { contentInput: { onWorkspaceSession: owner } },
+      )
+      const pick = (id: string): void => {
+        act(() => { (b.pickerOwner() as { onPick(id: WorkspaceId): void }).onPick(wid(id)) })
+      }
+      return { b, picks, owner, pick }
+    }
+
+    it('hands only the latest pick to the owner', () => {
+      const { picks, owner, pick } = embedded()
+      pick('second')
+      pick('third')
+      expect(picks[0]?.handOver?.(sid('second-blank'))).toBe(false)
+      expect(owner).not.toHaveBeenCalled()
+      expect(picks[1]?.handOver?.(sid('third-blank'))).toBe(true)
+      expect(owner.mock.calls).toEqual([[sid('third-blank')]])
+    })
+
+    it('declines a pick that connects after the occurrence unmounted', () => {
+      const { b, picks, owner, pick } = embedded()
+      pick('second')
+      b.view.unmount()
+      expect(picks[0]?.handOver?.(sid('second-blank'))).toBe(false)
+      expect(owner).not.toHaveBeenCalled()
+    })
+
+    it('shows why the latest pick failed for a while and returns to the Workspace it showed', async () => {
+      vi.useFakeTimers()
+      onTestFinished(() => { vi.useRealTimers() })
+      const { b, picks, pick } = embedded()
+      pick('second')
+      expect(b.view.getByText('Second Folder')).toBeTruthy()
+      await act(async () => { picks[0]?.fail(new Error('preset missing')); await Promise.resolve() })
+      expect(screen.getByText('没能打开这个工作区：preset missing')).toBeTruthy()
+      expect(b.view.queryByText('Second Folder')).toBeNull()
+      expect(b.view.getByText('one')).toBeTruthy()
+
+      pick('third')
+      await act(async () => { picks[1]?.fail('offline'); await Promise.resolve() })
+      expect(screen.queryByText('没能打开这个工作区：preset missing')).toBeNull()
+      expect(screen.getByText('没能打开这个工作区：offline')).toBeTruthy()
+      act(() => { vi.advanceTimersByTime(5_000) })
+      expect(screen.queryByText('没能打开这个工作区：offline')).toBeNull()
+    })
+
+    it('reports no failure for a pick that another pick replaced', async () => {
+      const { b, picks, pick } = embedded()
+      pick('second')
+      pick('third')
+      await act(async () => { picks[0]?.fail(new Error('too late')); await Promise.resolve() })
+      expect(screen.queryByText(/没能打开这个工作区/)).toBeNull()
+      expect(b.view.getByText('Third Folder')).toBeTruthy()
+    })
   })
 
   it('blank session keeps the interactive picker chip (workspace switchable until the first message)', () => {
