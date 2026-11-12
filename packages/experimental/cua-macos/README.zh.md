@@ -91,7 +91,7 @@ CUA 工具在读取 AX、窗口标题、截图、激活和输入前检查应用�
 
 原始 `getState` 操作返回经过校验的状态字段，以及按本次披露选项生成的完整文本。原生 helper 还返回供原生检查使用的结构化元素诊断数组，其中 `elementId` 是不透明字符串；工具投影会从模型文本和结构化工具值中移除这份重复数组。
 
-AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。子项无法读取时，树中会标出缺失部分，原始结果会返回 `hasUnreadableElements: true`。
+AX 观察默认只展示菜单栏入口。使用 `app.getAccessibilityTree({ includeMenus: true })` 展开菜单内容，使用 `app.getAccessibilityTree({ details: true })` 读取标识符、全局 point 坐标和完整动作名。原始 `getState` 也接受这两个选项。每次读取都会替换应用当前的快照；应使用该次读取返回的元素 ID。传入 `maxElements` 或 `maxDepth` 可调整本次读取的上限。树被截断时会提示触发的上限。子项无法读取时，树中会标出缺失部分，原始结果会返回 `hasUnreadableElements: true`。控件旁边有缺失提示时，仍可按该控件的元素 ID 操作。执行时需要重新查找目标的，macOS 会沿用读树时的分段读取方式找回可读子项。
 
 实际值与占位文字分别展示。有名称、状态或可用动作的分组和滚动区域保留独立行。同一节点中重复的名称、描述和帮助只显示一次。实际值、占位文字和 URL 即使文字相同也保留各自含义，不删除不同节点共有的正文。相关控件明确展示可写性，包括 `AXIncrementor`；`unknown` 表示系统未报告。缺少可选状态字段不代表 false。读树时，AXValue 或 AXSelectedTextRange 的可写性探测返回 -25200，会将该字段保留为未知并继续读取其他节点。实际写入仍严格校验；权限、通信和失效元素错误仍向上传播。超出当前值长度的 UTF-16 选区标为不可用。树中的动作简称可能省略 AppKit 的 target 和 selector 信息。调用 `performAction` 时使用 `listActions(elementId)` 返回的完整名称。
 
