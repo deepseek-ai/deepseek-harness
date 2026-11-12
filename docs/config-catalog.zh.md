@@ -1070,7 +1070,7 @@ export type Config = BrowserMcpConfig
 
 - `inject`: `browserUse` · `agents` · `tools` · `systemPrompt`
 - `refs`: `ModelConfig` (`@browserbasehq/stagehand`)
-- `source`: [`packages/experimental/browser-use-stagehand-native/src/index.ts:29`](../packages/experimental/browser-use-stagehand-native/src/index.ts)
+- `source`: [`packages/experimental/browser-use-stagehand-native/src/index.ts:32`](../packages/experimental/browser-use-stagehand-native/src/index.ts)
 
 ```ts config-catalog
 /** Profile-owned browser connection and independent Stagehand model credentials. */
@@ -1473,7 +1473,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-experimental-subagent-oar`
 
 - `inject`: `subagents`
-- `source`: [`packages/experimental/subagent-oar/src/index.ts:25`](../packages/experimental/subagent-oar/src/index.ts)
+- `source`: [`packages/experimental/subagent-oar/src/index.ts:27`](../packages/experimental/subagent-oar/src/index.ts)
 
 ```ts config-catalog
 /** Native runtime selection and deployment settings for one provider instance. */
@@ -1561,7 +1561,7 @@ export type PaidTranslationProvider = 'deepseek-account' | 'deepseek-official'
 
 - `inject`: `workingDirectory` · `fs` · `subprocess` · `sandbox` · `sandboxPolicy` · `sessionProjections`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/experimental/worktree/src/index.ts:36`](../packages/experimental/worktree/src/index.ts)
+- `source`: [`packages/experimental/worktree/src/index.ts:39`](../packages/experimental/worktree/src/index.ts)
 
 ```ts config-catalog
 /** Worktree location, generated names, executables, subprocess resource limits, and the archive cleanup switch. */
@@ -1724,7 +1724,7 @@ export interface HmrConfig extends ChokidarOptions {
 ## `@deepseek-ai/dsh-hooks-claude-code`
 
 - `inject`: `shell` · `agents` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:50`](../packages/experimental/hooks-claude-code/src/index.ts)
+- `source`: [`packages/experimental/hooks-claude-code/src/index.ts:53`](../packages/experimental/hooks-claude-code/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the CC hook config lives + substitution roots. */
@@ -1763,7 +1763,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-hooks-codex`
 
 - `inject`: `shell` · `agents` · `workingDirectory`
-- `source`: [`packages/experimental/hooks-codex/src/index.ts:49`](../packages/experimental/hooks-codex/src/index.ts)
+- `source`: [`packages/experimental/hooks-codex/src/index.ts:52`](../packages/experimental/hooks-codex/src/index.ts)
 
 ```ts config-catalog
 /** Plugin config: where the Codex hooks.json lives + the model name for payloads. */
@@ -4460,7 +4460,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-ralph`
 
 - `inject`: `tools` · `workflowEngine` · `subagents` · `systemPrompt`
-- `source`: [`packages/experimental/tool-ralph/src/index.ts:21`](../packages/experimental/tool-ralph/src/index.ts)
+- `source`: [`packages/experimental/tool-ralph/src/index.ts:24`](../packages/experimental/tool-ralph/src/index.ts)
 
 ```ts config-catalog
 /** Deployment policy for the fixed Ralph workflow. */
@@ -5091,7 +5091,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-schedule` | — | [`packages/client/ui-schedule/src/index.ts`](../packages/client/ui-schedule/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-secret-mask` | — | [`packages/client/ui-secret-mask/src/index.ts`](../packages/client/ui-secret-mask/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-session` | — | [`packages/client/ui-session/src/index.ts`](../packages/client/ui-session/src/index.ts) |
-| `@deepseek-ai/dsh-client-ui-session-status` | — | [`packages/client/ui-session-status/src/index.ts`](../packages/client/ui-session-status/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-session-status` | `remoteAccess` · `sessions` · `sessionPersistence` · `typert` | [`packages/client/ui-session-status/src/index.ts`](../packages/client/ui-session-status/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings` | — | [`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | — | [`packages/client/ui-settings-agent-loop/src/index.ts`](../packages/client/ui-settings-agent-loop/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-general` | — | [`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts) |

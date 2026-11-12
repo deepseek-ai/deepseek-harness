@@ -107,6 +107,8 @@ flowchart LR
   pkg_message_feedback["message-feedback"]
   pkg_experimental_api_speech_to_text["experimental-api-speech-to-text"]
   svc_speechController["ctx.speechController<br/>Experimental transcription Remote"]
+  pkg_client_ui_session_status["client-ui-session-status"]
+  svc_sessionStatus["ctx.sessionStatus<br/>Host Session reading records"]
   svc_sessionController["ctx.sessionController<br/>Host Session Remote controller"]
   svc_sessionFileReferences["ctx.sessionFileReferences<br/>Session-addressed file-reference Remote adapter"]
   svc_sessionSkillCatalog["ctx.sessionSkillCatalog<br/>Session-addressed skill Remote adapter"]
@@ -348,6 +350,7 @@ flowchart LR
   pkg_client_modules --> svc_clientModules
   pkg_client_product_analytics --> svc_productAnalytics
   pkg_client_ui_plugin_manager --> svc_pluginRegistryProbe
+  pkg_client_ui_session_status --> svc_sessionStatus
   pkg_command_feedback --> svc_sessionFeedback
   pkg_commands --> svc_commands
   pkg_compaction --> svc_compaction
@@ -578,6 +581,7 @@ flowchart LR
   svc_sessionProjections --> pkg_tool_todo
   svc_sessionQuery --> pkg_session_reference
   svc_sessionQuery --> pkg_tool_session_query
+  svc_sessionStatus --> pkg_client_ui_session_status
   svc_sessions --> pkg_agent
   svc_sessions --> pkg_agent_loop
   svc_sessions --> pkg_message_feedback
@@ -686,6 +690,7 @@ flowchart LR
 | `ctx.toolResultPruner` | `core` | [`compaction-tool-result-pruner`](../packages/compaction/compaction-tool-result-pruner) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 在摘要压缩前，通过可回放的单节点表层替换来改写过大的当前工具结果。 |
 | `ctx.sessions` | `core` | [`session`](../packages/core/session) | - | [`agent-loop`](../packages/core/agent-loop), [`agent`](../packages/core/agent), [`session-persistence`](../packages/session/session-persistence), [`session-query`](../packages/session-query/session-query), [`session-query-sqlite`](../packages/session-query/session-query-sqlite), [`subagent`](../packages/subagent/subagent), [`message-feedback`](../packages/feedback/message-feedback) | - | 拥有仅追加的 Session 实例，并发出持久的会话事件流。 |
 | `ctx.speechController` | `core` | [`experimental-api-speech-to-text`](../packages/experimental/api-speech-to-text) | - | - | - | 在 Provider 调用前校验受限的浏览器音频。 |
+| `ctx.sessionStatus` | `core` | [`client-ui-session-status`](../packages/client/ui-session-status) | - | [`client-ui-session-status`](../packages/client/ui-session-status) | - | 在会话历史之外保存使用者的阅读确认和手动未读标记；其前端部分通过 Remote 订阅已保存的更新、确认已加载的完成内容，并提供会话状态表。 |
 | `ctx.sessionController` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | 负责 Session 命令、冷读取、持久事件跟随、实时控制状态、模型目录、workspace 打开与 Agent 激活策略。 |
 | `ctx.sessionFileReferences` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | 通过 Session Controller 的既有 Agent lookup 策略委托文件引用发现。 |
 | `ctx.sessionSkillCatalog` | `core` | [`api-session-controller`](../packages/api/session-controller) | - | - | - | 在不激活冷 Agent 的前提下列出 Session 组合中允许用户调用的 skill。 |

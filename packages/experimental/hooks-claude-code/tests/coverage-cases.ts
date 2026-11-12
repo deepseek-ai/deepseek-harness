@@ -303,6 +303,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PreToolUse hook'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.error).toEqual({ name: 'HookError', code: 'HOOK_DENIED' })
     })
 
     it('PostToolUse deny with EMPTY stderr + no context uses the default feedback', async () => {
@@ -317,6 +318,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       await waitForIdle(ctx, agent)
       const result = events(agent).find(e => e.type === 'tool/result')
       expect(result?.type === 'tool/result' && result.data.message.content.some(b => b.type === 'text' && b.text.includes('blocked by PostToolUse hook'))).toBe(true)
+      expect(result?.type === 'tool/result' && result.data.error).toEqual({ name: 'HookError', code: 'HOOK_BLOCKED' })
     })
 
     it('SubagentStop with no registered child runs the hook cleanly (fire-and-forget)', async () => {

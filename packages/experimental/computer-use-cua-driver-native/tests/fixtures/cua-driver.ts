@@ -37,6 +37,7 @@ export const fixture: {
   createError?: Error
   list?: (signal?: AbortSignal) => Promise<string>
   call?: (name: string, args: Record<string, unknown>, signal?: AbortSignal) => Promise<unknown>
+  rawJson?: string
   shutdown?: () => Promise<void>
 } = { creates: 0, destroys: 0, shutdowns: 0, clicked: false, calls: [] }
 
@@ -50,6 +51,7 @@ export function resetFixture(): void {
   delete fixture.createError
   delete fixture.list
   delete fixture.call
+  delete fixture.rawJson
   delete fixture.shutdown
 }
 
@@ -68,6 +70,7 @@ export class CuaDriver {
   async callTool(name: string, argsJson: string, options?: { signal: AbortSignal }): Promise<{ rawJson: string }> {
     const args = JSON.parse(argsJson) as Record<string, unknown>
     fixture.calls.push({ name, args, ...options ? { signal: options.signal } : {} })
+    if (fixture.rawJson !== undefined) return { rawJson: fixture.rawJson }
     if (fixture.call) return { rawJson: JSON.stringify(await fixture.call(name, args, options?.signal)) }
     if (name === 'get_window_state') {
       return { rawJson: JSON.stringify({

@@ -353,6 +353,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Validates bounded browser audio before provider dispatch.',
   },
   {
+    key: 'sessionStatus',
+    pkg: 'client-ui-session-status',
+    title: 'Host Session reading records',
+    mode: 'core',
+    consumers: ['client-ui-session-status'],
+    note: 'Stores owner reading acknowledgements and manual unread marks outside Session history; its Client half follows committed changes over Remote, acknowledges loaded completions, and serves the Session status table.',
+  },
+  {
     key: 'sessionController',
     pkg: 'api-session-controller',
     title: 'Host Session Remote controller',
