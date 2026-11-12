@@ -2,8 +2,15 @@
 # and the shared session's composition are operator-owned configuration in a
 # user patch (see README.md).
 - insert:
+    # `timeout` bounds every platform request up to its response headers. A
+    # read the IM host stops waiting for (`platformTimeoutMs`) is abandoned,
+    # not cancelled, because `Bot.getMessage` takes no signal; this deadline
+    # is what eventually ends such a request. It is generous so a large upload
+    # still finishes.
     - id: im-http
       name: '@deepseek-ai/cordis-plugin-http'
+      config:
+        timeout: 120000
 
     # The `satori` service: every adapter below registers its bot here.
     - id: im-core

@@ -140,6 +140,10 @@ describe('IM bundle rows', () => {
     expect(rows().find(row => row.id === 'im')?.config).toEqual({ sources: [] })
   })
 
+  it('gives every platform request a transport deadline, which ends a read the host stopped waiting for', () => {
+    expect(rows().find(row => row.id === 'im-http')?.config).toEqual({ timeout: 120000 })
+  })
+
   it('renders every configurable row through its own schema', () => {
     const rendered = rows()
       .filter(row => row.id !== undefined && row.id in SCHEMAS)

@@ -308,7 +308,8 @@ export class ImIntake {
   /**
    * One platform read, ended at `config.platformTimeoutMs`. `bot.getMessage` takes no signal, so a request the platform
    * never answers would hold this chat's arrival order open — and with it {@link dispose}, which waits for the reads in
-   * flight — for as long as the socket lives.
+   * flight — for as long as the socket lives. The deadline only stops the waiting: the request itself is abandoned, not
+   * cancelled, and stays open until the transport's own timeout (the bundle's `im-http` row) or the connection ends it.
    * @param read - the platform read to run.
    * @returns what the platform answered.
    */
