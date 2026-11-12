@@ -178,6 +178,24 @@ it('aborts each in-flight Token request when the page leaves, including after a 
   expect(fixture.replace).not.toHaveBeenCalled()
 })
 
+it('does not navigate when a completed Token request settles after the page leaves', async () => {
+  const fixture = authenticationPage()
+  const pending = Promise.withResolvers<Response>()
+  fixture.exchange.mockReturnValue(pending.promise)
+  enterAuthenticationPage(loginLocales)
+  fixture.input.value = TOKEN
+  fixture.form.dispatchEvent(new Event('submit', { cancelable: true }))
+  const signal = fixture.exchange.mock.calls[0]![1]?.signal
+  expect(signal?.aborted).toBe(false)
+  pending.resolve(new Response(null, { status: 200 }))
+  window.dispatchEvent(new Event('pagehide'))
+  expect(signal?.aborted).toBe(true)
+  await expect.poll(() => fixture.submit.disabled).toBe(false)
+  expect(fixture.form.hasAttribute('aria-busy')).toBe(false)
+  expect(fixture.error.textContent).toBe('')
+  expect(fixture.replace).not.toHaveBeenCalled()
+})
+
 it.each(['', '#short', `#${'a'.repeat(42)}!`])('removes an invalid fragment without sending a login request: %s', (fragment) => {
   const fixture = page(`/remote-login${fragment}`)
   enterBrowser(loginLocales)

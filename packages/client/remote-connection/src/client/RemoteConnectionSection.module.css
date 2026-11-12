@@ -89,7 +89,6 @@
   height: auto;
   aspect-ratio: 1 / 1;
   border-radius: var(--dsw-radius-md);
-  background: var(--dsw-static-neutral-00);
 }
 
 .field {
