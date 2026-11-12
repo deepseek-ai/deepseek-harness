@@ -1,4 +1,7 @@
-/** JSONL teardown preserves events emitted by an asynchronously disposing injected consumer. */
+/** SQLite Segment teardown preserves events emitted by an asynchronously disposing injected consumer. */
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { DatabaseSync } from 'node:sqlite'
+import { z } from 'zod'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
@@ -6,16 +9,14 @@ import * as SessionPlugin from '@deepseek-ai/dsh-session'
 import type { SessionId, Session } from '@deepseek-ai/dsh-session'
 import * as JsonlPlugin from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { SessionHandleClosedError } from '@deepseek-ai/dsh-session-persistence'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scheduler } from 'node:timers/promises'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
-import { logPath } from '../src/format.ts'
-import { brandString } from '@deepseek-ai/dsh-brand'
 
-it('waits for injected consumer teardown, persists its final event, and releases listeners and leases', async () => {
+it('waits for consumer teardown, persists its final event, and releases listeners and leases', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-jsonl-teardown-'))
   const ctx = new Context()
   const entered = Promise.withResolvers<undefined>()
@@ -88,12 +89,21 @@ it('waits for injected consumer teardown, persists its final event, and releases
     expect(session).toBeDefined()
     const live = session!
     const oldReader = await ctx.sessionPersistence.open(live.id, 'read')
-    const path = logPath(root, live.header.cwd, live.id, 'none')
-    const before = await readFile(path, 'utf8')
+    const readStored = async (): Promise<unknown[]> => {
+      const db = new DatabaseSync(join(root, '.segments/sessions.sqlite'))
+      try {
+        const header = z.object({ header: z.string() }).parse(db.prepare('SELECT header FROM traces WHERE trace_uuid = ?').get(live.id))
+        const events = db.prepare('SELECT payload FROM events ORDER BY seq').all()
+        const metadata: unknown = JSON.parse(header.header)
+        return [metadata, ...events.map((row): unknown => JSON.parse(z.object({ payload: z.string() }).parse(row).payload))]
+      } finally { db.close() }
+    }
+    const before = JSON.stringify(await readStored())
     expect(before).toContain('turn/start')
     expect(before).not.toContain('turn/end')
     const routedEvents = ['session/event', 'session/flush', 'session/disposed'] as const
-    for (const event of routedEvents) expect(ctx.events.dispatch('emit', [event])).toHaveLength(1)
+    const listenerCounts = routedEvents.map(event => ctx.events.dispatch('emit', [event]).length)
+    expect(listenerCounts).toEqual([1, 1, 1])
 
     unload = provider.fiber!.dispose().then(() => { unloadFinished = true })
     await Promise.race([
@@ -102,7 +112,7 @@ it('waits for injected consumer teardown, persists its final event, and releases
     ])
     await scheduler.yield()
     expect(unloadFinished).toBe(false)
-    for (const event of routedEvents) expect(ctx.events.dispatch('emit', [event])).toHaveLength(1)
+    expect(routedEvents.map(event => ctx.events.dispatch('emit', [event]).length)).toEqual(listenerCounts)
     release.resolve(undefined)
     await consumerFinished.promise
     await unload
@@ -110,7 +120,7 @@ it('waits for injected consumer teardown, persists its final event, and releases
     expect(ctx.get('sessionPersistence')).toBeUndefined()
     for (const event of routedEvents) expect(ctx.events.dispatch('emit', [event])).toHaveLength(0)
     await expect(oldReader.read()).rejects.toBeInstanceOf(SessionHandleClosedError)
-    const persisted = (await readFile(path, 'utf8')).trimEnd().split('\n').map((line): unknown => JSON.parse(line))
+    const persisted = await readStored()
     expect(persisted.slice(1)).toEqual(live.snapshotEvents())
     expect(persisted.at(-1)).toMatchObject({ type: 'turn/end', seq: 1, data: { turn: 1, reason: { kind: 'completed' } } })
 
@@ -127,7 +137,7 @@ it('waits for injected consumer teardown, persists its final event, and releases
     } finally {
       await reopened.close()
     }
-    for (const event of routedEvents) expect(ctx.events.dispatch('emit', [event])).toHaveLength(1)
+    expect(routedEvents.map(event => ctx.events.dispatch('emit', [event]).length)).toEqual(listenerCounts)
   } finally {
     release.resolve(undefined)
     try {

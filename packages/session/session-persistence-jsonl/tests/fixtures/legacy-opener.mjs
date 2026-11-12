@@ -1,0 +1,29 @@
+/** Built-package import holder; stdin barriers keep migration and write ownership observable. @module */
+import { Context } from '@deepseek-ai/cordis'
+import { createInterface } from 'node:readline'
+import * as persistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+
+const [root, id, access, pause] = process.argv.slice(2)
+const ctx = new Context()
+const commands = createInterface({ input: process.stdin })[Symbol.asyncIterator]()
+await ctx.plugin(persistence, { root, compression: 'none' })
+if (pause === 'pause') {
+  const reader = Reflect.get(ctx.sessionPersistence, 'jsonl')
+  const prepare = reader.prepare.bind(reader)
+  reader.prepare = async (...args) => {
+    process.stdout.write('reading\n')
+    await commands.next()
+    return prepare(...args)
+  }
+}
+try {
+  const handle = await ctx.sessionPersistence.open(id, access)
+  process.stdout.write('opened\n')
+  await commands.next()
+  await handle.close()
+} catch (error) {
+  process.stdout.write(`${error.name}\n`)
+} finally {
+  await ctx.fiber.dispose()
+  process.stdin.destroy()
+}

@@ -2,8 +2,9 @@
 
 import { SessionFormatError, isSessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
 import type { SessionFormatCodec, SessionFormatCurrentEncoder, SessionFormatHeader, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
-import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
-import { assertV4SourceRowAdmission } from './message-sources.ts'
+import { decodeReleasedV2Event, releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v2-to-v3'
+import { validateDeliveryAccepted } from './validation.ts'
+import { assertV4MessageSources, assertV4SourceRowAdmission } from './message-sources.ts'
 import { assertV4RetiredSyntax } from './retired-syntax.ts'
 import { assertV4SystemMessageFields } from './system-message.ts'
 import { assertV4DeveloperData } from './developer.ts'
@@ -72,4 +73,20 @@ export function assertV4RowAdmission(row: unknown, knownEventTypes?: ReadonlySet
   const event = row as unknown as SessionFormatEvent
   assertV4ToolResultMessage(event)
   assertV4ForkResult(event)
+}
+
+/**
+ * Decode one released V4 physical event without reading earlier Session rows.
+ * @param value - untrusted physical row.
+ * @param knownEventTypes - installed vocabulary for ignorable developer rows, when available.
+ * @returns the logical event after V4 admission and source-event range decoding.
+ */
+export function decodeReleasedV4Event(value: unknown, knownEventTypes?: ReadonlySet<string>): SessionFormatEvent {
+  assertV4RowAdmission(value, knownEventTypes)
+  const event = decodeReleasedV2Event(value)
+  if (knownEventTypes?.has(event.type) === true) {
+    assertV4MessageSources(event)
+    validateDeliveryAccepted(event, 4)
+  }
+  return event
 }

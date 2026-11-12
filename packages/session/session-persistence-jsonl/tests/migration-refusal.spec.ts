@@ -1,5 +1,6 @@
 /** Durable EOF refusals preserve historical generations and never fall back from the selected generation. */
 
+import { JsonlReader } from '../src/reader.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'
@@ -269,7 +270,7 @@ describe.each(modes)('EOF migration refusal ($compression, $access)', ({ compres
       }
     }
     expect(await observe(path)).toEqual(original)
-    await expectOnlyGenerations(access === 'read' ? [path] : [path, generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)])
+    await expectOnlyGenerations([path])
   }
 
   it.each(migrationRefusals)('refuses V2 $name without publishing or discarding a tail', async ({ tail, diagnostic }) => {
@@ -460,7 +461,7 @@ describe.each(modes)('EOF migration refusal ($compression, $access)', ({ compres
       }
     }
     expect(await observe(path)).toEqual(original)
-    await expectOnlyGenerations(access === 'read' ? [path] : [path, generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)])
+    await expectOnlyGenerations([path])
   })
 
   it('preserves outer V3 tool-message metadata through migration and native reopening', async () => {
@@ -488,7 +489,7 @@ describe.each(modes)('EOF migration refusal ($compression, $access)', ({ compres
       }
     }
     expect(await observe(path)).toEqual(original)
-    await expectOnlyGenerations(access === 'read' ? [path] : [path, generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)])
+    await expectOnlyGenerations([path])
   })
 
   it.each(nativeRefusals.flatMap(refusal => ([3, SESSION_FORMAT_VERSION] as const).map(version => ({ ...refusal, version }))))(
@@ -496,17 +497,12 @@ describe.each(modes)('EOF migration refusal ($compression, $access)', ({ compres
       const lowerPath = await store(2, compression, prefix)
       const lower = await observe(lowerPath)
       const ctx = await mount(compression)
-      const reader = await ctx.sessionPersistence.open(id, 'read')
-      try {
-        expect(reader.header.version).toBe(SESSION_FORMAT_VERSION)
-        const restored = await reader.read()
-        expect(restored.events.map(event => event.type)).toEqual([
-          'turn/start', 'step/start', 'system/message', 'user/message', 'system/message', 'request/header',
-        ])
-        expect(restored.events.find(event => event.type === 'user/message')?.data).toEqual(question)
-      } finally {
-        await reader.close()
-      }
+      const preview = await new JsonlReader(ctx, { root, compression }).prepare(id)
+      expect(preview.header.version).toBe(SESSION_FORMAT_VERSION)
+      expect(preview.events.map(event => event.type)).toEqual([
+        'turn/start', 'step/start', 'system/message', 'user/message', 'system/message', 'request/header',
+      ])
+      expect(preview.events.find(event => event.type === 'user/message')?.data).toEqual(question)
       expect(await observe(lowerPath)).toEqual(lower)
       await expectOnlyGenerations([lowerPath])
 

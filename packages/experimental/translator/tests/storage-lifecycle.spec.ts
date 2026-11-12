@@ -1,6 +1,6 @@
 /** Queued cancellation, native storage ownership, and quiescent translator disposal. */
-import { pluginRecordOf, type SessionId } from '@deepseek-ai/dsh-session'
-import { rm } from 'node:fs/promises'
+import { pluginRecordOf, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { storageFixture, storageReply } from './storage-fixture.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -98,11 +98,13 @@ describe('translation storage lifecycle', () => {
     expect(b.requests).toEqual([])
   })
 
-  it('refuses a historical artifact deleted after admission before dispatch', async () => {
-    const b = await storageFixture(cleanups), original = await b.createSession(brandString<SessionId>('deleted'), false)
+  it('refuses a historical Session unavailable after metadata lookup before dispatch', async () => {
+    const b = await storageFixture(cleanups), original = await b.createSession(SessionId('deleted'), false)
     const stat = b.ctx.sessionPersistence.stat.bind(b.ctx.sessionPersistence)
     vi.spyOn(b.ctx.sessionPersistence, 'stat').mockImplementation(async (id, options) => {
-      const value = await stat(id, options); await rm(original.file); return value
+      const value = await stat(id, options)
+      vi.spyOn(b.ctx.sessionPersistence, 'open').mockRejectedValue(new SessionPersistenceNotFoundError(id))
+      return value
     })
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_REQUIRED' })

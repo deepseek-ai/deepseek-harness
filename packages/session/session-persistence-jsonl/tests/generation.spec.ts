@@ -2,6 +2,7 @@ import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import {
+  appendFile,
   link,
   mkdir,
   mkdtemp,
@@ -23,6 +24,8 @@ import {
   JsonlGenerationTargetConflictError,
   JsonlGenerationUnsupportedMigrationError,
   prepareJsonlMigration,
+  prepareJsonlSource,
+  decodeJsonlSource,
   readDecodedJsonlSource,
   verifyJsonlCurrentGeneration,
   type JsonlGenerationFormatAdapter,
@@ -1649,4 +1652,19 @@ describe('JSONL immutable generation publication', () => {
     await expect(ensureJsonlGenerationCurrent(request)).rejects.toThrow('cancelled migration')
     expect(await readdir(root)).toEqual(['session.jsonl'])
   })
+})
+
+it('refuses a destination commit when an append advanced the source after preparation', async () => {
+  const path = join(await tempRoot(), `session.v${SESSION_FORMAT_VERSION}.jsonl`)
+  await writeFile(path, line(header(SESSION_FORMAT_VERSION)) + line(event0))
+  const source = await prepareJsonlSource({
+    sourcePath: path,
+    decode: bytes => decodeJsonlSource(bytes, 'none', SESSION_FORMAT_VERSION, {
+      createRestore: value => sessionFormatCatalog.createRestore(value, { recovery: 'strict', validation: 'transformed' }),
+    }, undefined),
+  })
+  await appendFile(path, line(event1))
+  const destination = vi.fn(async (_artifact: SessionFormatArtifact) => {})
+  await expect(source.commit(destination)).rejects.toBeInstanceOf(JsonlGenerationSourceChangedError)
+  expect(destination).not.toHaveBeenCalled()
 })

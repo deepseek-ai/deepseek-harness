@@ -436,6 +436,8 @@
       "@deepseek-ai/dsh-ptc-runtime-node/configuration": ["./packages/ptc-runtime/ptc-runtime-node/src/configuration.ts"],
       "@deepseek-ai/dsh-message-feedback/types": ["./packages/feedback/message-feedback/src/types.ts"],
       "@deepseek-ai/dsh-webhook/types": ["./packages/experimental/webhook/src/types.ts"],
+      "@deepseek-ai/dsh-session-persistence/lease": ["./packages/session/session-persistence/src/lease.ts"],
+      "@deepseek-ai/dsh-session-persistence/win32": ["./packages/session/session-persistence/src/win32.ts"],
       // BEGIN generated package aliases — pnpm run gen-tsconfig-paths
       "@deepseek-ai/dsh-acp": ["./packages/acp/acp/src"],
       "@deepseek-ai/dsh-acp-app": ["./packages/bundle/acp-app/src"],
@@ -553,6 +555,7 @@
       "@deepseek-ai/dsh-session-log-export": ["./packages/session-query/session-log-export/src"],
       "@deepseek-ai/dsh-session-persistence": ["./packages/session/session-persistence/src"],
       "@deepseek-ai/dsh-session-persistence-jsonl": ["./packages/session/session-persistence-jsonl/src"],
+      "@deepseek-ai/dsh-session-persistence-sqlite": ["./packages/session/session-persistence-sqlite/src"],
       "@deepseek-ai/dsh-session-projection": ["./packages/session/session-projection/src"],
       "@deepseek-ai/dsh-session-projection-cache": ["./packages/session/session-projection-cache/src"],
       "@deepseek-ai/dsh-session-query": ["./packages/session-query/session-query/src"],

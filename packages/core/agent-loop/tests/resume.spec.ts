@@ -3,9 +3,9 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import { type ToolCallId, createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { appendFile, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionLogOffset, SessionSeq, Session, type SessionId, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '@deepseek-ai/dsh-session'
@@ -17,6 +17,7 @@ import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import { SessionAlreadyExistsError, type SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { generationLogPath, toHeaderLine } from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
@@ -196,13 +197,13 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
   it('a rejecting final writer close releases the registries, then rejects disposal', async () => {
     const { ctx } = await persistentHarness(new MockAdapter([textResponse('hi')]))
     const sessionId = brandString<SessionId>('drain-close-fails')
+    const create = vi.spyOn(ctx.sessionPersistence, 'create')
     const handle = await ctx.agents.create({ sessionId })
     const persisted = await ctx.sessionPersistence.open(sessionId, 'read')
     await persisted.close()
-    const stored = [...(ctx.sessionPersistence as unknown as {
-      tracker: { openHandles: Set<SessionHandle> }
-    }).tracker.openHandles].find(open => open.id === sessionId && open.access === 'write')
-    if (stored === undefined) throw new Error('missing owned write handle')
+    const creation = create.mock.results[0]
+    if (creation?.type !== 'return') throw new Error('missing owned write handle')
+    const stored = await creation.value
     // The real close still runs (releasing write ownership); the injected
     // failure models a drain that reports a durability error at close.
     const realClose = stored.close.bind(stored)
@@ -224,11 +225,11 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
   it('combines a machine-teardown failure with a close failure into one rejection', async () => {
     const { ctx } = await persistentHarness(new MockAdapter([textResponse('hi')]))
     const sessionId = brandString<SessionId>('drain-both-fail')
+    const create = vi.spyOn(ctx.sessionPersistence, 'create')
     const handle = await ctx.agents.create({ sessionId })
-    const stored = [...(ctx.sessionPersistence as unknown as {
-      tracker: { openHandles: Set<SessionHandle> }
-    }).tracker.openHandles].find(open => open.id === sessionId && open.access === 'write')
-    if (stored === undefined) throw new Error('missing owned write handle')
+    const creation = create.mock.results[0]
+    if (creation?.type !== 'return') throw new Error('missing owned write handle')
+    const stored = await creation.value
     const machine = handle.agent as Agent & { scope: { dispose: () => Promise<void> } }
     vi.spyOn(machine.scope, 'dispose').mockRejectedValue(new Error('scope exploded'))
     vi.spyOn(stored, 'close').mockRejectedValue(new Error('close exploded'))
@@ -576,23 +577,22 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  it('resume over a torn physical tail continues from the committed prefix', async () => {
+  it('resume imports a torn legacy tail and continues from its valid prefix in SQLite', async () => {
     const sessionId = brandString<SessionId>('torn-tail-resume')
     const root = await mkdtemp(join(tmpdir(), 'dsh-resume-torn-'))
     dirs.push(root)
     const ctx1 = await mountPersistentHarness(root, new MockAdapter([]), 'none')
-    await seedStoredSession(ctx1, sessionId, [
-      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
-    ])
+    const header = ctx1.sessions.prepare(sessionId).header
     await ctx1.fiber.dispose()
 
-    // Crash artifact: a half-written record with no trailing newline.
-    const logs = (await readdir(root, { recursive: true })).filter(name => name.endsWith('.jsonl'))
-    expect(logs).toHaveLength(1)
-    await appendFile(join(root, logs[0] as string), '{"type":"assistant/chunk","seq":1,"ti')
+    const path = generationLogPath(root, header.cwd, sessionId, header.version, 'none')
+    await mkdir(dirname(path), { recursive: true })
+    const bytes = [JSON.stringify(toHeaderLine(header)),
+      JSON.stringify({ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } }),
+      '{"type":"assistant/chunk","seq":1,"ti',
+    ].join('\n')
+    await writeFile(path, bytes)
 
-    // Resume truncates the torn tail under its write open, then appends the
-    // closers immediately after the committed prefix — no gap, no fragment.
     const ctx2 = await mountPersistentHarness(root, new MockAdapter([]), 'none')
     const handle = await ctx2.agents.resume({ resumeSessionId: sessionId })
     expect(handle.agent.session.snapshotEvents().map(event => event.type))
@@ -602,6 +602,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     const stored = await readStoredEvents(ctx2, sessionId)
     expect(stored.map(event => `${event.type}@${event.seq}`))
       .toEqual(['turn/start@0', 'turn/end@1', 'session/end-seed@2'])
+    expect(await readFile(path, 'utf8')).toBe(bytes)
     await ctx2.fiber.dispose()
   })
 

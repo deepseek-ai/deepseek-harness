@@ -1,6 +1,5 @@
 /** Successful Session translations survive remounts and restarts without another provider query. */
-import { pluginRecordOf, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { appendFile, readFile, writeFile } from 'node:fs/promises'
+import { pluginRecordOf, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationStorage } from '../src/storage.ts'
@@ -35,7 +34,6 @@ describe('durable translation results', () => {
       sourceLanguage: 'auto', targetLanguage: 'zh' } })
     expect((requests(first)[0]?.data as { recipe: string }).recipe).toEqual(expect.any(String))
     expect(results(first)[0]).toMatchObject({ ignorable: true, data: { requestSeq: requests(first)[0]?.seq, text: 'Stored translation' } })
-    expect((await readFile(original.file)).subarray(0, original.bytes.length)).toEqual(original.bytes)
     await b.restart()
     expect(b.ctx.sessions.list()).toEqual([])
     expect(await b.ctx.translator.translate(spec())).toBe('Stored translation')
@@ -189,7 +187,7 @@ describe('translation storage guards', () => {
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_INACTIVE' })
     expect(opened.mock.calls.every(([, access]) => access === 'read')).toBe(true)
-    expect(await readFile(original.file)).toEqual(original.bytes)
+    expect(await b.readEvents(original.id)).toEqual(original.events)
     expect(b.requests).toEqual([])
     expect(b.ctx.get('sessions')?.list() ?? []).toEqual([])
   })
@@ -226,7 +224,7 @@ describe('translation storage guards', () => {
     const b = await storageFixture(cleanups), original = await b.createSession(brandString<SessionId>('malformed'), false)
     let record = JSON.stringify({ type, data, seq: original.events.length, time: Date.now(), ignorable: true })
     if (_kind === 'result negative zero') record = record.replace('"requestSeq":0', '"requestSeq":-0')
-    await writeFile(original.file, Buffer.concat([original.bytes, Buffer.from(record + '\n')]))
+    b.appendStored(original.id, original.events.length, record)
     await expect(b.ctx.translator.translate(b.ctx.translator.resolve({ text: 'source', targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_STORAGE_ERROR' })
     expect(b.requests).toEqual([])
@@ -239,8 +237,8 @@ describe('translation storage guards', () => {
       const seq = await log.request(request); await log.result(seq, 'Retained result'); return 'Retained result'
     })
     const saved = await b.readEvents(original.id)
-    await appendFile(original.file, JSON.stringify({ type: 'plugin:other/unrelated', seq: saved.length, time: Date.now(),
-      data: { opaque: true }, ignorable: true }) + '\n')
+    b.appendStored(original.id, saved.length, JSON.stringify({ type: 'plugin:other/unrelated', seq: saved.length, time: Date.now(),
+      data: { opaque: true }, ignorable: true }))
     const cached = await storage.run(original.id, identity, new AbortController().signal, async () => { throw new Error('Cached translation must skip provider dispatch') })
     expect(cached).toBe('Retained result')
     expect(requests(await b.readEvents(original.id))[0]?.data).toEqual(request)

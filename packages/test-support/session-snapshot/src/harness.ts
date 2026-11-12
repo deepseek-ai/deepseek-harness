@@ -35,6 +35,7 @@ import {
   type AgentUnderTest,
   type LaunchedAcpTestAgent,
 } from './launcher.ts'
+import { collectStoredSessionLogs } from './persistence.ts'
 import { clearedProxyEnv } from '@deepseek-ai/dsh-http-proxy'
 import {
   assertPersistedSessionVersion,
@@ -809,6 +810,11 @@ function latestOpenTurn(content: string): number | undefined {
  * produced (a no-session scenario).
  */
 async function harvestSessionLogs(root: string): Promise<HarvestedLog[]> {
+  if (existsSync(join(root, '.segments', 'sessions.sqlite'))) {
+    return (await collectStoredSessionLogs(root)).sort((a, b) =>
+      Number(a.parentSession !== undefined) - Number(b.parentSession !== undefined)
+      || a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+  }
   let files: string[]
   try {
     files = await readdir(root, { recursive: true })

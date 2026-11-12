@@ -1,0 +1,4 @@
+- id: session-persistence-jsonl
+  config:
+    root: !!js process.env.DSH_HOME + '/sessions'
+    compression: none

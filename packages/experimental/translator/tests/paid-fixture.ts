@@ -13,7 +13,7 @@ import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import { createLaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { once } from 'node:events'
 import { createServer, type ServerResponse } from 'node:http'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Translator, { type Config } from '../src/index.ts'
@@ -208,10 +208,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
       await using handle = await ctx.sessionPersistence.create(header)
       await handle.append(events)
       await handle.flush()
-      const artifacts = (await readdir(storedRoot, { recursive: true })).filter(value => value.endsWith(join(id, `session.v${SESSION_FORMAT_VERSION}.jsonl`)))
-      if (artifacts.length !== 1) throw new Error('Expected one current Session artifact')
-      const file = join(storedRoot, artifacts[0]!)
-      return { id, header, events, file, bytes: await readFile(file) }
+      return { id, header, events }
     },
     async restart(changes: RestartOptions = {}) {
       await ctx.fiber.dispose()

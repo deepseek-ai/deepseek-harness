@@ -1,0 +1,39 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types"
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../../vendor/cosmokit"
+    },
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../llm/llm"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../session-persistence"
+    },
+    {
+      "path": "../session-format"
+    },
+    {
+      "path": "../session-format-catalog"
+    },
+    {
+      "path": "../session-format-v3-to-v4"
+    },
+    {
+      "path": "../../util/brand"
+    }
+  ]
+}

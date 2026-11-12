@@ -25,14 +25,14 @@
  * lockers verify against. The browser worker stubs the native flock entry to
  * immediate success: it is single-process, so the in-process write claim
  * already excludes every writer.
- * @module @deepseek-ai/dsh-session-persistence-jsonl/lease
+ * @module @deepseek-ai/dsh-session-persistence/lease
  */
 
 import { mkdir, open, stat } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tryLockExclusive } from '@deepseek-ai/node-addon-system/flock'
-import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
+import { SessionAlreadyOwnedError } from './errors.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { acquireLockHandleWin32, releaseLockHandleWin32 } from './win32.ts'
 
@@ -52,11 +52,12 @@ function isLockContention(error: unknown): boolean {
 }
 
 /**
- * One held write lock. Constructed only by {@link SessionWriteLease.acquire};
- * `release` closes the descriptor or handle, which is what releases the lock.
+ * One artifact write lock and an optional root-wide creation guard.
+ * `release` attempts both locks, preserving independent release failures.
  */
 export class SessionWriteLease {
   private released = false
+  private guard: SessionWriteLease | undefined
 
   private constructor(private readonly held: HeldLock) {}
 
@@ -64,10 +65,24 @@ export class SessionWriteLease {
    * Acquire the session directory's kernel write lock.
    * @param dir - the session's artifact directory (created if absent).
    * @param id - the session the lock guards, for error identities.
+   * @param guardDir - optional root-wide creation lock, acquired before the artifact lock and held until release.
    * @returns the held lock.
    * @throws {SessionAlreadyOwnedError} while another holder keeps the lock.
    */
-  static async acquire(dir: string, id: SessionId): Promise<SessionWriteLease> {
+  static async acquire(dir: string, id: SessionId, guardDir?: string): Promise<SessionWriteLease> {
+    const guard = guardDir === undefined ? undefined : await SessionWriteLease.acquireDirectory(guardDir, id)
+    try {
+      const lease = await SessionWriteLease.acquireDirectory(dir, id)
+      lease.guard = guard
+      return lease
+    } catch (error: unknown) {
+      try { await guard?.release() }
+      catch (releaseError: unknown) { throw new AggregateError([error, releaseError], 'Session lock acquisition and rollback failed') }
+      throw error
+    }
+  }
+
+  private static async acquireDirectory(dir: string, id: SessionId): Promise<SessionWriteLease> {
     const path = join(dir, LEASE_FILENAME)
     // Owner-only like materializePosix's directories: the lock may create the
     // session directory first, and both creators must agree on the mode.
@@ -124,12 +139,16 @@ export class SessionWriteLease {
   async release(): Promise<void> {
     if (this.released) return
     this.released = true
-    /* v8 ignore start -- native Windows coverage exercises this platform branch; Linux covers the POSIX peer */
-    if (this.held.kind === 'win32') {
-      await releaseLockHandleWin32(this.held.handle)
-      return
-    }
-    /* v8 ignore stop */
-    await this.held.handle.close()
+    const failures: unknown[] = []
+    try {
+      /* v8 ignore start -- native Windows coverage exercises this platform branch; Linux covers the POSIX peer */
+      if (this.held.kind === 'win32') await releaseLockHandleWin32(this.held.handle)
+      else await this.held.handle.close()
+      /* v8 ignore stop */
+    } catch (error: unknown) { failures.push(error) }
+    try { await this.guard?.release() }
+    catch (error: unknown) { failures.push(error) }
+    if (failures.length > 1) throw new AggregateError(failures, 'Session write locks failed to release')
+    if (failures.length === 1) throw failures[0]
   }
 }

@@ -1,6 +1,5 @@
 /** Storage helpers classify their own failures before a provider consumer can catch them. */
 import { SessionSeq } from '@deepseek-ai/dsh-session'
-import { rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TranslationStorage } from '../src/storage.ts'
 import type { TranslationIdentity } from '../src/types.ts'
@@ -33,12 +32,12 @@ describe('storage helper failures', () => {
     expect(b.requests).toEqual([])
   })
 
-  it.each(stages)('classifies %s writer failures after its artifact is removed', async (stage) => {
+  it.each(stages)('classifies %s writer failures after its writer is closed', async (stage) => {
     const b = await storageFixture(cleanups), original = await b.createSession(), storage = new TranslationStorage(b.ctx)
     let observed: unknown
     const outcome = await storage.run(original.id, identity, new AbortController().signal, async (log) => {
       const seq = stage === 'result' ? await log.request(identity) : SessionSeq(0)
-      await rm(original.file)
+      await original.writer?.close()
       try {
         if (stage === 'request') await log.request(identity)
         else await log.result(seq, 'complete')

@@ -1,13 +1,13 @@
 /** Fork history retains delivery ownership without requiring a source relationship. */
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { generationLogPath } from '../src/format.ts'
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { importedRows } from './fixtures/segments.ts'
 
 async function fixture(compression: 'none' | 'zstd') {
   const root = await mkdtemp(join(tmpdir(), 'dsh-fork-delivery-'))
@@ -21,7 +21,7 @@ async function fixture(compression: 'none' | 'zstd') {
   async function persist(session: Session) {
     const writer = await ctx.sessionPersistence.create(session.header, { inheritedEventCount: session.inheritedEventCount })
     try { await writer.append(session.snapshotEvents()) } finally { await writer.close() }
-    return generationLogPath(root, undefined, session.id, 4, compression)
+    return () => importedRows(root, session.id)
   }
   return { ctx, persist }
 }
@@ -47,7 +47,7 @@ describe.each(['none', 'zstd'] as const)('fork delivery persistence (%s)', (comp
         meta: { parentSession: source.id, isSeeded: true, ...(kind === 'subagent' ? { origin: 'subagent' } : {}) },
       })
     const path = await persist(child)
-    const bytes = await readFile(path)
+    const bytes = path()
     for (const access of ['read', 'write'] as const) {
       try {
         const handle = await ctx.sessionPersistence.open(child.id, access)
@@ -59,7 +59,7 @@ describe.each(['none', 'zstd'] as const)('fork delivery persistence (%s)', (comp
           expect(restored.header.parentSession).toBe(kind === 'subagent' || kind === 'legacy' ? source.id : undefined)
         } finally { await handle.close() }
       } finally {
-        expect(await readFile(path)).toEqual(bytes)
+        expect(path()).toEqual(bytes)
       }
     }
   })
@@ -76,12 +76,16 @@ describe.each(['none', 'zstd'] as const)('fork delivery persistence (%s)', (comp
     })
     const child = damage === 'inherited-through' ? ctx.sessions.fork(source) : invalidTarget
     const path = await persist(child)
-    const bytes = await readFile(path)
+    const bytes = path()
     for (const access of ['read', 'write'] as const) {
-      await expect(ctx.sessionPersistence.open(child.id, access)).rejects.toThrow(
-        damage === 'foreign-own' ? 'wrong Session' : 'throughSeq must precede',
-      )
-      expect(await readFile(path)).toEqual(bytes)
+      const opening = ctx.sessionPersistence.open(child.id, access).then(async (handle) => {
+        try { await handle.read() } finally { await handle.close() }
+      })
+      const error: unknown = await opening.catch((failure: unknown) => failure)
+      expect(error).toMatchObject({ name: 'SessionPersistenceCorruptionError' })
+      if (!(error instanceof Error) || !(error.cause instanceof Error)) throw new Error('Missing corruption cause')
+      expect(error.cause.message).toContain(damage === 'foreign-own' ? 'wrong Session' : 'throughSeq must precede')
+      expect(path()).toEqual(bytes)
     }
   })
 })

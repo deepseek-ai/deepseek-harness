@@ -14,14 +14,13 @@ import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0
 import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
 import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
 import {
-  assertPersistedSessionVersion,
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
+  collectStoredSessionLogs,
   fixtureContext,
   formatSystemPromptSnapshot,
   formatToolSchemasSnapshot,
-  latestPersistedSessionPaths,
   materializeProfilePatch,
   normalizeSessionSnapshots,
   normalizedHeaders,
@@ -198,12 +197,7 @@ function contextOf(logs: readonly string[]): NormalizeContext {
 
 async function persistedSessions(cwd: string): Promise<SessionLog[]> {
   const root = join(cwd, '.dsh', 'sessions')
-  const files = latestPersistedSessionPaths(await readdir(root, { recursive: true }))
-  const logs = await Promise.all(files.map(async (file): Promise<SessionLog> => {
-    const content = await readFile(join(root, file), 'utf8')
-    expect(assertPersistedSessionVersion(basename(file), content), `${file}: current writer`).toBe(SESSION_FORMAT_VERSION)
-    return { content, header: headerOf(content) }
-  }))
+  const logs = (await collectStoredSessionLogs(root)).map(log => ({ content: log.content, header: headerOf(log.content) }))
   // Siblings bind to fixture roles by catalog publication order; concurrent
   // provider startup can publish an older Session after a newer one.
   const catalogOrders = new Map(logs.map(log => [log.header.id, new Map(

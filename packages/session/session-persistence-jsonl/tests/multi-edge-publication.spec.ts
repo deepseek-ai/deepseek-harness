@@ -1,5 +1,7 @@
 /** Durable composition of historical chunk collapse and V3 system/reference migration. */
+import { brandString } from '@deepseek-ai/dsh-brand'
 
+import { importedRows } from './fixtures/segments.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -14,12 +16,9 @@ import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-j
 import { appendFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
-import { scheduler } from 'node:timers/promises'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { JsonlGenerationSourceChangedError } from '../src/generation.ts'
+import { afterEach, describe, expect, it } from 'vitest'
 import { generationLogPath, type JsonlCompression } from '../src/format.ts'
-import { compressZstdFrame, decompressZstdFrame, scanZstdFrames } from '../src/zstd.ts'
-import { brandString } from '@deepseek-ai/dsh-brand'
+import { compressZstdFrame } from '../src/zstd.ts'
 
 const id = brandString<SessionId>('multi-edge-seeded')
 const config = { provider: 'mock', model: 'mock' }
@@ -188,18 +187,6 @@ function assertMigrated(result: Awaited<ReturnType<typeof readSession>>) {
   assertRequests(events, header)
 }
 
-async function publishedRows(path: string, compression: JsonlCompression) {
-  const bytes = await readFile(path)
-  let plaintext = bytes
-  if (compression === 'zstd') {
-    const { frames, tornStart } = scanZstdFrames(bytes)
-    expect(tornStart).toBeUndefined()
-    expect(frames.length).toBeGreaterThan(0)
-    plaintext = Buffer.concat(await Promise.all(frames.map(frame => decompressZstdFrame(bytes.subarray(frame.start, frame.end)))))
-  }
-  return plaintext.toString('utf8').trimEnd().split('\n').map((line): unknown => JSON.parse(line))
-}
-
 describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) => {
   it.each(['none', 'zstd'] as const)('publishes only the current generation after chunk collapse, system changes, and reference remapping (%s)', async (compression) => {
     const { root, path } = await seed(version, compression)
@@ -209,19 +196,18 @@ describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) =
     assertMigrated(prepared)
     await ctx.sessionPersistence.flush()
     expect(await observe(path)).toEqual(source)
-    expect(await readdir(dirname(path))).toEqual([basename(path)])
+    expect((await readdir(dirname(path))).filter(name => name !== 'session.lock')).toEqual([basename(path)])
 
     const written = await readSession(ctx, 'write')
     assertMigrated(written)
     expect(written.events).toEqual(prepared.events)
     await ctx.fiber.dispose()
     contexts.splice(contexts.indexOf(ctx), 1)
-    const successor = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)
     expect((await readdir(dirname(path))).filter(name => name !== 'session.lock').sort())
-      .toEqual([basename(path), basename(successor)].sort())
-    expect(await publishedRows(successor, compression)).toEqual([{ type: 'session', ...prepared.header }, ...prepared.events])
+      .toEqual([basename(path)])
+    expect(importedRows(root, id)).toEqual([{ type: 'session', ...prepared.header }, ...prepared.events])
     expect(await observe(path)).toEqual(source)
-    const published = await observe(successor)
+    const published = importedRows(root, id)
 
     const reopened = await mount(root, compression)
     const native = await readSession(reopened, 'read')
@@ -233,49 +219,20 @@ describe.each([0, 1] as const)('V%s multi-edge durable publication', (version) =
     expect(repeated.cut).toBe(prepared.cut)
     await reopened.sessionPersistence.flush()
     expect(await observe(path)).toEqual(source)
-    expect(await observe(successor)).toEqual(published)
+    expect(importedRows(root, id)).toEqual(published)
   })
 
-  it.each(['none', 'zstd'] as const)('re-prepares populated history after source drift rejects stale publication (%s)', async (compression) => {
+  it.each(['none', 'zstd'] as const)('keeps imported history fixed when an obsolete source subsequently changes (%s)', async (compression) => {
     const { root, path } = await seed(version, compression)
-    const source = await observe(path)
     const ctx = await mount(root, compression)
-    const prepared = await readSession(ctx, 'read')
-    assertMigrated(prepared)
-    const tail = event('feedback/record', 24, { text: 'arrived after preparation' })
+    const imported = await readSession(ctx, 'read')
+    assertMigrated(imported)
+    const tail = event('feedback/record', 24, { text: 'obsolete writer' })
     const line = JSON.stringify(tail) + '\n'
-    const appended = compression === 'none' ? Buffer.from(line) : await compressZstdFrame(line)
-    const yieldSpy = vi.spyOn(scheduler, 'yield').mockImplementationOnce(async () => {
-      await appendFile(path, appended)
-    })
-    try {
-      await expect(readSession(ctx, 'write')).rejects.toBeInstanceOf(JsonlGenerationSourceChangedError)
-      expect(yieldSpy).toHaveBeenCalled()
-    } finally {
-      yieldSpy.mockRestore()
-    }
-    const changed = await observe(path)
-    expect(changed.bytes).toEqual(Buffer.concat([source.bytes, appended]))
-    expect(changed).toMatchObject({ dev: source.dev, ino: source.ino })
-    expect((await readdir(dirname(path))).filter(name => name !== 'session.lock')).toEqual([basename(path)])
-
-    const retried = await readSession(ctx, 'write')
-    const expected = [...prepared.events, { ...tail, seq: 23 }]
-    expect(retried.events).toEqual(expected)
-    expect(retried.cut).toBe(prepared.cut)
-    assertRequests(retried.events, retried.header)
-    const successor = generationLogPath(root, undefined, id, SESSION_FORMAT_VERSION, compression)
-    expect(await publishedRows(successor, compression)).toEqual([{ type: 'session', ...prepared.header }, ...expected])
-    expect((await readdir(dirname(path))).filter(name => name !== 'session.lock').sort())
-      .toEqual([basename(path), basename(successor)].sort())
-    await ctx.fiber.dispose()
-    contexts.splice(contexts.indexOf(ctx), 1)
-    const reopened = await mount(root, compression)
-    const native = await readSession(reopened, 'read')
-    expect(native.events).toEqual(expected)
-    expect(native.cut).toBe(prepared.cut)
-    assertRequests(native.events, native.header)
-    expect(await observe(path)).toEqual(changed)
+    await appendFile(path, compression === 'none' ? Buffer.from(line) : await compressZstdFrame(line))
+    const resumed = await readSession(ctx, 'write')
+    expect(resumed.events).toEqual(imported.events)
+    expect(importedRows(root, id).slice(1)).toEqual(imported.events)
   })
 
   it.each(['none', 'zstd'] as const)('refuses a late V3 prompt outside a step without publishing earlier edges (%s)', async (compression) => {

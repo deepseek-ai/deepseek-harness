@@ -1,9 +1,7 @@
 /** Common paid requests and results survive Host restart without altering main conversation input. */
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { pluginRecordOf, type SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
-import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import type { JsonlHandleStorage } from '../../../session/session-persistence-jsonl/src/storage.ts'
-import { readFile } from 'node:fs/promises'
+import { pluginRecordOf, SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite'
 import { setImmediate } from 'node:timers/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { paidFixture } from './paid-fixture.ts'
@@ -41,12 +39,13 @@ function historicalEvents(): SessionEvent[] {
 describe('common paid translation persistence', () => {
   it.each(['caller cancellation', 'provider deadline'] as const)(
     'keeps a pending result ahead of an immediate retry after %s without billing again', async (interruption) => {
-      const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } }), backend = b.ctx.sessionPersistence as SessionPersistence & Pick<JsonlHandleStorage, 'persistBatch'>
-      expect(typeof backend.persistBatch).toBe('function')
+      const b = await paidFixture(cleanups, { translator: { deepseekTimeoutMs: 60_000 } })
+      const backend = Reflect.get(b.ctx.sessionPersistence, 'sqlite') as SqliteLogs
+      expect(typeof backend.append).toBe('function')
       const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
       cleanups.push(async () => { release.resolve(undefined) })
-      const persist = backend.persistBatch.bind(backend)
-      vi.spyOn(backend, 'persistBatch').mockImplementation(async (...args) => {
+      const persist = backend.append.bind(backend)
+      vi.spyOn(backend, 'append').mockImplementation(async (...args) => {
         if (results(args[1]).length > 0) {
           entered.resolve(undefined)
           await release.promise
@@ -123,7 +122,7 @@ describe('common paid translation persistence', () => {
     await expect(b.ctx.translator.translate(spec)).rejects.toMatchObject({ code: 'TRANSLATION_SESSION_INACTIVE' })
     expect(prepare).not.toHaveBeenCalled()
     expect(b.requests).toEqual([])
-    expect(await readFile(original.file)).toEqual(original.bytes)
+    expect(await b.readEvents(original.id)).toEqual(original.events)
     expect(b.ctx.sessions.list()).toEqual([])
     const session = await b.activate(id)
     const resumed = await b.readEvents(id), surface = await b.ctx.sessionQuery.readSurface(id)
@@ -144,7 +143,7 @@ describe('common paid translation persistence', () => {
     expect(committed.slice(0, resumed.length)).toEqual(resumed)
     expect(results(committed)).toHaveLength(1)
     expect(results(committed)[0]).toMatchObject({ ignorable: true, data: { requestSeq: requests(committed)[0]?.seq, text: '翻译结果' } })
-    expect((await readFile(original.file)).subarray(0, original.bytes.length)).toEqual(original.bytes)
+    expect(committed.slice(0, original.events.length)).toEqual(original.events)
     expect((await b.ctx.sessionPersistence.stat(id))?.header).toEqual(original.header)
     const after = await b.ctx.sessionQuery.readSurface(id)
     expect(after.events).toEqual(surface.events)
@@ -169,7 +168,7 @@ describe('common paid translation persistence', () => {
       targetLanguage: 'zh', sessionId: original.id })))
       .rejects.toMatchObject({ code: 'TRANSLATION_SESSION_INACTIVE' })
     expect((await writer.read()).events).toEqual(original.events)
-    expect(await readFile(original.file)).toEqual(original.bytes)
+    expect(await b.readEvents(original.id)).toEqual(original.events)
     expect(b.requests).toEqual([])
     expect(b.ctx.sessions.list()).toEqual([])
   })

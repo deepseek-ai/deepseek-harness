@@ -1,4 +1,4 @@
-/** Loader-owned anonymous provider, live Sessions, and restartable real JSONL storage. */
+/** Loader-owned anonymous provider, live Sessions, and restartable real SQLite storage. */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
@@ -6,8 +6,9 @@ import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { DatabaseSync } from 'node:sqlite'
 import { once } from 'node:events'
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -154,11 +155,15 @@ export async function storageFixture(cleanups: Array<() => Promise<void>>, optio
       await handle.append(events)
       await handle.flush()
     }
-    const artifacts = (await readdir(storedRoot, { recursive: true })).filter(value => value.endsWith(join(id, `session.v${SESSION_FORMAT_VERSION}.jsonl`)))
-    if (artifacts.length !== 1) throw new Error('Expected one current Session artifact')
-    const file = join(storedRoot, artifacts[0]!)
-    return { id, session, scope, writer, events: await readEvents(id), file, bytes: await readFile(file) }
+    return { id, session, scope, writer, events: await readEvents(id) }
   }
   return { get ctx() { return ctx }, root, config, requests, errors, readEvents, createSession,
+    appendStored(id: SessionId, seq: number, payload: string) {
+      const db = new DatabaseSync(join(storedRoot, '.segments', 'sessions.sqlite'))
+      try {
+        db.prepare('INSERT INTO events (segment_uuid, seq, payload) SELECT tail_segment_uuid, ?, ? FROM traces WHERE trace_uuid = ?')
+          .run(seq, payload, id)
+      } finally { db.close() }
+    },
     async restart() { await ctx.fiber.dispose(); ctx = await start() } }
 }

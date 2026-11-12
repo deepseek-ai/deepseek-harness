@@ -1,5 +1,5 @@
 /**
- * Windows durable namespace helpers for the JSONL backend.
+ * Windows durable namespace helpers for Session persistence backends.
  *
  * POSIX publishes a newly-created log by creating a directory entry and then
  * fsyncing the parent directory. Windows does not expose that parent-directory
@@ -8,7 +8,7 @@
  * and publish it with `MoveFileExW(..., MOVEFILE_WRITE_THROUGH)` without
  * replacement or cross-volume copy fallback.
  *
- * @module dsh-session-persistence-jsonl/win32
+ * @module dsh-session-persistence/win32
  */
 
 import { createHash } from 'node:crypto'

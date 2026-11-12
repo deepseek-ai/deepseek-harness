@@ -1,0 +1,11 @@
+# Switching models on resume requires known capacity for the destination route.
+- id: llm-replay
+  config:
+    providers:
+      - id: deepseek-official
+        name: DeepSeek
+        models:
+          - id: deepseek-v4-flash
+            contextWindow: 1000000
+          - id: deepseek-v4-pro
+            contextWindow: 1000000

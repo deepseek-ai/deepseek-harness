@@ -10,14 +10,15 @@
  */
 
 import { existsSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
-  assertPersistedSessionVersion,
   assertSessionFixtureVersion,
+  collectStoredSessionLogs,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
   normalizeSessionFormatMetadata,
@@ -104,6 +105,10 @@ function dirOf(url: string): string {
 }
 
 interface SdkAssertions {
+  /** Restart the SDK process between recorded turns, retaining its Session. */
+  restartBetweenTurns?: boolean
+  /** Verify the configured SQLite store and collect through its logical reader. */
+  sqliteStorage?: boolean
   /** Client decisions for the internal approval protocol recording. */
   approvalOutcomes?: readonly ('allowed-once' | 'rejected')[]
   /** Additional profile patches applied after the shared composition. */
@@ -234,6 +239,14 @@ const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
   'subagent-spawn-in-process': {
     patches: [fileURLToPath(new URL('./subagent-spawn-in-process/runtime.cordis.yml', import.meta.url))],
   },
+  'session-resume': { restartBetweenTurns: true },
+  'sqlite-session-resume': { restartBetweenTurns: true, sqliteStorage: true,
+    patches: [fileURLToPath(new URL('./sqlite-session-resume/runtime.cordis.yml', import.meta.url))] },
+  'sqlite-subagent-fork': {
+    sqliteStorage: true,
+    patches: [fileURLToPath(new URL('./subagent-spawn-in-process/runtime.cordis.yml', import.meta.url)),
+      fileURLToPath(new URL('./sqlite-subagent-fork/runtime.cordis.yml', import.meta.url))],
+  },
   'subagent-fork-in-process': {
     patches: [fileURLToPath(new URL('./subagent-spawn-in-process/runtime.cordis.yml', import.meta.url))],
   },
@@ -360,12 +373,9 @@ async function jsonlFiles(dir: string): Promise<string[]> {
 }
 
 async function persistedLogs(sessionsRoot: string): Promise<PersistedLog[]> {
-  const files = await jsonlFiles(sessionsRoot)
-  return Promise.all(files.map(async (path) => {
-    const content = await readFile(path, 'utf8')
-    expect(assertPersistedSessionVersion(basename(path), content), `${path}: current writer`).toBe(SESSION_FORMAT_VERSION)
-    const header = JSON.parse(content.slice(0, content.indexOf('\n'))) as Record<string, unknown>
-    return { path, content, header }
+  return (await collectStoredSessionLogs(sessionsRoot)).map(log => ({
+    path: join(sessionsRoot, '.segments', 'sessions.sqlite'), content: log.content,
+    header: JSON.parse(log.content.slice(0, log.content.indexOf('\n'))) as Record<string, unknown>,
   }))
 }
 
@@ -780,7 +790,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
     ...legacySdkCompositions.has(scenario.manifest.composition) ? [legacySdkContextPatch] : [],
     ...authoredPatches(scenario, !recording),
     ...assertions.patches ?? [],
-    ...scenario.name === 'session-resume' && !recording ? [join(scenario.dir, 'replay.cordis.yml')] : [],
+    ...assertions.restartBetweenTurns === true && !recording ? [join(scenario.dir, 'replay.cordis.yml')] : [],
   ]
     .map((patch, index) => materializeProfilePatch(patch, cwd, scenario.manifest.profile, patchRoot, index))
   let childSessionsRoot: string | undefined
@@ -810,7 +820,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const actions = scenario.name === 'serial-created'
     ? recordedActions.filter(action => action.kind === 'turn' && action.content !== undefined)
     : recordedActions
-  const resumeReplayFile = scenario.name === 'session-resume' && !recording
+  const resumeReplayFile = assertions.restartBetweenTurns === true && !recording
     ? join(patchRoot, 'resume-replay.json') : undefined
   const prepareTurnReplay = async (turn: number): Promise<void> => {
     if (resumeReplayFile === undefined || parentFixture === undefined) return
@@ -945,7 +955,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           )
           continue
         }
-        if (scenario.name === 'session-resume' && results.length > 0) {
+        if (assertions.restartBetweenTurns === true && results.length > 0) {
           subscription.close()
           await harness.close()
           await prepareTurnReplay(action.turn)
@@ -1044,6 +1054,20 @@ async function runScenario(scenario: CorpusScenario): Promise<{
       persistedLogs(sessionsRoot),
       ...(childSessionsRoot === undefined ? [] : [persistedLogs(childSessionsRoot)]),
     ])).flat()
+    if (assertions.sqliteStorage) {
+      const db = new DatabaseSync(join(sessionsRoot, '.segments', 'sessions.sqlite'), { readOnly: true })
+      try {
+        expect(await jsonlFiles(sessionsRoot), 'SQLite Sessions have no JSONL artifacts').toEqual([])
+        expect(db.prepare('SELECT count(*) AS n FROM traces').get()).toMatchObject({ n: logs.length })
+        if (scenario.name === 'sqlite-subagent-fork') {
+          expect(logs).toHaveLength(2)
+          expect(db.prepare('SELECT count(*) AS n FROM segments WHERE parent_segment_uuid IS NOT NULL').get())
+            .toMatchObject({ n: 0 })
+          expect(db.prepare('SELECT count(*) AS n FROM segments WHERE parent_segment_uuid IS NULL').get())
+            .toMatchObject({ n: 2 })
+        }
+      } finally { db.close() }
+    }
     const finalWorkspace = await captureWorkspaceSnapshot(cwd, {
       ignoredRootEntries: RUNTIME_WORKSPACE_ENTRIES,
     })

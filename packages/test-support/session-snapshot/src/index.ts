@@ -118,3 +118,4 @@ export {
   type WorkspaceSymlinkSnapshot,
   type WorkspaceTextFileSnapshot,
 } from './workspace.ts'
+export { collectSessionLogs, collectStoredSessionLogs } from './persistence.ts'

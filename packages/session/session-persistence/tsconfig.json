@@ -19,6 +19,12 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../../native/system/packages/entry"
+    },
+    {
+      "path": "../session-format"
     }
   ]
 }

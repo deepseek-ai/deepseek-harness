@@ -246,50 +246,16 @@ describe('Session projection discovery', () => {
     expect(fixture.ctx.agents.get(parent.header.id)).toBeUndefined()
   })
 
-  it('reports read-prepared historical files as migration-required until a successor is published', async () => {
+  it('imports historical files on observation and reads sequenced projections without a live Session', async () => {
     const fixture = await harness()
     const parent = await stored(fixture, brandString<SessionId>('prepared-cold'), {}, 3)
-    const observation = await fixture.ctx.sessionQuery.observeSession(parent.header.id)
-    observation[Symbol.dispose]()
-    const open = vi.spyOn(fixture.ctx.sessionPersistence, 'open').mockRejectedValue(new Error('unexpected body reread'))
-
-    expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({
-      formatStatus: 'migration-required',
-    })
-    await expect(fixture.controller.projections({ sessionId: parent.header.id }, new AbortController().signal))
-      .resolves.toEqual({ kind: 'migration-required', values: {} })
-    expect(open).not.toHaveBeenCalled()
-    expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
-    expect(await readFile(parent.path, 'utf8')).toBe(parent.bytes)
-    expect(await readdir(dirname(parent.path))).toEqual(['session.v3.jsonl'])
-  })
-
-  it('reads sequenced projections after write publication replaces the disk format status', async () => {
-    const fixture = await harness()
-    const parent = await stored(fixture, brandString<SessionId>('published-cold'), {}, 3)
     using observation = await fixture.ctx.sessionQuery.observeSession(parent.header.id)
-    const expected = observation.projections
-    const signal = new AbortController().signal
-    await expect(fixture.controller.projections({ sessionId: parent.header.id }, signal))
-      .resolves.toEqual({ kind: 'migration-required', values: {} })
-
-    const writer = await fixture.ctx.sessionPersistence.open(parent.header.id, 'write')
-    try {
-      await writer.flush()
-    } finally {
-      await writer.close()
-    }
-
-    expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({
-      formatStatus: 'current',
-    })
-    await expect(fixture.controller.projections({ sessionId: parent.header.id }, signal))
-      .resolves.toEqual({ kind: 'sequenced', ...expected })
+    expect(await fixture.ctx.sessionPersistence.stat(parent.header.id)).toMatchObject({ formatStatus: 'current' })
+    await expect(fixture.controller.projections({ sessionId: parent.header.id }, new AbortController().signal))
+      .resolves.toEqual({ kind: 'sequenced', ...observation.projections })
     expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
     expect(await readFile(parent.path, 'utf8')).toBe(parent.bytes)
-    // POSIX retains the write-lock inode after close; Windows uses a semaphore.
-    expect((await readdir(dirname(parent.path))).filter(name => name !== 'session.lock').sort())
-      .toEqual(['session.v3.jsonl', `session.v${SESSION_FORMAT_VERSION}.jsonl`].sort())
+    expect((await readdir(dirname(parent.path))).filter(name => name !== 'session.lock')).toEqual(['session.v3.jsonl'])
   })
 
   it('reports unsupported current-format events instead of deferring migration', async () => {

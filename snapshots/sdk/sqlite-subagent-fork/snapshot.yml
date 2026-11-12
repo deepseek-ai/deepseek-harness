@@ -1,0 +1,7 @@
+version: 1
+scenario: sqlite-subagent-fork
+profile: sdk
+composition: default
+recording: live
+header:
+  class: default
