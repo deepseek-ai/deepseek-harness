@@ -7,10 +7,11 @@ import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { apply } from '../src/index.ts'
 import { internals } from '../src/runner-internals.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const originalInternals = { ...internals }
 let ctx: Context | undefined
@@ -134,7 +135,7 @@ describe('headless terminal failures', () => {
   it('ignores a different Agent failure during root completion', async () => {
     const test = await harness()
     const { agent: other } = await test.ctx.agents.create({
-      sessionId: SessionId('other'), agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: brandString<SessionId>('other'), agentOptions: { provider: 'mock', model: 'mock' },
     })
     test.ctx.on('agent/pre-step', ({ agent }, next) => {
       if (agent === other) throw new Error('another Agent failed')

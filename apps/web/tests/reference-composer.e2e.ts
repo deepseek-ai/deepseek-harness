@@ -13,7 +13,7 @@ import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import {
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
   SessionSeq,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-reference/types'
@@ -30,6 +30,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, pinBrowserClock, saveFailureShot, WEB_FIXTURE_TIME, writeComposerDraft } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/reference-composer', import.meta.url))
 const MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu.expected.md')
@@ -59,7 +60,7 @@ async function replaceReferenceQuery(page: Page, input: Locator, text: string): 
 
 /** Build one closed source session with a stable title for reference discovery. */
 function sourceSessionFixture(): string {
-  const session = Session.create(SessionId(SOURCE_SESSION_ID))
+  const session = Session.create(brandString<SessionId>(SOURCE_SESSION_ID))
   session.append('turn/start', {
     turn: 1,
   })
@@ -90,7 +91,7 @@ function sourceSessionFixture(): string {
 
 /** Build one target log with the direct message durably before its recalled context. */
 function targetSessionFixture(): string {
-  const session = Session.create(SessionId(TARGET_SESSION_ID))
+  const session = Session.create(brandString<SessionId>(TARGET_SESSION_ID))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: '@Research notes what changed?' }],
@@ -405,7 +406,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     await target.waitFor({ timeout: 15_000 })
     await target.click()
     await page.locator('[data-chat-flow-kind="user"]').filter({ hasText: 'Research notes' }).waitFor({ timeout: 15_000 })
-    const events = await readPersistedEvents(scaffold, SessionId(TARGET_SESSION_ID))
+    const events = await readPersistedEvents(scaffold, brandString<SessionId>(TARGET_SESSION_ID))
     const inputs = events.filter(event => event.type === 'user/message')
     expect(inputs.map(event => event.data.source.kind)).toEqual(['user', 'session-reference'])
     expect(inputs[0]?.seq).toBeLessThan(inputs[1]!.seq)

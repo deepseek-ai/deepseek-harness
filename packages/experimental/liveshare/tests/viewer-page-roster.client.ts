@@ -3,8 +3,8 @@
  *
  * A served viewer page is the owner's own Web shell with the owner's client plugins; this roster is the
  * subset the viewer page specs need: the wire plugin, the Gateway, remote access, the Session/Workspace controllers,
- * the menu service, presentation plugins, and the Liveshare `./client` face, which mounts the viewer surfaces when the
- * carrier names a share. Every row is the package's own `/client` face registered as a module-table
+ * Session status, the menu service, presentation plugins, and the Liveshare `./client` face, which mounts the viewer
+ * surfaces when the carrier names a share. Every row is the package's own `/client` face registered as a module-table
  * factory. It must be imported only after {@link prepareViewerRemoteFaces} answered the generated
  * `/remote` faces these plugins import.
  *
@@ -31,6 +31,7 @@ import * as uiFileDrag from '@deepseek-ai/dsh-client-ui-file-drag/client'
 import * as uiLayout from '@deepseek-ai/dsh-client-ui-layout/client'
 import * as uiRenderer from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as uiSession from '@deepseek-ai/dsh-client-ui-session/client'
+import * as uiSessionStatus from '@deepseek-ai/dsh-client-ui-session-status/client'
 import * as uiSettings from '@deepseek-ai/dsh-client-ui-settings/client'
 import * as uiSidebar from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import * as uiSidebarRight from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
@@ -70,6 +71,7 @@ export const VIEWER_PAGE_ROSTER: readonly ViewerPageRosterRow[] = [
   { id: '@deepseek-ai/dsh-client-ui-settings', exports: uiSettings },
   { id: '@deepseek-ai/dsh-client-ui-layout', exports: uiLayout },
   { id: '@deepseek-ai/dsh-client-ui-session', exports: uiSession },
+  { id: '@deepseek-ai/dsh-client-ui-session-status', exports: uiSessionStatus },
   { id: '@deepseek-ai/dsh-client-ui-sidebar', exports: uiSidebar },
   { id: '@deepseek-ai/dsh-client-ui-conversation', exports: uiConversation },
   { id: '@deepseek-ai/dsh-client-ui-chat', exports: uiChat },

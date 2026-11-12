@@ -5,6 +5,7 @@
     "outDir": "lib/types"
   },
   "references": [
+    { "path": "../../util/brand" },
     { "path": "../../../vendor/cordis" },
     { "path": "../../typert/protocol" },
     { "path": "../../llm/llm" },

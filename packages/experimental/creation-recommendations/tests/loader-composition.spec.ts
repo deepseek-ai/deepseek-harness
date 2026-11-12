@@ -8,11 +8,12 @@ import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { boot, initProfile, loadProfileDirectory, readProfilePatches, readProfileManifest, type ProfileContext } from '@deepseek-ai/dsh-app-boot'
 import Hmr from '@deepseek-ai/dsh-hmr'
 import PluginManager from '@deepseek-ai/dsh-plugin-manager'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import Projections from '@deepseek-ai/dsh-session-projection'
 import Agents from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import Llm, { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import Llm, { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import Skills from '@deepseek-ai/dsh-skill'
 import * as SkillTool from '@deepseek-ai/dsh-tool-skill'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -84,7 +85,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
   await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
   await ctx.hmr.runExclusive(async () => {})
   await ctx.plugin(AgentLoop, { agents: [] })
-  const callId = ToolCallId('call-card')
+  const callId = brandString<ToolCallId>('call-card')
   const adapter = new MockAdapter([
     toolCallResponse('call-skill', 'skill', { name: 'personalized-pages' }),
     toolCallResponse('call-card', 'propose_action', { action: 'create_personalized_page', title: 'Counter',
@@ -92,7 +93,7 @@ it.each(['portable-bundle', 'foreign-nested-row'] as const)('validates and insta
     textResponse('After you click Create below, I will build it in the background.'),
   ])
   ctx.llm.registerAdapter(['mock'], adapter)
-  const agent = await ctx.agentLoop.create(SessionId('creation-live'), { provider: 'mock', model: 'mock' }, { cwd: home })
+  const agent = await ctx.agentLoop.create(brandString<SessionId>('creation-live'), { provider: 'mock', model: 'mock' }, { cwd: home })
   agent.followup(createUserMessage({ content: [{ type: 'text', text: 'I want a counter that stays visible.' }], source: { kind: 'user' } }))
   await vi.waitFor(() => { expect(agent.session.snapshotEvents().some(event => event.type === 'turn/end')).toBe(true) })
   // The card tool is declared only from the step after the card skill loaded; the addition is logged.

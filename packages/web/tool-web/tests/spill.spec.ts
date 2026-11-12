@@ -17,8 +17,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -73,8 +74,8 @@ afterEach(async () => {
  * owner's step admission because web_fetch is a conditional registration.
  */
 async function fetchCall(): Promise<{ isError: boolean; content: { type: string; text?: string }[] }> {
-  const agent = { session: { header: { id: SessionId('web-sess') } } }
-  const exec = { callId: ToolCallId('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as ToolExecution
+  const agent = { session: { header: { id: brandString<SessionId>('web-sess') } } }
+  const exec = { callId: brandString<ToolCallId>('call-1'), name: 'web_fetch', arguments: { url: base }, agent, signal: testToolSignal } as ToolExecution
   if (exec.agent === undefined) throw new Error('the spill fixture call needs its session owner')
   const toolSet = await ctx.tools.resolve({ agent: exec.agent, modelSelection: { provider: 'test', model: 'test' }, signal: exec.signal })
   try {

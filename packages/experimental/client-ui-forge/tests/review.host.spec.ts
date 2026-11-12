@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   ChangeRequestRef, ForgeCommentId, ForgeFailure, ForgeReviewData, ForgeReviewId, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId,
 } from '@deepseek-ai/dsh-experimental-forge'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import ForgePanelController from '../src/index.ts'
 import type { ForgePanelState } from '../src/index.ts'
 import { bench, follow, git, pullUrl, repository, scratch, shellTurn } from './harness.ts'
 import type { Bench, Follower } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const cleanups: (() => Promise<void>)[] = []
 
@@ -47,6 +48,25 @@ function polledAt(state: ForgePanelState, url: string, headSha = HEAD, updatedAt
 }
 
 describe('forgePanel change request reviews', () => {
+  it('reports each accepted review change of any plugin on the bound entry and reads the threads again after it', async () => {
+    const { opened: panel, follower } = await opened()
+    const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
+    Object.assign(panel.provider, { readReview, writeReview: async () => ({ ok: true }) })
+    shellTurn(panel.session, 1, [{ callId: 'create', command: 'gh pr create --fill', output: `${pullUrl(7)}\n` }])
+    const polled = await follower.until(state => polledAt(state, pullUrl(7)))
+    expect(polled.changeRequests[0]?.reviewRevision).toBe(0)
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    const ref = polled.changeRequests[0]?.ref
+    if (ref === null || ref === undefined) throw new Error('unbound')
+
+    // Another plugin writes through `ctx.forge`, not through this panel.
+    await panel.ctx.forge.writeReview(ref, { kind: 'resolve', headSha: HEAD, thread: 'thread-1' as ForgeThreadId, resolved: true }, signal)
+    await follower.until(state => state.changeRequests[0]?.reviewRevision === 1)
+    await panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)
+    expect(readReview).toHaveBeenCalledTimes(2)
+  })
+
+
   it('reads threads at the displayed head and reuses them for every Session until the update time changes', async () => {
     const { opened: panel, follower, repo } = await opened()
     const readReview = vi.fn(async (_ref: ChangeRequestRef, headSha: string): Promise<ForgeReviewData | ForgeFailure> => review(headSha))
@@ -55,7 +75,7 @@ describe('forgePanel change request reviews', () => {
     await follower.until(state => polledAt(state, pullUrl(7)))
 
     await expect(panel.ctx.forgePanel.changeRequestReview(panel.session, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
-    const other = panel.ctx.sessions.create(SessionId('forge-review-other'), { meta: { cwd: repo } })
+    const other = panel.ctx.sessions.create(brandString<SessionId>('forge-review-other'), { meta: { cwd: repo } })
     panel.ctx.forgeSession.track(other, pullUrl(7))
     await expect(panel.ctx.forgePanel.changeRequestReview(other, pullUrl(7), HEAD, false, signal)).resolves.toEqual(review(HEAD))
     expect(readReview).toHaveBeenCalledTimes(1)

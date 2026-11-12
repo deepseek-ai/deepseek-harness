@@ -26,7 +26,7 @@ A build-only benchmark does not deploy, access Cloudflare credentials, or post p
 
 ## Publication semantics
 
-Runner selection does not alter pull-request events, per-PR cancellation, immutable installation, restore-only dependency caching, full workspace build, preview packing, sourcemap removal, or the preview page copied to the deployment root. Cloudflare uploads only the built site to the PR branch alias. The protected-image check requires HTTP 200, no transport content encoding, and gzip magic bytes; the URL comment remains idempotent. Dependabot and other PR authors remain on GitHub-hosted machines.
+Runner selection does not alter pull-request events, per-PR cancellation, immutable installation, restore-only dependency caching, full workspace build, preview packing, sourcemap removal, or the preview page copied to the deployment root. Cloudflare uploads only the built site and the snapshot diff page to the PR branch alias; that page embeds committed `snapshots/` diff text, never package sources. The protected-image check requires HTTP 200, no transport content encoding, and gzip magic bytes; the URL comment remains idempotent. Dependabot and other PR authors remain on GitHub-hosted machines.
 
 <a id="dev-note"></a>
 

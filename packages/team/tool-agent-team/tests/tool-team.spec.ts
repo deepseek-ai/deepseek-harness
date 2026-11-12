@@ -7,9 +7,9 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import { type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentService, { NO_START_CAPABILITIES, SubagentError, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
@@ -24,8 +24,9 @@ import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 import { bindSubagentActivation } from '../../../subagent/subagent/tests/manager-internals.ts'
-import TeamService, { TeamId } from '../../agent-team/src/index.ts'
+import TeamService, { type TeamId } from '../../agent-team/src/index.ts'
 import * as toolTeam from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function serializeRequest(request: GenerateOptions) {
   const connection = resolveAdapterOptions({ models: [{ id: request.model, systemPromptUpdate: 'in-history' }] })
@@ -87,7 +88,7 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabl
   const fiber = await ctx.plugin(toolTeam)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const lead = await ctx.agentLoop.create(SessionId('tool-team-lead'), { provider: 'mock', model: 'mock' })
+  const lead = await ctx.agentLoop.create(brandString<SessionId>('tool-team-lead'), { provider: 'mock', model: 'mock' })
   if (enabled) await ctx.agentTeams.setEnabled(lead, true)
   return { ctx, lead, fiber, adapter }
 }
@@ -104,7 +105,7 @@ async function execute(
   })
   try {
     return await executeToolFixture(ctx, {
-      callId: ToolCallId(`team-call-${++callNumber}`),
+      callId: brandString<ToolCallId>(`team-call-${++callNumber}`),
       name,
       arguments: args,
       signal,
@@ -236,7 +237,7 @@ describe('dsh-tool-team', () => {
 
   it('keeps Team tools local when an external activation starts and settles', async () => {
     const { ctx, lead } = await setup([])
-    const externalId = SessionId('team-external-result')
+    const externalId = brandString<SessionId>('team-external-result')
     ctx.effect(() => ctx.subagents.registerProvider({
       name: 'external-team-fixture', inheritsParentContext: false, capabilities: NO_START_CAPABILITIES,
       start: async () => ({
@@ -327,7 +328,7 @@ describe('dsh-tool-team', () => {
     await runTurn(lead, 'Parent task')
     const seed = lead.session.snapshotEvents()
     const handle = await ctx.agents.create({
-      sessionId: SessionId('ordinary-team-fork'),
+      sessionId: brandString<SessionId>('ordinary-team-fork'),
       seed,
       inheritedEventCount: SessionLogOffset(seed.length),
       meta: { parentSession: lead.id, isSeeded: true },
@@ -353,12 +354,12 @@ describe('dsh-tool-team', () => {
   it('identifies nested descendants with the tree root rather than their direct parent', async () => {
     const { ctx, lead } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('identity-child'),
+      sessionId: brandString<SessionId>('identity-child'),
       meta: { parentSession: lead.id, origin: 'subagent' },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const nested = await ctx.agents.create({
-      sessionId: SessionId('identity-nested'),
+      sessionId: brandString<SessionId>('identity-nested'),
       meta: { parentSession: child.agent.id, origin: 'subagent' },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead, [lead.id, child.agent.id]) },
     })
@@ -375,7 +376,7 @@ describe('dsh-tool-team', () => {
     await using persisted = await ctx.sessionPersistence.open(teammateId, 'read')
     const { events: seed } = await persisted.read()
     const handle = await ctx.agents.create({
-      sessionId: SessionId('fork-from-teammate'),
+      sessionId: brandString<SessionId>('fork-from-teammate'),
       seed,
       inheritedEventCount: SessionLogOffset(seed.length),
       meta: { parentSession: teammateId, isSeeded: true },
@@ -536,8 +537,8 @@ describe('dsh-tool-team', () => {
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', {
       cursor: 1,
     })))).not.toHaveProperty('nextCursor')
-    expect((await execute(ctx, lead, 'team_task_list', { cursor: -1 })).isError).toBe(true)
-    expect((await execute(ctx, lead, 'team_task_list', { limit: 101 })).isError).toBe(true)
+    expect(await execute(ctx, lead, 'team_task_list', { cursor: -1 })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(await execute(ctx, lead, 'team_task_list', { limit: 101 })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
 
     const edited = await execute(ctx, lead, 'team_task_update', {
       task_id: first.id,
@@ -595,7 +596,7 @@ describe('dsh-tool-team', () => {
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { owner: 'unowned' })))).toMatchObject({ tasks: [{ id: assigned.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: true })))).toMatchObject({ tasks: [{ id: pending.id }] })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_list', { unowned: false })))).toMatchObject({ tasks: [{ id: assigned.id }] })
-    expect((await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).isError).toBe(true)
+    expect(await execute(ctx, lead, 'team_task_list', { owner: 'unowned', unowned: true })).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
     await child.dispose()
   })
 
@@ -604,8 +605,8 @@ describe('dsh-tool-team', () => {
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Saved ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
     lead.session.append('team/task', {
-      version: 2, teamId: TeamId(lead.id),
-      task: { ...saved, revision: 2, ownerId: SessionId('cold-worker'), ownerName: 'reviewer/checker' },
+      version: 2, teamId: brandString<TeamId>(lead.id),
+      task: { ...saved, revision: 2, ownerId: brandString<SessionId>('cold-worker'), ownerName: 'reviewer/checker' },
     })
     const lookup = vi.spyOn(ctx.subagents, 'listDescendants').mockRejectedValue(new Error('catalog unavailable'))
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: created.id })))).toMatchObject({ owner: 'reviewer/checker' })
@@ -623,8 +624,8 @@ describe('dsh-tool-team', () => {
     const task = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = task
     lead.session.append('team/task', {
-      version: 2, teamId: TeamId(lead.id),
-      task: { ...saved, revision: 2, ownerId: SessionId('missing-worker') },
+      version: 2, teamId: brandString<TeamId>(lead.id),
+      task: { ...saved, revision: 2, ownerId: brandString<SessionId>('missing-worker') },
     })
     expect(JSON.parse(text(await execute(ctx, lead, 'team_task_get', { task_id: task.id }))))
       .toMatchObject({ owner: 'missing-worker' })
@@ -635,11 +636,11 @@ describe('dsh-tool-team', () => {
     const created = await ctx.agentTeams.createTask(lead, { subject: 'Review', description: 'Read old ownership' })
     const { ready: _ready, writeScopeWarnings: _warnings, ...saved } = created
     lead.session.append('team/task', {
-      version: 2, teamId: TeamId(lead.id),
-      task: { ...saved, revision: 2, ownerId: SessionId('unobserved-worker') },
+      version: 2, teamId: brandString<TeamId>(lead.id),
+      task: { ...saved, revision: 2, ownerId: brandString<SessionId>('unobserved-worker') },
     })
     lead.session.append('subagent/catalog', {
-      version: 0, childId: SessionId('unreadable-branch'), childCreatedAt: 1,
+      version: 0, childId: brandString<SessionId>('unreadable-branch'), childCreatedAt: 1,
       mode: 'continuable', label: 'Historical branch',
     })
     const task = ctx.agentTeams.getTask(lead, created.id)
@@ -654,9 +655,9 @@ describe('dsh-tool-team', () => {
 
   it.each([false, true])('rejects historical roster assignments without a readable continuable target (cataloged: %s)', async (cataloged) => {
     const { ctx, lead } = await setup([])
-    const id = SessionId('historical-worker')
+    const id = brandString<SessionId>('historical-worker')
     for (const phase of ['provisioning', 'active'] as const) lead.session.append('team/member', {
-      version: 2, teamId: TeamId(lead.id),
+      version: 2, teamId: brandString<TeamId>(lead.id),
       member: { id, name: 'old-name', description: 'historical member', provider: 'spawn', context: 'fresh', phase },
     })
     if (cataloged) lead.session.append('subagent/catalog', { version: 0, childId: id, childCreatedAt: 1, mode: 'continuable', label: 'Old child' })
@@ -701,7 +702,7 @@ describe('dsh-tool-team', () => {
   it('installs tools once when the plugin activates as Agent creation dispatch begins', async () => {
     const { ctx, lead, fiber } = await setup([])
     await fiber.dispose()
-    const id = SessionId('install-during-publication')
+    const id = brandString<SessionId>('install-during-publication')
     const stop = ctx.on('internal/dispatch', (_type, name) => {
       if (name === 'agent/created' && ctx.agents.get(id) !== undefined) toolTeam.apply(ctx)
     })
@@ -726,12 +727,12 @@ describe('dsh-tool-team', () => {
   it('leaves all current waits pending when tasks change', async () => {
     const { ctx, lead, adapter } = await setup([])
     const child = await ctx.agents.create({
-      sessionId: SessionId('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: brandString<SessionId>('waiting-child'), agentOptions: { provider: 'mock', model: 'mock' },
       meta: { origin: 'subagent', parentSession: lead.id },
       setup: (_ctx, agent) => { bindSubagentActivation(ctx, agent, lead) },
     })
     const unrelated = await ctx.agents.create({
-      sessionId: SessionId('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },
+      sessionId: brandString<SessionId>('unrelated-root'), agentOptions: { provider: 'mock', model: 'mock' },
     })
     vi.useFakeTimers()
     const first = await startWait(ctx, lead)
@@ -839,7 +840,7 @@ describe('dsh-tool-team', () => {
 
   it('switches tools and guidance for one tree while preserving tasks and ordinary subagents', async () => {
     const { ctx, lead } = await setup(['hang'], false)
-    const other = await ctx.agents.create({ sessionId: SessionId('other-root'), agentOptions: { provider: 'mock', model: 'mock' } })
+    const other = await ctx.agents.create({ sessionId: brandString<SessionId>('other-root'), agentOptions: { provider: 'mock', model: 'mock' } })
     const child = await waitRunning(ctx, (await spawn(ctx, lead, 'ordinary-child', 'work')).childId)
     for (const agent of [lead, child, other.agent]) expect(teamTools(await assembly(ctx, agent))).toEqual([])
     await ctx.agentTeams.setEnabled(lead, true)
@@ -956,7 +957,7 @@ describe('dsh-tool-team', () => {
     const enabled = await resolve()
     const input = {
       agent: lead, name: 'team_task_list', arguments: {}, signal: SIGNAL,
-      callId: ToolCallId('admitted-before-mode-change'),
+      callId: brandString<ToolCallId>('admitted-before-mode-change'),
     }
     try {
       expect((await executeToolFixture(ctx, { ...input, toolSet: disabled })).error?.info?.code).toBe('UNKNOWN_TOOL')
@@ -998,7 +999,7 @@ describe('dsh-tool-team', () => {
       textResponse('child done'), textResponse('parent received settlement'), textResponse('independent work done'),
     ])
     const parent = await ctx.agents.create({
-      sessionId: SessionId('temporary-parent'),
+      sessionId: brandString<SessionId>('temporary-parent'),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const childActivation = await spawn(ctx, parent.agent, 'orphan', 'finish')
@@ -1033,7 +1034,7 @@ describe('dsh-tool-team', () => {
 
   it.each([
     new Error('root lookup failed'),
-    new SubagentError('root lookup failed', 'INTERNAL_FAILURE'),
+    new SubagentError('root lookup failed', 'CONTINUATION_UNAVAILABLE'),
   ])('propagates unexpected identity lookup failures: %s', async (failure) => {
     const { ctx, lead } = await setup([])
     vi.spyOn(ctx.subagents, 'rootOf').mockImplementation(() => { throw failure })

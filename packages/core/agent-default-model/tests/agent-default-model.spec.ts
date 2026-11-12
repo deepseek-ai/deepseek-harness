@@ -1,6 +1,8 @@
 /** Default model references remain live without a settings service. */
 import { Context } from '@deepseek-ai/cordis'
 import { expect, it, onTestFinished, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import DefaultModel from '../src/index.ts'
 import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
 
@@ -19,9 +21,8 @@ it('reads complete selections from volatile config and clears omitted reasoning 
 
 it('persists complete selections through its owning profile entry', async () => {
   const { configurationFixture } = await import('../../../settings/settings/tests/configuration-fixture.ts')
-  const { ReasoningEffortId } = await import('@deepseek-ai/dsh-llm')
   const { ctx } = await configurationFixture({ hmr: false })
-  await ctx.agentDefaultModel.saveSelection({ provider: 'test', model: 'next', reasoningEffort: ReasoningEffortId('high') })
+  await ctx.agentDefaultModel.saveSelection({ provider: 'test', model: 'next', reasoningEffort: brandString<ReasoningEffortId>('high') })
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'test', model: 'next', reasoningEffort: 'high' })
   await ctx.agentDefaultModel.saveSelection({ provider: 'test', model: 'final' })
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'test', model: 'final' })

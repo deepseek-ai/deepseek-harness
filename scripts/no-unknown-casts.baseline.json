@@ -1062,9 +1062,6 @@
     "148509a0193d8d3c16a606a15f5145770f454c2ebc70dd0ccaa51fc1a0f43e99": 1,
     "2066ad746457f15b6737d62124c4ec81f2140fc3fa425187eac8e3b1c3b6ab0b": 8
   },
-  "packages/experimental/ptc-runtime-python/src/index.ts": {
-    "b121cee14635b00f7891217013e4682493cf96f676710be60722fdf8b862aea3": 1
-  },
   "packages/experimental/tool-ralph/src/index.ts": {
     "6fe9024d30e0d4757a348b83d246925b3f5aeaf2e79a0eff4bf12f3c9fb5826b": 1,
     "cec7714d93bd00a87b261199e97562ce99a73ae4b4e2414728d874d24bfed7a4": 1

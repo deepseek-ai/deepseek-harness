@@ -4,12 +4,14 @@ import type {
   ChangeRequestKey, ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeFailure, ForgeProvider, ForgeReadiness,
   ForgeRepository,
 } from '@deepseek-ai/dsh-experimental-forge'
-import { createAssistantMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import ForgeSessionService from '../src/index.ts'
 import type { Config } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Repository served by {@link FakeProvider}. */
 export const demo: ForgeRepository = { forge: 'fake', host: 'fake.test', owner: 'octo', name: 'demo' }
@@ -176,20 +178,67 @@ export function shellTurn(session: Session, calls: readonly ShellCall[]): void {
     step,
     stream: [],
     message: createAssistantMessage({
-      content: calls.map(call => ({ type: 'tool-call' as const, id: ToolCallId(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })),
+      content: calls.map(call => ({ type: 'tool-call' as const, id: brandString<ToolCallId>(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })),
       source: { provider: 'fixture', model: 'fixture' },
     }),
   }, { surfaceOp: 'append' })
   for (const call of calls) {
-    session.append('tool/call', { turn, step, callId: ToolCallId(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })
+    session.append('tool/call', { turn, step, callId: brandString<ToolCallId>(call.callId), name: call.tool ?? 'bash', arguments: callArguments(call) })
   }
   for (const call of calls) {
     session.append('tool/result', {
       turn,
       step,
-      message: createToolResultMessage({ callId: ToolCallId(call.callId), content: [{ type: 'text', text: call.output }], isError: call.isError ?? false }),
+      message: createToolResultMessage({ callId: brandString<ToolCallId>(call.callId), content: [{ type: 'text', text: call.output }], isError: call.isError ?? false }),
     }, { surfaceOp: 'append' })
   }
+  session.append('step/end', { turn, step })
+  session.append('turn/end', { turn, reason: { kind: 'completed' } })
+}
+
+/** One shell call inside a program, the text its settled dispatch carries, and its tool arguments. */
+export interface ProgramCall extends Omit<ShellCall, 'callId'> {
+  /** Logged arguments; defaults to `{ command, description }`. */
+  readonly arguments?: unknown
+}
+
+/**
+ * Append one completed turn in which the model runs `calls` as tool calls inside one PTC `run_code` program.
+ * Each call logs a `tool/ptc-dispatch-start` and a `tool/ptc-dispatch` event inside the open `run_code` call.
+ * @param session - live Session receiving the events.
+ * @param callId - id of the `run_code` call.
+ * @param calls - nested calls with their settled text, numbered `<callId>:ptc:<n>`.
+ * @param programError - whether the `run_code` result itself fails after the nested calls settle.
+ */
+export function programTurn(session: Session, callId: string, calls: readonly ProgramCall[], programError = false): void {
+  const turn = (turns.get(session) ?? 0) + 1
+  turns.set(session, turn)
+  const step = 1
+  const rootCallId = brandString<ToolCallId>(callId)
+  const programArguments = JSON.stringify({ code: 'await tools.bash({ command })', description: 'Run the program' })
+  session.append('turn/start', { turn })
+  session.append('step/start', { turn, step })
+  session.append('assistant/message', {
+    turn,
+    step,
+    stream: [],
+    message: createAssistantMessage({
+      content: [{ type: 'tool-call' as const, id: rootCallId, name: 'run_code', arguments: programArguments }],
+      source: { provider: 'fixture', model: 'fixture' },
+    }),
+  }, { surfaceOp: 'append' })
+  session.append('tool/call', { turn, step, callId: rootCallId, name: 'run_code', arguments: programArguments })
+  for (const [index, call] of calls.entries()) {
+    const ids = { rootCallId, parentCallId: rootCallId, subCallId: brandString<ToolCallId>(`${callId}:ptc:${index + 1}`) }
+    const dispatched = { ...ids, name: call.tool ?? 'bash', arguments: 'arguments' in call ? call.arguments : { command: call.command, description: 'Run it' } }
+    session.append('tool/ptc-dispatch-start', dispatched)
+    session.append('tool/ptc-dispatch', { ...dispatched, isError: call.isError ?? false, content: [{ type: 'text', text: call.output }] })
+  }
+  session.append('tool/result', {
+    turn,
+    step,
+    message: createToolResultMessage({ callId: rootCallId, content: [{ type: 'text', text: programError ? 'Error: code run failed' : 'done' }], isError: programError }),
+  }, { surfaceOp: 'append' })
   session.append('step/end', { turn, step })
   session.append('turn/end', { turn, reason: { kind: 'completed' } })
 }

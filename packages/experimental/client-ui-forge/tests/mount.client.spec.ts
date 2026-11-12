@@ -15,7 +15,7 @@ import type {
   ChangeRequestReviewer, ChangeRequestSnapshot, ForgeCommitList, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate,
   ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, ForgeThreadId, ForgeViewedFiles, ForgeViewedRequest,
 } from '@deepseek-ai/dsh-experimental-forge/types'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { RemoteError, type RemoteResult, type TypertRemoteContribution } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ActionToast } from '../src/client/ActionToast.tsx'
@@ -39,14 +39,16 @@ import type { WorktreeSettingsInjected, WorktreeSettings as WorktreeSettingsFiel
 import { WorktreeToggle, type WorktreeToggleInjected } from '../src/client/WorktreeToggle.tsx'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
 import type {
-  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame,
+  ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeExtensionState, ForgeLensFrame,
+  ForgeLensRequest,
   ForgeCommitRange, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope, ForgePanelState,
 } from '../src/types.ts'
 import { entry, listState, ready, snapshot, unserved } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const REMOTE: TypertRemoteContribution = { package: '@deepseek-ai/dsh-experimental-client-ui-forge', descriptors: [] }
-const S1 = SessionId('s1')
-const S2 = SessionId('s2')
+const S1 = brandString<SessionId>('s1')
+const S2 = brandString<SessionId>('s2')
 const BRANCHES: ForgeBranches = { current: 'main', branches: ['main', 'release'] }
 const LOCAL: ForgeLocalDiff = { base: 'origin/main', files: [], omitted: 0 }
 const CHANGE: ForgeChangeRequestDiff = { headSha: 'a'.repeat(40), files: [], localAhead: null, fileUrls: {} }
@@ -145,6 +147,7 @@ async function base() {
   const remote = new Remote()
   const streams: ReturnType<typeof stream>[] = []
   const stateStreams: ReturnType<typeof stream<ForgeChangeRequestStatesFrame>>[] = []
+  const extensionStreams: ReturnType<typeof stream<ForgeExtensionState>>[] = []
   const forgePanel = {
     follow: vi.fn((_sessionId: SessionId, signal: AbortSignal) => {
       const handle = stream(signal)
@@ -156,6 +159,12 @@ async function base() {
       stateStreams.push(handle)
       return handle
     }),
+    extensions: vi.fn((signal: AbortSignal) => {
+      const handle = stream<ForgeExtensionState>(signal)
+      extensionStreams.push(handle)
+      return handle
+    }),
+    changesLens: vi.fn((_sessionId: SessionId, _request: ForgeLensRequest, signal: AbortSignal) => stream<ForgeLensFrame>(signal)),
     worktreeCleanup: vi.fn(async (_sessionId: SessionId, _revision: number | null): Promise<RemoteResult<WorktreeCleanup | null>> =>
       ({ ok: true, value: null })),
     track: vi.fn(async (_sessionId: SessionId, _url: string): Promise<RemoteResult<void>> => OK),
@@ -210,7 +219,8 @@ async function base() {
   const unregisterTab = vi.fn()
   const sidebarRightTabs = { register: vi.fn((_type: SidebarRightTabDefinition) => unregisterTab) }
   ctx.provide('sidebarRightTabs', sidebarRightTabs)
-  const sidebarRight = { openTab: vi.fn(), toggleExpanded: vi.fn(), hide: vi.fn(),
+  const sidebarRight = { openTab: vi.fn(), toggleExpanded: vi.fn(), hide: vi.fn(), openResource: vi.fn(),
+    mounted: { getSnapshot: vi.fn((): SessionId | undefined => S1), subscribe: () => () => {} },
     tabsIn: vi.fn(() => [{ id: 'forge-tab' as TabId, kind: TAB_KIND }]) }
   const scopes = new Map<SessionId, ReturnType<Context['plugin']>>()
   const sessions = { scope: vi.fn<(id: SessionId) => Context | undefined>((id) => {
@@ -240,7 +250,8 @@ async function base() {
     },
   } as never, () => null)
   return {
-    ctx, remote, unmount, streams, stateStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions, scopes, worktreeForm,
+    ctx, remote, unmount, streams, stateStreams, extensionStreams, forgePanel, sidebarRightTabs, unregisterTab, sidebarRight, sessions,
+    scopes, worktreeForm,
   }
 }
 
@@ -383,6 +394,59 @@ describe('mountForgePanel registration', () => {
     await expect(fiber).rejects.toThrow('slot failed')
     expect(b.unmount).toHaveBeenCalledOnce()
     expect(b.unregisterTab).toHaveBeenCalled()
+  })
+})
+
+describe('mountForgePanel extension API', () => {
+  it('provides the changes view face, which opens a view in the shown Session and is withdrawn on unload', async () => {
+    const f = await fixture()
+    const forgeChanges = f.ctx.get('forgeChanges')
+    assert(forgeChanges !== undefined)
+    expect(forgeChanges.kinds).toEqual({ changes: CHANGES_KIND, panel: TAB_KIND })
+    const target = { sessionId: S1, source: { kind: 'local' } } as const
+    forgeChanges.open(target, { path: 'src/a.ts' })
+    expect(f.sidebarRight.openResource).toHaveBeenCalledWith(forgeChanges.address(target), { params: { path: 'src/a.ts' } })
+    forgeChanges.open(target)
+    expect(f.sidebarRight.openResource).toHaveBeenLastCalledWith(forgeChanges.address(target), undefined)
+    await f.dispose()
+    await settle()
+    expect(f.ctx.get('forgeChanges')).toBeUndefined()
+  })
+
+  it('streams the Host lenses to the changes view while it reads them, opens lens requests, and keeps one annotation view per address', async () => {
+    const f = await fixture()
+    const face = f.changes(S1)
+    const seen = vi.fn()
+    const stop = face.hooks.extensions.subscribe(seen)
+    expect(face.hooks.extensions.getSnapshot().state).toBeNull()
+    f.extensionStreams[0]?.push({ lenses: [{ id: 'fixture/exports', version: '1' }], maxAnnotationsPerFile: 4 })
+    await settle()
+    expect(face.hooks.extensions.getSnapshot().state).toEqual({ lenses: [{ id: 'fixture/exports', version: '1' }], maxAnnotationsPerFile: 4 })
+    const forgeChanges = f.ctx.get('forgeChanges')
+    assert(forgeChanges !== undefined)
+    const relay = vi.fn()
+    const unrelay = forgeChanges.extensions.subscribe(relay)
+    f.extensionStreams[0]?.push({ lenses: [], maxAnnotationsPerFile: 4 })
+    await settle()
+    expect(forgeChanges.extensions.getSnapshot()).toEqual({ lenses: [], maxAnnotationsPerFile: 4 })
+    expect(relay).toHaveBeenCalled()
+    unrelay()
+    stop()
+    expect(face.hooks.lenses).toBe(forgeChanges.lenses)
+
+    const request: ForgeLensRequest = { source: { kind: 'local', scope: { kind: 'unstaged' } }, version: 'v', lens: 'fixture/exports' }
+    face.changesLens(request, new AbortController().signal)
+    expect(f.forgePanel.changesLens).toHaveBeenCalledWith(S1, request, expect.any(AbortSignal))
+
+    const address = forgeChanges.address({ sessionId: S1, source: { kind: 'local' } })
+    const view = face.keyedHooks.annotations(address)
+    expect(face.keyedHooks.annotations(address)).toBe(view)
+    expect(face.keyedHooks.annotations(forgeChanges.address({ sessionId: S1, source: { kind: 'change', url: 'https://github.com/octo/demo/pull/7' } })))
+      .not.toBe(view)
+    expect(() => face.keyedHooks.annotations('dsh-resource://forge-changes/s1/remote')).toThrow('forge-panel: not a changes address')
+
+    await f.dispose()
+    expect(f.extensionStreams[0]?.disposed).toHaveBeenCalled()
   })
 })
 

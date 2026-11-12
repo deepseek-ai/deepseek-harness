@@ -117,3 +117,5 @@ declare module '@deepseek-ai/dsh-session/types' {
     }
   }
 }
+
+export type { CommandDefinitionId, CommandId } from './brand.ts'

@@ -3,7 +3,7 @@ description: "通过按应用和窗口限定的对象，观察和操作原生 ma
 kind: "package-reference"
 ---
 
-# @deepseek-ai/dsh-experimental-cua-macos
+# @deepseek-ai/dsh-cua-macos
 
 [English](README.md) | 中文
 
@@ -43,10 +43,10 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 
 配置输出命令不发起模型请求。执行真实任务时，将 `--dump-config` 替换为任务提示，并配置该 profile 的模型凭据。配置挂载 computer-use 注册表和本 provider；使用前需移除已有的竞争 provider。helper 需要辅助功能权限来读取 AX 和输入，需要屏幕录制权限来截图；通过 Computer Use 权限页打开系统设置并添加 helper。源码构建的应用包名为 `DSH Computer Use Dev.app`，Info.plist 声明名称 `DSH Computer Use Dev`；授权时选择开发版条目。`getCapabilities` 返回提供方声明的平台能力，以及实际查询的权限和锁屏状态。桌面会话锁定或不可用时，界面观察与输入会在分派前拒绝，需由用户解锁 macOS 后继续。`listApps` 和 `cua.getState` 列出运行中的应用。`findApps(query)` 按名称、bundle ID 或绝对路径搜索 macOS 标准应用目录。`getApp` 按唯一名称、bundle ID、路径或运行中的 PID 选择应用，取得应用许可后，在需要时后台启动尚未运行的应用。授权前从磁盘读取应用的 Bundle ID 和可执行路径，在启动前后重新读取并核对；没有 Bundle ID 的应用使用规范化的可执行路径复用授权。找到指定的安装包后，`getApp` 用可执行文件路径查找已有进程，进程显示名可以是其他语言。需要启动时，macOS 打开指定的安装副本，也可以复用授权期间启动的进程。helper 等待应用完成启动后返回运行状态。启动后验证失败会使待启动句柄失效，但进程可能仍在运行；应先查看运行中的应用，再取得新句柄。返回对象时不读取 AX，也不激活应用。启动被取消时，应用可能已经运行。模型指引要求先在后台观察和输入，不在初始化或每次动作前激活应用。窗口隐藏或最小化时，先尝试 `app.show()` 或 `window.show()`，再重新观察。它请求取消隐藏和恢复最小化，不主动激活、抬起窗口或切换桌面空间；应用级恢复选择焦点窗口、主窗口或唯一 AX 窗口。结果通过 `windowId` 指明选中的窗口，未选中时为 null；`foregroundChanged` 比较操作前后的前台应用和最上层窗口，无法取得完整观察时为 null，返回后仍可能发生焦点变化。恢复失败或窗口仍不可用时，说明需要前台的步骤，再调用 `app.activate()` 或窗口声明的 `AXRaise` 动作并重新观察。必须使用前台时，以完成任务为先。应用收到输入后仍可能改变焦点，后台投递不保证用户操作始终不受干扰。
 
-源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua` 是加载 `@deepseek-ai/dsh-experimental-cua-macos` 的节点 ID：
+源码构建默认使用 `sourceSigning: ad-hoc` 临时签名，不创建证书或钥匙串。二进制变化后可能需要重新授权。需要减少开发重建和跨 worktree 的授权次数时，在 DSH home 的 `cordis.patch.yml` 中选择已有证书及其钥匙串绝对路径；`cua-macos` 是加载 `@deepseek-ai/dsh-cua-macos` 的节点 ID：
 
 ```yaml
-- id: cua
+- id: cua-macos
   config:
     sourceSigning:
       identity: "<certificate SHA-1 fingerprint>"
@@ -59,6 +59,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | --- | --- | --- |
 | `agentPreset` | `ptc` | 为该 preset 提供原始 `cua`，为其他已组合的 preset 提供 `cua_run_code`；`false` 表示全局注册原始 `cua`。 |
 | `standaloneRunCode.runtime` / `standaloneRunCode.executor` | 共享 Node / PTC 上限 | 专用 CUA 运行时的资源、启动和嵌套调用设置；参见 [CUA](../cua/README.zh.md)。 |
+| `screenshotTarget` | 未设置 | 截图使用的固定 `{ longEdge, maxBytes }` 请求图片目标。未设置时按 Agent 的模型路由解析，该路由未声明图片输入时拒绝截图。 |
 | `allowedApps` | `[]` | 旧路径和签名许可，只导入 profile 存储一次供撤销，不授予新 Bundle ID 身份访问权限。 |
 | `helperPath` | 包内可执行文件 | 已签名 helper `.app` 内可执行文件的绝对路径；裸二进制会触发 `NATIVE_APPLICATION_REQUIRED`。 |
 | `requireSystemPointerApproval` | `true` | 主任务首次显式请求移动系统指针时询问用户。设为 `false` 时仅本次显式移动免询问。 |
@@ -78,7 +79,7 @@ pnpm dsh headless --patch packages/experimental/cua-macos/examples/macos.cordis.
 | `dragDurationMs` / `dragSteps` | `400` / `20` | 拖动时长和移动分段数。 |
 | `textEventIntervalMs` | `0.25` | 每个 Unicode 按下或抬起事件后的间隔，范围为 0 至 1000 毫秒。击键节奏独立。 |
 
-[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
+[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-cua-macos)列出全部字段。原生工具调用使用 `{method, params}`，模型可以看到每个方法的完整参数定义。`getApp` 返回每个面向应用的操作所需的 `appHandle`，`app.getWindow(windowId)` 返回负责截图和指针输入的对象。
 
 `pressKey(key, modifiers?)` 按下并松开一个键。使用快捷键时单独传入修饰键，例如 `pressKey('a', ['command'])`。单独调用 `pressKey('shift')` 时，按下事件带有 Shift 标志，释放事件清除该标志。`+` 和 `plus` 都会发送 Shift 和等号。`pressKey`、`click` 和 `drag` 都接受修饰键 `command`、`shift`、`option`/`alt`、`control`/`ctrl` 和 `fn`。只有 `pressKey` 的修饰键参数还接受 `command` 的别名 `cmd`。按键名由平台定义；数字键盘名称（`KP_0` 到 `KP_9`、`KP_Enter` 和数字键盘运算键）保留独立的物理键码。`typeText` 发送字面文本，包括其中的换行和制表符。短按使用 App 对象上的 `pressKey`。
 

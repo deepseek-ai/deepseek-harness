@@ -10,7 +10,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import type { SessionId, Session } from '@deepseek-ai/dsh-session'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { ShareRpcActor } from '@deepseek-ai/dsh-experimental-liveshare-protocol'

@@ -151,8 +151,8 @@ interface PtcBindingNamespace {
    * The global identifier the program sees. Must match the LANGUAGE-PORTABLE
    * identifier subset `[A-Za-z_][A-Za-z0-9_]*` and no language's reserved
    * words, so the same namespace list works against every backend regardless
-   * of `language` — a JS-only spelling like `$tools` is rejected by design,
-   * not just by the Python backend. Names that satisfy the identifier rule but
+   * of `language` — a JS-only spelling like `$tools` is always rejected.
+   * Names that satisfy the identifier rule but
    * name a backend-owned slot (`RESERVED_BINDING_GLOBALS`, e.g. `inspect`, `console`, `Image`,
    * `__dsh_main__`) are also refused everywhere; see its declaration for the
    * exact set and why each entry is reserved.
@@ -250,7 +250,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.ptcRuntime` — `PtcRuntime` (abstract seam)
 
-Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
+Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects, with PtcRuntimeError. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.
 
 ```ts cordis-catalog
 /**
@@ -281,7 +281,7 @@ registerEnvironmentInitializer(program: string): () => Promise<void>
  * Resolve supported options and provider defaults before execution.
  * @param request - Program, bindings, cancellation and optional execution choices.
  * @returns Complete directory, deadline and supported authority for run.
- * @throws When an explicit choice is invalid or unsupported by this provider.
+ * @throws When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.
  */
 abstract resolve(request: PtcRunRequest): PtcRunSpec
 

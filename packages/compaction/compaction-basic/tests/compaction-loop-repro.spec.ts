@@ -3,7 +3,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage, createSystemMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, resolveRetryPolicy , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -11,7 +12,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import * as LlmRetry from '@deepseek-ai/dsh-llm-retry'
-import { Session, SessionId, type SessionEvent, type SurfaceEvent } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, type SessionEvent, type SurfaceEvent } from '@deepseek-ai/dsh-session'
 
 /**
  * CBR-001 regression through the real loop. A replacement checkpoint has a high
@@ -50,7 +51,7 @@ class StepwiseToolAdapter extends LlmAdapter {
     const n = this.calls
     this.calls += 1
     if (n < this.toolSteps) {
-      const id = ToolCallId(`c${n}`)
+      const id = brandString<ToolCallId>(`c${n}`)
       const args = `{"i":${n}}`
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: `step ${n}` } }
@@ -174,7 +175,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 }
 
 function overflowHistorySeed(): readonly SessionEvent[] {
-  const session = Session.create(SessionId('overflow-history-seed'))
+  const session = Session.create(brandString<SessionId>('overflow-history-seed'))
   for (let turn = 1; turn <= 2; turn += 1) {
     const sentinel = turn === 1 ? 'OLD HISTORY SENTINEL' : 'RECENT HISTORY'
     session.append('turn/start', {
@@ -208,7 +209,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('uses the recorded model selection for post-step pressure', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('routed-pressure'), {
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('routed-pressure'), {
         provider: 'unconfigured-agent-fallback',
         model: 'unconfigured-agent-fallback',
       })
@@ -230,7 +231,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('runs automatic pressure between the completed tool step and the next step', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('post-step-order'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('post-step-order'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do tool work' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -262,7 +263,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('the head checkpoint the loop lands is a balanced cut on both sides', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('repro'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('repro'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a long multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -327,7 +328,7 @@ describe('token pressure after loop-admitted system prompts', () => {
         }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] })
         return { kind: 'retry' }
       })
-      const agent = await ctx.agentLoop.create(SessionId('prompt-pressure'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('prompt-pressure'), { provider: 'mock', model: 'mock' })
       // Eager replay must observe the same anchor as a fresh reader of the finished log.
       ctx.tokenMeter.measure(agent.session)
       for (const nextPrompt of [prompt, 'expanded guidance '.repeat(20), 'short', '']) {
@@ -341,7 +342,7 @@ describe('token pressure after loop-admitted system prompts', () => {
         expect(measured.baseline).toEqual({ kind: 'usage', tokens: 1110, usage })
         expect(measured.surfaceDeltaTokens).toBe(0)
         expect(measured.totalTokens).toBe(1110)
-        const replay = Session.create(SessionId('prompt-pressure-replay'), agent.session.snapshotEvents())
+        const replay = Session.create(brandString<SessionId>('prompt-pressure-replay'), agent.session.snapshotEvents())
         expect(ctx.tokenMeter.measure(replay)).toMatchObject({
           baseline: measured.baseline, surfaceDeltaTokens: 0, totalTokens: 1110, nodes: measured.nodes,
         })
@@ -389,7 +390,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
 
       try {
         const { agent } = await ctx.agentLoop.createAgent(ctx, {
-          sessionId: SessionId(`overflow-${delivery}`),
+          sessionId: brandString<SessionId>(`overflow-${delivery}`),
           seed: overflowHistorySeed(),
           agentOptions: {
             provider: 'unconfigured-agent-fallback',
@@ -466,7 +467,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
 
     try {
       const { agent } = await ctx.agentLoop.createAgent(ctx, {
-        sessionId: SessionId('alternating-recovery'),
+        sessionId: brandString<SessionId>('alternating-recovery'),
         seed: overflowHistorySeed(),
         agentOptions: { provider: 'mock', model: 'mock' },
       })

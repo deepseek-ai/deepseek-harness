@@ -5,15 +5,17 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionResult, ToolExecutionToken } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { WorkflowRunId, WorkflowEngine } from '@deepseek-ai/dsh-workflow'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkflowRunId } from '@deepseek-ai/dsh-workflow/types'
+import { WorkflowEngine } from '@deepseek-ai/dsh-workflow'
 import type {
   WorkflowAgentEndInfo, WorkflowAgentInfo, WorkflowResult, WorkflowRun,
-  WorkflowRunId as WorkflowRunIdType, WorkflowStartRequest,
+  WorkflowStartRequest,
 } from '@deepseek-ai/dsh-workflow'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { JobId } from '@deepseek-ai/dsh-jobs'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
@@ -23,7 +25,7 @@ import PtcWorkflowEngine from '@deepseek-ai/dsh-workflow-ptc'
 import { mountWorkflowRuntime } from '../../workflow-ptc/tests/setup.ts'
 import * as toolWorkflow from '../src/index.ts'
 import type {} from '../src/types.ts'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 
 const testToolSignal = new AbortController().signal
@@ -36,13 +38,13 @@ class StubEngine extends WorkflowEngine {
   disposeBarrier: Promise<void> | undefined
   disposeError: Error | undefined
   settle!: (result: WorkflowResult) => void
-  readonly settlements = new Map<WorkflowRunIdType, (result: WorkflowResult) => void>()
+  readonly settlements = new Map<WorkflowRunId, (result: WorkflowResult) => void>()
   startError: Error | undefined
 
   start(request: WorkflowStartRequest): WorkflowRun {
     if (this.startError) throw this.startError
     this.requests.push(request)
-    const id = WorkflowRunId(`run-${this.requests.length}`)
+    const id = brandString<WorkflowRunId>(`run-${this.requests.length}`)
     const result = new Promise<WorkflowResult>((resolve) => { this.settle = resolve })
     this.settlements.set(id, this.settle)
     request.signal?.addEventListener('abort', () => {
@@ -65,34 +67,34 @@ class StubEngine extends WorkflowEngine {
     }
   }
 
-  settleRun(id: WorkflowRunIdType, result: WorkflowResult): void {
+  settleRun(id: WorkflowRunId, result: WorkflowResult): void {
     const settle = this.settlements.get(id)
     if (settle === undefined) throw new Error(`unknown stub workflow ${id}`)
     settle(result)
   }
 
-  agentStart(id: WorkflowRunIdType, agent: WorkflowAgentInfo): void {
+  agentStart(id: WorkflowRunId, agent: WorkflowAgentInfo): void {
     this.emitWorkflowEvent('workflow/agent-start', {
       id,
       meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
     }, agent)
   }
 
-  agentEnd(id: WorkflowRunIdType, agent: WorkflowAgentEndInfo): void {
+  agentEnd(id: WorkflowRunId, agent: WorkflowAgentEndInfo): void {
     this.emitWorkflowEvent('workflow/agent-end', {
       id,
       meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
     }, agent)
   }
 
-  phase(id: WorkflowRunIdType, title: string): void {
+  phase(id: WorkflowRunId, title: string): void {
     this.emitWorkflowEvent('workflow/phase', {
       id,
       meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
     }, title)
   }
 
-  logLine(id: WorkflowRunIdType, message: string): void {
+  logLine(id: WorkflowRunId, message: string): void {
     this.emitWorkflowEvent('workflow/log', {
       id,
       meta: this.requests[Number(String(id).slice(4)) - 1]!.meta,
@@ -108,7 +110,7 @@ async function setup(config?: { toolName?: string; maxResultChars?: number }) {
   await ctx.plugin(StubEngine)
   await ctx.plugin(toolWorkflow, config ?? {})
   const engine = ctx.workflowEngine as StubEngine
-  const session = Session.create(SessionId('caller'))
+  const session = Session.create(brandString<SessionId>('caller'))
   const parent = { id: session.id, options: {}, session } as unknown as Agent
   return { ctx, engine, parent, session }
 }
@@ -123,7 +125,7 @@ function execute(ctx: Context, args: unknown, extra?: {
 }): Promise<ToolExecutionResult> {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId('call-1'),
+    callId: brandString<ToolCallId>('call-1'),
     name: 'workflow',
     arguments: args,
     ...extra?.agent ? { agent: extra.agent } : {},
@@ -155,18 +157,18 @@ describe('dsh-tool-workflow', () => {
     const { ctx, engine, parent, session } = await setup()
     const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
-    const runId = WorkflowRunId('run-1')
+    const runId = brandString<WorkflowRunId>('run-1')
     engine.agentStart(runId, {
       seq: 1,
       label: '',
       phase: '',
-      childId: SessionId('child-1'),
+      childId: brandString<SessionId>('child-1'),
     })
     engine.agentEnd(runId, {
       seq: 1,
       label: '',
       phase: '',
-      childId: SessionId('child-1'),
+      childId: brandString<SessionId>('child-1'),
       outcome: 'completed',
     })
     engine.settleRun(runId, { value: 1, stopReason: 'completed', agentsStarted: 1 })
@@ -188,7 +190,7 @@ describe('dsh-tool-workflow', () => {
     engine.disposeBarrier = barrier.promise
     const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
-    engine.settleRun(WorkflowRunId('run-1'), {
+    engine.settleRun(brandString<WorkflowRunId>('run-1'), {
       value: null, stopReason: 'completed', agentsStarted: 0,
     })
     await vi.waitFor(() => { expect(engine.disposed).toBe(1) })
@@ -205,14 +207,14 @@ describe('dsh-tool-workflow', () => {
     const first = execute(ctx, { script: SCRIPT, meta: { ...META, name: 'first' } }, { agent: parent })
     const second = execute(ctx, { script: SCRIPT, meta: { ...META, name: 'second' } }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(2) })
-    const secondId = WorkflowRunId('run-2')
+    const secondId = brandString<WorkflowRunId>('run-2')
     engine.agentStart(secondId, {
-      seq: 1, label: 'member', childId: SessionId('child-2'),
+      seq: 1, label: 'member', childId: brandString<SessionId>('child-2'),
     })
     engine.agentEnd(secondId, {
-      seq: 1, label: 'member', childId: SessionId('child-2'), outcome: 'failed',
+      seq: 1, label: 'member', childId: brandString<SessionId>('child-2'), outcome: 'failed',
     })
-    engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'completed', agentsStarted: 0 })
+    engine.settleRun(brandString<WorkflowRunId>('run-1'), { value: null, stopReason: 'completed', agentsStarted: 0 })
     engine.settleRun(secondId, { value: null, stopReason: 'error', error: 'child failed', agentsStarted: 1 })
     expect((await first).isError).toBe(false)
     expect((await second).isError).toBe(true)
@@ -232,7 +234,7 @@ describe('dsh-tool-workflow', () => {
       parent: Symbol('outer') as ToolExecutionToken,
     })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
-    engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'completed', agentsStarted: 0 })
+    engine.settleRun(brandString<WorkflowRunId>('run-1'), { value: null, stopReason: 'completed', agentsStarted: 0 })
     expect((await pending).isError).toBe(false)
     expect(session.snapshotEvents()).toEqual([])
   })
@@ -254,12 +256,12 @@ describe('dsh-tool-workflow', () => {
 
     const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
-    const runId = WorkflowRunId('run-1')
+    const runId = brandString<WorkflowRunId>('run-1')
     engine.agentStart(runId, {
-      seq: 1, label: 'member', childId: SessionId('child-1'),
+      seq: 1, label: 'member', childId: brandString<SessionId>('child-1'),
     })
     engine.agentEnd(runId, {
-      seq: 1, label: 'member', childId: SessionId('child-1'), outcome: 'completed',
+      seq: 1, label: 'member', childId: brandString<SessionId>('child-1'), outcome: 'completed',
     })
     engine.settleRun(runId, { value: null, stopReason: 'completed', agentsStarted: 1 })
     expect((await pending).isError).toBe(false)
@@ -287,7 +289,7 @@ describe('dsh-tool-workflow', () => {
     }
     const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
-    engine.settleRun(WorkflowRunId('run-1'), {
+    engine.settleRun(brandString<WorkflowRunId>('run-1'), {
       value: null, stopReason: 'completed', agentsStarted: 0,
     })
     expect((await pending).isError).toBe(false)
@@ -303,7 +305,18 @@ describe('dsh-tool-workflow', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('workflow run failed: script threw: boom')
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'RUN_FAILED' })
     expect(engine.disposed).toBe(1)
+  })
+
+  it('keeps the fatal code that ended a failed run', async () => {
+    const { ctx, engine, parent } = await setup()
+    const pending = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
+    await vi.waitFor(() => { expect(engine.requests.length).toBe(1) })
+    engine.settle({ value: null, stopReason: 'error', error: 'total agent cap (1)', errorCode: 'AGENT_CAP', agentsStarted: 1 })
+    const result = await pending
+    expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'AGENT_CAP' })
   })
 
   it('reports a cancelled run distinctly (with and without a reason)', async () => {
@@ -314,6 +327,7 @@ describe('dsh-tool-workflow', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('workflow run was cancelled (user)')
+    expect(result.error?.info).toEqual({ name: 'WorkflowError', code: 'CANCELLED' })
 
     const bare = execute(ctx, { script: SCRIPT, meta: META }, { agent: parent })
     await vi.waitFor(() => { expect(engine.requests.length).toBe(2) })
@@ -337,6 +351,7 @@ describe('dsh-tool-workflow', () => {
     controller.abort()
     const result = await pending
     expect(result.isError).toBe(true)
+    expect(result.error?.info).toEqual({ name: 'AbortError', code: TOOL_ABORTED })
     expect(engine.cancels).toContain('parent step aborted')
     expect(engine.disposed).toBe(1)
   })
@@ -354,6 +369,7 @@ describe('dsh-tool-workflow', () => {
     const result = await execute(ctx, { script: SCRIPT, meta: META })
     expect(result.isError).toBe(true)
     expect((result.content[0] as { text: string }).text).toContain('requires a calling agent')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(engine.requests.length).toBe(0)
   })
 
@@ -460,7 +476,7 @@ describe('dsh-tool-workflow', () => {
       await ctx.plugin(StubEngine)
       await ctx.plugin(toolWorkflow, config ?? {})
       const engine = ctx.workflowEngine as StubEngine
-      const session = Session.create(SessionId('caller'))
+      const session = Session.create(brandString<SessionId>('caller'))
       const parent: Agent = {
         id: session.id, options: {}, session, model: unsupportedModel(),
         inbox: createInboxStub(), status: 'idle', ctx,
@@ -493,11 +509,11 @@ describe('dsh-tool-workflow', () => {
       expect(job).toMatchObject({ kind: 'workflow', label: 'audit', status: 'running', owner: parent.id })
       expect(job.output.total).toBe(0)
 
-      const runId = WorkflowRunId('run-1')
+      const runId = brandString<WorkflowRunId>('run-1')
       engine.phase(runId, 'Scan')
       engine.logLine(runId, '3/10 found')
-      engine.agentStart(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: SessionId('child-1') })
-      engine.agentEnd(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: SessionId('child-1'), outcome: 'completed' })
+      engine.agentStart(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: brandString<SessionId>('child-1') })
+      engine.agentEnd(runId, { seq: 1, label: 'scan a.ts', phase: 'Scan', childId: brandString<SessionId>('child-1'), outcome: 'completed' })
       expect(retained(ctx, job.id, parent)).toBe('▸ Scan\n3/10 found\nagent #1 scan a.ts started\nagent #1 completed\n')
       expect(jobs.get(job.id, parent.id).progress).toBe('Scan')
       // Narration is observer-only: every chunk rides the log channel, so the
@@ -505,7 +521,7 @@ describe('dsh-tool-workflow', () => {
       expect(jobs.readAt(job.id, 0, parent.id).chunks.map(chunk => chunk.channel)).toEqual(['log', 'log', 'log', 'log'])
       const early = await executeToolFixture(ctx, {
         signal: testToolSignal,
-        callId: ToolCallId('call-early-read'),
+        callId: brandString<ToolCallId>('call-early-read'),
         name: 'job_output',
         arguments: { job_id: jobId },
         agent: parent,
@@ -519,7 +535,7 @@ describe('dsh-tool-workflow', () => {
       expect(settled.progress).toBeUndefined()
       const read = await executeToolFixture(ctx, {
         signal: testToolSignal,
-        callId: ToolCallId('call-settled-read'),
+        callId: brandString<ToolCallId>('call-settled-read'),
         name: 'job_output',
         arguments: { job_id: jobId },
         agent: parent,
@@ -565,7 +581,7 @@ describe('dsh-tool-workflow', () => {
       if (result.isError) throw new Error('expected background acceptance')
       const firstId = (result.value as { jobId: string }).jobId as JobId
       expect(engine.requests[0]).toMatchObject({ args: { files: ['a.ts'] } })
-      engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'error', error: 'script exploded', agentsStarted: 2 })
+      engine.settleRun(brandString<WorkflowRunId>('run-1'), { value: null, stopReason: 'error', error: 'script exploded', agentsStarted: 2 })
       const jobs = ctx.jobs
       await vi.waitFor(() => { expect(jobs.get(firstId, parent.id).status).toBe('failed') })
       expect(jobs.get(firstId, parent.id).detail).toBe('script exploded')
@@ -574,7 +590,7 @@ describe('dsh-tool-workflow', () => {
       const second = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       if (second.isError) throw new Error('expected background acceptance')
       const secondId = (second.value as { jobId: string }).jobId as JobId
-      engine.settleRun(WorkflowRunId('run-2'), { value: null, stopReason: 'error', agentsStarted: 0 })
+      engine.settleRun(brandString<WorkflowRunId>('run-2'), { value: null, stopReason: 'error', agentsStarted: 0 })
       await vi.waitFor(() => { expect(jobs.get(secondId, parent.id).status).toBe('failed') })
       expect(jobs.get(secondId, parent.id).detail).toBe('unknown error')
     })
@@ -590,7 +606,7 @@ describe('dsh-tool-workflow', () => {
       )
       if (result.isError) throw new Error('expected background acceptance')
       const jobId = (result.value as { jobId: string }).jobId as JobId
-      engine.settleRun(WorkflowRunId('run-1'), { value: 'ok', stopReason: 'completed', agentsStarted: 1 })
+      engine.settleRun(brandString<WorkflowRunId>('run-1'), { value: 'ok', stopReason: 'completed', agentsStarted: 1 })
       const jobs = ctx.jobs
       await vi.waitFor(() => { expect(jobs.get(jobId, parent.id).status).toBe('completed') })
       expect(jobs.get(jobId, parent.id).detail).toBe('1 agent')
@@ -614,6 +630,7 @@ describe('dsh-tool-workflow', () => {
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text)
         .toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+      expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     })
 
     it('a disabled composition hides the parameter and rejects the call', async () => {
@@ -624,6 +641,7 @@ describe('dsh-tool-workflow', () => {
       const result = await execute(ctx, { script: SCRIPT, meta: META, run_in_background: true }, { agent: parent })
       expect(result.isError).toBe(true)
       expect((result.content[0] as { text: string }).text).toContain('run_in_background is disabled')
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     })
 
     it('advertises the background semantics in the parameter', async () => {
@@ -652,7 +670,7 @@ describe('dsh-tool-workflow', () => {
       await mountWorkflowRuntime(ctx)
       await ctx.plugin(PtcWorkflowEngine, {})
       await ctx.plugin(toolWorkflow, {})
-      const session = Session.create(SessionId('caller'))
+      const session = Session.create(brandString<SessionId>('caller'))
       const parent = { id: session.id, options: {}, session } as unknown as Agent
       const controller = new AbortController()
       const ready = Promise.withResolvers<undefined>()
@@ -665,7 +683,7 @@ describe('dsh-tool-workflow', () => {
       controller.abort('user abort')
       const result = await pending
       expect(result.isError).toBe(true)
-      expect((result.content[0] as { text: string }).text).toContain('cancelled')
+      expect(result.error?.info).toEqual({ name: 'AbortError', code: TOOL_ABORTED })
     })
 
     it('a background run over the sandboxed PTC engine settles its job with the rendered return value', async () => {
@@ -689,7 +707,7 @@ describe('dsh-tool-workflow', () => {
       await mountWorkflowRuntime(ctx)
       await ctx.plugin(PtcWorkflowEngine, {})
       await ctx.plugin(toolWorkflow, {})
-      const session = Session.create(SessionId('caller'))
+      const session = Session.create(brandString<SessionId>('caller'))
       const parent: Agent = {
         id: session.id, options: {}, session, model: unsupportedModel(),
         inbox: createInboxStub(), status: 'idle', ctx,
@@ -714,7 +732,7 @@ describe('dsh-tool-workflow', () => {
       expect(ring).toContain('halfway')
       const read = await executeToolFixture(ctx, {
         signal: testToolSignal,
-        callId: ToolCallId('call-ptc-settled-read'),
+        callId: brandString<ToolCallId>('call-ptc-settled-read'),
         name: 'job_output',
         arguments: { job_id: jobId },
         agent: parent,

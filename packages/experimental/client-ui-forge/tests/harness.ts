@@ -18,12 +18,12 @@ import type {
 import ForgeSessionService from '@deepseek-ai/dsh-experimental-forge-session'
 import WorktreeService from '@deepseek-ai/dsh-experimental-worktree'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import { createAssistantMessage, createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import LocalSandbox from '@deepseek-ai/dsh-sandbox-local'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { pluginRecordOf, Session as SessionRecord, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { pluginRecordOf, Session as SessionRecord, SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
@@ -34,6 +34,7 @@ import ForgePanelController from '../src/index.ts'
 import type { Config, ForgePanelState, ForgeWorktreeState } from '../src/index.ts'
 import { CREATED_RECORD } from '@deepseek-ai/dsh-experimental-worktree'
 import { forgeWorktreeProjection, WORKTREE_RECORD } from '../src/worktree.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const execute = promisify(execFile)
 
@@ -142,7 +143,7 @@ export async function repository(parent: string, name = 'repo'): Promise<string>
  * @returns the Session.
  */
 export function plainSession(cwd: string): Session {
-  const id = SessionId('forge-git')
+  const id = brandString<SessionId>('forge-git')
   return SessionRecord.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, cwd })
 }
 
@@ -566,7 +567,7 @@ export async function runtime(cwd: string, options: BenchOptions = {}): Promise<
     await ctx.plugin(ForgeSessionService, {})
     const worktrees = options.worktrees === true ? ctx.plugin(WorktreeService, {}) : undefined
     if (worktrees !== undefined) await worktrees
-    const session = ctx.sessions.create(SessionId(`forge-panel-${Math.random().toString(36).slice(2)}`), { meta: { cwd } })
+    const session = ctx.sessions.create(brandString<SessionId>(`forge-panel-${Math.random().toString(36).slice(2)}`), { meta: { cwd } })
     const records: unknown[] = []
     const created: unknown[] = []
     ctx.on('session/event', (target: Session, event: SessionEvent) => {
@@ -664,16 +665,16 @@ export function shellTurn(session: Session, turn: number, calls: readonly { call
     step,
     stream: [],
     message: createAssistantMessage({
-      content: calls.map(call => ({ type: 'tool-call' as const, id: ToolCallId(call.callId), name: 'bash', arguments: callArguments(call.command) })),
+      content: calls.map(call => ({ type: 'tool-call' as const, id: brandString<ToolCallId>(call.callId), name: 'bash', arguments: callArguments(call.command) })),
       source: { provider: 'fixture', model: 'fixture' },
     }),
   }, { surfaceOp: 'append' })
-  for (const call of calls) session.append('tool/call', { turn, step, callId: ToolCallId(call.callId), name: 'bash', arguments: callArguments(call.command) })
+  for (const call of calls) session.append('tool/call', { turn, step, callId: brandString<ToolCallId>(call.callId), name: 'bash', arguments: callArguments(call.command) })
   for (const call of calls) {
     session.append('tool/result', {
       turn,
       step,
-      message: createToolResultMessage({ callId: ToolCallId(call.callId), content: [{ type: 'text', text: call.output }], isError: false }),
+      message: createToolResultMessage({ callId: brandString<ToolCallId>(call.callId), content: [{ type: 'text', text: call.output }], isError: false }),
     }, { surfaceOp: 'append' })
   }
   session.append('step/end', { turn, step })

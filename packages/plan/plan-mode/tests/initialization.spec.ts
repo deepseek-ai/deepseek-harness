@@ -4,9 +4,10 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 describe('plan-mode activation', () => {
   it.each([false, true])('rejects premature requests with restored active=%s, then includes the complete plan contribution', async (active) => {
@@ -21,10 +22,10 @@ describe('plan-mode activation', () => {
     await ctx.plugin(AgentLoop, { agents: [] })
     const adapter = new MockAdapter([textResponse('ready')])
     ctx.llm.registerAdapter(['mock'], adapter)
-    const seed = Session.create(SessionId('plan-seed'))
+    const seed = Session.create(brandString<SessionId>('plan-seed'))
     seed.append('plan/mode', { active })
     const { agent } = await ctx.agents.create({
-      sessionId: SessionId('initial-plan'), seed: seed.snapshotEvents(),
+      sessionId: brandString<SessionId>('initial-plan'), seed: seed.snapshotEvents(),
       agentOptions: { provider: 'mock', model: 'mock' },
     })
     const register = ctx.sessionProjections.register.bind(ctx.sessionProjections)
@@ -45,7 +46,9 @@ describe('plan-mode activation', () => {
     agent.followup(prompt)
     await agent.whenIdle()
     expect(adapter.requests).toHaveLength(0)
-    expect(errors.some(error => error instanceof Error && /plan.*not ready/.test(error.message))).toBe(true)
+    expect(errors).toContainEqual(expect.objectContaining({
+      name: 'PlanModeError', code: 'PLAN_STATE_UNAVAILABLE', message: expect.stringMatching(/plan.*not ready/) as string,
+    }))
     expect(agent.session.snapshotEvents().filter(event => event.type === 'request/header')).toHaveLength(0)
 
     release.resolve(undefined)

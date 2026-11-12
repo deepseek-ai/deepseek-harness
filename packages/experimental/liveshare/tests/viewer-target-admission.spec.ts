@@ -6,9 +6,10 @@
  * policy on the resources it resolves from the call's actual wire arguments.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentId, type ImageAttachmentRef } from '../../../attachment/attachment/src/index.ts'
+import type { AttachmentId, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { TypertGatewayService } from '@deepseek-ai/dsh-api-gateway'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
@@ -28,9 +29,9 @@ import { createViewerAccessPolicy, readerWriteRefusal, type ViewerAccessFacts } 
 import { createViewerReadService } from '../src/host/viewer-read.ts'
 
 const actor = { providerId: 'fixture', tenantId: 'tenant', subjectId: 'viewer' }
-const source = SessionId('source')
-const child = SessionId('own-child')
-const privateSession = SessionId('private-session')
+const source = brandString<SessionId>('source')
+const child = brandString<SessionId>('own-child')
+const privateSession = brandString<SessionId>('private-session')
 
 function call(method: string, request: object) {
   return { op: 'call' as const, path: `/api/${method}`, body: {
@@ -70,7 +71,7 @@ async function harness(mode: ViewerSessionMode = 'write') {
   })
   const agents = await Promise.all([source, child, privateSession].map(id => driver.create(id, {}, { cwd: process.cwd() })))
   const privateAgent = agents[2]!
-  const image: ImageAttachmentRef = { attachmentId: AttachmentId('private-image'),
+  const image: ImageAttachmentRef = { attachmentId: brandString<AttachmentId>('private-image'),
     mediaType: 'image/png', bytes: 1, width: 1, height: 1 }
   privateAgent.session.append('user/message', createUserMessage({
     content: [{ type: 'image', attachment: image }], source: { kind: 'user' },

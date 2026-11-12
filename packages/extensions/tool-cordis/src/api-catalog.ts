@@ -977,6 +977,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cuaPrograms',
+    summary: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    description: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    methods: [
+      {
+        signature: 'release(agent: Agent): Promise<void>',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
+        parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
+        returns: 'Completion after the process has exited and its output has drained.',
+        throws: ['When the process cleanup fails.'],
+      },
+      {
+        signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
+        description: 'Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured. A host that forwards screenshots outside a model request reads the same request version with it, so the image a caller sees matches the coordinate space the provider mapped.',
+        parameters: [{ name: 'image', description: 'Durable screenshot attachment from a `cua` result.' }],
+        returns: 'The fixed target, or undefined when the Agent\'s model route selects the delivered version.',
+      },
+    ],
+  },
+  {
     key: 'deepseekAccount',
     summary: 'Account login, credentials, and client-safe Remote operations.',
     description: 'Account login, credentials, and client-safe Remote operations.',
@@ -1313,7 +1333,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async writeReview(ref: ChangeRequestRef, write: ForgeReviewWrite, signal: AbortSignal): Promise<ForgeReviewWriteResult>',
-        description: 'Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls it as a stale read does.',
+        description: 'Write to the review threads or the pending review of a change request while its head is still `write.headSha`, then poll the change request at once when it is watched, unless the provider cannot write reviews. A `stale` result polls it as a stale read does; a write the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'write', description: 'the write and the head commit the user saw.' }, { name: 'signal', description: 'cancellation of the write.' }],
         returns: 'whether the host took the write; `unsupported` when the provider cannot write reviews, and `unknown` when the outcome must be checked on the host before the write is tried again.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
@@ -1327,7 +1347,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async setViewed(ref: ChangeRequestRef, request: ForgeViewedRequest, signal: AbortSignal): Promise<ForgeActionFailure | undefined>',
-        description: 'Set or clear the signed-in user\'s viewed mark on one file of a change request while its head is still `request.headSha`. A `stale` failure polls a watched change request again as ForgeService.diff does.',
+        description: 'Set or clear the signed-in user\'s viewed mark on one file of a change request while its head is still `request.headSha`. A `stale` failure polls a watched change request again as ForgeService.diff does; a saved mark is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'the file, its mark, and the head commit the user saw.' }, { name: 'signal', description: 'cancellation of the request.' }],
         returns: 'undefined once the host saved the mark, or why it did not; a provider that keeps no viewed marks fails.',
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
@@ -1347,8 +1367,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
       },
       {
+        signature: 'async mergeBase(ref: ChangeRequestRef, base: string, head: string, signal: AbortSignal): Promise<string | ForgeFailure>',
+        description: 'Find the merge base of two commits of a change request\'s repository: the commit whose files the old side of the change request\'s diff shows when `base` is the snapshot\'s `baseSha` and `head` its `headSha`.',
+        parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'base', description: 'full object name of the base commit.' }, { name: 'head', description: 'full object name of the head commit.' }, { name: 'signal', description: 'cancellation of the read.' }],
+        returns: 'the merge base\'s full object name, or why the host did not provide it; `unsupported` when the provider cannot name merge bases.',
+        throws: ['when no provider serves the change request\'s forge, or with `signal.reason` when it aborts.'],
+      },
+      {
         signature: 'async submitReview(ref: ChangeRequestRef, request: ForgeReviewRequest, signal: AbortSignal): Promise<ForgeReviewResult>',
-        description: 'Publish one comment or a completed review, then refresh the watched status.',
+        description: 'Publish one comment or a completed review, then refresh the watched status; a publication the host took is announced with `forge/review-changed`.',
         parameters: [{ name: 'ref', description: 'change request served by a registered provider.' }, { name: 'request', description: 'explicitly selected commit, comments, and review decision.' }, { name: 'signal', description: 'request cancellation.' }],
         returns: 'a publication URL or a failure, including an unknown write outcome.',
       },
@@ -1490,6 +1517,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['`forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves; `forgePanel/diff-too-large` when the host or its provider refuses the file over a size limit; `forgePanel/diff-failed` when the host does not provide the file otherwise.'],
       },
       {
+        signature: 'registerLens(lens: ForgeLens): () => Promise<void>',
+        description: 'Register a filter lens as an effect on the calling fiber. The changes views list it while it is registered; ending the registration aborts its running classifications and waits for them.',
+        parameters: [{ name: 'lens', description: 'the lens.' }],
+        returns: 'the disposer that unregisters the lens and waits for its classifications to stop.',
+        throws: ['when another registration holds `lens.id`.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *extensions(signal: AbortSignal): AsyncIterable<ForgeExtensionState>',
+        description: 'Stream the facts every changes view reads about the panel\'s extensions: the current facts first, then the facts after each lens registration or withdrawal. The stream ends when `signal` aborts or the Remote stops.',
+        parameters: [{ name: 'signal', description: 'ends the stream.' }],
+        returns: 'the registered lenses and the annotation limit, in publication order.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *changesLens(session: Session, request: ForgeLensRequest, signal: AbortSignal): AsyncIterable<ForgeLensFrame>',
+        description: 'Classify the files a changes view of a Session shows with one registered lens: progress frames while the lens runs, then the files it keeps. Results for the same files, lens, and lens version are reused from memory until `maxCachedLensBytes` evicts them. Local changes are read with the Session\'s permissions; a change request\'s files are those `changeRequestDiff` reads.',
+        parameters: [{ name: 'session', description: 'Session whose checkout or binding the view shows.' }, { name: 'request', description: 'the view\'s source, the version of the files it shows, and the lens.' }, { name: 'signal', description: 'ends the classification.' }],
+        returns: 'progress frames, then one result frame.',
+        throws: ['`forgePanel/lens-missing` while no lens holds the identity or once its registration ends; `forgePanel/lens-stale` before a change request\'s status was read, when the files differ from `request.version`, and when local files changed while the lens ran; `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.'],
+      },
+      {
         signature: '@Remote async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null>',
         description: 'Read the signed-in user\'s viewed marks on the files of a change request of a Session, which the host keeps for the whole change request.',
         parameters: [{ name: 'session', description: 'Session the change request is bound to.' }, { name: 'url', description: 'binding URL of the change request.' }, { name: 'headSha', description: 'head commit of the shown diff; marks read at another head are refused.' }, { name: 'signal', description: 'request cancellation.' }],
@@ -1599,7 +1646,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'forgeSession',
     summary: 'Session-scoped change request bindings.',
-    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
+    description: 'Session-scoped change request bindings. The `forgeChangeRequests` projection derives them from `gh pr create`, `gh pr view`, `gh pr edit`, `gh pr checkout`, and `git push` results, including those of shell calls inside PTC programs, and from `plugin:forge-session/binding` records. After each push result, and when a caller reports the branch a Session works on, the service looks up open change requests whose head is that branch and records the unbound ones as discovered. Watching a Session polls its visible change requests through `ctx.forge`.',
     methods: [
       {
         signature: 'changeRequests(session: Session): SessionChangeRequest[]',
@@ -2300,7 +2347,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'A provider lifetime owns all converters, queued calls, and temporary files.',
     methods: [
       {
-        signature: 'readonly generation: OfficeKitGeneration = OfficeKitGeneration(randomUUID())',
+        signature: 'readonly generation: OfficeKitGeneration = brandString<OfficeKitGeneration>(randomUUID())',
         description: 'Changes whenever engine, font, or conversion configuration is replaced.',
         parameters: [],
       },
@@ -2462,12 +2509,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read current plugins, including why a row cannot be changed through the profile patch.',
         parameters: [],
         returns: 'Current runtime entries with persistent patch targets.',
+        throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
         signature: '@Remote listBundles(): Promise<BundleInfo[]>',
         description: 'Read installed, installation-provided, and offline Official catalog bundles, plus selected non-bundle names. A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.',
         parameters: [],
         returns: 'Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional display metadata, activation selections, whether the installation offers the bundle, and removal availability.',
+        throws: ['{PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or installation manifest cannot be read; Remote callers receive `gateway/internal`.'],
       },
       {
         signature: '@Remote async registries(): Promise<PluginRegistries>',
@@ -2665,11 +2714,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'ptcRuntime',
     summary: 'Registers one `ctx.ptcRuntime` implementation.',
-    description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
+    description: 'Registers one `ctx.ptcRuntime` implementation. Program, budget, abort, and substrate failures resolve in PtcRunResult; only Service Definition contract misuse rejects, with PtcRuntimeError. Implementations bridge structured-cloneable bindings, materialize each declared namespace rejection class, treat programs as hostile peers, isolate distinct state owners, and terminate and await in-flight runs during disposal.',
     methods: [
       {
         signature: 'abstract readonly language: string',
-        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tool-executor-ptc` presents; the TypeScript backend is released, the Python backend is experimental and private (not published).',
+        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tool-executor-ptc` presents. The shipped Node backend reports `\'typescript\'`.',
         parameters: [],
       },
       {
@@ -2696,7 +2745,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve supported options and provider defaults before execution.',
         parameters: [{ name: 'request', description: 'Program, bindings, cancellation and optional execution choices.' }],
         returns: 'Complete directory, deadline and supported authority for run.',
-        throws: ['When an explicit choice is invalid or unsupported by this provider.'],
+        throws: ['When an explicit choice is invalid or unsupported by this provider; contract misuse throws {@link PtcRuntimeError}.'],
       },
       {
         signature: 'abstract run(spec: PtcRunSpec): Promise<PtcRunResult>',
@@ -4537,7 +4586,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Ask the scoped answerer waterfall and wait for the user\'s answer.\n\nWhen a caller supplies an agent, human interaction is valid only for the exact live instance of an ordinary Session. Explicit subagent origin rejects delegated callers; historical ordinary forks may retain parent metadata and still ask normally.',
         parameters: [{ name: 'request', description: 'Questions, owner agent, and abort signal.' }],
         returns: 'The answer chosen or typed by the human.',
-        throws: ['{UserQuestionError} code `ASK_ABORTED` when the supplied signal is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, or `DELEGATED_CALLER` when that live agent has subagent origin.'],
+        throws: ['{UserQuestionError} code `ASK_ABORTED` when the supplied signal is already or becomes aborted, `CALLER_NOT_LIVE` when a supplied agent is not the registry\'s exact live instance, `DELEGATED_CALLER` when that live agent has subagent origin, or `PROVIDER_ERROR`, keeping the original message, when an answerer fails with a value that is not a `HarnessError`; a coded `HarnessError` from an answerer keeps its `name` and `code`.'],
       },
     ],
   },
@@ -5272,6 +5321,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Announces a provider registration or withdrawal after the registry changes.',
     description: 'Announces a provider registration or withdrawal after the registry changes. Listener failures are logged without preventing other listeners from running.',
     parameters: [{ name: 'forge', description: 'family whose provider changed.' }],
+  },
+  {
+    name: 'forge/review-changed',
+    mode: 'parallel',
+    signature: '\'forge/review-changed\'(ref: ChangeRequestRef, change: ForgeReviewChange): void | Promise<void>',
+    summary: 'Announces a review change the host accepted through this service: a thread or pending-review write, a submitted review, or a viewed mark.',
+    description: 'Announces a review change the host accepted through this service: a thread or pending-review write, a submitted review, or a viewed mark. Changes whose outcome is unknown, refused, stale, or unsupported are not announced. Listener failures are logged without preventing other listeners from running.',
+    parameters: [{ name: 'ref', description: 'change request the change went to.' }, { name: 'change', description: 'what changed and the head commit it was made against.' }],
   },
   {
     name: 'fs/delete-intent',
@@ -6834,6 +6891,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeDiffStatus = \'added\' | \'deleted\' | \'modified\' | \'renamed\';',
   },
   {
+    name: 'ForgeExtensionState',
+    declaration: 'export interface ForgeExtensionState {\n    readonly lenses: readonly ForgeRegisteredLens[];\n    readonly maxAnnotationsPerFile: number;\n}',
+  },
+  {
     name: 'ForgeFailure',
     declaration: 'export interface ForgeFailure {\n    readonly code: \'not-found\' | \'unauthenticated\' | \'too-large\' | \'stale\' | \'unsupported\' | \'unavailable\';\n    readonly message: string;\n}',
   },
@@ -6842,8 +6903,48 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ForgeFileLayer = \'interface\' | \'implementation\' | \'test\';',
   },
   {
+    name: 'ForgeLens',
+    declaration: 'export interface ForgeLens {\n    readonly id: ForgeLensId;\n    readonly version: string;\n    classify(input: ForgeLensInput, signal: AbortSignal): Promise<ForgeLensResult>;\n}',
+  },
+  {
+    name: 'ForgeLensFile',
+    declaration: 'export type ForgeLensFile = Pick<ForgeDiffFile, \'path\' | \'previousPath\' | \'status\' | \'binary\' | \'layer\' | \'hunks\' | \'digest\'>;',
+  },
+  {
+    name: 'ForgeLensFrame',
+    declaration: 'export type ForgeLensFrame = {\n    readonly kind: \'progress\';\n    readonly done: number;\n    readonly total: number;\n} | {\n    readonly kind: \'result\';\n    readonly files: Readonly<Record<string, ForgeLensKeep>>;\n};',
+  },
+  {
+    name: 'ForgeLensId',
+    declaration: 'export type ForgeLensId = Branded<\'ForgeLensId\'>;',
+  },
+  {
+    name: 'ForgeLensInput',
+    declaration: 'export interface ForgeLensInput {\n    readonly source: ForgeLensSource;\n    readonly files: readonly ForgeLensFile[];\n    text(side: \'old\' | \'new\', path: string, signal: AbortSignal): Promise<string | null>;\n    progress(done: number, total: number): void;\n}',
+  },
+  {
+    name: 'ForgeLensKeep',
+    declaration: 'export interface ForgeLensKeep {\n    readonly ranges?: {\n        readonly old: readonly ForgeLineRange[];\n        readonly new: readonly ForgeLineRange[];\n    };\n}',
+  },
+  {
+    name: 'ForgeLensRequest',
+    declaration: 'export interface ForgeLensRequest {\n    readonly source: {\n        readonly kind: \'local\';\n        readonly scope: ForgeLocalScope;\n    } | {\n        readonly kind: \'change\';\n        readonly url: string;\n        readonly commits: ForgeCommitRange | null;\n    };\n    readonly version: string;\n    readonly lens: string;\n}',
+  },
+  {
+    name: 'ForgeLensResult',
+    declaration: 'export interface ForgeLensResult {\n    readonly files: Readonly<Record<string, ForgeLensKeep>>;\n}',
+  },
+  {
+    name: 'ForgeLensSource',
+    declaration: 'export type ForgeLensSource = {\n    readonly kind: \'local\';\n    readonly scope: ForgeLocalScope;\n} | {\n    readonly kind: \'change\';\n    readonly ref: ChangeRequestRef;\n    readonly headSha: string;\n    readonly commits: ForgeCommitRange | null;\n};',
+  },
+  {
     name: 'ForgeLineComment',
     declaration: 'export interface ForgeLineComment {\n    readonly path: string;\n    readonly side: \'L\' | \'R\';\n    readonly startLine: number;\n    readonly endLine: number;\n    readonly body: string;\n}',
+  },
+  {
+    name: 'ForgeLineRange',
+    declaration: 'export interface ForgeLineRange {\n    readonly start: number;\n    readonly end: number;\n}',
   },
   {
     name: 'ForgeLocalChanges',
@@ -6867,7 +6968,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ForgePanelChangeRequest',
-    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly snapshot: ChangeRequestSnapshot | null;\n}',
+    declaration: 'export interface ForgePanelChangeRequest extends SessionChangeRequest {\n    readonly snapshot: ChangeRequestSnapshot | null;\n    readonly reviewRevision: number;\n}',
   },
   {
     name: 'ForgePanelState',
@@ -6890,12 +6991,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ForgeReadiness {\n    readonly state: \'ready\' | \'unauthenticated\' | \'unavailable\';\n    readonly message: string | null;\n}',
   },
   {
+    name: 'ForgeRegisteredLens',
+    declaration: 'export interface ForgeRegisteredLens {\n    readonly id: string;\n    readonly version: string;\n}',
+  },
+  {
     name: 'ForgeRepository',
     declaration: 'export interface ForgeRepository {\n    readonly forge: string;\n    readonly host: string;\n    readonly owner: string;\n    readonly name: string;\n}',
   },
   {
     name: 'ForgeRerunRequest',
     declaration: 'export interface ForgeRerunRequest {\n    readonly headSha: string;\n}',
+  },
+  {
+    name: 'ForgeReviewChange',
+    declaration: 'export type ForgeReviewChange = {\n    readonly kind: \'write\';\n    readonly write: ForgeReviewWrite[\'kind\'];\n    readonly headSha: string;\n} | {\n    readonly kind: \'submit\';\n    readonly headSha: string;\n} | {\n    readonly kind: \'viewed\';\n    readonly path: string;\n    readonly viewed: boolean;\n    readonly headSha: string;\n};',
   },
   {
     name: 'ForgeReviewComment',
@@ -8439,7 +8548,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RemoteError',
-    declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends Error {\n    readonly isDSHRemoteError: true;\n    constructor(readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
+    declaration: 'export class RemoteError<Code extends RemoteErrorCode = RemoteErrorCode> extends HarnessError {\n    readonly isDSHRemoteError: true;\n    constructor(override readonly code: Code, message: string, readonly details: RemoteErrorDetailsMap[Code], options?: ErrorOptions);\n}',
   },
   {
     name: 'RemoteErrorCode',
@@ -10650,6 +10759,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type WorkflowAgentOutcome = \'completed\' | \'failed\' | \'cancelled\';',
   },
   {
+    name: 'WorkflowErrorCode',
+    declaration: 'export type WorkflowErrorCode = \'SCRIPT_PARSE\' | \'META_INVALID\' | \'INVALID_ARGUMENT\' | \'UNSUPPORTED_OPTION\' | \'UNSUPPORTED_SCHEMA\' | \'AGENT_CAP\' | \'ITEM_CAP\' | \'AGENT_START\' | \'AGENT_RESULT\' | \'RESULT_UNSERIALIZABLE\' | \'CANCELLED\' | \'RUN_FAILED\';',
+  },
+  {
     name: 'WorkflowMeta',
     declaration: 'export interface WorkflowMeta {\n    name: string;\n    description: string;\n    whenToUse?: string;\n    phases?: WorkflowPhase[];\n}',
   },
@@ -10659,11 +10772,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkflowResult',
-    declaration: 'export interface WorkflowResult {\n    value: unknown;\n    stopReason: WorkflowStopReason;\n    error?: string;\n    agentsStarted: number;\n}',
+    declaration: 'export interface WorkflowResult {\n    value: unknown;\n    stopReason: WorkflowStopReason;\n    error?: string;\n    errorCode?: WorkflowErrorCode;\n    agentsStarted: number;\n}',
   },
   {
     name: 'WorkflowResultInfo',
-    declaration: 'export interface WorkflowResultInfo {\n    stopReason: WorkflowStopReason;\n    error?: string;\n    agentsStarted: number;\n}',
+    declaration: 'export interface WorkflowResultInfo {\n    stopReason: WorkflowStopReason;\n    error?: string;\n    errorCode?: WorkflowErrorCode;\n    agentsStarted: number;\n}',
   },
   {
     name: 'WorkflowRun',

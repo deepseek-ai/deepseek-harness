@@ -8,14 +8,16 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
-import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
+import { createAfterScheduleRecord } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import ScheduleService from '../src/index.ts'
 import { boundTask, seedTasks } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 const contexts: Context[] = []
@@ -42,8 +44,8 @@ describe('due delivery during Agent creation', () => {
     await ctx.plugin(Storage)
     await ctx.plugin(StorageJson, { root: join(root, 'schedule-storage') })
     await ctx.plugin(StorageDomain, { backend: 'json' })
-    const sessionId = SessionId('serial-delivery')
-    const id = ScheduleId('due')
+    const sessionId = brandString<SessionId>('serial-delivery')
+    const id = brandString<ScheduleId>('due')
     const record = createAfterScheduleRecord(id, 'Due reminder', 1, Date.now() - 2_000, 'Due reminder')
     await seedTasks(ctx.storageDomain, [boundTask(sessionId, record)])
     const available = Promise.withResolvers<Agent>()
