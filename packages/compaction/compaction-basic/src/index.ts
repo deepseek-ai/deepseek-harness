@@ -4,17 +4,20 @@
  * @module @deepseek-ai/dsh-compaction-basic
  */
 
-import { Context } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { CompactionEngine, ManualCompactionError } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compaction'
 import type { EpochHeader, Session, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, LlmError } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
 import type {} from '@deepseek-ai/dsh-compaction-tool-result-pruner'
+import { answeredRouteProjectionDefinition } from './answered-route.ts'
+import type { AnsweredRoute } from './answered-route.ts'
 import {
   resolveCompactSpec,
   resolveConfig,
@@ -68,17 +71,17 @@ function reservedCompletionTokens(header: EpochHeader, defaultMaxTokens: number 
 
 /**
  * Resolve the route that summarizes the conversation and selects its policy
- * override. The route that last answered has held this history; the latest
- * header may name a route whose only request overflowed.
+ * override. The route that last answered already accepted this history; the
+ * latest header may name a route whose only request overflowed.
  * @param agent - supplies the latest header and the live fallback options.
- * @param answered - route of the request that produced the latest assistant message.
+ * @param answered - route recorded on the latest assistant message; `null` before the first one.
  * @returns the first complete route among `answered`, the latest header, and the agent options.
  */
 function conversationTarget(
   agent: Agent,
-  answered: SummaryRoute | undefined,
+  answered: AnsweredRoute,
 ): SummaryRoute | undefined {
-  return completeRoute(answered) ?? routedTarget(agent.session) ?? completeRoute(agent.options)
+  return completeRoute(answered ?? undefined) ?? routedTarget(agent.session) ?? completeRoute(agent.options)
 }
 
 const thresholdRatioSchema = z.number()
@@ -114,7 +117,7 @@ const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
  * token meter.
  */
 export class BasicCompactionEngine extends CompactionEngine {
-  static inject = ['llm', 'tokenMeter', 'sessions']
+  static inject = ['llm', 'tokenMeter', 'sessions', 'sessionProjections']
 
   static Config: z<BasicCompactionConfig> = z.object({
     thresholdRatio: thresholdRatioSchema,
@@ -136,11 +139,19 @@ export class BasicCompactionEngine extends CompactionEngine {
   private readonly warnedPressureConfigTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
+  /** Registered at construction; `summarize()` awaits it, so no read precedes readiness. */
+  private readonly answeredRoute: Promise<ProjectionHandle<AnsweredRoute>>
 
   constructor(ctx: Context, config: BasicCompactionConfig = {}) {
     super(ctx)
     this.config = resolveConfig(config)
+    this.answeredRoute = this.ctx.sessionProjections.register(answeredRouteProjectionDefinition)
     if (this.config.auto) this._registerAutomaticCompaction()
+  }
+
+  /** Fail plugin activation when the answered-route projection cannot register. */
+  protected async [Service.init](): Promise<void> {
+    await this.answeredRoute
   }
 
   /**
@@ -265,9 +276,9 @@ export class BasicCompactionEngine extends CompactionEngine {
    * Summarize the replayed conversation region through a direct one-shot
    * `ctx.llm.stream()` call whose prefix reuses the conversation's own system
    * prompt, tools, and messages so the provider's KV cache is not invalidated.
-   * Without a configured summary target the call goes to the route that
-   * produced the latest assistant message, then the latest request header,
-   * then the agent options. A model selected for a later request is not used.
+   * Without a configured summary target the call goes to the route recorded
+   * on the latest assistant message, then the latest request header, then the
+   * agent options. A model selected for a later request is not used.
    * Override this sole hook for a template or remote summarizer.
    * @param input - replayed conversation prefix (system, tools, and leading messages) to condense.
    * @param agent - supplies the session history, fallback model, and session id.
@@ -279,7 +290,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     agent: Agent,
     signal?: AbortSignal,
   ): Promise<SummaryResult> {
-    const target = conversationTarget(agent, this.ctx.tokenMeter.answeredRoute(agent.session))
+    const target = conversationTarget(agent, (await this.answeredRoute).stateOf(agent.session))
     const config = target === undefined
       ? this.config
       : resolveTargetPolicy(this.config, target)

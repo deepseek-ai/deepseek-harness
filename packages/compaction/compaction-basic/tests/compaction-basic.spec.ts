@@ -4,6 +4,7 @@ import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
 import BasicCompactionEngine from '@deepseek-ai/dsh-compaction-basic'
 import type { BasicCompactionConfig } from '@deepseek-ai/dsh-compaction-basic'
 import { selectCompactableRange } from '@deepseek-ai/dsh-compaction-basic/src/region.ts'
+import { answeredRouteProjectionDefinition } from '@deepseek-ai/dsh-compaction-basic/src/answered-route.ts'
 import { frameSummary } from '@deepseek-ai/dsh-compaction-basic/src/summarizer.ts'
 import type { SummarizationInput, SummaryResult } from '@deepseek-ai/dsh-compaction-basic/src/summarizer.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -27,8 +28,9 @@ import type {
   StreamChunk,
   TokenUsage,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import type { ProjectionCheckpoint } from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { agentEvents, type Agent, type RequestErrorAction } from '@deepseek-ai/dsh-agent'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
@@ -1579,6 +1581,79 @@ describe('default one-shot summarizer', () => {
     expect(output).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
     expect(adapter.lastOptions).toMatchObject({ provider: MODEL, model: MODEL, maxTokens: 222 })
     expect(unanswered.lastOptions).toBeUndefined()
+  })
+
+  it.each([false, true])('restores the answered route from a JSON checkpoint and folds only the suffix (answer in suffix: %s)', async (answerInSuffix) => {
+    const { ctx, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    ctx.llm.registerAdapter(['later'], new ScriptedAdapter([{ type: 'text', text: 'later summary' }]))
+    const session = conversation(1)
+    const checkpoint = JSON.parse(JSON.stringify(ctx.sessionProjections.checkpoint(session))) as ProjectionCheckpoint
+    expect(checkpoint['compactionAnsweredRoute']).toMatchObject({ ver: 1, val: { provider: MODEL, model: MODEL } })
+    const cut = session.seq
+    session.append('step/start', { turn: 2, step: 1 })
+    session.append('request/header', { header: { config: { provider: 'later', model: 'later' } }, reason: 'change' })
+    if (answerInSuffix) {
+      session.append('assistant/message', {
+        stream: [],
+        turn: 2,
+        step: 1,
+        message: createMessage({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'later answer' }],
+          source: { kind: 'model', provider: 'later', model: 'later' },
+        }),
+      }, { surfaceOp: 'append' })
+    }
+    const events = session.snapshotEvents()
+    const restored = Session.fromRestore(session.id, events, session.header, SessionLogOffset(0), 'detached')
+    const apply = vi.spyOn(answeredRouteProjectionDefinition, 'apply')
+    onTestFinished(() => { apply.mockRestore() })
+    ctx.sessionProjections.hydrate(restored, checkpoint, events.slice(cut), cut)
+    expect(apply.mock.calls.map(([, event]) => event.seq)).toEqual(events.slice(cut).map(event => event.seq))
+
+    const expected = answerInSuffix ? 'later' : MODEL
+    await expect(compact.runSummarize(promptInput('history'), agent(restored))).resolves
+      .toMatchObject({ provider: expected, model: expected })
+    await expect(compact.runSummarize(promptInput('history'), agent(session))).resolves
+      .toMatchObject({ provider: expected, model: expected })
+  })
+
+  it('keeps the answered-route state reference for unrelated events and an unchanged route', () => {
+    const { init, apply } = answeredRouteProjectionDefinition
+    const events = conversation(2).snapshotEvents()
+    const answers = events.filter(event => event.type === 'assistant/message')
+    const first = apply(init(), answers[0]!)
+    expect(first).toEqual({ provider: MODEL, model: MODEL })
+    for (const event of events) expect(apply(first, event)).toBe(first)
+    expect(apply(null, events.find(event => event.type === 'request/header')!)).toBeNull()
+    expect(answers).toHaveLength(2)
+  })
+
+  it('registers the answered-route projection with the plugin and releases it on unload', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(TokenMeter)
+    const fiber = await ctx.plugin(BasicCompactionEngine, { auto: false })
+    expect(ctx.sessionProjections.checkpoint(conversation(1))).toHaveProperty('compactionAnsweredRoute')
+
+    await fiber.dispose()
+    expect(ctx.sessionProjections.checkpoint(conversation(2))).not.toHaveProperty('compactionAnsweredRoute')
+  })
+
+  it('fails plugin activation when the answered-route projection cannot register', async () => {
+    const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(TokenMeter)
+    await ctx.sessionProjections.register({ ...answeredRouteProjectionDefinition, stateVersion: 2 })
+
+    await expect(ctx.plugin(BasicCompactionEngine, { auto: false })).rejects.toThrow('compactionAnsweredRoute')
+    expect(ctx.get('compaction')).toBeUndefined()
   })
 
   it('records the model actually dispatched after one-shot stream routing', async () => {

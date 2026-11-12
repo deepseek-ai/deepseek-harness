@@ -780,7 +780,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-compaction-basic`
 
-- `inject`: `llm` · `tokenMeter` · `sessions`
+- `inject`: `llm` · `tokenMeter` · `sessions` · `sessionProjections`
 - `source`: [`packages/compaction/compaction-basic/src/types.ts:46`](../packages/compaction/compaction-basic/src/types.ts)
 
 ```ts config-catalog

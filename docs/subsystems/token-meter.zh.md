@@ -114,14 +114,6 @@ Replay owner for one service-wide estimator and isolated per-session folds.
 contextPressure(session: Session): Pick<ContextPressureProjection, 'pressureTokens' | 'contextWindow'>
 
 /**
- * Read the route of the request that produced the latest assistant message.
- * A request that failed before recording an assistant message leaves it unchanged.
- * @param session - Session whose durable history is read.
- * @returns a detached provider/model pair, or `undefined` before any assistant message or when no request header preceded it.
- */
-answeredRoute(session: Session): { provider: string; model: string } | undefined
-
-/**
  * Measure current request pressure and surface through the durable tail.
  *
  * The effective envelope's routed provider/model selects the request-image
