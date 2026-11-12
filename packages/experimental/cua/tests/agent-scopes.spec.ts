@@ -10,6 +10,7 @@ import NodeRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Subprocess from '@deepseek-ai/dsh-subprocess'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
+import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -267,6 +268,29 @@ it('creates raw Agents while private runtime startup is pending', async () => {
   const standard = await create('private-restored-standard', 'standard')
   expect(ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()
   expect(ctx.tools.get('cua', ptc.agent)).toBe(raw)
+})
+
+it('creates raw Agents at every point of provider startup while the private runtime fails', async () => {
+  const { ctx, create } = await setup()
+  const report = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+  onTestFinished(() => { report.mockRestore() })
+  const { agent } = await create('startup-ptc', 'ptc')
+  const starting = ctx.plugin(provider, { standaloneRunCode: { runtime: { maxOutputBytes: 1 } } })
+  // A real creation spans several microtasks. The provider's listener is the only one here, so each
+  // announcement reaches it in the microtask that sends it.
+  const outcomes: Promise<string>[] = []
+  let announcedAfterRegistration = false
+  for (let turn = 0; turn < 32; turn++) {
+    announcedAfterRegistration ||= ctx.tools.get('cua', agent) !== undefined
+    outcomes.push(ctx.serial(scopeTarget(agent, agent), 'agent/created', { agent, source: 'startup' })
+      .then(() => 'created', (error: unknown) => String(error)))
+    await Promise.resolve()
+  }
+  expect(announcedAfterRegistration).toBe(true)
+  expect((await Promise.all(outcomes)).filter(outcome => outcome !== 'created')).toEqual([])
+  await starting
+  expect(ctx.tools.get('cua', agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', agent)).toBeUndefined()
 })
 
 it('uses a corrected private runtime after the failed instance is replaced', async () => {

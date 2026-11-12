@@ -103,8 +103,9 @@ var cua = connectCua(() => tools.cua);
     let program: ToolDefinition | undefined
     let programs: Fiber | undefined
     let closing = false
-    // Set while the optional preset registry is mounted; without it no Agent runs the configured preset.
-    let presets: Context['agentPresets'] | undefined
+    // The optional preset registry while it is mounted; without it no Agent runs the configured preset. The
+    // initial read classifies Agents created before the subscription below first runs.
+    let presets: Context['agentPresets'] | undefined = base.get('agentPresets')
     const modeOf = (agent: Agent): 'raw' | 'program' =>
       presets?.composedPreset(agent.ctx) === config.agentPreset ? 'raw' : 'program'
     const sync = (agent: Agent): void => {
