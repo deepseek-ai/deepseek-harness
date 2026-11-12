@@ -10,9 +10,7 @@ internal static class Input
     private const ushort VkControl = 0x11;
     private const ushort VkAlt = 0x12;
     private const ushort VkLeftWin = 0x5B;
-    private const ushort VkRightWin = 0x5C;
 
-    private static readonly int[] ModifierKeys = [VkShift, VkControl, VkAlt, VkLeftWin, VkRightWin];
     private static ushort Modifier(string name) => name switch
     {
         "shift" => VkShift, "ctrl" => VkControl, "alt" => VkAlt, "win" => VkLeftWin,
@@ -32,16 +30,9 @@ internal static class Input
 
     private static void Release(Win32.Input input) => Win32.SendInput(1, [input], Marshal.SizeOf<Win32.Input>());
 
-    private static void RequireIdleModifiers()
-    {
-        if (ModifierKeys.Concat([0x01, 0x02, 0x04, 0x05, 0x06]).Any(key => (Win32.GetAsyncKeyState(key) & 0x8000) != 0))
-            throw new NativeFailure("INPUT_BUSY", "A modifier or mouse button is already held; wait for the user to release it before sending input");
-    }
-
     private static void WithModifiers(IEnumerable<string> modifiers, Action action)
     {
         var keys = modifiers.Select(KeyChord.NormalizeModifier).Select(Modifier).Distinct().ToArray();
-        RequireIdleModifiers();
         var attempted = new List<ushort>();
         try
         {
@@ -121,11 +112,9 @@ internal static class Input
     internal static async Task Type(AppState app, WindowState window, string text, RequestContext context)
     {
         if (text.Contains('\0')) throw new NativeFailure("INVALID_ARGUMENT", "Text input cannot contain NUL");
-        RequireIdleModifiers();
         for (var index = 0; index < text.Length; index++)
         {
             Windows.RequireForeground(app, window, context);
-            RequireIdleModifiers();
             var character = text[index];
             if (character is '\r' or '\n' or '\t')
             {
@@ -197,7 +186,6 @@ internal static class Input
         var flags = Button(button);
         var keys = modifiers.Select(KeyChord.NormalizeModifier).Select(Modifier).Distinct().ToArray();
         Hit(app, window, point, context);
-        RequireIdleModifiers();
         var attempted = new List<ushort>();
         var buttonAttempted = false;
         try
@@ -228,7 +216,6 @@ internal static class Input
     {
         var point = WindowState.Point(window.RequireObservation(app, context), x, y);
         Hit(app, window, point, context);
-        RequireIdleModifiers();
         uint lines = 1, columns = 1;
         if (deltaY != 0 && (!Win32.SystemParametersInfo(0x0068, 0, out lines, 0) || lines == uint.MaxValue || lines == 0)
             || deltaX != 0 && (!Win32.SystemParametersInfo(0x006C, 0, out columns, 0) || columns == 0))
@@ -248,7 +235,6 @@ internal static class Input
         Hit(app, window, from, context);
         var flags = Button(button);
         var keys = modifiers.Select(KeyChord.NormalizeModifier).Select(Modifier).Distinct().ToArray();
-        RequireIdleModifiers();
         var attempted = new List<ushort>();
         var buttonAttempted = false;
         try
