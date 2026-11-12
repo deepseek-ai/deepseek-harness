@@ -31,10 +31,13 @@ it('shows checking until the manager lists the server, then each status with its
   expect(shown(server({ state: 'reconnecting', attempt: 1, maxAttempts: 3, nextRetryAtMs: 0, lastError: 'x' }))).toMatchObject({ phase: 'connecting' })
   const connected = shown(server({ state: 'connected', toolCount: 1, connectedAt: 0 }))
   expect(connected).toMatchObject({ phase: 'connected', badge: { zh: '已连接' }, detail: 'Ask the agent to use Acme.' })
-  expect(connected.buttons).toEqual([{
-    label: text({ en: 'Sign out', zh: '退出登录' }), command: { kind: 'start', operation: 'sign-out' },
-    confirm: { title: 'Sign out of Acme?', body: 'The saved grant is removed.', label: text({ en: 'Sign out' }) },
-  }])
+  expect(connected.buttons).toEqual([
+    { label: text({ en: 'Authorize again', zh: '重新授权' }), command: { kind: 'start', operation: 'connect' } },
+    {
+      label: text({ en: 'Sign out', zh: '退出登录' }), command: { kind: 'start', operation: 'sign-out' },
+      confirm: { title: 'Sign out of Acme?', body: 'The saved grant is removed.', label: text({ en: 'Sign out' }) },
+    },
+  ])
 })
 
 it('offers Connect while no grant exists and shows a grant that needs reconnection as disconnected with its reason', () => {
