@@ -279,6 +279,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
+      // Released macOS helpers accept an explicit false for mouseMove but reject the new drag field.
       if (method === 'drag' && !useSystemPointer) delete params.useSystemPointer
       else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)

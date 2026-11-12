@@ -78,7 +78,7 @@ The Host marker has no configurable fields; platform providers own native config
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Providers declare `systemPointer: true` to support explicit physical pointer movement. CUA exposes the option in the tool schema and model instructions only for those providers. CUA owns the approval card, live-session decision and delegated-task restriction. A provider receives the per-call pointer mode after CUA checks application access and any required consent.
+Providers declaring `systemPointer: true` must support explicit `useSystemPointer: true` on both `mouseMove` and `drag`. The operations share one session decision. CUA validates the tool arguments, asks for consent, and enforces the delegated-task restriction before calling the provider. The provider documents its default input routes.
 
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 

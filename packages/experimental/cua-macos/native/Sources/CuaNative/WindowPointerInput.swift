@@ -10,7 +10,7 @@ final class WindowPointerInput {
         let up: CGEvent
     }
 
-    private struct DragStep {
+    struct DragStep {
         let movement: CGEvent
         let release: CGEvent
     }
@@ -186,7 +186,7 @@ final class WindowPointerInput {
             }
         }
         let down = try event(Self.down(selected), at: start)
-        var release = try event(Self.up(selected), at: start)
+        let initialRelease = try event(Self.up(selected), at: start)
         var previous = start
         var path: [DragStep] = []
         for index in 1...steps {
@@ -203,32 +203,53 @@ final class WindowPointerInput {
         if useSystemPointer {
             try Self.validateSystemWindow(route)
             try await Self.checkSystemHit(route, at: down.location)
-            guard ![CGMouseButton.left, .right, .center].contains(where: { CGEventSource.buttonState(.combinedSessionState, button: $0) }) else {
-                throw NativeFailure(code: "INPUT_BUSY", message: "A mouse button is already held")
-            }
+            try Self.requireReleasedButtons()
             try checkCancellation()
             post(try event(.mouseMoved, at: start))
-            try await Self.checkSystemHit(route, at: down.location)
         }
-        let interval = Self.dragStepInterval(durationMs: durationMs, steps: steps)
+        try await Self.postDrag(down: down, initialRelease: initialRelease, path: path,
+                                interval: Self.dragStepInterval(durationMs: durationMs, steps: steps),
+                                validate: { event in
+            if useSystemPointer {
+                try await Self.checkSystemHit(route, at: event.location)
+                if event.type == Self.down(selected) { try Self.requireReleasedButtons() }
+            }
+            try self.checkCancellation()
+        }, post: post)
         try checkCancellation()
+    }
+
+    static func requireReleasedButtons(isPressed: (CGMouseButton) -> Bool = {
+        CGEventSource.buttonState(.combinedSessionState, button: $0)
+    }) throws {
+        if [CGMouseButton.left, .right, .center].contains(where: isPressed) {
+            throw NativeFailure(code: "INPUT_BUSY", message: "Wait for the held mouse button to be released before requesting a system drag")
+        }
+    }
+
+    /// After a press, always post one release at the last posted point, even when validation or a wait fails.
+    static func postDrag(down: CGEvent, initialRelease: CGEvent, path: [DragStep], interval: TimeInterval,
+                         validate: (CGEvent) async throws -> Void, post: (CGEvent) -> Void,
+                         isolation: isolated (any Actor)? = #isolation) async throws {
+        try await validate(down)
         post(down)
+        var release = initialRelease
+        var failure: (any Error)?
         do {
-            defer { post(release) }
             try await Task.sleep(for: .milliseconds(16))
             for step in path {
-                if useSystemPointer { try await Self.checkSystemHit(route, at: step.movement.location) }
-                try checkCancellation()
+                try await validate(step.movement)
                 post(step.movement)
                 release = step.release
                 try await Task.sleep(for: .seconds(interval))
             }
             try await Task.sleep(for: .milliseconds(50))
-            if useSystemPointer { try await Self.checkSystemHit(route, at: release.location) }
-            try checkCancellation()
-        }
-        try await Task.sleep(for: .milliseconds(100))
-        try checkCancellation()
+            try await validate(release)
+        } catch { failure = error }
+        post(release)
+        // The next input request must allow time for release processing even when this request was cancelled.
+        try await Task { try await Task.sleep(for: .milliseconds(100)) }.value
+        if let failure { throw failure }
     }
 
     /// Every posted down is paired with exactly one up, including cancellation during the wait.

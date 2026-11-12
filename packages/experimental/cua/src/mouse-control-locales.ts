@@ -1,14 +1,14 @@
 /** Scope and interruption shown before the user grants mouse control. */
 export const mouseControlPrompt = {
   question: {
-    en: 'Allow the agent to move your mouse pointer?',
-    zh: '允许智能体移动你的鼠标指针吗？',
-    ja: 'エージェントがマウスポインタを動かすことを許可しますか？',
-    es: '¿Permitir que el agente mueva el puntero del ratón?',
-    fr: 'Autoriser l’agent à déplacer le pointeur de la souris ?',
-    de: 'Darf der Agent den Mauszeiger bewegen?',
-    ru: 'Разрешить агенту перемещать указатель мыши?',
-    pt: 'Permitir que o agente mova o ponteiro do mouse?',
+    en: 'Allow the agent to move and drag with your mouse?',
+    zh: '允许智能体使用你的鼠标移动指针和拖动吗？',
+    ja: 'エージェントにマウスポインタの移動とドラッグを許可しますか？',
+    es: '¿Permitir que el agente mueva el puntero y arrastre con tu ratón?',
+    fr: 'Autoriser l’agent à déplacer le pointeur et à faire glisser des éléments avec votre souris ?',
+    de: 'Darf der Agent den Mauszeiger bewegen und mit gedrückter Maustaste ziehen?',
+    ru: 'Разрешить агенту перемещать указатель и перетаскивать объекты с помощью мыши?',
+    pt: 'Permitir que o agente mova o ponteiro e arraste com o seu mouse?',
   },
   detail: {
     en: 'The agent can move your pointer and drag with a mouse button held when it explicitly requests control. Your choice lasts until you close this session or restart DSH.',

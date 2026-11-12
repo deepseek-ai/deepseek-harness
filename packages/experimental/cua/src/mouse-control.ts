@@ -58,6 +58,6 @@ export class MouseControl {
         throw error
       }
     }
-    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer movement for this session. No input was sent. Use pointer-free actions.')
+    if (!granted) throw new NativeError('MOUSE_CONTROL_DENIED', 'The user declined system-pointer moves and drags for this session. No input was sent. Use pointer-free actions.')
   }
 }

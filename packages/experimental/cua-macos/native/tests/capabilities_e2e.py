@@ -51,7 +51,7 @@ def check_system_drag(helper, owner, window, point, state_file):
     call("getState", {**window, "maxElements": 300, "maxDepth": 20})
     count = len(json.loads(state_file.read_text())["events"])
     params = {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
-              "toY": point["y"] + 20, "durationMs": 400, "steps": 20, "useSystemPointer": True}
+              "toY": point["y"] + 20, "durationMs": 400, "steps": 1, "modifiers": ["shift"], "useSystemPointer": True}
     call("drag", params, "FOREGROUND_REQUIRED")
     assert len(json.loads(state_file.read_text())["events"]) == count
     call("activate", owner)
@@ -60,9 +60,13 @@ def check_system_drag(helper, owner, window, point, state_file):
     call("drag", params)
     state = wait_for_state(state_file, lambda v: any(e["type"] == 2 for e in v["events"][count:]))
     events = state["events"][count:]
-    assert events[0]["type"] == 1 and events[-1]["type"] == 2, events
-    assert any(e["type"] == 6 and e["pressedButtons"] & 1 and e["deltaX"] > 0 for e in events), events
-    assert events[-1]["point"][0] - events[0]["point"][0] == 80, events
+    assert [e["type"] for e in events] == [1, 6, 2], events
+    down, move, up = events
+    assert all(e["shift"] and e["eventNumber"] == down["eventNumber"] for e in events), events
+    assert move["pressedButtons"] & 1 and (move["deltaX"], move["deltaY"]) == (80, 20), events
+    # AppKit window coordinates count upward; Quartz movement deltas count downward.
+    assert (move["point"][0] - down["point"][0], down["point"][1] - move["point"][1]) == (80, 20), events
+    assert up["point"] == move["point"] and not up["pressedButtons"] & 1, events
     key = hashlib.sha256(Path(helper.process.args[0]).read_bytes()).hexdigest()
     connection = Connection(Path(f"/tmp/dsh-cua-{os.getuid()}/{key}.sock"), key)
     try:

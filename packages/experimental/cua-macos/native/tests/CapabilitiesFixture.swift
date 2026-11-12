@@ -93,6 +93,8 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
                 value["button"] = event.buttonNumber
                 value["pressedButtons"] = NSEvent.pressedMouseButtons
                 value["deltaX"] = event.deltaX
+                value["deltaY"] = event.deltaY
+                value["eventNumber"] = event.eventNumber
                 value["point"] = [event.locationInWindow.x, event.locationInWindow.y]
             }
             self.events.append(value)

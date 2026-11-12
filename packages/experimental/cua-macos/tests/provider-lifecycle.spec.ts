@@ -1400,6 +1400,13 @@ it.each([true, false])('uses the declared systemPointer capability for a non-mac
   const answer = vi.spyOn(f.ctx.userQuestions, 'ask').mockResolvedValue({
     answers: [{ id: 'cua-mouse-control', selected: ['Allow for this session'] }],
   })
+  if (!systemPointer) {
+    const denied = await f.execute('drag', { appHandle: 'app-one', windowId: '7', fromX: 1, fromY: 1, toX: 2, toY: 2, useSystemPointer: true })
+    expect(denied.isError).toBe(true)
+    expect(JSON.stringify(denied.content)).toContain('useSystemPointer')
+    expect(native.request).not.toHaveBeenCalled()
+    expect(answer).not.toHaveBeenCalled()
+  }
   const physical = await f.execute('mouseMove', physicalHover)
   expect(physical.isError).toBe(!systemPointer)
   expect(answer).toHaveBeenCalledTimes(systemPointer ? 1 : 0)
