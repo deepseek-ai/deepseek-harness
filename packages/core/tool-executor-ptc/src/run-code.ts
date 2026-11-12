@@ -5,7 +5,7 @@ import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { ToolExecutionPipeline } from '@deepseek-ai/dsh-tools/pipeline'
 import { Config } from './config.ts'
 import { PtcCalls } from './ptc-calls.ts'
-import { createRunCodeTransport } from './ptc.ts'
+import { createRunCodeTransport, requireRuntimeLanguage } from './ptc.ts'
 
 export { Config as RunCodeConfig } from './config.ts'
 
@@ -15,7 +15,7 @@ export interface RunCodeToolOptions {
   readonly name: string
   /** Capability instructions; runtime syntax, working directory, and escalation guidance are appended. */
   readonly description: string
-  /** Caller-owned provider; the factory never selects or replaces the scope's shared runtime. */
+  /** Caller-owned TypeScript provider; the factory never selects or replaces the scope's shared runtime. */
   readonly runtime: PtcRuntime
   /** Complete private binding set, with unique names; definitions need not be registered. */
   readonly tools: readonly ToolDefinition[]
@@ -32,8 +32,10 @@ export interface RunCodeToolOptions {
  * @param options - Fixed runtime, tools, presentation, and configurable limits.
  * @returns An unregistered definition; register it in the owning scope with ctx.tools.register.
  * @throws Error if private tool names repeat or configured limits are invalid.
+ * @throws ToolContextUnavailableError if the runtime language is not TypeScript.
  */
 export function createRunCodeTool(ctx: Context, options: RunCodeToolOptions): ToolDefinition {
+  requireRuntimeLanguage(options.runtime)
   const definitions = new Map<string, ToolDefinition>()
   for (const definition of options.tools) {
     if (definitions.has(definition.name)) throw new Error(`Program tool ${options.name} has duplicate binding ${definition.name}`)

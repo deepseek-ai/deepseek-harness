@@ -5,12 +5,12 @@
 /:
   en: dbdbb46d75c3dab6
   zh: 046691366a3298da
-/python-ptc-runtime-removal:
-  en: 7a0929c90f83d53e
-  zh: eab1f3556013f570
-/python-ptc-runtime-removal/change:
-  en: 09f1d48815a593eb
-  zh: 9fc1b25ae0736c64
-/python-ptc-runtime-removal/migration:
-  en: 0c178f15ce8392c3
-  zh: fdae160b37ca44e2
+/python-ptc-removal:
+  en: 3677e4a2744450dc
+  zh: 014c2c5dc75b8bae
+/python-ptc-removal/change:
+  en: 2515b072f293cefc
+  zh: 08121def05e691d0
+/python-ptc-removal/migration:
+  en: 30c656266535fb91
+  zh: 326190403ef56a5e
