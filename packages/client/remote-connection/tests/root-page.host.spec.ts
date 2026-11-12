@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import * as Connection from '@deepseek-ai/dsh-client-connection'
 import * as FrontendStatic from '@deepseek-ai/dsh-host-frontend-static'
 import * as Token from '@deepseek-ai/dsh-host-authentication-token'
-import WebServer from '@deepseek-ai/dsh-host-webserver'
+import WebServer, { type WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
 import type { CredentialKey, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import type { PeerScope, RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
 import { request as httpRequest } from 'node:http'
@@ -148,6 +148,47 @@ it('keeps source refusals outside the root page and invitation exchange', async 
   expect(renderedPeers).toHaveLength(0)
   const exchanged = await send('/remote-login', 'POST', { 'content-type': 'text/plain', origin: publicUrl.slice(0, -1) }, secret)
   expect(exchanged.status).toBe(204)
+})
+
+it('keeps Token entries and source refusals within their WebServer isolation', async () => {
+  const { ctx, authority, publicUrl, service, send } = await mounted()
+  const isolated = ctx.isolate('webServer')
+  await isolated.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+  const deny = vi.fn((): { kind: 'deny'; status: 403 } => ({ kind: 'deny', status: 403 }))
+  isolated.on('webserver/authorize', deny, { prepend: true })
+  isolated.effect(() => isolated.webServer.register({
+    kind: 'exact', path: '/probe', auth: 'anonymous',
+    handler(_request, response) { response.end('isolated') },
+  }))
+  await isolated.plugin(Token, { cookieMaxAgeDays: 30 })
+  const isolatedEntries: WebEntryUrl[] = []
+  isolated.emit(isolated.webServer, 'webserver/entry-url', publicUrl, isolatedEntries)
+  expect(isolatedEntries).toHaveLength(1)
+  expect(new URL(isolatedEntries[0]!.url).searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+
+  expect(service.status(null)).toMatchObject({ url: publicUrl, availability: 'available' })
+  expect(() => service.loginUrl()).toThrow(expect.objectContaining({ code: 'remote-connection/token-unavailable' }))
+  const anonymous = await send('/')
+  expect(anonymous.status).toBe(401)
+  expect(anonymous.body).not.toContain('name="token"')
+  expect(deny).not.toHaveBeenCalled()
+  expect((await fetch(`${isolated.webServer.getOrigin()}/probe`)).status).toBe(403)
+  expect(deny).toHaveBeenCalledOnce()
+
+  await ctx.plugin(Token, { cookieMaxAgeDays: 30 })
+  const link = new URL(service.loginUrl())
+  expect(link.origin).toBe(new URL(publicUrl).origin)
+  expect(link.pathname).toBe(new URL(publicUrl).pathname)
+  const withOwnToken = await send('/')
+  expect(withOwnToken.status).toBe(401)
+  expect(withOwnToken.body).toContain('name="token"')
+  const exchanged = await send(link.pathname + link.search)
+  expect(exchanged.status).toBe(303)
+  const ownCookie = cookie(exchanged)
+  const admitted = ctx.connection.admit({ headers: { host: authority, cookie: ownCookie } })
+  if ('rejection' in admitted) throw new Error('The owning WebServer refused its Token Cookie')
+  expect((await send('/', 'GET', { cookie: ownCookie })).status).toBe(200)
+  expect(deny).toHaveBeenCalledOnce()
 })
 
 it('keeps copied Token links and Remote credentials independent across provider unloads', async () => {

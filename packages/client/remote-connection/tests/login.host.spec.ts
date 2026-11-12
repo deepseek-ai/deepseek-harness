@@ -62,7 +62,7 @@ async function mount(url = 'https://login.example/ui/', protocol: 'http:' | 'htt
         url: new URL(request.url ?? '/', 'http://fixture.invalid'), transport: 'http' as const, socket: request.socket,
       }
       const policy = typeof registered.auth === 'function' ? registered.auth(facts) : registered.auth ?? 'required'
-      const admission = ctx.bail('webserver/authorize', facts, policy)
+      const admission = ctx.bail(ctx.webServer, 'webserver/authorize', facts, policy)
       if (admission?.kind === 'deny') {
         response.writeHead(admission.status)
         response.end()
