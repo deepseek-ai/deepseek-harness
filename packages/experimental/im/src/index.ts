@@ -44,7 +44,6 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Single-process IM host; module wiring only — behaviour lives in the per-concern modules. */
 /** What the IM host needs of the Loader that composed its context: the signal that every entry has settled. */
 interface Composition {
   await(): Promise<void>
@@ -62,6 +61,7 @@ function composition(ctx: Context): Composition | undefined {
   return typeof (loader as Partial<Composition>).await === 'function' ? loader as Composition : undefined
 }
 
+/** Single-process IM host; module wiring only — behaviour lives in the per-concern modules. */
 export class ImService extends Service implements ImApi {
   static inject = ['satori', 'agents', 'sessions', 'sessionPersistence', 'storageDomain', 'attachments']
   static Config = Config
