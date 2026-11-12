@@ -48,12 +48,15 @@ def stop_application(pid):
 
 def check_system_drag(helper, owner, window, point, state_file):
     call = helper.call
-    call("activate", owner)
-    wait_for_state(state_file, lambda v: v["active"] and v["keyWindow"])
     call("getState", {**window, "maxElements": 300, "maxDepth": 20})
     count = len(json.loads(state_file.read_text())["events"])
     params = {**window, "fromX": point["x"], "fromY": point["y"], "toX": point["x"] + 80,
               "toY": point["y"] + 20, "durationMs": 400, "steps": 20, "useSystemPointer": True}
+    call("drag", params, "FOREGROUND_REQUIRED")
+    assert len(json.loads(state_file.read_text())["events"]) == count
+    call("activate", owner)
+    wait_for_state(state_file, lambda v: v["active"] and v["keyWindow"])
+    call("getState", {**window, "maxElements": 300, "maxDepth": 20})
     call("drag", params)
     state = wait_for_state(state_file, lambda v: any(e["type"] == 2 for e in v["events"][count:]))
     events = state["events"][count:]
@@ -219,7 +222,7 @@ def main():
         info = {"CFBundleName": "Capabilities Fixture", "CFBundleDisplayName": "Capabilities Fixture",
                 "CFBundleIdentifier": "test.dsh.cua." + uuid.uuid4().hex,
                 "CFBundleExecutable": "CapabilitiesFixture", "CFBundlePackageType": "APPL",
-                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only,
+                "DSHFixtureStatePath": str(state_file), "DSHFixtureBackground": args.click_only or args.keyboard_only or args.drag_only,
                 "DSHFixtureKeyboard": args.keyboard_only}
         (application / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         subprocess.run(["swiftc", str(ROOT / "tests/CapabilitiesFixture.swift"), "-o", str(executable)], check=True)

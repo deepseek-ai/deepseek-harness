@@ -224,6 +224,7 @@ final class WindowPointerInput {
                 try await Task.sleep(for: .seconds(interval))
             }
             try await Task.sleep(for: .milliseconds(50))
+            if useSystemPointer { try await Self.checkSystemHit(route, at: release.location) }
             try checkCancellation()
         }
         try await Task.sleep(for: .milliseconds(100))
