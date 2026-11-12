@@ -1154,13 +1154,16 @@ function replaceWebCwd(value: string, cwd: string): string {
  * Normalize Web-only volatile strings while preserving JSON structure and row framing.
  * @param log - raw Session JSONL.
  * @param workspaceCwd - optional scaffold parent used before a live Session selects its cwd.
+ * @param cwdToken - `workspace` keeps a Session directory below `workspaceCwd` relative to `{{cwd}}`;
+ *   `session` tokenizes the Session's own cwd.
  * @returns compact JSONL with run-local strings tokenized.
  */
-export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string): string {
+export function normalizeWebSessionVolatiles(log: string, workspaceCwd?: string, cwdToken: 'session' | 'workspace' = 'session'): string {
   const headerLine = log.split(/\r?\n/).find(line => line.trim().length > 0)
   const header = headerLine === undefined ? undefined : JSON.parse(headerLine) as { cwd?: unknown }
   const sessionCwd = typeof header?.cwd === 'string' && header.cwd.length > 0 ? header.cwd : undefined
-  const cwdSpellings = [...new Set([sessionCwd ?? workspaceCwd]
+  const tokenizedCwd = cwdToken === 'workspace' ? workspaceCwd : sessionCwd ?? workspaceCwd
+  const cwdSpellings = [...new Set([tokenizedCwd]
     .filter((value): value is string => typeof value === 'string' && value.length > 0)
     .flatMap((value) => {
       const forward = value.replaceAll('\\', '/')

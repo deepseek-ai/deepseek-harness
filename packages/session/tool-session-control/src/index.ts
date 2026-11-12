@@ -6,9 +6,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { AgentInputClosedError } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-error'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { createAgentMessage } from '@deepseek-ai/dsh-subagent'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-subagent'
 import { defineTool, ToolArgsError, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-workspace'
 
@@ -101,7 +103,7 @@ export function apply(ctx: Context): void {
       const caller = exec.agent
       if (caller === undefined) throw new ToolContextUnavailableError('session_send_message requires a calling agent')
       if (args.message.trim().length === 0) throw new ToolArgsError(['message must contain non-whitespace text'])
-      const id = SessionId(args.session_id)
+      const id = brandString<SessionId>(args.session_id)
       if (id === caller.id) {
         throw new SessionMessageError('session_send_message requires another session', 'SESSION_MESSAGE_SELF')
       }
@@ -118,7 +120,11 @@ export function apply(ctx: Context): void {
       }
       exec.signal.throwIfAborted()
       assertUnarchived(id)
-      const message = createAgentMessage(caller, caller.id, [{ type: 'text', text: args.message }])
+      // The subagent-owned agent-message source and prefix match send_message, naming the sender by Session id.
+      const message = createUserMessage({
+        content: [{ type: 'text', text: `Agent ${caller.id} sent a message: ` }, { type: 'text', text: args.message }],
+        source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
+      })
       try {
         found.agent.steer(message)
       } catch (error: unknown) {

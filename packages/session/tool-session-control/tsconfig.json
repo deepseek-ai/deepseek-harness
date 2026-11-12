@@ -31,6 +31,12 @@
     },
     {
       "path": "../../workspace/workspace"
+    },
+    {
+      "path": "../../util/brand"
+    },
+    {
+      "path": "../../llm/llm"
     }
   ]
 }

@@ -15,7 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionControl`, `a calling Agent` | `tool/call`, `agent/inbox/spliced in the recipient`, `tool/result` | - | - |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionController`, `ctx.workspaceRegistry`, `a calling Agent` | `tool/call`, `agent/inbox/spliced in the recipient`, `tool/result` | - | The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -83,6 +83,8 @@ Send a message to an independent session. A working session receives it at its n
 ```
 
 Source: [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target.
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

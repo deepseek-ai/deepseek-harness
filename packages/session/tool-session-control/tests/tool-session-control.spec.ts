@@ -3,9 +3,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import type { ApiSessionAgentResult } from '@deepseek-ai/dsh-api-session-controller'
+import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { LlmAdapter, ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -20,6 +21,8 @@ class ReplyAdapter extends LlmAdapter {
   }
 }
 
+type ApiSessionAgentResult = Awaited<ReturnType<Context['sessionController']['resolveAgent']>>
+
 const contexts: Context[] = []
 
 afterEach(async () => {
@@ -33,8 +36,8 @@ async function setup() {
   const loop = await mountAgentLoopTestHarness(ctx)
   ctx.llm.registerAdapter(['fixture'], new ReplyAdapter())
   const options = { provider: 'fixture', model: 'reply' }
-  const caller = await loop.create(SessionId('sender'), options, { cwd: '/workspace/sender' })
-  const target = await loop.create(SessionId('recipient'), options, { cwd: '/elsewhere/recipient' })
+  const caller = await loop.create(brandString<SessionId>('sender'), options, { cwd: '/workspace/sender' })
+  const target = await loop.create(brandString<SessionId>('recipient'), options, { cwd: '/elsewhere/recipient' })
   const archivedSessionIds: SessionId[] = []
   const resolveAgent = vi.fn(async (id: SessionId): Promise<ApiSessionAgentResult> => {
     const agent = ctx.agents.get(id)
@@ -163,7 +166,7 @@ describe('Session message tool', () => {
   it('rejects a target whose lifecycle disposal has begun', async () => {
     const { ctx, caller, options, resolveAgent } = await setup()
     const closing = await ctx.agents.create({
-      sessionId: SessionId('closing'), agentOptions: options, meta: { cwd: '/elsewhere/closing' },
+      sessionId: brandString<SessionId>('closing'), agentOptions: options, meta: { cwd: '/elsewhere/closing' },
     })
     resolveAgent.mockImplementationOnce(async () => {
       const disposal = closing.dispose()

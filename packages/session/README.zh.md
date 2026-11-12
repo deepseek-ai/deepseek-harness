@@ -1,5 +1,5 @@
 ---
-description: "持久会话数据平面的包映射：持久化 seam 及其后端、检查点策略、投影、Session 控制、基于日志的标题与外发会话遥测。"
+description: "持久会话数据平面的包映射：持久化 seam 及其后端、检查点策略、投影、Session 消息、基于日志的标题与外发会话遥测。"
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-session 组让对话持久保存，恢复已发布的日志格式，并使已提交历史在重启后仍可用。存储与检查点包保护请求、工具副作用和已完成步骤；投影包生成客户端可用的值；控制包投递消息；标题包为会话命名；遥测包上报活动。先使用随产品交付的 JSONL 存储，再添加检查点，并仅按部署需要添加投影、标题策略或遥测。每个包 README 负责各自的保证与配置，同级查询组则提供独立的读取和工具访问。
+session 组让对话持久保存，恢复已发布的日志格式，并使已提交历史在重启后仍可用。存储与检查点包保护请求、工具副作用和已完成步骤；投影包生成客户端可用的值；消息工具让 Web Agent 向其他 Session 发送消息；标题包为会话命名；遥测包上报活动。先使用随产品交付的 JSONL 存储，再添加检查点，并仅按部署需要添加投影、标题策略或遥测。每个包 README 负责各自的保证与配置，同级查询组则提供独立的读取和工具访问。
 
 ## 目录
 
@@ -22,7 +22,7 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 <a id="packages"></a>
 ## 包
 
-本组涵盖持久存储（持久化 seam、后端、检查点策略）、投影、控制、标题与遥测。每个包 README 负责各自的约定与配置。
+本组涵盖持久存储（持久化 seam、后端、检查点策略）、投影、消息、标题与遥测。每个包 README 负责各自的约定与配置。
 
 ### 持久化
 
@@ -51,13 +51,11 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 | [`session-stats/`](session-stats/README.zh.md) | 通过 `sessionStats` 单元提供全日志会话计数与墙钟时间 | 注册到 `ctx.sessionProjections` |
 | [`session-turn-outline/`](session-turn-outline/README.zh.md) | 通过 `turnOutline` 单元提供全日志轮次大纲（轮次、`turn/start` seq、提示词预览） | 注册到 `ctx.sessionProjections` |
 
-### 控制
+### 消息
 
 | 包 | 职责 | ctx key |
 |---|---|---|
-| [`session-control/`](session-control/README.zh.md) | 定义 Agent 消息、接收回执与共享投递协调 | `ctx.sessionControl` |
-| [`session-control-local/`](session-control-local/README.zh.md) | 恢复当前运行时的独立 Session 并向其发送消息 | `ctx.sessionControlLocal` |
-| [`tool-session-control/`](tool-session-control/README.zh.md) | 按 id 向独立 Session 发送消息 | `session_send_message` |
+| [`tool-session-control/`](tool-session-control/README.zh.md) | 让 Web 组合中的 Agent 按 id 向另一个普通 Session 发送消息；不在线的目标通过 Session 控制器恢复 | `session_send_message` |
 
 ### 标题
 
@@ -84,7 +82,6 @@ session 组让对话持久保存，恢复已发布的日志格式，并使已提
 - [会话持久化子系统](../../docs/subsystems/persistence.zh.md)——后端无关的服务语义、flush 检查点与崩溃恢复。
 - [工作目录子系统](../../docs/subsystems/working-directory.zh.md) — 有效目录与恢复。
 - [会话投影子系统](../../docs/subsystems/session-projection.zh.md)——投影单元约定与驱动语义。
-- [Session 控制子系统](../../docs/subsystems/session-control.zh.md) — Agent 消息接收与提供方协调。
 - [会话标题子系统](../../docs/subsystems/session-title.zh.md)——标题资格、回退与提供方流程。
 - [会话遥测子系统](../../docs/subsystems/session-telemetry.zh.md)——捕获、脱敏与投递模式。
 - [会话子系统](../../docs/subsystems/session.zh.md)——本组每个包持久化或派生的实时事件日志。

@@ -19,7 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`, `ctx.sessionControl`, `调用 Agent` | `tool/call`, `接收方的 agent/inbox/spliced`, `tool/result` | - | - |
+| `@deepseek-ai/dsh-tool-session-control` | `session_send_message` | `ctx.tools`、`ctx.sessionController`、`ctx.workspaceRegistry`、调用 Agent | `tool/call`、接收方的 `agent/inbox/spliced`、`tool/result` | - | dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。 |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -86,7 +86,9 @@
 }
 ```
 
-来源： [`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+来源：[`packages/session/tool-session-control/src/index.ts`](../packages/session/tool-session-control/src/index.ts)
+
+dsh-web-app bundle 以禁用行挂载本包；Web Session controller 负责激活每个目标。
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

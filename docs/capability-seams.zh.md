@@ -173,11 +173,6 @@ flowchart LR
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
   pkg_tool_session_query["tool-session-query"]
-  pkg_session_control["session-control"]
-  svc_sessionControl["ctx.sessionControl<br/>Agent-authored Session messaging"]
-  pkg_session_control_local["session-control-local"]
-  pkg_tool_session_control["tool-session-control"]
-  svc_sessionControlLocal["ctx.sessionControlLocal<br/>Local independent Session delivery"]
   pkg_file_reference["file-reference"]
   svc_fileReferences["ctx.fileReferences<br/>File reference discovery"]
   pkg_file_reference_local["file-reference-local"]
@@ -433,9 +428,6 @@ flowchart LR
   pkg_sandbox_windows_acl --> svc_skills
   pkg_schedule --> svc_schedule
   pkg_session --> svc_sessions
-  pkg_session_control --> svc_sessionControl
-  pkg_session_control_local --> svc_sessionControl
-  pkg_session_control_local --> svc_sessionControlLocal
   pkg_session_log_deepseek --> svc_deepseekLlmApiExtensions
   pkg_session_log_deepseek --> svc_sessionLogDeepSeek
   pkg_session_persistence --> svc_sessionPersistence
@@ -574,9 +566,6 @@ flowchart LR
   svc_sandboxPolicy --> pkg_fs_sandbox
   svc_sandboxPolicy --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_terminal_panel
-  svc_sessionControl --> pkg_subagent
-  svc_sessionControl --> pkg_tool_session_control
-  svc_sessionControlLocal --> pkg_api_session_controller
   svc_sessionPersistence --> pkg_agent_loop
   svc_sessionPersistence --> pkg_hooks_claude_code
   svc_sessionPersistence --> pkg_hooks_codex
@@ -733,8 +722,6 @@ flowchart LR
 | `ctx.sessionFeedback` | `core` | [`command-feedback`](../packages/feedback/command-feedback) | - | - | - | 通过 Host 一元 Remote 契约在 live Session 上把一条带分类的 Session 级评价记录为仅写日志的 feedback/record 事件；/feedback 命令共用同一个生产方。 |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | [`api-workspace-controller`](../packages/api/workspace-controller), [`api-session-controller`](../packages/api/session-controller) | - | 通过领域设施拥有带 WorkspaceId 品牌类型的记录；稳定的 sessionIds 账户驱动 Host RPC 与 GUI 投影。 |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/experimental/tool-session-query) | - | 该接口提供精确读取、过滤和追踪；具体后端还提供全文协调、排序、摘要片段和游标世代，而模型消费方负责工作区权限与不含游标的渲染。 |
-| `ctx.sessionControl` | `seam` | [`session-control`](../packages/session/session-control) | [`session-control-local`](../packages/session/session-control-local) | [`tool-session-control`](../packages/session/tool-session-control), [`subagent`](../packages/subagent/subagent) | - | 负责发送者来源标记、逐目标串行化、接收回执与可撤销的提供方注册；subagent 投递保留现有树内权限和生命周期。 |
-| `ctx.sessionControlLocal` | `service` | [`session-control-local`](../packages/session/session-control-local) | - | [`api-session-controller`](../packages/api/session-controller) | - | 使用记录的预设恢复独立 Session，为 API Session Controller 提供由调用方拥有的激活，并在接收输入前拒绝已归档或正在关闭的消息目标。 |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | [`api-session-controller`](../packages/api/session-controller) | - | 该接口返回 Agent cwd 内仅含路径的补全候选；提供方负责命名空间访问与排序，但不读取文件内容。 |
 | `ctx.sessionReferenceResolver` | `core` | [`session-reference`](../packages/context/session-reference) | - | - | - | 将当前表层中有界的对话快照投影为持久但不可信的消息上下文；Host 适配器负责提及语法。 |
 | `ctx.sessionTitle` | `seam` | [`session-title`](../packages/session/session-title) | [`session-title-first-prompt-llm`](../packages/session/session-title-first-prompt-llm), [`session-title-all-prompts-llm`](../packages/experimental/session-title-all-prompts-llm) | - | - | 负责确定性回退、最新标题折叠区，以及唯一的可选异步提供方注册。 |

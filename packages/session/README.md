@@ -1,5 +1,5 @@
 ---
-description: "Package map for the durable session data plane: the persistence seam and its backends, checkpoint policy, projections, Session controls, log-backed titles, and outbound session telemetry."
+description: "Package map for the durable session data plane: the persistence seam and its backends, checkpoint policy, projections, Session messaging, log-backed titles, and outbound session telemetry."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The session group keeps conversations durable, restores released log formats, and makes committed history available after restart. Its storage and checkpoint packages protect requests, tool side effects, and completed steps; projection packages derive client-ready values; control packages deliver messages; title packages name sessions; telemetry packages report activity. Start with the shipped JSONL storage, then add checkpointing and only the projections, title policy, or telemetry your deployment needs. Each package README owns its guarantees and configuration, while a sibling query group provides independent read and tool access.
+The session group keeps conversations durable, restores released log formats, and makes committed history available after restart. Its storage and checkpoint packages protect requests, tool side effects, and completed steps; projection packages derive client-ready values; a messaging tool lets Web Agents message other Sessions; title packages name sessions; telemetry packages report activity. Start with the shipped JSONL storage, then add checkpointing and only the projections, title policy, or telemetry your deployment needs. Each package README owns its guarantees and configuration, while a sibling query group provides independent read and tool access.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ The session group keeps conversations durable, restores released log formats, an
 <a id="packages"></a>
 ## Packages
 
-The group covers durable storage (persistence seam, backends, checkpoint policy), projections, controls, titles, and telemetry. Each package README owns its contract and configuration.
+The group covers durable storage (persistence seam, backends, checkpoint policy), projections, messaging, titles, and telemetry. Each package README owns its contract and configuration.
 
 ### Persistence
 
@@ -51,13 +51,11 @@ The group covers durable storage (persistence seam, backends, checkpoint policy)
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times through the `sessionStats` unit | registers on `ctx.sessionProjections` |
 | [`session-turn-outline/`](session-turn-outline/README.md) | Serves the whole-log turn outline (turn, `turn/start` seq, prompt preview) through the `turnOutline` unit | registers on `ctx.sessionProjections` |
 
-### Controls
+### Messaging
 
 | Package | Role | ctx key |
 |---|---|---|
-| [`session-control/`](session-control/README.md) | Defines Agent-authored messaging, acceptance receipts, and shared delivery coordination | `ctx.sessionControl` |
-| [`session-control-local/`](session-control-local/README.md) | Restores and sends to independent Sessions in the current runtime | `ctx.sessionControlLocal` |
-| [`tool-session-control/`](tool-session-control/README.md) | Sends messages to independent Sessions by id | `session_send_message` |
+| [`tool-session-control/`](tool-session-control/README.md) | Lets an Agent in a Web composition message another ordinary Session by id; an inactive target resumes through the Session controller | `session_send_message` |
 
 ### Titles
 
@@ -84,7 +82,6 @@ Only one title provider may register at a time; without one, the title service k
 - [Session persistence subsystem](../../docs/subsystems/persistence.md) — backend-neutral service semantics, the flush checkpoint, and crash recovery.
 - [Working directory subsystem](../../docs/subsystems/working-directory.md) — effective directory and recovery.
 - [Session projections subsystem](../../docs/subsystems/session-projection.md) — the projection unit contract and drive semantics.
-- [Session control subsystem](../../docs/subsystems/session-control.md) — Agent-authored message acceptance and provider coordination.
 - [Session titles subsystem](../../docs/subsystems/session-title.md) — title eligibility, fallback, and provider flow.
 - [Session telemetry subsystem](../../docs/subsystems/session-telemetry.md) — capture, redaction, and delivery modes.
 - [Session subsystem](../../docs/subsystems/session.md) — the live event log every package in this group persists or derives from.

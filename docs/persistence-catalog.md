@@ -3177,13 +3177,13 @@ Sources: [`packages/context/agent-instructions/src/state.ts:40`](../packages/con
 
 <a id="persistence-type-agentmessagesource"></a>
 
-<a id="persistence-type-packagessessionsession-controlsrctypestsagentmessagesource"></a>
+<a id="persistence-type-packagessubagentsubagentsrccontinuation-messagestsagentmessagesource"></a>
 
 ### `AgentMessageSource`
 
 SHA-256: `4a9bef9f27a942520cc2279ca7dd3082556e4bff543f66b5c0333e1bbed1cd86`
 
-Sources: [`packages/session/session-control/src/types.ts:62`](../packages/session/session-control/src/types.ts)
+Sources: [`packages/subagent/subagent/src/continuation-messages.ts:14`](../packages/subagent/subagent/src/continuation-messages.ts)
 
 | Property | Presence | Type |
 |---|---|---|
@@ -4940,7 +4940,7 @@ One of:
 
 SHA-256: `848639f8787f035b480ec53cb5686850897c5e8006d87ca231cd8a9ee8634936`
 
-Sources: [`packages/subagent/subagent/src/continuation-messages.ts:19`](../packages/subagent/subagent/src/continuation-messages.ts)
+Sources: [`packages/subagent/subagent/src/continuation-messages.ts:29`](../packages/subagent/subagent/src/continuation-messages.ts)
 
 | Property | Presence | Type |
 |---|---|---|

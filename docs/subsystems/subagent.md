@@ -193,18 +193,26 @@ interface SubagentMemberNames {
 }
 ```
 
-<a id="messages-and-interruption"></a>
 ## Messages and interruption
 
 `sendMessage` requires the exact live sender and a target Session id in the same root tree. Root and continuable members can message across branches; admission revalidates the sender and root. Running targets receive Steer; only an absent target cold-resumes, while its creation ancestors may remain offline. External executions reject follow-ups. Local and external executions report final text, structured output, diagnostics, and status to their direct creator only while it is online; caller delivery suppresses those notices. `drainDescendants` awaits whole-tree teardown; an activation receipt’s `dispose()` releases only that execution.
 
-Shared `AgentMessageSource` attribution and delivery ordering belong to [Session control](session-control.md#requests-and-providers); subagent settlement notices remain owned here.
+```ts type-equiv
+/** Durable attribution for one model-authored message between Agents. */
+interface AgentMessageSource {
+  readonly kind: 'agent-message'
+  /** A message another agent addressed to this one (`relay` context form). */
+  readonly form: 'relay'
+  /** Session id of the Agent whose tool call produced the message. */
+  readonly senderSessionId: SessionId
+}
+```
 
 ```ts type-equiv
 /**
  * Durable attribution for the runtime's own account of a continuable child
  * settling. Deliberately a different kind from
- * `agent-message`: an Agent message is content the sender chose,
+ * {@link AgentMessageSource}: an Agent message is content the sender chose,
  * while this message is the manager stating what became of the child, and a
  * transcript that merged them would credit the child with words it never wrote.
  */

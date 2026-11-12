@@ -57,7 +57,7 @@ function agentMessageSource(sender: Agent): AgentMessageSource {
 /**
  * Build the model-visible and durable representation of one Agent message.
  * @param sender - exact live Agent that authored the message.
- * @param senderName - the sender's subagent-tree name, or its Session id for a message to an ordinary Session.
+ * @param senderName - the sender's model-facing name in its subagent tree.
  * @param content - model-visible message blocks supplied by the sender.
  * @returns the durable user-message representation delivered to the recipient.
  */

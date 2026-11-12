@@ -3,29 +3,29 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/session-control.md
 /:
-  en: 69830f677836e534
-  zh: 9e169e7d1766a334
+  en: bf54008623f4721c
+  zh: a2cb20f9a5acdeb7
 /send-a-message-to-another-session:
   en: de0624d539d2fb11
   zh: bf32ff9a6e7b0a2b
 /send-a-message-to-another-session/summary:
-  en: c86cd5e722bccadf
-  zh: 904d0b41c2f3a7b2
+  en: b7a6b1b53f4a7671
+  zh: 5bed38daed30bfbe
 /send-a-message-to-another-session/table-of-contents:
   en: d618088b4c6d8909
   zh: 8eb1b2e50fb18582
 /send-a-message-to-another-session/enable-messaging:
-  en: 3e51ba80f770c495
-  zh: 4c7335058faafdaa
+  en: 6cbfc2f945af5525
+  zh: 8c558f9deb9048ff
 /send-a-message-to-another-session/send-and-check-the-receipt:
-  en: be2164bd24269c96
-  zh: c53168fbf98fe342
+  en: dd96edfe14c5b3ab
+  zh: 30bde4901d41bfbe
 /send-a-message-to-another-session/delivery-limits:
-  en: 3b4402273c009ef7
-  zh: 09a6a6d38279bec7
+  en: b76f131ab146e66d
+  zh: 29466f478c7374c7
 /send-a-message-to-another-session/further-exploration:
-  en: 95c22f7d7709a72e
-  zh: 156563511bab2282
+  en: 39ce772bb1597c59
+  zh: 52ff6d9ea4d29818
 /send-a-message-to-another-session/dev-note:
   en: b75c8458928b72b9
   zh: 003ba4e17b4b5269

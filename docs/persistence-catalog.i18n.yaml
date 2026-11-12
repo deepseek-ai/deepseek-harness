@@ -981,11 +981,11 @@
   en: dba6b1babdde0cfe
   zh: 99b209824b99b693
 /session-persistence-event-catalog/resolved-persistence-types/agentinstructionsource:
-  en: f54c5b7abb28e38c
-  zh: 0283fe43e900a3ef
+  en: ef87a859325357fc
+  zh: f132439b0161ece6
 /session-persistence-event-catalog/resolved-persistence-types/agentmessagesource:
-  en: 08bbd6b0836d5bff
-  zh: 6306cdc4fab7d290
+  en: a1f024101085f6f1
+  zh: eedf4dc28c048838
 /session-persistence-event-catalog/resolved-persistence-types/approvaloutcome:
   en: bb7b3652609ac651
   zh: bdde4e652413c5eb
@@ -1254,8 +1254,8 @@
   en: 2b9c68682eec6f78
   zh: 8ef5e64326c1eae6
 /session-persistence-event-catalog/resolved-persistence-types/subagentsettledmessagesource:
-  en: 5c62f5adbe90bbca
-  zh: 0493666aa227abf6
+  en: e6d9113dc09f4098
+  zh: 3426e4f2f3cc5612
 /session-persistence-event-catalog/resolved-persistence-types/surfaceop:
   en: 737806b6ec54263d
   zh: b4e44293950ddf8c

@@ -339,7 +339,7 @@ describe('Agent.cancel()', () => {
     const ctx = await harness(adapter)
     try {
       const handle = await ctx.agents.create({
-        sessionId: SessionId('dispose-on-acceptance'),
+        sessionId: brandString<SessionId>('dispose-on-acceptance'),
         agentOptions: { provider: 'mock', model: 'mock' },
       })
       const { agent } = handle

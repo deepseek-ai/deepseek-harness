@@ -1,5 +1,5 @@
 ---
-description: "Enable cross-Session messages and interpret acceptance receipts for independent conversations in one Harness runtime."
+description: "Enable cross-Session messages in a Web profile and interpret acceptance receipts for independent conversations."
 ---
 
 # Send a message to another Session
@@ -8,7 +8,7 @@ English | [中文](session-control.zh.md)
 
 ## Summary
 
-Enable `session_send_message` when an Agent needs to send instructions or findings to another independent Session. The recipient can belong to a different Workspace or directory. Both Sessions must be visible to the same Harness runtime. You need a configured base-backed profile, such as `web`, and the target Session's id.
+Enable `session_send_message` in a Web profile when an Agent needs to send instructions or findings to another ordinary Session. The recipient can belong to a different Workspace or directory. You need a profile that includes the `@deepseek-ai/dsh-web-app` bundle, such as `web`, and the target Session's id. The tool is unavailable in the `headless`, `sdk`, `sdk-minimal`, and `acp` profiles.
 
 ## Table of Contents
 
@@ -23,16 +23,16 @@ Enable `session_send_message` when an Agent needs to send instructions or findin
 <a id="enable-messaging"></a>
 ## Enable messaging
 
-The tool is disabled by default. Enabling it allows the calling Agent to address any independent Session visible to the runtime, including Sessions outside its current Workspace or cwd.
+The tool is disabled by default. Enabling it allows the calling Agent to address any ordinary Session that the Web Session controller can open, including Sessions outside its current Workspace or cwd.
 
-Append this patch to `$DSH_HOME/profiles/<profile>/cordis.patch.yml`, preserving existing entries. If `DSH_HOME` is unset, use `~/.dsh`:
+Append this patch to `$DSH_HOME/profiles/<profile>/cordis.patch.yml` of a Web profile, preserving existing entries. If `DSH_HOME` is unset, use `~/.dsh`:
 
 ```yaml
 - id: tool-session-control
   disabled: false
 ```
 
-Restart the profile after changing its patch. The example assumes a profile that includes the base bundle; `sdk-minimal` does not include that bundle.
+Restart the profile after changing its patch. The patch targets the `tool-session-control` row of the Web bundle. The `headless`, `sdk`, `sdk-minimal`, and `acp` profiles have no such row, so the Loader warns that the entry is not found and skips the patch there.
 
 From a source checkout, the same patch is available in [session-control.overlay.yml](../../apps/cli/config/examples/session-control.overlay.yml). Inspect its effect without starting the Web server:
 
@@ -54,23 +54,23 @@ Give the Agent the target Session id and the message to send. For example, ask i
 }
 ```
 
-Replace the placeholder with a real independent Session id. The message must contain non-whitespace text. The recipient records the calling Agent as the sender; the tool does not accept a sender override.
+Replace the placeholder with a real Session id other than the caller's own. The message must contain non-whitespace text. The recipient records the calling Session as the sender; the tool does not accept a sender override.
 
-A successful result contains `message_id`. It confirms inbox acceptance, without waiting for a reply or completion. A running recipient receives steering input at its next input opportunity; an idle recipient starts a turn; a cold recipient restores its conversation before accepting the message.
+A successful result contains `message_id`. It confirms inbox acceptance, without waiting for a reply or completion. A running recipient receives steering input at its next input opportunity; an idle recipient starts a turn; an inactive recipient resumes its conversation before accepting the message and then stays loaded, like a Session opened in the Web UI.
 
 <a id="delivery-limits"></a>
 ## Delivery limits
 
 - Archived Sessions reject messages and stay archived. Unarchive a target explicitly before messaging it.
-- Subagent targets use the existing `send_message` tool and its tree-local names and permissions. `session_send_message` does not bypass subagent restoration rules.
+- Subagent targets use the existing `send_message` tool and its tree-local names and permissions. `session_send_message` rejects them and does not bypass subagent restoration rules.
 - Cancellation stops work before acceptance; it does not retract a message already accepted. Keep a successful receipt, and do not repeat a send automatically when its outcome is unknown.
-- The tool sends text and does not wait for the recipient's answer or communicate with another Harness process.
+- The tool sends text only. It does not wait for the recipient's answer or communicate with another Harness process.
 
 <a id="further-exploration"></a>
 ## Further Exploration
 
-- [Session control tool](../../packages/session/tool-session-control/README.md) — tool arguments, result, and presentation.
-- [Local Session control](../../packages/session/session-control-local/README.md) — restoration, access, and provider lifetime.
+- [Session control tool](../../packages/session/tool-session-control/README.md) — tool arguments, failures, and presentation.
+- [API Session Controller](../../packages/api/session-controller/README.md) — Session activation and restoration in Web profiles.
 
 <a id="dev-note"></a>
 ## Dev Note
