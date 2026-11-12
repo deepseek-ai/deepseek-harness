@@ -19,7 +19,7 @@ import Testing
 }
 
 @MainActor @Test func realAXRangesKeepActionsAndScopePartialReadsToTheSelectedWindow() throws {
-    _ = NSApplication.shared
+    let app = NSApplication.shared
     func makeWindow() -> ChildFixtureWindow {
         let window = ChildFixtureWindow(contentRect: NSRect(x: 40, y: 40, width: 240, height: 120),
                                         styleMask: [.titled], backing: .buffered, defer: false)
@@ -38,6 +38,7 @@ import Testing
     bad.childList = [before, NSNull(), after, group]
     good.orderBack(nil)
     bad.orderBack(nil)
+    app.finishLaunching()
 
     let access = AXAccess(timeout: 3, cancellation: CancellationLatch())
     let identity = try NativePlatform.identity(getpid())
@@ -45,6 +46,11 @@ import Testing
         try access.project(identity: identity, windowID: UInt32(window.windowNumber),
                            maxElements: 1000, maxDepth: depth)
     }
+
+    let ownApp = AXUIElementCreateApplication(getpid())
+    let badRoot = try #require(try access.children(ownApp, "AXWindows").first { try access.windowID($0) == UInt32(bad.windowNumber) })
+    var whole: CFTypeRef?
+    #expect(AXUIElementCopyAttributeValue(badRoot, kAXChildrenAttribute as CFString, &whole) == .failure)
 
     let complete = try project(good)
     #expect(!complete.truncated && !complete.incomplete)
