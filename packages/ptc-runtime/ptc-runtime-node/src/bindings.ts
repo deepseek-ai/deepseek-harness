@@ -2,7 +2,7 @@
 import { PtcImage, RESERVED_BINDING_WORDS, PtcRuntimeError, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcBindingFunction, PtcBindingNamespace, PtcJsonValue, PtcProgramFormat, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import { snapshotPtcJsonValue, encodePtcJsonWire, type PtcJsonWire, type PtcImageWire } from './json-wire.ts'
-import { RESERVED_PREFIX } from './evaluators/scoped-repl-names.ts'
+import { RESERVED_PREFIX } from './evaluators/scoped-repl.ts'
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 /**
  * Reject unusable namespaces before starting a process.

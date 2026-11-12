@@ -2,8 +2,6 @@
 import { getLineInfo, parse } from 'acorn'
 import type { Identifier, ModuleDeclaration, Pattern, Program, Statement } from 'acorn'
 import { Script, type Context, type ScriptOptions } from 'node:vm'
-import { RESERVED_PREFIX } from './scoped-repl-names.ts'
-export { RESERVED_PREFIX } from './scoped-repl-names.ts'
 
 /** Declaration keyword recorded for a top-level binding; later programs copy `var` bindings as `var` and every other binding as `let`. */
 export type ScopedReplBindingKind = 'var' | 'let' | 'const' | 'function' | 'class'
@@ -36,6 +34,8 @@ export interface ScopedReplScan {
   finalExpression?: ScopedReplFinalExpression
 }
 
+/** Prefix of every generated name; programs that contain it anywhere are rejected. */
+export const RESERVED_PREFIX = '__$binding_'
 /** Generated parameter receiving the values copied from earlier programs. */
 export const BINDING_VALUES = `${RESERVED_PREFIX}vals`
 /** Generated parameter receiving one read function per binding, in binding order. */
