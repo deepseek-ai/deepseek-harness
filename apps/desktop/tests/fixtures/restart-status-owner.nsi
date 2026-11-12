@@ -12,6 +12,7 @@ Section
   InitPluginsDir
   File "/oname=$PLUGINSDIR\window-frame.dll" "${STATUS_DLL}"
   StrCpy $InstallerTheme "dark"
+  SetOutPath "$EXEDIR\install-root"
   SetErrors
   !insertmacro ShowRestartBanner
   IfErrors +3
@@ -19,6 +20,11 @@ Section
     Quit
   StrCpy $0 0
   wait:
+    IfFileExists "$EXEDIR\release-directory" 0 still_owned
+    SetOutPath "$EXEDIR"
+    FileOpen $1 "$EXEDIR\directory-released" w
+    FileClose $1
+  still_owned:
     IfFileExists "$EXEDIR\finish-owner" done
     Sleep 50
     IntOp $0 $0 + 1
