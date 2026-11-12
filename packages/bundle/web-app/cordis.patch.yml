@@ -140,8 +140,8 @@
     - id: ui-settings-account
       name: '@deepseek-ai/dsh-client-ui-settings-account'
 
-    - id: account-controller
-      name: '@deepseek-ai/dsh-api-account-controller'
+    - id: ui-account-notifications
+      name: '@deepseek-ai/dsh-client-ui-account-notifications'
 
     - id: settings-controller
       name: '@deepseek-ai/dsh-api-settings-controller'
@@ -275,6 +275,10 @@
 
     - id: ui-session
       name: '@deepseek-ai/dsh-client-ui-session'
+
+    # Session status table behind ctx.uiSession.sessionStatus and useSessionStatus.
+    - id: ui-session-status
+      name: '@deepseek-ai/dsh-client-ui-session-status'
 
     # Unified resource model: protocol providers behind the useResource hook.
     - id: resources

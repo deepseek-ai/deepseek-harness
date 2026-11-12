@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { ReplayEntry } from '@deepseek-ai/dsh-llm-replay'
 import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
@@ -22,8 +23,8 @@ const args = JSON.stringify({
 const script: ReplayEntry[] = [
   { kind: 'chunks', chunks: [
     { type: 'block-start', index: 0, blockType: 'tool-call' },
-    { type: 'tool-call-delta', index: 0, id: ToolCallId('ptc-question'), name: 'run_code', argumentsDelta: args },
-    { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('ptc-question'), name: 'run_code', arguments: args } },
+    { type: 'tool-call-delta', index: 0, id: brandString<ToolCallId>('ptc-question'), name: 'run_code', argumentsDelta: args },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('ptc-question'), name: 'run_code', arguments: args } },
     { type: 'finish', reason: { kind: 'tool-calls' } },
   ] },
   { kind: 'chunks', chunks: [

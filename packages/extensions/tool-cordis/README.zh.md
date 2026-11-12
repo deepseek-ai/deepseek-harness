@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-创造模式包含这组工具。其他组合需要在宿主组合里、提供 `cordisInspect` 的 host runner 旁挂载一次 `@deepseek-ai/dsh-tool-cordis/host`，并在每个要暴露这些工具的 agent preset 里挂载 `@deepseek-ai/dsh-tool-cordis`；仅有 preset 行不会注册任何 Host provider。调用 `cordis_inspect_list` 发现 provider，再用 `cordis_inspect_query` 查询其具体方法和类型。Host 的 `Config` provider 分页列出运行中的 Loader entry（`offset`、最多 100 的 `limit`、可选的精确插件 `name`；`total` 与 `nextOffset` 界定遍历），每个 entry 带 Loader id、patch 所寻址的树内 id 及其 Config 状态（`schema`、`absent`、`unsupported`、group 与 include 载体为 `tree`、禁用、未导入或已销毁的 entry 为 `inactive`），并把单个 entry 的原生 Config 投影为自包含的 JSON Schema 文档，同时在 profile 包查找能解析时给出该 entry 的 `packageDir`，即包 README 与构建产物 `lib/` 所在目录。通过 [Plugin Manager](../../boot/plugin-manager/README.zh.md) 安装包含插件代码或 MCP 配置的组合包。
+创造模式包含这组工具。其他组合需要在宿主组合里、提供 `cordisInspect` 的 host runner 旁挂载一次 `@deepseek-ai/dsh-tool-cordis/host`，并在每个要暴露这些工具的 agent preset 里挂载 `@deepseek-ai/dsh-tool-cordis`；仅有 preset 行不会注册任何 Host provider。调用 `cordis_inspect_list` 发现 provider，再用 `cordis_inspect_query` 查询其具体方法和类型。Host 的 `Config` provider 分页列出运行中的 Loader entry（`offset`、最多 100 的 `limit`、可选的精确插件 `name`；`total` 与 `nextOffset` 界定遍历），每个 entry 带 Loader id、patch 所寻址的树内 id 及其 Config 状态（`schema`、`absent`、`unsupported`、group 与 include 载体为 `tree`、禁用、未导入或已销毁的 entry 为 `inactive`），并把单个 entry 的原生 Config 投影为自包含的 JSON Schema 文档，同时在 profile 包查找能解析时给出该 entry 的 `packageDir`，即包 README 与构建产物 `lib/` 所在目录。没有 Agent 的调用，或在没有 Loader 的 Host 上的 `Config` 查询，以 `ToolContextUnavailableError` 失败；`Config` 分页字段格式错误时以 `ToolArgsError` 失败；未知 entry id 以 `InspectError` `INSPECT_TARGET_NOT_FOUND` 失败。通过 [Plugin Manager](../../boot/plugin-manager/README.zh.md) 安装包含插件代码或 MCP 配置的组合包。
 
 -----
 
@@ -54,7 +54,7 @@ Host provider 结合生成的 Service/Event 目录、经 app-boot Config 投影�
 
 #### 模型所见
 
-[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-cordis) 描述两个只读检查工具。插件不贡献 system prompt 段落：工具描述已说明何时调用每个工具以及查询不会调用业务方法。在 `cordis` preset 中，首轮 skill catalog 携带两个随附技能的描述，把插件、MCP、组合编辑和未指定去向的视觉请求路由到覆盖 Plugin Manager、MCP 设置、Client 打包和 slot 注册的技能。查询结果包含所请求的 API 声明、当前工具 schema、带 Config 状态的运行中 entry 目录，或单个 entry 投影后的 Config JSON Schema。
+[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-cordis) 描述两个只读检查工具。插件不贡献 system prompt 段落：工具描述已说明何时调用每个工具以及查询不会调用业务方法。在 `cordis` preset 中，首轮 skill catalog 携带随附的 `dsh-doc` 技能的描述，该技能覆盖关于 DSH 的问题，以及构建或修改 DSH 插件、MCP 连接和 agent preset 的请求；其参考资料覆盖 Plugin Manager、MCP 设置、Client 打包和 slot 注册。查询结果包含所请求的 API 声明、当前工具 schema、带 Config 状态的运行中 entry 目录，或单个 entry 投影后的 Config JSON Schema。
 
 #### Token 影响
 

@@ -41,7 +41,7 @@ kind: "package-reference"
 
 组合包的平台声明会在保存启用选择前检查。Host 不受支持时返回 `unsupported-platform`。组合包仍保留显示信息，并允许取消选择。包操作后的自动启用执行同一检查。给模型的下一步说明会提示用户在受支持的 Host 上运行该组合包。
 
-`listBundles` 保留默认隐藏的组合包，根据各包的展示声明和 Host 平台支持范围生成 `listedByDefault`。不支持的组合包默认不出现在主列表或“更多”中；profile 显式安装的依赖和已保存的选择仍可管理，显示平台原因并允许关闭。官方离线目录携带同一份包级平台声明，因此无需解析提供方代码或查询注册表，也能检查未安装的条目。这些检查不改变选择或激活状态。声明不是布尔值时返回元数据诊断。已选择但无法加载的组合包仍会出现在 `listBundles` 中，并携带 `error`；`enabled` 表示保存的选择，不代表加载成功。插件页面显示错误并允许取消选择。损坏的组合包无法启用。管理组合包的文件变得不可读后仍受保护。
+`listBundles` 保留默认隐藏的组合包，根据各包的展示声明和 Host 平台支持范围生成 `listedByDefault`。不支持的组合包默认不出现在主列表或“更多”中；profile 显式安装的依赖和已保存的选择仍可管理，显示平台原因并允许关闭。官方离线目录携带同一份包级平台声明，因此无需解析提供方代码或查询注册表，也能检查未安装的条目。这些检查不改变选择或激活状态。声明不是布尔值时返回元数据诊断，因为启动器不读取该声明。已选择但无法加载的组合包仍会出现在 `listBundles` 中，携带 `error`，且没有带 `entryId` 的行；`enabled` 表示保存的选择，不代表加载成功。插件页面将其标记为未运行，并允许取消选择。损坏的组合包无法启用。管理组合包的文件变得不可读后仍受保护。
 
 `listBundles` 为各组合包及其声明的插件行提供可选的展示 `meta`，包括已禁用的组合包。Client 从这些值中选择语言。单独的 `description` 字段是该组合包原始的 `package.json.description`；元信息诊断不会阻止管理操作。`source` 以 `pnpm add` 接受的 spec 给出 profile 依赖：git 地址或 URL 按记录给出，但去掉 http(s) URL 的 user information（查询字符串保持原样）；`file:` 或 `link:` 路径按 profile 目录解析为绝对路径，`~` 展开为主目录；注册表版本范围、标签或别名接在包名的 `@` 之后，以别名安装的包的 spec 也是如此。安装提供的组合包没有该字段，即使 profile 也依赖它，因为实际加载的是安装中的副本。`plugin_manager` 工具的列表结果不包含 UI 展示元信息和更新资格。
 
@@ -152,7 +152,7 @@ service 运行若在 `idleTimeoutMs` 内没有任何捕获输出即被终止，�
 
 #### 模型看到什么
 
-[`plugin_manager` 工具](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plugin-manager) 列出插件条目和组合包，并执行影响整个 profile 的改动。结果包含保存状态变化、应用状态和包管理诊断。未直接应用的变更结果会增加 `nextStep`，这是一句根据应用状态、拒绝代码、包管理器失败类型或重启原因生成的说明，指出模型下一步做什么或告诉用户什么。管理操作不会向 Agent 注入消息。
+[`plugin_manager` 工具](../../../docs/tool-catalog.zh.md#deepseek-aidsh-plugin-manager) 列出插件条目和组合包，并执行影响整个 profile 的改动。结果包含保存状态变化、应用状态和包管理诊断。未直接应用的变更结果会增加 `nextStep`，这是一句根据应用状态、拒绝代码、包管理器失败类型或重启原因生成的说明，指出模型下一步做什么或告诉用户什么。管理操作不会向 Agent 注入消息。缺少参数或参数越界时以带 `INVALID_ARGS` 的 `ToolArgsError` 失败。变更开始前或读取 profile 时的失败抛出 `PluginManagerError`：profile 或安装清单、profile 补丁无法读取时为 `PLUGIN_MANAGER_PROFILE_READ_FAILED`，管理器已卸载时为 `PLUGIN_MANAGER_UNAVAILABLE`；其他写入方持有 profile 锁超过 `lockWaitMs` 时以 atomic-write 的 `FileLockError` `FILE_LOCK_TIMEOUT` 失败；其他操作失败仍记录在变更结果中。
 
 #### Token 影响
 

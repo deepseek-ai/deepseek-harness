@@ -31,12 +31,13 @@ import type { SubmitOutcome } from '../src/client/contract/input.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { $replaceDetectSpanWithText, $selectDetectSpan } from '../src/client/input/editor/span-map.ts'
 import type {
-  ComposerAttachment, ComposerAttachmentsOwnerProps, DraftFileUploads, InputActivityOwnerProps,
+  ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerFileIntake, DraftFileUploads, InputActivityOwnerProps,
 } from '../src/client/contract/slots.ts'
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { en, zh } from '../src/client/locales.ts'
+import { createComposerFileIntake } from '../src/client/input/file-intake.ts'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
@@ -95,6 +96,8 @@ interface BenchOptions {
   /** The hub's steer-all face (empty-draft accelerated Enter). */
   steerQueue?: () => void
   variant?: 'hero' | 'composer'
+  occurrence?: 'main' | 'embedded'
+  registerFileIntake?: ComposerFileIntake
   placeholder?: string
   t?: InputBarProps['t']
   accessory?: React.ReactNode
@@ -213,6 +216,7 @@ function bench(over?: BenchOptions) {
     addFiles: over?.addFiles ?? (() => null),
     useFileUploads: bindSnapshotSelector(createSnapshotStore<DraftFileUploads>(over?.fileUploads ?? {})),
     retryFileUpload: undefined,
+    registerFileIntake: over?.registerFileIntake ?? createComposerFileIntake(),
     removeAttachment,
     resolveDraftAttachments: ids => ids.flatMap((id) => {
       const attachment = over?.attachments?.find(candidate => candidate.id === id)
@@ -230,6 +234,7 @@ function bench(over?: BenchOptions) {
     t: over?.t ?? makeTranslate(zh, commonZh),
     renderSlot,
     variant: over?.variant ?? 'composer',
+    occurrence: over?.occurrence ?? 'main',
     ...(over?.inert === true ? { disabled: true } : {}),
     ...(over?.blocked !== undefined ? { blocked: over.blocked } : {}),
     ...(over?.workspacePickerOpen !== undefined ? { workspacePickerOpen: over.workspacePickerOpen } : {}),
@@ -634,6 +639,31 @@ describe('image draft rail', () => {
     intake(within, [fits])
     expect(within.props.addFiles).toHaveBeenCalledWith([fits], undefined)
     expect(within.view.queryByRole('alert')).toBeNull()
+  })
+
+  it('joins the paste route with its card and occurrence and routes pastes through its own intake', () => {
+    const leave = vi.fn()
+    const register = vi.fn<ComposerFileIntake>(() => leave)
+    const addFiles = vi.fn(() => null)
+    const result = bench({ addFiles, registerFileIntake: register, occurrence: 'embedded' })
+    expect(register).toHaveBeenCalledTimes(1)
+    const target = register.mock.calls[0]![0]
+    expect(target.card).toBe(result.view.container.querySelector('[data-composer-card]'))
+    expect(target.occurrence).toBe('embedded')
+    expect(target.accepts()).toBe(true)
+    const pasted = new File([Uint8Array.of(1)], 'pasted.png', { type: 'image/png' })
+    act(() => { target.add([pasted]) })
+    expect(addFiles).toHaveBeenCalledWith([pasted], undefined)
+
+    // Acceptance follows live bar state without re-registering.
+    result.view.rerender(<InputBar {...result.props} useAccess={() => false} />)
+    expect(target.accepts()).toBe(false)
+    expect(register).toHaveBeenCalledTimes(1)
+    result.view.rerender(<InputBar {...result.props} occurrence="main" />)
+    expect(leave).toHaveBeenCalledTimes(1)
+    expect(register.mock.calls[1]![0].occurrence).toBe('main')
+    result.view.unmount()
+    expect(leave).toHaveBeenCalledTimes(2)
   })
 
   it('announces the format problem before any limit when the batch holds a non-image', () => {

@@ -10,6 +10,7 @@ import { loadOverlayPatches } from '../packages/boot/app-boot/src/index.ts'
 import { readPluginMeta } from '../packages/boot/app-boot/src/package-meta.ts'
 import { bundlePatchPaths, composeEntries, initProfile, readProfileManifest } from '../packages/boot/app-boot/src/profile.ts'
 import { OPTIONAL_BUNDLES, PROFILE_TEMPLATES } from '../packages/util/official-bundles/src/bundles.ts'
+import { HIDDEN_BUNDLES } from '../packages/util/official-bundles/src/plugin-manager.ts'
 import type { DshBundleManifest } from '../packages/util/package-manifest/src/types.ts'
 import { createPluginProfile } from '../apps/desktop/src/project-manager.ts'
 
@@ -30,6 +31,9 @@ function bundle(name: string): { dir: string; patches: ReturnType<typeof loadOve
   if (entry?.manifest.dsh?.bundle === undefined) throw new Error(`${name} is not a workspace bundle`)
   return { dir: entry.dir, patches: bundlePatchPaths(entry.dir, entry.manifest.dsh.bundle).flatMap(path => loadOverlayPatches('test', path)) }
 }
+
+/** Optional bundles that compose a profile of their own; the plugin page hides them, the Host inventory still reports them. */
+const STANDALONE_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-cua-mcp']
 
 const lightweight = [
   '@deepseek-ai/dsh-experimental-session-search',
@@ -92,8 +96,8 @@ describe.each(['web', 'desktop'] as const)('%s optional bundle overrides', (surf
 })
 
 describe('optional bundles', () => {
-  it('admits Computer Use only on macOS Hosts', () => {
-    expect(bundles.get('@deepseek-ai/dsh-cua-bundle')?.manifest.dsh?.bundle?.platforms).toEqual(['darwin'])
+  it('admits Computer Use on macOS and native Windows Hosts', () => {
+    expect(bundles.get('@deepseek-ai/dsh-cua-bundle')?.manifest.dsh?.bundle?.platforms).toEqual(['darwin', 'win32'])
   })
   const shipped = ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'].map(name => bundle(name).patches)
 
@@ -105,7 +109,22 @@ describe('optional bundles', () => {
     expect(OPTIONAL_BUNDLES).not.toContain('@deepseek-ai/dsh-experimental-inspector')
   })
 
-  it.each(OPTIONAL_BUNDLES)('%s composes over the Web profile without a skipped patch', (name) => {
+  // A bundle that composes a profile of its own is never layered over a GUI profile; HIDDEN_BUNDLES keeps it off the plugin page.
+  const standalone = OPTIONAL_BUNDLES.filter(name => STANDALONE_PROFILE_BUNDLES.includes(name))
+  const layered = OPTIONAL_BUNDLES.filter(name => !standalone.includes(name))
+
+  it.each(standalone)('%s composes its own profile alone over the empty root and stays off the plugin page', (name) => {
+    const { patches } = bundle(name)
+    const warnings: string[] = []
+    const composed = composeEntries([patches], message => warnings.push(message))
+    expect(warnings).toEqual([])
+    const topLevelIds = composed.flatMap(entry => typeof entry.id === 'string' ? [entry.id] : [])
+    expect(topLevelIds.length).toBeGreaterThan(0)
+    expect(topLevelIds).toHaveLength(new Set(topLevelIds).size)
+    expect(HIDDEN_BUNDLES).toContain(name)
+  })
+
+  it.each(layered)('%s composes over the Web profile without a skipped patch', (name) => {
     const { patches } = bundle(name)
     const warnings: string[] = []
     const composed = composeEntries([...shipped, patches], message => warnings.push(message))
@@ -144,7 +163,7 @@ describe('optional bundles', () => {
     }
   })
 
-  it('offers the forge panel and model worktree tool together with their separate worktree services', () => {
+  it('offers the forge panel and model worktree tool together over one worktree service', () => {
     const name = '@deepseek-ai/dsh-experimental-forge-bundle'
     expect(OPTIONAL_BUNDLES).toContain(name)
     for (const template of Object.values(PROFILE_TEMPLATES)) expect(template.bundles).not.toContain(name)
@@ -159,9 +178,8 @@ describe('optional bundles', () => {
       expect(flattenRows(composeEntries(shipped)).some(row => row.name === moduleName)).toBe(false)
       expect(rows.filter(row => row.name === moduleName && row.disabled !== true)).toHaveLength(1)
     }
-    const group = composeEntries([...shipped, bundle(name).patches]).find(row => row.id === 'optional-forge-panel')
-    expect(group?.isolate).toEqual({ worktrees: true })
-    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(2)
+    expect(composeEntries([...shipped, bundle(name).patches]).some(row => row.name === 'cordis:group' && row.id === 'optional-forge-panel')).toBe(false)
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-experimental-worktree')).toHaveLength(1)
   })
 
   it('keeps the existing tool and panel row overrides addressable in the unified bundle', () => {
@@ -170,12 +188,12 @@ describe('optional bundles', () => {
     const composed = composeEntries([...shipped, bundle('@deepseek-ai/dsh-experimental-forge-bundle').patches, [
       { id: 'worktree', config },
       { id: 'tool-worktree', disabled: true },
-      { id: 'optional-forge-panel', disabled: true },
+      { id: 'forge-panel', disabled: true },
     ]], message => warnings.push(message))
     expect(warnings).toEqual([])
     expect(composed.find(row => row.id === 'worktree')?.config).toEqual(config)
     expect(composed.find(row => row.id === 'tool-worktree')?.disabled).toBe(true)
-    expect(composed.find(row => row.id === 'optional-forge-panel')?.disabled).toBe(true)
+    expect(composed.find(row => row.id === 'forge-panel')?.disabled).toBe(true)
   })
 
   it('ships all five lightweight bundles without selecting them in a default template', () => {

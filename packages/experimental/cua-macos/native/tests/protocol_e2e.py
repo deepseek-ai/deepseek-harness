@@ -54,8 +54,13 @@ def cases():
         (request("call-中文-🧪", "protocol-absent\noperation", {}), "call-中文-🧪", "UNSUPPORTED",
          "Unsupported native operation: protocol-absent\noperation"),
     ]
-    result.append((request("hover-button", "hover", {"mouseButton": "left"}), "hover-button", "INVALID_ARGUMENT",
+    result.append((request("hover-button", "mouseMove", {"mouseButton": "left"}), "hover-button", "INVALID_ARGUMENT",
                    "Unknown operation parameter"))
+    for method in ("typeText", "pressKey", "paste"):
+        identifier = "window-keyboard-" + method
+        argument = {"key": "Return"} if method == "pressKey" else {"text": "do not dispatch"}
+        result.append((request(identifier, method, {"appHandle": "never-selected", "windowId": "1", **argument}),
+                       identifier, "INVALID_ARGUMENT", "macOS keyboard input follows application focus; use the App object"))
     for index in range(24):
         identifier = f"ordered-{index:02d}"
         method = f"protocol-absent-{index:02d}"

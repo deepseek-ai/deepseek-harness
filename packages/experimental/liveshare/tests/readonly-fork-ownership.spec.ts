@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import RemoteAccessService from '@deepseek-ai/dsh-api-remote-access'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { createViewerReadService } from '../src/host/viewer-read.ts'
 import { ForkRegistry } from '../src/host/fork-registry.ts'
@@ -14,12 +14,13 @@ import type { ForkShareState } from '../src/host/fork-policy.ts'
 import { createViewerAccessPolicy, readerWriteRefusal, type ViewerAccessFacts } from '../src/host/viewer-access-policy.ts'
 import type { ViewerCallRequest } from '../src/viewer-channel.ts'
 import { readerConnection } from './viewer-read-peers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const creator = { providerId: 'feishu', tenantId: 'tenant-a', subjectId: 'ou_viewer' }
 
 const share: ForkShareState = {
   shareId: 'share-1',
-  sessionId: 'session-shared',
+  sessionIds: ['session-shared'],
   // The view tier with the share's own fork switch on: forking is no longer a tier of its own.
   sessionMode: 'view',
   allowsFork: true,
@@ -60,7 +61,7 @@ function owner(access: RemoteAccessService) {
     const decide = (sessionId: string) => access.decide({
       principal: peer.principal,
       action: endpoint,
-      resources: [{ kind: 'session', id: SessionId(sessionId) }],
+      resources: [{ kind: 'session', id: brandString<SessionId>(sessionId) }],
     })
     if (endpoint === 'session/list') {
       const items = [
@@ -114,7 +115,7 @@ async function service(childCreator = creator): Promise<{ read: ReturnType<typeo
   ctx.remoteAccess.registerPolicy('share-viewer', createViewerAccessPolicy(accessFacts))
   const read = createViewerReadService({
     connection: owner(ctx.remoteAccess).connection,
-    sharedSessionId: () => 'session-shared',
+    sharedSessionIds: () => ['session-shared'],
     forkStateOf: () => share,
     forks,
     writeRefusal: (viewer, action, sessionId, concrete) => readerWriteRefusal(accessFacts, viewer, action, sessionId, concrete),

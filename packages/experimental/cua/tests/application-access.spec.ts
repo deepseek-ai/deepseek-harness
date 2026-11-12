@@ -7,7 +7,7 @@ import Storage from '@deepseek-ai/dsh-storage'
 import * as JsonStorage from '@deepseek-ai/dsh-storage-json'
 import * as Domains from '@deepseek-ai/dsh-storage-domain'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import UserQuestions, { UserQuestionError, type AskUserQuestionAnswer, type AskUserQuestionRequest } from '@deepseek-ai/dsh-user-questions'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { ApplicationAuthorizationResult, ApplicationAccess } from '../src/application-access.ts'
@@ -16,6 +16,7 @@ import type { CuaAppHandle } from '../src/types.ts'
 import { NativeClient } from '../src/native-client.ts'
 import { permissionFixture } from './permission-fixture.ts'
 import { CuaPermissionStore } from '../src/permission-store.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const native = vi.hoisted(() => ({ instances: [] as Array<{
   disposed: boolean
@@ -28,7 +29,7 @@ vi.mock('../src/native-client.ts', async original => ({
   NativeClient: class {
     disposed = false
     request = vi.fn(async (method: string) => method === 'openPermissionSettings' ? { opened: true }
-      : { accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
+      : { platform: 'darwin', accessibility: false, screenRecording: false, helper: { pid: 9 }, parent: { pid: 8 } })
     invalidate() { this.disposed = true }
     dispose = vi.fn(async () => { this.disposed = true })
     constructor() { native.instances.push(this) }
@@ -50,7 +51,7 @@ async function setup(choice = 'Allow for this session', options: { writable?: bo
   await mountAgentLoopTestDependencies(ctx)
   await mountAgentLoopTestHarness(ctx)
   if (options.questions !== false) await ctx.plugin(UserQuestions)
-  const owner = await ctx.agents.create({ sessionId: SessionId('cua-access-test') })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-access-test') })
   const answer = vi.fn<(request: AskUserQuestionRequest) => Promise<AskUserQuestionAnswer>>(async () => ({ answers: [{ id: 'cua-app-access', selected: [choice] }] }))
   ctx.on('user-questions/request', answer)
   const permissions = permissionFixture(ctx, options.initial, options.writable)
@@ -293,7 +294,7 @@ it('reports delegated approval as a main-task action without granting access', a
 it('keeps another task allowed when the same application is denied in a new task', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('cua-task-denial') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('cua-task-denial') })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
   await expect(f.access.select(owner.agent, client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
@@ -361,7 +362,7 @@ it('rejects an answer for a helper that exits while the human question is pendin
 it('refuses closed helpers and forgets one task without removing another task', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('other-consented-task') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('other-consented-task') })
   const other = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(owner.agent, other, handle, identity, signal)
   f.access.forget(f.agent)
@@ -382,7 +383,7 @@ it('keeps an active task operation running when a different task denies the same
   })
   try {
     const operationSignal = await entered.promise
-    const owner = await f.ctx.agents.create({ sessionId: SessionId('denying-task') })
+    const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('denying-task') })
     const other = new NativeClient(f.ctx, nativeConfig, unusedConnector)
     f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
     await expect(f.access.select(owner.agent, other, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')
@@ -414,7 +415,7 @@ it.each(['Allow for this session', 'Deny'])('retains %s when the same session ge
 it('asks separately for another session and a changed application identity', async () => {
   const f = await setup()
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('separate-session') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('separate-session') })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   await f.access.select(owner.agent, client, handle, identity, signal)
   expect(f.answer).toHaveBeenCalledTimes(2)
@@ -473,7 +474,7 @@ it('restores consent after a complete context restart only for the original conv
   await restored.access.select(restored.agent, restored.client, handle, identity, signal)
   expect(restored.answer).not.toHaveBeenCalled()
   await expect(restored.access.run(restored.client, handle, signal, async () => 'read')).resolves.toBe('read')
-  const other = await restored.ctx.agents.create({ sessionId: SessionId('another-conversation') })
+  const other = await restored.ctx.agents.create({ sessionId: brandString<SessionId>('another-conversation') })
   const client = new NativeClient(restored.ctx, nativeConfig, unusedConnector)
   await restored.access.select(other.agent, client, handle, identity, signal)
   expect(restored.answer).toHaveBeenCalledOnce()
@@ -486,7 +487,7 @@ it('revokes an unselected application and clears only refused conversations', as
   await f.access.revoke(identity.id)
   await f.access.retryApproval(identity.id)
   await f.access.select(f.agent, f.client, handle, identity, signal)
-  const owner = await f.ctx.agents.create({ sessionId: SessionId('refused-conversation') })
+  const owner = await f.ctx.agents.create({ sessionId: brandString<SessionId>('refused-conversation') })
   const client = new NativeClient(f.ctx, nativeConfig, unusedConnector)
   f.answer.mockResolvedValueOnce({ answers: [{ id: 'cua-app-access', selected: ['Deny'] }] })
   await expect(f.access.select(owner.agent, client, handle, identity, signal)).rejects.toThrow('APP_ACCESS_DENIED')

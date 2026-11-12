@@ -21,7 +21,7 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   await writeFile(join(root, 'package.json'), JSON.stringify({ name, version: '1.0.0', dsh: { bundle: {
     patch: './cordis.patch.yml', platforms: [process.platform === 'darwin' ? 'win32' : 'darwin'],
   } } }))
-  await writeFile(join(root, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: persistent-in-memory\n')
+  await writeFile(join(root, 'cordis.patch.yml'), '- id: ptc-runtime\n  config:\n    executionMode: persistent-in-memory\n    replScoped: false\n')
   const scaffold = owned.scaffold = await launchWebScaffold({ profile: { packages: [{ dir: root }] } })
   const browser = owned.browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
@@ -44,8 +44,9 @@ it('disables unsupported bundles, shows the Host restriction, and refuses direct
   const names = [name]
   await page.locator('[data-plugin-panel]').getByRole('button', { name: '更多', exact: true }).click()
   const cua = page.locator('[data-plugin-package="@deepseek-ai/dsh-cua-bundle"]')
-  expect(await cua.count()).toBe(process.platform === 'darwin' ? 1 : 0)
-  if (process.platform !== 'darwin') {
+  const cuaSupported = process.platform === 'darwin' || process.platform === 'win32'
+  expect(await cua.count()).toBe(cuaSupported ? 1 : 0)
+  if (!cuaSupported) {
     expect((await scaffold.ctx.pluginManager.listBundles()).find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
       .toMatchObject({ listedByDefault: false, enabled: false, error: { code: 'unsupported-platform' } })
     names.push('@deepseek-ai/dsh-cua-bundle')

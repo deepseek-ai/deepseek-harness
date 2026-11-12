@@ -138,12 +138,20 @@ struct WindowInfo: Sendable {
     let bounds: WindowBounds
     let isOnScreen: Bool
     let onCurrentSpace: Bool?
+    var layer: Int = 0
+
+    /// Normal windows remain discoverable for restoration, including when minimized or on another Space.
+    var isDiscoverable: Bool {
+        layer == 0 || (isOnScreen && onCurrentSpace != false && bounds.width > 0 && bounds.height > 0)
+    }
 
     var json: JSONValue {
-        .object([
-            "windowId": .number(Double(windowID)), "pid": .number(Double(pid)),
+        var record: [String: JSONValue] = [
+            "windowId": .string(String(windowID)),
             "appName": .string(appName), "title": .string(title), "bounds": bounds.json,
             "isOnScreen": .bool(isOnScreen), "onCurrentSpace": onCurrentSpace.map(JSONValue.bool) ?? .null,
-        ])
+        ]
+        if !isDiscoverable { record["cacheOnly"] = .bool(true) }
+        return .object(record)
     }
 }

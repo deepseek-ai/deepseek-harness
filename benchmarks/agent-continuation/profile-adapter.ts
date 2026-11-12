@@ -1,7 +1,8 @@
 /** Compiled synthetic model for the shipped sdk-minimal profile; tools remain production plugins. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { response, WORKLOAD } from './workload.ts'
 
@@ -18,7 +19,7 @@ class ProfileAdapter extends LlmAdapter {
       return
     }
     for (let index = 0; index < WORKLOAD.toolsPerLiveTurn; index++) {
-      const id = ToolCallId('profile-call-' + String(serial) + '-' + String(index))
+      const id = brandString<ToolCallId>('profile-call-' + String(serial) + '-' + String(index))
       const args = JSON.stringify({ command: 'view', path: process.cwd() + '/synthetic.txt' })
       yield { type: 'block-start', index, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index, id, name: 'str_replace_editor', argumentsDelta: args }

@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import type { Context } from '@deepseek-ai/cordis'
 import type { FileSystem, FsObservation, FsTarget } from '@deepseek-ai/dsh-fs'
-import { FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { WorkspaceFiles } from '../src/index.ts'
 import { failureOf, openWorkspace, type Harness } from './harness.ts'
 
@@ -47,7 +48,7 @@ async function observe(path: string, observation: FsObservation): Promise<void> 
   harness.ctx.emit('fs/observed', target, observation, undefined)
 }
 
-const present = (version: string): FsObservation => ({ kind: 'present', version: FsVersion(version) })
+const present = (version: string): FsObservation => ({ kind: 'present', version: brandString<FsVersion>(version) })
 
 /** Own the iterator until its asynchronous watcher close has settled, including failed assertions. */
 function open(
@@ -72,7 +73,13 @@ async function ready(stream: ReturnType<typeof open>): Promise<void> {
 async function ownedEndpoint() {
   let service: WorkspaceFiles | undefined
   const fiber = await harness.ctx.plugin(Object.assign((ctx: Context) => {
-    service = new WorkspaceFiles(ctx, { maxBytes: 1024, maxFileBytes: 1024, maxLines: 10, maxEntries: 10 })
+    service = new WorkspaceFiles(ctx, {
+      maxBytes: 1024,
+      maxFileBytes: 1024,
+      maxLines: 10,
+      maxEntries: 10,
+      search: { maxResults: 100, maxEntries: 1000, graceMs: 3000, timeoutMs: 30000, stderrMaxBytes: 65536 },
+    })
   }, { inject: ['fs', 'sandboxPolicy'] }))
   cleanups.push(() => fiber.dispose())
   if (service === undefined) throw new Error('plugin body did not run')

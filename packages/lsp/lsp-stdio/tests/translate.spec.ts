@@ -6,7 +6,7 @@ import {
   requestMethod,
   supportsOperation,
   supportsTransientOpen,
-} from '@deepseek-ai/dsh-lsp-stdio'
+} from '../src/translate.ts'
 import type { WireServerCapabilities } from '@deepseek-ai/dsh-lsp-stdio/src/protocol.ts'
 
 const RANGE = { start: { line: 1, character: 2 }, end: { line: 1, character: 5 } }
@@ -61,7 +61,11 @@ describe('negotiatePositionEncoding', () => {
   })
 
   it('rejects any other encoding', () => {
-    expect(() => negotiatePositionEncoding('utf-8')).toThrow(/unsupported position encoding/)
+    expect(() => negotiatePositionEncoding('utf-8')).toThrow(expect.objectContaining({
+      name: 'LspError',
+      code: 'LSP_UNSUPPORTED_ENCODING',
+      message: expect.stringMatching(/unsupported position encoding "utf-8"/) as string,
+    }))
   })
 })
 

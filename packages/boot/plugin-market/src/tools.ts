@@ -2,8 +2,9 @@
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { Context } from '@deepseek-ai/cordis'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { MarketListingVersion } from './index.ts'
+import { PluginMarketError, pluginMarketToolError } from './error.ts'
 
 /** Required services for the listing tool; `pluginMarket` is awaited inside `apply`. */
 export const inject = ['tools']
@@ -15,6 +16,19 @@ function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
     signal.addEventListener('abort', abort, { once: true })
     promise.then(resolve, reject).finally(() => { signal.removeEventListener('abort', abort) })
   })
+}
+
+/**
+ * Await one market read for a tool call: cancellation rethrows the signal's reason, and any other
+ * rejection becomes a coded {@link PluginMarketError} or keeps its `HarnessError` identity.
+ */
+async function marketRead<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  try {
+    return await untilAborted(promise, signal)
+  } catch (error) {
+    signal.throwIfAborted()
+    throw pluginMarketToolError(error)
+  }
 }
 
 /** Longest market-supplied title or description returned to the model, in UTF-16 code units. */
@@ -46,7 +60,7 @@ interface Page {
 function pageOf(offset: number | undefined, limit: number | undefined): Page {
   const page = { offset: offset ?? 0, limit: limit ?? 25 }
   if (!Number.isInteger(page.offset) || page.offset < 0 || !Number.isInteger(page.limit) || page.limit < 1 || page.limit > 100) {
-    throw new Error('offset must be a non-negative integer and limit must be an integer from 1 to 100')
+    throw new ToolArgsError(['offset must be a non-negative integer and limit must be an integer from 1 to 100'])
   }
   return page
 }
@@ -94,11 +108,11 @@ function registerTool(ctx: Context): void {
             })),
           })
         case 'list_plugins': {
-          if (args.target === undefined) throw new Error('target index URL is required')
+          if (args.target === undefined) throw new ToolArgsError(['target index URL is required'])
           const page = pageOf(args.offset, args.limit)
           const text = args.query ?? ''
           // The read is shared with other callers, so cancelling this call stops waiting without aborting the fetch.
-          const result = await untilAborted(market.search(args.target, {
+          const result = await marketRead(market.search(args.target, {
             text, sort: { kind: text.trim() === '' ? 'index' : 'relevance' }, offset: page.offset, limit: page.limit,
           }), exec.signal)
           const entries = result.entries.map((entry) => {
@@ -121,11 +135,13 @@ function registerTool(ctx: Context): void {
           return JSON.stringify({ index: english(result.title), entries, total: result.total, nextOffset: result.nextOffset })
         }
         case 'list_versions': {
-          if (args.target === undefined) throw new Error('target index URL is required')
-          if (args.name === undefined) throw new Error('name is required')
+          if (args.target === undefined) throw new ToolArgsError(['target index URL is required'])
+          if (args.name === undefined) throw new ToolArgsError(['name is required'])
           const page = pageOf(args.offset, args.limit)
-          const entry = await untilAborted(market.entry(args.target, args.name), exec.signal)
-          if (entry === undefined) throw new Error(`${args.name} is not listed in ${args.target}`)
+          const entry = await marketRead(market.entry(args.target, args.name), exec.signal)
+          if (entry === undefined) {
+            throw new PluginMarketError(`${args.name} is not listed in ${args.target}`, 'PLUGIN_MARKET_PLUGIN_NOT_FOUND')
+          }
           const { slice, nextOffset } = paged(entry.versions, page)
           return JSON.stringify({
             name: entry.name, defaultVersion: entry.defaultVersion ?? null, versions: slice.map(versionResult),

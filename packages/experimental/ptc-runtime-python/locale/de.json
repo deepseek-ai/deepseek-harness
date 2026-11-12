@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Python PTC-Laufzeit",
-    "description": "Führen Sie programmgesteuerten Tool-Aufrufcode in CPython-Unterprozessen aus."
-  }
-}

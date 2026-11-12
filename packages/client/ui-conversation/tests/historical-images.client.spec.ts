@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
 import { RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { HistoricalImageCache } from '../src/client/conversation/historical-images.ts'
@@ -18,7 +19,7 @@ describe('HistoricalImageCache', () => {
     await reference.ready
     const cache = new HistoricalImageCache(runtime.ctx, runtime.ctx.sessions)
     const attachment = {
-      attachmentId: AttachmentId('image-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>('image-1'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
     } as const
 
     const pending = cache.resolve(sessionId, attachment)
@@ -44,7 +45,7 @@ describe('HistoricalImageCache', () => {
       await reference.ready
       const cache = new HistoricalImageCache(runtime.ctx, runtime.ctx.sessions)
       const attachment = {
-        attachmentId: AttachmentId('image-seeded'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+        attachmentId: brandString<AttachmentId>('image-seeded'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
       } as const
 
       expect(cache.seed(sessionId, attachment, 'blob:seeded')).toBe(true)
@@ -83,7 +84,7 @@ describe('HistoricalImageCache', () => {
       await reference.ready
       const cache = new HistoricalImageCache(runtime.ctx, runtime.ctx.sessions)
       const attachment = {
-        attachmentId: AttachmentId('image-missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+        attachmentId: brandString<AttachmentId>('image-missing'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
       } as const
 
       expect(cache.seed(sessionId, attachment, 'blob:seeded')).toBe(true)
@@ -101,7 +102,7 @@ describe('HistoricalImageCache', () => {
     const runtime = await SlotTestRuntime.create()
     const cache = new HistoricalImageCache(runtime.ctx, runtime.ctx.sessions)
     const attachment = {
-      attachmentId: AttachmentId('image-unknown'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+      attachmentId: brandString<AttachmentId>('image-unknown'), mediaType: 'image/png', bytes: 1, width: 1, height: 1,
     } as const
     expect(cache.seed('missing' as never, attachment, 'blob:orphan')).toBe(false)
     await runtime.dispose()

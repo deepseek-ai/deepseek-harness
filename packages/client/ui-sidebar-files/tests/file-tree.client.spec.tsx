@@ -288,3 +288,26 @@ describe('FileTree', () => {
     expect(currentRef).toHaveBeenLastCalledWith(null)
   })
 })
+
+describe('caller-narrowed entries', () => {
+  it('highlights each occurrence of the given text in a name, ignoring case', () => {
+    const { view } = draw({ entries: CHANGES, expanded: ['pr/src'], highlight: 'FILE' })
+    const marks = [...view.container.querySelectorAll('mark')].map(mark => mark.textContent)
+    expect(marks).toEqual(['file', 'file'])
+    expect(row(view.container, 'pr/src/file2.ts').textContent).toBe('file2.ts')
+    expect(row(view.container, 'pr/README.md').querySelector('mark')).toBeNull()
+  })
+
+  it('says a directory left without entries holds hidden ones, or nothing for a selection', () => {
+    const entries: readonly TreeEntry[] = [
+      { path: 'pr/hidden', name: 'hidden', meta: { kind: 'directory' } },
+      { path: 'pr/unmatched', name: 'unmatched', meta: { kind: 'directory' } },
+    ]
+    const { view } = draw({
+      entries, expanded: ['pr/hidden', 'pr/unmatched'],
+      directories: { 'pr/hidden': { omitted: 'hidden' }, 'pr/unmatched': { omitted: 'unmatched' } },
+    })
+    const notes = [...view.container.querySelectorAll('[data-files-row]')].map(note => [note.getAttribute('data-files-row'), note.textContent])
+    expect(notes).toEqual([['hidden-only', en.emptyHidden]])
+  })
+})

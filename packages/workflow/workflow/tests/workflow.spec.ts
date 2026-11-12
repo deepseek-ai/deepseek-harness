@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { WorkflowRunId } from '../src/types.ts'
 import { Context } from '@deepseek-ai/cordis'
 import WorkflowEngineDefault, {
   isFatalWorkflowError,
   WorkflowError,
-  WorkflowRunId,
   WorkflowEngine,
 } from '../src/index.ts'
 import type { WorkflowRun, WorkflowRunInfo, WorkflowStartRequest } from '../src/index.ts'
@@ -20,11 +21,11 @@ class StubEngine extends WorkflowEngine {
   }
 }
 
-const INFO: WorkflowRunInfo = { id: WorkflowRunId('run-1'), meta: { name: 'w', description: 'd' } }
+const INFO: WorkflowRunInfo = { id: brandString<WorkflowRunId>('run-1'), meta: { name: 'w', description: 'd' } }
 
 describe('dsh-workflow (interface)', () => {
-  it('WorkflowRunId brands a string (identity at runtime)', () => {
-    expect(WorkflowRunId('abc')).toBe('abc')
+  it('preserves workflow identity as a string', () => {
+    expect(brandString<WorkflowRunId>('abc')).toBe('abc')
   })
 
   it('WorkflowError carries code + fatal (default true) and reads as a HarnessError', () => {

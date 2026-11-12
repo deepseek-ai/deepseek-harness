@@ -17,7 +17,8 @@
       - text: DeepSeek deepseek-official API 密钥
       - button "认证说明": "?"
       - textbox "API 密钥":
-        - /placeholder: 留空使用已保存凭据
+        - /placeholder: sk-messa••••••••••ding
+      - paragraph: 使用已保存的 API key。
       - group:
         - text: 自定义设置 API 地址
         - textbox "API 地址":

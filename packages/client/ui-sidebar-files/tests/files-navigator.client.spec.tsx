@@ -610,6 +610,17 @@ describe('FileNavigator beside a preview', () => {
     expect(document.activeElement).toBe(document.body)
   })
 
+  it('carries keyboard focus on the tree\'s scroll container, with no current row, to the next drawing', async () => {
+    const h = mountNavigator('sidebar://files')
+    act(() => { h.instance.actions.shown(PANE, true) })
+    await act(() => h.script.watches.ready(ROOT))
+    act(() => { h.view.container.querySelector<HTMLElement>('[data-files-body]')!.focus() })
+    h.view.unmount()
+    const back = h.remount()
+    await endTask()
+    expect(document.activeElement).toBe(back.container.querySelector('[data-files-body]'))
+  })
+
   it('gives the carried focus to the drawing in place when the task ends, after the tab draws the tree again', async () => {
     const h = mountNavigator(A)
     await revealSrc(h)
@@ -629,15 +640,15 @@ describe('FileNavigator beside a preview', () => {
     expect(document.activeElement).toBe(document.body)
   })
 
-  it('takes keyboard focus when asked, at its next drawing or at once', async () => {
+  it('gives its search field keyboard focus when asked, at its next drawing or at once', async () => {
     const h = mountNavigator('sidebar://files')
     act(() => { h.face.focus(PANE) })
     await act(() => h.script.watches.ready(ROOT))
-    expect(document.activeElement?.hasAttribute('data-files-body')).toBe(true)
+    expect(document.activeElement).toBe(h.view.getByRole('searchbox', { name: zh['search.placeholder'] }))
     act(() => { (document.activeElement as HTMLElement).blur() })
     act(() => { h.face.focus(PANE) })
     await endTask()
-    expect(document.activeElement?.hasAttribute('data-files-body')).toBe(true)
+    expect(document.activeElement).toBe(h.view.getByRole('searchbox', { name: zh['search.placeholder'] }))
   })
 
   it('keeps the pane\'s tree when a preview is replaced in place by the file it opened', async () => {

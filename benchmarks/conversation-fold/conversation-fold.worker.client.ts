@@ -3,7 +3,8 @@
 import { performance } from 'node:perf_hooks'
 import { Context } from '@deepseek-ai/cordis'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { ChatNode, ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -204,8 +205,8 @@ function preparingTool(tool: 'write' | 'bash', characters: number, definitions: 
   const chunksPerPublication = 64
   const payload = 'abcdefghijklmno '.repeat(Math.ceil(characters / chunkSize)).slice(0, characters)
   const tail = `${payload}"}`
-  const callId = ToolCallId('preparing-benchmark')
-  const attemptId = LlmAttemptId('preparing-benchmark')
+  const callId = brandString<ToolCallId>('preparing-benchmark')
+  const attemptId = brandString<LlmAttemptId>('preparing-benchmark')
   const delta = (index: number, argumentsDelta: string): SessionEventLikeEntry => ({
     type: 'transient',
     event: {
@@ -284,7 +285,7 @@ function streamingAssistant(
   const payload = pattern === 'ordinary'
     ? 'abcdefghijklmno '.repeat(Math.ceil(characters / 16)).slice(0, characters)
     : ' '.repeat(characters / 2) + 'abcdefghijklmno '.repeat(Math.ceil(characters / 32)).slice(0, characters / 2)
-  const attemptId = LlmAttemptId('streaming-benchmark')
+  const attemptId = brandString<LlmAttemptId>('streaming-benchmark')
   const live = (index: number, chunk: StreamChunk): SessionEventLikeEntry => ({
     type: 'transient',
     event: {

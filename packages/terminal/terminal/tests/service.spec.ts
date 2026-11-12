@@ -1,10 +1,11 @@
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalBackendCleanupError, TerminalError, type TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   TerminalBackend,
   TerminalBackendSession,
@@ -16,12 +17,13 @@ import type {
   TerminalSignal,
 } from '@deepseek-ai/dsh-terminal'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const agentScopeDisposers = new WeakMap<Agent, () => Promise<void>>()
 const ptyServiceDisposers = new WeakMap<Context, () => Promise<void>>()
 
 function stubAgent(ctx: Context, rawId: string): Agent {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const scopeFiber = ctx.plugin(() => {})
   const session = Session.create(id)
   const agent: Agent = {
@@ -137,7 +139,7 @@ async function disposeTerminalSessionService(ctx: Context): Promise<void> {
 
 describe('TerminalSessionService backend registry', () => {
   it('preserves the id brand and disposes exact backend contributions', async () => {
-    expectTypeOf(TerminalSessionId('pty-1')).toEqualTypeOf<TerminalSessionIdType>()
+    expectTypeOf(brandString<TerminalSessionId>('pty-1')).toEqualTypeOf<TerminalSessionIdType>()
     const ctx = await harness()
     const first = backend()
     const dispose = ctx.terminals.registerBackend(first.provider)
@@ -193,7 +195,18 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(ctx.terminals.spawn(owner, { type: 'stub', name: 'main' })).rejects.toMatchObject({ code: 'DUPLICATE_NAME' })
 
     const operation = ctx.terminals.startSend(owner, created.sessionId, { text: 'echo hi', submit: true })
-    expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })).toThrow(TerminalError)
+    let concurrent: unknown
+    try {
+      ctx.terminals.startSend(owner, created.sessionId, { text: 'pwd', submit: true })
+    } catch (error: unknown) {
+      concurrent = error
+    }
+    expect(concurrent).toBeInstanceOf(TerminalError)
+    expect(concurrent).toBeInstanceOf(HarnessError)
+    expect(concurrent).toMatchObject({ name: 'TerminalError', code: 'SEND_ACTIVE' })
+    const cleanup = new TerminalBackendCleanupError(new Error('setup failed'), new Error('cleanup failed'))
+    expect(cleanup).toBeInstanceOf(TerminalError)
+    expect(cleanup).toMatchObject({ name: 'TerminalBackendCleanupError', code: 'CLEANUP_FAILED' })
     expect(operation.readOutput()).toEqual({ delta: 'delta', truncated: false })
     expect(operation.cancel()).toBe(true)
     await operation.done
@@ -286,6 +299,18 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     controller.abort(reason)
 
     await expect(pending).rejects.toBe(reason)
+  })
+
+  it('rejects an uncancelled spawn with the backend cleanup failure and its code', async () => {
+    const ctx = await harness()
+    const failure = new TerminalBackendCleanupError(new Error('startup failed'), new Error('backend cleanup failed'))
+    ctx.terminals.registerBackend({ type: 'cleanup-failing', spawn: () => Promise.reject(failure) })
+    const owner = stubAgent(ctx, 'owner')
+    await ctx.agents.register(owner)
+
+    await expect(ctx.terminals.spawn(owner, { type: 'cleanup-failing' })).rejects.toBe(failure)
+    expect(failure).toMatchObject({ name: 'TerminalBackendCleanupError', code: 'CLEANUP_FAILED' })
+    expect(ctx.terminals.hasOwnerActivity(owner)).toBe(true)
   })
 
   it.each(['owner', 'service'] as const)('retains caller-triggered backend cleanup failure until %s disposal', async (scope) => {
@@ -516,6 +541,8 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     b.sessions[0]!.closeGate = Promise.withResolvers<undefined>()
     const first = ctx.terminals.kill(owner, created.sessionId)
     expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: '', submit: false })).toThrow('closing')
+    expect(() => ctx.terminals.startSend(owner, created.sessionId, { text: '', submit: false }))
+      .toThrow(expect.objectContaining({ name: 'TerminalError', code: 'SESSION_CLOSING' }))
     const second = ctx.terminals.kill(owner, created.sessionId)
     b.sessions[0]!.closeGate?.resolve(undefined)
     expect(await first).toBe(true)

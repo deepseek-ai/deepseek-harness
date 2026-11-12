@@ -18,8 +18,17 @@ export interface Config {
   hosts?: string[]
   /** Deadline in milliseconds for one `gh` invocation. */
   timeoutMs?: number
-  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read. */
+  /** Maximum captured bytes per `gh` output stream and combined JSON bytes of one complete check read or review read. */
   maxOutputBytes?: number
+  /**
+   * Most review threads counted per pull request in one status read, which reports a lower bound past it, and read in
+   * one review read, which reports itself truncated past it.
+   */
+  maxReviewThreads?: number
+  /** Most commits one pull request commit listing returns; GitHub lists at most 250 commits of a pull request. */
+  maxCommits?: number
+  /** Most files whose viewed marks one read lists; GitHub lists at most 3,000 files of a pull request. */
+  maxViewedFiles?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -27,6 +36,9 @@ export const Config: z<Config> = z.object({
   hosts: z.array(z.string()).default(['github.com']),
   timeoutMs: z.number().default(30_000),
   maxOutputBytes: z.number().default(8_388_608),
+  maxReviewThreads: z.number().default(1_000),
+  maxCommits: z.number().default(250),
+  maxViewedFiles: z.number().default(3_000),
 })
 
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d+)?$/i
@@ -41,8 +53,8 @@ export function apply(ctx: Context, config: Config): void {
   if (!Number.isSafeInteger(resolved.timeoutMs) || resolved.timeoutMs <= 0 || resolved.timeoutMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`forge-github: timeoutMs must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
   }
-  if (!Number.isSafeInteger(resolved.maxOutputBytes) || resolved.maxOutputBytes <= 0) {
-    throw new Error('forge-github: maxOutputBytes must be a positive safe integer')
+  for (const key of ['maxOutputBytes', 'maxReviewThreads', 'maxCommits', 'maxViewedFiles'] as const) {
+    if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-github: ${key} must be a positive safe integer`)
   }
-  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved.maxOutputBytes))
+  ctx.forge.register(new GitHubProvider(ghRunner(resolved), resolved.hosts, resolved))
 }

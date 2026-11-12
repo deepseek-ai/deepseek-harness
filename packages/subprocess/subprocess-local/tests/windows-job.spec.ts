@@ -350,6 +350,7 @@ describe('Windows parent runner contract', () => {
     statusless.child.connected = false
     statusless.child.exit( null, null)
     await expect(statusless.result.direct).rejects.toThrow('without an exit status')
+    await expect(statusless.result.direct).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_FAILED' })
   })
 
   it('fails closed on malformed/duplicate result, runner spawn error, and start-send error', async () => {
@@ -357,6 +358,7 @@ describe('Windows parent runner contract', () => {
     malformed.child.emit('message', { type: 'target-exit', exitCode: -1 })
     expect(malformed.child.killed).toEqual(['SIGKILL'])
     await expect(malformed.result.direct).rejects.toThrow('invalid target-exit')
+    await expect(malformed.result.direct).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_IPC_FAILED' })
     await expect(malformed.result.owner.waitForExit()).rejects.toThrow('invalid target-exit')
 
     const duplicate = launch()
@@ -364,6 +366,7 @@ describe('Windows parent runner contract', () => {
     duplicate.child.emit('message', { type: 'target-exit', exitCode: 0 })
     await expect(duplicate.result.direct).resolves.toEqual({ exitCode: 0, signal: null })
     await expect(duplicate.result.owner.waitForExit()).rejects.toThrow('more than one direct result')
+    await expect(duplicate.result.owner.waitForExit()).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_IPC_FAILED' })
 
     const errored = launch(new FakeChild(), spec, false)
     const spawnError = new Error('runner executable missing')
@@ -375,8 +378,9 @@ describe('Windows parent runner contract', () => {
     const postSpawnError = launch()
     const infrastructureError = new Error('runner failed after spawn')
     postSpawnError.child.emit('error', infrastructureError)
-    await expect(postSpawnError.result.direct).rejects.toBe(infrastructureError)
-    await expect(postSpawnError.result.owner.waitForExit()).rejects.toBe(infrastructureError)
+    const runnerFailure = { name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_FAILED', cause: infrastructureError }
+    await expect(postSpawnError.result.direct).rejects.toMatchObject(runnerFailure)
+    await expect(postSpawnError.result.owner.waitForExit()).rejects.toMatchObject(runnerFailure)
 
     const sendFailedChild = new FakeChild()
     sendFailedChild.sendError = new Error('IPC send failed')
@@ -389,14 +393,16 @@ describe('Windows parent runner contract', () => {
     Object.defineProperty(noIpc, 'send', { value: undefined })
     const noIpcResult = launch(noIpc).result
     await expect(noIpcResult.direct).rejects.toThrow('has no IPC channel')
+    await expect(noIpcResult.direct).rejects.toMatchObject({ name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_IPC_FAILED' })
     await expect(noIpcResult.owner.waitForExit()).rejects.toThrow('has no IPC channel')
 
     const nonError = new FakeChild()
     nonError.throwOnSendCall = 1
     nonError.sendThrown = 'start send failed'
     const nonErrorResult = launch(nonError).result
-    await expect(nonErrorResult.direct).rejects.toBe('start send failed')
-    await expect(nonErrorResult.owner.waitForExit()).rejects.toBe('start send failed')
+    const ipcFailure = { name: 'SubprocessError', code: 'SUBPROCESS_RUNNER_IPC_FAILED', cause: 'start send failed' }
+    await expect(nonErrorResult.direct).rejects.toMatchObject(ipcFailure)
+    await expect(nonErrorResult.owner.waitForExit()).rejects.toMatchObject(ipcFailure)
   })
 
   it('fails infrastructure and kills the runner when termination delivery fails', async () => {

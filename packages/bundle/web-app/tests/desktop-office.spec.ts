@@ -11,10 +11,11 @@ import { loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import OfficeKit from '@deepseek-ai/dsh-office-kit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { resolveKitModule } from '@deepseek-ai/dsh-office-kit/src/locate.ts'
 import SkillRegistry from '@deepseek-ai/dsh-skill'
 import * as SkillOffice from '@deepseek-ai/dsh-skill-office'
@@ -102,7 +103,7 @@ async function boot(profile: string, primaryRuntime: (root: string) => string | 
 
 /** Convert through `office_convert` as an Agent whose previous request declared the Office tools. */
 async function convertReport(ctx: Context, workspace: string, callId: string) {
-  const id = SessionId(callId)
+  const id = brandString<SessionId>(callId)
   const session = Session.create(id, [], { version: SESSION_FORMAT_VERSION, id, createdAt: 0, cwd: workspace, isSeeded: false })
   vi.spyOn(session, 'requestHeader').mockReturnValue({ config: { provider: 'fixture', model: 'fixture' }, tools: ctx.tools.schemas() })
   const agent = { session, options: {} } as never
@@ -110,7 +111,7 @@ async function convertReport(ctx: Context, workspace: string, callId: string) {
   const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'fixture', model: 'fixture' }, signal })
   try {
     return await executeToolFixture(ctx, {
-      signal, callId: ToolCallId(callId), name: 'office_convert', agent, toolSet, arguments: { input: 'report.docx', format: 'pdf' },
+      signal, callId: brandString<ToolCallId>(callId), name: 'office_convert', agent, toolSet, arguments: { input: 'report.docx', format: 'pdf' },
     })
   } finally { toolSet.dispose() }
 }

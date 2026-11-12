@@ -519,7 +519,7 @@ describe('web e2e: sidebar search alignment and row action targets', () => {
       }),
       vi.spyOn(account, 'getBalance').mockResolvedValue({ status: 'ready', value: [], bonusWallets: [] }),
       vi.spyOn(account, 'watch').mockImplementation(async function* (signal) {
-        yield state
+        yield { type: 'snapshot', state }
         if (signal.aborted) return
         await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
       }),

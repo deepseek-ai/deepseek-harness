@@ -269,7 +269,7 @@ Classification uses the recorded tool name exactly: no case folding, namespace s
 | `write` | `write` |
 | `edit` | `edit`, `apply_patch` |
 | `commands` | `bash`, `pwsh`, `exec_command`, `write_stdin`, or prefix `terminal_` |
-| `code` | `run_code` |
+| `code` | `run_code`, `cua_run_code` |
 | `webSearch` | `web_search` |
 | `webFetch` | `web_fetch` |
 | `subagents` | `subagent` or prefix `subagent_` |
@@ -290,7 +290,7 @@ A subagent tool follows ordinary group boundaries: it does not create a group me
 | Background subagent startup has returned its tool result, while the child is still running | Keep its category count, but remove that call from running-activity candidates. The child does not keep the parent's group in the subagent activity state. |
 | Tool calls recorded only in a child Session | Do not include them in the parent group's counts or live detail. Only calls actually attached to a member's `subCalls` participate recursively. |
 
-A `run_code` root counts once as `code`; its recorded PTC subcalls each count in their own categories. The wrapper is not replaced by leaf-call counts, and children are not all classified as `code`. With distinct call ids, `run_code → [read, bash, subagent_codex]` produces `code=1, read=1, commands=1, subagents=1`, in that tie order. A subcall can supply the live category while the outer `run_code` remains running.
+A `run_code` or `cua_run_code` root counts once as `code`; its recorded PTC subcalls each count in their own categories. The wrapper is not replaced by leaf-call counts, and children are not all classified as `code`. With distinct call ids, `run_code → [read, bash, subagent_codex]` produces `code=1, read=1, commands=1, subagents=1`, in that tie order. A subcall can supply the live category while the outer `run_code` remains running.
 
 Exact-name rules also mean that a recorded name such as `functions.read`, `mcp.read`, or `Read` falls into `tools`, while `browser_inspect` falls into `search`. A `terminal_*` name follows the command rule even when its operation only inspects or closes a terminal, unless the earlier `_inspect` rule matches.
 

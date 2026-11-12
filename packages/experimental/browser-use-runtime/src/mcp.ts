@@ -3,7 +3,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import Schema from '@deepseek-ai/schemastery'
-import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/types'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
@@ -126,7 +127,7 @@ export function mountSessionMcp(ctx: Context, options: SessionMcpOptions): void 
   }
 
   ctx.effect(function* () {
-    yield ctx.browserUse.register(BrowserUseProviderName(options.name))
+    yield ctx.browserUse.register(brandString<BrowserUseProviderName>(options.name))
     resources = new SessionResources(ctx, {
       label: options.name,
       exclusive: options.exclusive,

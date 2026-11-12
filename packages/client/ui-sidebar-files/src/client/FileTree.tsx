@@ -5,7 +5,8 @@
  * path, adds the directories the paths imply, orders every drawn level, and
  * draws the rows and their icons. It redraws when its
  * props or the occurrence's local selection change, and orders a drawn level
- * again only when the names or directory kinds in that level change.
+ * again only when the names or directory kinds in that level change. Given a
+ * query to highlight, it marks each occurrence of the query inside a name.
  */
 import { memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
@@ -14,6 +15,7 @@ import type { FactoryComponentPropsOf } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ContextMenuTriggerProps } from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import { FileTypeIcon, classifyFileType, IconFolderCloseRegular, IconFolderOpenRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from './locales.ts'
+import { matchRanges } from './search-tree.ts'
 import css from './FileTree.module.css'
 
 /** What a row is: a directory toggles, a file opens, and anything else is listed without either. */
@@ -51,6 +53,13 @@ export interface TreeDirectoryState {
   readonly failure?: string
   /** Entries are missing from the listing. */
   readonly truncated?: true
+  /**
+   * The caller left entries out, which changes what the directory says while
+   * none is drawn: `hidden` says that its hidden entries are not shown, and
+   * `unmatched`, for entries that are a selection such as search matches, says
+   * nothing instead of that it is empty.
+   */
+  readonly omitted?: 'hidden' | 'unmatched'
 }
 
 /** The `sidebar.files.tree` Factory's input: data and callbacks only. */
@@ -70,6 +79,8 @@ export interface FileTreeInput {
   readonly expanded: readonly string[]
   /** Listing state by directory key, root included; a directory absent here is listed and complete. */
   readonly directories?: Readonly<Record<string, TreeDirectoryState>> | undefined
+  /** Text whose occurrences inside each name are highlighted, ignoring case; nothing is highlighted without it. */
+  readonly highlight?: string | undefined
   /** Key of the file to mark as current, when it is drawn. */
   readonly current?: string | undefined
   /** Receives the current file's main button while drawn. @param row - the button, or `null` once it goes. */
@@ -190,12 +201,27 @@ interface TreeContext {
   readonly Accessory: ReturnType<FactoryComponentPropsOf<'sidebar.files.tree'>['useFactorySlot']>
 }
 
+/** One entry's name, with the occurrences of the text to highlight marked. */
+function Name({ name, highlight }: { name: string; highlight: string | undefined }): ReactNode {
+  const ranges = highlight === undefined ? [] : matchRanges(name, highlight)
+  if (ranges.length === 0) return <span className={css.name}>{name}</span>
+  const parts: ReactNode[] = []
+  let at = 0
+  for (const [start, end] of ranges) {
+    if (start > at) parts.push(name.slice(at, start))
+    parts.push(<mark key={start} className={css.match}>{name.slice(start, end)}</mark>)
+    at = end
+  }
+  if (at < name.length) parts.push(name.slice(at))
+  return <span className={css.name}>{parts}</span>
+}
+
 /** One entry's row, and its children when it is an expanded directory. */
 function Entry({ node, tree }: { node: TreeNode; tree: TreeContext }): ReactNode {
   const { input, Accessory } = tree
   const { entry, kind } = node
   const hidden = entry.meta?.hidden === true && css.hidden
-  const label = <span className={css.name}>{entry.name}</span>
+  const label = <Name name={entry.name} highlight={input.highlight} />
   if (kind === 'directory') {
     const expanded = tree.expanded.has(entry.path)
     return (
@@ -260,7 +286,11 @@ function Level({ path, tree }: { path: string; tree: TreeContext }): ReactNode {
   return (
     <>
       {state?.failure !== undefined && <li className={css.note} data-files-row="failed">{state.failure}</li>}
-      {level.length === 0 && state?.failure === undefined && <li className={css.note} data-files-row="empty">{t('empty')}</li>}
+      {level.length === 0 && state?.failure === undefined && state?.omitted !== 'unmatched' && (
+        state?.omitted === 'hidden'
+          ? <li className={css.note} data-files-row="hidden-only">{t('emptyHidden')}</li>
+          : <li className={css.note} data-files-row="empty">{t('empty')}</li>
+      )}
       {order.map(index => level[index]).filter(node => node !== undefined)
         .map(node => <Entry key={node.entry.path} node={node} tree={tree} />)}
       {state?.truncated === true && <li className={css.note} data-files-row="truncated">{t('truncated')}</li>}

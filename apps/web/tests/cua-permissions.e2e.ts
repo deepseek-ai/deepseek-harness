@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { chromium, type Browser } from 'playwright'
@@ -31,11 +32,11 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   const state = join(root, 'permissions.json'), audit = join(root, 'helper-events.jsonl')
   const launchApplication = { name: 'DSH Computer Use.app', path: '/Applications/DSH Computer Use.app',
     icon: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADElEQVQImWNgZGIGAAAOAAeCcsnOAAAAAElFTkSuQmCC' }
-  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: false, screenRecording: false, launchApplication }))
   await writeFile(join(root, 'observe-helper'), '')
   const fixturePatch = join(root, 'native-fixture.yml')
   // Keep the external helper override above bundle order changes when CUA is re-enabled.
-  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
+  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua-macos', config: { helperPath: helper } }]))
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] },
     extraOverlayPath: fixturePatch,
@@ -54,7 +55,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   scaffold.ctx.approval.setPolicy(agent, 'never')
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
-    calls: [{ type: 'tool-call', id: ToolCallId('cua-app-approval'), name: 'run_code',
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('cua-app-approval'), name: 'run_code',
       arguments: JSON.stringify({ code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
         description: 'Request application access' }) }] })
   const approval = page.locator('[data-approval-key]')
@@ -201,7 +202,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await accessibility.getByRole('button', { name: 'Request permission', exact: true }).click()
   await expect.poll(() => panel.getAttribute('aria-busy')).toBe('false')
   expect(await accessibility.getByRole('button', { name: 'Request permission', exact: true }).count()).toBe(1)
-  await writeFile(state, JSON.stringify({ accessibility: true, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin' as const, accessibility: true, screenRecording: false, launchApplication }))
   // Returning from System Settings refreshes the page's native permission observation.
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   await accessibility.getByText('Allowed', { exact: true }).waitFor()
@@ -297,7 +298,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
     await trace.evaluate((value) => { value.stop() })
     await trace.dispose()
   }
-  await writeFile(state, JSON.stringify({ accessibility: 'unavailable', screenRecording: false }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin', accessibility: 'unavailable', screenRecording: false }))
   await page.evaluate(() => { window.dispatchEvent(new Event('focus')) })
   const diagnostic = panel.getByRole('alert')
   await diagnostic.waitFor()
@@ -325,7 +326,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   }
   await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')
   await expect.poll(() => rowToggle.isEnabled(), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe(true)
-  await writeFile(state, JSON.stringify({ accessibility: false, screenRecording: false, launchApplication }))
+  await writeFile(state, JSON.stringify({ platform: 'darwin', accessibility: false, screenRecording: false, launchApplication }))
   await rowToggle.click()
   await expect.poll(() => rowToggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
   await expect.poll(() => panel.getAttribute('aria-busy'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('false')

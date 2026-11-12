@@ -48,6 +48,100 @@ function fixture() {
   return { column, viewport, group, row, prepend: (height: number) => { prependedHeight += height } }
 }
 
+it('updates history distance only from scrollport size observations before layout writes', () => {
+  let resize: ResizeObserverCallback | undefined
+  class Observer implements ResizeObserver {
+    constructor(callback: ResizeObserverCallback) { resize = callback }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  vi.stubGlobal('ResizeObserver', Observer)
+  onTestFinished(() => { vi.unstubAllGlobals() })
+  const h = fixture()
+  const edge = document.createElement('div')
+  h.column.prepend(edge)
+  const height = vi.fn(() => 300)
+  Object.defineProperty(h.column, 'clientHeight', { configurable: true, get: height })
+  h.viewport.setHistoryEdge(edge)
+  expect(height).not.toHaveBeenCalled()
+  let afterWrite = false
+  vi.spyOn(h.viewport, 'reclaimBelow').mockImplementation(() => { afterWrite = true })
+  height.mockImplementation(() => {
+    if (afterWrite) throw new Error('height read after a layout writer')
+    return 300
+  })
+  const entry: ResizeObserverEntry = { target: h.column, contentRect: new DOMRect(),
+    borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }
+  const notify = resize
+  const observer = new Observer(() => {})
+  notify?.([entry], observer)
+  height.mockClear()
+  notify?.([], observer)
+  vi.spyOn(edge, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -600, 20, 10))
+  expect(h.viewport.confirmHistoryStart()).toBe(true)
+  vi.spyOn(edge, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, -700, 20, 10))
+  expect(h.viewport.confirmHistoryStart()).toBe(false)
+  expect(height).not.toHaveBeenCalled()
+})
+
+it('uses the first paging anchor for one-shot history prepending without reading-position lookup', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  const scrollerRect = vi.spyOn(h.column, 'getBoundingClientRect')
+  const capture = vi.spyOn(h.viewport, 'capturePosition')
+  const query = vi.spyOn(h.column, 'querySelector')
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(capture).not.toHaveBeenCalled()
+  expect(query).toHaveBeenCalledTimes(1)
+  expect(scrollerRect).toHaveBeenCalledTimes(1)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(row.getBoundingClientRect().top).toBe(0)
+  h.prepend(30)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+})
+
+it('uses a collapsed group paging anchor when no ordinary content row is visible', () => {
+  const h = fixture()
+  const group = h.row(h.column, 'group', 0)
+  group.dataset.chatGroupKey = 'group'
+  const body = document.createElement('div')
+  body.hidden = true
+  group.append(body)
+  h.row(body, 'hidden-member', 20)
+  expect(h.viewport.capturePosition()).toBeNull()
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(group.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('restores the captured screen position once without retaining paging ownership', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(h.viewport.preserving).toBe(false)
+  h.column.scrollTop = 25
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(row.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('does not prepare a correction when no paging anchor exists', () => {
+  const h = fixture()
+  expect(h.viewport.beginHistoryPrepend()).toBe(false)
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(0)
+})
+
 it.each([
   { count: 64, slot: false }, { count: 4096, slot: false },
   { count: 64, slot: true }, { count: 4096, slot: true },
@@ -438,6 +532,71 @@ it.each([
   expect(h.body.scrollTop).toBe(test.expectedInner)
   expect(h.scroller.scrollTop).toBe(test.expectedOuter)
   expect(h.row.getBoundingClientRect().top).toBe(top)
+})
+
+it('restores the captured inner and outer screen position once without subscribing', () => {
+  const h = nestedFixture(600, 400)
+  h.scroller.scrollTop = 80
+  h.body.scrollTop = 40
+  const screenTop = h.row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  expect(h.viewport.preserving).toBe(false)
+  expect(h.observed.has(h.content)).toBe(false)
+  h.body.scrollTop = 60
+  h.scroller.scrollTop = 90
+  h.prepend(200)
+  h.viewport.finishHistoryPrepend()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
+  expect(h.row.getBoundingClientRect().top).toBe(screenTop)
+  expect(h.observed.has(h.content)).toBe(false)
+  h.prepend(20)
+  h.resize()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(80)
+})
+
+it('resolves a remounted one-shot anchor without entering retained paging', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  row.remove()
+  const replacement = h.row(h.column, 'old', 0)
+  h.column.scrollTop = 25
+  h.prepend(120)
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120)
+  expect(replacement.getBoundingClientRect().top).toBe(0)
+  expect(h.viewport.preserving).toBe(false)
+})
+
+it('does not repeat native outer anchoring during a near-zero one-shot prepend', () => {
+  const h = fixture()
+  const row = h.row(h.column, 'old', 0)
+  h.column.scrollTop = 0.5
+  const top = row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(120)
+  // Model the browser's adjustment before the layout effect reads the new geometry.
+  h.column.scrollTop = 120.5
+  h.viewport.finishHistoryPrepend()
+  expect(h.column.scrollTop).toBe(120.5)
+  expect(row.getBoundingClientRect().top).toBe(top)
+})
+
+it('does not repeat native inner anchoring when the outer scroller is at zero', () => {
+  const h = nestedFixture(600, 400)
+  h.body.scrollTop = 40
+  const top = h.row.getBoundingClientRect().top
+  expect(h.viewport.beginHistoryPrepend()).toBe(true)
+  h.prepend(200)
+  // Same ordering as the Chromium regression: native inner adjustment precedes our correction.
+  h.body.scrollTop = 240
+  h.viewport.finishHistoryPrepend()
+  expect(h.body.scrollTop).toBe(240)
+  expect(h.scroller.scrollTop).toBe(0)
+  expect(h.row.getBoundingClientRect().top).toBe(top)
+  expect(h.viewport.preserving).toBe(false)
 })
 
 it('gives paging compensation priority over an active inner follow animation', () => {

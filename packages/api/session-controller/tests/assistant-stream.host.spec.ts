@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session'
 import { SessionAssistantStreamAccumulator } from '../src/assistant-stream.ts'
 
@@ -10,12 +11,12 @@ describe('SessionAssistantStreamAccumulator', () => {
     expect(accumulator.snapshot()).toBe(empty)
 
     accumulator.accept({
-      type: 'start', attemptId: LlmAttemptId('stale'), revision: 2, turn: 1, step: 1,
+      type: 'start', attemptId: brandString<LlmAttemptId>('stale'), revision: 2, turn: 1, step: 1,
     }, -1)
     expect(accumulator.snapshot()).toEqual({ revision: 2 })
 
     accumulator.accept({
-      type: 'start', attemptId: LlmAttemptId('current'), revision: 1, turn: 2, step: 3,
+      type: 'start', attemptId: brandString<LlmAttemptId>('current'), revision: 1, turn: 2, step: 3,
     }, SessionSeq(5))
     expect(accumulator.snapshot()).toMatchObject({
       revision: 1,
@@ -25,16 +26,16 @@ describe('SessionAssistantStreamAccumulator', () => {
     })
 
     accumulator.accept({
-      type: 'chunk', attemptId: LlmAttemptId('other'), revision: 2, index: 0,
+      type: 'chunk', attemptId: brandString<LlmAttemptId>('other'), revision: 2, index: 0,
       time: 4, chunk: { type: 'text-delta', index: 0, text: 'lost' },
     }, SessionSeq(5))
     expect(accumulator.snapshot()).toEqual({ revision: 2 })
 
     accumulator.accept({
-      type: 'start', attemptId: LlmAttemptId('settled'), revision: 3, turn: 2, step: 4,
+      type: 'start', attemptId: brandString<LlmAttemptId>('settled'), revision: 3, turn: 2, step: 4,
     }, SessionSeq(8))
     accumulator.accept({
-      type: 'chunk', attemptId: LlmAttemptId('settled'), revision: 4, index: 0,
+      type: 'chunk', attemptId: brandString<LlmAttemptId>('settled'), revision: 4, index: 0,
       time: 5, chunk: { type: 'text-delta', index: 0, text: 'ok' },
     }, SessionSeq(8))
     const active = accumulator.snapshot()
@@ -48,7 +49,7 @@ describe('SessionAssistantStreamAccumulator', () => {
     expect(accumulator.snapshot()).toBe(active)
 
     accumulator.accept({
-      type: 'end', attemptId: LlmAttemptId('settled'), revision: 5, index: 1,
+      type: 'end', attemptId: brandString<LlmAttemptId>('settled'), revision: 5, index: 1,
       outcome: { kind: 'abandoned' },
     }, SessionSeq(9))
     expect(accumulator.snapshot()).toEqual({ revision: 5 })

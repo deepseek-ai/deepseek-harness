@@ -1,7 +1,8 @@
 /** Mandatory-update policy, independent of local business traffic and updater artifacts. */
 
 import { valid } from 'semver'
-import { platformClientHeaders, type AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account'
+import type { AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account'
+import { platformClientHeaders } from '@deepseek-ai/dsh-deepseek-account/client-metadata'
 
 /** Installed release identity; no field is supplied by a renderer. */
 export interface DesktopPolicyIdentity {

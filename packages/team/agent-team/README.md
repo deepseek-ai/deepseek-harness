@@ -80,7 +80,7 @@ File hints produce warnings when two in-progress tasks plan to touch overlapping
 
 The standard `wait_agent` tool waits for the exact caller’s next-step inbox and works without Team mode; see [subagent controls](../../subagent/tool-subagent-control/README.md#wait_agent). Task changes and Team mode changes do not end waits, add inbox input, or start idle Agents. Use `send_message` when an Agent needs to act on an update.
 
-An ancestor stops a descendant’s current turn with the standard `interrupt_agent` tool. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
+When the [subagent control plugin](../../subagent/tool-subagent-control/README.md#use-this-package) enables `config.interrupt`, an ancestor can stop a descendant’s current turn with `interrupt_agent`. Built-in configurations disable this tool by default. Interruption keeps unclaimed queued messages and leaves task ownership unchanged.
 
 ### What success and failure look like
 
@@ -147,7 +147,7 @@ Unloading the service unregisters the projection. The retained handle remains re
 
 ### Browser projection
 
-The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
+The `agentTeam` projection publishes non-deleted task views and any failure beside the last valid state. Historical roster and mailbox records cannot cause a task-board projection failure. A failed projection rejects task reads and mutations with `TeamError` `TEAM_STATE_CORRUPT` without appending task events. Mode selections can still be saved and applied, including disabling Team; the projection failure remains visible. Invalid mode payloads retain the last valid selection and publish a projection failure. The [subsystem reference](../../../docs/subsystems/agent-team.md#web-projection) defines the wire types.
 
 The [Web UI](../../client/ui-agent-team/README.md) displays tasks only. Ordinary subagent navigation owns the member list; task owner labels display the owner's full name, or its Session id when the owner has no name.
 

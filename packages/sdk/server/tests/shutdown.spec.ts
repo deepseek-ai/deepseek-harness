@@ -5,11 +5,12 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, { NO_START_CAPABILITIES, type SubagentActivation } from '@deepseek-ai/dsh-subagent'
 import { describe, expect, it, vi } from 'vitest'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { HarnessSdkJsonRpcServer } from '../src/server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup() {
   const ctx = new Context()
@@ -68,20 +69,20 @@ describe('SDK descendant shutdown', () => {
     }
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'root task' }] })
-      const root = ctx.agents.get(SessionId('main'))!
+      const root = ctx.agents.get(brandString<SessionId>('main'))!
       await root.whenIdle()
       const owned: Agent[] = []
       let parent = root
       for (let level = 0; level < depth; level++) {
-        const child = await start(parent, SessionId(`owned-child-${level}`))
+        const child = await start(parent, brandString<SessionId>(`owned-child-${level}`))
         owned.push(child)
         parent = child
       }
       await Promise.all(owned.map(child => park(root, child)))
       const { agent: outside } = await ctx.agents.create({
-        sessionId: SessionId('outside'), agentOptions: { provider: 'mock', model: 'mock' },
+        sessionId: brandString<SessionId>('outside'), agentOptions: { provider: 'mock', model: 'mock' },
       })
-      const outsideChild = await start(outside, SessionId('outside-child'))
+      const outsideChild = await start(outside, brandString<SessionId>('outside-child'))
       await park(outside, outsideChild)
       const disposed: SessionId[] = []
       ctx.on('agent/disposed', ({ agent }) => { disposed.push(agent.id) })
@@ -121,7 +122,7 @@ describe('SDK descendant shutdown', () => {
     const drain = vi.spyOn(ctx.subagents, 'drainDescendants').mockRejectedValue(drainFailure)
     try {
       await server.prompt({ sessionId: 'main', contentBlocks: [{ type: 'text', text: 'root task' }] })
-      const root = ctx.agents.get(SessionId('main'))!
+      const root = ctx.agents.get(brandString<SessionId>('main'))!
       await root.whenIdle()
       const shutdown = server.shutdown()
       if (rootFails) {

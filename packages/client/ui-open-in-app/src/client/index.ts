@@ -56,6 +56,7 @@ export function apply(ctx: ClientContext): void {
   const controller = new OpenInAppController()
   void controller.load()
   const paths = new OpenInAppPathController(ctx.remote)
+  ctx.effect(() => () => { paths.dispose() }, 'open-in-app: association refreshes')
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'open-in-app: dictionaries')
   const t = ctx.locale.bind(NS)
   // Keep operation feedback visible after its initiating panel closes.

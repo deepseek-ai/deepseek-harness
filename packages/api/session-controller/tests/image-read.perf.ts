@@ -14,9 +14,10 @@ import { crc32, deflateSync } from 'node:zlib'
 import { Context } from '@deepseek-ai/cordis'
 import { LocalAttachmentStore } from '@deepseek-ai/dsh-attachment-local'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { MessageId, ToolCallId } from '@deepseek-ai/dsh-llm'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
-import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, type Session } from '@deepseek-ai/dsh-session'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
@@ -92,17 +93,17 @@ function populate(session: Session, turns: number, refs: readonly ImageAttachmen
     session.append('turn/start', { turn })
     session.append('step/start', { turn, step: 1 })
     session.append('user/message', {
-      id: MessageId(`input-${turn}`), role: 'user', source: { kind: 'user' },
+      id: brandString<MessageId>(`input-${turn}`), role: 'user', source: { kind: 'user' },
       content: [
         { type: 'text', text: `Inspect synthetic module ${turn}. ` + 'Describe the visible result. '.repeat(8) },
         ...(ref === undefined ? [] : [{ type: 'image' as const, attachment: ref }]),
       ],
     }, { surfaceOp: 'append' })
-    const callId = ToolCallId(`call-${turn}`)
+    const callId = brandString<ToolCallId>(`call-${turn}`)
     const call = session.append('tool/call', { turn, step: 1, callId, name: 'synthetic_read', arguments: '{}' })
     session.append('tool/result', {
       turn, step: 1,
-      message: { id: MessageId(`result-${turn}`), role: 'tool', toolCallId: callId, isError: false,
+      message: { id: brandString<MessageId>(`result-${turn}`), role: 'tool', toolCallId: callId, isError: false,
         source: { kind: 'tool', callId }, content: [{ type: 'text', text: `module ${turn}\n` + 'export const value = 42;\n'.repeat(80) }] },
     }, { surfaceOp: 'append', sourceEventSeqs: [call.seq] })
     const block = { type: 'text' as const, text: `Result ${turn}. ` + 'Synthetic response. '.repeat(40) }
@@ -115,7 +116,7 @@ function populate(session: Session, turns: number, refs: readonly ImageAttachmen
     stream.push({ time: 1_700_000_001_001 + turn, chunk: { type: 'finish', reason: { kind: 'stop' } } })
     session.append('assistant/message', {
       turn, step: 1, stream: [...stream.snapshot()],
-      message: { id: MessageId(`reply-${turn}`), role: 'assistant', content: [block], source: { kind: 'model', provider: 'synthetic', model: 'synthetic' } },
+      message: { id: brandString<MessageId>(`reply-${turn}`), role: 'assistant', content: [block], source: { kind: 'model', provider: 'synthetic', model: 'synthetic' } },
     }, { surfaceOp: 'append' })
     session.append('step/end', { turn, step: 1 })
     session.append('turn/end', { turn, reason: { kind: 'completed' } })
@@ -168,7 +169,7 @@ async function measure(workload: keyof typeof WORKLOADS) {
     for (let ordinal = 0; ordinal < WORKLOADS[workload].images; ordinal++) {
       refs.push(await ctx.attachments.saveImage({ data: image(ordinal), mediaType: 'image/png' }))
     }
-    const session = ctx.sessions.create(SessionId('synthetic-image-history'), { meta: { cwd: '/synthetic-image-history' } })
+    const session = ctx.sessions.create(brandString<SessionId>('synthetic-image-history'), { meta: { cwd: '/synthetic-image-history' } })
     populate(session, WORKLOADS[workload].turns, refs)
     let timing: Timings = {
       historyObservations: 0, historyQueries: 0, historySnapshots: 0,

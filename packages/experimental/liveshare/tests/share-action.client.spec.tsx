@@ -60,7 +60,7 @@ describe('Session header Share action', () => {
   it('returns to the share dialog when the manager opens this same Session', async () => {
     const { shares } = ownerSharesDouble({
       list: async () => accepted({ shares: [{
-        shareId: 'share', sessionId: SESSION, sessionTitle: 'Review the migration',
+        shareId: 'share', sessionIds: [SESSION], sessionTitle: 'Review the migration',
         link: 'https://relay.test/?shareId=share', createdAt: '2026-09-05T00:00:00Z', online: true,
       }] as never }),
     })
@@ -79,7 +79,7 @@ describe('Session header Share action', () => {
     setManagedShareOpener(open)
     const { shares } = ownerSharesDouble({
       list: async () => accepted({ shares: [{
-        shareId: 'other', sessionId: 'other-session', sessionTitle: 'Other session',
+        shareId: 'other', sessionIds: ['other-session'], sessionTitle: 'Other session',
         link: 'https://relay.test/?shareId=other', createdAt: '2026-09-05T00:00:00Z', online: true,
       }] as never }),
     })
