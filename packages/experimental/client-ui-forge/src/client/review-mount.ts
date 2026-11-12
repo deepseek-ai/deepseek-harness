@@ -16,6 +16,7 @@ import type {} from '@deepseek-ai/dsh-experimental-client-ui-forge/remote'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { ForgePanelKey } from './locales.ts'
+import { actionReporter } from './action-notices.ts'
 import { NS } from './locales.ts'
 import { ReviewQueue } from './review-queue.ts'
 import { createReviewStore } from './review-store.ts'
@@ -75,23 +76,17 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
   const { notices, settled, nameOf, openLink, copyText } = deps
   const remote = ctx.remote.forgePanel
   const subscribeReset = (listener: () => void): (() => void) => ctx.on('connection/reset', listener)
-  const reportUnknown = (entry: ChangeRequestEntry): void => { notices.report('toast.actionUnknown', { params: { name: nameOf(entry) } }) }
+  const reportAction = actionReporter(notices, nameOf)
   const actionsFor = (url: string, showChanges: () => void): ChangeRequestActions => ({
     openLink,
     copyLink: copyText,
     retry: () => { void remote.reviewPoll(url).then(result => settled(result, 'toast.refreshFailed')) },
     markReady: async (entry) => {
-      const result = await remote.reviewMarkReady(url)
-      if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-      else notices.report('toast.markReadyFailed', { params: { message: result.error.message } })
+      reportAction(entry, await remote.reviewMarkReady(url), { done: 'toast.markedReady', failed: 'toast.markReadyFailed' })
     },
     merge: async (entry, request) => {
-      const result = await remote.reviewMerge(url, request.method, request.headSha)
-      if (result.ok) notices.report('toast.merged', { tone: 'success', params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-      else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
+      reportAction(entry, await remote.reviewMerge(url, request.method, request.headSha),
+        { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
     },
     readChecks: async (_url, headSha, signal) => {
       const result = await remote.reviewChecks(url, headSha, signal)
@@ -99,18 +94,13 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       return result.value
     },
     rerunChecks: async (entry, request) => {
-      const result = await remote.reviewRerunChecks(url, request)
-      if (result.ok) notices.report('toast.rerunRequested', { tone: 'success', params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.rerunStale', { params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-      else notices.report('toast.rerunFailed', { params: { message: result.error.message } })
+      reportAction(entry, await remote.reviewRerunChecks(url, request),
+        { done: 'toast.rerunRequested', stale: 'toast.rerunStale', failed: 'toast.rerunFailed' })
     },
     requestReviews: async (entry, reviewers) => {
-      const result = await remote.reviewRequestReviews(url, reviewers)
-      const login = reviewers.map(reviewer => reviewer.login).join(', ')
-      if (result.ok) notices.report('toast.reviewRequested', { tone: 'success', params: { name: nameOf(entry), login } })
-      else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-      else notices.report('toast.reviewRequestFailed', { params: { message: result.error.message } })
+      reportAction(entry, await remote.reviewRequestReviews(url, reviewers),
+        { done: 'toast.reviewRequested', failed: 'toast.reviewRequestFailed' },
+        { login: reviewers.map(reviewer => reviewer.login).join(', ') })
     },
     reviewerCandidates: async (_url, query, signal) => {
       const result = await remote.reviewReviewerCandidates(url, query, signal)
@@ -118,11 +108,8 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       return result.value
     },
     updateBranch: async (entry, request) => {
-      const result = await remote.reviewUpdateBranch(url, request.method, request.headSha)
-      if (result.ok) notices.report('toast.branchUpdated', { tone: 'success', params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.branchUpdateStale', { params: { name: nameOf(entry) } })
-      else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-      else notices.report('toast.branchUpdateFailed', { params: { message: result.error.message } })
+      reportAction(entry, await remote.reviewUpdateBranch(url, request.method, request.headSha),
+        { done: 'toast.branchUpdated', stale: 'toast.branchUpdateStale', failed: 'toast.branchUpdateFailed' })
     },
     viewChanges: () => { showChanges() },
   })

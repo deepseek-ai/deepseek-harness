@@ -176,6 +176,39 @@ function Issues({ item, t }: { readonly item: ReviewItem; readonly t: Translate 
   )
 }
 
+/** Props of one list item, in either view. */
+interface ItemProps {
+  readonly item: ReviewItem
+  /** The list the item shows in, which picks its hint. */
+  readonly filter: ForgeViewerFilter
+  readonly selected: boolean
+  /** Whether the item names its repository, because the lists span more than one. */
+  readonly qualified: boolean
+  readonly now: number
+  readonly onSelect: (url: string) => void
+  readonly t: Translate
+}
+
+/** The meta line of an item: its name, author, update time, the issues it closes, and what follows them. */
+function ItemMeta({ item, name, ago, children, t }: {
+  readonly item: ReviewItem
+  readonly name: string
+  readonly ago: string | undefined
+  readonly children?: ReactNode
+  readonly t: Translate
+}): ReactNode {
+  const { author } = item.summary
+  return (
+    <span className={css.itemMeta}>
+      <span>{name}</span>
+      {author !== null && <><span aria-hidden="true">·</span><span className={css.ellipsis}>{author.login}</span></>}
+      {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
+      <Issues item={item} t={t} />
+      {children}
+    </span>
+  )
+}
+
 /** What the hover card of a compact item shows: the full title and every fact the detailed item names. */
 function CompactDetails({ item, filter, qualified, now, t }: {
   readonly item: ReviewItem
@@ -191,27 +224,15 @@ function CompactDetails({ item, filter, qualified, now, t }: {
   return (
     <span className={css.compactCard}>
       <span className={css.compactCardTitle}>{summary.title}</span>
-      <span className={css.itemMeta}>
-        <span>{qualified ? `${repository.owner}/${repository.name}#${number}` : t('change.number', { number })}</span>
-        {summary.author !== null && <><span aria-hidden="true">·</span><span>{summary.author.login}</span></>}
-        {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
-        <Issues item={item} t={t} />
-      </span>
+      <ItemMeta item={item} name={qualified ? `${repository.owner}/${repository.name}#${number}` : t('change.number', { number })}
+        ago={ago} t={t} />
       {hint !== undefined && <span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span>}
     </span>
   )
 }
 
 /** One listed change request on one line: its glyph, its title, which marquees while hovered, and its update time. */
-function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: {
-  readonly item: ReviewItem
-  readonly filter: ForgeViewerFilter
-  readonly selected: boolean
-  readonly qualified: boolean
-  readonly now: number
-  readonly onSelect: (url: string) => void
-  readonly t: Translate
-}): ReactNode {
+function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: ItemProps): ReactNode {
   const { summary } = item
   const title = useRef<HTMLSpanElement>(null)
   const marquee = useTitleMarquee(title)
@@ -240,16 +261,7 @@ function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: {
 }
 
 /** One listed change request. */
-function Item({ item, filter, selected, qualified, now, onSelect, t }: {
-  readonly item: ReviewItem
-  readonly filter: ForgeViewerFilter
-  readonly selected: boolean
-  /** Whether the item names its repository, because the lists span more than one. */
-  readonly qualified: boolean
-  readonly now: number
-  readonly onSelect: (url: string) => void
-  readonly t: Translate
-}): ReactNode {
+function Item({ item, filter, selected, qualified, now, onSelect, t }: ItemProps): ReactNode {
   const { summary } = item
   const { repository, number } = summary.ref
   const hint = reviewHint(summary, filter)
@@ -262,13 +274,9 @@ function Item({ item, filter, selected, qualified, now, onSelect, t }: {
         <span className={css.itemGlyph}><ChangeRequestGlyph tone={summaryTone(summary)} checks={checks} size={16} /></span>
         <span className={css.itemText}>
           <span className={css.itemTitle}>{summary.title}</span>
-          <span className={css.itemMeta}>
-            <span>{qualified ? `${repository.name}#${number}` : t('change.number', { number })}</span>
-            {summary.author !== null && <><span aria-hidden="true">·</span><span className={css.ellipsis}>{summary.author.login}</span></>}
-            {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
-            <Issues item={item} t={t} />
+          <ItemMeta item={item} name={qualified ? `${repository.name}#${number}` : t('change.number', { number })} ago={ago} t={t}>
             {hint !== undefined && <><span aria-hidden="true">·</span><span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span></>}
-          </span>
+          </ItemMeta>
         </span>
       </button>
     </li>

@@ -20,6 +20,7 @@ import type { RemoteResult, TypertRemoteContribution } from '@deepseek-ai/dsh-ty
 import type {
   ForgeChangeRequestListState, ForgeChangeRequestStatesFrame, ForgeExtensionState,
 } from '../types.ts'
+import { actionReporter } from './action-notices.ts'
 import { AnnotationView } from './annotations.ts'
 import { ForgeChangesService } from './changes-service.ts'
 import type {} from './slots.ts'
@@ -203,10 +204,7 @@ function registerUi(ctx: Context): void {
     const number = numberOf(entry)
     return number === null ? entry.snapshot?.title ?? entry.url : t('change.number', { number })
   }
-  /** Tell the reader that the code host may have applied an action it did not confirm, which they should check there. */
-  const reportUnknown = (entry: ChangeRequestEntry): void => {
-    notices.report('toast.actionUnknown', { params: { name: nameOf(entry) } })
-  }
+  const reportAction = actionReporter(notices, nameOf)
   const remove = (sessionId: SessionId, entry: ChangeRequestEntry): void => {
     void ctx.remote.forgePanel.dismiss(sessionId, entry.url).then((result) => {
       if (!settled(result, 'toast.removeFailed')) return
@@ -251,31 +249,21 @@ function registerUi(ctx: Context): void {
         return result.value
       },
       markReady: async (entry) => {
-        const result = await ctx.remote.forgePanel.markReady(sessionId, entry.url)
-        if (result.ok) notices.report('toast.markedReady', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.markReadyFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.markReady(sessionId, entry.url),
+          { done: 'toast.markedReady', failed: 'toast.markReadyFailed' })
       },
       merge: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha)
-        if (result.ok) notices.report('toast.merged', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.mergeStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.mergeFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.merge(sessionId, entry.url, request.method, request.headSha),
+          { done: 'toast.merged', stale: 'toast.mergeStale', failed: 'toast.mergeFailed' })
       },
       rerunChecks: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request)
-        if (result.ok) notices.report('toast.rerunRequested', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.rerunStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.rerunFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.rerunChecks(sessionId, entry.url, request),
+          { done: 'toast.rerunRequested', stale: 'toast.rerunStale', failed: 'toast.rerunFailed' })
       },
       requestReviews: async (entry, reviewers) => {
-        const result = await ctx.remote.forgePanel.requestReviews(sessionId, entry.url, reviewers)
-        const login = reviewers.map(reviewer => reviewer.login).join(', ')
-        if (result.ok) notices.report('toast.reviewRequested', { tone: 'success', params: { name: nameOf(entry), login } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.reviewRequestFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.requestReviews(sessionId, entry.url, reviewers),
+          { done: 'toast.reviewRequested', failed: 'toast.reviewRequestFailed' },
+          { login: reviewers.map(reviewer => reviewer.login).join(', ') })
       },
       reviewerCandidates: async (url, query, signal) => {
         const result = await ctx.remote.forgePanel.reviewerCandidates(sessionId, url, query, signal)
@@ -283,11 +271,8 @@ function registerUi(ctx: Context): void {
         return result.value
       },
       updateBranch: async (entry, request) => {
-        const result = await ctx.remote.forgePanel.updateBranch(sessionId, entry.url, request.method, request.headSha)
-        if (result.ok) notices.report('toast.branchUpdated', { tone: 'success', params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/stale-head') notices.report('toast.branchUpdateStale', { params: { name: nameOf(entry) } })
-        else if (result.error.code === 'forgePanel/action-unknown') reportUnknown(entry)
-        else notices.report('toast.branchUpdateFailed', { params: { message: result.error.message } })
+        reportAction(entry, await ctx.remote.forgePanel.updateBranch(sessionId, entry.url, request.method, request.headSha),
+          { done: 'toast.branchUpdated', stale: 'toast.branchUpdateStale', failed: 'toast.branchUpdateFailed' })
       },
       restore: () => {
         void restore(sessionId).then((message) => {

@@ -138,6 +138,18 @@ export interface SnapshotPages {
 
 const actorSchema = z.object({ __typename: z.string(), login: z.string(), avatarUrl: z.string().nullable() })
 
+/** The closing issues references of a pull request, the snapshot's and a viewer list item's. */
+export const closingIssuesSchema = z.object({
+  totalCount: z.number().int().nonnegative(),
+  nodes: z.array(z.object({
+    number: z.number().int().positive(),
+    title: z.string(),
+    state: z.string(),
+    url: z.string(),
+    repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
+  })),
+})
+
 const reviewsSchema = z.object({
   totalCount: z.number().int().nonnegative(),
   nodes: z.array(z.object({ state: z.string(), commit: z.object({ oid: z.string() }).nullable(), author: actorSchema.nullable() })),
@@ -179,16 +191,7 @@ const pullRequestSchema = z.object({
   }),
   latestReviews: reviewsSchema,
   latestOpinionatedReviews: reviewsSchema,
-  closingIssuesReferences: z.object({
-    totalCount: z.number().int().nonnegative(),
-    nodes: z.array(z.object({
-      number: z.number().int().positive(),
-      title: z.string(),
-      state: z.string(),
-      url: z.string(),
-      repository: z.object({ name: z.string(), owner: z.object({ login: z.string() }) }),
-    })),
-  }),
+  closingIssuesReferences: closingIssuesSchema,
   commits: z.object({
     nodes: z.array(z.object({
       commit: z.object({

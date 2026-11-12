@@ -5,7 +5,7 @@ import type {
 } from '@deepseek-ai/dsh-experimental-forge'
 import { z } from 'zod'
 import type { GraphqlReader } from './commits.ts'
-import { checksRollup, reviewDecision, VERDICTS } from './graphql.ts'
+import { checksRollup, closingIssuesSchema, reviewDecision, VERDICTS } from './graphql.ts'
 import { isSegment } from './urls.ts'
 
 /** The lists GitHub search reads, each the same search the GitHub pull request page offers. */
@@ -63,12 +63,7 @@ const rowSchema = z.object({
   viewerLatestReviewRequest: z.object({
     requestedReviewer: z.object({ __typename: z.string(), combinedSlug: z.string().optional() }).nullable(),
   }).nullable(),
-  closingIssuesReferences: z.object({
-    totalCount: z.number().int().nonnegative(),
-    nodes: z.array(z.object({
-      number: z.number().int().positive(), title: z.string(), state: z.string(), url: z.string(), repository: ownerSchema,
-    })),
-  }),
+  closingIssuesReferences: closingIssuesSchema,
 })
 
 const listSchema = z.object({

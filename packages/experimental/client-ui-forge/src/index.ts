@@ -571,10 +571,7 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async reviewRequestReviews(url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
-    const { ref } = this.served(url)
-    if (reviewers.length === 0 || reviewers.some(reviewer => reviewer.login.trim() === '')) throw new Error('Invalid reviewers')
-    const failure = await this.home.forge.requestReviews(ref, { reviewers }, signal)
-    if (failure !== undefined) throw actionError(failure)
+    await this.askReviews(this.served(url).ref, reviewers, signal)
   }
 
   /**
@@ -589,9 +586,7 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async reviewReviewerCandidates(url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]> {
     signal.throwIfAborted()
-    const result = await this.home.forge.reviewerCandidates(this.served(url).ref, query, signal)
-    if ('code' in result) throw new RemoteError('forgePanel/reviewers-failed', result.message, {})
-    return result
+    return await this.candidatesOf(this.served(url).ref, query, signal)
   }
 
   /**
@@ -1122,10 +1117,7 @@ export class ForgePanelController extends TypertRemoteService {
     session: Session, url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal,
   ): Promise<void> {
     signal.throwIfAborted()
-    const { ref } = this.bound(session, url)
-    if (reviewers.length === 0 || reviewers.some(reviewer => reviewer.login.trim() === '')) throw new Error('Invalid reviewers')
-    const failure = await this.home.forge.requestReviews(ref, { reviewers }, signal)
-    if (failure !== undefined) throw actionError(failure)
+    await this.askReviews(this.bound(session, url).ref, reviewers, signal)
   }
 
   /**
@@ -1141,9 +1133,7 @@ export class ForgePanelController extends TypertRemoteService {
   @Remote
   async reviewerCandidates(session: Session, url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]> {
     signal.throwIfAborted()
-    const result = await this.home.forge.reviewerCandidates(this.bound(session, url).ref, query, signal)
-    if ('code' in result) throw new RemoteError('forgePanel/reviewers-failed', result.message, {})
-    return result
+    return await this.candidatesOf(this.bound(session, url).ref, query, signal)
   }
 
   /**
@@ -1484,6 +1474,22 @@ export class ForgePanelController extends TypertRemoteService {
   }
 
   /** The change request a review page URL names, with its latest polling result. */
+  /** Request reviews of a change request from the given accounts, refusing an empty list or an empty login. */
+  private async askReviews(
+    ref: ChangeRequestRef, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal,
+  ): Promise<void> {
+    if (reviewers.length === 0 || reviewers.some(reviewer => reviewer.login.trim() === '')) throw new Error('Invalid reviewers')
+    const failure = await this.home.forge.requestReviews(ref, { reviewers }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /** List accounts a review of a change request can be requested from, failing with the host's reason. */
+  private async candidatesOf(ref: ChangeRequestRef, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]> {
+    const result = await this.home.forge.reviewerCandidates(ref, query, signal)
+    if ('code' in result) throw new RemoteError('forgePanel/reviewers-failed', result.message, {})
+    return result
+  }
+
   private served(url: string): ChangeRequestTarget {
     const ref = this.home.forge.changeRequestFromUrl(url)
     if (ref === undefined) throw new RemoteError('forgePanel/unrecognized-url', 'No provider serves this change request URL', {})
