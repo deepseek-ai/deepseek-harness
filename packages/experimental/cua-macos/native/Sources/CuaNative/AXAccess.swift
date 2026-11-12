@@ -32,40 +32,85 @@ struct AXAttributeSetTarget: Sendable {
     }
 }
 
-/// Keeps child-discovery failures until the requested AX window has been resolved.
+/// Retains invalid roots for partial projection and rejects unresolved windows after incomplete discovery.
 struct AXRootDiscovery {
-    let roots: [AXUIElement]
-    private let invalidChildFailure: NativeFailure?
+    private(set) var roots: [AXUIElement]
+    private(set) var invalidRoots: [AXUIElement: NativeFailure] = [:]
+    private var invalidFailure: NativeFailure?
 
     static func discover(roots initial: [AXUIElement], maxElements: Int,
                          role: (AXUIElement) throws -> String?,
                          children: (AXUIElement) throws -> [AXUIElement]) throws -> AXRootDiscovery {
-        var roots = initial
-        var invalidChildFailure: NativeFailure?
+        var discovery = AXRootDiscovery(roots: initial)
         var cursor = 0
-        while cursor < roots.count && cursor < maxElements {
-            let root = roots[cursor]
+        while cursor < discovery.roots.count && cursor < maxElements {
+            let root = discovery.roots[cursor]
             cursor += 1
-            let rootRole = try role(root)
+            let rootRole = try discovery.readRoot(root) { try role(root) }
             guard rootRole == "AXWindow" || rootRole == "AXSheet" else { continue }
-            for child in try children(root) where roots.count < maxElements {
+            guard let rootChildren = try discovery.readRoot(root, read: { try children(root) }) else { continue }
+            for child in rootChildren where discovery.roots.count < maxElements {
                 do {
-                    if try role(child) == "AXSheet", !roots.contains(where: { CFEqual($0, child) }) {
-                        roots.append(child)
+                    if try role(child) == "AXSheet", !discovery.roots.contains(where: { CFEqual($0, child) }) {
+                        discovery.roots.append(child)
                     }
                 } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
-                    if invalidChildFailure == nil { invalidChildFailure = failure }
+                    if discovery.invalidFailure == nil { discovery.invalidFailure = failure }
                 }
             }
         }
-        return AXRootDiscovery(roots: roots, invalidChildFailure: invalidChildFailure)
+        return discovery
+    }
+
+    /// Invalid roots stay unreadable for this observation, including later focus and selection reads.
+    mutating func readRoot<Value>(_ root: AXUIElement, read: () throws -> Value?) throws -> Value? {
+        guard invalidRoots[root] == nil else { return nil }
+        do { return try read() }
+        catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+            invalidRoots[root] = failure
+            if invalidFailure == nil { invalidFailure = failure }
+            return nil
+        }
+    }
+
+    mutating func selectWindow(_ requested: UInt32,
+                               attribute: (AXUIElement, String) throws -> String?,
+                               windowID: (AXUIElement) throws -> UInt32?,
+                               verifyOwnership: () throws -> Void) throws -> [AXUIElement] {
+        var matches: [AXUIElement] = []
+        var nonWindows: [(element: AXUIElement, role: String)] = []
+        var anonymousSheets: [AXUIElement] = []
+        for root in roots {
+            guard let (role, id) = try readRoot(root, read: {
+                let role = try attribute(root, "AXRole") ?? ""
+                let id = role == "AXWindow" || role == "AXSheet" ? try windowID(root) : nil
+                return (role, id)
+            }) else { continue }
+            if role == "AXWindow" || role == "AXSheet" {
+                if id == requested { matches.append(root) }
+                else if role == "AXSheet" && id == nil { anonymousSheets.append(root) }
+            } else { nonWindows.append((root, role)) }
+        }
+        try validateWindowSelection(hasMatch: !matches.isEmpty, verifyOwnership: verifyOwnership)
+        guard !matches.isEmpty else { return [] }
+        let dialog = try matches.contains { root in
+            // An unreadable selected window cannot establish that application menus belong in its scope.
+            try readRoot(root, read: {
+                let role = try attribute(root, "AXRole")
+                let subrole = try attribute(root, "AXSubrole")
+                let identifier = try attribute(root, "AXIdentifier")
+                return role == "AXSheet" || ["AXDialog", "AXSystemDialog", "AXSheet"].contains(subrole ?? "") || ["open-panel", "save-panel"].contains(identifier ?? "")
+            }) ?? true
+        }
+        return matches + nonWindows.filter { !dialog || $0.role != "AXMenuBar" }.map(\.element)
+            + (dialog ? [] : anonymousSheets)
     }
 
     /// Only a successful discovery can establish that an owned window has no AX surface.
     func validateWindowSelection(hasMatch: Bool, verifyOwnership: () throws -> Void) throws {
         guard !hasMatch else { return }
         try verifyOwnership()
-        if let invalidChildFailure { throw invalidChildFailure }
+        if let invalidFailure { throw invalidFailure }
     }
 }
 
@@ -633,28 +678,16 @@ final class AXAccess {
         for root in try children(app, "AXWindows") { appendUnique(root) }
         let focused = try element(app, "AXFocusedWindow")
         if let focused { appendUnique(focused) }
-        let rootDiscovery = try AXRootDiscovery.discover(roots: roots, maxElements: maxElements,
+        var rootDiscovery = try AXRootDiscovery.discover(roots: roots, maxElements: maxElements,
             role: { try self.string($0, "AXRole") }, children: {
                 try observedChildren($0, self.attribute($0, "AXChildren"), duringDiscovery: true).entries.compactMap { $0 }
             })
         roots = rootDiscovery.roots
-        let focusedID = try focused.flatMap { try windowID($0) }
+        let focusedID = try focused.flatMap { root in try rootDiscovery.readRoot(root) { try windowID(root) } }
         if let requested {
-            var matches: [AXUIElement] = []
-            var nonWindows: [AXUIElement] = []
-            var anonymousSheets: [AXUIElement] = []
-            for root in roots {
-                let role = try string(root, "AXRole") ?? ""
-                if role == "AXWindow" || role == "AXSheet" {
-                    let id = try windowID(root)
-                    if id == requested { matches.append(root) }
-                    else if role == "AXSheet" && id == nil { anonymousSheets.append(root) }
-                } else { nonWindows.append(root) }
-            }
-            try rootDiscovery.validateWindowSelection(hasMatch: !matches.isEmpty) {
-                _ = try NativePlatform.ownedWindow(identity.pid, requested)
-            }
-            if matches.isEmpty {
+            roots = try rootDiscovery.selectWindow(requested, attribute: { try self.string($0, $1) },
+                windowID: { try self.windowID($0) }, verifyOwnership: { _ = try NativePlatform.ownedWindow(identity.pid, requested) })
+            if roots.isEmpty {
                 let hasUnreadableElements = recoveryCache.values.contains(where: \.hasUnreadableElements)
                 let limited = recoveryCache.values.contains(where: \.elementLimitReached)
                 var lines: [String] = []
@@ -663,18 +696,6 @@ final class AXAccess {
                 return AXProjection(tree: lines.joined(separator: "\n"), elements: [], indexed: [:], focusedWindowID: focusedID,
                                     truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
-            let dialog = try matches.contains { root in
-                let role = try string(root, "AXRole")
-                let subrole = try string(root, "AXSubrole")
-                let identifier = try string(root, "AXIdentifier")
-                return role == "AXSheet" || ["AXDialog", "AXSystemDialog", "AXSheet"].contains(subrole ?? "") || ["open-panel", "save-panel"].contains(identifier ?? "")
-            }
-            roots = matches
-            for root in nonWindows {
-                let role = try string(root, "AXRole")
-                if !dialog || role != "AXMenuBar" { roots.append(root) }
-            }
-            if !dialog { roots.append(contentsOf: anonymousSheets) }
         }
         let rootObservation = AXObservedChildren(
             entries: requested == nil ? appChildren.entries + roots.dropFirst(appRootCount).map(Optional.some) : roots.map(Optional.some),
@@ -683,7 +704,8 @@ final class AXAccess {
         return try AXTreeProjection.project(roots: rootObservation, focusedWindowID: focusedID, windowScoped: requested != nil,
             maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details,
             checkCancellation: { try self.cancellation.check() }, read: { element in
-                try self.readNode(element, includeMenus: includeMenus, readChildren: { observation in
+                if let failure = rootDiscovery.invalidRoots[element] { throw failure }
+                return try self.readNode(element, includeMenus: includeMenus, readChildren: { observation in
                     try observedChildren(element, observation.attribute("AXChildren"))
                 })
             })
@@ -716,13 +738,14 @@ final class AXAccess {
         let focused = try booleanValue(observed("AXFocused"), attribute: "AXFocused")
         let expanded = try booleanValue(observed("AXExpanded"), attribute: "AXExpanded")
         var node = AXTextNode(index: nil, role: role, title: title, value: value, description: description,
-                          actions: actionNames, enabled: enabled, valueWritable: valueWritable,
-                          selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
-                          selectedText: selectedText, subrole: subrole, placeholder: placeholder, help: help,
-                          identifier: identifier, url: url, focused: focused, expanded: expanded)
+                              actions: actionNames, enabled: enabled, valueWritable: valueWritable,
+                              selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
+                              selectedText: selectedText, subrole: subrole, placeholder: placeholder, help: help,
+                              identifier: identifier, url: url, focused: focused, expanded: expanded)
         node.validateSelection()
-        if !node.omitted, let position = try observed("AXPosition") { node.bounds = try bounds(position: position, size: observed("AXSize")) }
-        let children = role == "AXMenuBarItem" && !includeMenus && !node.omitted ? AXObservedChildren() : try readChildren(observation)
+        let omitted = node.omitted
+        if !omitted, let position = try observed("AXPosition") { node.bounds = try bounds(position: position, size: observed("AXSize")) }
+        let children = role == "AXMenuBarItem" && !includeMenus && !omitted ? AXObservedChildren() : try readChildren(observation)
         return AXReadNode(text: node, children: children)
     }
 

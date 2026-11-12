@@ -187,9 +187,15 @@ function createApplicationState(socket, record, application, captureBroker, conn
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
       if (partialObservation) {
         partialObservation = false
+        const appScope = params.windowId === undefined
         return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
-          tree: 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  [One child could not be read.]\n  - AXStaticText "Readable sibling"',
-          elements: [], windows: windows(), truncated: false, hasUnreadableElements: true }
+          tree: appScope
+            ? 'AX scope=application offsets=UTF-16\n[One child could not be read.]\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"'
+            : 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  [One child could not be read.]\n  - AXStaticText "Readable sibling"',
+          elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
+            identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
+          focusedWindowId: appScope ? null : window.windowId,
+          windows: windows(), truncated: false, hasUnreadableElements: true }
       }
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
