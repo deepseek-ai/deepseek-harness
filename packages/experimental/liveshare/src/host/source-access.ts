@@ -4,13 +4,14 @@
  * The layer is registered into the Session's own scope and confines the turns a share viewer starts while
  * any share over the Session is active; the owner's own turns keep the deployment's tools. It belongs to
  * the Session rather than to one share, so several shares over it share one installation, and the host
- * releases it once no share is left. Stopping a share stops whatever turn the Session is running, with
- * the owner's own cancellation, without asking which turn or which requester it was.
+ * releases it once no share is left. Stopping a share stops the turn that admitted share-viewer input,
+ * with the owner's own cancellation; an owner-started turn keeps running, and a turn this host cannot
+ * attribute stops with the share.
  * @module @deepseek-ai/dsh-experimental-liveshare/src/host/source-access
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import type { SessionId, Session } from '@deepseek-ai/dsh-session'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type { ShareRpcActor } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
@@ -144,6 +145,13 @@ export interface SourceAccessDeps {
    * this is the per-execution authority both the guard and the replacements read.
    */
   readonly confinedExecution: (execution: ForkToolExecution) => boolean
+  /**
+   * Whether the turn one Session is running was started by a share viewer.
+   *
+   * A grant that ends stops the work it admitted, not the owner's own work: the same recorded turn
+   * origin the sandbox reads decides whether there is anything of the share's to stop.
+   */
+  readonly turnIsViewerDriven: (sessionId: string) => boolean
 }
 
 /** The confined access layer and turn control one host's source Sessions carry. */
@@ -197,11 +205,11 @@ export interface SourceAccess {
    */
   childToolAuthorized(childSessionId: string, tool: string): boolean
   /**
-   * Stop whatever turn one share's Session is running, when the share stops driving it.
+   * Stop whatever turns one share's source Sessions are running, when the share stops driving them.
    *
-   * The host records only whether a turn was viewer-started, not which viewer admitted it, so it cannot
-   * tell a revoked viewer's turn from the owner's: a share that ends its grant stops the running turn
-   * itself.
+   * The host records whether each turn was started by a share viewer, so a turn the owner started keeps
+   * running when a grant ends. A turn this host cannot attribute is stopped, because it may be the work
+   * the ended grant admitted. Each source Session is judged on its own origin record.
    * @param shareId - Share whose capability just ended.
    */
   cancelShareTurn(shareId: string): void
@@ -537,12 +545,13 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
   }
 
   /**
-   * Stop whatever turn one share's Session is running.
+   * Stop whatever turn one share's source Sessions are running, when those turns belong to the share.
    *
-   * Revoking a share's capability unestablishes the work it admitted, but the host does not attribute a
-   * turn to the requester that admitted it: the running turn is stopped with the same cancellation the
-   * owner's own Stop command uses. Nothing already written is undone; a turn that has not started yet is
-   * refused by the sandbox instead.
+   * Revoking a share's capability unestablishes the work it admitted. A turn the owner started is not
+   * that work, so it keeps running; a turn this host cannot attribute is stopped with the same
+   * cancellation the owner's own Stop command uses, because it may be the work the grant admitted.
+   * The owner records that origin per Session, so each source Session of the share is judged on its own.
+   * Nothing already written is undone; a turn that has not started yet is refused by the sandbox instead.
    * @param shareId - Share whose capability just ended.
    */
   const cancelShareTurn = (shareId: string): void => {
@@ -554,6 +563,7 @@ export function createSourceAccess(deps: SourceAccessDeps): SourceAccess {
     for (const sessionId of share.sessionIds) {
       const live = agents?.get?.(sessionId)
       if (live === undefined || live.status !== 'running') continue
+      if (!deps.turnIsViewerDriven(sessionId)) continue
       console.warn(`[liveshare] cancelling source turn share=${shareId} session=${sessionId}`)
       live.cancel?.({ kind: 'user' }, { keepInbox: true })
     }

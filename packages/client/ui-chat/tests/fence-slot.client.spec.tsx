@@ -10,7 +10,8 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, stubConfigForm, usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyConversation, inject as injectConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { apply as applyChat, inject as injectChat } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/types'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
@@ -55,7 +56,7 @@ function settledReply(text: string): SessionEventLikeEntry[] {
     ...turnStart,
     { type: 'event', event: { type: 'assistant/message', seq: SessionSeq(3), time: 3, surfaceOp: 'append', data: {
       turn: 1, step: 1, stream: [], message: {
-        id: MessageId('reply'), role: 'assistant', content: [{ type: 'text', text }],
+        id: brandString<MessageId>('reply'), role: 'assistant', content: [{ type: 'text', text }],
         source: { kind: 'model', provider: 'fixture', model: 'fixture' },
       },
     } } },
@@ -68,7 +69,7 @@ function streamingReply(text: string): SessionEventLikeEntry[] {
   return [
     ...turnStart,
     { type: 'transient', event: { type: 'assistant/live-chunk', seq: SessionSeq(3), time: 3, data: {
-      attemptId: LlmAttemptId('fence-attempt'), turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text },
+      attemptId: brandString<LlmAttemptId>('fence-attempt'), turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text },
     } } },
   ]
 }

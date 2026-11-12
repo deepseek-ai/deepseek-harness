@@ -80,6 +80,11 @@ interface WorkflowResult {
   /** The failure message (present iff `stopReason` is not `completed`). */
   error?: string
   /**
+   * The code of the fatal {@link WorkflowError} that ended an `error` run;
+   * absent when the script's own exception or the engine runtime ended it.
+   */
+  errorCode?: WorkflowErrorCode
+  /**
    * How many `agent()` calls the run accepted over its whole lifetime. On a
    * graceful settlement this is the script-side count (calls still queued for
    * a concurrency slot included); on a termination path (cancellation or
@@ -113,7 +118,7 @@ interface WorkflowRun {
 
 ## Failure discipline: `WorkflowError.fatal`
 
-Hook misuse inside a script — bad arguments, unknown/deferred `agent()` options, a schema outside the [structured-output subset](../../packages/core/tools/README.md), a tripped cap, a seam start failure, cancellation — throws a `WorkflowError` with `fatal: true`. The `parallel()`/`pipeline()` combinators RE-THROW fatal errors instead of mapping the item to `null`: a typo'd option must kill the script loudly, never dissolve into something that reads as an ordinary child failure. The per-item `null` is reserved for child-run failures (a non-`completed` stop reason) and ordinary in-stage script errors.
+Hook misuse inside a script — bad arguments, unknown/deferred `agent()` options, a schema outside the [structured-output subset](../../packages/core/tools/README.md), a tripped cap, a seam start failure, cancellation — throws a `WorkflowError` with `fatal: true`. The `parallel()`/`pipeline()` combinators RE-THROW fatal errors instead of mapping the item to `null`: a typo'd option must kill the script loudly, never dissolve into something that reads as an ordinary child failure. The per-item `null` is reserved for child-run failures (a non-`completed` stop reason) and ordinary in-stage script errors. When a fatal error ends a run, the engine reports its code as `WorkflowResult.errorCode`, and the `workflow` tool fails with that code, such as `AGENT_CAP`; a run that settled as `error` without one (the script's own exception or an engine runtime failure) fails with `RUN_FAILED`, and one that settled as `cancelled` with `CANCELLED`; when the calling step itself was aborted, the tool runtime's `AbortError` `ABORTED` result applies instead.
 
 ## Events
 

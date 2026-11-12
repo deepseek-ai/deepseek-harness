@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-11-liveshare-owner-state-host-claim.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-11-liveshare-owner-state-host-claim.md
+/agent-note-one-host-claims-the-liveshare-owner-state:
+  en: fe99c1b2c07f8b44
+  zh: 127e08e92ec5fefe
+/agent-note-one-host-claims-the-liveshare-owner-state/problem:
+  en: 547680b92db88db1
+  zh: 46db5e6498aa1a25
+/agent-note-one-host-claims-the-liveshare-owner-state/decision:
+  en: 16acf8f131c35b82
+  zh: afed5f4b4c0dcb7a
+/agent-note-one-host-claims-the-liveshare-owner-state/alternatives-considered:
+  en: 451b3983c32e8c1d
+  zh: 3b44b6b8782db1be
+/agent-note-one-host-claims-the-liveshare-owner-state/consequences:
+  en: b88da2957ada40b3
+  zh: 2d624911e24755e5

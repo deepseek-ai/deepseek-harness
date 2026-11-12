@@ -10,12 +10,13 @@ import { Context, FiberState } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import ComputerUse from '@deepseek-ai/dsh-computer-use'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/types'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import LlmRuntime, { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -42,7 +43,7 @@ class ScreenshotModel extends LlmAdapter {
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     if (this.requests.length === 1) {
-      const id = ToolCallId('screenshot-call')
+      const id = brandString<ToolCallId>('screenshot-call')
       const args = '{"display":0}'
       yield { type: 'block-start', index: 0, blockType: 'tool-call' }
       yield { type: 'tool-call-delta', index: 0, id, name: TOOL, argumentsDelta: args }
@@ -135,7 +136,7 @@ describe('installed Cua Driver Loader composition', () => {
     const fibers = [...ctx.loader.entries()].flatMap(entry => entry.fiber === undefined ? [] : [entry.fiber])
     expect(fibers.every(fiber => fiber.state === FiberState.ACTIVE)).toBe(true)
     expect(ctx.computerUse.providerName).toBe('cua-driver-mcp')
-    const agent = await ctx.agentLoop.create(SessionId('computer-use-composition'), { provider: 'fixture', model: 'vision' })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>('computer-use-composition'), { provider: 'fixture', model: 'vision' })
     const idle = new Promise<void>((resolve) => {
       const dispose = ctx.on('agent/status', ({ agent: subject, status }) => {
         if (subject === agent && status === 'idle') { dispose(); resolve() }
@@ -167,14 +168,14 @@ describe('installed Cua Driver Loader composition', () => {
 
   it('retains exclusive ownership when the external process disconnects and reconnects', async () => {
     const { ctx, root } = await load()
-    await executeToolFixture(ctx, { name: 'mcp__cua-driver-mcp__disconnect', arguments: {}, callId: ToolCallId('disconnect'), signal: new AbortController().signal })
+    await executeToolFixture(ctx, { name: 'mcp__cua-driver-mcp__disconnect', arguments: {}, callId: brandString<ToolCallId>('disconnect'), signal: new AbortController().signal })
     expect(ctx.computerUse.providerName).toBe('cua-driver-mcp')
-    expect(() => ctx.computerUse.register(ComputerUseProviderName('replacement'))).toThrow('already registered')
+    expect(() => ctx.computerUse.register(brandString<ComputerUseProviderName>('replacement'))).toThrow('already registered')
     await vi.waitFor(async () => {
       expect((await driverEvents(root)).filter(event => event.event === 'initialize')).toHaveLength(2)
     }, { timeout: 10_000 })
     await vi.waitFor(async () => {
-      const result = await executeToolFixture(ctx, { name: TOOL, arguments: { display: 2 }, callId: ToolCallId('reconnected'), signal: new AbortController().signal })
+      const result = await executeToolFixture(ctx, { name: TOOL, arguments: { display: 2 }, callId: brandString<ToolCallId>('reconnected'), signal: new AbortController().signal })
       expect(result.isError).not.toBe(true)
       expect(result.content[0]).toEqual({ type: 'text', text: 'Display 2' })
     })

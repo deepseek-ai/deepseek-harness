@@ -2,7 +2,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId, type Session } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, type Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionRecord } from '@deepseek-ai/dsh-session-query'
 import { resolve } from 'node:path'
@@ -12,6 +12,7 @@ import SessionController from '../src/index.ts'
 import { createSessionTestController, TEST_IMAGE_LIMITS } from './test-remote.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiSessionList } from '../src/list.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type Phase = 'live' | 'cold'
 interface Row {
@@ -76,7 +77,7 @@ async function harness(rows: readonly Row[], summaryMs = 8, workSliceMs = 8) {
     detach.set(id, () => { detachAgent(); detachSession() })
   }
   const records: SessionRecord[] = rows.map((row) => {
-    const session = ctx.sessions.prepare(SessionId(row.id), {
+    const session = ctx.sessions.prepare(brandString<SessionId>(row.id), {
       meta: { createdAt: 100, ...(row.cwd === false ? {} : { cwd: resolve('list-scheduling-fixture') }) },
     })
     prepared.set(row.id, session)
@@ -157,7 +158,7 @@ describe('Session-list work slices', () => {
     const get = h.ctx.sessions.get.bind(h.ctx.sessions)
     const lookup = vi.spyOn(h.ctx.sessions, 'get').mockImplementation((id) => {
       h.clock.now += 4
-      if (id === SessionId('first')) betweenRows(() => { controller.abort(reason) })
+      if (id === brandString<SessionId>('first')) betweenRows(() => { controller.abort(reason) })
       return get(id)
     })
     await expect(h.list.list(controller.signal)).rejects.toBe(reason)
@@ -240,7 +241,7 @@ describe('Session-list work slices', () => {
       : [`${phase}:first`, `${phase}:middle`, `${phase}:last`])
     expect(h.listSessions).toHaveBeenCalledExactlyOnceWith(controller.signal)
     if (phase === 'live' && abortAt === 'first') {
-      expect(lookup).toHaveBeenCalledExactlyOnceWith(SessionId('first'))
+      expect(lookup).toHaveBeenCalledExactlyOnceWith(brandString<SessionId>('first'))
     }
   })
 
@@ -342,7 +343,7 @@ describe('Session-list work slices', () => {
       { sessionId: 'queued', agentAvailable: false, running: false },
       { sessionId: 'removed', agentAvailable: false, running: false },
     ])
-    expect(h.ctx.agents.get(SessionId('queued'))).toBeDefined()
-    expect(h.ctx.sessions.get(SessionId('removed'))).toBeUndefined()
+    expect(h.ctx.agents.get(brandString<SessionId>('queued'))).toBeDefined()
+    expect(h.ctx.sessions.get(brandString<SessionId>('removed'))).toBeUndefined()
   })
 })

@@ -9,7 +9,8 @@ import { createPermissionParameters } from './permission-guide.ts'
 import { nativeHostArchitecture, prepareNativeExecutable, type SourceSigning } from './native-build.ts'
 import { createSharedNativeChannel } from './shared-native.ts'
 import { installHeldKeys } from './held-keys.ts'
-import { GUIDANCE } from './guidance.ts'
+import { AX_TRAVERSAL_MAX } from './ax-limits.ts'
+import { GUIDANCE, PROGRAM_GUIDANCE } from './guidance.ts'
 export { GUIDANCE } from './guidance.ts'
 
 const CAPABILITIES: CuaStartupCapabilities = {
@@ -26,7 +27,7 @@ const CAPABILITIES: CuaStartupCapabilities = {
 }
 
 /** Loader plugin identity. */
-export const name = 'experimental-cua-macos'
+export const name = 'cua-macos'
 /** Services required by the shared CUA executor and the native launcher. */
 export const inject = ['computerUse', 'tools', 'systemPrompt', 'subprocess', 'agents']
 /** Native preparation, source-build signing, operation bounds, and profile-local application grants. */
@@ -43,6 +44,8 @@ export interface Config extends CuaConfig {
 /** Validate shared operation bounds and macOS source signing before preparing the helper. */
 export const Config = Schema.object({
   ...CuaConfigFields,
+  maxElements: CuaConfigFields.maxElements.max(AX_TRAVERSAL_MAX.maxElements).default(5000),
+  maxDepth: CuaConfigFields.maxDepth.max(AX_TRAVERSAL_MAX.maxDepth).default(50),
   permissionPollIntervalMs: Schema.number().step(1).min(100).max(2 ** 31 - 1).default(1000),
   sourceSigning: Schema.union([
     Schema.const('ad-hoc'),
@@ -62,10 +65,10 @@ export const Config = Schema.object({
  */
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const backend = { createChannel: createSharedNativeChannel, sendKeyEvent: installHeldKeys(ctx),
-    guidance: GUIDANCE, capabilities: CAPABILITIES,
-    permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
+    getGuidance: (kind: 'raw' | 'standalone') => kind === 'raw' ? GUIDANCE : PROGRAM_GUIDANCE, capabilities: CAPABILITIES,
+    acceptsPidSelector: true, permissionParameters: createPermissionParameters(config.permissionPollIntervalMs) }
   if (config.helperPath !== undefined) {
-    if (!isAbsolute(config.helperPath)) throw new Error('dsh-cua helperPath must be absolute')
+    if (!isAbsolute(config.helperPath)) throw new Error('macOS CUA helperPath must be absolute')
     installCua(ctx, config, { helperPath: config.helperPath, ...backend })
     return
   }
@@ -80,7 +83,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     controller.abort()
     // The Loader receives preparation failures through apply; disposal only awaits quiescence.
     await prepared.catch(() => {})
-  }, 'dsh-cua.native-preparation')
+  }, 'cua-macos.native-preparation')
   const helperPath = await prepared
   controller.signal.throwIfAborted()
   installCua(ctx, config, { helperPath, ...backend })

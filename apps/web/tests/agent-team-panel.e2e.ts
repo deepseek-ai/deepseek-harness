@@ -6,8 +6,9 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
 import type {} from '@deepseek-ai/dsh-agent-team'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   acknowledgeReloadConnectionLoss, assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -30,7 +31,7 @@ const RECEIPT_LOCALES = [
   },
   {
     language: 'Chinese', code: 'zh', browserLocale: 'zh-CN', connect: connectFreshWorkspaceZh,
-    modelButton: /^选择模型/u, toggle: '启用智能体团队协作', title: '智能体团队协作',
+    modelButton: /^选择模型/u, toggle: '开启智能体团队协作', title: '智能体团队协作',
     enabled: '已开启', disabled: '已停用',
     suggestions: '触发候选建议', commandLabel: '智能体团队协作',
     failure: '执行失败：Use /team on or /team off.',
@@ -38,6 +39,19 @@ const RECEIPT_LOCALES = [
 ] as const
 
 type ReceiptLocale = typeof RECEIPT_LOCALES[number]
+
+async function openTeamSettings(page: Page, chinese = false): Promise<void> {
+  const trigger = page.getByRole('button', { name: chinese ? /^选择模型/u : /^Select model/u })
+  await trigger.click()
+  await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('true')
+  await page.getByRole('menuitem', { name: chinese ? /^智能体团队协作 /u : /^Agent teamwork /u }).click()
+}
+
+async function closeModelMenu(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: /^(Select model|选择模型)/u })
+  if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click()
+  await expect.poll(() => trigger.getAttribute('aria-expanded')).toBe('false')
+}
 
 async function seedTeamConversation(page: Page, scaffold: WebScaffold): Promise<void> {
   const agent = scaffold.ctx.agents.list()[0]
@@ -114,94 +128,157 @@ describe('web e2e: agent teamwork panel', () => {
     await scaffold?.close()
   })
 
-  it('explains agent teamwork on hover and focus without changing the Session selection', async () => {
+  it('shows the explanation and switch only on the detail pane and returns to the summary', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-info'))
-    await page.getByRole('button', { name: /^Select model/u }).click()
-    const info = page.getByRole('button', { name: 'About agent teamwork', exact: true })
-    const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
-    const tooltip = page.getByRole('tooltip')
-    await info.hover()
-    await tooltip.waitFor({ state: 'visible' })
-    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'info.expected.md'), await captureStableAria(page, '[role="tooltip"]', scaffold.workspaceCwd), MODE)
-    expect(await toggle.getAttribute('aria-checked')).toBe('false')
-    await page.getByRole('button', { name: /^Select model/u }).hover()
-    await tooltip.waitFor({ state: 'hidden' })
-    await page.keyboard.press('Shift')
-    await info.focus()
-    await tooltip.waitFor({ state: 'visible' })
-    await page.keyboard.press('Escape')
-    await tooltip.waitFor({ state: 'hidden' })
-    expect(await toggle.isVisible()).toBe(true)
-    await info.click()
-    await tooltip.waitFor({ state: 'visible' })
-    expect(await info.getAttribute('aria-describedby')).toBe(await tooltip.getAttribute('id'))
-    expect(await toggle.getAttribute('aria-checked')).toBe('false')
-    await page.keyboard.press('Escape')
-    await tooltip.waitFor({ state: 'hidden' })
-    await page.keyboard.press('Escape')
-    expect(tripwire.pageErrors).toEqual([])
+    const trigger = page.getByRole('button', { name: /^Select model/u })
+    await trigger.click()
+    const menu = page.locator('[data-model-menu]')
+    const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
+    await summary.waitFor()
+    const stateColor = await summary.getByText('Off', { exact: true }).evaluate(element => getComputedStyle(element).color)
+    const modelColor = await menu.getByRole('menuitem', { name: 'Model DeepSeek-V4-Flash', exact: true })
+      .getByText('DeepSeek-V4-Flash', { exact: true }).evaluate(element => getComputedStyle(element).color)
+    expect(stateColor).toBe(modelColor)
+    const inspectArrow = (element: HTMLElement | SVGElement) => {
+      const { left, right, width, height } = element.getBoundingClientRect()
+      return { left, right, width, height, color: getComputedStyle(element).color, glyph: element.innerHTML }
+    }
+    const peerArrow = menu.getByRole('menuitem', { name: 'Model DeepSeek-V4-Flash', exact: true }).locator('svg').last()
+    expect(await summary.locator('svg').evaluate(inspectArrow)).toEqual(await peerArrow.evaluate(inspectArrow))
+    expect(await menu.getByRole('switch').count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'About agent teamwork', exact: true }).count()).toBe(0)
+    const rootSnapshot = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
+    const original = await menu.elementHandle()
+    if (original === null) throw new Error('Model menu is missing')
+    try {
+      await summary.click()
+      const toggle = menu.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
+      await toggle.waitFor()
+      expect(await original.evaluate(element => element.isConnected)).toBe(true)
+      await menu.getByText('Coordinate work and progress across agents with a shared task board for better results on complex tasks, with correspondingly higher token costs.', { exact: true }).waitFor()
+      expect(await page.getByRole('tooltip').count()).toBe(0)
+      expect(await toggle.getAttribute('aria-checked')).toBe('false')
+      await page.mouse.move(0, 0)
+      await toggle.press('ArrowDown')
+      expect(await toggle.evaluate(element => ({
+        rowBackground: getComputedStyle(element.parentElement!).backgroundColor,
+        focusVisible: element.matches(':focus-visible'),
+        outline: getComputedStyle(element).outlineStyle,
+        descriptionGap: element.parentElement!.nextElementSibling!.getBoundingClientRect().top
+          - element.parentElement!.getBoundingClientRect().bottom,
+      }))).toEqual({ rowBackground: 'rgba(0, 0, 0, 0)', focusVisible: true, outline: 'solid', descriptionGap: 0 })
+      const settingsSnapshot = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
+      await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'info.expected.md'),
+        `## Root\n\n${rootSnapshot}\n\n## Team settings\n\n${settingsSnapshot}`, MODE)
+      await page.keyboard.press('Escape')
+      await expect.poll(() => summary.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(await menu.getByRole('switch').count()).toBe(0)
+      await summary.press('Enter')
+      await toggle.waitFor()
+      await page.keyboard.press('Escape')
+      await summary.waitFor()
+      expect(await summary.evaluate(element => element === document.activeElement)).toBe(true)
+      expect(scaffold.ctx.agentTeams.isEnabled(scaffold.ctx.agents.list()[0]!)).toBe(false)
+      await page.keyboard.press('Escape')
+      await menu.waitFor({ state: 'hidden' })
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await closeModelMenu(page)
+      await original.dispose()
+    }
   })
 
-  it('toggles from the row label and empty space while keeping the information button independent', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-row'))
-    await page.getByRole('button', { name: /^Select model/u }).click()
-    const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
-    const info = page.getByRole('button', { name: 'About agent teamwork', exact: true })
-    const label = page.getByText('Enable agent teamwork', { exact: true })
-    const labelBounds = await label.boundingBox()
-    if (labelBounds === null) throw new Error('Team label is not visible')
-    const labelPoint = { x: labelBounds.x + labelBounds.width / 2, y: labelBounds.y + labelBounds.height / 2 }
-    await page.mouse.move(labelPoint.x, labelPoint.y)
-    expect(await toggle.evaluate((element) => {
-      const row = element.parentElement!
-      return getComputedStyle(row).backgroundColor !== 'rgba(0, 0, 0, 0)'
-    })).toBe(true)
-    await page.mouse.click(labelPoint.x, labelPoint.y)
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-    await info.click()
-    await page.getByRole('tooltip').waitFor({ state: 'visible' })
-    expect(await toggle.getAttribute('aria-checked')).toBe('true')
-    await page.keyboard.press('Escape')
-    const gap = await toggle.evaluate((element) => {
-      const control = element.getBoundingClientRect()
-      const help = element.parentElement!.querySelector('button:not([role="switch"])')!.getBoundingClientRect()
-      return { x: (help.right + control.left) / 2, y: control.top + control.height / 2 }
-    })
-    await page.mouse.click(gap.x, gap.y)
-    await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
-    expect(await page.getByRole('tooltip').count()).toBe(0)
-    await page.keyboard.press('Escape')
-    expect(tripwire.pageErrors).toEqual([])
+  it('aligns settings with the root menu and keeps explanatory text noninteractive in wide and narrow viewports', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-team-settings-page'))
+    const viewport = page.viewportSize()!
+    try {
+      await openTeamSettings(page)
+      const menu = page.locator('[data-model-menu]')
+      const toggle = menu.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
+      const description = menu.getByText('Coordinate work and progress across agents with a shared task board for better results on complex tasks, with correspondingly higher token costs.', { exact: true })
+      await description.click()
+      expect(await menu.isVisible()).toBe(true)
+      expect(await toggle.getAttribute('aria-checked')).toBe('false')
+      for (const size of [viewport, { width: 390, height: 700 }]) {
+        await page.setViewportSize(size)
+        await page.keyboard.press('Escape')
+        const summary = menu.getByRole('menuitem', { name: 'Agent teamwork Off', exact: true })
+        await summary.waitFor()
+        const rootBounds = await menu.evaluate((element) => {
+          const { width, left, right } = element.getBoundingClientRect()
+          return { width, left, right }
+        })
+        expect(rootBounds.width).toBe(240)
+        await summary.click()
+        await toggle.waitFor()
+        await expect.poll(() => menu.evaluate((element) => {
+          const { width, left, right } = element.getBoundingClientRect()
+          return { width, left, right }
+        })).toEqual(rootBounds)
+        await expect.poll(() => menu.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          return bounds.left >= 12 && bounds.right <= innerWidth - 12
+            && bounds.top >= 12 && bounds.bottom <= innerHeight - 12
+            && element.scrollWidth <= element.clientWidth
+        })).toBe(true)
+        expect(await description.evaluate((element) => {
+          const bounds = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return bounds.height > Number.parseFloat(style.lineHeight)
+            && element.scrollHeight <= element.clientHeight && style.textOverflow !== 'ellipsis'
+        })).toBe(true)
+      }
+      const labelBounds = await menu.getByText('Enable agent teamwork', { exact: true }).boundingBox()
+      if (labelBounds === null) throw new Error('Team label is not visible')
+      await page.mouse.click(labelBounds.x + labelBounds.width / 2, labelBounds.y + labelBounds.height / 2)
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
+      await expect.poll(() => toggle.isEnabled()).toBe(true)
+      await toggle.press('Escape')
+      await menu.getByRole('menuitem', { name: 'Agent teamwork On', exact: true }).click()
+      const gap = await toggle.evaluate((element) => {
+        const control = element.getBoundingClientRect()
+        const label = element.parentElement!.querySelector('span')!.getBoundingClientRect()
+        return { x: (label.right + control.left) / 2, y: control.top + control.height / 2 }
+      })
+      await page.mouse.click(gap.x, gap.y)
+      await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
+      expect(await page.getByRole('tooltip').count()).toBe(0)
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await closeModelMenu(page)
+      await page.setViewportSize(viewport)
+    }
   })
 
   it('defaults off and saves a Session selection in the model menu', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-team-mode'))
     expect(await page.locator('[data-subagent-action]').count()).toBe(0)
-    await page.getByRole('button', { name: /^Select model/u }).click()
+    await openTeamSettings(page)
     const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
     await toggle.waitFor()
     expect(await toggle.getAttribute('aria-checked')).toBe('false')
     await toggle.focus()
-    await page.keyboard.press('ArrowUp')
-    expect(await toggle.evaluate(element => element === document.activeElement)).toBe(false)
-    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Shift+Tab')
+    expect(await page.getByRole('button', { name: /^Select model/u }).evaluate(element => element === document.activeElement)).toBe(true)
+    expect(await toggle.count()).toBe(0)
+    await openTeamSettings(page)
     expect(await toggle.evaluate(element => element === document.activeElement)).toBe(true)
     await page.keyboard.press('Space')
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-    await page.keyboard.press('Escape')
+    await closeModelMenu(page)
     expect(await page.locator('[data-subagent-action]').count()).toBe(0)
     const agent = scaffold.ctx.agents.list()[0]!
     expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
     expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
-    const other = await scaffold.ctx.agents.create({ sessionId: SessionId('other-team-mode'), agentOptions: agent.options })
+    const other = await scaffold.ctx.agents.create({ sessionId: brandString<SessionId>('other-team-mode'), agentOptions: agent.options })
     expect(scaffold.ctx.agentTeams.isEnabled(other.agent)).toBe(false)
     await other.dispose()
     const beforeReload = tripwire.warnings.length
     await page.reload({ waitUntil: 'load' })
-    await page.getByRole('button', { name: /^Select model/u }).click()
+    await openTeamSettings(page)
     expect(await page.locator('[data-subagent-action]').count()).toBe(0)
     expect(await toggle.getAttribute('aria-checked')).toBe('true')
-    await page.keyboard.press('Escape')
+    await closeModelMenu(page)
     acknowledgeReloadConnectionLoss(tripwire, beforeReload)
   }, 60_000)
 
@@ -210,11 +287,11 @@ describe('web e2e: agent teamwork panel', () => {
     const input = page.locator('[data-composer-input]').first()
     const agent = scaffold.ctx.agents.list()[0]!
     for (const enabled of [false, true]) {
-      await page.getByRole('button', { name: /^Select model/u }).click()
+      await openTeamSettings(page)
       const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
-      await page.keyboard.press('Escape')
+      await closeModelMenu(page)
       await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
       await expect.poll(() => input.textContent()).toBe('')
       await page.getByRole('button', { name: 'Account menu', exact: true }).focus()
@@ -268,7 +345,7 @@ describe('web e2e: agent teamwork panel', () => {
     const projectionReads = vi.spyOn(scaffold.ctx.sessionController, 'projections')
     onTestFinished(() => { projectionReads.mockRestore() })
     const agent = scaffold.ctx.agents.list()[0]!
-    const memberId = SessionId('team-panel-researcher')
+    const memberId = brandString<SessionId>('team-panel-researcher')
     agent.session.append('subagent/catalog', {
       version: 2, childId: memberId, childCreatedAt: Date.now(), mode: 'external',
       label: RESEARCHER_DESCRIPTION,
@@ -434,22 +511,22 @@ describe('web e2e: agent teamwork panel', () => {
   }, 60_000)
 
   it('hides the board while disabled and restores its tasks when re-enabled', async () => {
-    await page.getByRole('button', { name: /^Select model/u }).click()
+    await openTeamSettings(page)
     const toggle = page.getByRole('switch', { name: 'Enable agent teamwork', exact: true })
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('false')
     expect(await page.locator('[data-subagent-action]').count()).toBe(1)
-    await page.keyboard.press('Escape')
+    await closeModelMenu(page)
     await page.locator('[data-subagent-action]').getByRole('button', { name: '1 subagent', exact: true }).click()
     await page.getByRole('treeitem', { name: /Researcher/u }).waitFor()
     expect(await page.locator('[data-team-panel]').count()).toBe(0)
     expect(await page.locator('[data-subagent-panel]').evaluate(element => element.getBoundingClientRect().width)).toBe(360)
     expect(await page.locator('[data-subagent-section-header]').count()).toBe(0)
     await page.keyboard.press('Escape')
-    await page.getByRole('button', { name: /^Select model/u }).click()
+    await openTeamSettings(page)
     await toggle.click()
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-    await page.keyboard.press('Escape')
+    await closeModelMenu(page)
     await page.locator('[data-subagent-action]').getByRole('button', { name: /subagents?$/u }).click()
     await page.locator('[data-subagent-panel]').getByText('Agent task', { exact: true }).waitFor()
     await page.keyboard.press('Escape')
@@ -784,14 +861,15 @@ describe('web e2e: agent teamwork panel', () => {
     agent.session.append('request/header', { header: { config: selection }, reason: 'initial' })
     await scaffold.ctx.sessions.flush(agent.session)
     const openConfirmation = async (): Promise<void> => {
-      await page.getByRole('button', { name: /^Select model/u }).click()
+      await openTeamSettings(page)
       await page.getByRole('switch', { name: 'Enable agent teamwork', exact: true }).click()
       await page.getByRole('dialog', { name: 'Disable agent teamwork?', exact: true }).waitFor()
     }
     await openConfirmation()
     const dialog = page.getByRole('dialog', { name: 'Disable agent teamwork?', exact: true })
     await assertWarningDialogLayout(dialog)
-    expect(await page.getByRole('menu', { name: 'Model and reasoning effort', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('group', { name: 'Agent teamwork', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: /^Select model/u }).getAttribute('aria-expanded')).toBe('false')
     expect(await dialog.getByRole('checkbox').count()).toBe(0)
     expect(scaffold.ctx.agentTeams.isEnabled(agent)).toBe(true)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'disable-confirmation.expected.md'),
@@ -810,11 +888,11 @@ describe('web e2e: agent teamwork panel', () => {
     await dialog.waitFor({ state: 'hidden' })
     await expect.poll(() => page.getByRole('button', { name: /^Select model/u }).evaluate(element => element === document.activeElement)).toBe(true)
     await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(false)
-    await page.getByRole('button', { name: /^Select model/u }).click()
+    await openTeamSettings(page)
     await page.getByRole('switch', { name: 'Enable agent teamwork', exact: true }).click()
     await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(true)
     expect(await dialog.count()).toBe(0)
-    await page.keyboard.press('Escape')
+    await closeModelMenu(page)
     expect(agent.session.ownEvents().filter(event => event.type === 'command/run' || event.type === 'command/done')).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   })
@@ -891,14 +969,14 @@ it.each(RECEIPT_LOCALES)('toggles teamwork in $language without command records 
       await expect.poll(captureLayout).toEqual(recordedLayout)
     }
     for (const enabled of [true, false]) {
-      await page.getByRole('button', { name: locale.modelButton }).click()
+      await openTeamSettings(page, locale.code === 'zh')
       const toggle = page.getByRole('switch', { name: locale.toggle, exact: true })
       await toggle.click()
       await expect.poll(() => toggle.getAttribute('aria-checked')).toBe(String(enabled))
       await expect.poll(() => scaffold.ctx.agentTeams.isEnabled(agent)).toBe(enabled)
       expect(scaffold.ctx.commands.list(agent).some(command => command.name === 'team')).toBe(false)
       expect(commandEvents()).toEqual([])
-      await page.keyboard.press('Escape')
+      await closeModelMenu(page)
       await assertChatUnchanged()
     }
     await scaffold.ctx.sessions.flush(agent.session)
@@ -913,12 +991,12 @@ it.each(RECEIPT_LOCALES)('toggles teamwork in $language without command records 
 
     // Historical receipts are read-only fixtures, not invocations of a registered command.
     for (const args of [' on', ' off']) {
-      const commandId = CommandId(`historical-team-${args.trim()}`)
+      const commandId = brandString<CommandId>(`historical-team-${args.trim()}`)
       agent.session.append('command/run', { commandId, name: 'team', args, source: { kind: 'user' } })
       agent.session.append('command/done', { commandId, kind: 'success', text: 'Team mode saved.' })
     }
     agent.session.append('command/run', {
-      commandId: CommandId('historical-team-pending'), name: 'team', args: ' on', source: { kind: 'user' },
+      commandId: brandString<CommandId>('historical-team-pending'), name: 'team', args: ' on', source: { kind: 'user' },
     })
     await scaffold.ctx.sessions.flush(agent.session)
     const historicalCommands = commandEvents()
@@ -938,7 +1016,7 @@ it.each(RECEIPT_LOCALES)('renders historical Team failures in $language without 
   await withTeamReceiptPage(locale, async (page, scaffold, tripwire) => {
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Team failure fixture has no Agent')
-    const commandId = CommandId('historical-team-error')
+    const commandId = brandString<CommandId>('historical-team-error')
     agent.session.append('command/run', { commandId, name: 'team', args: ' invalid', source: { kind: 'user' } })
     agent.session.append('command/done', { commandId, kind: 'error', text: 'Use /team on or /team off.' })
     await scaffold.ctx.sessions.flush(agent.session)
@@ -998,21 +1076,27 @@ it('uses the Chinese collaboration name in the switch and disable confirmation',
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd)
     const agent = scaffold.ctx.agents.list()[0]
     if (agent === undefined) throw new Error('Chinese Team fixture has no Agent')
+    const trigger = page.getByRole('button', { name: /^选择模型/u })
+    await trigger.click()
+    await page.getByRole('menuitem', { name: '智能体团队协作 关闭', exact: true }).waitFor()
+    await closeModelMenu(page)
     await scaffold.ctx.agentTeams.setEnabled(agent, true)
     const selection = agent.model.current()
     if (selection === undefined) throw new Error('Chinese Team fixture has no model')
     agent.session.append('request/header', { header: { config: selection }, reason: 'initial' })
     await scaffold.ctx.sessions.flush(agent.session)
-    await page.getByRole('button', { name: /^选择模型/u }).click()
-    const toggle = page.getByRole('switch', { name: '启用智能体团队协作', exact: true })
+    await trigger.click()
+    await page.getByRole('menuitem', { name: '智能体团队协作 开启', exact: true }).click()
+    const toggle = page.getByRole('switch', { name: '开启智能体团队协作', exact: true })
     await expect.poll(() => toggle.getAttribute('aria-checked')).toBe('true')
-    await page.getByRole('button', { name: '关于智能体团队协作', exact: true }).waitFor()
+    await page.getByText('通过共享任务板协调多个智能体的分工与进度，复杂任务表现更佳，token 开销也相应更高。', { exact: true }).waitFor()
+    expect(await page.getByRole('tooltip').count()).toBe(0)
     expect(await toggle.evaluate(element => element.parentElement!.scrollWidth <= element.parentElement!.clientWidth)).toBe(true)
-    const menu = await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd)
+    const menu = await captureStableAria(page, '[data-model-menu]', scaffold.workspaceCwd)
     await toggle.click()
-    const dialog = page.getByRole('dialog', { name: '确认停用智能体团队协作？', exact: true })
+    const dialog = page.getByRole('dialog', { name: '确认关闭智能体团队协作？', exact: true })
     await dialog.waitFor()
-    await dialog.getByText('对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。', { exact: true }).waitFor()
+    await dialog.getByText('对话过程中关闭智能体团队协作，将停止共享任务工具和团队协调指令。', { exact: true }).waitFor()
     await assertWarningDialogLayout(dialog)
     const confirmation = await captureStableAria(page, '[aria-modal="true"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'collaboration.zh.expected.md'),

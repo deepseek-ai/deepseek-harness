@@ -232,6 +232,8 @@ def check_observation(value, row_count, app_handle, window_id):
         raise AssertionError("Complete benchmark observation was truncated")
     if not isinstance(value["tree"], str) or not isinstance(value["elements"], list) or not isinstance(value["windows"], list):
         raise AssertionError("Observation tree, elements or windows have unexpected types")
+    if value.get("hasUnreadableElements", False):
+        raise AssertionError("Complete benchmark observation has unreadable children")
     labels = {int(number) for number in re.findall(r"\bScroll row ([0-9]+)\b", value["tree"])}
     if labels != set(range(1, row_count + 1)):
         raise AssertionError(f"Observation omitted static rows: expected {row_count}, found {len(labels)}")

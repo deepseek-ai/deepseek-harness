@@ -7,9 +7,10 @@ import { Context, LoggerLevel } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import type { DeepSeekLlmApiExtensionRequest } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as DeepSeek from '@deepseek-ai/dsh-llm-deepseek-api-key'
 import { adapter, assemble, options, sse, textEvents } from './helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare module '@deepseek-ai/dsh-deepseek-llm-api-extensions' {
   interface DeepSeekLlmApiExtensionMap {
@@ -83,7 +84,7 @@ describe('Messages request extensions', () => {
       return Promise.resolve(new Response(sse(textEvents)))
     })
     vi.stubGlobal('fetch', fetch)
-    const stream = ctx.llm.stream(options({ sessionId: SessionId('session-parity'), purpose: 'compaction' }))
+    const stream = ctx.llm.stream(options({ sessionId: brandString<SessionId>('session-parity'), purpose: 'compaction' }))
     for await (const chunk of stream) {
       expect(accepted).toHaveBeenCalledOnce()
       if (chunk.type === 'finish') expect(chunk.reason.kind).toBe('stop')

@@ -1,6 +1,7 @@
 /** Normalize HTTP and in-band Messages errors into provider-neutral failures. */
 
-import { isContextWindowExceededError, isQuotaExceededError, LlmError, ProviderRequestId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { isContextWindowExceededError, isQuotaExceededError, LlmError, type ProviderRequestId } from '@deepseek-ai/dsh-llm'
 import type { BuiltinLlmFailureCode } from '@deepseek-ai/dsh-llm'
 
 /** Read only provider error fields used by bounded Files recovery.
@@ -39,7 +40,7 @@ export function providerError(raw: unknown, status: number | undefined, headers?
   const id = headers?.get('request-id') ?? headers?.get('x-request-id') ?? headers?.get('x-deepseek-request-id')
   return new LlmError(message, code, {
     ...status === undefined ? {} : { status },
-    ...id ? { requestId: ProviderRequestId(id) } : {},
+    ...id ? { requestId: brandString<ProviderRequestId>(id) } : {},
     ...Number.isFinite(delay) && delay > 0 ? { providerRetryAfterMs: delay } : {},
   })
 }

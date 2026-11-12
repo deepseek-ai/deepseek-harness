@@ -26,9 +26,21 @@ func keypadKeysRetainTheirPhysicalIdentity(_ key: String, _ code: UInt16) throws
     #expect(throws: NativeFailure.self) { try WindowPointerInput.button("unsupported") }
 }
 
-@Test func everyDeclaredPointerButtonAndModifierHasANativeMapping() throws {
+@Test func everyDeclaredPointerButtonHasANativeMapping() throws {
     let buttons = try #require(NativeProtocol.stringEnums["click"]?["mouseButton"])
-    let modifiers = try #require(NativeProtocol.stringEnums["click"]?["modifiers"])
     for button in buttons { _ = try WindowPointerInput.button(button) }
-    for modifier in modifiers { _ = try KeyboardInput.modifierFlags([modifier]) }
+}
+
+@Test func macOSPointerModifiersMapToTheirEventFlags() throws {
+    let modifiers: [(String, CGEventFlags)] = [
+        ("command", .maskCommand), ("control", .maskControl), ("ctrl", .maskControl),
+        ("option", .maskAlternate), ("alt", .maskAlternate), ("shift", .maskShift), ("fn", .maskSecondaryFn),
+    ]
+    for (name, flag) in modifiers { #expect(try KeyboardInput.modifierFlags([name]) == flag) }
+    do {
+        _ = try KeyboardInput.modifierFlags(["win"])
+        Issue.record("Accepted the Win modifier on macOS")
+    } catch let error as NativeFailure {
+        #expect(error.code == "INVALID_ARGUMENT")
+    }
 }

@@ -16,7 +16,7 @@ import {
 } from '@deepseek-ai/dsh-llm/message'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { RemoteAccessFrame, RemoteAccessGrant } from '@deepseek-ai/dsh-api-remote-access/client'
-import type { MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId, ReasoningEffortId, ToolCallId } from '@deepseek-ai/dsh-llm/types'
 import type {
   AssistantMessage,
   ContentBlock,
@@ -26,7 +26,7 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
-import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import type { LlmAttemptId } from '@deepseek-ai/dsh-llm/types'
 import {
   AssistantStreamAccumulator,
   expandAssistantStream,
@@ -49,10 +49,7 @@ import type {
 import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo/client'
-// Type-only: the brand constructor is host-side; the fixture casts at its
-// wire-fabrication boundary (the schema layer's one-cast-point posture).
-import type { CommandDefinitionId, CommandId } from '@deepseek-ai/dsh-commands/brand'
-import type { CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
+import type { CommandDefinitionId, CommandId, CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
 import type { DirectoryListing as FixtureDirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
@@ -280,7 +277,7 @@ type FixtureFollowEventFrame = Exclude<FixtureFollowFrame, { type: 'snapshot' }>
 interface FixtureAssistantStreamBaseline {
   readonly revision: number
   readonly activeAttempt?: {
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly startedAfterSeq: number
     readonly turn: number
     readonly step: number
@@ -293,7 +290,7 @@ interface FixtureAssistantStreamBaseline {
 export type FixtureAssistantStreamFrame =
   | {
     readonly type: 'start'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly startedAfterSeq: SessionSeqCursor
     readonly turn: number
@@ -301,7 +298,7 @@ export type FixtureAssistantStreamFrame =
   }
   | {
     readonly type: 'chunk'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly index: number
     readonly time: number
@@ -309,7 +306,7 @@ export type FixtureAssistantStreamFrame =
   }
   | {
     readonly type: 'end'
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly revision: number
     readonly index: number
     readonly outcome:
@@ -2296,7 +2293,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const controlConns = new Set<StreamConn<FixtureControlFrame>>()
   const followConns = new Map<SessionId, Set<StreamConn<FixtureFollowEventFrame>>>()
   interface FixtureAttemptState {
-    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly attemptId: LlmAttemptId
     readonly startedAfterSeq: number
     readonly turn: number
     readonly step: number
@@ -2331,7 +2328,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     return revision
   }
   const beginAssistant = (sessionId: SessionId, turn: number, step: number): FixtureAttemptState => {
-    const attemptId = LlmAttemptId(`${sessionId}:fixture:${String(nextAssistantRevision(sessionId))}`)
+    const attemptId = brandString<LlmAttemptId>(`${sessionId}:fixture:${String(nextAssistantRevision(sessionId))}`)
     const lastSeq = logOf(sessionId).length - 1
     const startedAfterSeq = lastSeq < 0 ? -1 : SessionSeq(lastSeq)
     const attempt = {
@@ -2574,7 +2571,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
               ? 'Attachments cannot accompany /plan off.'
               : undefined
         if (rejection !== undefined) {
-          const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+          const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
           append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
           const result: CommandResult = { kind: 'error', text: rejection }
           append(id, { type: 'command/done', data: { commandId, ...result } })
@@ -2583,7 +2580,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }
       if (name === 'permission') {
         const preset = args.trim()
-        const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+        const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
         append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
         const spec = PERMISSION_PRESETS[preset]
         let result: CommandResult
@@ -2602,7 +2599,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return { ok: true, value: { commandId, result } }
       }
       if (name === 'goal') {
-        const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+        const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
         append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
         const objective = args.trim()
         const current = backscanGoal(logOf(id))
@@ -2636,7 +2633,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }
       const text = name === undefined ? undefined : outcomes[name]
       if (name === undefined || text === undefined) return { ok: true, value: undefined }
-      const commandId = `fx-cmd-${logOf(id).length}` as CommandId
+      const commandId = brandString<CommandId>(`fx-cmd-${logOf(id).length}`)
       append(id, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } })
       if (name === 'plan' && !running) {
         const plan = foldPlan(logOf(id))

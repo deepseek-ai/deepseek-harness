@@ -6,10 +6,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
-import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
-  SessionId,
+  type SessionId,
   SessionSeq,
   type Session,
 } from '@deepseek-ai/dsh-session'
@@ -54,7 +55,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await ctx.plugin(SqliteSessionQueryEngine, { path: join(root, 'session-query.db') })
     await ctx.plugin(ToolSessionQuery)
 
-    const persisted = SessionId('persisted')
+    const persisted = brandString<SessionId>('persisted')
     const writer = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION,
       id: persisted,
@@ -74,7 +75,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     }])
     await writer.close()
 
-    const caller = ctx.sessions.create(SessionId('caller'), {
+    const caller = ctx.sessions.create(brandString<SessionId>('caller'), {
       meta: { createdAt: 10, cwd: '/work' },
     })
     caller.append('turn/start', { turn: 1 })
@@ -91,7 +92,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     const execute = (name: string, args: unknown) => executeToolFixture(ctx, {
       name,
       arguments: args,
-      callId: ToolCallId(`integration-${++call}`),
+      callId: brandString<ToolCallId>(`integration-${++call}`),
       signal: new AbortController().signal,
       agent: fakeAgent(caller),
     })
@@ -129,7 +130,7 @@ describe('tool-session-query with the real SQLite provider', () => {
     await ctx.plugin(ToolSessionQuery)
 
     const base = Date.parse('2026-07-24T00:00:00.000Z')
-    const persisted = SessionId('fractional-persisted')
+    const persisted = brandString<SessionId>('fractional-persisted')
     const writer = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION,
       id: persisted,
@@ -181,14 +182,14 @@ describe('tool-session-query with the real SQLite provider', () => {
     ])
     await writer.close()
 
-    const caller = ctx.sessions.create(SessionId('fractional-caller'), {
+    const caller = ctx.sessions.create(brandString<SessionId>('fractional-caller'), {
       meta: { createdAt: base + 1_000, cwd: '/work' },
     })
     let call = 0
     const execute = (args: unknown) => executeToolFixture(ctx, {
       name: 'session_event_search',
       arguments: args,
-      callId: ToolCallId(`fractional-integration-${++call}`),
+      callId: brandString<ToolCallId>(`fractional-integration-${++call}`),
       signal: new AbortController().signal,
       agent: fakeAgent(caller),
     })

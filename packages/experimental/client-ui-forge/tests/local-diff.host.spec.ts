@@ -8,7 +8,7 @@ import { gitIn, inspectCheckout } from '../src/git.ts'
 import type { Inspection } from '../src/git.ts'
 import {
   aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, forkPoint, localChanges,
-  localCommits, localDiff, localText, NoForkPoint,
+  localCommits, localDiff, localOldText, localText, NoForkPoint,
 } from '../src/local-diff.ts'
 import type { DiffConfig, ForkPoint } from '../src/local-diff.ts'
 import { FileLayers } from '../src/layers.ts'
@@ -466,6 +466,51 @@ describe('commits of the branch scope', () => {
     await expect(read(second, first)).rejects.toThrow('The chosen commits are no longer on the branch')
     await expect(localText(ctx, CONFIG, plainSession(repo), repo,
       { kind: 'branch', base: null, commits: { from: first, to: 'HEAD' } }, 'second.txt', signal)).rejects.toBeInstanceOf(CommitsMissing)
+  })
+})
+
+describe('localOldText', () => {
+  it('reads the old side at the fork point, HEAD, the index, or before the first chosen commit', async () => {
+    const { repo, fork } = await forked(await directory())
+    await writeFile(join(repo, 'staged.txt'), 'edited after staging\n')
+    const ctx = await context(repo)
+    const point: ForkPoint = { commit: fork, label: 'origin/main', worktree: false }
+    const committed = await git(repo, 'rev-parse', 'HEAD')
+    const read = (scope: ForgeLocalScope, path: string, at: ForkPoint | null = null): Promise<string | null> =>
+      localOldText(ctx, CONFIG, plainSession(repo), repo, scope, at, path, signal)
+
+    await expect(read({ kind: 'branch', base: null, commits: null }, 'tracked.txt', point)).resolves.toBe('initial\n')
+    await expect(read({ kind: 'branch', base: null, commits: null }, 'committed.txt', point)).resolves.toBeNull()
+    await expect(read({ kind: 'uncommitted' }, 'committed.txt')).resolves.toBe('one\n')
+    await expect(read({ kind: 'staged' }, 'staged.txt')).resolves.toBeNull()
+    await expect(read({ kind: 'unstaged' }, 'staged.txt')).resolves.toBe('staged\n')
+    await expect(read({ kind: 'branch', base: null, commits: { from: committed, to: committed } }, 'tracked.txt', point)).resolves.toBe('initial\n')
+  })
+
+  it('reads binary content and the parent of a root commit as missing', async () => {
+    const { repo } = await forked(await directory())
+    await writeFile(join(repo, 'blob.bin'), Uint8Array.from([0x61, 0, 0x62]))
+    await git(repo, 'add', 'blob.bin')
+    await git(repo, 'commit', '--quiet', '-m', 'blob')
+    const ctx = await context(repo)
+    const root = await git(repo, 'rev-list', '--max-parents=0', 'HEAD')
+
+    await expect(localOldText(ctx, CONFIG, plainSession(repo), repo, { kind: 'unstaged' }, null, 'blob.bin', signal)).resolves.toBeNull()
+    await expect(localOldText(ctx, CONFIG, plainSession(repo), repo, { kind: 'branch', base: null, commits: { from: root, to: root } },
+      { commit: root, label: 'root', worktree: false }, 'tracked.txt', signal)).resolves.toBeNull()
+  })
+
+  it('refuses a path outside the checkout, a branch without a fork point, and a chosen commit that is not an object name', async () => {
+    const { repo, fork } = await forked(await directory())
+    const ctx = await context(repo)
+    const point: ForkPoint = { commit: fork, label: 'origin/main', worktree: false }
+
+    await expect(localOldText(ctx, CONFIG, plainSession(repo), repo, { kind: 'unstaged' }, null, '../outside.txt', signal))
+      .rejects.toThrow('is not a path inside the checkout')
+    await expect(localOldText(ctx, CONFIG, plainSession(repo), repo, { kind: 'branch', base: null, commits: null }, null, 'tracked.txt', signal))
+      .rejects.toBeInstanceOf(NoForkPoint)
+    await expect(localOldText(ctx, CONFIG, plainSession(repo), repo, { kind: 'branch', base: null, commits: { from: 'HEAD', to: 'HEAD' } }, point,
+      'tracked.txt', signal)).rejects.toBeInstanceOf(CommitsMissing)
   })
 })
 

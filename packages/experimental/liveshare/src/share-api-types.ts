@@ -338,6 +338,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'liveshareShares/relay-unavailable': { readonly relay: string; readonly reason?: string }
     /** The owner state file could not be written; the previous record is still in force. */
     'liveshareShares/owner-state-unavailable': Record<string, never>
+    /** Another running host owns the owner state, so this host refuses to change the shares. */
+    'liveshareShares/owner-state-held': Record<string, never>
     /** A submitted capability names a plugin that offers no viewer endpoints. */
     'liveshareShares/unknown-plugin': { readonly plugin: string }
     /** A submitted policy names an endpoint the platform catalog does not offer. */

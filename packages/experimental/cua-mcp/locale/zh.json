@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use MCP 服务器",
+    "description": "通过 cua-mcp profile 向 Codex、Claude Code 等 MCP 客户端提供 Computer Use：cua_run_code 对桌面应用运行持久程序，cua_reset 清空程序环境。"
+  }
+}

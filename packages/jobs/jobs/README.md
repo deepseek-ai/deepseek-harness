@@ -79,9 +79,9 @@ This section explains the design decisions behind the contract and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: the abstract `JobRegistry` service and its contract |
-| [`src/types.ts`](src/types.ts) | Shared vocabulary: `JobSpec`, `JobHandle`, `JobHooks`, `JobOutcome`, `JobEvent`, and the read results |
+| [`src/types.ts`](src/types.ts) | Type-only `/types` entry: shared job vocabulary and the `JobId` re-export |
+| [`src/brand.ts`](src/brand.ts) | `JobId` definition and compatibility constructor |
 | [`src/view.ts`](src/view.ts) | Client-safe leaf: `JobView`, `JobChunk`, `JobStatus`, and the merge-extensible `JobKindMap` |
-| [`src/brand.ts`](src/brand.ts) | the `JobId` branded identifier, importable without the agent dependency |
 | [`src/error.ts`](src/error.ts) | `JobError` and its closed `JOB_ERROR_CODES` list |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | The `job` family of the Workspace registry's archive admission, installed by the seam's constructor for every implementation |
 

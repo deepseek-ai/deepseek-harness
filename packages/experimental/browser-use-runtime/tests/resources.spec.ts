@@ -3,11 +3,17 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SessionResources } from '../src/index.ts'
+import { BrowserSessionError, SessionResources } from '../src/index.ts'
+import type { BrowserSessionErrorCode } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
+
+function browserError(code: BrowserSessionErrorCode, message: string) {
+  return { constructor: BrowserSessionError, name: 'BrowserSessionError', code, message: expect.stringContaining(message) as string }
+}
 
 async function fixture() {
   const ctx = new Context()
@@ -16,7 +22,7 @@ async function fixture() {
   await ctx.plugin(AgentRegistry)
   async function owner(id: string) {
     const fiber = ctx.plugin(() => {})
-    const session = Session.create(SessionId(id))
+    const session = Session.create(brandString<SessionId>(id))
     const agent: Agent = {
       id: session.id, session, ctx: fiber.ctx, options: {}, status: 'idle',
       model: unsupportedModel(),
@@ -50,13 +56,13 @@ describe('Session browser resource ownership', () => {
     expect(open).toHaveBeenCalledTimes(2)
     await a.dispose()
     expect(close).toHaveBeenCalledTimes(1)
-    await expect(resources.get(a.agent)).rejects.toThrow('not a live browser owner')
+    await expect(resources.get(a.agent)).rejects.toMatchObject(browserError('BROWSER_OWNER_NOT_LIVE', 'not a live browser owner'))
     const resumed = await owner('a')
     expect(await resources.get(resumed.agent)).not.toBe(first)
     await resources.dispose()
     expect(close).toHaveBeenCalledTimes(3)
     expect(resources.available(b.agent)).toBe(false)
-    await expect(resources.get(b.agent)).rejects.toThrow('not a live browser owner')
+    await expect(resources.get(b.agent)).rejects.toMatchObject(browserError('BROWSER_OWNER_NOT_LIVE', 'not a live browser owner'))
   })
 
   it('reserves an attached browser while acquisition or cleanup is pending', async () => {
@@ -78,14 +84,14 @@ describe('Session browser resource ownership', () => {
     const first = resources.get(a.agent)
     expect(resources.available(a.agent)).toBe(true)
     expect(resources.available(b.agent)).toBe(false)
-    await expect(resources.get(b.agent)).rejects.toThrow('already reserved')
+    await expect(resources.get(b.agent)).rejects.toMatchObject(browserError('BROWSER_LOCKED', 'already reserved'))
     opened.resolve(undefined)
     await first
     const disposing = a.dispose()
     await closing.promise
     expect(resources.available(a.agent)).toBe(false)
     expect(resources.available(b.agent)).toBe(false)
-    await expect(resources.get(b.agent)).rejects.toThrow('already reserved')
+    await expect(resources.get(b.agent)).rejects.toMatchObject(browserError('BROWSER_LOCKED', 'already reserved'))
     released.resolve(undefined)
     await disposing
     expect(resources.available(b.agent)).toBe(true)
@@ -259,7 +265,7 @@ describe('Session browser resource ownership', () => {
     const resources = new SessionResources<number>(ctx, { label: 'test', exclusive: false, open })
     const controller = new AbortController()
     const waiting = resources.get(a.agent, controller.signal)
-    const canceled = expect(waiting).rejects.toMatchObject({ message: 'browser operation canceled', cause: 'stop' })
+    const canceled = expect(waiting).rejects.toMatchObject({ name: 'AbortError', message: 'browser operation canceled', cause: 'stop' })
     await entered.promise
     controller.abort('stop')
     await canceled
@@ -285,7 +291,7 @@ describe('Session browser resource ownership', () => {
       async open() { entered.resolve(undefined); await release.promise; return { value: {}, close } },
     })
     const acquiring = resources.get(a.agent)
-    const rejected = expect(acquiring).rejects.toThrow('closing')
+    const rejected = expect(acquiring).rejects.toMatchObject(browserError('BROWSER_CLOSED', 'closing'))
     await entered.promise
     const ownerDisposal = a.dispose()
     const providerDisposal = resources.dispose()
@@ -314,7 +320,7 @@ describe('Session browser resource ownership', () => {
       await stopped.promise
       signal.throwIfAborted()
     })
-    const rejected = expect(call).rejects.toThrow('closing')
+    const rejected = expect(call).rejects.toMatchObject(browserError('BROWSER_CLOSED', 'closing'))
     await running.promise
     await resources.dispose()
     await rejected
@@ -330,9 +336,9 @@ describe('Session browser resource ownership', () => {
     })
     await resources.get(a.agent)
     await a.dispose()
-    await expect(resources.get(b.agent)).rejects.toThrow('already reserved')
-    await expect(resources.dispose()).rejects.toThrow('browser cleanup failed')
-    await expect(resources.get(b.agent)).rejects.toThrow('not a live browser owner')
+    await expect(resources.get(b.agent)).rejects.toMatchObject(browserError('BROWSER_LOCKED', 'already reserved'))
+    await expect(resources.dispose()).rejects.toMatchObject(browserError('BROWSER_CLEANUP_FAILED', 'browser cleanup failed'))
+    await expect(resources.get(b.agent)).rejects.toMatchObject(browserError('BROWSER_OWNER_NOT_LIVE', 'not a live browser owner'))
   })
 })
 
@@ -355,6 +361,6 @@ it('reports early disposal cleanup failure while retaining the owned resource', 
   await canceled
   await a.dispose()
   expect(warning).toHaveBeenCalledWith(expect.stringContaining('cleanup during Session cancellation failed'))
-  await expect(resources.dispose()).rejects.toThrow('browser cleanup failed')
+  await expect(resources.dispose()).rejects.toMatchObject(browserError('BROWSER_CLEANUP_FAILED', 'browser cleanup failed'))
   warning.mockRestore()
 })

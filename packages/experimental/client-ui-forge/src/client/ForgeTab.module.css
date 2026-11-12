@@ -395,13 +395,14 @@
   line-height: 18px;
 }
 
-/* Expanded facts, one row each: an icon under the glyph, the label, the value,
-   and a chevron on a row that opens something. */
+/* Expanded facts, one sentence per row: an icon under the glyph, the value, an optional trailing part, and a chevron
+   on a row that opens something. */
 .rows {
+  /* Contains the visually hidden row labels, so they never extend a scroll area outside the panel. */
+  position: relative;
   display: grid;
-  /* Edge tracks include each row's padding; labels retain their Chinese width and grow for longer translations. */
-  grid-template-columns: 24px minmax(32px, max-content) minmax(0, 1fr) 22px;
-  gap: 2px 10px;
+  grid-template-columns: 24px minmax(0, 1fr) auto 12px;
+  gap: 0 8px;
   padding: 4px 6px 6px;
   border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
@@ -411,12 +412,12 @@
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   align-items: center;
-  column-gap: 10px;
+  column-gap: 8px;
   box-sizing: border-box;
   width: 100%;
-  min-height: 34px;
+  min-height: 32px;
   margin: 0;
-  padding: 0 10px 0 8px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--dsw-radius-sm);
   background: transparent;
@@ -427,6 +428,10 @@
 
 .rowWide {
   grid-column: 2 / 4;
+}
+
+.row:disabled {
+  cursor: default;
 }
 
 .rowButton {
@@ -445,23 +450,33 @@
 
 .rowIcon {
   display: inline-flex;
+  grid-column: 1;
+  justify-content: center;
   color: var(--dsw-alias-label-tertiary);
 }
 
-.rowLabel {
-  color: var(--dsw-alias-label-secondary);
-}
-
 .rowChevron {
+  grid-column: 4;
   color: var(--dsw-alias-label-tertiary);
 }
 
 .rowValue {
   display: inline-flex;
+  grid-column: 2;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  overflow-wrap: anywhere;
+}
+
+/* Trailing detail of a row, such as the reviewers' avatars or the unresolved thread count. */
+.rowTrailing {
+  display: inline-flex;
+  grid-column: 3;
+  align-items: center;
+  gap: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .rowValue[data-tone='error'] {
@@ -590,5 +605,23 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The unresolved review thread count at the end of the changes row. */
+.threads {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The name of a fact row, read by assistive technology before its value. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
 }

@@ -4,12 +4,13 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentCancelCause, AgentStatus, CancelOptions } from '@deepseek-ai/dsh-agent'
 import { unsupportedModel, unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionActivity } from '@deepseek-ai/dsh-workspace'
 import SubagentRuntime, { SUBAGENT_DESCRIPTOR_VERSION } from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 type CancelCall = [AgentCancelCause, CancelOptions | undefined]
 
@@ -55,7 +56,7 @@ async function liveAgent(ctx: Context, session: Session, initial: AgentStatus): 
 
 /** A child session in the durable lineage this package records at delegation. */
 function childOf(ctx: Context, id: string, parent: SessionId, label?: string): Session {
-  const child = ctx.sessions.create(SessionId(id), { meta: { parentSession: parent, origin: 'subagent' } })
+  const child = ctx.sessions.create(brandString<SessionId>(id), { meta: { parentSession: parent, origin: 'subagent' } })
   if (label !== undefined) {
     child.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label })
   }
@@ -80,13 +81,13 @@ function proposed(ctx: Context, agent: Agent) {
 describe('Subagent archive admission: reporting', () => {
   it('reports running descendants by durable lineage at any depth, with their labels, but never forks', async () => {
     const ctx = await harness()
-    const parent = ctx.sessions.create(SessionId('parent'))
+    const parent = ctx.sessions.create(brandString<SessionId>('parent'))
     await liveAgent(ctx, parent, 'idle')
     const child = childOf(ctx, 'child', parent.id, 'reviewer')
     const childAgent = await liveAgent(ctx, child, 'idle')
     const grandchild = childOf(ctx, 'grandchild', child.id)
     await liveAgent(ctx, grandchild, 'running')
-    const fork = ctx.sessions.create(SessionId('fork'), { meta: { parentSession: parent.id } })
+    const fork = ctx.sessions.create(brandString<SessionId>('fork'), { meta: { parentSession: parent.id } })
     await liveAgent(ctx, fork, 'running')
     ctx.on('workspace/session-activity', async (_request, next) => [...(await next()), { kind: 'probe' }])
 
@@ -99,12 +100,12 @@ describe('Subagent archive admission: reporting', () => {
     // A fork is an independent conversation: its own turn (reported by the
     // composed Agent registry) does not hold its source.
     expect(await ask(ctx, fork.id)).toEqual([{ kind: 'turn' }, { kind: 'probe' }])
-    expect(await ask(ctx, SessionId('cold-or-unknown'))).toEqual([{ kind: 'probe' }])
+    expect(await ask(ctx, brandString<SessionId>('cold-or-unknown'))).toEqual([{ kind: 'probe' }])
   })
 
   it('reports a child label without the Session query service', async () => {
     const queryless = await harness({ sessionQuery: false })
-    const parent = queryless.sessions.create(SessionId('parent'))
+    const parent = queryless.sessions.create(brandString<SessionId>('parent'))
     await liveAgent(queryless, parent, 'idle')
     await liveAgent(queryless, childOf(queryless, 'child', parent.id, 'reviewer'), 'running')
     expect(await ask(queryless, parent.id)).toEqual([{ kind: 'subagent', items: [{ id: 'child', label: 'reviewer' }] }])
@@ -112,9 +113,9 @@ describe('Subagent archive admission: reporting', () => {
 
   it('names a child by id alone with a damaged descriptor', async () => {
     const ctx = await harness()
-    const damagedParent = ctx.sessions.create(SessionId('damaged-parent'))
+    const damagedParent = ctx.sessions.create(brandString<SessionId>('damaged-parent'))
     await liveAgent(ctx, damagedParent, 'idle')
-    const damaged = ctx.sessions.create(SessionId('damaged-child'), { meta: { parentSession: damagedParent.id, origin: 'subagent' } })
+    const damaged = ctx.sessions.create(brandString<SessionId>('damaged-child'), { meta: { parentSession: damagedParent.id, origin: 'subagent' } })
     // A current-version payload whose label is not a string fails the descriptor parse.
     damaged.append('subagent/descriptor', { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 'spawn', label: 7 } as never)
     await liveAgent(ctx, damaged, 'running')
@@ -123,9 +124,9 @@ describe('Subagent archive admission: reporting', () => {
 
   it('uses only the latest own descriptor identity without observing history', async () => {
     const ctx = await harness()
-    const parent = ctx.sessions.create(SessionId('seed-parent'))
+    const parent = ctx.sessions.create(brandString<SessionId>('seed-parent'))
     await liveAgent(ctx, parent, 'idle')
-    const child = ctx.sessions.create(SessionId('seed-child'), {
+    const child = ctx.sessions.create(brandString<SessionId>('seed-child'), {
       meta: { parentSession: parent.id, origin: 'subagent', isSeeded: true },
       seed: [{
         type: 'subagent/descriptor', seq: SessionSeq(0), time: 1,
@@ -155,8 +156,8 @@ describe('Subagent archive admission: reporting', () => {
     const ctx = await harness()
     // Two headers naming each other as subagent parents cannot be created by
     // delegation; a report over such data terminates instead of hanging.
-    const first = ctx.sessions.create(SessionId('loop-a'), { meta: { parentSession: SessionId('loop-b'), origin: 'subagent' } })
-    const second = ctx.sessions.create(SessionId('loop-b'), { meta: { parentSession: first.id, origin: 'subagent' } })
+    const first = ctx.sessions.create(brandString<SessionId>('loop-a'), { meta: { parentSession: brandString<SessionId>('loop-b'), origin: 'subagent' } })
+    const second = ctx.sessions.create(brandString<SessionId>('loop-b'), { meta: { parentSession: first.id, origin: 'subagent' } })
     await liveAgent(ctx, first, 'idle')
     await liveAgent(ctx, second, 'running')
     expect(await ask(ctx, first.id)).toEqual([{ kind: 'subagent', items: [{ id: 'loop-b' }] }])
@@ -166,15 +167,15 @@ describe('Subagent archive admission: reporting', () => {
 describe('Subagent archive admission: stopping', () => {
   it('cancels running descendants as their parent and leaves idle children and forks alone', async () => {
     const ctx = await harness()
-    const parent = ctx.sessions.create(SessionId('stop-me'))
+    const parent = ctx.sessions.create(brandString<SessionId>('stop-me'))
     const parentAgent = await liveAgent(ctx, parent, 'running')
     const childAgent = await liveAgent(ctx, childOf(ctx, 'stop-child', parent.id), 'running')
     const idleChildAgent = await liveAgent(ctx, childOf(ctx, 'idle-child', parent.id), 'idle')
-    const fork = ctx.sessions.create(SessionId('stop-fork'), { meta: { parentSession: parent.id } })
+    const fork = ctx.sessions.create(brandString<SessionId>('stop-fork'), { meta: { parentSession: parent.id } })
     const forkAgent = await liveAgent(ctx, fork, 'running')
 
     await stop(ctx, parent.id)
-    await stop(ctx, SessionId('nobody'))
+    await stop(ctx, brandString<SessionId>('nobody'))
     expect(childAgent.cancels).toEqual([[{ kind: 'parent' }, undefined]])
     expect(idleChildAgent.cancels).toEqual([])
     expect(forkAgent.cancels).toEqual([])
@@ -184,7 +185,7 @@ describe('Subagent archive admission: stopping', () => {
 
   it('keeps asking the remaining descendants to stop when one cancel throws', async () => {
     const ctx = await harness()
-    const parent = ctx.sessions.create(SessionId('stubborn'))
+    const parent = ctx.sessions.create(brandString<SessionId>('stubborn'))
     await liveAgent(ctx, parent, 'running')
     const stubborn = await liveAgent(ctx, childOf(ctx, 'stubborn-child', parent.id), 'running')
     stubborn.cancel = () => { throw new Error('child refuses cancel') }
@@ -217,7 +218,7 @@ describe('Subagent archive admission: lifetime', () => {
     onTestFinished(() => { registration.mockRestore() })
     const error = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
     onTestFinished(() => { error.mockRestore() })
-    const parent = ctx.sessions.create(SessionId('initializing-parent'))
+    const parent = ctx.sessions.create(brandString<SessionId>('initializing-parent'))
     await liveAgent(ctx, parent, 'idle')
     await liveAgent(ctx, childOf(ctx, 'initializing-child', parent.id, 'reviewer'), 'running')
     const fiber = ctx.plugin(SubagentRuntime)
@@ -242,11 +243,11 @@ describe('Subagent archive admission: lifetime', () => {
 
   it('checks header ancestry for unmanaged Agents and permits independent forks', async () => {
     const ctx = await harness()
-    const parentId = SessionId('offline-parent')
+    const parentId = brandString<SessionId>('offline-parent')
     const archived: SessionId[] = [parentId]
     ctx.provide('workspaceRegistry', { get archivedSessionIds() { return archived } } as never)
     const child = await liveAgent(ctx, childOf(ctx, 'orphan', parentId), 'idle')
-    const fork = await liveAgent(ctx, ctx.sessions.create(SessionId('fork'), { meta: { parentSession: parentId } }), 'idle')
+    const fork = await liveAgent(ctx, ctx.sessions.create(brandString<SessionId>('fork'), { meta: { parentSession: parentId } }), 'idle')
     expect(await proposed(ctx, child)).toEqual({ kind: 'reject' })
     expect(await proposed(ctx, fork)).toEqual({ kind: 'enter', messages: [] })
     archived.length = 0
@@ -261,7 +262,7 @@ describe('Subagent archive admission: lifetime', () => {
     await ctx.plugin(AgentRegistry)
     await mountWorkingDirectoryFixture(ctx)
     const fiber = await ctx.plugin(SubagentRuntime)
-    const parent = ctx.sessions.create(SessionId('watched'))
+    const parent = ctx.sessions.create(brandString<SessionId>('watched'))
     await liveAgent(ctx, parent, 'idle')
     const child = await liveAgent(ctx, childOf(ctx, 'watched-child', parent.id, 'reviewer'), 'running')
     ctx.provide('workspaceRegistry', { archivedSessionIds: [parent.id] } as never)

@@ -46,7 +46,7 @@ it.for(['standard', 'ptc'] as const)('keeps %s plugin changes pending until the 
       } catch (error) { fixtureError = error }
       const call = mode === 'ptc'
         ? { type: 'tool_use', id: `manage-${requests.length}`, name: 'run_code', input: {
-          code: `return await tools.plugin_manager(${JSON.stringify(args)});`, description: 'Disable web tools after restart',
+          code: `inspect(await tools.plugin_manager(${JSON.stringify(args)}));`, description: 'Disable web tools after restart',
         } }
         : { type: 'tool_use', id: `manage-${requests.length}`, name: 'plugin_manager', input: args }
       response.writeHead(200, { 'content-type': 'text/event-stream' })

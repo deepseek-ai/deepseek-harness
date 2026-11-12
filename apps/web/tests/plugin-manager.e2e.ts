@@ -857,7 +857,7 @@ describe('web e2e: plugin manager', () => {
         && bundle.name !== '@deepseek-ai/dsh-experimental-liveshare'
         && bundle.official && (bundle.listedByDefault !== false || bundle.enabled || bundle.installed)).length)
     // Computer Use ships with the installation and is listed only on the macOS Hosts it supports.
-    const cuaSupported = process.platform === 'darwin'
+    const cuaSupported = process.platform === 'darwin' || process.platform === 'win32'
     expect(bundles.find(bundle => bundle.name === '@deepseek-ai/dsh-cua-bundle'))
       .toMatchObject({ enabled: false, optional: true, availability: 'installation', ...cuaSupported ? {} : { listedByDefault: false } })
     expect(await panel.locator('[data-plugin-group="more"] [data-plugin-package="@deepseek-ai/dsh-cua-bundle"]').count())
@@ -1191,7 +1191,8 @@ describe('web e2e: plugin manager', () => {
       await teamPage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
       await connectFreshWorkspaceZh(teamPage, scaffold.workspaceCwd)
       await teamPage.getByRole('button', { name: /^选择模型/u }).click()
-      const mode = teamPage.getByRole('switch', { name: '启用智能体团队协作', exact: true })
+      await teamPage.getByRole('menuitem', { name: '智能体团队协作 关闭', exact: true }).click()
+      const mode = teamPage.getByRole('switch', { name: '开启智能体团队协作', exact: true })
       await mode.waitFor()
       expect(await mode.getAttribute('aria-checked')).toBe('false')
       await mode.click()

@@ -80,7 +80,7 @@ it('skips an unsupported saved bundle before composing any runtime overrides and
   const unsupported = process.platform === 'darwin' ? 'win32' : 'darwin'
   const anchor = stageInstallation({
     base: { patch: '- insert:\n  - id: ptc-runtime\n    name: runtime\n    config: { executionMode: isolated }\n' },
-    restricted: { platforms: [unsupported], patch: '- id: ptc-runtime\n  config: { executionMode: persistent-in-memory }\n' },
+    restricted: { platforms: [unsupported], patch: '- id: ptc-runtime\n  config: { executionMode: persistent-in-memory, replScoped: false }\n' },
   })
   const dir = join(tmp(), 'profile')
   initProfile(dir, ['base', 'restricted'])

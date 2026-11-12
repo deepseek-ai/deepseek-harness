@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canonicalizeCronExpression, canonicalizeTimeZone, createAtScheduleRecord, createCronScheduleRecord,
-  createDailyScheduleRecord, createEveryScheduleRecord, createWeeklyScheduleRecord,
-  decodeScheduleRecord, isRecurringScheduleRecord, parseCronInput,
-  renderRecurringReminderBatchFraming, resolveCronOccurrence, resolveRecurringOccurrence,
-  ScheduleId, ScheduleLogError,
+  canonicalizeCronExpression,
+  canonicalizeTimeZone,
+  createAtScheduleRecord,
+  createCronScheduleRecord,
+  createDailyScheduleRecord,
+  createEveryScheduleRecord,
+  createWeeklyScheduleRecord,
+  decodeScheduleRecord,
+  isRecurringScheduleRecord,
+  parseCronInput,
+  renderRecurringReminderBatchFraming,
+  resolveCronOccurrence,
+  resolveRecurringOccurrence,
+  ScheduleLogError,
 } from '../src/domain.ts'
 import { updateResult } from './rule-edits.ts'
-import type { CronInput, CronScheduleRecord } from '../src/types.ts'
+import type { CronInput, CronScheduleRecord, ScheduleId } from '../src/types.ts'
 import type { ScheduleRecord, ScheduleTiming } from '../src/types.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function cron(now: string, expression: string, timeZone = 'UTC'): CronScheduleRecord {
   return createCronScheduleRecord(
-    ScheduleId('cron'), '  Cron reminder  ', { expression, time_zone: timeZone }, Date.parse(now), 'Cron reminder',
+    brandString<ScheduleId>('cron'), '  Cron reminder  ', { expression, time_zone: timeZone }, Date.parse(now), 'Cron reminder',
   )
 }
 
@@ -64,17 +74,17 @@ describe('cron task construction and decisions', () => {
     expect(() => cron('2026-01-01T00:00:00Z', '0 0 30 2 *')).toThrow(/four-digit-year/)
     for (const now of [Number.NaN, 0.5, Date.parse('0000-12-31T23:59:59.999Z'), Date.parse('+010000-01-01T00:00:00Z')]) {
       expect(() => createCronScheduleRecord(
-        ScheduleId('bad'), 'Reminder', { expression: '0 0 * * *', time_zone: 'UTC' }, now, 'Reminder',
+        brandString<ScheduleId>('bad'), 'Reminder', { expression: '0 0 * * *', time_zone: 'UTC' }, now, 'Reminder',
       )).toThrow(expect.objectContaining({ code: 'time_out_of_range' }))
     }
   })
 
   it('rejects empty prompts and blank fields before computing a target', () => {
     expect(() => createCronScheduleRecord(
-      ScheduleId('bad'), ' ', { expression: '0 0 * * *', time_zone: 'UTC' }, 0, 'Title',
+      brandString<ScheduleId>('bad'), ' ', { expression: '0 0 * * *', time_zone: 'UTC' }, 0, 'Title',
     )).toThrow(/prompt/)
     expect(() => createCronScheduleRecord(
-      ScheduleId('bad'), 'Reminder', { expression: '0 0 * * *', time_zone: 'UTC' }, 0, 'x'.repeat(121),
+      brandString<ScheduleId>('bad'), 'Reminder', { expression: '0 0 * * *', time_zone: 'UTC' }, 0, 'x'.repeat(121),
     )).toThrow(/title/)
   })
 
@@ -117,11 +127,11 @@ describe('cron durable decoding', () => {
 
   it('shares recurring selection and batch framing with the existing recurring kinds', () => {
     const every = createEveryScheduleRecord(
-      ScheduleId('every'), 'Every', 300, Date.parse('2026-09-15T00:00:00Z'), 'Every',
+      brandString<ScheduleId>('every'), 'Every', 300, Date.parse('2026-09-15T00:00:00Z'), 'Every',
     )
     expect(isRecurringScheduleRecord(record)).toBe(true)
     expect(isRecurringScheduleRecord(every)).toBe(true)
-    expect(isRecurringScheduleRecord(createAtScheduleRecord(ScheduleId('at'), 'Once', '2026-09-15T01:00:00Z',
+    expect(isRecurringScheduleRecord(createAtScheduleRecord(brandString<ScheduleId>('at'), 'Once', '2026-09-15T01:00:00Z',
       Date.parse('2026-09-15T00:00:00Z'), 'Once'))).toBe(false)
     expect(resolveRecurringOccurrence(record, Date.parse(record.scheduledAt))).toEqual(decision(record, record.scheduledAt))
     expect(renderRecurringReminderBatchFraming([{ record, occurrenceAt: record.scheduledAt }])).toBe([
@@ -134,7 +144,7 @@ describe('cron durable decoding', () => {
 
 describe('cron timing edits', () => {
   const now = Date.parse('2026-09-16T00:00:00.125Z')
-  const id = ScheduleId('timing')
+  const id = brandString<ScheduleId>('timing')
   const current: ScheduleRecord = createCronScheduleRecord(id, 'Keep prompt', {
     expression: '0 9 * * 1-5', time_zone: 'US/Eastern',
   }, now, 'Kept name')

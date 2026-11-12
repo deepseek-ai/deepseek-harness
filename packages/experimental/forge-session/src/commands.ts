@@ -33,9 +33,18 @@ export function commandOf(argumentsJson: string): string | undefined {
     void error // Malformed arguments never ran a command.
     return undefined
   }
-  if (typeof parsed !== 'object' || parsed === null) return undefined
-  const command: unknown = (parsed as { command?: unknown }).command
-  return typeof command === 'string' ? command : undefined
+  return commandIn(parsed)
+}
+
+/**
+ * Read the command string of parsed `bash` or `pwsh` arguments, such as the
+ * arguments a program dispatch logs.
+ * @param args - parsed tool arguments.
+ * @returns the command, or undefined when the arguments carry no string `command`.
+ */
+export function commandIn(args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null || !('command' in args)) return undefined
+  return typeof args.command === 'string' ? args.command : undefined
 }
 
 /**

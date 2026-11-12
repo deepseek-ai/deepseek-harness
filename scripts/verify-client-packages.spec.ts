@@ -202,7 +202,28 @@ describe('module requests', () => {
     const slots = declaration('slots')
     expect(collectClientPackageViolations(facts([], { declarations: [ui, slots] }))).toEqual([
       ui.manifest + ': client feature package requests runtime external '
-      + '"@deepseek-ai/dsh-client-slots/client"; import shared types only or call an injected Cordis service',
+      + '"@deepseek-ai/dsh-client-slots/client"; request only rows under packages/api/, import shared types only,'
+      + ' or call an injected Cordis service',
+    ])
+  })
+
+  it('accepts a client feature runtime request to an infrastructure row and still rejects a stale one', () => {
+    const gateway = {
+      ...declaration('@deepseek-ai/dsh-api-gateway'), manifest: 'packages/api/gateway/package.json',
+    }
+    const live = declaration('live', {
+      external: ['@deepseek-ai/dsh-api-gateway/client'],
+      runtimeSourceUses: {
+        '@deepseek-ai/dsh-api-gateway': ['packages/client/live/src/client/index.ts'],
+      },
+      runtimeSourceSpecifiers: {
+        '@deepseek-ai/dsh-api-gateway/client': ['packages/client/live/src/client/index.ts'],
+      },
+    })
+    const stale = declaration('stale', { external: ['@deepseek-ai/dsh-api-gateway/client'] })
+    expect(collectClientPackageViolations(facts([], { declarations: [gateway, live, stale] }))).toEqual([
+      stale.manifest + ': dsh.client.external "@deepseek-ai/dsh-api-gateway/client"'
+      + ' has no runtime import or re-export in production source; remove the stale declaration',
     ])
   })
 

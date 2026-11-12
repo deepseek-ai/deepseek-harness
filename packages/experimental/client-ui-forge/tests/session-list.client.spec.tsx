@@ -9,7 +9,7 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { BindingState } from '@deepseek-ai/dsh-experimental-forge-session/types'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionSummaryValues } from '@deepseek-ai/dsh-session-projection/types'
 import { en } from '../src/client/locales.ts'
 import { sessionForgeFacts, type ChangeRequestStates } from '../src/client/session-list.ts'
@@ -18,11 +18,12 @@ import { SessionRowForge, stateLine, type SessionRowForgeProps } from '../src/cl
 import css from '../src/client/SessionList.module.css'
 import type { ForgeChangeRequestListState } from '../src/types.ts'
 import { created, listState as state } from './client-fixtures.client.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
 const t = makeTranslate(en)
-const S1 = SessionId('s1')
+const S1 = brandString<SessionId>('s1')
 
 type Values = Readonly<Partial<SessionProjectionSummaryValues>>
 

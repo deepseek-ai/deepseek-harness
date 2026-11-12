@@ -4,9 +4,10 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import ToolResultPruner from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import { SessionFormatEventCollector, type SessionFormatEvent, type SessionFormatArtifact, type SessionFormatJsonObject } from '@deepseek-ai/dsh-session-format'
-import { Session, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import { buildForkSeed } from '@deepseek-ai/dsh-session/fork'
-import { createMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { releasedV4SessionFormatCodec as codec, assertV4RowAdmission, restoreReleasedV4Artifact } from '../src/index.ts'
 import { assertV4ForkResult } from '../src/fork-result.ts'
 
@@ -19,17 +20,17 @@ type MutableResult = {
 }
 
 function fork() {
-  const source = Session.create(SessionId('fork-parent'))
+  const source = Session.create(brandString<SessionId>('fork-parent'))
   source.append('turn/start', { turn: 1 })
   source.append('step/start', { turn: 1, step: 1 })
   source.append('assistant/message', {
     turn: 1, step: 1, stream: [],
     message: createMessage({ role: 'assistant', source: { kind: 'model', provider: 'mock', model: 'mock' },
-      content: [{ type: 'tool-call', id: ToolCallId('read-one'), name: 'read', arguments: '{}' }] }),
+      content: [{ type: 'tool-call', id: brandString<ToolCallId>('read-one'), name: 'read', arguments: '{}' }] }),
   }, { surfaceOp: 'append' })
   const seed = buildForkSeed(source.snapshotEvents(), SessionSeq(2))
-  return Session.create(SessionId('fork-child'), seed, {
-    version: 4, id: SessionId('fork-child'), createdAt: 1, delegationDepth: 0, isSeeded: true, parentSession: source.id,
+  return Session.create(brandString<SessionId>('fork-child'), seed, {
+    version: 4, id: brandString<SessionId>('fork-child'), createdAt: 1, delegationDepth: 0, isSeeded: true, parentSession: source.id,
   }, SessionLogOffset(3))
 }
 
@@ -76,8 +77,8 @@ describe('V4 fork results', () => {
     const result = child.snapshotEvents().find(event => event.type === 'tool/result')!
     expect(result.data.message.id).toBe(`forked-tool-result-read-one-${result.seq}`)
     expect(JSON.stringify(result)).toContain('The parent session may have executed it after the fork point.')
-    const nested = Session.create(SessionId('fork-grandchild'), buildForkSeed(child.snapshotEvents(), result.seq), {
-      version: 4, id: SessionId('fork-grandchild'), createdAt: 1, delegationDepth: 0, isSeeded: true, parentSession: child.id,
+    const nested = Session.create(brandString<SessionId>('fork-grandchild'), buildForkSeed(child.snapshotEvents(), result.seq), {
+      version: 4, id: brandString<SessionId>('fork-grandchild'), createdAt: 1, delegationDepth: 0, isSeeded: true, parentSession: child.id,
     }, SessionLogOffset(result.seq + 1))
     expect(restoreReleasedV4Artifact(artifact(nested), new Set(original.map(event => event.type)))).toBeDefined()
   })

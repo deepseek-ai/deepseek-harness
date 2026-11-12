@@ -3,13 +3,14 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { identityKeyOf } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { apply } from '../src/host/share-host.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 vi.mock('../src/host/tunnel-worker.ts', () => ({ TunnelWorker: class {
   start() {}
@@ -45,7 +46,7 @@ it('rejects queued viewer input after Relay independently revoked it', async () 
   // The message records the reader it came from; the turn it enters has decided no requester yet.
   const message = createUserMessage({ content: [{ type: 'text', text: 'queued' }],
     source: { kind: 'user', rpcId: requestId, principal: { kind: 'share-viewer', shareId: 'share', actor } } })
-  const agent = { id: SessionId('source'), session: { id: SessionId('source') } } as Agent
+  const agent = { id: brandString<SessionId>('source'), session: { id: brandString<SessionId>('source') } } as Agent
   const next = vi.fn(async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
   expect(await ctx.waterfall('agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, agent, turn: 4, step: 1, messages: [message],
     signal: new AbortController().signal }, next)).toEqual({ kind: 'reject' })
@@ -76,7 +77,7 @@ it('rejects a steer of a revoked reader when its step starts', async () => {
   })
   const steered = createUserMessage({ content: [{ type: 'text', text: 'steer' }],
     source: { kind: 'user', rpcId: 'steer-1' as SessionRequestId, principal: { kind: 'share-viewer', shareId: 'share', actor } } })
-  const agent = { id: SessionId('source'), session: { id: SessionId('source') } } as Agent
+  const agent = { id: brandString<SessionId>('source'), session: { id: brandString<SessionId>('source') } } as Agent
   const next = vi.fn(async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [steered] }))
   expect(await ctx.waterfall('agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, agent, turn: 2, step: 2, messages: [steered],
     signal: new AbortController().signal }, next)).toEqual({ kind: 'reject' })
@@ -107,7 +108,7 @@ it('keeps a normal admitted viewer step entering the model', async () => {
   })
   const message = createUserMessage({ content: [{ type: 'text', text: 'normal' }],
     source: { kind: 'user', rpcId: 'normal-1' as SessionRequestId, principal: { kind: 'share-viewer', shareId: 'share', actor } } })
-  const agent = { id: SessionId('source'), session: { id: SessionId('source') } } as Agent
+  const agent = { id: brandString<SessionId>('source'), session: { id: brandString<SessionId>('source') } } as Agent
   const next = vi.fn(async (): Promise<PreStepDecision> => ({ kind: 'enter', messages: [message] }))
   expect(await ctx.waterfall('agent/pre-step', { modelSelection: { provider: 'mock', model: 'mock' }, agent, turn: 3, step: 1, messages: [message],
     signal: new AbortController().signal }, next)).toMatchObject({ kind: 'enter' })

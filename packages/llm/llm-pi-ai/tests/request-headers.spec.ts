@@ -3,10 +3,11 @@
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { userAgent } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as PiAi from '../src/index.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(async () => {
   await closeMockServers()
@@ -63,7 +64,7 @@ it('composes request-local headers, enforces attribution, and removes disposed l
     headers.set('x-second-listener', 'yes')
     return next()
   })
-  await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: SessionId('one') })
+  await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: brandString<SessionId>('one') })
   await assemble(ctx, { model: 'deepseek-flash', messages: [] })
   expect(seen).toEqual([
     { provider: 'deepseek', model: 'deepseek-flash', baseURL: server.url, sessionId: 'one' },
@@ -75,7 +76,7 @@ it('composes request-local headers, enforces attribution, and removes disposed l
   expect(server.headers[1]).not.toHaveProperty('x-request-session')
   remove()
   removeSecond()
-  await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: SessionId('two') })
+  await assemble(ctx, { model: 'deepseek-flash', messages: [], sessionId: brandString<SessionId>('two') })
   expect(server.headers[2]).toMatchObject({ 'x-request-session': 'static-session', 'x-company': 'static' })
   expect(server.headers[2]).not.toHaveProperty('x-second-listener')
 })
@@ -91,10 +92,10 @@ it('uses the prepared endpoint and isolates overlapping requests', async () => {
     return next()
   })
   const prepared = await ctx.llm.prepareCall({ provider: 'deepseek', model: 'deepseek-flash' })
-  const iterator = prepared.stream({ ...prepared.config, messages: [], sessionId: SessionId('first') })[Symbol.asyncIterator]()
+  const iterator = prepared.stream({ ...prepared.config, messages: [], sessionId: brandString<SessionId>('first') })[Symbol.asyncIterator]()
   onTestFinished(async () => { await iterator.return?.() })
   await iterator.next()
-  await assemble(ctx, { provider: 'gateway', model: 'm', messages: [], sessionId: SessionId('second') })
+  await assemble(ctx, { provider: 'gateway', model: 'm', messages: [], sessionId: brandString<SessionId>('second') })
   while (!(await iterator.next()).done) { /* Drain the first response after the second call settles. */ }
   expect(seen.map(({ provider, baseURL, sessionId }) => ({ provider, baseURL, sessionId }))).toEqual([
     { provider: 'deepseek', baseURL: first.url, sessionId: 'first' },

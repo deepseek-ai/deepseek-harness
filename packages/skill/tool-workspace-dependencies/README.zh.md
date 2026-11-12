@@ -46,7 +46,7 @@ kind: "package-reference"
 
 在 macOS 和 Linux 上，构建器将 `python` 和 `python3` 保留为指向同目录版本化解释器（例如 `python3.12`）的相对链接。安装时保留这两个别名，其他链接展开为实际文件。别名校验要求目标名称与同目录解释器文件名完全一致，且目标为普通文件；Python wheel 等无法保留链接的载体使用普通命令文件，同样受支持。Windows 保留普通的 `python.exe` 文件。
 
-打包的 `sdk` profile 默认使用随包 Python 和 Office skills；`DSH_PRIMARY_RUNTIME` 覆盖资源位置，空值表示不使用随包环境。没有主运行时（包括源码启动）时，`sdk` profile 不挂载此工具，但仍挂载 Office skills，由它们引导模型使用用户的 Python。独立选择 skills 的方式见[运行时配置](../../../python/sdk-runtime/README.zh.md)。缺少 skill 资源时，目录发现阶段通过 `ctx.logger.warn` 报告一次；无效或不完整的外部运行时 payload 在首次工具调用时失败。profile 配置变更需要重启 SDK 进程。
+打包的 `sdk` profile 默认使用随包 Python 和 Office skills；`DSH_PRIMARY_RUNTIME` 覆盖资源位置，空值表示不使用随包环境。没有主运行时（包括源码启动）时，`sdk` profile 不挂载此工具，但仍挂载 Office skills，由它们引导模型使用用户的 Python。独立选择 skills 的方式见[运行时配置](../../../python/sdk-runtime/README.zh.md)。缺少 skill 资源时，目录发现阶段通过 `ctx.logger.warn` 报告一次；无效或不完整的外部运行时 payload 在首次工具调用时以 `WorkspaceDependencyError` 失败：payload 缺失、格式错误或不完整时为 `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD`，目标为其他平台或架构时为 `WORKSPACE_DEPENDENCY_UNSUPPORTED_PLATFORM`，其他文件系统失败为 `WORKSPACE_DEPENDENCY_PREPARATION_FAILED`。profile 配置变更需要重启 SDK 进程。
 
 ### 构建载体 payload
 

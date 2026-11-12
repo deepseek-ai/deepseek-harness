@@ -13,7 +13,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { LspError, LspProviderId } from '@deepseek-ai/dsh-lsp'
+import { LspError, type LspProviderId } from '@deepseek-ai/dsh-lsp'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {
   LspProvider,
@@ -27,19 +27,7 @@ import type { HostWorkspace } from './host.ts'
 import { LspInstance } from './instance.ts'
 import type { ConnectionSpawner } from './connection.ts'
 import type { InstanceSpec } from './instance.ts'
-
-export { canonicalizeWorkspace, readHostSource } from './host.ts'
-export { encodeMessage, MessageDecoder } from './framing.ts'
-export {
-  negotiatePositionEncoding,
-  normalizeHover,
-  normalizeLocations,
-  requestMethod,
-  supportsOperation,
-  supportsTransientOpen,
-} from './translate.ts'
-export { LspInstance } from './instance.ts'
-export { LspConnection } from './connection.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Cordis plugin name for loader diagnostics. */
 export const name = 'lsp-stdio'
@@ -261,7 +249,7 @@ class LocalLspProvider implements LspProvider {
     private readonly executable: string,
     private readonly spawner: ConnectionSpawner,
   ) {
-    this.id = LspProviderId(providerId)
+    this.id = brandString<LspProviderId>(providerId)
     this.extensionToLanguage = config.extensionToLanguage
   }
 

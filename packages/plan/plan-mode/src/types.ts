@@ -8,7 +8,7 @@
  * @module @deepseek-ai/dsh-plan-mode/types
  */
 
-import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 
 /**
  * The plan projection's wire value. `active` is the logged state in force

@@ -17,7 +17,9 @@ import { FsError, type FsInfo, type FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-skill'
-import { OfficeKitError, OfficeSourceKey, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { OfficeSourceKey } from '@deepseek-ai/dsh-office-kit/types'
+import { OfficeKitError, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
   type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
 import { defineTool, ToolContextUnavailableError, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
@@ -270,7 +272,7 @@ async function authorizeContent(ctx: Context, target: FsTarget, info: FsInfo, si
 /** A deferred bounded read that refuses a source changed since its authorizing stat. */
 function officeSource(ctx: Context, agent: Agent, target: FsTarget, info: FsInfo): OfficeKitSource {
   return {
-    key: OfficeSourceKey(JSON.stringify([agent.session.id, ctx.fs.processPath(target)])),
+    key: brandString<OfficeSourceKey>(JSON.stringify([agent.session.id, ctx.fs.processPath(target)])),
     version: info.version,
     ...info.size === undefined ? {} : { bytes: info.size },
     async read(signal, maxBytes) {

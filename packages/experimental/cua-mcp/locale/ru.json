@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MCP-сервер управления компьютером",
+    "description": "Предоставляет Computer Use клиентам MCP, включая Codex и Claude Code, из профиля cua-mcp: cua_run_code выполняет постоянные программы для настольных приложений, а cua_reset очищает их."
+  }
+}

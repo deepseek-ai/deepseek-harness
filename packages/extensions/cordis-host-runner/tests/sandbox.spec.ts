@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { sandboxDefineTool } from '../src/guard.ts'
 import { syntaxErrorContext } from '../src/sandbox.ts'
 import { AGENT_A, call, CONTENT_OUTPUT_CODE, mount, setup, text, running } from './helpers.ts'
@@ -38,6 +39,59 @@ describe('dynamic tool declaration boundary', () => {
       execute: async () => 'ok',
     })
     expect(() => definition.output.render({}, 'ok')).toThrow(/output\.render returned \["x+…/)
+  })
+})
+
+describe('dynamic tool execution failures', () => {
+  const tool = (execute: () => Promise<unknown>) => sandboxDefineTool({
+    name: 'failing', description: 'failing tool', parameters: {},
+    output: { schema: { type: 'json' }, render: () => [] },
+    execute,
+  })
+  const run = (execute: () => Promise<unknown>, signal = new AbortController().signal) =>
+    tool(execute).execute({}, { signal } as never)
+
+  it('classifies thrown values and non-JSON results as PluginToolError', async () => {
+    const thrown = Object.assign(new Error('quota exhausted'), { code: 'QUOTA' })
+    await expect(run(() => Promise.reject(thrown))).rejects.toMatchObject({
+      name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED', message: 'quota exhausted (code QUOTA)', cause: thrown,
+    })
+    // Sandbox code may reject with any value, not only an Error.
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+    await expect(run(() => Promise.reject('bare failure'))).rejects.toMatchObject({
+      name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED', message: 'bare failure',
+    })
+    const trapped = new Proxy({}, { get: (_target, key) => { if (key === 'code') throw new Error('trap'); return undefined } })
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+    await expect(run(() => Promise.reject(trapped))).rejects.toMatchObject({ name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED' })
+    await expect(run(() => Promise.resolve(new Map()))).rejects.toMatchObject({
+      name: 'PluginToolError', code: 'PLUGIN_TOOL_INVALID_RESULT',
+    })
+  })
+
+  it('keeps a HarnessError and a failure after cancellation unchanged', async () => {
+    const coded = new HarnessError('service failed', 'SERVICE_FAILED')
+    await expect(run(() => Promise.reject(coded))).rejects.toBe(coded)
+    const controller = new AbortController()
+    const reason = new Error('cancelled')
+    controller.abort(reason)
+    await expect(run(() => Promise.reject(reason), controller.signal)).rejects.toBe(reason)
+    await expect(run(() => Promise.reject(new Error('cleanup failed')), controller.signal)).rejects.toMatchObject({
+      name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED', message: 'cleanup failed',
+    })
+  })
+
+  it('classifies hostile thrown values and results that throw during the clone', async () => {
+    const revocable = Proxy.revocable({}, {})
+    revocable.revoke()
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors
+    await expect(run(() => Promise.reject(revocable.proxy))).rejects.toMatchObject({ name: 'PluginToolError', code: 'PLUGIN_TOOL_FAILED' })
+    for (const thrown of ['getter failed', null]) {
+      const value = { get broken(): never { throw thrown } }
+      await expect(run(() => Promise.resolve(value))).rejects.toMatchObject({
+        name: 'PluginToolError', code: 'PLUGIN_TOOL_INVALID_RESULT', message: String(thrown),
+      })
+    }
   })
 })
 

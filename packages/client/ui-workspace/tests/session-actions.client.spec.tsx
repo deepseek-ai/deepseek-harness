@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceId, WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionStatusSnapshot } from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { GlobalStandardProps, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -534,6 +534,12 @@ describe('RowActionToast', () => {
     expect(callOrder(dismissToast)).toBeLessThan(callOrder(openForkSource))
     expect(forkSession).toHaveBeenCalledOnce()
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([t, tEn])('reports an unknown reading write outcome', async (translate) => {
+    const { notify } = await toastSurface(undefined, translate)
+    notify({ kind: 'readingFailed' })
+    expect(screen.getByRole('alert').textContent).toBe(translate('toast.readingFailed'))
   })
 
   it.each([t, tEn])('reports clipboard success and failure through the global toast', async (translate) => {

@@ -10,10 +10,11 @@ import { join, resolve, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SandboxPolicyService, { SANDBOX_MODES, setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string; additionalWritableRoots?: string[] } = {}) {
   const ctx = new Context()
@@ -23,7 +24,7 @@ async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'dange
 }
 
 function session(id: string, cwd?: string): Session {
-  const sessionId = SessionId(id)
+  const sessionId = brandString<SessionId>(id)
   return Session.create(sessionId, undefined, {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,
@@ -370,7 +371,7 @@ describe('the sandbox/mode session kit', () => {
 
   it('the sandboxMode projection folds to the last switch, or null without one', async () => {
     const ctx = await mounted()
-    const session = Session.create(SessionId('sess-fold'))
+    const session = Session.create(brandString<SessionId>('sess-fold'))
     expect(ctx.sessionProjections.checkpoint(session).sandboxMode?.val).toBeNull()
     setSandboxMode(session, 'workspace-write')
     setSandboxMode(session, 'read-only')
@@ -378,7 +379,7 @@ describe('the sandbox/mode session kit', () => {
   })
 
   it('setSandboxMode appends exactly one sandbox/mode event per switch', () => {
-    const session = Session.create(SessionId('sess-write'))
+    const session = Session.create(brandString<SessionId>('sess-write'))
     setSandboxMode(session, 'danger-full-access')
     const modeEvents = session.snapshotEvents().filter(e => e.type === 'sandbox/mode')
     expect(modeEvents).toHaveLength(1)

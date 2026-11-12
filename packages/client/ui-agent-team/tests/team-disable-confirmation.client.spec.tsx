@@ -2,17 +2,18 @@
 
 import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import {
   TeamDisableConfirmation, type TeamDisableConfirmationProps, type TeamDisableRequest,
 } from '../src/client/TeamDisableConfirmation.tsx'
 import { zh } from '../src/client/locales.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 afterEach(cleanup)
 
-const ORIGINAL = SessionId('original-session')
-const REPLACEMENT = SessionId('replacement-session')
+const ORIGINAL = brandString<SessionId>('original-session')
+const REPLACEMENT = brandString<SessionId>('replacement-session')
 
 function props(
   request: TeamDisableRequest | null = { sessionId: ORIGINAL },
@@ -48,8 +49,8 @@ it('renders nothing when no disable request exists', () => {
 it('shows the localized title, two paragraphs, and actions without a checkbox', () => {
   const input = props()
   render(<TeamDisableConfirmation {...input.props} />)
-  const dialog = within(screen.getByRole('dialog', { name: '确认停用智能体团队协作？' }))
-  expect(dialog.getByRole('heading', { name: '确认停用智能体团队协作？' })).toBeTruthy()
+  const dialog = within(screen.getByRole('dialog', { name: '确认关闭智能体团队协作？' }))
+  expect(dialog.getByRole('heading', { name: '确认关闭智能体团队协作？' })).toBeTruthy()
   expect(dialog.getByText(zh['disable.description'], { selector: 'p' })).toBeTruthy()
   expect(dialog.getByText(zh['disable.warning'], { selector: 'p' })).toBeTruthy()
   expect(dialog.getAllByRole('paragraph')).toHaveLength(2)

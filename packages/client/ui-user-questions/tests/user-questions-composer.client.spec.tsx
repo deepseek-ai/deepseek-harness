@@ -5,7 +5,8 @@ import { useSyncExternalStore } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { allowAllAccess } from '@deepseek-ai/dsh-client-test-runtime'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { AskUserQuestionAnswerItem } from '@deepseek-ai/dsh-user-questions/types'
 import { createWaterfallRequest, PendingQuestion, type QuestionCardSnapshot, type QuestionComposerProps } from '../src/client/contract/slots.ts'
@@ -662,7 +663,7 @@ describe('PendingQuestion domain face', () => {
   })
 
   it('ignores persisted progress that no longer matches the question batch', () => {
-    const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId('stale-progress'))
+    const carrier = new PendingQuestion(SID, QUESTIONS, brandString<ToolCallId>('stale-progress'))
     draftInstance.actions.replace(carrier.key, { index: 7, drafts: [] })
 
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -725,7 +726,7 @@ const TIMED: PendingQuestion['questions'] = [{
 }]
 
 /** A timed card as the Remote Event listener builds it: waterfall channel with a Client-decided deadline. */
-function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
+function timedCard(deadline: number, callId = brandString<ToolCallId>('ask-timed')) {
   const carrier = new PendingQuestion(SID, TIMED, callId)
   const request = createWaterfallRequest(deadline, undefined, (channel) => { carrier.detachWaterfall(channel) })
   carrier.attachWaterfall(request.channel)
@@ -736,7 +737,7 @@ function timedCard(deadline: number, callId = ToolCallId('ask-timed')) {
 describe('timed card', () => {
   it.each([true, false])('does not autofocus before claiming and respects manual focus until readiness: %s', async (stillFocused) => {
     vi.useFakeTimers()
-    const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], ToolCallId('claiming'))
+    const carrier = new PendingQuestion(SID, [{ id: 'free', question: '补充说明' }], brandString<ToolCallId>('claiming'))
     const request = createWaterfallRequest(Date.now() + 2_000, undefined,
       (channel) => { carrier.detachWaterfall(channel) })
     try {
@@ -891,7 +892,7 @@ describe('timed card', () => {
   })
 
   it('steers an RPC reply, hides the panel, and rejects a duplicate before discard', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-retry'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-retry'))
     const answer = vi.fn(async () => true)
     const hide = vi.fn()
     answer.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('a reply is already queued for this question'))
@@ -917,7 +918,7 @@ describe('timed card', () => {
   })
 
   it('unlocks an older reply when the rendered channel lags its continued state', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-stale-channel'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-stale-channel'))
     const hide = vi.fn()
     carrier.attachRpc({ answer: vi.fn(async () => true) })
     carrier.attachSeat({ hide })
@@ -935,7 +936,7 @@ describe('timed card', () => {
   })
 
   it('closing a continued panel only withdraws it from the seat and sends nothing', async () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-continued'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-continued'))
     const answer = vi.fn(async () => true)
     const hide = vi.fn()
     carrier.attachRpc({ answer })
@@ -955,7 +956,7 @@ describe('timed card', () => {
   })
 
   it('closing a card-keyed panel with no channel left still just withdraws it', () => {
-    const carrier = new PendingQuestion(SID, TIMED, ToolCallId('ask-gap'))
+    const carrier = new PendingQuestion(SID, TIMED, brandString<ToolCallId>('ask-gap'))
     const hide = vi.fn()
     carrier.attachSeat({ hide })
     render(<QuestionComposer matched={carrier} {...kit} />)
@@ -1008,7 +1009,7 @@ const RECORDED_CUSTOM: readonly AskUserQuestionAnswerItem[] = [
 
 /** A read-only card as the panel provider builds it from a settled call's transcript record. */
 function reviewCard(review: readonly AskUserQuestionAnswerItem[] = RECORDED) {
-  const carrier = new PendingQuestion(SID, QUESTIONS, ToolCallId(REVIEWED_CALL), undefined, review)
+  const carrier = new PendingQuestion(SID, QUESTIONS, brandString<ToolCallId>(REVIEWED_CALL), undefined, review)
   const hide = vi.fn()
   carrier.attachSeat({ hide })
   return { carrier, hide }
@@ -1059,7 +1060,7 @@ describe('review card', () => {
         options: [{ label: 'Web (Recommended)' }, { label: 'Desktop' }],
       },
     ]
-    const carrier = new PendingQuestion(SID, questions, ToolCallId(REVIEWED_CALL), undefined, [{ id: 'checks', selected: ['Lint'] }])
+    const carrier = new PendingQuestion(SID, questions, brandString<ToolCallId>(REVIEWED_CALL), undefined, [{ id: 'checks', selected: ['Lint'] }])
     carrier.attachSeat({ hide: vi.fn() })
     render(<QuestionComposer matched={carrier} {...kit} />)
 

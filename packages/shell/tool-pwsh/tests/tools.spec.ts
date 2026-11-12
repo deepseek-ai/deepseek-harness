@@ -18,14 +18,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED, TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
@@ -37,6 +37,7 @@ import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
 import { processOutcome } from '../src/background.ts'
 import { renderPwshJobRead, renderPwshResult } from '../src/render.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Empty offset readers for fakes that never produce output. */
 const silentReader = { readFrom: (fromByte: number) => ({ text: '', nextOffset: fromByte, lossy: false }) }
@@ -227,7 +228,7 @@ class ConfiningFakeBash extends ShellExecutor {
 }
 
 /** Sandboxed composition: the shared policy service + a confining executor + the pwsh tool (+ optional approval). */
-async function setupSandboxed(withApproval = false) {
+async function setupSandboxed(withApproval = false, toolConfig: Partial<ToolPwsh.Config> = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
@@ -244,7 +245,7 @@ async function setupSandboxed(withApproval = false) {
   await ctx.plugin(SandboxPolicyService, {})
   await ctx.plugin(ConfiningFakeBash)
   if (withApproval) await ctx.plugin(ApprovalService)
-  await ctx.plugin(ToolPwsh)
+  await ctx.plugin(ToolPwsh, toolConfig)
   const bash = ctx.shell as ConfiningFakeBash
   return { ctx, bash }
 }
@@ -271,7 +272,7 @@ function sandboxAgent(
   if (mode !== undefined) {
     events.push({ type: 'sandbox/mode', seq: SessionSeq(1), time: 1, data: { mode } })
   }
-  const id = SessionId('sandbox-session')
+  const id = brandString<SessionId>('sandbox-session')
   return {
     id,
     ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
@@ -309,7 +310,7 @@ function sandboxAgent(
  */
 async function registerFakeAgent(ctx: Context, sessionId: string): Promise<Agent> {
   const scopeFiber = ctx.plugin(() => {})
-  const id = SessionId(sessionId)
+  const id = brandString<SessionId>(sessionId)
   const agent = {
     id,
     ctx: scopeFiber.ctx,
@@ -331,7 +332,7 @@ let callCounter = 0
 function call(ctx: Context, name: string, args: unknown, agent?: Agent) {
   return executeToolFixture(ctx, {
     signal: testToolSignal,
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: args,
     ...agent ? { agent } : {},
@@ -500,7 +501,7 @@ describe('execution through the bash seam', () => {
     bash.handler = () => runResult('ok\n')
     await executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('call-signal'),
+      callId: brandString<ToolCallId>('call-signal'),
       name: 'pwsh',
       arguments: { command: 'Write-Output ok', description: 'ok' },
     })
@@ -681,11 +682,25 @@ describe('sandbox escalation through ctx.approval', () => {
     expect(schema.parameters.properties).not.toHaveProperty('sandbox_permissions')
   })
 
+  it('rejects a forced background call before asking for an escalation', async () => {
+    const { ctx, bash } = await setupSandboxed(true, { enableRunInBackground: false })
+    const prompted = vi.fn()
+    ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+    const result = await call(ctx, 'pwsh', { ...escalate, run_in_background: true }, sandboxAgent())
+    expect(text(result)).toContain('invalid arguments: run_in_background is disabled for this deployment (enableRunInBackground: false)')
+    expect(result).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(prompted).not.toHaveBeenCalled()
+    expect(bash.modes).toEqual([])
+  })
+
   it('rejects injected escalation without a sandbox and narrower escalation without prompting', async () => {
     const plain = await setup()
-    const unavailable = await call(plain.ctx, 'pwsh', escalate)
-    expect(text(unavailable)).toContain('not available in this composition')
-    expect(unavailable).toMatchObject({ error: { info: { name: 'SandboxEscalationError', code: 'SANDBOX_ESCALATION_UNAVAILABLE' } } })
+    const { command, description, sandbox_permissions, justification } = escalate
+    for (const args of [escalate, { command, description, sandbox_permissions }, { command, description, justification }]) {
+      const unavailable = await call(plain.ctx, 'pwsh', args)
+      expect(text(unavailable)).toContain('invalid arguments: sandbox_permissions and justification are not available in this composition')
+      expect(unavailable).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    }
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()
@@ -735,7 +750,7 @@ describe('sandbox escalation through ctx.approval', () => {
     const agent = sandboxAgent(undefined, ctx)
     await ctx.agents.register(agent)
     const foreground = await executeToolFixture(ctx, {
-      callId: ToolCallId('sandbox-signal'),
+      callId: brandString<ToolCallId>('sandbox-signal'),
       name: 'pwsh',
       arguments: escalate,
       agent,
@@ -761,7 +776,7 @@ describe('sandbox escalation through ctx.approval', () => {
     const started = vi.spyOn(bash, 'execute')
 
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('cancelled-escalation-background'),
+      callId: brandString<ToolCallId>('cancelled-escalation-background'),
       name: 'pwsh',
       arguments: { ...escalate, run_in_background: true },
       agent,
@@ -882,7 +897,7 @@ describe('background execution through the job runtime', () => {
     const controller = new AbortController()
     controller.abort()
     const result = await executeToolFixture(ctx, {
-      callId: ToolCallId('call-pre-aborted'),
+      callId: brandString<ToolCallId>('call-pre-aborted'),
       name: 'pwsh',
       arguments: { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true },
       signal: controller.signal,
@@ -924,8 +939,8 @@ describe('background execution through the job runtime', () => {
 
     // Schema omission is advertising; execution must also enforce the opt-out.
     const forced = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'test command', run_in_background: true })
-    expect(forced).toMatchObject({ isError: true, error: { info: { name: 'JobError', code: 'JOB_BACKGROUND_DISABLED' } } })
-    expect(text(forced)).toContain('run_in_background is disabled for this deployment')
+    expect(forced).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(text(forced)).toContain('invalid arguments: run_in_background is disabled for this deployment (enableRunInBackground: false)')
     const foreground = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'test command' })
     expect(foreground.isError).toBe(false)
   })
@@ -1311,7 +1326,7 @@ describe('launch failures without a job registry', () => {
     })
     const aborted = await executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('launch-aborted'),
+      callId: brandString<ToolCallId>('launch-aborted'),
       name: 'pwsh',
       arguments: { command: 'Write-Output ok', description: 'd' },
     })
@@ -1327,7 +1342,7 @@ describe('launch failures without a job registry', () => {
     })
     const result = await executeToolFixture(ctx, {
       signal: controller.signal,
-      callId: ToolCallId('launch-aborted-spawn-error'),
+      callId: brandString<ToolCallId>('launch-aborted-spawn-error'),
       name: 'pwsh',
       arguments: { command: 'Write-Output ok', description: 'd' },
     })

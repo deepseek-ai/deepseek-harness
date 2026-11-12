@@ -234,6 +234,17 @@ export async function scrollIntoView(target: Locator): Promise<void> {
 }
 
 /**
+ * Request one earlier page without scrolling the transcript to its automatic pagination threshold.
+ * @param page - Page showing the English Chat history control.
+ */
+export async function loadEarlierChatPage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Load earlier', exact: true }).evaluate((button) => {
+    button.focus({ preventScroll: true })
+  })
+  await page.keyboard.press('Enter')
+}
+
+/**
  * Expand every eligible Turn process and secondary group so a Tool-focused
  * scenario can exercise the original row contract beneath product-default
  * compact Chat presentation.
@@ -467,4 +478,14 @@ export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Prom
   }
   await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
+}
+
+/**
+ * The right Sidebar's fullscreen panel box: 1px wider than the viewport, so the
+ * first column's divider sits past the window's left edge where the frame clips it.
+ * @param viewport - the page viewport size.
+ * @returns the panel's expected bounding box.
+ */
+export function fullscreenBox(viewport: { width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  return { x: -1, y: 0, width: viewport.width + 1, height: viewport.height }
 }

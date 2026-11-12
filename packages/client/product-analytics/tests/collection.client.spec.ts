@@ -95,7 +95,7 @@ it('fails closed on stream loss and accepts a fresh policy after reconnection', 
   const b = await setup()
   b.options().open(new AbortController().signal)
   expect(b.options().ended(true).message).toContain('policy stream ended')
-  b.options().carrierFailed?.(new Error('offline'))
+  b.options().carrierFailed?.(Object.assign(new Error('offline'), { code: 'gateway/carrier-lost' as const }))
   expect(b.ctx.productAnalytics.enabled).toBe(false)
   await b.policy(true)
   await b.fail()
