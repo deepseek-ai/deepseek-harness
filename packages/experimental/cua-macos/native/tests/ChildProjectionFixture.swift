@@ -8,6 +8,7 @@ import ApplicationServices
     var inputLog: URL?
 
     override func accessibilityChildren() -> [Any]? { childList ?? super.accessibilityChildren() }
+    @objc func paste(_ sender: NSMenuItem) { pressed.append(sender.title) }
     @objc func press(_ sender: NSButton) {
         pressed.append(sender.title)
         if sender.title == "Identify as open panel" { setAccessibilityIdentifier("open-panel") }
@@ -18,6 +19,14 @@ import ApplicationServices
         let button = NSButton(title: title, target: self, action: #selector(press(_:)))
         contentView?.addSubview(button)
         return button
+    }
+}
+
+@MainActor private final class ChildFixtureMenu: NSMenu {
+    var gapFirst = false
+    override func accessibilityChildren() -> [Any]? {
+        let items = super.accessibilityChildren() ?? []
+        return gapFirst ? [NSNull()] + items : items + [NSNull()]
     }
 }
 
@@ -42,6 +51,17 @@ import ApplicationServices
         group.setAccessibilityRole(.group)
         group.setAccessibilityChildren([NSTextField(labelWithString: "Nested child")])
         bad.childList = [before, NSNull(), after, group, NSDate(timeIntervalSince1970: 0)]
+        let menuBar = NSMenu(), editItem = NSMenuItem(), edit = ChildFixtureMenu(title: "Edit")
+        edit.autoenablesItems = false
+        func addPaste(_ name: String) {
+            let item = NSMenuItem(title: name, action: #selector(ChildFixtureWindow.paste(_:)), keyEquivalent: "v")
+            item.target = bad
+            edit.addItem(item)
+        }
+        addPaste("Paste")
+        editItem.submenu = edit
+        menuBar.addItem(editItem)
+        app.mainMenu = menuBar
         good.orderBack(nil)
         bad.orderBack(nil)
         app.finishLaunching()
@@ -82,6 +102,20 @@ import ApplicationServices
         var whole: CFTypeRef?
         try check(AXUIElementCopyAttributeValue(badRoot, kAXChildrenAttribute as CFString, &whole) == .failure, "AXChildren must return -25200")
 
+        // AppKit can vend a separate menu representation to other processes.
+        // Reading this application's own menu exercises the overridden AXChildren getter.
+        for scenario in ["before", "after", "duplicate"] {
+            edit.gapFirst = scenario == "before"
+            if scenario == "duplicate" { addPaste("Second Paste") }
+            do {
+                let command = try access.pasteCommand(getpid(), maxElements: 2000, maxDepth: 25)
+                try access.perform(command, "AXPress")
+                throw NativeFailure(code: "FIXTURE", message: "Dispatched Paste for " + scenario)
+            } catch let failure as NativeFailure where failure.code == "UNSUPPORTED" {
+                let reason = scenario == "duplicate" ? "ambiguous" : "incomplete"
+                try check(failure.message.contains(reason) && failure.message.contains("No input was dispatched"), failure.message)
+            }
+        }
         let complete = try project(good)
         try check(!complete.truncated && !complete.hasUnreadableElements && complete.tree.contains("Healthy window"), "An unrelated window reported missing children")
         let partial = try project(bad)

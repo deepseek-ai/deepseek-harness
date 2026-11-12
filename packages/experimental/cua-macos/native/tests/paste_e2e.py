@@ -60,26 +60,21 @@ def main():
             assert result == {"dispatched": True}, result
             foreground = wait_state(root / "target.json", lambda state: state["text"] == "test")
             assert foreground["pasteCalls"] == [False, True] and foreground["active"], foreground
-            for mode in ["before", "after", "duplicate"]:
-                state_path = root / f"{mode}.json"
-                receiver = subprocess.Popen([str(binary), str(state_path), f"DSH partial menu {mode}", mode],
-                                            stdout=subprocess.PIPE, text=True)
-                processes.append(receiver)
-                assert line(receiver).strip() == "READY"
-                partial = helper.call("getApp", {"selector": str(receiver.pid)})
-                target = {"appHandle": partial["appHandle"]}
-                tree = helper.call("getState", {**target, "maxElements": 2000, "maxDepth": 25, "includeMenus": True})
-                assert tree["hasUnreadableElements"] and any(e["title"] == "Paste" for e in tree["elements"])
-                error = helper.call("paste", {**params, **target}, "UNSUPPORTED")
-                reason = "ambiguous" if mode == "duplicate" else "incomplete"
-                assert reason in error["message"] and "No input was dispatched. Read fresh state" in error["message"], error
-                state = json.loads(state_path.read_text())
-                assert state["text"] == "" and state["pasteCalls"] == [], state
+            duplicate_path = root / "duplicate.json"
+            duplicate = subprocess.Popen([str(binary), str(duplicate_path), "Duplicate Paste commands", "--duplicate"],
+                                         stdout=subprocess.PIPE, text=True)
+            processes.append(duplicate)
+            assert line(duplicate).strip() == "READY"
+            target = helper.call("getApp", {"selector": str(duplicate.pid)})
+            error = helper.call("paste", {**params, "appHandle": target["appHandle"]}, "UNSUPPORTED")
+            assert "ambiguous" in error["message"] and "No input was dispatched. Read fresh state" in error["message"], error
+            state = json.loads(duplicate_path.read_text())
+            assert state["text"] == "" and state["pasteCalls"] == [], state
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)
                 (args.artifacts / "results.json").write_text(json.dumps({"background": background,
                     "foreground": foreground, "backgroundElapsedSeconds": elapsed, "error": unread}, indent=2) + "\n")
-            print(f"PASS: background PASTE_NOT_CONSUMED in {elapsed:.3f}s; foreground paste inserted test; unreadable and ambiguous menus received zero Paste actions")
+            print(f"PASS: background PASTE_NOT_CONSUMED in {elapsed:.3f}s; foreground paste inserted test; ambiguous menu received zero Paste actions")
         finally:
             if args.artifacts:
                 args.artifacts.mkdir(parents=True, exist_ok=True)

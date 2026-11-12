@@ -1,14 +1,6 @@
 // A foreground-sensitive Paste receiver records AX command delivery independently of clipboard consumption.
 import AppKit
 
-private final class PartialMenu: NSMenu {
-    var gapFirst = false
-    override func accessibilityChildren() -> [Any]? {
-        let items = super.accessibilityChildren() ?? []
-        return gapFirst ? [NSNull()] + items : items + [NSNull()]
-    }
-}
-
 final class PasteFixture: NSObject, NSApplicationDelegate, NSTextViewDelegate {
     let statePath: String
     let label: String
@@ -19,18 +11,12 @@ final class PasteFixture: NSObject, NSApplicationDelegate, NSTextViewDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu()
         let editItem = NSMenuItem()
-        let mode = CommandLine.arguments.dropFirst(3).first
-        let edit: NSMenu
-        if let mode {
-            let partial = PartialMenu(title: "Edit")
-            partial.gapFirst = mode == "before"
-            edit = partial
-        } else { edit = NSMenu(title: "Edit") }
+        let edit = NSMenu(title: "Edit")
         edit.autoenablesItems = false
         let paste = NSMenuItem(title: "Paste", action: #selector(pasteText(_:)), keyEquivalent: "v")
         paste.target = self
         edit.addItem(paste)
-        if mode == "duplicate" {
+        if CommandLine.arguments.last == "--duplicate" {
             let duplicate = NSMenuItem(title: "Second Paste", action: #selector(pasteText(_:)), keyEquivalent: "v")
             duplicate.target = self
             edit.addItem(duplicate)
