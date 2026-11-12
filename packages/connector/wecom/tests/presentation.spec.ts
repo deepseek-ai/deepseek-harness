@@ -41,8 +41,14 @@ it('offers the next step for each state', () => {
   shown = presentAccount({ account: unauthorized, operation: { id: OP, kind: 'connect', phase: 'checking', cancellable: false } })
   expect(shown).toMatchObject({ status: say('step.connecting'), buttons: [] })
 
-  shown = presentAccount({ account: { state: 'authorized', skills: 'installed' } })
-  expect(shown).toMatchObject({ phase: 'connected', status: say('status.connected'), badge: say('badge.connected'), detail: say('detail.connected'), buttons: [] })
+  shown = presentAccount({ account: { state: 'authorized', botId: 'bot-1', skills: 'installed' } })
+  expect(shown).toMatchObject({ phase: 'connected', status: say('status.connected'), badge: say('badge.connected'), detail: say('detail.connected') })
+  expect(shown.buttons).toMatchObject([{
+    label: say('action.rebind'), command: CONNECT,
+    confirm: { title: say('rebind.title'), body: say('rebind.body'), label: say('action.rebind') },
+  }])
+  expect(shown.notes).toMatchObject([{ text: { zh: '已绑定机器人：bot-1', en: 'Bound bot: bot-1' } }])
+  expect(presentAccount({ account: { state: 'authorized', skills: 'installed' } }).notes).toEqual([])
 
   for (const view of [
     { account: { state: 'authorized', skills: 'installed' }, operation: { id: OP, kind: 'check', phase: 'checking', cancellable: false } },

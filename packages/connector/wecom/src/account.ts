@@ -1,4 +1,4 @@
-/** Host-owned check and QR-code authorization of the wecom-cli bot that the user's terminal shares. */
+/** Host-owned check and QR-code binding of the wecom-cli bot that the user's terminal shares; binding again replaces it. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { CliAccountRuntime, exitFailure, type CliCommandExecutor, type CliOperationControl } from '@deepseek-ai/dsh-cli-account'
@@ -7,6 +7,9 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import type { WecomAccountState, WecomOperationFailure, WecomOperationKind, WecomPhase } from './types.ts'
 
 const AUTHORIZATION_LINK = /^\s*(https:\/\/\S+)\s*$/u
+/** `auth show` prints `Status: authorized` or `Status: unauthorized`, then `Bot ID: <id>` when a bound bot gives the authorization. */
+const STATUS_LINE = /^Status:[ \t]*(authorized|unauthorized)[ \t]*$/mu
+const BOT_LINE = /^Bot ID:[ \t]*(\S+)[ \t]*$/mu
 
 type Control = CliOperationControl<WecomPhase, WecomOperationFailure['command']>
 
@@ -67,12 +70,13 @@ export class WecomAccount extends CliAccountRuntime<WecomAccountState, WecomOper
   /** Restart a failed download of the guides without waiting for it, then read the authorization state, publish it, and return it. */
   private async check(control: Control, signal: AbortSignal): Promise<WecomAccountState> {
     this.skills.retry()
-    const result = await control.run('auth-status', ['auth', 'show', '--status'], signal)
-    const state = result.stdout.trim()
+    const result = await control.run('auth-status', ['auth', 'show'], signal)
+    const state = STATUS_LINE.exec(result.stdout)?.[1]
     if (result.exitCode !== 0 || (state !== 'authorized' && state !== 'unauthorized')) {
-      throw new Error(`wecom: auth show --status exited with ${String(result.exitCode)}`)
+      throw new Error(`wecom: auth show exited with ${String(result.exitCode)} or printed an unknown status`)
     }
-    const account: WecomAccountState = { state, skills: this.skills.state }
+    const botId = state === 'authorized' ? BOT_LINE.exec(result.stdout)?.[1] : undefined
+    const account: WecomAccountState = { state, ...botId === undefined ? {} : { botId }, skills: this.skills.state }
     this.publish(account)
     return account
   }

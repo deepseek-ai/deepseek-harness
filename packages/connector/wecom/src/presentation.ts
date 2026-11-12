@@ -54,7 +54,7 @@ function connectingButtons(operation: NonNullable<WecomState['operation']>): Con
 /**
  * The authorization section for one Host view.
  * @param view - the authorization, the operation in progress, and the last result.
- * @returns the phase, status, tag, buttons, detail, guide download row, and failure.
+ * @returns the phase, status, tag, buttons, detail, bound-bot and guide download rows, and failure.
  */
 export function presentAccount(view: WecomState): ConnectorAccountDisplay {
   const notes = skillsNotes(view.account.skills)
@@ -86,8 +86,15 @@ export function presentAccount(view: WecomState): ConnectorAccountDisplay {
       }
     case 'authorized':
       return {
-        phase: 'connected', status: text('status.connected'), badge: text('badge.connected'), buttons: [],
-        detail: text('detail.connected'), notes, ...failure,
+        phase: 'connected', status: text('status.connected'), badge: text('badge.connected'),
+        // Binding again replaces the bot in the CLI's configuration, which the terminal shares, so it asks first.
+        buttons: [{
+          label: text('action.rebind'), command: CONNECT,
+          confirm: { title: text('rebind.title'), body: text('rebind.body'), label: text('action.rebind') },
+        }],
+        detail: text('detail.connected'),
+        notes: [...view.account.botId === undefined ? [] : [{ text: text('bot.bound', { id: view.account.botId }) }], ...notes],
+        ...failure,
       }
     /* v8 ignore next -- closed account state union */
     default: return assertNever(view.account.state)

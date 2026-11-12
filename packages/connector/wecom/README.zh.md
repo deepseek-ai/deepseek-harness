@@ -52,10 +52,10 @@ dsh plugin --profile web remove @deepseek-ai/dsh-wecom
 | 操作 | 作用 |
 |---|---|
 | `check` | 重新检查授权；没有操作运行时，每个打开 Web 应用的浏览器会触发一次 |
-| `connect` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权 |
+| `connect` | 运行 `auth init --noninteractive --no-browser`，等待用户扫码，然后确认 CLI 报告机器人已授权。已授权的区块以“更换机器人”再次提供它，需先确认，因为新绑定会替换终端共用的那一个 |
 | 取消 | 在等待扫码期间取消连接并等待其命令退出；其他步骤会被忽略 |
 
-检查运行 `auth show --status`。授权状态按 CLI 的输出原样读作 `authorized` 或 `unauthorized`；其他输出或非零退出码会使检查失败，并保留之前的状态。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
+检查运行 `auth show`。授权状态从 CLI 输出的 `Status` 行读作 `authorized` 或 `unauthorized`，CLI 打印 `Bot ID` 行时，从中读取已绑定机器人的 id 并显示在区块中；其他输出或非零退出码会使检查失败，并保留之前的状态。`auth init` 在 stdout 中单独一行打印的链接，只有是 `work.weixin.qq.com` 上的 HTTPS 地址时才会提供。结果分为成功、已取消和失败。失败时，页面和 Host 日志显示命令和观察到的退出码；CLI 的输出可能带有扫码会话，因此不保留。`wecom-cli` 没有撤销授权的命令，因此插件不提供断开连接。运行 DSH 的进程需要能访问 CLI 配置；`DSH_HOME` 不会迁移它。
 
 ### 配置
 
@@ -162,7 +162,7 @@ Scripts in the WeCom skill call `wecom-cli` by name; start only the commands tha
 
 - 仅支持 macOS 和 Windows x64；其他平台未经验证。`@wecom/cli` 没有发布 Windows arm64 平台包。
 - 命令必须在本 Host 上运行。组合把命令放到别处运行（例如通过 SSH）时，插件仍会加载，但每条运行 `wecom-cli` 的命令都会因为那里没有这个路径而失败。
-- 插件使用 CLI 的默认配置。在 DSH 中授权会影响用户自己的终端，没有 DSH 私有机器人或机器人选择器。`wecom-cli` 无法撤销授权，因此页面和关闭插件都不会移除它。
+- 插件使用 CLI 的默认配置。在 DSH 中授权会影响用户自己的终端，没有 DSH 私有机器人或机器人选择器。`wecom-cli` 无法撤销授权，因此页面和关闭插件都不会移除它；页面只能把已绑定的机器人换成另一个。
 - 连接从 `auth init --noninteractive --no-browser` 的纯文本输出中读取扫码链接；CLI 版本改变该输出时，连接以可重试的结果失败。
 - 子指南跟随上游提交 `4c74ff2`；更新时要用 `scripts/upstream-skills-digest.ts` 生成新的固定信息，之后按新的子指南核对总入口的索引和 DSH 指引。
 - 换用新的固定提交后，首次加载需要能访问 GitHub 或配置的镜像；下载成功之前，agent 没有 `wecom` skill。

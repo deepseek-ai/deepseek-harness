@@ -15,11 +15,11 @@ import * as Wecom from '../src/index.ts'
 import type { WecomState } from '../src/types.ts'
 import { createBinDir, ScriptedSubprocess, type CliReply, type ScriptedProcess } from './harness.ts'
 
-const STATUS = 'auth show --status'
+const STATUS = 'auth show'
 const INIT = 'auth init --noninteractive --no-browser'
 const QR_LINK = 'https://work.weixin.qq.com/ai/qc/gen?source=wecom-cli&scode=fixture-scode'
-const AUTHORIZED: CliReply = { stdout: 'authorized\n' }
-const UNAUTHORIZED: CliReply = { stdout: 'unauthorized\n' }
+const AUTHORIZED: CliReply = { stdout: 'Status: authorized\nBot ID: bot-1\n' }
+const UNAUTHORIZED: CliReply = { stdout: 'Status: unauthorized\n' }
 
 type Script = (process: ScriptedProcess) => void
 
@@ -74,7 +74,8 @@ describe('WecomAccount', () => {
   }
 
   it.each<[string, CliReply, WecomState['account']]>([
-    ['an authorized bot', AUTHORIZED, { state: 'authorized', skills: 'installed' }],
+    ['an authorized bot', AUTHORIZED, { state: 'authorized', botId: 'bot-1', skills: 'installed' }],
+    ['an authorized bot whose id the CLI omits', { stdout: 'Status: authorized\n' }, { state: 'authorized', skills: 'installed' }],
     ['no authorization', UNAUTHORIZED, { state: 'unauthorized', skills: 'installed' }],
   ])('checks %s', async (_name, reply, expected) => {
     script[STATUS] = [reply]
@@ -103,14 +104,14 @@ describe('WecomAccount', () => {
     script[STATUS] = [AUTHORIZED]
     const id = account.start('check')
     expect(skills.state).toBe('downloading')
-    expect(await settled(id)).toEqual({ account: { state: 'authorized', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1', skills: 'downloading' }, result: { id, kind: 'check', outcome: 'succeeded' } })
   })
 
   it('reports a new state of the guides with the current authorization', async () => {
     script[STATUS] = [AUTHORIZED]
     await settled(account.start('check'))
     account.showSkills('failed')
-    expect(account.snapshot().account).toEqual({ state: 'authorized', skills: 'failed' })
+    expect(account.snapshot().account).toEqual({ state: 'authorized', botId: 'bot-1', skills: 'failed' })
   })
 
   it('connects through the QR-code page, offers only trusted links, and confirms the authorization', async () => {
@@ -132,7 +133,7 @@ describe('WecomAccount', () => {
     await vi.waitFor(() => { expect(account.snapshot().operation).toMatchObject({ phase: 'authorizing', authorizationUrl: QR_LINK }) })
     authorizing.reply({ stdout: 'Authorized\n' })
 
-    expect(await settled(id)).toEqual({ account: { state: 'authorized', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
+    expect(await settled(id)).toEqual({ account: { state: 'authorized', botId: 'bot-1', skills: 'installed' }, result: { id, kind: 'connect', outcome: 'succeeded' } })
     stop()
     expect(offered).toEqual([QR_LINK])
     expect(commands()).toEqual([INIT, STATUS])

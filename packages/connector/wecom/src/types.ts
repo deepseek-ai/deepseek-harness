@@ -3,9 +3,11 @@
 import type { CliAccountView, CliCommandFailure } from '@deepseek-ai/dsh-cli-account/types'
 import type { UpstreamSkillsState } from '@deepseek-ai/dsh-upstream-skills/types'
 
-/** The CLI's authorization as the latest `auth show --status` reported it, and where the upstream guides stand. */
+/** The CLI's authorization as the latest `auth show` reported it, and where the upstream guides stand. */
 export interface WecomAccountState {
   readonly state: 'unchecked' | 'unauthorized' | 'authorized'
+  /** The bound bot's id, when the CLI reports one with an authorized state. */
+  readonly botId?: string
   /** Whether the guides the `wecom` skill indexes are in place, downloading, or unavailable until a check retries them. */
   readonly skills: UpstreamSkillsState
 }
