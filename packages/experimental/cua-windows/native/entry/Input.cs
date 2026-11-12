@@ -93,14 +93,9 @@ internal static class Input
     internal static void Press(AppState app, WindowState window, string key, string[] modifiers, RequestContext context)
     {
         Windows.RequireForeground(app, window, context);
-        var chord = new KeyChord(key, modifiers.Select(KeyChord.NormalizeModifier).Distinct().ToArray());
-        var name = chord.Key.ToLowerInvariant();
-        if (name == "printscreen" || chord.Modifiers.Contains("alt") && name is "tab" or "escape" or "esc"
-            || chord.Modifiers.Contains("ctrl") && name is "escape" or "esc"
-            || chord.Modifiers.Contains("ctrl") && chord.Modifiers.Contains("alt") && name == "delete")
-            throw new NativeFailure("UNSUPPORTED", "This shortcut acts on the system rather than the selected application");
-        var resolved = ResolveKey(chord.Key);
-        WithModifiers(chord.Modifiers.Concat(resolved.Modifiers), () =>
+        var held = KeyChord.ModifiersForPress(key, modifiers);
+        var resolved = ResolveKey(key);
+        WithModifiers(held.Concat(resolved.Modifiers), () =>
         {
             Windows.RequireForeground(app, window, context);
             var flags = resolved.Extended ? 1u : 0;

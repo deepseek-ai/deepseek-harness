@@ -106,8 +106,8 @@ it('references Modifier without defining its members in shared guidance', () => 
     expect(entry).toContain('modifiers?: Modifier[]')
     expect(entry).not.toContain('members of Modifier')
   }
-  expect(PLATFORM_GUIDANCE).toContain('Supported modifiers: command, control, option, shift, fn.')
-  expect(COMMON_GUIDANCE).toContain('\n\nThe available members of Modifier depend on the platform; see the platform guidance.\n\n')
+  expect(PLATFORM_GUIDANCE).toContain('pressKey, click, and drag accept command, control (or ctrl), option (or alt), shift, and fn. pressKey also accepts cmd for command.')
+  expect(COMMON_GUIDANCE).toContain('\n\nSupported modifier names depend on the platform and the operation; see the platform guidance.\n\n')
   expect(COMMON_GUIDANCE).not.toMatch(/(?:type|enum) Modifier\b|Modifier\s*=/)
   expect(COMMON_GUIDANCE).not.toContain('Supported modifiers:')
   expect(COMMON_GUIDANCE).toContain('Key names are platform-defined strings')
