@@ -1,5 +1,6 @@
 /** The Chat View's aside layer: one Session-level occupant beside the transcript, given the end gutter it keeps within. */
-import { memo, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { memo, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatAsideOwnerProps } from '../contract/slots.ts'
 import css from './ChatView.module.css'
 
@@ -37,16 +38,15 @@ function useEndGutter(layer: RefObject<HTMLElement>): number {
 }
 
 /**
- * Render the aside layer with its occupant. The layer re-renders only when
- * the gutter or the renderer changes, not with every transcript update.
- * @param props - the renderer of the aside slot.
+ * Render the aside layer with its occupant. The Chat View's `renderSlot` is
+ * stable per registration, so the layer re-renders only when the gutter
+ * changes, not with every transcript update.
+ * @param props - the Chat View's slot renderer.
  * @returns the zero-height aside layer.
  */
-export const ChatAside = memo(function ChatAside({ renderAside }: {
-  readonly renderAside: (owner: ChatAsideOwnerProps) => ReactNode
-}) {
+export const ChatAside = memo(function ChatAside({ renderSlot }: Pick<PropsRenderSlots<'conversation.chat.aside'>, 'renderSlot'>) {
   const layer = useRef<HTMLDivElement>(null)
   const endGutter = useEndGutter(layer)
   const owner = useMemo((): ChatAsideOwnerProps => ({ endGutter }), [endGutter])
-  return <div ref={layer} className={css.asideSlot} data-chat-aside="">{renderAside(owner)}</div>
+  return <div ref={layer} className={css.asideSlot} data-chat-aside="">{renderSlot('conversation.chat.aside', owner)}</div>
 })
