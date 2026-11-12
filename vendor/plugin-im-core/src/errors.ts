@@ -86,3 +86,14 @@ export class ResourceTooLargeError extends Error {
     super(message)
   }
 }
+
+/**
+ * A fetched resource did not finish within the deadline of the fetch that asked for it, its body included. The request
+ * is aborted when the deadline passes, so a server that drips its answer holds the caller no longer than that.
+ */
+export class ResourceTimeoutError extends Error {
+  override name = 'ResourceTimeoutError'
+  constructor(readonly timeout: number, message: string) {
+    super(message)
+  }
+}

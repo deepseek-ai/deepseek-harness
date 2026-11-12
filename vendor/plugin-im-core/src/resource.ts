@@ -12,7 +12,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Binary } from '@deepseek-ai/cosmokit'
 import { createHash } from 'node:crypto'
 import type { Adapter } from './bot.ts'
-import { ResourceTooLargeError } from './errors.ts'
+import { ResourceTimeoutError, ResourceTooLargeError } from './errors.ts'
 import type { Target } from './protocol.ts'
 
 export type ResourceKind = 'image' | 'audio' | 'video' | 'file'
@@ -380,7 +380,12 @@ export interface ResourceFetchPolicy {
    * refused. The `satori:` internal route answers its own 3xx and is unaffected.
    */
   redirect?: RequestRedirect
-  /** Deadline of the whole fetch, body included; the transport aborts and the call rejects when it passes. */
+  /**
+   * Deadline of the whole fetch in milliseconds, the body included. It is a signal of the fetcher's own, joined with
+   * the caller's and held until the last byte is read, rather than the transport's `timeout`, which `ctx.http` clears
+   * as soon as the response headers arrive: a server that answers its headers at once and then drips the body would
+   * otherwise hold the call for as long as it likes. When it passes, the request is aborted and the call rejects.
+   */
   timeout?: number
 }
 
@@ -404,52 +409,86 @@ export function createResourceFetcher(ctx: Context, policy: ResourceFetchPolicy 
     const http = ctx.get('http')
     if (!http) throw new Error(`cannot fetch ${src}: the http service is not installed`)
 
-    // `ctx.http` runs the `http/fetch` waterfall, which is what resolves `satori:` internal URLs (plugin-im-core's
-    // own hook) and `file:` sources; `responseType` keeps the raw `Response` so the bytes and headers stay ours.
-    const response = await http.get(src, {
-      responseType: (raw: globalThis.Response) => raw,
-      signal,
-      ...policy.redirect === undefined ? {} : { redirect: policy.redirect },
-      ...policy.timeout === undefined ? {} : { timeout: policy.timeout },
-    })
-    return {
-      data: await readBounded(response, policy.maxBytes, src),
-      mime: mimeOf(response.headers.get('content-type')),
-      name: nameOf(response.headers.get('content-disposition')),
+    const deadline = policy.timeout === undefined ? undefined : AbortSignal.timeout(policy.timeout)
+    const bounded = deadline === undefined ? signal : AbortSignal.any([signal, deadline])
+    try {
+      // `ctx.http` runs the `http/fetch` waterfall, which is what resolves `satori:` internal URLs (plugin-im-core's
+      // own hook) and `file:` sources; `responseType` keeps the raw `Response` so the bytes and headers stay ours.
+      const response = await http.get(src, {
+        responseType: (raw: globalThis.Response) => raw,
+        signal: bounded,
+        ...policy.redirect === undefined ? {} : { redirect: policy.redirect },
+      })
+      return {
+        data: await readBounded(response, policy.maxBytes, src, bounded),
+        mime: mimeOf(response.headers.get('content-type')),
+        name: nameOf(response.headers.get('content-disposition')),
+      }
+    } catch (error) {
+      if (deadline?.aborted && !signal.aborted) {
+        throw new ResourceTimeoutError(policy.timeout!, `resource "${preview(src)}" did not arrive within ${policy.timeout} ms`)
+      }
+      throw error
     }
   }
 }
 
 /**
+ * Settle with `pending`, or reject with the reason of `signal` as soon as it aborts. A body stream is not required to
+ * honour the signal of the request that produced it (a `http/fetch` hook can answer with any stream), so every read is
+ * raced against it instead of trusting the stream to error.
+ */
+function abortable<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason)
+    signal.addEventListener('abort', abort, { once: true })
+    pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
+}
+
+/**
  * Read one response body, refusing it as soon as it passes `maxBytes`: the declared length first, then every chunk, so
- * an oversized body is abandoned instead of buffered. Without a limit the body is read in one call, as upstream does.
+ * an oversized body is abandoned instead of buffered. Every read is bounded by `signal`, which carries the deadline of
+ * the whole fetch: when it aborts, the body is cancelled and the read rejects with its reason.
  * @param response - the raw response the http service returned.
  * @param maxBytes - the accepted size, or `undefined` for no limit.
  * @param src - the resource URL, used in the refusal only through its preview.
+ * @param signal - cancellation of the caller joined with the fetch deadline.
  * @returns the body bytes.
  */
-async function readBounded(response: globalThis.Response, maxBytes: number | undefined, src: string): Promise<Uint8Array> {
-  if (maxBytes === undefined) return new Uint8Array(await response.arrayBuffer())
+async function readBounded(
+  response: globalThis.Response,
+  maxBytes: number | undefined,
+  src: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
   const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
+  if (maxBytes !== undefined && Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel()
     throw new ResourceTooLargeError(maxBytes, declared,
       `resource "${preview(src)}" declares ${declared} bytes, over the ${maxBytes}-byte limit`)
   }
   const reader = response.body?.getReader()
-  if (reader === undefined) return new Uint8Array(await response.arrayBuffer())
+  if (reader === undefined) return new Uint8Array(await abortable(response.arrayBuffer(), signal))
   const chunks: Uint8Array[] = []
   let total = 0
-  for (;;) {
-    const chunk = await reader.read()
-    if (chunk.done) break
-    total += chunk.value.byteLength
-    if (total > maxBytes) {
-      await reader.cancel()
-      throw new ResourceTooLargeError(maxBytes, undefined,
-        `resource "${preview(src)}" is over the ${maxBytes}-byte limit`)
+  try {
+    for (;;) {
+      const chunk = await abortable(reader.read(), signal)
+      if (chunk.done) break
+      total += chunk.value.byteLength
+      if (maxBytes !== undefined && total > maxBytes) {
+        throw new ResourceTooLargeError(maxBytes, undefined,
+          `resource "${preview(src)}" is over the ${maxBytes}-byte limit`)
+      }
+      chunks.push(chunk.value)
     }
-    chunks.push(chunk.value)
+  } catch (error) {
+    // The body is abandoned either way; its cancellation can fail on a stream that already errored, which changes
+    // nothing for a body nobody reads again, so only the original error is reported.
+    reader.cancel(error).catch((cancelError: unknown) => void cancelError)
+    throw error
   }
   const data = new Uint8Array(total)
   let offset = 0

@@ -18,6 +18,7 @@ import {
   type ResourceCache,
   type ResourceKind,
   ResourceRef,
+  ResourceTimeoutError,
   ResourceTooLargeError,
   resourceCacheKey,
   type ResolvedResource,
@@ -587,6 +588,53 @@ describe('createResourceFetcher', () => {
     const fetch = createResourceFetcher(fakeContext(undefined), { maxBytes: 1 })
     await expect(fetch('data:text/plain,hello', new AbortController().signal))
       .rejects.toBeInstanceOf(ResourceTooLargeError)
+  })
+
+  /** A response whose headers arrive at once and whose body sends one chunk, then never another or an end. */
+  function drippingHttp() {
+    const calls: { config: any }[] = []
+    let cancelled: unknown
+    const http = {
+      async get(_src: string, config: any) {
+        calls.push({ config })
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) { controller.enqueue(new Uint8Array(1)) },
+          cancel(reason) { cancelled = reason ?? true },
+        })
+        return await config.responseType(new Response(body))
+      },
+    }
+    return { http, calls, cancelled: () => cancelled }
+  }
+
+  it('ends a body that drips past the policy deadline, whatever the transport timer does', async () => {
+    const { http, calls, cancelled } = drippingHttp()
+    const fetch = createResourceFetcher(fakeContext(http), { maxBytes: 1024, timeout: 30 })
+    const started = Date.now()
+    await expect(fetch('https://example.com/slow.png', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTimeoutError)
+    expect(Date.now() - started).toBeLessThan(2_000)
+    // The deadline is the fetcher's own signal, not the transport `timeout` `ctx.http` clears once the headers arrive.
+    expect(calls[0]!.config.timeout).toBeUndefined()
+    expect(calls[0]!.config.signal.aborted).toBe(true)
+    expect(cancelled()).toBeDefined()
+  })
+
+  it('bounds an unlimited body by the deadline too', async () => {
+    const { http } = drippingHttp()
+    const fetch = createResourceFetcher(fakeContext(http), { timeout: 30 })
+    await expect(fetch('https://example.com/slow.png', new AbortController().signal))
+      .rejects.toBeInstanceOf(ResourceTimeoutError)
+  })
+
+  it('rejects with the caller cancellation, not a timeout, when the caller aborts first', async () => {
+    const { http } = drippingHttp()
+    const fetch = createResourceFetcher(fakeContext(http), { maxBytes: 1024, timeout: 60_000 })
+    const caller = new AbortController()
+    const reason = new Error('caller stopped')
+    const pending = fetch('https://example.com/slow.png', caller.signal)
+    setTimeout(() => caller.abort(reason), 10)
+    await expect(pending).rejects.toBe(reason)
   })
 })
 
