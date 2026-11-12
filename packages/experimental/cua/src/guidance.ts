@@ -70,7 +70,7 @@ export function withSystemPointerGuidance(guidance: string): string {
 Leave useSystemPointer unset for ordinary mouseMove and drag calls, even after the user grants mouse control. Prefer an advertised accessibility action, selectText for a text range, or a window-directed drag. If the result is unclear, inspect the target before trying another gesture. Request useSystemPointer: true only when the user explicitly asks to use the system pointer or the task requires it and no pointer-free action can achieve the intended effect.
 
 win.drag(from, to, { useSystemPointer: true }) presses, moves, and releases the selected button in the unobscured foreground window. The first explicit system-pointer request interrupts the user for session permission unless approval is disabled. Moves and drags share the decision until the session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
-  return guidance.replace(mouseHeading, mouseGuidance)
+  return guidance.replace(mouseHeading, `${mouseGuidance}\n`)
     .replace(hoverSignature, signature)
     .replace(dragSignature, systemDrag)
 }
