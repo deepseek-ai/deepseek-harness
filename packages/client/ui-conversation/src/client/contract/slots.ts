@@ -469,10 +469,13 @@ export type ConvViewProps = PropsRuntime<'conversation.view'>
 /** Business callbacks injected into the resident Conversation shell. */
 export interface ConversationInjected {
   /**
-   * Connect a blank Session in the selected Workspace and move the draft to it; it opens as the main Session unless
-   * `report` receives it, which retains it before the draft moves.
+   * Connect a blank Session in the selected Workspace and move the draft to it. Without `report` it opens as the main
+   * Session. With `report`, the connected Session is offered to it in one synchronous step: `report` returns whether
+   * the pick is still wanted and, when it is, retains the Session before it returns; the Session the draft comes from
+   * stays retained until the draft has moved, so `report` may release it. A declined pick changes nothing. A failed
+   * connection rejects; with `report`, the caller shows the failure.
    */
-  selectWorkspace: (workspaceId: WorkspaceId, report?: (sessionId: SessionId) => void) => Promise<void>
+  selectWorkspace: (workspaceId: WorkspaceId, report?: (sessionId: SessionId) => boolean) => Promise<void>
   /** Session-addressed composer block source, or the stable absent source. */
   hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
 }
@@ -688,8 +691,11 @@ export interface ConversationContentInputProps {
   hero: boolean
   /**
    * Receives the blank Session of a Workspace the Hero's picker chose instead of that blank opening as the main
-   * Session; an embedded occurrence that sets it shows the reported Session itself. It must retain the Session before
-   * it returns: the draft then moves to it.
+   * Session; an embedded occurrence that sets it shows the reported Session itself. It is called only for the latest
+   * pick, and only while the occurrence still shows the Session the pick started from; a pick that completes later
+   * changes nothing. It must retain the reported Session before it returns and may release the one shown before:
+   * the draft moves to the reported Session once it returns. A pick whose Workspace cannot connect shows a transient
+   * notice and keeps the draft where it is.
    */
   onWorkspaceSession?: ((sessionId: SessionId) => void) | undefined
   /** Text the blank-session Hero shows instead of its default headline and preview badge. */
