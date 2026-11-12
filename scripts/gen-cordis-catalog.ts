@@ -83,6 +83,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   browserUse: 'browser-use.md',
   computerUse: 'computer-use.md',
   cuaAccess: 'computer-use.md',
+  cuaPrograms: 'computer-use.md',
   commands: 'commands.md',
   compaction: 'compaction.md',
   cordisInspect: 'extensions.md',
