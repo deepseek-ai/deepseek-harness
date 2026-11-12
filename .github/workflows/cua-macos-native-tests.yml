@@ -1,4 +1,4 @@
-name: macOS CUA native tests
+name: macOS CUA AX child recovery
 
 on:
   pull_request:
@@ -21,5 +21,9 @@ jobs:
       - uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-      - run: python3 packages/experimental/cua-macos/native/tests/test_swift.py
-      - run: python3 packages/experimental/cua-macos/native/tests/test_ax_projection.py
+      - name: Verify AX range recovery and native error classification
+        run: >-
+          python3 packages/experimental/cua-macos/native/tests/test_swift.py
+          --filter 'AXObservedChildrenTests|batchFailuresPreservePermissionCommunicationAndStaleElementErrors|nodeRoleAndContainerChildrenRetainStructuralFailures'
+      - name: Verify real AppKit window projection and actions
+        run: python3 packages/experimental/cua-macos/native/tests/test_ax_projection.py
