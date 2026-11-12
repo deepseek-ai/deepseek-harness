@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
-import { createToolResultMessage, createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createToolResultMessage, createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import {
-  appendPluginRecord, Session, SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
+  appendPluginRecord, Session, SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset, SessionSeq, type SessionEvent, type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import { actionCardProjection, type ActionCardState } from '../src/projection.ts'
 import type { ActionCardDecision } from '../src/types.ts'
@@ -11,7 +12,7 @@ const args = { action: 'test_action', title: 'Counter', brief: 'Keep count visib
 let seq = 0
 
 function init(inherited = 0): ActionCardState {
-  const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: SessionId('cards'), createdAt: 0, isSeeded: inherited > 0 }
+  const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: brandString<SessionId>('cards'), createdAt: 0, isSeeded: inherited > 0 }
   return projection.init(header, SessionLogOffset(inherited))
 }
 
@@ -21,12 +22,13 @@ function turn(value: number): SessionEvent<'turn/start'> {
 
 function call(callId: string, value: object | string = args, turnNumber = 1, name = 'propose_action'): SessionEvent<'tool/call'> {
   return { type: 'tool/call', seq: SessionSeq(seq++), time: 0,
-    data: { turn: turnNumber, step: 1, callId: ToolCallId(callId), name, arguments: typeof value === 'string' ? value : JSON.stringify(value) } }
+    data: { turn: turnNumber, step: 1, callId: brandString<ToolCallId>(callId), name, arguments: typeof value === 'string' ? value : JSON.stringify(value) } }
 }
 
 function result(callId: string, isError = false, turnNumber = 1): SessionEvent<'tool/result'> {
   return { type: 'tool/result', seq: SessionSeq(seq++), time: 0, surfaceOp: 'append',
-    data: { turn: turnNumber, step: 1, message: createToolResultMessage({ callId: ToolCallId(callId), content: [], isError }) } }
+    data: { turn: turnNumber, step: 1,
+      message: createToolResultMessage({ callId: brandString<ToolCallId>(callId), content: [], isError }) } }
 }
 
 function spliced(inserted: number, removedCount?: number, target: 'next-turn' | 'next-step' = 'next-turn'): SessionEvent<'agent/inbox/spliced'> {
@@ -35,7 +37,7 @@ function spliced(inserted: number, removedCount?: number, target: 'next-turn' | 
 }
 
 function records(...data: ActionCardDecision[]): readonly SessionEvent[] {
-  const session = Session.create(SessionId('records'))
+  const session = Session.create(brandString<SessionId>('records'))
   for (const value of data) appendPluginRecord(session, 'plugin:action-cards/decision', value)
   return session.snapshotEvents()
 }
@@ -71,7 +73,7 @@ it('keeps the first admitted card of a turn and replaces only unstarted earlier 
   expect(Object.keys(late.view.proposals)).toEqual(['a'])
   const next = fold([turn(2), call('c', args, 2), result('c', false, 2)], first)
   expect(next.view.decisions).toEqual({ a: { callId: 'a', action: 'test_action', phase: 'replaced' } })
-  const started = fold(records({ callId: ToolCallId('a'), action: 'test_action', phase: 'creating' }), first)
+  const started = fold(records({ callId: brandString<ToolCallId>('a'), action: 'test_action', phase: 'creating' }), first)
   const afterStart = fold([turn(2), call('c', args, 2), result('c', false, 2)], started)
   expect(afterStart.view.decisions.a?.phase).toBe('creating')
   expect(afterStart.view.decisions.c).toBeUndefined()
@@ -101,9 +103,9 @@ it('ignores the events a forked Session inherits from its parent', () => {
 
 it('records valid decisions as pending status until a status notice acknowledges them', () => {
   const [created, malformed, dismissed] = records(
-    { callId: ToolCallId('a'), action: 'test_action', phase: 'creating', data: { value: 1 } },
-    { callId: ToolCallId('a'), action: 'test_action', phase: '' },
-    { callId: ToolCallId('b'), action: 'test_action', phase: 'dismissed' },
+    { callId: brandString<ToolCallId>('a'), action: 'test_action', phase: 'creating', data: { value: 1 } },
+    { callId: brandString<ToolCallId>('a'), action: 'test_action', phase: '' },
+    { callId: brandString<ToolCallId>('b'), action: 'test_action', phase: 'dismissed' },
   )
   const state = fold([created!, malformed!, dismissed!])
   expect(state.view.decisions).toEqual({

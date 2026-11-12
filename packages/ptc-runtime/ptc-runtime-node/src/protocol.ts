@@ -15,6 +15,8 @@ export interface ProgramBootData {
   programFormat?: PtcProgramFormat
   /** Whether the host will reuse this process after the evaluation. */
   retainsState: boolean
+  /** Await successful completion without serializing its value. */
+  discardCompletion?: boolean
   /** Globals and callable names injected into the program. */
   namespaces: {
     global: string
@@ -57,6 +59,11 @@ export interface HostMethods {
    * @param text - Captured text.
    */
   log(text: string): void
+  /**
+   * Emit one registered image at the current output position.
+   * @param id - Image identity issued by this process’s host.
+   */
+  image(id: string): void
   /** Report exhausted program-side output accounting. */
   outputLimit(): void
 }

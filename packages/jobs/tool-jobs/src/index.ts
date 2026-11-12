@@ -17,12 +17,13 @@ import type { ContextFormed, MessageId } from '@deepseek-ai/dsh-llm'
 import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
-import { JobId } from '@deepseek-ai/dsh-jobs'
+import type { JobId } from '@deepseek-ai/dsh-jobs'
 import type { JobEvent, JobView, JobRead } from '@deepseek-ai/dsh-jobs'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent'
 import { publicJob, renderModelDelta, statusLine } from './render.ts'
 import type { PublicJobSnapshot } from './render.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'tool-jobs': { kind: 'tool-jobs' } & ContextFormed
@@ -210,7 +211,7 @@ function validateJobId(value: string): JobId {
   if (value.length === 0) {
     throw new ToolArgsError([`invalid job_id: expected a non-empty string, got ${JSON.stringify(value)}`])
   }
-  return JobId(value)
+  return brandString<JobId>(value)
 }
 
 /** Pending presentation shared by the three generic job controls. */

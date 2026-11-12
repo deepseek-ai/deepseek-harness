@@ -57,6 +57,7 @@ it.each(['awaited', 'unawaited', 'unawaited script'] as const)('boots an unbuilt
       return scenario === 'awaited' ? encodePtcJsonWire(42) : await new Promise<never>(() => {})
     },
     log(text) { logs.push(text) },
+    image() {},
     outputLimit() {},
   }, [], (error) => { completed.reject(error) })
   onTestFinished(async () => { channel.$close(); child.kill(); await finished })

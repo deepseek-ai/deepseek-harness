@@ -25,7 +25,7 @@ try {
   const runtime = {
     language: 'typescript', programFormat: 'repl', retainsState: false,
     resolve(request) { return { ...request, cwd: process.cwd(), timeoutMs: 60000 } },
-    async run() { return { logs: [], error: { kind: 'exception', message: 'probe failure' } } },
+    async run() { return { output: [], error: { kind: 'exception', message: 'probe failure' } } },
   }
   const capability = defineTool({
     name: 'private_probe', description: 'Probe private binding.', parameters: {},
@@ -43,10 +43,12 @@ try {
     error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_RUN_FAILED')
   runtime.run = async (spec) => {
     assert.deepEqual(Object.keys(spec.bindings[0].functions), ['private_probe'])
-    return { logs: [], value: await spec.bindings[0].functions.private_probe({}) }
+    assert.equal(spec.discardCompletion, true)
+    assert.equal(await spec.bindings[0].functions.private_probe({}), 'private result')
+    return { output: [{ type: 'text', text: 'private result' }] }
   }
   const result = await definition.execute({ code: 'probe', description: 'Check the private binding' }, execution)
-  assert.deepEqual(result, { logs: [], result: 'private result' })
+  assert.deepEqual(result, { logs: ['private result'] })
   assert.equal(ctx.tools.get('private_probe'), undefined)
 } finally {
   await ctx.fiber.dispose()

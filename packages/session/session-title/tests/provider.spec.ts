@@ -3,10 +3,11 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { SessionTitleProviderId } from '@deepseek-ai/dsh-session-title/types'
 import SessionTitleService, {
-  SessionTitleProviderId,
   type SessionTitleProvider,
   type SessionTitleProviderRequest,
   type SessionTitleProviderResult,
@@ -60,9 +61,9 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
     const generate = vi.fn(async () => ({ title: 'Unexpected', messageSeqs: [] }))
-    ctx.sessionTitle.register({ id: SessionTitleProviderId('first'), automatic: 'first-prompt', generate })
-    const source = ctx.sessions.create(SessionId('empty-source'))
-    const child = kind === 'fork' ? ctx.sessions.fork(source) : ctx.sessions.create(SessionId('child'), {
+    ctx.sessionTitle.register({ id: brandString<SessionTitleProviderId>('first'), automatic: 'first-prompt', generate })
+    const source = ctx.sessions.create(brandString<SessionId>('empty-source'))
+    const child = kind === 'fork' ? ctx.sessions.fork(source) : ctx.sessions.create(brandString<SessionId>('child'), {
       meta: { origin: 'subagent', parentSession: source.id },
     })
     expect(child.header.parentSession).toBe(kind === 'fork' ? undefined : source.id)
@@ -78,7 +79,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
-    const parent = ctx.sessions.create(SessionId('title-parent'))
+    const parent = ctx.sessions.create(brandString<SessionId>('title-parent'))
     parent.append('turn/start', {
       turn: 1,
     })
@@ -86,7 +87,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await settle()
     parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
 
-    const child = ctx.sessions.fork(parent, undefined, SessionId('title-child'))
+    const child = ctx.sessions.fork(parent, undefined, brandString<SessionId>('title-child'))
     expect(ctx.sessionTitle.get(child)).toEqual(ctx.sessionTitle.get(parent))
     expect(child.snapshotEvents().find(event => event.type === 'session/title'))
       .toEqual(parent.snapshotEvents().find(event => event.type === 'session/title'))
@@ -96,7 +97,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       messageSeqs: [request.messages[0]!.seq],
     }))
     const disposeFirst = ctx.sessionTitle.register({
-      id: SessionTitleProviderId('fork-first'),
+      id: brandString<SessionTitleProviderId>('fork-first'),
       automatic: 'first-prompt',
       generate: firstGenerate,
     })
@@ -116,7 +117,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       messageSeqs: request.messages.map(message => message.seq),
     }))
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('fork-all'),
+      id: brandString<SessionTitleProviderId>('fork-all'),
       automatic: 'all-prompts',
       generate: allGenerate,
     })
@@ -133,7 +134,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(ctx.sessionTitle.get(child)).toMatchObject({
       title: 'Fork all prompts',
       messageSeqs: [inheritedMessage.seq, childMessage.seq, latestMessage.seq],
-      source: { kind: 'provider', provider: SessionTitleProviderId('fork-all') },
+      source: { kind: 'provider', provider: brandString<SessionTitleProviderId>('fork-all') },
     })
     expect(ctx.sessionTitle.get(parent)?.title).toBe('Inherited title prompt')
   })
@@ -146,7 +147,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     const provider: SessionTitleProvider = {
-      id: SessionTitleProviderId('first-model'),
+      id: brandString<SessionTitleProviderId>('first-model'),
       automatic: 'first-prompt',
       async generate(request) {
         requests.push(request)
@@ -158,7 +159,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       },
     }
     ctx.sessionTitle.register(provider)
-    const session = ctx.sessions.create(SessionId('first-provider'))
+    const session = ctx.sessions.create(brandString<SessionId>('first-provider'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -187,7 +188,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       messageSeqs: [first.seq],
       source: {
         kind: 'provider',
-        provider: SessionTitleProviderId('first-model'),
+        provider: brandString<SessionTitleProviderId>('first-model'),
         model: { provider: 'aux-route', model: 'title-model' },
       },
     })
@@ -211,14 +212,14 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, { fallbackMaxWords: 5, fallbackMaxBytes: 1, maxTitleBytes: 24 })
     const currentTitles: (SessionTitleSnapshot | undefined)[] = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('absent-current'),
+      id: brandString<SessionTitleProviderId>('absent-current'),
       automatic: 'all-prompts',
       async generate(request) {
         currentTitles.push(request.currentTitle)
         return { title: 'Provided title', messageSeqs: request.messages.map(message => message.seq) }
       },
     })
-    const session = ctx.sessions.create(SessionId('underivable-fallback'))
+    const session = ctx.sessions.create(brandString<SessionId>('underivable-fallback'))
     session.append('turn/start', { turn: 1 })
     appendHumanPrompt(session, '番')
     await settle()
@@ -228,7 +229,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(currentTitles).toEqual([undefined])
     expect(ctx.sessionTitle.get(session)).toMatchObject({
       title: 'Provided title',
-      source: { kind: 'provider', provider: SessionTitleProviderId('absent-current') },
+      source: { kind: 'provider', provider: brandString<SessionTitleProviderId>('absent-current') },
     })
   })
 
@@ -241,7 +242,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const currentTitles: (SessionTitleSnapshot | undefined)[] = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('current-title'),
+      id: brandString<SessionTitleProviderId>('current-title'),
       automatic: 'all-prompts',
       async generate(request) {
         currentTitles.push(request.currentTitle)
@@ -251,7 +252,7 @@ describe('SessionTitleService Provider lifecycle', () => {
         }
       },
     })
-    const session = ctx.sessions.create(SessionId('current-title-snapshot'))
+    const session = ctx.sessions.create(brandString<SessionId>('current-title-snapshot'))
     session.append('turn/start', { turn: 1 })
     const first = appendHumanPrompt(session, 'First prompt')
     await settle()
@@ -270,7 +271,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(currentTitles[1]).toMatchObject({
       title: 'Revision 1',
       messageSeqs: [first.seq],
-      source: { kind: 'provider', provider: SessionTitleProviderId('current-title') },
+      source: { kind: 'provider', provider: brandString<SessionTitleProviderId>('current-title') },
     })
     expect(Object.isFrozen(currentTitles[1])).toBe(true)
   })
@@ -281,7 +282,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionTitleService, CONFIG)
-    const session = ctx.sessions.create(SessionId('chunked-provider-input'))
+    const session = ctx.sessions.create(brandString<SessionId>('chunked-provider-input'))
     session.append('turn/start', { turn: 1 })
     const messages = Array.from({ length: 70 }, (_, index) =>
       appendHumanPrompt(session, `Prompt ${String(index)}`))
@@ -291,7 +292,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       messageSeqs: request.messages.map(message => message.seq),
     }))
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('chunked-provider'),
+      id: brandString<SessionTitleProviderId>('chunked-provider'),
       automatic: 'all-prompts',
       generate,
     })
@@ -313,7 +314,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('watermark-cut'),
+      id: brandString<SessionTitleProviderId>('watermark-cut'),
       automatic: 'first-prompt',
       async generate(request) {
         requests.push(request)
@@ -323,7 +324,7 @@ describe('SessionTitleService Provider lifecycle', () => {
         }
       },
     })
-    const session = ctx.sessions.create(SessionId('watermark-cut'))
+    const session = ctx.sessions.create(brandString<SessionId>('watermark-cut'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -338,7 +339,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(ctx.sessionTitle.get(session)).toMatchObject({
       title: 'Watermarked title',
       messageSeqs: [first.seq],
-      source: { kind: 'provider', provider: SessionTitleProviderId('watermark-cut') },
+      source: { kind: 'provider', provider: brandString<SessionTitleProviderId>('watermark-cut') },
     })
   })
 
@@ -351,7 +352,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const pending = deferred<SessionTitleProviderResult>()
     let observedSignal: AbortSignal | undefined
     const first: SessionTitleProvider = {
-      id: SessionTitleProviderId('winner'),
+      id: brandString<SessionTitleProviderId>('winner'),
       automatic: 'all-prompts',
       generate(request) {
         observedSignal = request.signal
@@ -360,12 +361,12 @@ describe('SessionTitleService Provider lifecycle', () => {
     }
     const dispose = ctx.sessionTitle.register(first)
     expect(() => ctx.sessionTitle.register({
-      id: SessionTitleProviderId('duplicate'),
+      id: brandString<SessionTitleProviderId>('duplicate'),
       automatic: 'first-prompt',
       generate: async () => ({ title: 'duplicate', messageSeqs: [SessionSeq(0)] }),
     })).toThrow(/already registered/)
 
-    const session = ctx.sessions.create(SessionId('dispose-provider'))
+    const session = ctx.sessions.create(brandString<SessionId>('dispose-provider'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -387,7 +388,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(ctx.sessionTitle.get(session)?.source.kind).toBe('fallback')
 
     const replacement: SessionTitleProvider = {
-      id: SessionTitleProviderId('replacement'),
+      id: brandString<SessionTitleProviderId>('replacement'),
       automatic: 'first-prompt',
       generate: async () => ({ title: 'replacement', messageSeqs: [message.seq] }),
     }
@@ -403,11 +404,11 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const pending = deferred<SessionTitleProviderResult>()
     const dispose = ctx.sessionTitle.register({
-      id: SessionTitleProviderId('retiring'),
+      id: brandString<SessionTitleProviderId>('retiring'),
       automatic: 'all-prompts',
       generate: () => pending.promise,
     })
-    const session = ctx.sessions.create(SessionId('replace-while-draining'))
+    const session = ctx.sessions.create(brandString<SessionId>('replace-while-draining'))
     session.append('turn/start', { turn: 1 })
     const message = appendHumanPrompt(session, 'Generate this title')
     await settle()
@@ -416,12 +417,12 @@ describe('SessionTitleService Provider lifecycle', () => {
 
     const disposal = dispose()
     const disposeReplacement = ctx.sessionTitle.register({
-      id: SessionTitleProviderId('replacement'),
+      id: brandString<SessionTitleProviderId>('replacement'),
       automatic: 'all-prompts',
       generate: async () => ({ title: 'replacement', messageSeqs: [message.seq] }),
     })
     expect(() => ctx.sessionTitle.register({
-      id: SessionTitleProviderId('duplicate'),
+      id: brandString<SessionTitleProviderId>('duplicate'),
       automatic: 'first-prompt',
       generate: async () => ({ title: 'duplicate', messageSeqs: [message.seq] }),
     })).toThrow(/"replacement" is already registered/)
@@ -440,7 +441,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     const firstResult = deferred<SessionTitleProviderResult>()
     const requests: SessionTitleProviderRequest[] = []
     const provider: SessionTitleProvider = {
-      id: SessionTitleProviderId('all-model'),
+      id: brandString<SessionTitleProviderId>('all-model'),
       automatic: 'all-prompts',
       generate(request) {
         requests.push(request)
@@ -452,7 +453,7 @@ describe('SessionTitleService Provider lifecycle', () => {
       },
     }
     ctx.sessionTitle.register(provider)
-    const session = ctx.sessions.create(SessionId('supersede'))
+    const session = ctx.sessions.create(brandString<SessionId>('supersede'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -485,7 +486,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const requests: SessionTitleProviderRequest[] = []
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('unchanged-route'),
+      id: brandString<SessionTitleProviderId>('unchanged-route'),
       automatic: 'all-prompts',
       async generate(request) {
         requests.push(request)
@@ -495,7 +496,7 @@ describe('SessionTitleService Provider lifecycle', () => {
         }
       },
     })
-    const session = ctx.sessions.create(SessionId('unchanged-route'))
+    const session = ctx.sessions.create(brandString<SessionId>('unchanged-route'))
     session.append('turn/start', {
       turn: 1,
     })
@@ -544,17 +545,17 @@ describe('SessionTitleService Provider lifecycle', () => {
       messageSeqs: request.messages.map(message => message.seq),
     }))
     ctx.sessionTitle.register({
-      id: SessionTitleProviderId('request-filter'),
+      id: brandString<SessionTitleProviderId>('request-filter'),
       automatic: 'all-prompts',
       generate,
     })
     const options = { provider: 'main-route', model: 'chat-model', messages: [] }
 
     void ctx.llm.stream(deepFreeze(options))
-    void ctx.llm.stream(markAgentLoopRequest(deepFreeze({ ...options, sessionId: SessionId('missing') })))
-    const quiet = ctx.sessions.create(SessionId('quiet'))
+    void ctx.llm.stream(markAgentLoopRequest(deepFreeze({ ...options, sessionId: brandString<SessionId>('missing') })))
+    const quiet = ctx.sessions.create(brandString<SessionId>('quiet'))
     void ctx.llm.stream(markAgentLoopRequest(deepFreeze({ ...options, sessionId: quiet.id })))
-    const pending = ctx.sessions.create(SessionId('unmatched-boundary'))
+    const pending = ctx.sessions.create(brandString<SessionId>('unmatched-boundary'))
     pending.append('turn/start', {
       turn: 1,
     })
@@ -574,12 +575,12 @@ describe('SessionTitleService Provider lifecycle', () => {
     await ctx.plugin(SessionTitleService, CONFIG)
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
     const provider: SessionTitleProvider = {
-      id: SessionTitleProviderId('failing'),
+      id: brandString<SessionTitleProviderId>('failing'),
       automatic: 'all-prompts',
       generate: async () => { throw new Error('title backend failed') },
     }
     ctx.sessionTitle.register(provider)
-    const session = ctx.sessions.create(SessionId('failure'))
+    const session = ctx.sessions.create(brandString<SessionId>('failure'))
     session.append('turn/start', {
       turn: 1,
     })

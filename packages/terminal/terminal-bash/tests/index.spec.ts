@@ -4,13 +4,13 @@ import { PassThrough } from 'node:stream'
 import { resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import SessionStore, { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import SandboxProvider from '@deepseek-ai/dsh-sandbox'
 import type { ConfinedArgv, SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import TerminalSessionService, { TerminalBackendCleanupError, TerminalSessionId } from '@deepseek-ai/dsh-terminal'
+import TerminalSessionService, { TerminalBackendCleanupError, type TerminalSessionId } from '@deepseek-ai/dsh-terminal'
 import type { TerminalSendRequest, TerminalWaitReason } from '@deepseek-ai/dsh-terminal'
 import { BashTerminalBackend, PWSH_PROMPT_SETUP } from '@deepseek-ai/dsh-terminal-bash'
 import { ENCODING_PREAMBLE } from '@deepseek-ai/dsh-pwsh-local'
@@ -24,6 +24,7 @@ import type {
   SubprocessTerminalHandle,
   SubprocessTerminalSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class EmptySandbox extends SandboxProvider {
   async confine(_argv: readonly string[], _policy: SandboxPolicy): Promise<ConfinedArgv> {
@@ -50,7 +51,7 @@ function config(): ResolvedConfig {
 }
 
 function agent(ctx: Context, cwd?: string): Agent {
-  const id = SessionId('agent')
+  const id = brandString<SessionId>('agent')
   const session = Session.create(id, undefined, {
     version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false, ...cwd === undefined ? {} : { cwd },
   })
@@ -92,7 +93,7 @@ class StubSubprocessRuntime extends SubprocessRuntime {
 
 function spec(owner: Agent, signal?: AbortSignal) {
   return {
-    sessionId: TerminalSessionId('pty-1'), owner, type: 'shell',
+    sessionId: brandString<TerminalSessionId>('pty-1'), owner, type: 'shell',
     ...signal !== undefined ? { signal } : {},
   }
 }
@@ -662,7 +663,7 @@ describe('terminal-bash plugin shape', () => {
     await ctx.plugin(StubSubprocessRuntime)
     await ctx.plugin(ptyLocal, config())
 
-    const session = ctx.sessions.create(SessionId('unowned-mode'))
+    const session = ctx.sessions.create(brandString<SessionId>('unowned-mode'))
     expect(() => {
       session.append('turn/start', { turn: 1 })
     }).not.toThrow()
@@ -680,7 +681,7 @@ describe('terminal-bash plugin shape', () => {
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
     await ctx.plugin(StubSubprocessRuntime)
 
-    const session = ctx.sessions.create(SessionId('mode-owner'))
+    const session = ctx.sessions.create(brandString<SessionId>('mode-owner'))
     const ownerFiber = await ctx.plugin(() => {})
     const owner: Agent = {
       id: session.id, options: {}, session, model: unsupportedModel(),
@@ -696,7 +697,7 @@ describe('terminal-bash plugin shape', () => {
     const providerFiber = await registerStubLocalBackend(ctx, () => stubLocalSession())
     const created = await ctx.terminals.spawn(owner, { type: 'stub' })
 
-    const unrelated = ctx.sessions.create(SessionId('unrelated-mode'))
+    const unrelated = ctx.sessions.create(brandString<SessionId>('unrelated-mode'))
     expect(() => { setSandboxMode(unrelated, 'read-only') }).not.toThrow()
     expect(() => {
       session.append('turn/start', { turn: 1 })
@@ -732,7 +733,7 @@ describe('terminal-bash plugin shape', () => {
     await ctx.plugin(SandboxPolicyService, { mode: 'danger-full-access', workspaceRoot: '/tmp' })
     await ctx.plugin(StubSubprocessRuntime)
 
-    const session = ctx.sessions.create(SessionId('pending-mode-owner'))
+    const session = ctx.sessions.create(brandString<SessionId>('pending-mode-owner'))
     const ownerFiber = await ctx.plugin(() => {})
     const owner: Agent = {
       id: session.id, options: {}, session, model: unsupportedModel(),

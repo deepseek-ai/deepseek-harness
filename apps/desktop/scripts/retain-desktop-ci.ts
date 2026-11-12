@@ -1,30 +1,21 @@
 /** Retain completed CI packages for later manual publication. */
 import { appendFile, readFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './desktop-build-paths.mjs'
-import { desktopBuildRecordFilename, desktopUpdateMetadataFilename, resolveDesktopUpdateChannel } from './desktop-auto-update-environment.mjs'
+import { desktopReleasesRoot } from '@deepseek-ai/dsh-desktop-publisher/desktop-releases-root.ts'
+import { desktopBuildRecordFilename, desktopUpdateMetadataFilename, resolveDesktopUpdateChannel } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs'
-import { retainDesktopRelease, type DesktopRetainedSource } from './desktop-release-store.ts'
+import { retainDesktopRelease, type DesktopRetainedSource } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 import { validateDesktopBuildVersion } from './desktop-build-version.mjs'
-import { desktopPublishRunnersSchema } from './desktop-publish-targets.ts'
-import { desktopPublishQualificationError } from './desktop-publish-qualification.mjs'
+import { desktopPublishRunnersSchema } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-targets.ts'
+import { desktopPublishQualificationError } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-qualification.mjs'
+
+export { desktopReleasesRoot } from '@deepseek-ai/dsh-desktop-publisher/desktop-releases-root.ts'
 
 function required(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]
   if (!value) throw new Error(`desktop retention: ${name} is required`)
   return value
-}
-
-/**
- * Resolve the persistent release root without assuming a particular user's home directory.
- * @param env Machine packaging configuration; an explicit releases directory overrides its sibling default.
- * @returns Absolute directory outside the disposable checkout.
- */
-export function desktopReleasesRoot(env: NodeJS.ProcessEnv): string {
-  const configured = required(env, 'DSH_PACKAGING_CONFIG_DIR')
-  const root = env.DSH_DESKTOP_RELEASES_DIR || join(dirname(configured), 'releases')
-  if (!isAbsolute(configured) || !isAbsolute(root)) throw new Error('desktop retention: machine directories must be absolute')
-  return root
 }
 
 /**

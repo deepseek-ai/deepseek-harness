@@ -23,7 +23,7 @@
 
 | 标头 | 出现条件 | 值 |
 |---|---|---|
-| `user-agent` | 每个提供方 HTTP 请求，包括 Files API 操作 | 采用 `product/version (+url)` 形式的应用身份；默认产品为 `deepseek-harness` |
+| `user-agent` | 每个提供方 HTTP 请求，包括 Files API 操作 | 采用 `product/version (+url)` 形式的应用身份，其后追加命名所启动 profile 的 `dsh-profile/<profile>`，`tchar` 以外的字节及 `%` 做百分号编码（例如 `dsh-profile/desktop`、`dsh-profile/web`、`dsh-profile/sdk`）；默认产品为 `deepseek-harness` |
 | `x-deepseek-harness-user-id` | 每个已授权的模型请求 | 已解析 Harness home 的稳定匿名 UUID |
 | `x-deepseek-harness-session-id` | 携带会话 id 的模型请求 | 确切的请求 `sessionId` 字符串 |
 | `x-deepseek-harness-compact` | 用途为 `compaction` 的模型请求 | 字面字符串 `1` |

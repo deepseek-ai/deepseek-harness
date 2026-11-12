@@ -1,0 +1,37 @@
+# Replays the cua-run-code Session with the scoped REPL in cua_run_code.
+- id: llm-replay
+  config:
+    providers:
+      - id: deepseek-official
+        name: DeepSeek
+        models:
+          - id: deepseek-v4-flash-vision-exp
+            inputModalities: [text, image]
+
+- insert:
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      config:
+        default: standard
+    - id: cua-standard-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: standard
+        plugins:
+          - name: '@deepseek-ai/dsh-tool-executor-native'
+    - id: cua-standard-selection
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/parent-agent-preset.ts'
+      config:
+        presets: [standard]
+    - id: computer-use
+      name: '@deepseek-ai/dsh-computer-use'
+    - id: cua-run-code-fixture
+      name: '../cua-run-code/provider.mjs'
+      config:
+        standaloneRunCode:
+          runtime:
+            replScoped: true
+        allowedApps:
+          - id: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            name: Fixture
+            executablePath: /fixture/app

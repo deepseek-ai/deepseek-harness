@@ -4,10 +4,8 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { mountWorkingDirectoryFixture } from '../../subagent/tests/working-directory-fixture.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import {
-  ToolCallId,
-  LlmAdapter,
-  ReasoningEffortId,
+import { type ToolCallId,
+  LlmAdapter, type ReasoningEffortId,
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
@@ -19,13 +17,14 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as tool from '../src/index.ts'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SubagentModelSelectionConfig from '../src/model-selection-settings.ts'
 import { modelSelectionSetupAgent, ownContext, setup, testToolSignal, text } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 class CatalogAdapter extends LlmAdapter {
   constructor(private readonly empty = false) {
@@ -53,10 +52,10 @@ class CatalogAdapter extends LlmAdapter {
       description: 'Focused work.',
       reasoning: {
         efforts: [
-          { id: ReasoningEffortId('low'), name: 'Low' },
-          { id: ReasoningEffortId('high'), name: 'High', description: 'Quality first.' },
+          { id: brandString<ReasoningEffortId>('low'), name: 'Low' },
+          { id: brandString<ReasoningEffortId>('high'), name: 'High', description: 'Quality first.' },
         ],
-        defaultEffort: ReasoningEffortId('high'),
+        defaultEffort: brandString<ReasoningEffortId>('high'),
       },
     })
   }
@@ -81,7 +80,7 @@ async function setupListTool(routes = [
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
-  const { agent } = await ctx.agents.create({ sessionId: SessionId('discovery-parent') })
+  const { agent } = await ctx.agents.create({ sessionId: brandString<SessionId>('discovery-parent') })
   callingAgents.set(ctx, agent)
   return ctx
 }
@@ -99,7 +98,7 @@ let counter = 0
 function call(ctx: Context, args: unknown, signal = testToolSignal) {
   return executeToolFixture(ctx, {
     signal,
-    callId: ToolCallId(`list-models-${++counter}`),
+    callId: brandString<ToolCallId>(`list-models-${++counter}`),
     name: 'list_subagent_models',
     arguments: args,
     ...callingAgents.has(ctx) ? { agent: callingAgents.get(ctx)! } : {},
@@ -150,8 +149,8 @@ describe('list_subagent_models', () => {
 
   it('keeps discovery registration and disposal local to each tool scope', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const first = await ctx.agents.create({ sessionId: SessionId('first-discovery-owner') })
-    const second = await ctx.agents.create({ sessionId: SessionId('second-discovery-owner') })
+    const first = await ctx.agents.create({ sessionId: brandString<SessionId>('first-discovery-owner') })
+    const second = await ctx.agents.create({ sessionId: brandString<SessionId>('second-discovery-owner') })
     const config = { provider: 'mock', modelDiscovery: true }
     const firstOwner = await first.agent.ctx.plugin(tool, config)
     const secondOwner = await second.agent.ctx.plugin(tool, config)
@@ -178,24 +177,27 @@ describe('list_subagent_models', () => {
     await mountWorkingDirectoryFixture(ctx)
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(tool, { provider: 'unused', modelDiscovery: true })
-    expect(text(await call(ctx, {}))).toContain('requires a calling agent')
+    const agentless = await call(ctx, {})
+    expect(text(agentless)).toContain('requires a calling agent')
+    expect(agentless.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     await ctx.fiber.dispose()
 
     const parentContext = await setup({ provider: 'mock', withModelSelection: true, hostSelectionEnabled: false })
     const agent = modelSelectionSetupAgent(parentContext)
     const result = await executeToolFixture(parentContext, {
-      signal: testToolSignal, callId: ToolCallId('missing-parent-route'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('missing-parent-route'),
       name: 'list_subagent_models', arguments: {}, agent,
     })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('without a parent provider and model')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('reads the recorded Session allowlist through the delegation plugin', async () => {
     const ctx = await setup({ provider: 'mock', withModelSelection: true })
     ctx.llm.registerAdapter(['alpha', 'secret'], new CatalogAdapter())
     const result = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('recorded-routes'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('recorded-routes'),
       name: 'list_subagent_models', arguments: {}, agent: modelSelectionSetupAgent(ctx),
     })
     expect(result.isError).toBe(false)
@@ -218,6 +220,7 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('`llm` service is unavailable')
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   })
 
   it('lists registered providers and follows live registration changes', async () => {
@@ -260,6 +263,7 @@ describe('list_subagent_models', () => {
     const denied = await call(ctx, { provider: 'alpha', model: 'plain' })
     expect(denied.isError).toBe(true)
     expect(text(denied)).toContain('is not allowed for this Session')
+    expect(denied.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
   })
 
   it('rejects an unauthorized provider before calling its adapter catalog', async () => {
@@ -272,6 +276,7 @@ describe('list_subagent_models', () => {
 
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('provider "secret" is not allowed for this Session')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' })
     expect(listModels).not.toHaveBeenCalled()
   })
 
@@ -349,7 +354,7 @@ describe('list_subagent_models', () => {
     const listModels = vi.spyOn(adapter, 'listModels')
     ctx.llm.registerAdapter(['alpha'], adapter)
     const result = await executeToolFixture(ctx, {
-      signal: testToolSignal, callId: ToolCallId('parent-only-discovery'),
+      signal: testToolSignal, callId: brandString<ToolCallId>('parent-only-discovery'),
       name: 'list_subagent_models', arguments: { provider: 'alpha' }, agent: modelSelectionSetupAgent(ctx),
     })
     expect(result.isError).toBe(false)
@@ -377,14 +382,15 @@ describe('list_subagent_models', () => {
   })
 
   it.each([
-    { args: { model: 'fast' }, expected: '`model` requires `provider`' },
-    { args: { provider: '' }, expected: '`provider` must be non-empty' },
-    { args: { provider: 'missing' }, expected: 'is not allowed for this Session' },
-  ])('rejects incomplete or unavailable provider requests', async ({ args, expected }) => {
+    { args: { model: 'fast' }, expected: '`model` requires `provider`', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    { args: { provider: '' }, expected: '`provider` must be non-empty', info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } },
+    { args: { provider: 'missing' }, expected: 'is not allowed for this Session', info: { name: 'SubagentError', code: 'MODEL_ROUTE_NOT_ALLOWED' } },
+  ])('rejects incomplete or unavailable provider requests', async ({ args, expected, info }) => {
     const ctx = await setupListTool()
     const result = await call(ctx, args)
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(expected)
+    expect(result.error?.info).toEqual(info)
   })
 
   it('rejects an empty exact model after resolving the provider', async () => {
@@ -393,6 +399,7 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'alpha', model: '' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('`model` must be non-empty')
+    expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 
   it('reports registered alternatives for an unavailable provider', async () => {
@@ -404,6 +411,7 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'missing' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('available providers: alpha')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'LLM_PROVIDER_NOT_FOUND' })
     expect(text(result)).not.toContain('secret')
   })
 
@@ -412,5 +420,6 @@ describe('list_subagent_models', () => {
     const result = await call(ctx, { provider: 'missing' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('available providers: (none)')
+    expect(result.error?.info).toEqual({ name: 'SubagentError', code: 'LLM_PROVIDER_NOT_FOUND' })
   })
 })

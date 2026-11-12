@@ -41,8 +41,8 @@ struct ForegroundObservation: Sendable {
     }
     var json: JSONValue {
         .object(["frontPid": frontPID.map { .number(Double($0)) } ?? .null,
-                 "focusedWindowId": focusedWindowID.map { .number(Double($0)) } ?? .null,
-                 "frontWindowId": frontWindowID.map { .number(Double($0)) } ?? .null,
+                 "focusedWindowId": focusedWindowID.map { .string(String($0)) } ?? .null,
+                 "frontWindowId": frontWindowID.map { .string(String($0)) } ?? .null,
                  "frontWindowPid": frontWindowPID.map { .number(Double($0)) } ?? .null])
     }
 }
@@ -141,12 +141,12 @@ actor AXWorker {
         catch { forget(handle); throw error }
         return identity
     }
-    private func acquire(_ identity: ProcessIdentity) throws -> String {
+    private func acquire(_ identity: ProcessIdentity, pendingHandle: String? = nil) throws -> String {
         if let old = targets.first(where: { if case .running(let value) = $0.value { return value.pid == identity.pid }; return false }) {
             if case .running(let value) = old.value, value == identity { return old.key }
             forget(old.key)
         }
-        let id = try identifier("app")
+        let id = try pendingHandle ?? identifier("app")
         targets[id] = .running(identity)
         return id
     }
@@ -230,11 +230,19 @@ actor AXWorker {
                 "accessibility": .bool(AXIsProcessTrusted()), "screenRecording": .bool(CGPreflightScreenCaptureAccess())]),
                 "sessionLocked": locked.map(JSONValue.bool) ?? .null]))
         }
-        if method == "listApps" { return .result(.array(catalog.applications.filter { $0.regular && $0.name != nil }.map(\.json))) }
+        if method == "listApps" {
+            // listApps enumerates running applications only, so each entry reports its running state.
+            return .result(.array(catalog.selectableApplications.map { app in
+                var value = app.json.object ?? [:]
+                value["isRunning"] = .bool(true)
+                return .object(value)
+            }))
+        }
         try NativePlatform.requireUnlocked(locked)
         if method == "getApp" {
             let selector = try params.string("selector")
-            let matches = catalog.applications.filter { $0.matches(selector) }
+            let candidates = catalog.selectableApplications
+            let matches = installed.map { candidates.filter($0.matchesProcess) } ?? candidates.filter { $0.matches(selector) }
             if matches.isEmpty, let installed {
                 let authorization = try ApplicationAuthorization.describeInstalled(installed)
                 let previous = targets.filter { if case .pending(let app, _) = $0.value { return app.path == installed.path }; return false }
@@ -247,7 +255,7 @@ actor AXWorker {
                 return .result(pendingApplication(installed, handle: handle, authorization: authorization))
             }
             guard !matches.isEmpty else { throw NativeFailure(code: "APP_UNAVAILABLE", message: "No running or installed application matches selector") }
-            guard matches.count == 1, let app = matches.first else { throw NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps") }
+            guard matches.count == 1, let app = matches.first else { throw Self.ambiguousApplication }
             let identity = try NativePlatform.identity(app.pid)
             let authorization = try ApplicationAuthorization.describe(identity, name: app.name ?? selector, expectedExecutablePath: app.executablePath)
             let handle = try acquire(identity)
@@ -265,6 +273,10 @@ actor AXWorker {
             guard try ApplicationAuthorization.describeInstalled(app) == authorization else {
                 forget(handle)
                 throw NativeFailure(code: "STALE_APP", message: "Application executable changed before launch; select it again")
+            }
+            guard catalog.selectableApplications.filter(app.matchesProcess).count <= 1 else {
+                forget(handle)
+                throw Self.ambiguousApplication
             }
             return .launch(ApplicationLaunch(handle: handle, application: app, authorization: authorization))
         }
@@ -298,7 +310,7 @@ actor AXWorker {
             let changed = ForegroundObservation.change(beforePID: beforePID, beforeWindow: beforeWindow,
                                                        afterPID: afterPID, afterWindow: afterWindow)
             return .result(.object(["dispatched": .bool(true),
-                "windowId": restored.map { .number(Double($0)) } ?? .null, "foregroundChanged": changed]))
+                "windowId": restored.map { .string(String($0)) } ?? .null, "foregroundChanged": changed]))
         case "activate":
             return .foreground(ForegroundPlan(appHandle: handle, identity: identity))
         case "getState":
@@ -325,8 +337,8 @@ actor AXWorker {
                 observedWindowBounds[handle, default: [:]][observed.windowID] = observed.bounds
             }
             return .result(.object(["appHandle": .string(handle),
-                "windowId": window.map { .number(Double($0)) } ?? .null,
-                "focusedWindowId": projection.focusedWindowID.map { .number(Double($0)) } ?? .null,
+                "windowId": window.map { .string(String($0)) } ?? .null,
+                "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
         case "screenshot":
@@ -453,24 +465,31 @@ actor AXWorker {
         try ax().perform(command, "AXPress")
     }
 
+    private static let ambiguousApplication = NativeFailure(code: "AMBIGUOUS_APP", message: "Select an exact PID from listApps")
+
     private func pendingApplication(_ app: InstalledApplication, handle: String, authorization: JSONValue) -> JSONValue {
         var value: [String: JSONValue] = ["appHandle": .string(handle), "running": .bool(false), "name": .string(app.name), "authorization": authorization]
         if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
         return .object(value)
     }
-    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32) throws -> JSONValue {
+    func finishLaunch(_ plan: ApplicationLaunch, pid: Int32, catalog: ApplicationCatalogSnapshot) throws -> JSONValue {
         do {
             try cancellation.check()
             guard case .pending(let app, let original)? = targets[plan.handle], app == plan.application, original == plan.authorization,
                   try ApplicationAuthorization.describeInstalled(app) == original else {
                 throw NativeFailure(code: "STALE_APP", message: "Application selection changed during launch")
             }
+            guard !catalog.selectableApplications.contains(where: { $0.pid != pid && app.matchesProcess($0) }) else {
+                throw Self.ambiguousApplication
+            }
             let identity = try NativePlatform.identity(pid)
             let actual = try ApplicationAuthorization.describe(identity, name: app.name, expectedExecutablePath: app.executablePath)
             if original["persistable"] == .bool(true), actual["id"] != original["id"] {
                 throw NativeFailure(code: "STALE_APP", message: "Launched application does not match the approved application identity")
             }
-            targets[plan.handle] = .running(identity)
+            guard try acquire(identity, pendingHandle: plan.handle) == plan.handle else {
+                throw NativeFailure(code: "STALE_APP", message: "This connection already has a handle for this process. Use the existing handle or retrieve it with getApp")
+            }
             var value: [String: JSONValue] = ["appHandle": .string(plan.handle), "running": .bool(true), "name": .string(app.name)]
             if let bundleID = app.bundleID { value["bundleId"] = .string(bundleID) }
             return .object(value)
@@ -505,7 +524,7 @@ actor AXWorker {
         trace?.mark("postflight.end")
         return .object(["mimeType": .string("image/png"), "data": .string(encoded),
             "pixelWidth": .number(Double(image.width)), "pixelHeight": .number(Double(image.height)), "bounds": after.bounds.json,
-            "coordinateSpace": .string("window-points"), "windowId": .number(Double(after.windowID))])
+            "coordinateSpace": .string("window-points"), "windowId": .string(String(after.windowID))])
     }
     static func mouseMoveResult(route: String, pointerMoved: Bool) -> JSONValue {
         .object(["dispatched": .bool(true), "hoverRoute": .string(route), "systemPointerMoved": .bool(pointerMoved)])

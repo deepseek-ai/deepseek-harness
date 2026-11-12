@@ -19,8 +19,8 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Page, Route, WebSocketRoute } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, expandAssistantStream } from '@deepseek-ai/dsh-llm'
-import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { type ToolCallId, expandAssistantStream } from '@deepseek-ai/dsh-llm'
+import type { SessionId, Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionListValue } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import {
@@ -31,6 +31,7 @@ import {
 import {
   connectFreshWorkspace, expandTurnProcesses, newEnglishPage, REPO_ROOT, saveFailureShot,
 } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip', import.meta.url))
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v3.jsonl', import.meta.url))
@@ -263,13 +264,13 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     const probe = await launchWebScaffold()
     try {
       const handle = await probe.ctx.agents.create({
-        sessionId: SessionId('web-url-probe'),
+        sessionId: brandString<SessionId>('web-url-probe'),
         setup: agentCtx => probe.ctx.agentPresets.mount(agentCtx).then(() => undefined),
       })
       try {
         const result = await executeToolFixture(probe.ctx, {
           signal: AbortSignal.timeout(5_000),
-          callId: ToolCallId('web-url-probe'),
+          callId: brandString<ToolCallId>('web-url-probe'),
           name: 'bash',
           arguments: {
             command: 'printf \'%s\\n\' "$DSH_WEB_URL"',

@@ -40,6 +40,9 @@
       "path": "../../util/brand"
     },
     {
+      "path": "../../util/error"
+    },
+    {
       "path": "../../util/atomic-write"
     },
     {

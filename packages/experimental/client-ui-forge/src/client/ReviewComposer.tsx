@@ -7,6 +7,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReviewQueue } from './review-queue.ts'
 import { reviewRange, type ReviewSelection, type ReviewSource } from './review.ts'
 import type { NS } from './locales.ts'
+import type { ForgeCommentActionsProps } from './slots.ts'
 import css from './ReviewComposer.module.css'
 
 /** Actions supplied by the owning changes tab. */
@@ -29,6 +30,8 @@ export interface ReviewActions {
   readonly publish?: (selection: ReviewSelection) => Promise<string | undefined>
   /** Add one comment to the pending review on the code host, starting one when needed; an error string preserves the editor. */
   readonly queue?: (selection: ReviewSelection) => Promise<string | undefined>
+  /** Draw the buttons plugins add to the form through `forge.diff.comment.actions`. */
+  readonly renderActions?: (owner: Omit<ForgeCommentActionsProps, 'target'>) => ReactNode
 }
 
 /**
@@ -115,6 +118,15 @@ export function ReviewComposer({ selection, actions, close, visible = true, t }:
           if (actions.addToInput(selected)) { actions.onQuoted?.(selected); close() }
           else setError(t('review.inputFailed'))
         }}>{t('review.addToInput')}</Button>
+        {actions.renderActions?.({
+          selection: {
+            path: selection.comment.path, side: selection.comment.side,
+            startLine: selection.comment.startLine, endLine: selection.comment.endLine,
+          },
+          empty,
+          busy,
+          send: (deliver) => { void send(async () => await deliver(body.current)) },
+        })}
         {visible && actions.queue !== undefined && <SplitAction disabled={busy || actions.publishingBlocked === true || empty}
           label={t(busy ? 'review.publishing' : actions.reviewStarted === true ? 'review.queue' : 'review.startReview')}
           run={() => { void send(actions.queue) }} menuLabel={t('review.githubActions')}

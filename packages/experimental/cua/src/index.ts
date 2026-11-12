@@ -6,9 +6,9 @@ import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/brand'
+import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/types'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -20,8 +20,8 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
-import { CuaConfigFields, type CuaStandaloneRunCodeConfig } from './config.ts'
-import { installCuaTools } from './tool-registration.ts'
+import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunCodeConfig } from './config.ts'
+import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { observeNativeWindows } from './native-observation.ts'
 import type { ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -29,9 +29,11 @@ import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-computer-use'
 import type {} from '@deepseek-ai/dsh-ptc-runtime'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 export { CuaAccess } from './access.ts'
 export type { CuaStartupCapabilities } from './types.ts'
+export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
@@ -41,6 +43,11 @@ export interface CuaConfig {
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
   standaloneRunCode: CuaStandaloneRunCodeConfig
+  /**
+   * Fixed request-image target for screenshots. Omission resolves the target from the Agent's model
+   * route and refuses capture when that route declares no image input.
+   */
+  screenshotTarget?: CuaScreenshotTargetConfig | undefined
   /** Legacy grants imported once into profile-scoped storage; later edits are ignored. */
   allowedApps: Array<Omit<CuaApplicationGrant, 'id'> & {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
@@ -100,6 +107,8 @@ interface CuaExecution extends ToolExecution {
 }
 
 
+const nativeDiscoveryRows = z.array(z.record(z.string(), z.json()))
+
 type ScreenshotValue = z.infer<typeof ScreenshotResult> & { attachment: { [K in keyof ImageAttachmentRef]: ImageAttachmentRef[K] } }
 
 /** Native values stay available to programs; only metadata and the stored image enter model content. */
@@ -109,10 +118,13 @@ function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
   return [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', attachment }]
 }
 
-/** Resolve the exact calling model and attachment store before requesting a screenshot. */
-async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) {
+/** Resolve the attachment store and the request-image target before requesting a screenshot. */
+async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, configured: CuaScreenshotTargetConfig | undefined) {
   const attachments = ctx.get('attachments')
   if (!attachments) throw new Error('CUA screenshots require an attachment store')
+  if (configured !== undefined) {
+    return { attachments, target: (image: ImageAttachmentRef): ImageRequestTarget => fixedScreenshotTarget(configured, image) }
+  }
   const agent = execution.agent
   const routed = agent.session.requestHeader()?.config
   const provider = routed?.provider ?? agent.options.provider
@@ -136,6 +148,8 @@ export interface CuaBackend {
    */
   getGuidance(kind: 'raw' | 'standalone'): string
   capabilities: CuaStartupCapabilities
+  /** Preserve discovery PIDs when getApp accepts a decimal PID as an exact process selector. */
+  acceptsPidSelector?: boolean
   /** Dispatch a directional key through the provider's execution-scoped input owner, after application authorization. */
   sendKeyEvent?: (client: NativeClient, params: Record<string, JsonValue>,
     execution: Readonly<ToolExecution>) => Promise<JsonValue>
@@ -213,7 +227,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     return owner
   }
   ctx.effect(function* () {
-    yield ctx.computerUse.register(ComputerUseProviderName('dsh-cua'))
+    yield ctx.computerUse.register(brandString<ComputerUseProviderName>('dsh-cua'))
     yield async () => {
       lifetime.abort()
       const permissions = Promise.allSettled([access.dispose()])
@@ -245,7 +259,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
-        const { attachments, target } = await screenshotStore(ctx, execution)
+        const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
         if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()
@@ -262,13 +276,17 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         }
         const refs = await stage('image admission', () => admitEncodedImages(attachments, [{ data: screenshot.data, mediaType: screenshot.mimeType }]))
         signal.throwIfAborted()
-        const attachment = refs[0] as ImageAttachmentRef
+        let attachment = refs[0] as ImageAttachmentRef
         const original = attachment.originalDimensions ?? attachment
         if (original.width !== screenshot.pixelWidth || original.height !== screenshot.pixelHeight) {
           throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot dimensions disagree with its decoded image')
         }
         const image = await stage('model image preparation', () => attachments.readImageRequest(attachment, target(attachment), signal))
         signal.throwIfAborted()
+        if (image.width !== attachment.width || image.height !== attachment.height) {
+          attachment = await stage('image storage', () => attachments.saveImage({ data: image.data, mediaType: image.mediaType }))
+          signal.throwIfAborted()
+        }
         execution.coordinates.screenshot(parsedParams.appHandle as CuaAppHandle, screenshot.windowId, screenshot.bounds, image)
         return { ...screenshot, mimeType: image.mediaType, data: Buffer.from(image.data).toString('base64'),
           pixelWidth: image.width, pixelHeight: image.height, coordinateSpace: 'screenshot-pixels', attachment }
@@ -291,6 +309,9 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
         return selected
       }
       signal.throwIfAborted()
+      if ((method === 'listApps' || method === 'findApps') && !backend.acceptsPidSelector) {
+        return nativeDiscoveryRows.parse(result).map(({ pid: _pid, ...record }) => record)
+      }
       if (method === 'getCapabilities') {
         const runtime = z.record(z.string(), z.json()).parse(result)
         const capabilities = backend.capabilities

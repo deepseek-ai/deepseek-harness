@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Computernutzung",
-    "description": "Unterstützt derzeit macOS; die Windows-Unterstützung befindet sich in Entwicklung. Ermöglicht die Computernutzung in bestehenden und neuen Sitzungen im Standardmodus, Erstellermodus, PTC-Modus und weiteren Modi. Erteilen Sie vor der Verwendung die Berechtigungen für Barrierefreiheit und Bildschirmaufzeichnung.",
+    "description": "Apps unter macOS und Windows steuern. Bei der Installation über npm unter Windows muss das Hilfsprogramm separat eingerichtet werden.",
     "detail": "docs/DETAIL.md"
   }
 }

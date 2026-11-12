@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { rollbackDesktopChannel } from '../scripts/desktop-rollback.ts'
-import type { DesktopPublishOperations } from '../scripts/desktop-publish.ts'
+import type { DesktopPublishOperations } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
 import type { DesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
 
 function fixture() {

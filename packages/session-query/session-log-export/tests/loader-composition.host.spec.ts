@@ -8,8 +8,9 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import * as SessionLogDownload from '@deepseek-ai/dsh-session-log-export'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 let root: string | undefined
 let context: Context | undefined
@@ -58,7 +59,7 @@ describe('session-log-download real Loader composition', () => {
     await context.loader.await()
 
     const session = (context.get('sessions') as SessionStore)
-      .create(SessionId('loader-session-export'), { meta: { createdAt: 1 } })
+      .create(brandString<SessionId>('loader-session-export'), { meta: { createdAt: 1 } })
     const agent = { session, status: 'idle', options: {} } as unknown as Agent
     expect(context.commands.list(agent)).toContainEqual({
       definitionId: '@deepseek-ai/dsh-session-log-export',

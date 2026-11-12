@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { chromium, type Browser } from 'playwright'
@@ -35,7 +36,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   await writeFile(join(root, 'observe-helper'), '')
   const fixturePatch = join(root, 'native-fixture.yml')
   // Keep the external helper override above bundle order changes when CUA is re-enabled.
-  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua', config: { helperPath: helper } }]))
+  await writeFile(fixturePatch, JSON.stringify([{ id: 'cua-macos', config: { helperPath: helper } }]))
   const scaffold = await launchWebScaffold({
     profile: { packages: [{ dir: bundle, enabled: true }] },
     extraOverlayPath: fixturePatch,
@@ -54,7 +55,7 @@ it.skipIf(process.platform !== 'darwin')('keeps system requests pending until fr
   scaffold.ctx.approval.setPolicy(agent, 'never')
   // Application consent remains independent of the session's tool-approval policy.
   const grant = scaffold.ctx.tools.execute({ agent, signal: new AbortController().signal,
-    calls: [{ type: 'tool-call', id: ToolCallId('cua-app-approval'), name: 'run_code',
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('cua-app-approval'), name: 'run_code',
       arguments: JSON.stringify({ code: 'return await tools.cua({ method: "getApp", params: { selector: "Fixture" } })',
         description: 'Request application access' }) }] })
   const approval = page.locator('[data-approval-key]')

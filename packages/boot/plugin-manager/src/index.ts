@@ -35,6 +35,7 @@ import { dependencySpec, InvalidInstallSpecError, parseInstallSpec, pinnedGitOri
 import { attributeFailure, normalizeRegistry, NPMMIRROR_REGISTRY, registryPlan } from './registry.ts'
 import { flatten, writePluginEnabled } from './patch.ts'
 import { incompatiblePlugin, ManagementFailure } from './failure.ts'
+import { PluginManagerError, readProfileState } from './error.ts'
 import { approveBuilds, recordPendingBuilds } from './build-approval.ts'
 import { checkGitConnection, checkGithubConnection, type GithubConnectionFailure } from './github-connection.ts'
 import { chooseGitTransport, sshGitSpec } from './git-transport.ts'
@@ -48,6 +49,7 @@ import type {
 } from './types.ts'
 export type * from './types.ts'
 export { classifyInstallFailure, type InstallFailureFacts } from './install-failure.ts'
+export { PluginManagerError, type PluginManagerErrorCode } from './error.ts'
 export { InvalidInstallSpecError, parseInstallSpec, pinnedGitOrigin, type ParsedInstallSpec } from './install-spec.ts'
 
 /** The pnpm executable, registries, and limits for diagnostics, lookups and connection checks. */
@@ -471,10 +473,12 @@ export class PluginManager extends TypertRemoteService {
 
   /** Read current plugins, including why a row cannot be changed through the profile patch.
    * @returns Current runtime entries with persistent patch targets.
+   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when the profile patches
+   *   cannot be read; Remote callers receive `gateway/internal`.
    */
   @Remote
   async listPlugins(): Promise<PluginInfo[]> {
-    const rows = flatten(composeEntries([readProfilePatches('dsh', this.profile)]))
+    const rows = readProfileState(() => flatten(composeEntries([readProfilePatches('dsh', this.profile)])))
     const snapshot = await readPluginInventory(this.ctx)
     return snapshot.entries.map((entry) => {
       const actual = [...this.ctx.loader.entries()].find(row => row.id === entry.entryId)
@@ -495,6 +499,8 @@ export class PluginManager extends TypertRemoteService {
    * A dependency without a bundle patch is listed, as a `not-bundle` problem, only while it is selected.
    * @returns Package versions, manifest descriptions, the installable spec of profile dependencies, rows, optional
    * display metadata, activation selections, whether the installation offers the bundle, and removal availability.
+   * @throws {PluginManagerError} `PLUGIN_MANAGER_PROFILE_READ_FAILED` to in-process callers when a profile or
+   *   installation manifest cannot be read; Remote callers receive `gateway/internal`.
    */
   @Remote
   listBundles(): Promise<BundleInfo[]> {
@@ -506,12 +512,14 @@ export class PluginManager extends TypertRemoteService {
 
   /** The bundle inventory before update eligibility, which is derived from each listed bundle. */
   private readBundles(): Omit<BundleInfo, 'update'>[] {
-    const manifest = readProfileManifest('dsh', this.profile.dir)
-    const exemptions = readProfileVersionExemptions(this.profile.dir)
+    const { manifest, exemptions, installation } = readProfileState(() => ({
+      manifest: readProfileManifest('dsh', this.profile.dir),
+      exemptions: readProfileVersionExemptions(this.profile.dir),
+      installation: JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest,
+    }))
     const selected = bundleSelection(manifest)
     const recorded = manifest.dependencies ?? {}
     const dependencies = Object.keys(recorded)
-    const installation = JSON.parse(readFileSync(this.profile.installAnchor, 'utf8')) as InstallationManifest
     const catalog = new Map(OFFICIAL_ON_DEMAND_CATALOG.map(entry => [entry.packageName, entry]))
     const names = [...new Set([...selected, ...dependencies, ...Object.keys(installation.dependencies ?? {}), ...catalog.keys()])]
     const bundles: Omit<BundleInfo, 'update'>[] = []
@@ -1375,7 +1383,9 @@ export class PluginManager extends TypertRemoteService {
     let settled: ChangeResult
     try {
       settled = await withFileLock(join(this.profile.dir, 'package.json'), async () => {
-        this.abort.signal.throwIfAborted()
+        if (this.abort.signal.aborted) {
+          throw new PluginManagerError('plugin-manager: the manager is disposed; retry after the Host reloads it', 'PLUGIN_MANAGER_UNAVAILABLE')
+        }
         const before = this.diskState()
         const result: ChangeResult = { ...request, changed: false,
           ...this.ownerContext.get('hmr') !== undefined ? { application: 'applied' } : { application: 'restart-required', restartReason: 'no-hmr' } }

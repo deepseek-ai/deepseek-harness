@@ -25,7 +25,7 @@ Run JavaScript workflows in fresh Node processes under the calling Session's fil
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this engine in a composition that provides subagents, sandbox policy and the [Node PTC runtime](../../ptc-runtime/ptc-runtime-node/README.md). It supplies workflow execution for `dsh-tool-workflow` and for `dsh-tool-ralph` when explicitly enabled. Ralph remains disabled in shipped defaults. The engine rejects non-TypeScript PTC providers when it loads. Python PTC compositions must disable the `workflow-ptc`, `tool-workflow` and any enabled `tool-ralph` rows.
+Mount this engine in a composition that provides subagents, sandbox policy and the [Node PTC runtime](../../ptc-runtime/ptc-runtime-node/README.md). It supplies workflow execution for `dsh-tool-workflow` and for `dsh-tool-ralph` when explicitly enabled. Ralph remains disabled in shipped defaults. The engine rejects non-TypeScript PTC providers when it loads.
 
 ### Minimal configuration
 

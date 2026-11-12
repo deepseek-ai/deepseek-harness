@@ -49,6 +49,8 @@ kind: "package-reference"
 
 Client 查询在 `clientInspectTimeoutMs` 内接受首个有效页面响应。某个页面失败不会阻止其他页面成功回答。若没有有效结果，查询返回首个 Client 错误或输出校验诊断；若没有页面回答，则提示调用方打开或重新连接 Harness 页面后重试。取消和注册表卸载也会结束待处理查询。页面重连不会重放错过的请求，因此需在连接恢复后重试。Host 查询不受此超时影响。
 
+查询失败抛出 `InspectError`：`INSPECT_PROVIDER_NOT_FOUND`、`INSPECT_METHOD_NOT_FOUND` 与 `INSPECT_INVALID_INPUT` 在发送前拒绝请求；`INSPECT_INVALID_OUTPUT` 拒绝提供方返回值；`INSPECT_CLIENT_UNAVAILABLE` 表示没有页面或注册表已卸载；`INSPECT_TIMEOUT` 表示 Client 期限已到。Host 提供方可以抛出自己的 `HarnessError`，例如 `INSPECT_TARGET_NOT_FOUND`；其他提供方失败变为 `INSPECT_FAILED`，原始错误保留为 `cause`。取消时重新抛出信号的 reason。
+
 ### run 会做什么
 
 程序调用方使用 `define`、`run`、`stop` 和 `undefine`；浏览器面板操作已有定义。仅含 Host 的包在本进程激活。带浏览器部分的包等待审批或取消，批准后先加载 Host 再加载 Client。`mode: "run"` 启动当前版本，`mode: "update"` 替换版本。Stop 释放运行中的 effect 并保留定义；undefine 还会移除定义。
@@ -56,6 +58,8 @@ Client 查询在 `clientInspectTimeoutMs` 内接受首个有效页面响应。�
 ### 定义的去向
 
 定义按会话隔离且仅在进程内存在：其他会话无法读取，重启会清空。历史日志保留工具参数和回执，但不会恢复注册表。浏览器页面重载后，需要再次显式运行才能加载 Client 部分。
+
+通过 `harness.defineTool` 定义的工具以 `PluginToolError` 失败：`execute` 抛出时为 `PLUGIN_TOOL_FAILED`，`message` 保留抛出的消息及其字符串 `code`；返回值不是无损 JSON 数据时为 `PLUGIN_TOOL_INVALID_RESULT`。抛出的 `HarnessError` 与取消之后的任何失败保留其自身身份。
 
 ### 信任立场
 
