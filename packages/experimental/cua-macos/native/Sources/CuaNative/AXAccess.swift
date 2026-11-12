@@ -53,9 +53,9 @@ final class AXAccess {
         let error = AXUIElementSetMessagingTimeout(element, timeout)
         guard error == .success else { throw failure(error, "set AX messaging timeout") }
     }
-    func failure(_ error: AXError, _ operation: String) -> NativeFailure {
+    func failure(_ error: AXError, _ operation: String, attribute: String? = nil) -> NativeFailure {
         NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
-                      message: "Accessibility \(operation) failed with error \(error.rawValue)", accessibilityError: error.rawValue)
+                      message: "Accessibility \(operation) failed with error \(error.rawValue)", accessibilityError: error.rawValue, attribute: attribute)
     }
     private func absent(_ error: AXError) -> Bool { error == .attributeUnsupported || error == .noValue || error == .notImplemented }
     static func optionalAttributeUnavailable(_ error: AXError, attribute: String) -> Bool {
@@ -71,7 +71,7 @@ final class AXAccess {
         var value: CFTypeRef?
         let error = AXUIElementCopyAttributeValue(element, name as CFString, &value)
         if absent(error) || Self.optionalAttributeUnavailable(error, attribute: name) { return nil }
-        guard error == .success else { throw failure(error, "read \(name)") }
+        guard error == .success else { throw failure(error, "read \(name)", attribute: name) }
         guard let value else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) returned no value after success") }
         return value
     }
@@ -117,6 +117,26 @@ final class AXAccess {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) is not an array")
         }
         return try array.map { try elementValue($0, name) }
+    }
+    private func recoverChildren(_ element: AXUIElement, limit: Int, requests: inout Int) throws -> AXObservedChildren {
+        guard requests > 0 else { return .unavailable }
+        requests -= 1
+        try prepare(element)
+        var count = 0
+        let error = AXUIElementGetAttributeValueCount(element, kAXChildrenAttribute as CFString, &count)
+        if absent(error) || error == .failure { return .unavailable }
+        guard error == .success else { throw failure(error, "count AXChildren") }
+        return try AXObservedChildren.readRanges(count: count, limit: limit, requests: &requests) { range in
+            try prepare(element)
+            var values: CFArray?
+            let error = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString,
+                                                       range.lowerBound, range.count, &values)
+            if error == .failure { return .unreadable }
+            if absent(error) || error == .illegalArgument { return .unavailable }
+            guard error == .success else { throw failure(error, "read AXChildren range") }
+            guard let values, CFArrayGetCount(values) == range.count else { return .unavailable }
+            return .values(try childValues(values, attribute: "AXChildren"))
+        }
     }
     func windowID(_ element: AXUIElement) throws -> UInt32? {
         try prepare(element)
@@ -515,7 +535,7 @@ final class AXAccess {
                 if error == .attributeUnsupported || error == .noValue || error == .notImplemented
                     || optionalAttributeUnavailable(error, attribute: name) { return nil }
                 throw NativeFailure(code: error == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR",
-                                    message: "Accessibility read \(name) failed with error \(error.rawValue)", accessibilityError: error.rawValue)
+                                    message: "Accessibility read \(name) failed with error \(error.rawValue)", accessibilityError: error.rawValue, attribute: name)
             }
         }
         return value
@@ -545,7 +565,20 @@ final class AXAccess {
     func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false) throws -> AXProjection {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
-        var roots = try children(app)
+        var recoveryRequests = maxElements
+        // Window discovery and traversal can both enumerate the same parent.
+        var discovery: [AXUIElement: AXObservedChildren] = [:]
+        func observedChildren(_ parent: AXUIElement, _ value: @autoclosure () throws -> CFTypeRef?, duringDiscovery: Bool = false) throws -> AXObservedChildren {
+            if let cached = discovery[parent] { return cached }
+            do {
+                return try AXObservedChildren(elements: childValues(value(), attribute: "AXChildren"), incomplete: false)
+            } catch let error as NativeFailure where error.attribute == "AXChildren" && error.accessibilityError == AXError.failure.rawValue {
+                let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests)
+                if duringDiscovery { discovery[parent] = children }
+                return children
+            }
+        }
+        var roots = try observedChildren(app, attribute(app, "AXChildren"), duringDiscovery: true).elements
         func appendUnique(_ element: AXUIElement) {
             if !roots.contains(where: { CFEqual($0, element) }) { roots.append(element) }
         }
@@ -558,7 +591,7 @@ final class AXAccess {
             cursor += 1
             let role = try string(root, "AXRole")
             guard role == "AXWindow" || role == "AXSheet" else { continue }
-            for child in try children(root) where roots.count < maxElements {
+            for child in try observedChildren(root, attribute(root, "AXChildren"), duringDiscovery: true).elements where roots.count < maxElements {
                 if try string(child, "AXRole") == "AXSheet" { appendUnique(child) }
             }
         }
@@ -577,6 +610,7 @@ final class AXAccess {
             }
             if matches.isEmpty {
                 _ = try NativePlatform.ownedWindow(identity.pid, requested)
+                if discovery.values.contains(where: \.incomplete) { throw failure(.failure, "locate window in incomplete AXChildren") }
                 return AXProjection(tree: "", elements: [], indexed: [:], focusedWindowID: focusedID, truncated: false)
             }
             let dialog = try matches.contains { root in
@@ -592,17 +626,26 @@ final class AXAccess {
             }
             if !dialog { roots.append(contentsOf: anonymousSheets) }
         }
+        if roots.isEmpty && discovery[app]?.incomplete == true { throw failure(.failure, "read application AXChildren") }
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
         var elementLimitReached = false
         var depthLimitReached = false
+        var unreportedParents = Set(discovery.compactMap { $0.value.incomplete ? $0.key : nil })
+        var childrenMissing = !unreportedParents.isEmpty
         var menusCollapsed = false
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
         var indexed: [Int: AXUIElement] = [:]
         var pending = roots.reversed().map { (element: $0, level: 0, depth: 0) }
-        func enqueueChildren(_ children: [AXUIElement], level: Int, depth: Int) {
-            for child in children.reversed() { pending.append((child, level, depth)) }
+        func enqueueChildren(_ parent: AXUIElement, observation: AXNodeObservation, level: Int, depth: Int) throws {
+            let children = try observedChildren(parent, observation.attribute("AXChildren"))
+            if children.incomplete {
+                childrenMissing = true
+                unreportedParents.remove(parent)
+                lines.append(String(repeating: "  ", count: level) + "[Some children of " + observation.role + " could not be read.]")
+            }
+            for child in children.elements.reversed() { pending.append((child, level, depth)) }
         }
         while let (element, level, depth) = pending.popLast() {
             try cancellation.check()
@@ -644,7 +687,7 @@ final class AXAccess {
                                   identifier: identifier, url: url, focused: focused, expanded: expanded)
             node.validateSelection()
             if node.transparent || (!addressable && !node.hasMeaning && role != "AXWindow" && role != "AXSheet") {
-                enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level, depth: depth + 1)
+                try enqueueChildren(element, observation: observation, level: level, depth: depth + 1)
                 continue
             }
             let index: Int? = addressable ? indexed.count : nil
@@ -669,12 +712,13 @@ final class AXAccess {
                 ]))
             }
             if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; continue }
-            enqueueChildren(try childValues(observed("AXChildren"), attribute: "AXChildren"), level: level + 1, depth: depth + 1)
+            try enqueueChildren(element, observation: observation, level: level + 1, depth: depth + 1)
         }
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         let truncated = elementLimitReached || depthLimitReached
         if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated)
+        if !unreportedParents.isEmpty { lines.append("[Some children could not be read during window discovery.]") }
+        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated || childrenMissing)
     }
 
     func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {
