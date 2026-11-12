@@ -32,6 +32,43 @@ struct AXAttributeSetTarget: Sendable {
     }
 }
 
+/// Keeps child-discovery failures until the requested AX window has been resolved.
+struct AXRootDiscovery {
+    let roots: [AXUIElement]
+    private let invalidChildFailure: NativeFailure?
+
+    static func discover(roots initial: [AXUIElement], maxElements: Int,
+                         role: (AXUIElement) throws -> String?,
+                         children: (AXUIElement) throws -> [AXUIElement]) throws -> AXRootDiscovery {
+        var roots = initial
+        var invalidChildFailure: NativeFailure?
+        var cursor = 0
+        while cursor < roots.count && cursor < maxElements {
+            let root = roots[cursor]
+            cursor += 1
+            let rootRole = try role(root)
+            guard rootRole == "AXWindow" || rootRole == "AXSheet" else { continue }
+            for child in try children(root) where roots.count < maxElements {
+                do {
+                    if try role(child) == "AXSheet", !roots.contains(where: { CFEqual($0, child) }) {
+                        roots.append(child)
+                    }
+                } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                    if invalidChildFailure == nil { invalidChildFailure = failure }
+                }
+            }
+        }
+        return AXRootDiscovery(roots: roots, invalidChildFailure: invalidChildFailure)
+    }
+
+    /// Only a successful discovery can establish that an owned window has no AX surface.
+    func validateWindowSelection(hasMatch: Bool, verifyOwnership: () throws -> Void) throws {
+        guard !hasMatch else { return }
+        try verifyOwnership()
+        if let invalidChildFailure { throw invalidChildFailure }
+    }
+}
+
 final class AXAccess {
     let timeout: Float
     let cancellation: CancellationLatch
@@ -553,21 +590,9 @@ final class AXAccess {
         for root in try children(app, "AXWindows") { appendUnique(root) }
         let focused = try element(app, "AXFocusedWindow")
         if let focused { appendUnique(focused) }
-        var cursor = 0
-        while cursor < roots.count && cursor < maxElements {
-            let root = roots[cursor]
-            cursor += 1
-            let role = try string(root, "AXRole")
-            guard role == "AXWindow" || role == "AXSheet" else { continue }
-            for child in try children(root) where roots.count < maxElements {
-                do {
-                    if try string(child, "AXRole") == "AXSheet" { appendUnique(child) }
-                } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
-                    // The selected tree traversal reports this unavailable child in its parent branch.
-                    continue
-                }
-            }
-        }
+        let discovery = try AXRootDiscovery.discover(roots: roots, maxElements: maxElements,
+            role: { try self.string($0, "AXRole") }, children: { try self.children($0) })
+        roots = discovery.roots
         let focusedID = try focused.flatMap { try windowID($0) }
         if let requested {
             var matches: [AXUIElement] = []
@@ -581,8 +606,10 @@ final class AXAccess {
                     else if role == "AXSheet" && id == nil { anonymousSheets.append(root) }
                 } else { nonWindows.append(root) }
             }
-            if matches.isEmpty {
+            try discovery.validateWindowSelection(hasMatch: !matches.isEmpty) {
                 _ = try NativePlatform.ownedWindow(identity.pid, requested)
+            }
+            if matches.isEmpty {
                 return AXProjection(tree: "", elements: [], indexed: [:], focusedWindowID: focusedID, truncated: false, incomplete: false)
             }
             let dialog = try matches.contains { root in

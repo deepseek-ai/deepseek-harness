@@ -174,7 +174,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
-        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXWindows failed with error -25202. Read fresh state or use a screenshot; do not repeat input automatically')
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXRole failed with error -25202. Read fresh state or use a screenshot; do not repeat input automatically')
       }
       if (communicationFailure) {
         communicationFailure = false
