@@ -28,6 +28,7 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-desktop-publisher/*": ["./apps/desktop-publisher/src/*"],
       "@deepseek-ai/dsh-client-ui-file-actions": ["./packages/client/ui-file-actions/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/client": ["./packages/client/ui-file-actions/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/types": ["./packages/client/ui-file-actions/src/types.ts"],
@@ -291,6 +292,7 @@
       "@deepseek-ai/dsh-client-ui-session/client": ["./packages/client/ui-session/src/client"],
       "@deepseek-ai/dsh-client-ui-session-status": ["./packages/client/ui-session-status/src"],
       "@deepseek-ai/dsh-client-ui-session-status/client": ["./packages/client/ui-session-status/src/client"],
+      "@deepseek-ai/dsh-client-ui-session-status/types": ["./packages/client/ui-session-status/src/types.ts"],
       "@deepseek-ai/dsh-client-connection": ["./packages/client/connection/src"],
       "@deepseek-ai/dsh-client-file-upload": ["./packages/client/file-upload/src"],
       "@deepseek-ai/dsh-client-file-upload/client": ["./packages/client/file-upload/src/client/index.ts"],
@@ -456,6 +458,7 @@
       "@deepseek-ai/dsh-credentials": ["./packages/credentials/credentials/src"],
       "@deepseek-ai/dsh-credentials-local": ["./packages/credentials/credentials-local/src"],
       "@deepseek-ai/dsh-cua-bundle": ["./packages/experimental/cua-bundle/src"],
+      "@deepseek-ai/dsh-cua-mcp": ["./packages/experimental/cua-mcp/src"],
       "@deepseek-ai/dsh-deepseek-llm-api-extensions": ["./packages/llm/deepseek-llm-api-extensions/src"],
       "@deepseek-ai/dsh-deliverable-file-references": ["./packages/deliverables/deliverable-file-references/src"],
       "@deepseek-ai/dsh-deque": ["./packages/util/deque/src"],

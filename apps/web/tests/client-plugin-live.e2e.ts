@@ -196,7 +196,7 @@ it('keeps ordered legacy Session menu rows before Archive and removes them with 
     await row.hover()
     await trigger.click()
     await menu.waitFor()
-    const remainingNames = ['Pin session', 'Rename', 'Fork session', 'Copy Session ID', 'Archive session']
+    const remainingNames = ['Pin session', 'Rename', 'Mark as unread', 'Fork session', 'Copy Session ID', 'Archive session']
     const remainingItems = menu.getByRole('menuitem')
     expect(await remainingItems.count()).toBe(remainingNames.length)
     for (const [index, name] of remainingNames.entries()) {

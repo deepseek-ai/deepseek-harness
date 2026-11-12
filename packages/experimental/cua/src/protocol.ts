@@ -14,7 +14,7 @@ const nativeTraversalLimits = z.object({
 }).strict()
 const app = { appHandle: z.string().min(1) }
 const pointer = { mouseButton: z.enum(['left', 'right', 'middle']).optional(),
-  modifiers: z.array(z.enum(['command', 'control', 'option', 'shift', 'fn'])).optional() }
+  modifiers: z.array(z.enum(['command', 'control', 'ctrl', 'option', 'alt', 'shift', 'win', 'fn'])).optional() }
 const click = { ...pointer, clickCount: z.union([z.literal(1), z.literal(2)]).optional(),
   holdMs: z.number().int().nonnegative().optional()
     .describe('Milliseconds between each mouse press and release; omitted for an ordinary click.') }

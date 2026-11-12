@@ -52,6 +52,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`@lexical/utils`](https://github.com/facebook/lexical) | MIT |
 | [`@modelcontextprotocol/client`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
 | [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
+| [`@modelcontextprotocol/server`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
 | [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) | MIT |
 | [`@octokit/webhooks`](https://github.com/octokit/webhooks.js) | MIT |
 | [`@openai/codex`](https://github.com/openai/codex) | Apache-2.0 |
@@ -87,6 +88,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`clsx`](https://github.com/lukeed/clsx) | MIT |
 | [`commander`](https://github.com/tj/commander.js) | MIT |
 | [`compression`](https://github.com/expressjs/compression) | MIT |
+| [`cos-nodejs-sdk-v5`](https://github.com/tencentyun/cos-nodejs-sdk-v5) | ISC |
 | [`cross-spawn`](https://github.com/moxystudio/node-cross-spawn) | MIT |
 | [`diff`](https://github.com/kpdecker/jsdiff) | BSD-3-Clause |
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
@@ -144,6 +146,7 @@ External packages installed for runtime use or embedded in distributed Host or b
 | [`string_decoder`](https://github.com/nodejs/string_decoder) | MIT |
 | [`supports-color`](https://github.com/chalk/supports-color) | MIT |
 | [`tar`](https://github.com/isaacs/node-tar) | BlueOak-1.0.0 |
+| [`tencentcloud-sdk-nodejs-teo`](https://github.com/tencentcloud/tencentcloud-sdk-nodejs) | Apache-2.0 |
 | [`tsx`](https://github.com/privatenumber/tsx) | MIT |
 | [`turndown`](https://github.com/mixmark-io/turndown) | MIT |
 | [`typescript`](https://github.com/microsoft/TypeScript) | Apache-2.0 |
@@ -212,7 +215,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`@electron/notarize`](https://github.com/electron/notarize) | MIT |
 | [`@lexical/headless`](https://github.com/facebook/lexical) | MIT |
 | [`@modelcontextprotocol/node`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
-| [`@modelcontextprotocol/server`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
 | [`@modelcontextprotocol/server-everything`](https://github.com/modelcontextprotocol/servers) | MIT / Apache-2.0 |
 | [`@modelcontextprotocol/server-filesystem`](https://github.com/modelcontextprotocol/servers) | MIT / Apache-2.0 |
 | [`@panzoom/panzoom`](https://github.com/timmywil/panzoom) | MIT |
@@ -247,7 +249,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`@yao-pkg/pkg`](https://github.com/yao-pkg/pkg) | MIT |
 | [`@yarnpkg/cli-dist`](https://github.com/yarnpkg/berry) | BSD-2-Clause |
 | [`app-builder-lib`](https://github.com/electron-userland/electron-builder) | MIT |
-| [`cos-nodejs-sdk-v5`](https://github.com/tencentyun/cos-nodejs-sdk-v5) | ISC |
 | [`cytoscape`](https://github.com/cytoscape/cytoscape.js) | MIT |
 | [`cytoscape-cose-bilkent`](https://github.com/cytoscape/cytoscape.js-cose-bilkent) | MIT |
 | [`dayjs`](https://github.com/iamkun/dayjs) | MIT |
@@ -274,7 +275,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`selfsigned`](https://github.com/jfromaniello/selfsigned) | MIT |
 | [`smol-toml`](https://github.com/squirrelchat/smol-toml) | BSD-3-Clause |
 | [`spdx-expression-parse`](https://github.com/jslicense/spdx-expression-parse.js) | MIT |
-| [`tencentcloud-sdk-nodejs-teo`](https://github.com/tencentcloud/tencentcloud-sdk-nodejs) | Apache-2.0 |
 | [`tsdown`](https://github.com/rolldown/tsdown) | MIT |
 | [`typescript-language-server`](https://github.com/typescript-language-server/typescript-language-server) | Apache-2.0 |
 | [`vite`](https://github.com/vitejs/vite) | MIT |

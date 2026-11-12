@@ -6,15 +6,59 @@ import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import { createRunCodeTool } from '@deepseek-ai/dsh-tool-executor-ptc/run-code'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import { longEdgeDimensions, type ImageAttachmentRef, type ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { PromptSection } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import type { CuaConfig } from './index.ts'
+import type { CuaScreenshotTargetConfig } from './config.ts'
+import { CUA_PROMPT_SECTION_NAME } from './guidance.ts'
 
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
   + 'The global cua object is ready to use; retain application and window objects across calls. '
   + 'Only tools.cua is available inside the program. Call other session tools directly. '
   + 'Use inspect(...values) to display selected text and images.'
+
+/** Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`. */
+export interface CuaPrograms {
+  /**
+   * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
+   * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
+   * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
+   * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+   * programs until the release settles, so the caller holds them back; after a failed release it rejects them
+   * until a later release succeeds. Resolves when no environment exists.
+   * @param agent - Agent whose `cua_run_code` state owner is released.
+   * @returns Completion after the process has exited and its output has drained.
+   * @throws When the process cleanup fails.
+   */
+  release(agent: Agent): Promise<void>
+  /**
+   * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
+   * A host that forwards screenshots outside a model request reads the same request version with it, so the
+   * image a caller sees matches the coordinate space the provider mapped.
+   * @param image - Durable screenshot attachment from a `cua` result.
+   * @returns The fixed target, or undefined when the Agent's model route selects the delivered version.
+   */
+  screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    /** Present while the CUA provider owns a dedicated program runtime. */
+    cuaPrograms: CuaPrograms
+  }
+}
+
+/**
+ * Project a configured screenshot target onto one stored image.
+ * @param configured - Validated `screenshotTarget`.
+ * @param image - Durable normalized screenshot.
+ * @returns The request target for that image: the long edge capped at the configured value, the configured byte budget.
+ */
+export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, image: ImageAttachmentRef): ImageRequestTarget {
+  return { ...longEdgeDimensions(image.width, image.height, configured.longEdge), maxBytes: configured.maxBytes }
+}
 
 /**
  * Register raw CUA for its configured PTC preset and a persistent program tool for other presets.
@@ -31,7 +75,7 @@ export function installCuaTools(
   // PTC publishes the installed JS entry; automatic CUA initialization follows the Host's code format.
   const ptcBridgeUrl = JSON.stringify(new URL('../lib/bridge.js', import.meta.url).href)
   const programBridgeUrl = JSON.stringify(new URL(`./bridge${extname(new URL(import.meta.url).pathname)}`, import.meta.url).href)
-  const prompt = { name: 'computer-use:dsh-cua', order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
+  const prompt = { name: CUA_PROMPT_SECTION_NAME, order: ctx.systemPrompt.getSectionOrder('TOOL_COMPUTER_USE') }
   const rawPrompt: PromptSection = { ...prompt, text: () => {
     const runtime = ctx.get('ptcRuntime')
     return !runtime?.retainsState ? guidance : `${guidance}
@@ -101,6 +145,12 @@ var cua = connectCua(() => tools.cua);
                   name: 'cua_run_code', description: programDescription, runtime: consumer.ptcRuntime,
                   tools: [tool], limits: config.standaloneRunCode.executor,
                 })
+                // Hosts without a model (MCP frontends) end an Agent's environment with the runtime's owner release.
+                consumer.provide('cuaPrograms', {
+                  release: (agent: Agent) => consumer.ptcRuntime.release(agent),
+                  screenshotRequestTarget: image => config.screenshotTarget === undefined
+                    ? undefined : fixedScreenshotTarget(config.screenshotTarget, image),
+                } satisfies CuaPrograms)
                 consumer.effect(function* () {
                   yield () => {
                     if (program !== definition) return

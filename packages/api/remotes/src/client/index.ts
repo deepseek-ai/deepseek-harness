@@ -27,6 +27,8 @@ import sessionFeedbackRemote from '@deepseek-ai/dsh-command-feedback/remote'
 import fileUploadsRemote from '@deepseek-ai/dsh-client-file-upload/remote'
 import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
+import sessionStatusRemote from '@deepseek-ai/dsh-client-ui-session-status/remote'
+export type {} from '@deepseek-ai/dsh-client-ui-session-status/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import jobRemote from '@deepseek-ai/dsh-api-job-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
@@ -203,7 +205,8 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       toolResultsRemote,
       messageFeedbackRemote, sessionFeedbackRemote,
       fileUploadsRemote, sessionReferencesRemote,
-      permissionPresetsRemote, subagentsRemote, sessionRemote, jobRemote, workspaceRemote, workspaceFilesRemote, terminalRemote,
+      permissionPresetsRemote, subagentsRemote, sessionRemote, sessionStatusRemote, jobRemote,
+      workspaceRemote, workspaceFilesRemote, terminalRemote,
       officeKitRemote, userQuestionsRemote, webRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
