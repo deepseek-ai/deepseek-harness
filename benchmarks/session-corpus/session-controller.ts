@@ -2,8 +2,6 @@
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import SessionController, { type Config } from '@deepseek-ai/dsh-api-session-controller'
-import SessionControl from '@deepseek-ai/dsh-session-control'
-import SessionControlLocal from '@deepseek-ai/dsh-session-control-local'
 
 class BenchmarkSessionController extends SessionController {
   initialize(): Promise<void> {
@@ -18,8 +16,6 @@ class BenchmarkSessionController extends SessionController {
  * @returns controller ready for list, search, and fork calls.
  */
 export async function createBenchmarkSessionController(ctx: Context, config: Config): Promise<SessionController> {
-  await ctx.plugin(SessionControl)
-  await ctx.plugin(SessionControlLocal)
   ctx.provide('attachments', {
     imageLimits: {
       maxImageBytes: 5 * 1024 * 1024,

@@ -529,8 +529,6 @@
       "@deepseek-ai/dsh-sdk-minimal": ["./packages/bundle/sdk-minimal/src"],
       "@deepseek-ai/dsh-session": ["./packages/core/session/src"],
       "@deepseek-ai/dsh-session-checkpoint-policy": ["./packages/session/session-checkpoint-policy/src"],
-      "@deepseek-ai/dsh-session-control": ["./packages/session/session-control/src"],
-      "@deepseek-ai/dsh-session-control-local": ["./packages/session/session-control-local/src"],
       "@deepseek-ai/dsh-session-format": ["./packages/session/session-format/src"],
       "@deepseek-ai/dsh-session-format-catalog": ["./packages/session/session-format-catalog/src"],
       "@deepseek-ai/dsh-session-format-v0-to-v1": ["./packages/session/session-format-v0-to-v1/src"],

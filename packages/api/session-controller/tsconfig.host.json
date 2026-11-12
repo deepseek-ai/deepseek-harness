@@ -130,12 +130,6 @@
     },
     {
       "path": "../../util/brand"
-    },
-    {
-      "path": "../../session/session-control"
-    },
-    {
-      "path": "../../session/session-control-local"
     }
   ]
 }

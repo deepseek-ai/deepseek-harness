@@ -92,8 +92,6 @@
     "@deepseek-ai/dsh-sdk-protocol": "workspace:*",
     "@deepseek-ai/dsh-session": "workspace:*",
     "@deepseek-ai/dsh-session-checkpoint-policy": "workspace:*",
-    "@deepseek-ai/dsh-session-control": "workspace:*",
-    "@deepseek-ai/dsh-session-control-local": "workspace:*",
     "@deepseek-ai/dsh-session-log-deepseek": "workspace:*",
     "@deepseek-ai/dsh-session-persistence": "workspace:*",
     "@deepseek-ai/dsh-session-persistence-jsonl": "workspace:*",

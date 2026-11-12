@@ -1,4 +1,3 @@
-import SessionControl from '@deepseek-ai/dsh-session-control'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 /** External activation admission and resource ownership across parent lifetimes. */
 
@@ -20,7 +19,6 @@ async function setup(start: (request: SubagentStartRequest) => Promise<SubagentR
   await mountWorkingDirectoryFixture(ctx)
   await ctx.plugin(SubagentRuntime)
   const parent = await externalTestParent(ctx)
-  await ctx.plugin(SessionControl)
   ctx.subagents.registerProvider({
     name: 'external', inheritsParentContext: false,
     capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },

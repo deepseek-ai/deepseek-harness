@@ -1,4 +1,3 @@
-import SessionControl from '@deepseek-ai/dsh-session-control'
 import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
 /** SDK shutdown releases managed descendants before their root Agents leave the registry. */
 
@@ -18,7 +17,6 @@ async function setup() {
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await mountWorkingDirectoryFixture(ctx)
-  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   ctx.llm.registerAdapter(['mock'], new MockAdapter(Array.from({ length: 6 }, () => textResponse('answer'))))
   ctx.subagents.registerProvider({

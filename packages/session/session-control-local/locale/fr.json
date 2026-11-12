@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Contrôle local des sessions",
-    "description": "Restaure les sessions indépendantes et accepte les messages dans l’environnement d’exécution actuel."
-  }
-}

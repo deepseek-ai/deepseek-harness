@@ -1,4 +1,3 @@
-import SessionControl from '@deepseek-ai/dsh-session-control'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -81,7 +80,6 @@ async function setup(script: ConstructorParameters<typeof MockAdapter>[0], enabl
   await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentService)
   await ctx.plugin(ToolSubagentControl)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })

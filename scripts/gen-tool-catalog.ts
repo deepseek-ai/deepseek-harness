@@ -34,7 +34,6 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
 import * as ToolSessionControl from '@deepseek-ai/dsh-tool-session-control'
-import SessionControlService from '@deepseek-ai/dsh-session-control'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -214,13 +213,15 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-session-control',
     dir: 'tool-session-control',
     source: 'packages/session/tool-session-control/src/index.ts',
-    requires: ['ctx.tools', 'ctx.sessionControl', 'a calling Agent'],
+    requires: ['ctx.tools', 'ctx.sessionController', 'ctx.workspaceRegistry', 'a calling Agent'],
     writes: ['tool/call', 'agent/inbox/spliced in the recipient', 'tool/result'],
     async mount(ctx) {
-      await ctx.plugin(AgentRegistry)
-      await ctx.plugin(SessionControlService)
+      // Schema harvest never executes a tool, so both Host services are empty stubs.
+      ctx.provide('sessionController', {} as Context['sessionController'])
+      ctx.provide('workspaceRegistry', {} as Context['workspaceRegistry'])
       await ctx.plugin(ToolSessionControl)
     },
+    note: 'The dsh-web-app bundle mounts this package on a disabled row; the Web Session controller activates each target.',
   },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',

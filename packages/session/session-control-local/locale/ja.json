@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "ローカル Session 制御",
-    "description": "現在のランタイムで独立した Session を復元し、メッセージを受け付けます。"
-  }
-}

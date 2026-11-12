@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "本地 Session 控制",
-    "description": "在当前运行时恢复独立 Session 并接收消息。"
-  }
-}

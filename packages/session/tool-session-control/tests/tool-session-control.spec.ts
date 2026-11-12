@@ -1,15 +1,24 @@
-/** Tool arguments and receipts preserve runtime caller identity through the shared service. */
+/** Session messages activate targets through the Web Session controller and attribute the real sender. */
 
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { ApiSessionAgentResult } from '@deepseek-ai/dsh-api-session-controller'
+import { LlmAdapter, ToolCallId, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SessionControlService, { SessionControlError } from '@deepseek-ai/dsh-session-control'
-import type { SessionControlProvider } from '@deepseek-ai/dsh-session-control'
 import { executeToolFixture } from '@deepseek-ai/dsh-tool-testkit'
+import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ToolSessionControl from '../src/index.ts'
+
+class ReplyAdapter extends LlmAdapter {
+  async * stream(request: GenerateOptions): AsyncIterable<StreamChunk> {
+    request.signal?.throwIfAborted()
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: 'received' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
 
 const contexts: Context[] = []
 
@@ -22,12 +31,21 @@ async function setup() {
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   const loop = await mountAgentLoopTestHarness(ctx)
-  const caller = await loop.create(SessionId('sender'))
-  await ctx.plugin(SessionControlService)
-  const deliver = vi.fn<SessionControlProvider['deliver']>(async request => ({ messageId: request.message.id }))
-  ctx.sessionControl.register({ deliver })
+  ctx.llm.registerAdapter(['fixture'], new ReplyAdapter())
+  const options = { provider: 'fixture', model: 'reply' }
+  const caller = await loop.create(SessionId('sender'), options, { cwd: '/workspace/sender' })
+  const target = await loop.create(SessionId('recipient'), options, { cwd: '/elsewhere/recipient' })
+  const archivedSessionIds: SessionId[] = []
+  const resolveAgent = vi.fn(async (id: SessionId): Promise<ApiSessionAgentResult> => {
+    const agent = ctx.agents.get(id)
+    return agent === undefined
+      ? { error: new RemoteError('session/not-found', `session "${id}" not found`, { sessionId: id }) }
+      : { agent }
+  })
+  ctx.provide('sessionController', { resolveAgent } as never)
+  ctx.provide('workspaceRegistry', { archivedSessionIds } as never)
   const fiber = await ctx.plugin(ToolSessionControl)
-  return { ctx, caller, deliver, fiber }
+  return { ctx, caller, target, archivedSessionIds, resolveAgent, fiber, options }
 }
 
 function call(ctx: Context, args: unknown, caller?: Agent, signal = new AbortController().signal) {
@@ -40,84 +58,147 @@ function call(ctx: Context, args: unknown, caller?: Agent, signal = new AbortCon
   })
 }
 
+function agentMessages(agent: Agent) {
+  return agent.session.snapshotEvents().flatMap(event => event.type === 'user/message'
+    && event.data.source.kind === 'agent-message' ? [event.data] : [])
+}
+
 describe('Session message tool', () => {
-  it('returns the accepted message id and uses the exact calling Agent', async () => {
-    const { ctx, caller, deliver } = await setup()
-    const result = await call(ctx, { session_id: 'recipient', message: '  Please review.\nKeep the context.  ' }, caller)
-    expect(deliver).toHaveBeenCalledTimes(1)
-    const [request, runtime] = deliver.mock.calls[0]!
-    expect(runtime.caller).toBe(caller)
-    expect(request.id).toBe('recipient')
-    expect(request.message.source).toEqual({ kind: 'agent-message', form: 'relay', senderSessionId: caller.id })
-    expect(request.message.content).toContainEqual({ type: 'text', text: '  Please review.\nKeep the context.  ' })
-    expect(result.isError).toBe(false)
-    expect(result.content).toEqual([{ type: 'text', text: JSON.stringify({ message_id: request.message.id }) }])
+  it('delivers to an ordinary Session in another directory under the real sender', async () => {
+    const { ctx, caller, target, resolveAgent } = await setup()
+    const result = await call(ctx, { session_id: target.id, message: '  Please review.\nKeep the context.  ', sender: 'forged' }, caller)
+    expect(resolveAgent).toHaveBeenCalledWith(target.id)
+    await target.whenIdle()
+    const [message] = agentMessages(target)
+    expect(message).toMatchObject({
+      source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
+      content: [
+        { type: 'text', text: `Agent ${caller.id} sent a message: ` },
+        { type: 'text', text: '  Please review.\nKeep the context.  ' },
+      ],
+    })
+    expect(result).toMatchObject({
+      isError: false,
+      content: [{ type: 'text', text: JSON.stringify({ message_id: message!.id }) }],
+    })
+    expect(agentMessages(caller)).toEqual([])
   })
 
-  it.each(['', ' ', '\t\n'])('rejects a blank message before delivery (%j)', async (message) => {
-    const { ctx, caller, deliver } = await setup()
+  it.each(['', ' ', '\t\n'])('rejects a blank message before activation (%j)', async (message) => {
+    const { ctx, caller, resolveAgent } = await setup()
     const result = await call(ctx, { session_id: 'recipient', message }, caller)
     expect(result).toMatchObject({ isError: true, error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
-    expect(deliver).not.toHaveBeenCalled()
+    expect(resolveAgent).not.toHaveBeenCalled()
   })
 
-  it('requires a runtime caller and ignores model-supplied sender or authority', async () => {
-    const { ctx, caller, deliver } = await setup()
-    const absent = await call(ctx, { session_id: 'recipient', message: 'Hello' })
-    expect(absent).toMatchObject({
+  it('requires a calling Agent and refuses to message itself', async () => {
+    const { ctx, caller, resolveAgent } = await setup()
+    expect(await call(ctx, { session_id: 'recipient', message: 'Hello' })).toMatchObject({
       isError: true,
       error: { info: { name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' } },
     })
-    const forged = await call(ctx, { session_id: 'recipient', message: 'Hello', sender: 'another', authorized: true }, caller)
-    expect(forged.isError).toBe(false)
-    expect(deliver).toHaveBeenCalledTimes(1)
-    const [request, runtime] = deliver.mock.calls[0]!
-    expect(request.message.source).toMatchObject({ senderSessionId: caller.id })
-    expect(runtime.caller).toBe(caller)
-  })
-
-  it('propagates provider failures without converting them into receipts or retrying', async () => {
-    const { ctx, caller, deliver } = await setup()
-    deliver.mockRejectedValue(new SessionControlError('Target is archived', 'SESSION_CONTROL_ARCHIVED'))
-    const result = await call(ctx, { session_id: 'recipient', message: 'Hello' }, caller)
-    expect(result).toMatchObject({
+    expect(await call(ctx, { session_id: caller.id, message: 'Hello' }, caller)).toMatchObject({
       isError: true,
-      error: { info: { name: 'SessionControlError', code: 'SESSION_CONTROL_ARCHIVED' } },
+      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_SELF' } },
     })
-    expect(deliver).toHaveBeenCalledTimes(1)
+    expect(resolveAgent).not.toHaveBeenCalled()
   })
 
-  it('forwards cancellation while waiting for acceptance', async () => {
-    const { ctx, caller, deliver } = await setup()
-    const entered = Promise.withResolvers<undefined>()
-    const controller = new AbortController()
-    deliver.mockImplementation(async (_request, runtime) => {
-      entered.resolve(undefined)
-      await new Promise<void>((_resolve, reject) => {
-        runtime.signal.addEventListener('abort', () => { reject(new DOMException('Cancelled', 'AbortError')) }, { once: true })
-      })
-      throw new Error('cancelled delivery unexpectedly continued')
+  it('rejects archived targets before activation and after an activation wait', async () => {
+    const { ctx, caller, target, archivedSessionIds, resolveAgent } = await setup()
+    archivedSessionIds.push(target.id)
+    expect(await call(ctx, { session_id: target.id, message: 'Hello' }, caller)).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_ARCHIVED' } },
     })
-    const pending = call(ctx, { session_id: 'recipient', message: 'Hello' }, caller, controller.signal)
-    await entered.promise
+    expect(resolveAgent).not.toHaveBeenCalled()
+
+    archivedSessionIds.splice(0)
+    resolveAgent.mockImplementationOnce(async () => {
+      archivedSessionIds.push(target.id)
+      return { agent: target }
+    })
+    expect(await call(ctx, { session_id: target.id, message: 'Hello' }, caller)).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_ARCHIVED' } },
+    })
+    expect(agentMessages(target)).toEqual([])
+  })
+
+  it('directs subagent targets to send_message and keeps other controller failures', async () => {
+    const { ctx, caller, resolveAgent } = await setup()
+    const ownership = new RemoteError('session/agent-busy', 'session "child" is owned by subagent routing', {
+      reason: 'use subagent delivery for this child session',
+    })
+    resolveAgent.mockResolvedValueOnce({ error: ownership })
+    const subagent = await call(ctx, { session_id: 'child', message: 'Hello' }, caller)
+    expect(subagent).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_SUBAGENT_OWNED' } },
+    })
+    expect(subagent.content).toEqual([{
+      type: 'text', text: 'Error: session "child" is a subagent; message it with send_message and its agent name',
+    }])
+    expect(await call(ctx, { session_id: 'missing', message: 'Hello' }, caller)).toMatchObject({
+      isError: true,
+      error: { info: { code: 'session/not-found' } },
+    })
+  })
+
+  it('stops waiting at cancellation and never delivers after the activation settles', async () => {
+    const { ctx, caller, target, resolveAgent } = await setup()
+    const activation = Promise.withResolvers<ApiSessionAgentResult>()
+    resolveAgent.mockReturnValueOnce(activation.promise)
+    const controller = new AbortController()
+    const pending = call(ctx, { session_id: target.id, message: 'Hello' }, caller, controller.signal)
+    await vi.waitFor(() => { expect(resolveAgent).toHaveBeenCalledTimes(1) })
     controller.abort(new DOMException('Cancelled', 'AbortError'))
     expect(await pending).toMatchObject({ isError: true, error: { info: { name: 'AbortError', code: 'ABORTED' } } })
-    expect(deliver).toHaveBeenCalledTimes(1)
+    activation.resolve({ agent: target })
+    await activation.promise
+    await target.whenIdle()
+    expect(agentMessages(target)).toEqual([])
   })
 
-  it('retains an accepted receipt when cancellation arrives before the tool returns', async () => {
-    const { ctx, caller, deliver } = await setup()
-    const controller = new AbortController()
-    deliver.mockImplementation(async (request) => {
-      controller.abort(new DOMException('Cancelled after acceptance', 'AbortError'))
-      return { messageId: request.message.id }
+  it('rejects a target whose lifecycle disposal has begun', async () => {
+    const { ctx, caller, options, resolveAgent } = await setup()
+    const closing = await ctx.agents.create({
+      sessionId: SessionId('closing'), agentOptions: options, meta: { cwd: '/elsewhere/closing' },
     })
-    const result = await call(ctx, { session_id: 'recipient', message: 'Hello' }, caller, controller.signal)
-    expect(deliver).toHaveBeenCalledTimes(1)
-    const [request] = deliver.mock.calls[0]!
+    resolveAgent.mockImplementationOnce(async () => {
+      const disposal = closing.dispose()
+      void disposal.catch(() => undefined)
+      return { agent: closing.agent }
+    })
+    expect(await call(ctx, { session_id: 'closing', message: 'Hello' }, caller)).toMatchObject({
+      isError: true,
+      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_INPUT_CLOSED' } },
+    })
+    expect(agentMessages(closing.agent)).toEqual([])
+  })
+
+  it('reports an inbox write failure without converting it to a closing target', async () => {
+    const { ctx, caller, target, resolveAgent } = await setup()
+    const failure = new Error('inbox write failed')
+    vi.spyOn(target, 'steer').mockImplementation(() => { throw failure })
+    resolveAgent.mockResolvedValueOnce({ agent: target })
+    const result = await call(ctx, { session_id: target.id, message: 'Hello' }, caller)
+    expect(result).toMatchObject({ isError: true, error: { message: 'inbox write failed' } })
+    expect(result.error?.info?.code).not.toBe('SESSION_MESSAGE_INPUT_CLOSED')
+  })
+
+  it('retains an accepted receipt when cancellation arrives from the inbox notification', async () => {
+    const { ctx, caller, target } = await setup()
+    const controller = new AbortController()
+    ctx.on('agent/inbox/inserted', ({ agent }) => {
+      if (agent === target) controller.abort(new DOMException('Cancelled after acceptance', 'AbortError'))
+    })
+    const result = await call(ctx, { session_id: target.id, message: 'Hello' }, caller, controller.signal)
+    await target.whenIdle()
+    const [message] = agentMessages(target)
     expect(result).toMatchObject({
       isError: false,
-      content: [{ type: 'text', text: JSON.stringify({ message_id: request.message.id }) }],
+      content: [{ type: 'text', text: JSON.stringify({ message_id: message!.id }) }],
     })
   })
 
@@ -129,11 +210,8 @@ describe('Session message tool', () => {
       content: [{ type: 'text', text: 'Review this' }],
     })
     const schema = ctx.tools.schemas().find(item => item.name === 'session_send_message')!
-    expect(schema.parameters).toMatchObject({
-      properties: { session_id: { type: 'string' }, message: { type: 'string' } },
-      required: ['session_id', 'message'],
-    })
     expect(Object.keys(schema.parameters.properties ?? {})).toEqual(['session_id', 'message'])
+    expect(schema.parameters.required).toEqual(['session_id', 'message'])
     await fiber.dispose()
     expect(ctx.tools.get('session_send_message')).toBeUndefined()
   })

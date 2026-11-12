@@ -26,8 +26,6 @@ import {
 } from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
-import SessionControl from '@deepseek-ai/dsh-session-control'
-import SessionControlLocal from '@deepseek-ai/dsh-session-control-local'
 import { vi } from 'vitest'
 import {
   RemoteError,
@@ -239,12 +237,6 @@ export function installSessionReadTestServices(ctx: Context): void {
   if (ctx.get('sessionQuery') === undefined) new TestSessionQuery(ctx)
 }
 
-/** Mount ordinary Session activation after a direct fixture supplies its required services. */
-export async function mountSessionControlTestServices(ctx: Context): Promise<void> {
-  if (ctx.get('sessionControl') === undefined) await ctx.plugin(SessionControl)
-  if (ctx.get('sessionControlLocal') === undefined) await ctx.plugin(SessionControlLocal)
-}
-
 async function installControllers(
   ctx: Context,
   defaults: TestSessionRemoteDefaults,
@@ -304,7 +296,6 @@ async function installControllers(
     } as never)
   }
   installSessionReadTestServices(ctx)
-  await mountSessionControlTestServices(ctx)
   if (ctx.get('remoteAccess') === undefined) new RemoteAccessService(ctx)
   const cwd = vi.spyOn(process, 'cwd').mockReturnValue(defaults.cwd)
   class TestController extends SessionController {

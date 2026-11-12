@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Local Session control",
-    "description": "Restore independent Sessions and accept messages in the current runtime."
-  }
-}

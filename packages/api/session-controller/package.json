@@ -113,9 +113,7 @@
     "@deepseek-ai/dsh-util-values": "workspace:*",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-session-control": "workspace:*",
-    "@deepseek-ai/dsh-session-control-local": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-session-persistence": {
@@ -174,8 +172,6 @@
     "@deepseek-ai/dsh-util-workspace-path": "workspace:*",
     "@deepseek-ai/dsh-workspace": "workspace:*",
     "@types/mime-types": "^3.0.1",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-session-control": "workspace:*",
-    "@deepseek-ai/dsh-session-control-local": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

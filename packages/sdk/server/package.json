@@ -83,7 +83,6 @@
     "@deepseek-ai/dsh-tools": "workspace:*",
     "@deepseek-ai/dsh-user-approval": "workspace:*",
     "@deepseek-ai/dsh-user-questions": "workspace:*",
-    "@deepseek-ai/dsh-working-directory": "workspace:*",
-    "@deepseek-ai/dsh-session-control": "workspace:*"
+    "@deepseek-ai/dsh-working-directory": "workspace:*"
   }
 }

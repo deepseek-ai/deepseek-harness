@@ -601,23 +601,6 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering.',
   },
   {
-    key: 'sessionControl',
-    pkg: 'session-control',
-    title: 'Agent-authored Session messaging',
-    mode: 'seam',
-    implementations: ['session-control-local'],
-    consumers: ['tool-session-control', 'subagent'],
-    note: 'Owns sender attribution, target serialization, acceptance receipts, and reversible provider registration; subagent delivery retains its existing tree authority and lifecycle.',
-  },
-  {
-    key: 'sessionControlLocal',
-    pkg: 'session-control-local',
-    title: 'Local independent Session delivery',
-    mode: 'service',
-    consumers: ['api-session-controller'],
-    note: 'Restores independent Sessions with their recorded preset, supplies caller-owned activation to the API Session Controller, and refuses archived or closing message targets before accepting input.',
-  },
-  {
     key: 'fileReferences',
     pkg: 'file-reference',
     title: 'File reference discovery',

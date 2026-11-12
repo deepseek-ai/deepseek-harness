@@ -1,8 +1,0 @@
-- id: tool-session-control
-  disabled: false
-
-- insert:
-    - id: workspace
-      name: '@deepseek-ai/dsh-workspace'
-    - id: session-control-message-fixture
-      name: '../../../packages/session/tool-session-control/tests/fixtures/session-message.mjs'

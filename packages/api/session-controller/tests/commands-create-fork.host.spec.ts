@@ -16,7 +16,7 @@ import {
   type ApiSessionCreateRequest,
 } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
-import { installSessionReadTestServices, mountSessionControlTestServices, testSessionPersistence } from './test-remote.ts'
+import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function expectFailure(operation: Promise<unknown>, code: string): Promise<void> {
@@ -56,7 +56,6 @@ async function baseContext(): Promise<Context> {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
     saveSelection: () => Promise.resolve(),
   } as never)
-  await mountSessionControlTestServices(ctx)
   return ctx
 }
 

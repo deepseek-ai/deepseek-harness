@@ -4,11 +4,11 @@ import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentOptions, AgentSetup } from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-agent-default-model'
+import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { SessionControlError } from '@deepseek-ai/dsh-session-control'
-import type { OrdinarySessionComposition } from '@deepseek-ai/dsh-session-control-local'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-typert-registry'
@@ -77,7 +77,10 @@ export interface ApiSessionCreated {
 }
 
 /** Resolved preset and pre-publication Agent setup for one create or resume. */
-type ApiSessionComposition = OrdinarySessionComposition
+interface ApiSessionComposition {
+  readonly agentPreset?: string
+  readonly setup: AgentSetup
+}
 
 /** Failures produced while resolving one ordinary Session identity to its live Agent. */
 export type ApiSessionAgentError = RemoteError<'session/not-found' | 'session/agent-busy' | 'session/writer-held' | 'gateway/internal'>
@@ -256,7 +259,18 @@ export class ApiSessionAgentController {
    * @returns the resolved preset identity and Agent setup callback.
    */
   async composeAgent(presetId: string | undefined): Promise<ApiSessionComposition> {
-    return this.ctx.sessionControlLocal.compose(presetId)
+    const presets = this.ctx.get('agentPresets')
+    if (presets === undefined) {
+      return { setup: (agentCtx) => { installModelSelection(agentCtx) } }
+    }
+    const resolvedId = (await presets.resolve(presetId)).id
+    return {
+      agentPreset: resolvedId,
+      setup: async (agentCtx) => {
+        installModelSelection(agentCtx)
+        await presets.mount(agentCtx, resolvedId)
+      },
+    }
   }
 
   private liveAgent(sessionId: SessionId): ApiSessionAgentResult | undefined {
@@ -288,14 +302,19 @@ export class ApiSessionAgentController {
     if (observation.header.id !== sessionId || observation.header.cwd === undefined) {
       throw new ApiSessionNotFound(`session "${sessionId}" not found`)
     }
-    try {
-      return (await this.ctx.sessionControlLocal.resumeObserved(observation)).agent
-    } catch (error: unknown) {
-      if (error instanceof SessionControlError && error.code === 'SESSION_CONTROL_SUBAGENT_OWNED') {
-        throw new ApiSessionSubagentOwnership(sessionId)
-      }
-      throw error
+    if (hasApiSessionSubagentOwner({ header: observation.header })) {
+      throw new ApiSessionSubagentOwnership(sessionId)
     }
+    const composition = await this.composeAgent(this.presetForObservation(observation))
+    const published = this.ctx.sessions.get(sessionId)
+    if (published !== undefined && hasApiSessionSubagentOwner(published)) {
+      throw new ApiSessionSubagentOwnership(sessionId)
+    }
+    return (await this.ctx.agents.resume({
+      resumeSessionId: sessionId,
+      agentOptions: this.agentOptions(),
+      setup: composition.setup,
+    })).agent
   }
 
   private async inOrder<Value>(sessionId: SessionId, operation: () => Promise<Value>): Promise<Value> {
@@ -432,7 +451,13 @@ export class ApiSessionAgentController {
   }
 
   private agentOptions(): AgentOptions {
-    return this.ctx.sessionControlLocal.defaultOptions()
+    const defaults = this.ctx.agentDefaultModel
+    // A Session that records no selection or request follows default changes.
+    return {
+      get provider() { return defaults.currentSelection().provider },
+      get model() { return defaults.currentSelection().model },
+      get reasoningEffort() { return defaults.currentSelection().reasoningEffort },
+    }
   }
 
   /**
@@ -441,6 +466,9 @@ export class ApiSessionAgentController {
    * @returns the current preset, or undefined when the capability is absent.
    */
   presetForObservation(observation: SessionObservation): string | undefined {
-    return this.ctx.sessionControlLocal.presetForObservation(observation)
+    if (observation.projections === undefined) {
+      throw new Error('api-session: Agent activation requires a projected Session observation')
+    }
+    return observation.projections.values.agentPreset ?? undefined
   }
 }

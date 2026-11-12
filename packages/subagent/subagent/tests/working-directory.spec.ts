@@ -1,4 +1,3 @@
-import SessionControl from '@deepseek-ai/dsh-session-control'
 import { startTestActivation } from './local-activation.ts'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises'
@@ -35,7 +34,6 @@ async function fixture() {
   await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'sessions') })
   await ctx.plugin(TestSessionQuery)
   await mountWorkingDirectoryFixture(ctx)
-  await ctx.plugin(SessionControl)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(Spawn, { providerName: 'spawn' })
   await ctx.plugin(Fork, { providerName: 'fork' })
