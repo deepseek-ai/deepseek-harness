@@ -316,16 +316,7 @@ Either unrecorded rating opens the Session's feedback dialog, the `feedback-dial
 
 ## Feedback in exported Session logs
 
-This section is for consumers that select rated Sessions from exported logs. In the default `FEEDBACK_ONLY` mode, [`session-telemetry-otel`](../../packages/session/session-telemetry-otel/README.md) exports each canonical event as one OTel log record named `session-log`. Each new feedback event of the Session itself releases the not-yet-exported log prefix that ends at that event, so the export also contains the conversation before the feedback.
-
-| Record field | Content |
-|---|---|
-| `session.id`, `sessionId` | Session whose log contains the event |
-| `session.format_version` | Session log format version |
-| `event.type`, `event.seq` | Event type and its zero-based position in the Session log |
-| `session.parent_id`, `session.seed_length` | Present only on forks; events with `event.seq` below `session.seed_length` were copied from the parent Session |
-| `content` | JSON string `{ type, seq, time, data }`; `time` is Unix epoch milliseconds and `data` is the event payload |
-| Resource `user.id` | [Anonymous user id](../../packages/identity/anonymous-user-id/README.md) of the harness home |
+This section is for consumers that select rated Sessions from exported logs. The [OTel backend](../../packages/session/session-telemetry-otel/README.md#use-this-package) owns the record fields and the feedback that releases a log prefix; the [session-telemetry subsystem](session-telemetry.md) owns deduplication, and [the redact waterfall](session-telemetry.md#session-telemetryrecord--waterfall) owns how exported `data` can differ from the canonical log. The feedback-specific `data` fields are:
 
 | Event | Target | `data` | Meaning |
 |---|---|---|---|
@@ -333,18 +324,13 @@ This section is for consumers that select rated Sessions from exported logs. In 
 | `feedback/message-put` | One assistant message | `sessionId`, and `item` with `messageId`, `rating`, `note?`, `category?`, `version`, `createdAt`, `updatedAt` | Complete current value after a creation or edit |
 | `feedback/message-delete` | One assistant message | `sessionId`, `messageId` | Retraction of the current value |
 
-Read exported feedback with these rules:
+Derive feedback with these rules:
 
-1. Deduplicate by `session.id`, `session.format_version`, and `event.seq`; restarts and cold snapshots can export the same prefix again.
-2. Skip events copied from a fork parent: events whose `event.seq` is below `session.seed_length`, and message events whose `data.sessionId` differs from `session.id`.
-3. Take the event with the highest `event.seq` per `session.id` and `messageId` as the current message feedback; when that event is `feedback/message-delete`, the message has no current feedback. Earlier puts remain as edit history.
-4. Locate the rated reply through the `assistant/message` event in the same Session whose `data.message.id` equals `item.messageId`; its `data.turn` and the events before it reproduce the conversation state.
+1. When counting a Session's own feedback, exclude feedback events whose `seq` is below `session.seed_length`, which only seeded Sessions carry, and `feedback/message-*` events whose `data.sessionId` differs from the record's `sessionId`. Keep every other event, including the inherited prefix, for the rules below.
+2. Group `feedback/message-put` by `data.item.messageId` and `feedback/message-delete` by `data.messageId` within one Session; the event with the highest `seq` is the current value, and a `feedback/message-delete` there means no current feedback. Earlier puts remain as edit history.
+3. The rated reply is the append-origin `assistant/message` whose `data.message.id` equals `data.item.messageId`; in a seeded Session it can lie in the inherited prefix. Its `data.turn` identifies the turn, and the events up to it reproduce the conversation state.
 
-The services and events record no actor, and any composed Host plugin, runtime extension, or Client plugin can call `sessionFeedback.record` and `messageFeedback.put` or append these events directly. Exported feedback fields therefore contain plugin-written state, and each such write also triggers an export. Treat these values as plugin writes, not human feedback:
-
-- a `feedback/record` whose `text` parses as a JSON object with string members `namespace` and `type`;
-- a `feedback/message-put` whose `note` matches `^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)+:\s*[{[]` (a slash-separated name followed by serialized JSON);
-- a Session with far more feedback events than assistant turns, which needs manual review before use.
+The services and events record no actor. Host plugins and runtime extensions can call `sessionFeedback.record` and `messageFeedback.put` or append these events directly, and Client plugins can call the same Remotes, so exported feedback fields can contain plugin-written state. Each appended feedback event of the Session itself also authorizes the release of the prefix that ends at it. Text content does not establish who wrote a value; recognition rules for specific plugins belong to the consumer's tooling.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
