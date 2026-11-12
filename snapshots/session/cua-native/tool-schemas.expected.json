@@ -641,8 +641,11 @@
                           "enum": [
                             "command",
                             "control",
+                            "ctrl",
                             "option",
+                            "alt",
                             "shift",
+                            "win",
                             "fn"
                           ]
                         }
@@ -716,8 +719,11 @@
                           "enum": [
                             "command",
                             "control",
+                            "ctrl",
                             "option",
+                            "alt",
                             "shift",
+                            "win",
                             "fn"
                           ]
                         }
@@ -794,8 +800,11 @@
                           "enum": [
                             "command",
                             "control",
+                            "ctrl",
                             "option",
+                            "alt",
                             "shift",
+                            "win",
                             "fn"
                           ]
                         }
@@ -1261,8 +1270,11 @@
                           "enum": [
                             "command",
                             "control",
+                            "ctrl",
                             "option",
+                            "alt",
                             "shift",
+                            "win",
                             "fn"
                           ]
                         }
@@ -1328,8 +1340,11 @@
                           "enum": [
                             "command",
                             "control",
+                            "ctrl",
                             "option",
+                            "alt",
                             "shift",
+                            "win",
                             "fn"
                           ]
                         }

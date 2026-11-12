@@ -1,25 +1,25 @@
 namespace DeepSeek.Cua.Protocol;
 
-public sealed record KeyChord(string Key, string[] Modifiers)
+public static class KeyChord
 {
-    public static KeyChord Parse(string text, IEnumerable<string> extra)
+    public static string[] ModifiersForPress(string key, IEnumerable<string> names)
     {
-        if (text.Length == 0) throw new NativeFailure("INVALID_ARGUMENT", "A key name is required");
-        var plus = text == "+" || text.EndsWith("++", StringComparison.Ordinal);
-        var parts = plus ? text[..^1].TrimEnd('+').Split(new[] { '+' }, StringSplitOptions.RemoveEmptyEntries) : text.Split('+');
-        var key = plus ? "+" : parts[^1];
-        if (key.Length == 0) throw new NativeFailure("INVALID_ARGUMENT", "A key chord must end with a key");
-        var modifiers = (plus ? parts : parts.Take(parts.Length - 1)).Concat(extra).Select(NormalizeModifier).Distinct().ToArray();
-        return new(key, modifiers);
+        var modifiers = names.Select(NormalizeModifier).Distinct().ToArray();
+        var name = key.ToLowerInvariant();
+        if (modifiers.Contains("win") || name == "printscreen" || modifiers.Contains("alt") && name is "tab" or "escape" or "esc"
+            || modifiers.Contains("ctrl") && name is "escape" or "esc"
+            || modifiers.Contains("ctrl") && modifiers.Contains("alt") && name == "delete")
+            throw new NativeFailure("UNSUPPORTED", "This shortcut acts on the system rather than the selected application");
+        return modifiers;
     }
 
     public static string NormalizeModifier(string value) => value.ToLowerInvariant() switch
     {
-        "control" or "ctrl" => "control",
+        "ctrl" or "control" => "ctrl",
         "shift" => "shift",
-        "option" or "alt" => "option",
-        "command" or "cmd" or "meta" or "win" or "windows" => "command",
-        "fn" => throw new NativeFailure("UNSUPPORTED", "Windows has no general Fn-key injection; use an available application action"),
+        "alt" => "alt",
+        "win" => "win",
+        "fn" => throw new NativeFailure("UNSUPPORTED", "Fn is typically handled by keyboard firmware rather than exposed as a distinct key in the Windows input layer"),
         _ => throw new NativeFailure("INVALID_ARGUMENT", "Unknown key modifier"),
     };
 }

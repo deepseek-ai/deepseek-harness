@@ -151,7 +151,7 @@ export interface CuaSurface {
    * Press and release one key at the current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Provider-defined key name to press and release; not a chord.
-   * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
+   * @param modifiers - Modifier names held for this keystroke. The provider validates the names; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>

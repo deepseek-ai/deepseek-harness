@@ -6,12 +6,17 @@ namespace DeepSeek.Cua.Windows;
 
 internal static class Input
 {
-    private static readonly int[] ModifierKeys = [0x10, 0x11, 0x12, 0x5B, 0x5C];
+    private const ushort VkShift = 0x10;
+    private const ushort VkControl = 0x11;
+    private const ushort VkAlt = 0x12;
+    private const ushort VkLeftWin = 0x5B;
+    private const ushort VkRightWin = 0x5C;
+
+    private static readonly int[] ModifierKeys = [VkShift, VkControl, VkAlt, VkLeftWin, VkRightWin];
     private static ushort Modifier(string name) => name switch
     {
-        "shift" => 0x10, "control" => 0x11, "option" => 0x12,
-        "command" => throw new NativeFailure("UNSUPPORTED", "Windows-key shortcuts act outside the selected application; use Control for application shortcuts"),
-        "fn" => throw new NativeFailure("UNSUPPORTED", "Windows does not expose a portable Fn input event"),
+        "shift" => VkShift, "ctrl" => VkControl, "alt" => VkAlt, "win" => VkLeftWin,
+        "fn" => throw new NativeFailure("UNSUPPORTED", "Fn is typically handled by keyboard firmware rather than exposed as a distinct key in the Windows input layer"),
         _ => throw new NativeFailure("INVALID_ARGUMENT", "Unknown key modifier"),
     };
     private static Win32.Input Keyboard(ushort key, ushort scan = 0, uint flags = 0) => new()
@@ -40,10 +45,10 @@ internal static class Input
         var attempted = new List<ushort>();
         try
         {
-            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key, flags: key == 0x5B ? 1u : 0)); }
+            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key, flags: key == VkLeftWin ? 1u : 0)); }
             action();
         }
-        finally { foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == 0x5B ? 1u : 0))); }
+        finally { foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == VkLeftWin ? 1u : 0))); }
     }
 
     private static (ushort Key, bool Extended, string[] Modifiers) ResolveKey(string name)
@@ -80,22 +85,17 @@ internal static class Input
         if (mapped == -1) throw new NativeFailure("UNSUPPORTED", "This character has no key in the target keyboard layout; use typeText");
         var modifiers = new List<string>();
         if ((mapped & 0x100) != 0) modifiers.Add("shift");
-        if ((mapped & 0x200) != 0) modifiers.Add("control");
-        if ((mapped & 0x400) != 0) modifiers.Add("option");
+        if ((mapped & 0x200) != 0) modifiers.Add("ctrl");
+        if ((mapped & 0x400) != 0) modifiers.Add("alt");
         return ((ushort)(mapped & 0xFF), false, modifiers.ToArray());
     }
 
     internal static void Press(AppState app, WindowState window, string key, string[] modifiers, RequestContext context)
     {
         Windows.RequireForeground(app, window, context);
-        var chord = new KeyChord(key, modifiers.Select(KeyChord.NormalizeModifier).Distinct().ToArray());
-        var name = chord.Key.ToLowerInvariant();
-        if (name == "printscreen" || chord.Modifiers.Contains("option") && name is "tab" or "escape" or "esc"
-            || chord.Modifiers.Contains("control") && name is "escape" or "esc"
-            || chord.Modifiers.Contains("control") && chord.Modifiers.Contains("option") && name == "delete")
-            throw new NativeFailure("UNSUPPORTED", "This shortcut acts on the system rather than the selected application");
-        var resolved = ResolveKey(chord.Key);
-        WithModifiers(chord.Modifiers.Concat(resolved.Modifiers), () =>
+        var held = KeyChord.ModifiersForPress(key, modifiers);
+        var resolved = ResolveKey(key);
+        WithModifiers(held.Concat(resolved.Modifiers), () =>
         {
             Windows.RequireForeground(app, window, context);
             var flags = resolved.Extended ? 1u : 0;
@@ -189,7 +189,7 @@ internal static class Input
         var buttonAttempted = false;
         try
         {
-            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key)); }
+            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key, flags: key == VkLeftWin ? 1u : 0)); }
             point = WindowState.Point(window.RequireObservation(app, context), x, y);
             Hit(app, window, point, context);
             Send(Move(point));
@@ -207,7 +207,7 @@ internal static class Input
         finally
         {
             if (buttonAttempted) Release(Mouse(flags.Up));
-            foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2));
+            foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == VkLeftWin ? 1u : 0)));
         }
     }
 
@@ -240,7 +240,7 @@ internal static class Input
         var buttonAttempted = false;
         try
         {
-            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key, flags: key == 0x5B ? 1u : 0)); }
+            foreach (var key in keys) { attempted.Add(key); Send(Keyboard(key, flags: key == VkLeftWin ? 1u : 0)); }
             geometry = window.RequireObservation(app, context);
             from = WindowState.Point(geometry, fromX, fromY);
             Hit(app, window, from, context);
@@ -257,7 +257,7 @@ internal static class Input
         finally
         {
             if (buttonAttempted) Release(Mouse(flags.Up));
-            foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == 0x5B ? 1u : 0)));
+            foreach (var key in attempted.AsEnumerable().Reverse()) Release(Keyboard(key, flags: 2u | (key == VkLeftWin ? 1u : 0)));
         }
     }
 }
