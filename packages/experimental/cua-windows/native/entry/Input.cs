@@ -166,7 +166,6 @@ internal static class Input
     {
         var point = WindowState.Point(window.RequireObservation(app, context), x, y);
         Hit(app, window, point, context);
-        RequireIdleModifiers();
         if (!Win32.GetCursorPos(out var before)) throw new NativeFailure("INPUT_UNAVAILABLE", "The current pointer position is unavailable");
         Send(Move(point));
         return new { dispatched = true, hoverRoute = "system-pointer", systemPointerMoved = before.X != point.X || before.Y != point.Y };
