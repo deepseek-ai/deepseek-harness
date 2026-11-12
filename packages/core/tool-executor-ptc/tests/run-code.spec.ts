@@ -15,7 +15,7 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createRunCodeTool, RunCodeConfig } from '../src/run-code.ts'
 
 class ControlledRuntime extends PtcRuntime {
-  readonly language = 'typescript'
+  readonly language: string = 'typescript'
   readonly isolation = 'fixture'
   override get retainsState() { return true }
   override get programFormat() { return 'repl' as const }
@@ -79,6 +79,16 @@ async function setup(definition: ToolDefinition, limits?: Partial<RunCodeConfig>
 }
 
 describe('registered program tool factory', () => {
+  it.each(['python', 'ruby', 'constructor'])('rejects unsupported runtime %s before creating a program tool', async (language) => {
+    const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    class UnsupportedRuntime extends ControlledRuntime { override readonly language = language }
+    await ctx.plugin(UnsupportedRuntime)
+    expect(() => createRunCodeTool(ctx, {
+      name: 'unsupported_program', description: 'Run a program.', runtime: ctx.ptcRuntime, tools: [],
+    })).toThrow(expect.objectContaining({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' }))
+  })
+
   it('uses the explicit runtime and binds only private definitions under native execution', async () => {
     const body = vi.fn(async () => 'private result')
     const definition = privateTool(body)
