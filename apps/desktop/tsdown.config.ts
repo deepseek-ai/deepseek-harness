@@ -50,6 +50,7 @@ export default defineConfig([
     dts: false,
     clean: false,
     codeSplitting: false,
+    // The standalone worker has no node_modules; inline even production dependencies.
     deps: { alwaysBundle: ['@deepseek-ai/dsh-atomic-write', '@deepseek-ai/dsh-error'] },
   },
   {
