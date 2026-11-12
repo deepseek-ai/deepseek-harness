@@ -22,16 +22,21 @@ class InputSource extends AutomationSource<AutomationCandidate> {
 
 const active: Awaited<ReturnType<typeof harness>>[] = []
 const sources: InputSource[] = []
+const beforeDispose: Array<() => Promise<void>> = []
 const ID = ScheduleId('source-task')
 const TARGET = SessionId('source-target')
 const INPUT = 'Build failed\n"master" needs inspection'
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-09-16T00:00:00Z') })
 afterEach(async () => {
-  for (const source of sources.splice(0)) await source.dispose()
-  for (const test of active.splice(0)) await test.ctx.fiber.dispose()
-  vi.restoreAllMocks()
-  vi.useRealTimers()
+  try {
+    for (const cleanup of beforeDispose.splice(0)) await cleanup()
+    for (const source of sources.splice(0)) await source.dispose()
+    for (const test of active.splice(0)) await test.ctx.fiber.dispose()
+  } finally {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  }
 })
 
 function stored(fields: Partial<ScheduleTask> = {}): ScheduleTask {
@@ -646,6 +651,166 @@ it('keeps an old source connection bound to its stopped runtime after Schedule i
   expect(test.agent.followup).toHaveBeenCalledOnce()
   expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
 })
+
+it('unloads an unused provider before releasing an unrelated FIFO write or its queued source input', async () => {
+  const entered = Promise.withResolvers<undefined>()
+  const release = Promise.withResolvers<undefined>()
+  const queued = Promise.withResolvers<undefined>()
+  const pending: Promise<unknown>[] = []
+  beforeDispose.push(async () => {
+    release.resolve(undefined)
+    await Promise.allSettled(pending)
+  })
+  const pool = new MemoryMediaPool()
+  let blocking = false
+  const test = await setup(stored(), {
+    sessionController: false, pool,
+    backend: gatedScheduleBackend(pool, { putRecord: async () => {
+      if (blocking) { entered.resolve(undefined); await release.promise }
+    } }),
+  })
+  const provider = await test.ctx.plugin({
+    apply(ctx: Context) { ctx.provide('sessionController', { resolveAgent: test.resolve, create: test.createSession } as never) },
+  })
+  test.source.subscribe(async () => { queued.resolve(undefined) })
+  blocking = true
+  const editing = test.service.edit({ id: ID, action: 'update', patch: { title: 'Pending edit' } })
+  pending.push(editing)
+  let output: Promise<void> | undefined
+  let closing: Promise<void> | undefined
+  try {
+    await entered.promise
+    output = expect(test.source.publish(INPUT)).rejects.toMatchObject({
+      code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ message: 'schedule: no Session activation provider' })] },
+    })
+    pending.push(output)
+    await queued.promise
+    closing = Promise.resolve(provider.dispose())
+    pending.push(closing)
+    await closing
+    expect(test.resolve).not.toHaveBeenCalled()
+    expect(test.createSession).not.toHaveBeenCalled()
+    release.resolve(undefined)
+    await editing
+    await output
+    expect(test.agent.followup).not.toHaveBeenCalled()
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
+  } finally {
+    release.resolve(undefined)
+    await editing
+    await output
+    await closing
+  }
+})
+
+it.each([
+  ['new_once', 'create'], ['new_once', 'resolve'], ['new_once', 'flush'], ['new_once', 'receipt'], ['new', 'create'],
+] as const)(
+  'holds a borrowed %s provider through %s and receipt settlement without waiting for the FIFO tail', async (kind, stage) => {
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const tailEntered = Promise.withResolvers<undefined>()
+    const tailRelease = Promise.withResolvers<undefined>()
+    const queued = Promise.withResolvers<undefined>()
+    const pending: Promise<unknown>[] = []
+    beforeDispose.push(async () => {
+      release.resolve(undefined)
+      tailRelease.resolve(undefined)
+      await Promise.allSettled(pending)
+    })
+    const tailId = ScheduleId('unrelated-provider-tail')
+    const reserved = SessionId('leased-provider-session')
+    const pool = new MemoryMediaPool()
+    let receiptReady = false
+    let tailBlocking = false
+    let providerClosed = false
+    let receiptAtClose = false
+    const pause = async (point: typeof stage) => {
+      if (stage === point) { entered.resolve(undefined); await release.promise }
+      expect(providerClosed).toBe(false)
+    }
+    const target = kind === 'new' ? { kind, create: {} } : { kind, sessionId: reserved, create: {} }
+    const test = await setup(seededTask(stored().record, target), {
+      sessionController: false, pool,
+      backend: gatedScheduleBackend(pool, { putRecord: async (_table, key) => {
+        if (key === tailId && tailBlocking) { tailEntered.resolve(undefined); await tailRelease.promise }
+        if (key === ID && receiptReady) await pause('receipt')
+      } }),
+    })
+    await taskTable(test.ctx).put(tailId, boundTask(TARGET,
+      createAfterScheduleRecord(tailId, 'Unrelated task', 3600, Date.now(), 'Unrelated task')))
+    const agents = new Map<SessionId, HarnessAgent>()
+    test.createSession.mockImplementation(async (request) => {
+      await pause('create')
+      agents.set(request.sessionId!, agentFor(test.ctx, request.sessionId!))
+      return { sessionId: request.sessionId! }
+    })
+    test.resolve.mockImplementation(async (id) => {
+      expect(providerClosed).toBe(false)
+      const agent = agents.get(id)
+      if (agent === undefined) return { error: new RemoteError('session/not-found', 'No Session', { sessionId: id }) }
+      await pause('resolve')
+      return { agent }
+    })
+    test.flush.mockImplementation(async () => { await pause('flush'); receiptReady = true })
+    const provider = await test.ctx.plugin({
+      apply(ctx: Context) {
+        ctx.effect(function* () {
+          yield () => { providerClosed = true; receiptAtClose = taskTable(test.ctx).get(ID)?.lastDelivery !== undefined }
+          yield ctx.provide('sessionController', { resolveAgent: test.resolve, create: test.createSession } as never)
+        })
+      },
+    })
+    const tailSource = new InputSource()
+    sources.push(tailSource)
+    test.service.connectSource(tailSource, tailId)
+    tailSource.subscribe(async () => { queued.resolve(undefined) })
+    expect(taskTable(test.ctx).get(ID)?.pendingDelivery).toBeUndefined()
+    const work = test.source.publish(INPUT)
+    pending.push(work)
+    let editing: Promise<unknown> | undefined
+    let output: Promise<void> | undefined
+    let closing: Promise<void> | undefined
+    try {
+      await entered.promise
+      if (kind === 'new') {
+        expect(test.resolve).not.toHaveBeenCalled()
+        expect(taskTable(test.ctx).get(ID)?.pendingDelivery?.targetSessionId).toBe(test.createSession.mock.calls[0]![0].sessionId)
+      }
+      tailBlocking = true
+      editing = test.service.edit({ id: tailId, action: 'update', patch: { title: 'Queued tail' } })
+      pending.push(editing)
+      output = expect(tailSource.publish('not borrowed before provider unload')).rejects.toMatchObject({
+        code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ message: 'schedule: no Session activation provider' })] },
+      })
+      pending.push(output)
+      await queued.promise
+      closing = Promise.resolve(provider.dispose())
+      pending.push(closing)
+      release.resolve(undefined)
+      await work
+      await tailEntered.promise
+      await closing
+      expect(providerClosed).toBe(true)
+      expect(receiptAtClose).toBe(true)
+      const deliveredSession = taskTable(test.ctx).get(ID)!.lastDelivery!.targetSessionId
+      expect(agents.get(deliveredSession)!.followup).toHaveBeenCalledOnce()
+      expect(test.createSession).toHaveBeenCalledExactlyOnceWith({ sessionId: deliveredSession })
+      expect(taskTable(test.ctx).get(tailId)?.lastDelivery).toBeUndefined()
+      tailRelease.resolve(undefined)
+      await editing
+      await output
+      expect(test.agent.followup).not.toHaveBeenCalled()
+    } finally {
+      release.resolve(undefined)
+      tailRelease.resolve(undefined)
+      await work
+      await editing
+      await output
+      await closing
+    }
+  },
+)
 
 it('finishes source deliveries already queued behind another delivery before stopping their runtime', async () => {
   const test = await setup()

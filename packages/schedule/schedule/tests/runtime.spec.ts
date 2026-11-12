@@ -31,7 +31,7 @@ async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[
     tasks[index] = task
   })
   const changed = vi.fn<() => void>()
-  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, changed, LIMITS, test.resolveAgent)
+  const runtime = new ScheduleRuntime(test.ctx, () => tasks, work => work(), commit, changed, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
   runtimes.push(runtime)
   return { ...test, agent, followup: agent.followup, runtime, commit, changed }
 }
@@ -658,7 +658,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     const failed = Promise.withResolvers<never>()
     const serial = { transact: <T>(work: () => Promise<T>) => work() }
     const transaction = vi.spyOn(serial, 'transact').mockReturnValueOnce(failed.promise)
-    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const runtime = new ScheduleRuntime(test.ctx, () => [], serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
     const warning = vi.spyOn(test.ctx.logger, 'warn').mockImplementationOnce(() => { runtime.requestDrive() })
     runtime.requestDrive()
@@ -683,7 +683,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
       },
     }
     const transaction = vi.spyOn(serial, 'transact')
-    const runtime = new ScheduleRuntime(test.ctx, () => records, serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const runtime = new ScheduleRuntime(test.ctx, () => records, serial.transact, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
     test.ctx.effect(() => () => runtime.dispose())
     const stop = vi.spyOn(runtime, 'dispose')
@@ -727,7 +727,7 @@ describe('Schedule dispatch failures and concurrent changes', () => {
   it('drains a rejected serialization promise during disposal', async () => {
     const test = await setup([])
     const transaction = Promise.withResolvers<never>()
-    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {}, () => {}, LIMITS, test.resolveAgent)
+    const runtime = new ScheduleRuntime(test.ctx, () => [], () => transaction.promise, async () => {}, () => {}, LIMITS, test.resolveAgent, () => test.ctx.get('sessionController'))
     runtimes.push(runtime)
     runtime.requestDrive()
     const stopped = runtime.dispose()

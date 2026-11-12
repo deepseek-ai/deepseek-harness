@@ -1,4 +1,5 @@
 /** Host-wide durable reminders and shared human/model management. */
+import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
@@ -243,7 +244,11 @@ export class ScheduleService extends TypertRemoteService {
   private chain: Promise<unknown> = Promise.resolve()
   private notifications: Promise<void> = Promise.resolve()
   private runtime: ScheduleRuntime | undefined
-  private resolveWebAgent: ((sessionId: SessionId) => Promise<Agent>) | undefined
+  private webController: Context['sessionController'] | undefined
+  private operation: {
+    readonly settled: Promise<void>
+    controller: Context['sessionController'] | undefined
+  } | undefined
   private stopping = false
 
   /**
@@ -252,18 +257,16 @@ export class ScheduleService extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config) {
     super(ctx, 'schedule')
-    ctx.inject(['sessionController'], (webCtx) => {
+    const controllerChild = ctx.inject(['sessionController'], (webCtx) => {
       webCtx.effect(() => {
-        this.resolveWebAgent = async (sessionId) => {
-          const resolved = await webCtx.sessionController.resolveAgent(sessionId)
-          if ('error' in resolved) throw resolved.error
-          return resolved.agent
-        }
+        const controller = webCtx.sessionController
+        this.webController = controller
         // Resume overdue tasks when the Web activation provider becomes ready.
         this.runtime?.requestDrive()
         return async () => {
-          await this.chain
-          this.resolveWebAgent = undefined
+          this.webController = undefined
+          const operation = this.operation
+          if (operation?.controller === controller) await operation.settled
         }
       })
     })
@@ -294,14 +297,17 @@ export class ScheduleService extends TypertRemoteService {
     })
     this.initialized = ctx.effect(async () => {
       const domain = await this.ready
-      let cleanup: () => Promise<void>
+      const cleanup = async () => {
+        this.stopping = true
+        await this.chain // Finish accepted deliveries before stopping their runtime and closing storage.
+        await this.runtime?.dispose()
+        await this.notifications // Each notice contains its own delivery failure.
+        await domain.close()
+      }
       try {
-        cleanup = ctx.effect(() => async () => {
-          this.stopping = true
-          await this.chain // Finish accepted deliveries before stopping their runtime and closing storage.
-          await this.runtime?.dispose()
-          await this.notifications // Each notice contains its own delivery failure.
-          await domain.close()
+        ctx.effect(function* () {
+          yield controllerChild.dispose
+          yield cleanup
         })
       } catch (error) {
         this.stopping = true
@@ -318,12 +324,15 @@ export class ScheduleService extends TypertRemoteService {
         },
         () => { this.emitChanged() },
         this.limits,
-        (sessionId) => {
-          if (this.resolveWebAgent === undefined) throw new Error('schedule: no Session activation provider')
-          return this.resolveWebAgent(sessionId)
-        })
+        async (sessionId) => {
+          const controller = this.borrowSessionController()
+          if (controller === undefined) throw new Error('schedule: no Session activation provider')
+          const resolved = await controller.resolveAgent(sessionId)
+          if ('error' in resolved) throw resolved.error
+          return resolved.agent
+        },
+        () => this.borrowSessionController())
       runtime.requestDrive()
-      return cleanup
     })
     // Host tasks outlive their Session's Agent, so archive admission reads the
     // stored rows rather than a live runtime: an idle Session that an active task
@@ -830,9 +839,24 @@ export class ScheduleService extends TypertRemoteService {
     return removed
   }
 
+  /** Retain the first provider used by the current FIFO operation until its full persistence work settles. */
+  private borrowSessionController(): Context['sessionController'] | undefined {
+    assert(this.operation, 'Session controller access requires a serialized Schedule operation')
+    return this.operation.controller ??= this.webController
+  }
+
   private serialize<T>(work: () => Promise<T>): Promise<T> {
     if (this.stopping) return Promise.reject(new Error('Schedule service is stopping'))
-    const pending = this.chain.then(work)
+    const pending = this.chain.then(async () => {
+      const settled = Promise.withResolvers<void>()
+      this.operation = { settled: settled.promise, controller: undefined }
+      try {
+        return await work()
+      } finally {
+        this.operation = undefined
+        settled.resolve()
+      }
+    })
     this.chain = pending.catch(() => undefined) // Preserve FIFO progress after the caller receives the failure.
     return pending
   }

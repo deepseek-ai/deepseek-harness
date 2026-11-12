@@ -176,9 +176,11 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 
 管理和投递写入共用一个宿主 FIFO。修改在持久化前重新检查取消信号和版本；启用任务时在队列内重查 Session 目标可用性。提交发出 `schedule/changed`、重算定时器，并独立排入通知。投递在创建前保存 `new` 目标预留，排入 `schedule` 消息，等待 Session flush，然后保存回执、已存指令快照及下一个发生时点或结束状态。独立提交可能在崩溃后重复投递。复用目标持有执行槽直到 Agent 空闲；每次新建的目标可以并发运行。立即执行使用同一准入，不移动下一个发生时点。
 
+仅卸载 Session-controller provider 时，不再允许新的操作使用该 provider。已使用它的投递会保留该 provider，直到整个操作完成或失败，包括 Session flush 和任务写入。不相关的管理写入及仍在 FIFO 中等待的投递不会延迟该卸载。卸载 Schedule 本身时，先停止接受新工作，排空已接受工作及通知，关闭存储，然后释放它对 Session-controller 的依赖。
+
 历史与任务一同保存，只在追加时裁剪。旧历史缺失时保留最新回执，并标记更早记录不可用。历史 Session 日志中的 `schedule/change` 事件保留冻结类型，作为既有记录；Schedule 不解释这些事件、发出相关警告或将它们导入宿主存储。
 
-`archiveAdmission()` 报告 `session` 或预留的 `new_once` 目标的 `sessionId` 与该 Session 匹配的活动任务。停止操作在同一 FIFO 内通过一次领域批量写入删除该集合。批量写入被拒绝时发出 `schedule/changed`，让观察方重读目录；`unknown-state` 失败会隔离领域，直到重新打开。投递拒绝已归档的目的 Session，包括重试时复用的预留 Session。读取和删除不激活 Session。关闭存储前排空已接受的工作及通知。
+`archiveAdmission()` 报告 `session` 或预留的 `new_once` 目标的 `sessionId` 与该 Session 匹配的活动任务。停止操作在同一 FIFO 内通过一次领域批量写入删除该集合。批量写入被拒绝时发出 `schedule/changed`，让观察方重读目录；`unknown-state` 失败会隔离领域，直到重新打开。投递拒绝已归档的目的 Session，包括重试时复用的预留 Session。读取和删除不激活 Session。
 
 <a id="source-delivery"></a>
 ### Source 投递
