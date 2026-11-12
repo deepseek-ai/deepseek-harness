@@ -255,9 +255,13 @@ it('requires keyboard scopes', () => {
   expect(CapabilitiesResult.safeParse(capabilities).success).toBe(false)
 })
 
-it('admits the pointer option only in the system-pointer model schema and only as a boolean', () => {
-  const target = { appHandle: 'app', windowId: '1', x: 0, y: 0 }
-  const request = { method: 'mouseMove', params: { ...target, useSystemPointer: true } }
+it.each<[string, Record<string, number | boolean>]>([
+  ['mouseMove', { x: 0, y: 0 }],
+  ['drag', { fromX: 1, fromY: 2, toX: 3, toY: 4 }],
+  ['drag', { relative: true, fromX: 1, fromY: 2, toX: 3, toY: 4 }],
+])('admits %s system-pointer control only for supporting providers', (method, points) => {
+  const target = { appHandle: 'app', windowId: '1', ...points }
+  const request = { method, params: { ...target, useSystemPointer: true } }
   expect(Request.safeParse(request).success).toBe(false)
   expect(SystemPointerRequest.safeParse(request).success).toBe(true)
   expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)

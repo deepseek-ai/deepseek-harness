@@ -51,6 +51,8 @@ Application consent precedes launch, observation, capture, and input. Session ac
 
 Actions return a `dispatched` boolean; `mouseMove` also reports `hoverRoute` and `systemPointerMoved`, and `show()` adds `windowId` and `foregroundChanged`. Read fresh state to verify the result. Screenshots and pointer actions are available only on explicit window objects. Coordinate actions default to pixels in the latest returned screenshot; `relative: true` accepts integers from 0 to 999 after a successful AX observation covering the window or a screenshot. Selecting a window alone does not establish this observation. Values are divided by 1000 and scaled to the window dimensions, then clamped inside the window. The Host resolves attachment normalization and the selected model route’s image projection before returning the screenshot, then converts input to the provider’s native window coordinates. Resizing invalidates the screenshot mapping; `SCREENSHOT_REQUIRED` requires a new screenshot for absolute coordinates. Resizing rejects old coordinates with `WINDOW_CHANGED`; movement alone preserves window-local coordinates.
 
+On providers with system-pointer support, `win.drag(from, to, { useSystemPointer: true })` shares the session’s mouse permission with `win.mouseMove`. Request the system pointer explicitly for each gesture.
+
 `click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` applies only to `click`; it accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
 
 ### Permission controls
@@ -76,7 +78,7 @@ The Host marker has no configurable fields; platform providers own native config
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 
-Providers declare `systemPointer: true` to support explicit physical pointer movement. CUA exposes the option in the tool schema and model instructions only for those providers. CUA owns the approval card, live-session decision and delegated-task restriction. A provider receives the per-call pointer mode after CUA checks application access and any required consent.
+Providers declaring `systemPointer: true` must support explicit `useSystemPointer: true` on both `mouseMove` and `drag`. The operations share one session decision. CUA validates the tool arguments, asks for consent, and enforces the delegated-task restriction before calling the provider. The provider documents its default input routes.
 
 Permission responses identify their platform and report only the state that platform can observe. The shared page renders the controls those observations support. Before platform identification, it shows neutral observation and input rows without system actions. Native providers use the shared build lock and compiler cleanup. The macOS provider reads its signed application receipt after compilation completes under the same lock.
 

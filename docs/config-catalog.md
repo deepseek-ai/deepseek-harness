@@ -780,7 +780,7 @@ export interface Config {
 
 ## `@deepseek-ai/dsh-compaction-basic`
 
-- `inject`: `llm` · `tokenMeter` · `sessions`
+- `inject`: `llm` · `tokenMeter` · `sessions` · `sessionProjections`
 - `source`: [`packages/compaction/compaction-basic/src/types.ts:46`](../packages/compaction/compaction-basic/src/types.ts)
 
 ```ts config-catalog
@@ -4363,7 +4363,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-tool-office`
 
 - `inject`: `tools` · `fs` · `workingDirectory` · `agents`
-- `source`: [`packages/document/tool-office/src/index.ts:40`](../packages/document/tool-office/src/index.ts)
+- `source`: [`packages/document/tool-office/src/index.ts:43`](../packages/document/tool-office/src/index.ts)
 
 ```ts config-catalog
 /** Activation skills and render bounds; lower deployment attachment limits take precedence. */
