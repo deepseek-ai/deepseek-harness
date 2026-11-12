@@ -12,6 +12,9 @@ import { changesActions, type ChangesState } from './changes-store.ts'
 /** A tab of the review page's detail. */
 export type ReviewTab = 'summary' | 'changes' | 'chat'
 
+/** How the list column shows its items: two lines each, or one line each with the rest in a hover card. */
+export type ReviewView = 'detailed' | 'compact'
+
 /** The review page's choices, and those of its changes view by change request URL. */
 export interface ReviewPageState extends ChangesState {
   /** Web URL of the change request shown in full, or null. */
@@ -30,6 +33,10 @@ export interface ReviewPageState extends ChangesState {
   directOnly: boolean
   /** The conversation the page's chat started for a change request, by its URL, until the page reloads. */
   conversations: Record<string, SessionId>
+  /** How the list column shows its items. */
+  view: ReviewView
+  /** Quotes added to each change request's conversation while its chat tab was not shown, by URL. */
+  unseenQuotes: Record<string, number>
 }
 
 const reviewActions = {
@@ -38,7 +45,15 @@ const reviewActions = {
     state.selected = url
     state.tab = 'summary'
   },
-  tabbed: (state: ReviewPageState, tab: ReviewTab) => { state.tab = tab },
+  tabbed: (state: ReviewPageState, tab: ReviewTab) => {
+    state.tab = tab
+    if (tab === 'chat' && state.selected !== null) state.unseenQuotes[state.selected] = 0
+  },
+  viewed: (state: ReviewPageState, view: ReviewView) => { state.view = view },
+  quoted: (state: ReviewPageState, url: string) => {
+    if (state.selected === url && state.tab === 'chat') return
+    state.unseenQuotes[url] = (state.unseenQuotes[url] ?? 0) + 1
+  },
   toggledList: (state: ReviewPageState) => { state.listHidden = !state.listHidden },
   folded: (state: ReviewPageState, filter: ForgeViewerFilter) => { state.folded[filter] = state.folded[filter] !== true },
   scopedTo: (state: ReviewPageState, repository: ReviewPageState['repository']) => { state.repository = repository },
@@ -57,7 +72,7 @@ const reviewActions = {
 export function createReviewStore(): EngineStoreHandle<ReviewPageState, typeof reviewActions> {
   return defineStore({
     init: (): ReviewPageState => ({
-      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, query: '', directOnly: false, conversations: {}, byTab: {},
+      selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, query: '', directOnly: false, conversations: {}, view: 'detailed', unseenQuotes: {}, byTab: {},
     }),
     actions: reviewActions,
   })

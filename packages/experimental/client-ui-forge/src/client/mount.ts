@@ -455,7 +455,7 @@ function registerUi(ctx: Context): void {
     name: 'sidebar.session.row.hover', id: 'forge-panel.row', order: 20, locale: NS, inject: listFace,
   }, SessionHoverForge))
   registerReviewPage(ctx, {
-    notices, settled, nameOf, openLink, copyText, copyPath, locale,
+    notices, settled, nameOf, openLink, copyText, copyPath, locale, quoteReview: addReviewToInput, quoteThread: addThreadToInput,
   })
   const worktreeSettings = new WorktreeSettingsForm(ctx.configForms.get<WorktreeSettingsFields>(WORKTREE_NS))
   ctx.effect(() => () => { worktreeSettings.dispose() }, 'forge-panel: worktree settings form')

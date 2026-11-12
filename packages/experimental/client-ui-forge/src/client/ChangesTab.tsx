@@ -40,7 +40,7 @@ import { sameReviewSource, type ReviewQueue } from './review-queue.ts'
 import { ReviewThread, useFileReview } from './ReviewThread.tsx'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { SubmitReview } from './SubmitReview.tsx'
-import type { ReviewSelection, ReviewSource } from './review.ts'
+import type { QuoteCopy, ReviewSelection, ReviewSource } from './review.ts'
 import { BaseMenu } from './BaseMenu.tsx'
 import { parseChangesAddress, type ChangesSource, type ChangesTarget } from './changes-address.ts'
 import type { ChangesLens, createChangesStore } from './changes-store.ts'
@@ -86,7 +86,7 @@ interface Wanted {
 /** Business face of the changes tab body. */
 export interface ChangesTabInjected {
   /** Append a frozen comment to the main input without submitting it. */
-  readonly addReviewToInput: (selection: ReviewSelection) => boolean
+  readonly addReviewToInput: (selection: ReviewSelection) => boolean | Promise<boolean>
   /** Records retained across Session switches and cleared when this tab occurrence closes. */
   readonly reviewQueue: (tab: Pick<ChangesViewTab, 'id' | 'signal'>) => ReviewQueue
   /** Publish one comment or a completed review; never retries mutations. */
@@ -140,7 +140,7 @@ export interface ChangesTabInjected {
   /** Write to the review threads or the pending review of a change request; never retries a write. */
   readonly changeRequestReviewWrite: (url: string, write: ForgeReviewWrite) => Promise<RemoteResult<ForgeReviewWriteResult>>
   /** Quote a whole review thread of the change request at `url` in the main input without submitting it. */
-  readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean
+  readonly addThreadToInput: (thread: ForgeReviewThread, url: string, range: string | null) => boolean | Promise<boolean>
   /** Open a URL outside the app. */
   readonly openLink: (url: string) => void
   /** Copy a path to the clipboard and report the outcome. */
@@ -182,6 +182,8 @@ export type ChangesViewProps = Omit<ChangesTabProps, 'useTabInfo' | 'sessionId' 
   readonly annotations: ViewAnnotations | undefined
   /** Open a file of the checkout in the right sidebar, by its absolute path; undefined where no sidebar shows. */
   readonly openFile: ((path: string) => void) | undefined
+  /** Copy of the quote actions where they quote somewhere other than the Session's input. */
+  readonly quoteCopy?: QuoteCopy | undefined
 }
 
 /** Changes of either source as the view draws them. */
@@ -559,7 +561,8 @@ export function ChangesTab({ useTabInfo, sessionId, usePanel, useAnnotations, ..
  * @returns the view body.
  */
 export function ChangesView({
-  tab, source, target, snapshot, annotations: viewAnnotations, openFile, useStore, actions, reconnect, localDiff, diffBases, localText,
+  tab, source, target, snapshot, annotations: viewAnnotations, openFile, quoteCopy, useStore, actions, reconnect, localDiff, diffBases,
+  localText,
   localCommits, changeRequestDiff, changeRequestText, changeRequestCommits, changeRequestReview, changeRequestReviewWrite, viewedFiles,
   changeRequestViewed, setFileViewed, openLink, copyPath, createChangeRequest, addReviewToInput, addThreadToInput, reviewQueue,
   submitReview, report, useLenses, useExtensions, changesLens, renderSlot, t,
@@ -1009,7 +1012,7 @@ export function ChangesView({
     source: shownSource ?? (source.kind === 'local'
       ? { kind: 'local', scope, base: null, baseRef: baseRefOf(localScope), commits: commitsOf(localScope) }
       : { kind: 'change', url: source.url, headSha: '', commits: changeCommits }),
-    records: queue, addToInput: addReviewToInput, openLink,
+    records: queue, addToInput: addReviewToInput, openLink, quoteCopy,
   }
   const absentPaths = [...new Set([...reviewState.comments, ...reviewState.records.map(item => item.selection)]
     .filter(item => sameReviewSource(item.source, recordActions.source)).map(item => item.comment.path))]
@@ -1022,16 +1025,17 @@ export function ChangesView({
   const threadActions = useMemo((): ThreadActions | null => review === null || url === null ? null : {
     author: prAuthor,
     addToInput: (thread, range) => addThreadToInput(thread, url, range),
+    quoteCopy,
     openLink,
     readText: (commit, path) => changeRequestText(url, commit, path),
-    inputFailed: () => { live.current.report('thread.inputFailed') },
+    inputFailed: () => { live.current.report(quoteCopy?.failed ?? 'thread.inputFailed') },
     focused: focus,
     writes: {
       write: (write: ThreadWrite) => live.current.writeReview(url, { ...write, headSha: review.headSha }),
       reviewStarted: review.pendingReview !== null,
       canReview: review.viewerCanReview,
     },
-  }, [review, url, prAuthor, addThreadToInput, openLink, changeRequestText, focus])
+  }, [review, url, prAuthor, addThreadToInput, quoteCopy, openLink, changeRequestText, focus])
   const fileThreads = useMemo(() => new Map<string, FileThreads>(threadActions === null ? []
     : [...placed.files].map(([path, group]) => [path, { ...group, actions: threadActions }])), [placed.files, threadActions])
   /** Show a file's next unresolved thread in display order after the one last shown, or its first. */
@@ -1196,6 +1200,7 @@ export function ChangesView({
   const fileReview = useMemo((): ReviewActions | undefined => shownSource === null ? undefined : {
     source: shownSource,
     addToInput: addReviewToInput,
+    quoteCopy,
     renderActions: owner => target === null ? null : live.current.renderSlot('forge.diff.comment.actions', { target, ...owner }),
     records: queue, openLink, reviewStarted,
     onQuoted: (selection) => { if (!queue.recordAgent(selection)) live.current.report('review.saveFailed') },
@@ -1207,7 +1212,7 @@ export function ChangesView({
           url => queue.published(selection, url))
         : Promise.resolve(live.current.t('review.stale')),
     } : {},
-  }, [shownSource, addReviewToInput, queue, openLink, reviewStarted, publishingBlocked, queueable, single, target])
+  }, [shownSource, addReviewToInput, quoteCopy, queue, openLink, reviewStarted, publishingBlocked, queueable, single, target])
 
   let body: ReactNode
   if (data === null) {

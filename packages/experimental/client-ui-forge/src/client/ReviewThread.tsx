@@ -5,7 +5,7 @@ import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ReviewActions } from './ReviewComposer.tsx'
 import { EMPTY_FILE_REVIEW, type FileReviewState, type ReviewThread as Thread } from './review-queue.ts'
-import { reviewRange } from './review.ts'
+import { INPUT_QUOTE_COPY, reviewRange, settleQuote } from './review.ts'
 import type { NS } from './locales.ts'
 import css from './ReviewComposer.module.css'
 
@@ -42,7 +42,8 @@ export function ReviewThread({ thread, actions, locked, outdated, t }: PropsLoca
   const comment = thread.selection.comment
   const quoted = editing && thread.kind === 'pending' ? { ...thread.selection, comment: { ...comment, body } } : thread.selection
   const range = reviewRange(comment)
-  const status = thread.kind === 'pending' ? 'review.browserDraft' : thread.kind === 'published' ? 'review.published' : 'review.quoted'
+  const copy = actions.quoteCopy ?? INPUT_QUOTE_COPY
+  const status = thread.kind === 'pending' ? 'review.browserDraft' : thread.kind === 'published' ? 'review.published' : copy.added
   const save = (): boolean => actions.records?.editThread(thread.key, body) === true
   const queue = actions.queue
   /** Add the draft to the pending review on the code host, then delete it from the browser. */
@@ -76,8 +77,8 @@ export function ReviewThread({ thread, actions, locked, outdated, t }: PropsLoca
     {error !== null && <div className={css.error} role="alert">{error}</div>}
     <div className={css.threadActions}>
       <Button size="sm" disabled={quoted.comment.body.trim() === ''} onClick={() => {
-        if (!actions.addToInput(quoted)) setError(t('review.inputFailed'))
-      }}>{t('review.addToInput')}</Button>
+        settleQuote(actions.addToInput(quoted), (accepted) => { if (!accepted) setError(t(copy.failed)) })
+      }}>{t(copy.add)}</Button>
       {thread.kind === 'pending' && <>
         {editing
           ? <Button size="sm" disabled={locked || moving || body.trim() === ''} onClick={() => {

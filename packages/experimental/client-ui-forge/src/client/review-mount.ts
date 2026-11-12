@@ -57,6 +57,10 @@ export interface ReviewPageDeps {
   readonly copyText: (text: string) => void
   /** Copy a path and report the outcome. */
   readonly copyPath: (path: string) => void
+  /** Quote a comment in a retained Session's draft, numbered after the comments already there. */
+  readonly quoteReview: ReviewPageInjected['quoteReview']
+  /** Quote a whole thread in a retained Session's draft, numbered after the threads already there. */
+  readonly quoteThread: ReviewPageInjected['quoteThread']
   /** The UI language. */
   readonly locale: HostObservable<string>
 }
@@ -150,8 +154,6 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
       }
       return queue
     },
-    addReviewToInput: () => false,
-    addThreadToInput: () => false,
     openLink,
     copyPath: deps.copyPath,
     createChangeRequest: () => {},
@@ -171,8 +173,8 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
     },
     retain: (sessionId, signal) => ctx.sessions.retain(sessionId, { source: 'forgeReview', signal }),
     stage: (sessionId, url) => { void remote.reviewStage(sessionId, url).then(result => settled(result, 'reviewPage.chat.stageFailed')) },
-    fill: (reference, draft) => {
-      void reference.ready.then(() => {
+    fill: async (reference, draft) => {
+      await reference.ready.then(() => {
         const scope = ctx.sessions.scope(reference.sessionId)
         const conversation = scope?.get('conversation')
         if (scope === undefined || conversation === undefined) return
@@ -216,6 +218,8 @@ export function registerReviewPage(ctx: Context, deps: ReviewPageDeps): void {
         changes,
         copyText,
         chat,
+        quoteReview: deps.quoteReview,
+        quoteThread: deps.quoteThread,
       }),
       children: { 'forge.review.conversation': { kind: 'single', scope: 'session' } },
     }, ReviewPage))

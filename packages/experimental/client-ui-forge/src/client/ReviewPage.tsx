@@ -8,17 +8,18 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import clsx from 'clsx'
 import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
-import type { ChangeRequestDescription } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestDescription, ForgeReviewThread } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ForgeReviewChangeRequest, ForgeReviewFrame } from '../types.ts'
 import type { ChangeRequestActions } from './ChangeRequestCard.tsx'
 import type { ForgeLensDescription } from './changes-service.ts'
 import { ChangesView, type ChangesTabInjected, type ChangesViewTab } from './ChangesTab.tsx'
-import { useHostStream } from './host-stream.ts'
+import { useHostStream, type StreamRead } from './host-stream.ts'
 import type { NS } from './locales.ts'
-import { ReviewChat, type ReviewChatFace } from './ReviewChat.tsx'
+import { ReviewChat, useReviewConversation, type ReviewChatFace } from './ReviewChat.tsx'
 import { ReviewDetail } from './ReviewDetail.tsx'
 import { ReviewList } from './ReviewList.tsx'
+import type { QuoteCopy, ReviewSelection } from './review.ts'
 import type { createReviewStore, ReviewTab } from './review-store.ts'
 import type { HostStream, StreamSnapshot } from './source.ts'
 import type { ChangesPanelState } from './status.ts'
@@ -26,8 +27,14 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ForgeExtensionState } from '../types.ts'
 import css from './ReviewPage.module.css'
 
-/** What the changes view of the review page reads and does, each naming the change request by URL. */
-export type ReviewChangesFace = Omit<ChangesTabInjected, 'keyedHooks' | 'hooks' | 'reconnect'>
+/**
+ * What the changes view of the review page reads and does, each naming the change request by URL; the page quotes
+ * comments and threads into its own conversation.
+ */
+export type ReviewChangesFace = Omit<ChangesTabInjected, 'keyedHooks' | 'hooks' | 'reconnect' | 'addReviewToInput' | 'addThreadToInput'>
+
+/** The quote copy of the review page, which quotes into the change request's conversation. */
+const CHAT_QUOTE_COPY: QuoteCopy = { add: 'reviewPage.addToChat', added: 'reviewPage.addedToChat', failed: 'reviewPage.addToChatFailed' }
 
 /** Business face of the review page. */
 export interface ReviewPageInjected {
@@ -51,6 +58,10 @@ export interface ReviewPageInjected {
   readonly copyText: (text: string) => void
   /** What the chat tab asks of the forge panel. */
   readonly chat: ReviewChatFace
+  /** Quote a comment in a retained Session's draft; returns whether the draft took it. */
+  readonly quoteReview: (sessionId: SessionId, selection: ReviewSelection) => boolean
+  /** Quote a whole thread in a retained Session's draft; returns whether the draft took it. */
+  readonly quoteThread: (sessionId: SessionId, thread: ForgeReviewThread, url: string, range: string | null) => boolean
 }
 
 /** Full props of the review page. */
@@ -82,7 +93,7 @@ function useMinuteClock(): number {
 function ReviewChanges({ frame, visible, changes, useStore, actions, t }: {
   readonly frame: ForgeReviewChangeRequest
   readonly visible: boolean
-  readonly changes: ReviewChangesFace
+  readonly changes: Omit<ChangesTabInjected, 'keyedHooks' | 'hooks' | 'reconnect'>
   readonly useStore: ReviewPageProps['useStore']
   readonly actions: ReviewPageProps['actions']
   readonly t: ReviewPageProps['t']
@@ -106,8 +117,76 @@ function ReviewChanges({ frame, visible, changes, useStore, actions, t }: {
   if (tab === null) return null
   return (
     <ChangesView {...changes} tab={tab} source={source} target={null} snapshot={snapshot} annotations={undefined} openFile={undefined}
+      quoteCopy={CHAT_QUOTE_COPY}
       reconnect={NO_BINDING} useLenses={NO_LENSES} useExtensions={NO_EXTENSIONS} renderSlot={NO_SLOT}
       useStore={useStore} actions={actions} t={t} />
+  )
+}
+
+/** Props of the detail pane, keyed by the shown change request. */
+interface DetailPaneProps {
+  readonly url: string
+  readonly read: StreamRead<ForgeReviewChangeRequest>
+  readonly tab: ReviewTab
+  readonly listHidden: boolean
+  readonly now: number
+  readonly locale: string
+  readonly cardActions: ChangeRequestActions
+  readonly conversationId: SessionId | undefined
+  readonly onConversation: (sessionId: SessionId | null) => void
+  readonly unseenQuotes: number
+  readonly page: ReviewPageProps
+}
+
+/**
+ * The detail of the shown change request with the conversation the page keeps for it: quotes from the changes tab go
+ * into that conversation's draft, starting the conversation when there is none.
+ * @param props - the change request stream, the tab, the conversation, and the page's face.
+ * @returns the detail.
+ */
+function DetailPane({
+  url, read, tab, listHidden, now, locale, cardActions, conversationId, onConversation, unseenQuotes, page,
+}: DetailPaneProps): ReactNode {
+  const { actions, changes, chat, quoteReview, quoteThread, readDescription, renderSlot, SessionProvider, useStore, t } = page
+  const conversation = useReviewConversation(read.frame, conversationId, onConversation, chat)
+  const { start } = conversation
+  const quoteChanges = useMemo(() => {
+    const quote = async (insert: (sessionId: SessionId) => boolean): Promise<boolean> => {
+      const retained = await start()
+      if (retained === undefined || !insert(retained.sessionId)) return false
+      actions.quoted(url)
+      return true
+    }
+    return {
+      ...changes,
+      addReviewToInput: async (selection: ReviewSelection) => await quote(sessionId => quoteReview(sessionId, selection)),
+      addThreadToInput: async (thread: ForgeReviewThread, threadUrl: string, range: string | null) =>
+        await quote(sessionId => quoteThread(sessionId, thread, threadUrl, range)),
+    }
+  }, [changes, start, quoteReview, quoteThread, actions, url])
+  return (
+    <ReviewDetail
+      url={url}
+      read={read}
+      tab={tab}
+      onTab={(value: ReviewTab) => { actions.tabbed(value) }}
+      listHidden={listHidden}
+      onToggleList={() => { actions.toggledList() }}
+      onBack={() => { actions.select(null) }}
+      now={now}
+      locale={locale}
+      actions={cardActions}
+      readDescription={readDescription}
+      renderChanges={frame => (
+        <ReviewChanges frame={frame} visible={tab === 'changes'} changes={quoteChanges} useStore={useStore} actions={actions} t={t} />
+      )}
+      renderChat={frame => (
+        <ReviewChat frame={frame} sessionId={conversationId} conversation={conversation} onConversation={onConversation} chat={chat}
+          renderSlot={renderSlot} SessionProvider={SessionProvider} t={t} />
+      )}
+      unseenQuotes={unseenQuotes}
+      t={t}
+    />
   )
 }
 
@@ -116,10 +195,8 @@ function ReviewChanges({ frame, visible, changes, useStore, actions, t }: {
  * @param props - the Host streams and reads, the card actions, the page store, and copy.
  * @returns the page.
  */
-export function ReviewPage({
-  useLocale, openLists, openChangeRequest, subscribeReset, refresh, readDescription, actionsFor, changes, copyText, chat, useStore, actions,
-  renderSlot, SessionProvider, t,
-}: ReviewPageProps): ReactNode {
+export function ReviewPage(props: ReviewPageProps): ReactNode {
+  const { useLocale, openLists, openChangeRequest, subscribeReset, refresh, actionsFor, copyText, useStore, actions, t } = props
   const locale = useLocale(value => value)
   const now = useMinuteClock()
   const selected = useStore(state => state.selected)
@@ -129,6 +206,8 @@ export function ReviewPage({
   const repository = useStore(state => state.repository)
   const query = useStore(state => state.query)
   const directOnly = useStore(state => state.directOnly)
+  const view = useStore(state => state.view)
+  const unseenQuotes = useStore(state => selected === null ? 0 : state.unseenQuotes[selected] ?? 0)
   const conversation = useStore(state => selected === null ? undefined : state.conversations[selected])
   const onConversation = useMemo(() => selected === null ? null : (sessionId: SessionId | null) => {
     actions.conversed(selected, sessionId)
@@ -161,6 +240,8 @@ export function ReviewPage({
           onSearch={(value) => { actions.searched(value) }}
           onScope={(value) => { actions.scopedTo(value) }}
           onToggleDirect={() => { actions.toggledDirect() }}
+          view={view}
+          onView={(value) => { actions.viewed(value) }}
           onFold={(filter) => { actions.folded(filter) }}
           onRefresh={startRefresh}
           onRetry={lists.retry}
@@ -177,28 +258,19 @@ export function ReviewPage({
             </div>
           )
           : (
-            <ReviewDetail
+            <DetailPane
               key={selected}
               url={selected}
               read={detail}
               tab={tab}
-              onTab={(value: ReviewTab) => { actions.tabbed(value) }}
               listHidden={listHidden}
-              onToggleList={() => { actions.toggledList() }}
-              onBack={() => { actions.select(null) }}
               now={now}
               locale={locale}
-              actions={cardActions}
-              readDescription={readDescription}
-              renderChanges={frame => (
-                <ReviewChanges frame={frame} visible={tab === 'changes'} changes={changes} useStore={useStore} actions={actions} t={t} />
-              )}
-              renderChat={frame => (
-                <ReviewChat frame={frame} sessionId={conversation} onConversation={onConversation} chat={chat} renderSlot={renderSlot}
-                  SessionProvider={SessionProvider} t={t} />
-              )}
-              askAgent={() => { actions.tabbed('chat') }}
-              t={t}
+              cardActions={cardActions}
+              conversationId={conversation}
+              onConversation={onConversation}
+              unseenQuotes={unseenQuotes}
+              page={props}
             />
           )}
       </div>

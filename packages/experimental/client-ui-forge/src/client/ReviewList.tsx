@@ -3,23 +3,25 @@
  * and one foldable section per list with its items, empty state, and failure.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, Input, Menu,
-  MenuItemButton, Tooltip,
+  Button, HoverCard, IconChevronDownOutlineRegular, IconFlatListOutlineRegular, IconFolderCloseRegular, IconLayersOutlineRegular,
+  IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, IconUserOutlineRegular, IconUsersOutlineRegular, Input, Menu, titleMarqueeClass,
+  Tooltip, useTitleMarquee,
   type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChecksRollup, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { ForgeReviewFrame } from '../types.ts'
-import { formatAgo } from './format.ts'
+import { formatAgo, formatShortAgo } from './format.ts'
 import { ChangeRequestGlyph } from './glyphs.tsx'
 import type { ForgePanelKey, NS } from './locales.ts'
 import { RefreshGlyph } from './RefreshGlyph.tsx'
 import {
   pastedUrl, reviewHint, reviewRepositories, reviewSections, summaryTone, type ReviewItem, type ReviewRepository, type ReviewSection,
 } from './review-lists.ts'
+import type { ReviewView } from './review-store.ts'
 import css from './ReviewPage.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -58,6 +60,10 @@ export interface ReviewListProps {
   readonly onScope: (repository: ReviewRepository | null) => void
   /** Toggle whether the review-requested list leaves out team requests. */
   readonly onToggleDirect: () => void
+  /** How list items show: two lines each, or one line each with the rest on hover. */
+  readonly view: ReviewView
+  /** Choose how list items show. */
+  readonly onView: (view: ReviewView) => void
   /** Fold or unfold a section. */
   readonly onFold: (filter: ForgeViewerFilter) => void
   /** Read every list again. */
@@ -70,9 +76,9 @@ export interface ReviewListProps {
   readonly t: Translate
 }
 
-/** The filter menu: the repository the lists are read in, and whether team requests show. */
-function FilterMenu({ frame, repository, directOnly, onScope, onToggleDirect, t }: Pick<ReviewListProps,
-  'frame' | 'repository' | 'directOnly' | 'onScope' | 'onToggleDirect' | 't'>): ReactNode {
+/** The view menu, laid out like the Session list's: the list view, the repository the lists are read in, and whether team requests show. */
+function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
+  'frame' | 'repository' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
   const [open, setOpen] = useState(false)
   const repositories = reviewRepositories(frame)
   const chosen = repository === null ? null : `${repository.owner}/${repository.name}`
@@ -80,9 +86,30 @@ function FilterMenu({ frame, repository, directOnly, onScope, onToggleDirect, t 
   const offered = repository !== null && !repositories.some(item => `${item.owner}/${item.name}` === chosen)
     ? [repository, ...repositories] : repositories
   const items: MenuEntry[] = [
-    { type: 'label', id: 'repository', text: t('reviewPage.filter.repository') },
-    { id: '', label: t('reviewPage.filter.allRepositories') },
-    ...offered.map(item => ({ id: `${item.owner}/${item.name}`, label: `${item.owner}/${item.name}` })),
+    { type: 'label', id: 'view', text: t('reviewPage.filter.view') },
+    { id: 'view:detailed', label: t('reviewPage.filter.detailed'), icon: <IconLayersOutlineRegular /> },
+    { id: 'view:compact', label: t('reviewPage.filter.compact'), icon: <IconFlatListOutlineRegular /> },
+    { type: 'separator', id: 'repository-separator' },
+    { type: 'label', id: 'repository-label', text: t('reviewPage.filter.repository') },
+    {
+      id: 'repository',
+      icon: <IconFolderCloseRegular />,
+      label: (
+        <span className={css.menuRow}>
+          <span>{t('reviewPage.filter.repository')}</span>
+          <span className={css.menuValue}>{chosen ?? t('reviewPage.filter.allRepositories')}</span>
+        </span>
+      ),
+      submenu: [
+        { id: 'repo:', label: t('reviewPage.filter.allRepositories') },
+        { type: 'separator', id: 'repo-separator' },
+        ...offered.map(item => ({ id: `repo:${item.owner}/${item.name}`, label: `${item.owner}/${item.name}` })),
+      ],
+    },
+    { type: 'separator', id: 'requests-separator' },
+    { type: 'label', id: 'requests', text: t('reviewPage.filter.requests') },
+    { id: 'requests:all', label: t('reviewPage.filter.teamRequests'), icon: <IconUsersOutlineRegular /> },
+    { id: 'requests:direct', label: t('reviewPage.filter.directOnly'), icon: <IconUserOutlineRegular /> },
   ]
   const active = repository !== null || directOnly
   return (
@@ -90,7 +117,9 @@ function FilterMenu({ frame, repository, directOnly, onScope, onToggleDirect, t 
       open={open}
       onClose={() => { setOpen(false) }}
       portal
+      dense
       align="end"
+      submenuBackLabel={t('reviewPage.filter.back')}
       anchor={(
         <Tooltip label={t('reviewPage.filter')} side="bottom">
           <button type="button" className={clsx(css.iconButton, active && css.iconButtonActive)} aria-label={t('reviewPage.filter')}
@@ -100,18 +129,18 @@ function FilterMenu({ frame, repository, directOnly, onScope, onToggleDirect, t 
         </Tooltip>
       )}
       items={items}
-      selectedId={chosen ?? ''}
+      selectedIds={[`view:${view}`, `repo:${chosen ?? ''}`, directOnly ? 'requests:direct' : 'requests:all']}
       onSelect={(id) => {
         setOpen(false)
-        const [owner = '', name = ''] = id.split('/')
-        onScope(id === '' ? null : { owner, name })
+        if (id === 'view:detailed' || id === 'view:compact') onView(id === 'view:compact' ? 'compact' : 'detailed')
+        else if (id === 'requests:all' || id === 'requests:direct') {
+          if ((id === 'requests:direct') !== directOnly) onToggleDirect()
+        } else if (id.startsWith('repo:')) {
+          const [owner = '', name = ''] = id.slice('repo:'.length).split('/')
+          onScope(id === 'repo:' ? null : { owner, name })
+        }
       }}
-    >
-      <MenuItemButton separatorBefore icon={directOnly ? <IconCheckOutlineRegular size={16} /> : <span className={css.menuIconSpace} />}
-        onSelect={() => { setOpen(false); onToggleDirect() }}>
-        {t('reviewPage.filter.directOnly')}
-      </MenuItemButton>
-    </Menu>
+    />
   )
 }
 
@@ -121,11 +150,77 @@ function Issues({ item, t }: { readonly item: ReviewItem; readonly t: Translate 
   if (first === undefined) return null
   const more = item.summary.closingIssues.length - 1 + (item.summary.closingIssuesTruncated ? 1 : 0)
   return (
-    <span className={css.itemIssues}>
-      <span aria-hidden="true">⊙</span>
-      {t('change.number', { number: first.number })}
-      {more > 0 && <span>{t(item.summary.closingIssuesTruncated ? 'reviewPage.issuesMoreTruncated' : 'reviewPage.issuesMore', { count: more })}</span>}
+    <>
+      <span aria-hidden="true">·</span>
+      <span className={css.itemIssues}>
+        <span aria-hidden="true">⊙</span>
+        {t('change.number', { number: first.number })}
+        {more > 0 && <span>{t(item.summary.closingIssuesTruncated ? 'reviewPage.issuesMoreTruncated' : 'reviewPage.issuesMore', { count: more })}</span>}
+      </span>
+    </>
+  )
+}
+
+/** What the hover card of a compact item shows: the full title and every fact the detailed item names. */
+function CompactDetails({ item, filter, qualified, now, t }: {
+  readonly item: ReviewItem
+  readonly filter: ForgeViewerFilter
+  readonly qualified: boolean
+  readonly now: number
+  readonly t: Translate
+}): ReactNode {
+  const { summary } = item
+  const { repository, number } = summary.ref
+  const hint = reviewHint(summary, filter)
+  const ago = formatAgo(summary.updatedAt, now, t)
+  return (
+    <span className={css.compactCard}>
+      <span className={css.compactCardTitle}>{summary.title}</span>
+      <span className={css.itemMeta}>
+        <span>{qualified ? `${repository.owner}/${repository.name}#${number}` : t('change.number', { number })}</span>
+        {summary.author !== null && <><span aria-hidden="true">·</span><span>{summary.author.login}</span></>}
+        {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
+        <Issues item={item} t={t} />
+      </span>
+      {hint !== undefined && <span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span>}
     </span>
+  )
+}
+
+/** One listed change request on one line: its glyph, its title, which marquees while hovered, and its update time. */
+function CompactItem({ item, filter, selected, qualified, now, onSelect, t }: {
+  readonly item: ReviewItem
+  readonly filter: ForgeViewerFilter
+  readonly selected: boolean
+  readonly qualified: boolean
+  readonly now: number
+  readonly onSelect: (url: string) => void
+  readonly t: Translate
+}): ReactNode {
+  const { summary } = item
+  const title = useRef<HTMLSpanElement>(null)
+  const marquee = useTitleMarquee(title)
+  const checks: Exclude<ChecksRollup, 'none'> | undefined = summary.checksRollup === 'none' ? undefined : summary.checksRollup
+  const time = formatShortAgo(summary.updatedAt, now, t)
+  return (
+    <li>
+      <HoverCard
+        grouped
+        openDelayMs={800}
+        copyText={summary.title}
+        copyLabel={t('reviewPage.copyTitle')}
+        copiedLabel={t('toast.copied')}
+        content={<CompactDetails item={item} filter={filter} qualified={qualified} now={now} t={t} />}
+        anchor={(
+          <button type="button" className={css.compactItem} aria-current={selected ? 'true' : undefined} data-forge-review-item={summary.url}
+            onPointerEnter={marquee.enter} onPointerLeave={marquee.leave} onClick={() => { onSelect(summary.url) }}>
+            <span className={css.compactGlyph}><ChangeRequestGlyph tone={summaryTone(summary)} checks={checks} size={16} /></span>
+            <span ref={title} className={clsx(css.compactTitle, titleMarqueeClass)}>{summary.title}</span>
+            {time !== undefined && <span className={css.compactTime}>{time}</span>}
+          </button>
+        )}
+      />
+    </li>
   )
 }
 
@@ -157,8 +252,8 @@ function Item({ item, filter, selected, qualified, now, onSelect, t }: {
             {summary.author !== null && <><span aria-hidden="true">·</span><span className={css.ellipsis}>{summary.author.login}</span></>}
             {ago !== undefined && <><span aria-hidden="true">·</span><span>{ago}</span></>}
             <Issues item={item} t={t} />
+            {hint !== undefined && <><span aria-hidden="true">·</span><span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span></>}
           </span>
-          {hint !== undefined && <span className={css.itemHint} data-tone={hint.tone}>{t(hint.key, hint.params)}</span>}
         </span>
       </button>
     </li>
@@ -197,7 +292,8 @@ function SectionFailure({ section, copyText, t }: {
  * @returns the column.
  */
 export function ReviewList(props: ReviewListProps): ReactNode {
-  const { frame, stopped, selected, query, folded, refreshing, now, onSelect, onSearch, onFold, onRefresh, onRetry, copyText, t } = props
+  const { frame, stopped, selected, query, folded, refreshing, now, view } = props
+  const { onSelect, onSearch, onFold, onRefresh, onRetry, copyText, t } = props
   const sections = reviewSections(frame, query, props.directOnly)
   const pasted = pastedUrl(query)
   const qualified = reviewRepositories(frame).length > 1
@@ -241,11 +337,12 @@ export function ReviewList(props: ReviewListProps): ReactNode {
               : shown.length === 0
                 ? <p className={css.sectionEmpty}>{t(query.trim() === '' ? 'reviewPage.empty.section' : 'reviewPage.empty.search')}</p>
                 : (
-                  <ul className={css.items}>
-                    {shown.map(item => (
-                      <Item key={item.summary.url} item={item} filter={section.filter} selected={item.summary.url === selected}
+                  <ul className={css.items} data-view={view}>
+                    {shown.map((item) => {
+                      const Row = view === 'compact' ? CompactItem : Item
+                      return <Row key={item.summary.url} item={item} filter={section.filter} selected={item.summary.url === selected}
                         qualified={qualified} now={now} onSelect={onSelect} t={t} />
-                    ))}
+                    })}
                   </ul>
                 )}
             {section.truncated && query.trim() === '' && (

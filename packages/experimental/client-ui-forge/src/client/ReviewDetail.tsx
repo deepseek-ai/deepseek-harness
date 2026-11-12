@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular, IconSparkleRegular, MarkdownText, Menu,
+  Button, IconChevronLeftOutlineRegular, IconEllipsisOutlineRegular, IconPanelLeftOutlineRegular, MarkdownText, Menu,
   StateDot, Tooltip, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
@@ -70,8 +70,8 @@ export interface ReviewDetailProps {
   readonly renderChanges: (frame: ForgeReviewChangeRequest) => ReactNode
   /** The chat tab's content. */
   readonly renderChat: (frame: ForgeReviewChangeRequest) => ReactNode
-  /** Start a review conversation about the change request in the chat tab. */
-  readonly askAgent: () => void
+  /** Quotes added to the conversation while the chat tab was not shown. */
+  readonly unseenQuotes: number
   /** Forge panel copy. */
   readonly t: Translate
 }
@@ -198,7 +198,8 @@ function Summary({ frame, snapshot, description, now, locale, actions, t }: {
  * @returns the detail.
  */
 export function ReviewDetail({
-  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, renderChanges, renderChat, askAgent, t,
+  url, read, tab, onTab, listHidden, onToggleList, onBack, now, locale, actions, readDescription, renderChanges, renderChat, unseenQuotes,
+  t,
 }: ReviewDetailProps): ReactNode {
   const frame = read.frame
   const snapshot = frame?.snapshot ?? null
@@ -248,7 +249,10 @@ export function ReviewDetail({
   const tabLabel = (value: ReviewTab): ReactNode => value === 'changes'
     ? <>{t('reviewPage.tab.changes')}<span className={css.added}>{`+${snapshot.additions.toLocaleString(locale)}`}</span>
       <span className={css.deleted}>{`−${snapshot.deletions.toLocaleString(locale)}`}</span></>
-    : t(value === 'summary' ? 'reviewPage.tab.summary' : 'reviewPage.tab.chat')
+    : value === 'summary' ? t('reviewPage.tab.summary')
+      : <>{t('reviewPage.tab.chat')}{unseenQuotes > 0 && (
+        <span className={css.tabBadge} aria-label={t('reviewPage.chatQuotes', { count: unseenQuotes })}>{unseenQuotes}</span>
+      )}</>
   return (
     <div className={css.detail} data-forge-review-detail={url}>
       <header className={css.detailHeader}>
@@ -268,7 +272,6 @@ export function ReviewDetail({
             )}
           </span>
           <span className={css.headerActions}>
-            <Button size="sm" variant="outline" icon={<IconSparkleRegular size={14} />} onClick={askAgent}>{t('reviewPage.askAgent')}</Button>
             <ChangeRequestPrimary entry={frame} snapshot={snapshot} name={name} actions={actions} className={css.primary} t={t} />
             <MoreMenu url={snapshot.url} actions={actions} t={t} />
           </span>
