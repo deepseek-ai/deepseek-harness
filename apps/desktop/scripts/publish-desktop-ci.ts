@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { appendFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
-import { readDesktopPublishConfig, readDesktopUploadCredentials } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
+import { readDesktopPublishConfig, readDesktopUploadCredentials, requireDesktopEdgeOneZoneId } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
 import { retainedDesktopPath, verifyRetainedDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 import { verifyRetainedDesktopSignatures } from './verify-retained-desktop.ts'
@@ -70,10 +70,7 @@ if (process.argv[1] !== undefined && resolve(process.argv[1]) === import.meta.fi
     const env = process.env
     const { route, manifest, config, plan, root, approval, stagingPercentage } = await prepareDesktopPublication(env)
     if (mode === '--publish' && !env.DESKTOP_APPROVED_PACKAGE) throw new Error('desktop publish: approved package digest is required')
-    if (env.DESKTOP_UPLOAD_WEBSITE === 'true' && route.preset === 'production'
-      && !/^zone-[a-z0-9]+$/u.test(env.DOWNLOAD_PROD_EO_ZONE_ID || '')) {
-      throw new Error('desktop publish: configure DOWNLOAD_PROD_EO_ZONE_ID before approving website upload')
-    }
+    if (env.DESKTOP_UPLOAD_WEBSITE === 'true' && route.preset === 'production') requireDesktopEdgeOneZoneId(config)
     if (mode === '--check') {
       if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT, `website-destination=${createHash('sha256').update(`${config.bucket}/${plan.target}`).digest('hex')}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\napproval=${approval}\nlabel=${plan.version} → ${manifest.source.channel} / ${plan.target} / ${plan.environment}\n`)
       if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_APPROVED_PACKAGE) await appendFile(env.GITHUB_STEP_SUMMARY,

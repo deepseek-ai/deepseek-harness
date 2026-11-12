@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-通过共享的 [Computer Use API](../cua/README.zh.md) 发现 Windows 应用、获取授权，然后观察和操作应用窗口。选择应用、选择窗口、读取辅助功能树和前台激活是彼此独立的动作。本页说明 Windows 平台的接口语义与安全交互规范。
+通过共享的 [Computer Use API](../cua/README.zh.md) 发现 Windows 应用、获取授权，然后观察和操作应用窗口。模拟键盘和鼠标输入已可用，支持文本输入、粘贴、按键、独立按下与抬起事件、鼠标移动、点击、滚动和拖拽。选择应用、选择窗口、读取辅助功能树和前台激活是彼此独立的动作。本页说明 Windows 平台的接口语义与安全交互规范。
 
 ## 目录
 
@@ -82,7 +82,7 @@ kind: "package-reference"
 - 清理输入时，helper 不检查每个按键或鼠标按钮的释放结果。操作失败后如有按键或按钮仍处于按下状态，请先手动释放。
 - helper 的身份摘要只覆盖 exe。同一 apphost 搭配不同 DLL 时可能复用旧服务。重新构建前请先关闭使用同一输出目录的 Host，避免文件被占用。
 - Windows 握手要求 `maxClickHoldMs` 为正整数。设为 0 会使连接以 `INVALID_CONFIG` 失败，连普通点击和状态查询也不可用。
-- 不支持 `findApps`、启动应用、应用级辅助功能和持续按键 `sendKeyEvent`。请让用户打开所需应用或窗口。
+- 不支持 `findApps`、启动应用和应用级辅助功能。请让用户打开所需应用或窗口。
 - 可以发现 `isRunning: false` 的应用，但当前 `getApp` 流程会尝试未支持的启动操作，并以 `UNSUPPORTED` 失败。选择这类应用前应先打开窗口。
 - 观察和输入需要可访问、未锁定的交互式 Windows 会话。截图需要 Windows Graphics Capture 支持；列出的窗口仍可能无法截图或接收输入。
 - 应用授权不提供 **Always allow（始终允许）** 选项。其他会话需要分别获得授权。

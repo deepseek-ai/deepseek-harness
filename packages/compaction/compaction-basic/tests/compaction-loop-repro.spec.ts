@@ -489,3 +489,114 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
     }
   })
 })
+
+const SMALL_WINDOW = 4_000
+
+/** `big` accepts every request; `small` counts one token per character and rejects above its window. */
+class TwoWindowAdapter extends LlmAdapter {
+  readonly requests: Array<{ kind: 'chat' | 'summary'; model: string; overflow: boolean }> = []
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      context: { contextWindow: model === 'small' ? SMALL_WINDOW : 1_000_000 },
+    })
+  }
+
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const characters = options.messages.reduce((total, message) => total + message.content
+      .reduce((sum, block) => sum + (block.type === 'text' ? block.text.length : 0), 0), 0)
+    const kind = options.purpose === 'compaction' ? 'summary' : 'chat'
+    const overflow = options.model === 'small' && characters > SMALL_WINDOW
+    this.requests.push({ kind, model: options.model, overflow })
+    if (overflow) {
+      yield {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: { message: `prompt is too long: ${characters} tokens > ${SMALL_WINDOW} maximum`, code: CONTEXT_WINDOW_EXCEEDED_CODE },
+        },
+      }
+      return
+    }
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: kind === 'summary' ? 'SWITCH CHECKPOINT' : 'answer' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
+describe('summary route after a switch to a model that undercounts in the estimate', () => {
+  /**
+   * Four `big` turns of CJK text: the fixed heuristic prices the history near
+   * 2,000 tokens, below the 3,200-token `small` threshold, so the switch check
+   * admits the request, while `small` counts about 8,000 tokens and rejects it.
+   */
+  async function switchedHistory(maxOverflowRetries: number): Promise<{
+    ctx: Context
+    adapter: TwoWindowAdapter
+    compact: BasicCompactionEngine
+    agent: Agent
+    prompt: (text: string) => Promise<void>
+  }> {
+    const ctx = new Context()
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(TokenMeter)
+    const adapter = new TwoWindowAdapter()
+    ctx.llm.registerAdapter(['big', 'small', 'other'], adapter)
+    const compact = new BasicCompactionEngine(ctx, { headroomTokens: 0, maxTokens: 64, maxOverflowRetries })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>(`switch-${maxOverflowRetries}`), { provider: 'big', model: 'big' })
+    const prompt = async (text: string): Promise<void> => {
+      agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+    }
+    for (let turn = 0; turn < 4; turn += 1) await prompt('上下文'.repeat(667))
+    adapter.requests.length = 0
+    agent.model.select({ provider: 'small', model: 'small' })
+    return { ctx, adapter, compact, agent, prompt }
+  }
+
+  it('recovers the overflowed request by summarizing on the route that last answered', async () => {
+    const { ctx, adapter, agent, prompt } = await switchedHistory(1)
+    try {
+      await prompt('继续')
+
+      expect(adapter.requests).toEqual([
+        { kind: 'chat', model: 'small', overflow: true },
+        { kind: 'summary', model: 'big', overflow: false },
+        { kind: 'chat', model: 'small', overflow: false },
+      ])
+      const events = agent.session.snapshotEvents()
+      expect(events.findLast(event => event.type === 'compaction/summary')?.data)
+        .toMatchObject({ provider: 'big', model: 'big' })
+      expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      expect(agent.session.requestHeader()?.config.model).toBe('small')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('summarizes manual compaction on the route that last answered, not the failed header or a pending selection', async () => {
+    const { ctx, adapter, compact, agent, prompt } = await switchedHistory(0)
+    try {
+      await prompt('继续')
+      expect(adapter.requests).toEqual([{ kind: 'chat', model: 'small', overflow: true }])
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+        type: 'turn/end', data: { reason: { kind: 'error', error: { code: CONTEXT_WINDOW_EXCEEDED_CODE } } },
+      })
+      expect(agent.session.requestHeader()?.config.model).toBe('small')
+
+      adapter.requests.length = 0
+      agent.model.select({ provider: 'other', model: 'other' })
+      const result = await compact.compactNow(agent, new AbortController().signal)
+
+      expect(adapter.requests).toEqual([{ kind: 'summary', model: 'big', overflow: false }])
+      expect(result?.summary).toEqual([{ type: 'text', text: 'SWITCH CHECKPOINT' }])
+      expect(agent.model.current()).toMatchObject({ provider: 'other', model: 'other' })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
