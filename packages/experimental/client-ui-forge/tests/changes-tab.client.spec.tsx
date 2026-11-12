@@ -2461,6 +2461,26 @@ describe('ChangesTab review threads', () => {
     expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
   })
 
+  it.each(['head', 'patch'] as const)('drops pending context when the change request %s changes', async (changed) => {
+    const m = mount({ source })
+    await settle()
+    const text = deferred<RemoteResult<string>>()
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    const next = changed === 'head' ? { ...CHANGE, headSha: OLD } : {
+      ...CHANGE, files: CHANGE.files.map(file => file.path === APP.path
+        ? { ...file, digest: 'changed-base-patch', hunks: file.hunks.slice(0, 1) } : file),
+    }
+    m.faces.changeRequestDiff.mockResolvedValueOnce(ok(next))
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).not.toContain(APP_LINES[0])
+    expect(within(section).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
+  })
+
   it('clears a filter lens that hides the file of a thread the reader opens from the thread list', async () => {
     const lens = 'fixture/exports'
     const m = mount({ source, extensions: { lenses: [{ id: lens, version: '1' }], maxAnnotationsPerFile: 5 }, params: { lens }, setup: (faces) => {
