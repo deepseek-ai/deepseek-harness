@@ -6,8 +6,9 @@
  * is (or resolves to) a loopback, private, link-local or multicast address reaches this host's network. Both refusals
  * are switchable in the deployment configuration (`media.source.file`, `media.source.internal`).
  *
- * The address rule classifies the addresses one lookup returns; it does not pin the connection to them, so a name whose
- * answer changes between the lookup and the fetch is not caught here.
+ * The address rule classifies the addresses one lookup returns, and the fetch it guards follows no redirect (see
+ * `ImMediaStore.fetch`): the connection reaches the address this rule admitted and nothing else. A name the resolver
+ * cannot name within `media.timeoutMs` is refused rather than left to the fetch.
  */
 import { BlockList, isIP } from 'node:net'
 import { lookup } from 'node:dns/promises'
@@ -71,6 +72,7 @@ export function isPublicAddress(address: string): boolean {
  * @param src - the source of one inbound media element.
  * @param policy - the deployment's switches, from `config.media.source`.
  * @param resolve - address lookup of an http(s) host; the system resolver by default.
+ * @param timeout - deadline of that lookup in milliseconds.
  * @returns a promise that resolves when the source may be fetched.
  * @throws RefusedSourceError naming the source and the switch that would accept it.
  */
@@ -78,6 +80,7 @@ export async function admitMediaSource(
   src: string,
   policy: ImMediaSourcePolicy,
   resolve: HostResolver = systemHostResolver,
+  timeout = 30000,
 ): Promise<void> {
   const url = parseSource(src)
   switch (url.protocol) {
@@ -94,7 +97,7 @@ export async function admitMediaSource(
     case 'http:':
     case 'https:':
       if (policy.internal) return
-      await refuseInternal(url, resolve)
+      await refuseInternal(url, resolve, timeout)
       return
     default:
       throw new RefusedSourceError(
@@ -121,13 +124,19 @@ function parseSource(src: string): URL {
  * Refuse an http(s) source whose host is a non-public address, or whose addresses include one.
  * @param url - the parsed source.
  * @param resolve - address lookup of the host.
+ * @param timeout - deadline of that lookup in milliseconds.
  * @returns a promise that resolves when every address the host has is public.
  */
-async function refuseInternal(url: URL, resolve: HostResolver): Promise<void> {
+async function refuseInternal(url: URL, resolve: HostResolver, timeout: number): Promise<void> {
   const hostname = url.hostname.replace(/^\[|\]$/g, '')
-  const addresses = isIP(hostname) === 0 ? await resolveAddresses(hostname, resolve) : [hostname]
-  // A name that does not resolve here cannot be connected to either: the fetch reports its own failure.
-  if (addresses === undefined) return
+  const addresses = isIP(hostname) === 0 ? await resolveAddresses(hostname, resolve, timeout) : [hostname]
+  // The fetch resolves the name again, and a resolver that answers this lookup differently then is exactly the case
+  // this rule cannot classify: an unresolved name is refused rather than handed over to the fetch.
+  if (addresses === undefined) {
+    throw new RefusedSourceError(
+      `${preview(url.href)} did not resolve, and a received message cannot make this host fetch a source it cannot classify (media.source.internal is off)`,
+    )
+  }
   for (const address of addresses) {
     if (isPublicAddress(address)) continue
     throw new RefusedSourceError(
@@ -137,17 +146,31 @@ async function refuseInternal(url: URL, resolve: HostResolver): Promise<void> {
 }
 
 /**
- * Every address one host name has, or undefined when the resolver cannot name any.
+ * Every address one host name has, or undefined when the resolver cannot name any within the deadline.
  * @param hostname - host name of the source.
  * @param resolve - the resolver to ask.
- * @returns the addresses, or undefined for a name that does not resolve.
+ * @param timeout - deadline of that lookup in milliseconds.
+ * @returns the addresses, or undefined for a name that does not resolve in time.
  */
-async function resolveAddresses(hostname: string, resolve: HostResolver): Promise<readonly string[] | undefined> {
+async function resolveAddresses(
+  hostname: string,
+  resolve: HostResolver,
+  timeout: number,
+): Promise<readonly string[] | undefined> {
+  // `lookup` takes no cancellation, so the deadline settles this call: a resolver that hangs must not hold the
+  // admission (and the chat's arrival order behind it) open.
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<undefined>((settle) => {
+    timer = setTimeout(() => settle(undefined), timeout)
+    timer.unref?.()
+  })
   try {
-    return await resolve(hostname)
+    const answers = await Promise.race([resolve(hostname), deadline])
+    return answers
   } catch {
-    // An unresolvable name is not a destination this check can classify; the fetch fails on its own.
     return undefined
+  } finally {
+    clearTimeout(timer)
   }
 }
 

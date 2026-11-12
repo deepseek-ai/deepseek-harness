@@ -101,8 +101,15 @@ describe('admitMediaSource', () => {
     await expect(admitMediaSource('http://localhost/x.png', REFUSING)).rejects.toThrow('non-public address')
     await expect(admitMediaSource('http://localhost/x.png', ACCEPTING)).resolves.toBeUndefined()
   })
-  it('leaves an unresolvable name for the fetch to report', async () => {
-    await expect(admitMediaSource('https://nowhere.example/x.png', REFUSING, resolve)).resolves.toBeUndefined()
+
+  it('refuses a name it cannot classify instead of leaving the decision to the fetch', async () => {
+    // The fetch resolves the name again; a resolver that answers differently then is the case this rule cannot judge.
+    await expect(admitMediaSource('https://nowhere.example/x.png', REFUSING, resolve)).rejects.toThrow('did not resolve')
+  })
+
+  it('refuses a host whose lookup outlives the deadline', async () => {
+    const hanging: HostResolver = () => new Promise(() => {})
+    await expect(admitMediaSource('https://slow.example/x.png', REFUSING, hanging, 10)).rejects.toThrow('did not resolve')
   })
 
   it('refuses a scheme and a source it cannot parse', async () => {
