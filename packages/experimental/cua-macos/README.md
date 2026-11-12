@@ -57,7 +57,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `agentPreset` | `ptc` | Give this preset raw `cua` and every other Agent, with or without a preset, `cua_run_code`; `false` registers raw `cua` globally. |
+| `agentPreset` | `ptc` | Give this preset raw `cua` and every other Agent, with or without a preset, `cua_run_code` while its [program services](../cua/README.md#use-this-package) are available; `false` registers raw `cua` globally. |
 | `standaloneRunCode.runtime` / `standaloneRunCode.executor` | shared Node / PTC limits | Resource, launch, and nested-call settings for the dedicated CUA runtime; see [CUA](../cua/README.md). |
 | `screenshotTarget` | unset | Fixed `{ longEdge, maxBytes }` request-image target for screenshots. Unset resolves the target from the Agent's model route and refuses capture when that route declares no image input. |
 | `allowedApps` | `[]` | Legacy path/signature grants, imported once for removal; they do not authorize new bundle-ID identities. |
