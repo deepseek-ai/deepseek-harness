@@ -1,5 +1,5 @@
 /** Resolve the required policy service from the same deployment as updater publication. */
-import { resolveDesktopAutoUpdateEnvironment } from './desktop-auto-update-environment.mjs'
+import { resolveDesktopAutoUpdateEnvironment } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 
 function origin(value, name) {
   let url

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { z } from 'zod'
 import { readDesktopPublishConfig, readDesktopUploadCredentials } from './desktop-publish-config.ts'
-import { desktopReleasesRoot } from './retain-desktop-ci.ts'
+import { desktopReleasesRoot } from './desktop-releases-root.ts'
 import { readRetainedDesktopManifest, retainedDesktopPath } from './desktop-release-store.ts'
 import { prepareWebsiteInstaller, uploadWebsiteInstaller } from './desktop-website-installer.ts'
 import { desktopPublishCos } from './desktop-publish-cos.ts'
@@ -45,7 +45,7 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
     || !/^[1-9]\d*$/u.test(env.GITHUB_RUN_ATTEMPT || '')) throw new Error('website publication: invalid Actions identity or original machine')
   const root = desktopReleasesRoot(env)
   const manifest = await readRetainedDesktopManifest(root, route.runId, route.attempt)
-  const config = await readDesktopPublishConfig(env.DSH_PACKAGING_CONFIG_DIR!, 'production')
+  const config = await readDesktopPublishConfig(z.string().parse(env.DSH_PACKAGING_CONFIG_DIR), 'production')
   const approval = websiteApproval(manifest, config.bucket)
   if (!env.DESKTOP_WEBSITE_APPROVAL || env.DESKTOP_WEBSITE_APPROVAL !== approval) throw new Error('website publication: approved build or destination changed')
   const zoneId = env.DOWNLOAD_PROD_EO_ZONE_ID
@@ -68,7 +68,7 @@ export async function publishWebsiteCi(mode: 'upload' | 'purge', env: NodeJS.Pro
     const installer = await prepareWebsiteInstaller(retainedDesktopPath(root, route.runId, route.attempt), manifest, route,
       env.GITHUB_REPOSITORY || '', config.bucket)
     try {
-      const outcome = await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0]!.key}`, async () => {
+      const outcome = await withDesktopChannelLock(join(dirname(root), 'publish-locks'), `${config.bucket}/${installer.plan.artifacts[0].key}`, async () => {
         const previouslyUploaded = state.uploadConfirmed === true || state.upload === 'uploaded'
         return uploadWebsiteInstaller(installer, credentials, desktopPublishCos(installer.plan, credentials), async (event) => {
           state = event === 'upload-intent'

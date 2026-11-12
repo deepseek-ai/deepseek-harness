@@ -5,7 +5,7 @@ import { Readable, Writable } from 'node:stream'
 import type COS from 'cos-nodejs-sdk-v5'
 import { createDesktopCos, DESKTOP_COS_REGION, type DesktopCosCredentials } from './desktop-cos.ts'
 import { cosOperation } from './cos-operation.ts'
-import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
+import type { DesktopUploadPlan } from './desktop-upload-types.ts'
 import { desktopArtifactDigest, type DesktopPublishTransport } from './desktop-publish.ts'
 import { DesktopCosOperationError } from './desktop-publication-failure.ts'
 
@@ -66,7 +66,8 @@ export function desktopPublishCos(
       if (actual.size !== digest.size || actual.sha512 !== digest.sha512) throw new Error('desktop publish: local input changed')
       const cos = client()
       const md5 = createHash('md5')
-      const bytes = artifact.contents === undefined ? createReadStream(artifact.path) : [Buffer.from(artifact.contents)]
+      const bytes = artifact.contents === undefined
+        ? createReadStream(artifact.path) as AsyncIterable<Buffer> : [Buffer.from(artifact.contents)]
       for await (const chunk of bytes) md5.update(chunk)
       const body = artifact.contents === undefined ? createReadStream(artifact.path) : Readable.from([Buffer.from(artifact.contents)])
       try {

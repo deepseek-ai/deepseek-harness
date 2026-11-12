@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs'
 import { load } from 'js-yaml'
 import { gt, valid } from 'semver'
 import { z } from 'zod'
-import type { DesktopUploadArtifact, DesktopUploadPlan } from './desktop-upload-plan.ts'
+import type { DesktopUploadArtifact, DesktopUploadPlan } from './desktop-upload-types.ts'
 
 /** File identity computed from bytes, never inferred from COS ETags. */
 export interface DesktopObjectDigest { readonly size: number; readonly sha512: string }
@@ -51,7 +51,8 @@ export class DesktopPublishError extends Error {
 export async function desktopArtifactDigest(artifact: DesktopUploadArtifact): Promise<DesktopObjectDigest> {
   const hash = createHash('sha512')
   let size = 0
-  const stream = artifact.contents === undefined ? createReadStream(artifact.path) : [Buffer.from(artifact.contents)]
+  const stream = artifact.contents === undefined
+    ? createReadStream(artifact.path) as AsyncIterable<Buffer> : [Buffer.from(artifact.contents)]
   for await (const bytes of stream) { hash.update(bytes); size += bytes.length }
   return { size, sha512: hash.digest('base64') }
 }
@@ -61,10 +62,11 @@ function same(left: DesktopObjectDigest | null, right: DesktopObjectDigest | nul
 }
 
 function version(contents: string, remote = false): string {
+  let parsed: { version: string } | undefined
   try {
-    const parsed = z.object({ version: z.string() }).parse(load(contents))
-    if (valid(parsed.version) !== null) return parsed.version
-  } catch (error) { /* Discard parser error details, which may include raw remote YAML. */ }
+    parsed = z.object({ version: z.string() }).parse(load(contents))
+  } catch (_parseError) { /* Discard parser error details, which may include raw remote YAML. */ }
+  if (parsed !== undefined && valid(parsed.version) !== null) return parsed.version
   throw new DesktopPublishError(remote ? 'verification-failed' : 'invalid-plan',
     `desktop publish: invalid ${remote ? 'remote' : 'planned'} channel version`)
 }

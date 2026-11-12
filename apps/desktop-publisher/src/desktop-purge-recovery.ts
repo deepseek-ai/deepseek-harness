@@ -1,6 +1,6 @@
 /** Resume a fixed-URL purge without repeating ambiguous submissions. */
 import type { teo } from 'tencentcloud-sdk-nodejs-teo'
-import type { DesktopPurgeConfig } from './desktop-edgeone.ts'
+import type { DesktopPurgeConfig } from './desktop-purge-types.ts'
 
 /** Non-secret evidence saved before submission and after every observation. */
 export interface DesktopPurgeRecord {
@@ -65,12 +65,12 @@ async function observe(record: DesktopPurgeRecord, client: DesktopPurgeRecoveryC
       if (offset >= response.TotalCount) break
       if (response.Tasks.length === 0 || offset >= 10_000) return unknown('task history could not be fully inspected')
     } while (true)
-  } catch (error) { return unknown('task query failed; check EdgeOne history and DescribePurgeTasks permission') }
+  } catch (_error) { return unknown('task query failed; check EdgeOne history and DescribePurgeTasks permission') }
   if (matches.length === 0) return unknown(record.jobId
     ? 'accepted task not found in query history; execution result unconfirmed'
     : 'no matching submission found; purge may not have been submitted; inspect EdgeOne history before manual recovery')
-  if (matches.length !== 1) return unknown('multiple matching submissions found; cannot identify this submission')
-  const task = matches[0]!
+  const task = matches[0]
+  if (matches.length !== 1 || !task) return unknown('multiple matching submissions found; cannot identify this submission')
   if (!task.JobId || !/^[\w.-]{1,128}$/u.test(task.JobId)
     || task.JobId.includes(config.secretId) || task.JobId.includes(config.secretKey)) return unknown('query returned no usable task ID')
   const status = task.Status
@@ -115,7 +115,7 @@ export async function recoverDesktopPurge(config: DesktopPurgeConfig, previous: 
     await options.save(record)
     let response: Awaited<ReturnType<DesktopPurgeRecoveryClient['CreatePurgeTask']>> | undefined
     try { response = await client.CreatePurgeTask({ ZoneId: config.zoneId, Type: 'purge_url', Targets: [config.publicUrl] }) }
-    catch (error) { /* Submission may have reached EdgeOne; reconcile history without repeating the request. */ }
+    catch (_error) { /* Submission may have reached EdgeOne; reconcile history without repeating the request. */ }
     const jobId = response?.JobId
     if (response?.FailedList?.length) {
       record = { ...record, status: 'failed' }

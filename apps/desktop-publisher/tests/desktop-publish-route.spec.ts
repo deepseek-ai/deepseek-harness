@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { resolveDesktopPublishRoute } from '../scripts/desktop-publish-route.ts'
+import { resolveDesktopPublishRoute } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-route.ts'
 
 function fixture() {
   const run = { id: 42, run_attempt: 2, head_sha: 'a'.repeat(40), path: '.github/workflows/macos-package.yml',

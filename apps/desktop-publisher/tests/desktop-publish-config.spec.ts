@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { readDesktopPublishConfig, readDesktopUploadCredentials } from '../scripts/desktop-publish-config.ts'
+import { readDesktopPublishConfig, readDesktopUploadCredentials } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 
 it('reads public settings without opening the absent credential file and requires production App settings', async () => {
   const root = await mkdtemp(join(tmpdir(), 'publish-config-'))

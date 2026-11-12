@@ -1,10 +1,10 @@
 import { expect, it } from 'vitest'
-import { createDesktopCos } from '../scripts/desktop-cos.ts'
-import { desktopPublishCos } from '../scripts/desktop-publish-cos.ts'
-import { desktopArtifactDigest } from '../scripts/desktop-publish.ts'
-import type { DesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
+import { createDesktopCos } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
+import { desktopPublishCos } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-cos.ts'
+import { desktopArtifactDigest } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
+import type { DesktopUploadPlan } from '../src/desktop-upload-types.ts'
 import { answer, cosError, startCosLoopback } from './cos-loopback.ts'
-import { desktopPublicationFailure } from '../scripts/desktop-publication-failure.ts'
+import { desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
 
 it.each([true, false])('preserves download headers and verified bytes with overwrite prevention %s', async (forbidOverwrite) => {
   const objects = new Map<string, Buffer>()

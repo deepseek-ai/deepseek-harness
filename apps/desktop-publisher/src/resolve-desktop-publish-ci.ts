@@ -53,12 +53,12 @@ export function selectDesktopPackage(repository: string, inputsValue: unknown, r
   }
   packages = packages.filter(job => job.run_attempt === run.run_attempt && job.conclusion === 'success' && job.runner_name)
   if (packages.length !== 1) throw new Error('desktop publish: expected one successful package job')
-  const runnerName = packages[0]!.runner_name!
+  const runnerName = z.string().parse(packages[0]?.runner_name)
   const routes = desktopPublishRunnersSchema.parse(routesValue)
   const route = routes[runnerName]
   const target = (Object.keys(desktopPackageWorkflows) as Array<keyof typeof desktopPackageWorkflows>)
-    .find(name => desktopPackageWorkflows[name] === run.path)!
-  if (!route || !route.target.includes(target)) throw new Error('desktop publish: original machine has no configured publishing route')
+    .find(name => desktopPackageWorkflows[name] === run.path)
+  if (!route || target === undefined || !route.target.includes(target)) throw new Error('desktop publish: original machine has no configured publishing route')
   if (new Set(Object.values(routes).map(value => value.label)).size !== Object.keys(routes).length) {
     throw new Error('desktop publish: each configured machine needs its own unique runner label')
   }

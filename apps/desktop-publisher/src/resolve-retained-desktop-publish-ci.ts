@@ -2,7 +2,7 @@
 import { appendFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { z } from 'zod'
-import { desktopReleasesRoot } from './retain-desktop-ci.ts'
+import { desktopReleasesRoot } from './desktop-releases-root.ts'
 import { verifyRetainedDesktopRelease } from './desktop-release-store.ts'
 import { resolveDesktopPublishRoute } from './desktop-publish-route.ts'
 
@@ -15,7 +15,7 @@ import { resolveDesktopPublishRoute } from './desktop-publish-route.ts'
  */
 export async function resolveRetainedDesktopPublication(env: NodeJS.ProcessEnv, api: (path: string) => unknown,
   readManifest = verifyRetainedDesktopRelease) {
-  const selection = z.object({ run: z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive() }).passthrough(),
+  const selection = z.object({ run: z.object({ id: z.number().int().positive(), run_attempt: z.number().int().positive() }).loose(),
     jobs: z.array(z.unknown()), routes: z.unknown(), runnerName: z.string() }).parse(JSON.parse(env.DESKTOP_PACKAGE_SELECTION || '{}'))
   if (!env.GITHUB_REPOSITORY || env.RUNNER_NAME !== selection.runnerName) throw new Error('desktop publish: task was dispatched to a different machine')
   const manifest = await readManifest(desktopReleasesRoot(env), String(selection.run.id), String(selection.run.run_attempt))
@@ -52,7 +52,7 @@ export function retainedDesktopPublishApi(env: NodeJS.ProcessEnv): (path: string
       signal: AbortSignal.timeout(60_000),
     })
     if (!response.ok) throw new Error(`desktop publish: GitHub verification request failed (HTTP ${response.status})`)
-    return response.json()
+    return response.json() as Promise<unknown>
   }
 }
 

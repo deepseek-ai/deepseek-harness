@@ -108,7 +108,7 @@ export async function findDesktopPublication(root: string, expected: {
   for (const entry of entries) {
     if (!entry.isDirectory() || !entry.name.startsWith('publish-')) continue
     const directory = join(root, entry.name)
-    let operation
+    let operation: unknown
     try { operation = JSON.parse(await readFile(join(directory, 'operation.json'), 'utf8')) } catch (error) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
       throw error

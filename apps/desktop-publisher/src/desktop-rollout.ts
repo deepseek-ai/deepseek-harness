@@ -7,15 +7,15 @@ import { dump, load } from 'js-yaml'
 import { z } from 'zod'
 import { desktopUpdateMetadataFilename, resolveDesktopUploadConfig } from './desktop-auto-update-environment.mjs'
 import type { DesktopRetainedManifest } from './desktop-release-store.ts'
-import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
+import type { DesktopSingleUploadPlan } from './desktop-upload-types.ts'
 import { desktopArtifactDigest, type DesktopPublishOperations, type DesktopRemoteObject } from './desktop-publish.ts'
 
 const percentage = z.number().int().min(0).max(100)
 const metadataSchema = z.object({
   version: z.string(),
-  files: z.array(z.object({ url: z.string(), size: z.number().int().positive(), sha512: z.string() }).passthrough()).length(1),
+  files: z.tuple([z.object({ url: z.string(), size: z.number().int().positive(), sha512: z.string() }).loose()]),
   path: z.string().optional(), sha512: z.string().optional(), stagingPercentage: percentage.optional(),
-}).passthrough()
+}).loose()
 
 function metadata(contents: string) {
   if (Buffer.byteLength(contents) > 1024 * 1024) throw new Error('desktop rollout: metadata exceeds 1 MiB')
@@ -26,7 +26,7 @@ function metadata(contents: string) {
 
 /** Validated immutable update identity; no installer bytes are read. */
 export interface DesktopRolloutPlan {
-  readonly upload: DesktopUploadPlan
+  readonly upload: DesktopSingleUploadPlan
   readonly expected: string
 }
 
@@ -56,7 +56,7 @@ export async function prepareDesktopRollout(directory: string, manifest: Desktop
   const parsed = metadata(contents)
   const payload = `deepseek-harness-${source.version}-${source.target}.${windows ? 'exe' : 'zip'}`
   const file = manifest.files.find(entry => entry.name === payload)
-  const entry = parsed.files[0]!
+  const entry = parsed.files[0]
   if (parsed.version !== source.version || entry.url !== payload || !file
     || entry.size !== file.size || entry.sha512 !== file.sha512
     || (parsed.path !== undefined && parsed.path !== payload)
@@ -103,8 +103,9 @@ export function verifyDesktopRolloutFeed(plan: DesktopRolloutPlan, remote: Deskt
 export async function rolloutDesktopRelease(plan: DesktopRolloutPlan, target: number | undefined,
   operations: Pick<DesktopPublishOperations, 'transport' | 'record'>) {
   if (target !== undefined) percentage.parse(target)
-  const artifact = plan.upload.artifacts[0]!
+  const artifact = plan.upload.artifacts[0]
   const before = await operations.transport.read(artifact.key, true)
+  if (!before?.contents) throw new Error('desktop rollout: published update feed is missing')
   const current = verifyDesktopRolloutFeed(plan, before)
   const next = target ?? current.percentage
   if (next < current.percentage) throw new Error('desktop rollout: percentage cannot decrease; inspect the current rollout')
@@ -115,8 +116,8 @@ export async function rolloutDesktopRelease(plan: DesktopRolloutPlan, target: nu
   const updated = { ...artifact, contents: dump({ ...current.metadata, stagingPercentage: next }) }
   const digest = await desktopArtifactDigest(updated)
   const confirmed = await operations.transport.read(artifact.key, true)
-  if (confirmed?.contents !== before?.contents) throw new Error('desktop rollout: feed changed before write; inspect and retry')
-  await operations.record({ type: 'put-intent', key: artifact.key, before: before!.contents!, after: updated.contents })
+  if (confirmed?.contents !== before.contents) throw new Error('desktop rollout: feed changed before write; inspect and retry')
+  await operations.record({ type: 'put-intent', key: artifact.key, before: before.contents, after: updated.contents })
   await operations.transport.put(updated, digest, false)
   const actual = await operations.transport.read(artifact.key, true)
   if (actual?.size !== digest.size || actual.sha512 !== digest.sha512) {
