@@ -71,7 +71,7 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'> & CuaCoordinateOptions
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers' | 'useSystemPointer'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
 export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
@@ -208,7 +208,7 @@ export interface CuaWindow extends CuaSurface {
    * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting screenshot-local point or integer ratio.
    * @param to - destination in the same coordinate mode.
-   * @param options - button, modifiers and coordinate mode for the complete gesture.
+   * @param options - button, modifiers, coordinate mode, and optional system-pointer control on supported providers.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>

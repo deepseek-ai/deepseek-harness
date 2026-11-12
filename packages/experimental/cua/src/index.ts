@@ -37,7 +37,7 @@ export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
-  /** Ask once per live Session before an explicitly requested system-pointer move. */
+  /** Ask once per live Session before explicitly requested system-pointer moves or drags. */
   requireSystemPointerApproval: boolean
   /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
   agentPreset: string | false
@@ -246,7 +246,8 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
       const signal = execution.signal
       signal.throwIfAborted()
       const client = execution.nativeClient
-      if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
+      if (method === 'drag' && !useSystemPointer) delete params.useSystemPointer
+      else if (useSystemPointer !== undefined) params.useSystemPointer = useSystemPointer
       if (method === 'sendKeyEvent' && backend.sendKeyEvent) return backend.sendKeyEvent(client, params, execution)
       const nativeParams = method === 'findApps'
         ? { ...params, maxAppMatches: config.maxAppMatches }
@@ -369,7 +370,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
             owner.coordinates = new CuaCoordinates()
           }
           const nativeClient = client
-          const route = request.method === 'mouseMove'
+          const route = request.method === 'mouseMove' || request.method === 'drag'
             ? mouseControl?.resolve(agent, 'useSystemPointer' in request.params && request.params.useSystemPointer === true)
             : undefined
           if (route?.prepare) owner.coordinates.parameters(request)

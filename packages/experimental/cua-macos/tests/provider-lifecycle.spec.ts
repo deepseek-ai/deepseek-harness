@@ -1210,6 +1210,32 @@ it('requires an explicit system-pointer request on every move and asks only once
   expect(f.ask).toHaveBeenCalledTimes(1)
 })
 
+it.each([true, false])('asks before a system drag and shares the session decision with hover (allow=%s)', async (allow) => {
+  const f = await hoverFixture()
+  const target = { appHandle: 'app-one', windowId: '7', relative: true, fromX: 100, fromY: 200, toX: 300, toY: 400 }
+  native.request.mockResolvedValueOnce({ appHandle: target.appHandle, windowId: null, snapshotId: 's', tree: '', truncated: false,
+    windows: [{ windowId: '7', appName: 'Fixture', title: '', bounds: imageMetadata.bounds, isOnScreen: true, onCurrentSpace: true }] })
+  await f.execute('getState', { appHandle: target.appHandle })
+  if (!allow) f.ask.mockResolvedValue({ answers: [{ id: 'cua-mouse-control', selected: ['Deny'] }] })
+  native.request.mockClear()
+  const drag = await f.execute('drag', { ...target, useSystemPointer: true })
+  const hover = await f.execute('mouseMove', physicalHover)
+  expect(f.ask).toHaveBeenCalledTimes(1)
+  if (allow) {
+    expect(drag.isError).toBe(false)
+    expect(hover.isError).toBe(false)
+    expect(native.request.mock.calls.map(([method, params]) => [method, params.useSystemPointer])).toEqual([['drag', true], ['mouseMove', true]])
+  } else {
+    for (const result of [drag, hover]) expect(JSON.stringify(result.content)).toContain('MOUSE_CONTROL_DENIED')
+    expect(native.request).not.toHaveBeenCalled()
+  }
+  for (const params of [target, { ...target, useSystemPointer: false }]) {
+    expect((await f.execute('drag', params)).isError).toBe(false)
+    expect(native.request.mock.lastCall?.[1]).not.toHaveProperty('useSystemPointer')
+  }
+  expect(f.ask).toHaveBeenCalledTimes(1)
+})
+
 it('keeps refusals and grants separate and forgets a closed session on reopen', async () => {
   const f = await hoverFixture()
   expect((await f.execute('mouseMove', physicalHover)).isError).toBe(false)

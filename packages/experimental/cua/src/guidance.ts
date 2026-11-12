@@ -1,6 +1,8 @@
 /** Shared model instructions for native application and window operations. */
 const hoverSignature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean })'
 
+const dragSignature = "drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean })"
+
 /** System-prompt section that carries the CUA operation guidance for one Agent. */
 export const CUA_PROMPT_SECTION_NAME = 'computer-use:dsh-cua'
 
@@ -42,7 +44,7 @@ Use an explicit window for screenshots and pointer input. Before coordinate inpu
 - ${hoverSignature} -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
-- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean }) -> ActionResult — drag between two points of one window.
+- ${dragSignature} -> ActionResult — drag between two points of one window.
 
 A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current AX observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then explicitly activate the target and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
 
@@ -61,7 +63,8 @@ Raw tools use { method, params }: include appHandle for app calls and windowId f
  */
 export function withSystemPointerGuidance(guidance: string): string {
   const signature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean })'
-  return `${guidance.replace(hoverSignature, signature)}
+  const systemDrag = dragSignature.replace('relative?: boolean', 'relative?: boolean, useSystemPointer?: boolean')
+  return `${guidance.replace(hoverSignature, signature).replace(dragSignature, systemDrag)}
 
-Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
+Use win.mouseMove(target, { useSystemPointer: true }) or win.drag(from, to, { useSystemPointer: true }) only when the task requires the system pointer. System drag presses, moves, and releases the selected mouse button in the unobscured foreground window. Omit the option for ordinary window-directed drag. Inspect the application after dispatch before deciding whether to try another route. The first explicit request asks for session permission unless approval is disabled. Approval or refusal applies to moves and drags until the session closes or DSH restarts. Pass true on each physical gesture. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
 }

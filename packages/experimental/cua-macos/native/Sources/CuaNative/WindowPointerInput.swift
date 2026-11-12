@@ -32,28 +32,36 @@ final class WindowPointerInput {
     @MainActor static func mouseMove(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
-        try NativePlatform.verify(route.owner)
-        try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
-        let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
-        guard current.bounds == route.bounds else {
-            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before hover; read fresh state")
-        }
+        try validateSystemWindow(route)
+        let screen = screenPoint(point, in: route)
+        try checkSystemHit(route, at: screen)
         guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
-                                  mouseCursorPosition: Self.screenPoint(point, in: route), mouseButton: .left) else {
+                                  mouseCursorPosition: screen, mouseButton: .left) else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system pointer movement")
         }
         event.flags = []
-        try Self.requireSystemPointerTarget(route, frontPID: NativePlatform.frontPID(),
-                                            hitWindowID: NativePlatform.mouseWindow(at: Self.screenPoint(point, in: route)))
         try checkCancellation()
         event.post(tap: .cghidEventTap)
         try checkCancellation()
     }
 
+    private static func validateSystemWindow(_ route: WindowRoute) throws {
+        try NativePlatform.verify(route.owner)
+        try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
+        let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
+        guard current.bounds == route.bounds else {
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before system-pointer input; read fresh state")
+        }
+    }
+
+    @MainActor private static func checkSystemHit(_ route: WindowRoute, at screen: CGPoint) throws {
+        try requireSystemPointerTarget(route, frontPID: NativePlatform.frontPID(), hitWindowID: NativePlatform.mouseWindow(at: screen))
+    }
+
     /// Input-transparent windows do not obscure a target; AppKit owns mouse hit testing.
     static func requireSystemPointerTarget(_ route: WindowRoute, frontPID: Int32?, hitWindowID: Int) throws {
         guard frontPID == route.owner.pid, hitWindowID == Int(route.windowID) else {
-            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer hover requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
+            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer input requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
         }
     }
 
@@ -142,8 +150,9 @@ final class WindowPointerInput {
     /// Drag the selected button along an interpolated path, releasing at the last posted point on cancellation.
     func drag(
         in route: WindowRoute, from start: WindowPoint, to end: WindowPoint, durationMs: Int, steps: Int,
-        button: String = "left", modifiers: [String] = []
-    ) throws {
+        button: String = "left", modifiers: [String] = [], useSystemPointer: Bool = false,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws {
         try checkCancellation()
         try Self.validate(start, in: route)
         try Self.validate(end, in: route)
@@ -151,61 +160,73 @@ final class WindowPointerInput {
             throw NativeFailure(code: "INVALID_ARGUMENT", message: "Drag durationMs must be 1...5000 and steps 1...240")
         }
         let source = try Self.source()
-        let selectedButton = try Self.button(button)
+        let selected = try Self.button(button)
         let flags = try KeyboardInput.modifierFlags(modifiers)
         let group = Self.clickGroup()
-        let down = try mouseEvent(
-            source: source, route: route, screen: Self.screenPoint(start, in: route), local: start,
-            type: Self.down(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
-        )
-        let initialRelease = try mouseEvent(
-            source: source, route: route, screen: Self.screenPoint(start, in: route), local: start,
-            type: Self.up(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
-        )
+        func event(_ type: CGEventType, at point: WindowPoint) throws -> CGEvent {
+            let screen = Self.screenPoint(point, in: route)
+            if !useSystemPointer {
+                return try mouseEvent(source: source, route: route, screen: screen, local: point, type: type,
+                                      button: selected, clickState: 1, subtype: 0, group: group, flags: flags)
+            }
+            guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: screen, mouseButton: selected) else {
+                throw NativeFailure(code: "NATIVE_ERROR", message: "Could not create system drag event")
+            }
+            event.flags = flags
+            event.setIntegerValueField(.mouseEventNumber, value: group)
+            event.setIntegerValueField(.mouseEventClickState, value: type == .mouseMoved ? 0 : 1)
+            return event
+        }
+        func post(_ event: CGEvent) {
+            if useSystemPointer {
+                event.timestamp = DispatchTime.now().uptimeNanoseconds
+                event.post(tap: .cghidEventTap)
+            } else {
+                poster.post(event, to: route.owner.pid)
+            }
+        }
+        let down = try event(Self.down(selected), at: start)
+        var release = try event(Self.up(selected), at: start)
+        var previous = start
         var path: [DragStep] = []
         for index in 1...steps {
             let fraction = Double(index) / Double(steps)
-            let local = WindowPoint(
-                x: start.x + (end.x - start.x) * fraction,
-                y: start.y + (end.y - start.y) * fraction
-            )
-            let screen = Self.screenPoint(local, in: route)
-            path.append(DragStep(
-                movement: try mouseEvent(
-                    source: source, route: route, screen: screen, local: local,
-                    type: Self.dragged(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
-                ),
-                release: try mouseEvent(
-                    source: source, route: route, screen: screen, local: local,
-                    type: Self.up(selectedButton), button: selectedButton, clickState: 1, subtype: 0, group: group, flags: flags
-                )
-            ))
+            let local = WindowPoint(x: start.x + (end.x - start.x) * fraction, y: start.y + (end.y - start.y) * fraction)
+            let movement = try event(Self.dragged(selected), at: local)
+            if useSystemPointer {
+                movement.setIntegerValueField(.mouseEventDeltaX, value: Int64(local.x.rounded() - previous.x.rounded()))
+                movement.setIntegerValueField(.mouseEventDeltaY, value: Int64(local.y.rounded() - previous.y.rounded()))
+            }
+            path.append(DragStep(movement: movement, release: try event(Self.up(selected), at: local)))
+            previous = local
         }
-        var heldRelease: CGEvent?
+        if useSystemPointer {
+            try Self.validateSystemWindow(route)
+            try await Self.checkSystemHit(route, at: down.location)
+            guard ![CGMouseButton.left, .right, .center].contains(where: { CGEventSource.buttonState(.combinedSessionState, button: $0) }) else {
+                throw NativeFailure(code: "INPUT_BUSY", message: "A mouse button is already held")
+            }
+            try checkCancellation()
+            post(try event(.mouseMoved, at: start))
+            try await Self.checkSystemHit(route, at: down.location)
+        }
+        let interval = Self.dragStepInterval(durationMs: durationMs, steps: steps)
+        try checkCancellation()
+        post(down)
         do {
-            defer {
-                if let heldRelease {
-                    poster.post(heldRelease, to: route.owner.pid)
-                    Thread.sleep(forTimeInterval: 0.100)
-                }
-            }
-            try checkCancellation()
-            poster.post(down, to: route.owner.pid)
-            heldRelease = initialRelease
-            Thread.sleep(forTimeInterval: 0.016)
-            let stepInterval = Self.dragStepInterval(durationMs: durationMs, steps: steps)
+            defer { post(release) }
+            try await Task.sleep(for: .milliseconds(16))
             for step in path {
+                if useSystemPointer { try await Self.checkSystemHit(route, at: step.movement.location) }
                 try checkCancellation()
-                poster.post(step.movement, to: route.owner.pid)
-                heldRelease = step.release
-                if stepInterval > 0 { Thread.sleep(forTimeInterval: stepInterval) }
+                post(step.movement)
+                release = step.release
+                try await Task.sleep(for: .seconds(interval))
             }
-            Thread.sleep(forTimeInterval: 0.050)
+            try await Task.sleep(for: .milliseconds(50))
             try checkCancellation()
-            if let release = heldRelease { poster.post(release, to: route.owner.pid) }
-            heldRelease = nil
-            Thread.sleep(forTimeInterval: 0.100)
         }
+        try await Task.sleep(for: .milliseconds(100))
         try checkCancellation()
     }
 

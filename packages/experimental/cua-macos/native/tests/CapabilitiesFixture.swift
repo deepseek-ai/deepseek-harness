@@ -89,7 +89,12 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
                 value["keyCode"] = event.keyCode
                 value["characters"] = event.characters ?? ""
                 value["repeat"] = event.isARepeat
-            } else { value["button"] = event.buttonNumber }
+            } else {
+                value["button"] = event.buttonNumber
+                value["pressedButtons"] = NSEvent.pressedMouseButtons
+                value["deltaX"] = event.deltaX
+                value["point"] = [event.locationInWindow.x, event.locationInWindow.y]
+            }
             self.events.append(value)
             self.persist()
         }

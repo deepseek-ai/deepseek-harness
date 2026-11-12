@@ -1,7 +1,7 @@
 /** Object facade over logged native operations; its caller owns evaluator persistence. */
 import type { z } from 'zod'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, WindowsResult } from './protocol.ts'
+import { ActionNamesResult, ActionResult, AppResult, AppsResult, CapabilitiesResult, FoundAppsResult, HoverResult, MouseMoveTargets, Request, ShowResult, StateResult, SystemPointerRequest, WindowsResult } from './protocol.ts'
 import type { CuaApi, CuaApp, CuaAppHandle, CuaCapabilities, CuaDispatch, CuaOperation, CuaProgramImage, CuaSurface, CuaWindow } from './types.ts'
 export type * from './types.ts'
 
@@ -24,7 +24,7 @@ function requestIssueMessage(issues: readonly z.core.$ZodIssue[], parent: readon
 
 function validatedCall(dispatch: CuaDispatch) {
   return (method: CuaOperation['method'], params: Record<string, JsonValue>, options?: object) => {
-    const request = Request.safeParse({ method, params })
+    const request = SystemPointerRequest.safeParse({ method, params })
     if (!request.success) throw new Error(`${method} ${requestIssueMessage(request.error.issues)}`)
     if (options) {
       // The facade owns the target and coordinates. The Host validates additional options against its provider schema.
@@ -217,6 +217,7 @@ function createCuaObjects(call: ReturnType<typeof validatedCall>): {
       async drag(from, to, options) {
         return base.action('drag', { ...coordinateParams(appHandle, windowId),
           fromX: from[0], fromY: from[1], toX: to[0], toY: to[1],
+          ...options?.useSystemPointer === undefined ? {} : { useSystemPointer: options.useSystemPointer },
           ...options?.relative === undefined ? {} : { relative: options.relative },
           ...options?.mouseButton === undefined ? {} : { mouseButton: options.mouseButton },
           ...options?.modifiers === undefined ? {} : { modifiers: [...options.modifiers] },

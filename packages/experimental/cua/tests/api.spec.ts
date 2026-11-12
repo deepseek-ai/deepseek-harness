@@ -229,10 +229,10 @@ describe('pointer buttons and modifiers', () => {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', x: 10, y: 20,
       mouseButton: 'left', clickCount: 1, modifiers: ['command'],
     } })
-    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'] })
+    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'], useSystemPointer: true })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'drag', params: {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', fromX: 10, fromY: 20, toX: 30, toY: 40,
-      mouseButton: 'middle', modifiers: ['shift', 'option'],
+      useSystemPointer: true, mouseButton: 'middle', modifiers: ['shift', 'option'],
     } })
     const count = f.dispatch.mock.calls.length
     await expect(window.click(element('0'), { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
