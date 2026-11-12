@@ -215,7 +215,7 @@ class CountingStartExecutor extends ShellExecutor {
   }
 }
 
-async function setupSandboxed(withApproval = false) {
+async function setupSandboxed(withApproval = false, toolConfig: Partial<ToolBash.Config> = {}) {
   const ctx = new Context()
   provideWorkingDirectoryFixture(ctx)
   await ctx.plugin(SystemPrompt)
@@ -229,7 +229,7 @@ async function setupSandboxed(withApproval = false) {
   await ctx.plugin(RecordingSandboxExecutor)
   if (withApproval) await ctx.plugin(ApprovalService)
   await ctx.plugin(BashEnvPlugin)
-  await ctx.plugin(ToolBash)
+  await ctx.plugin(ToolBash, toolConfig)
   return { ctx, bash: ctx.shell as RecordingSandboxExecutor }
 }
 
@@ -798,11 +798,25 @@ describe('sandbox escalation through the generic task producer', () => {
     }
   })
 
+  it('rejects a forced background call before asking for an escalation', async () => {
+    const { ctx, bash } = await setupSandboxed(true, { enableRunInBackground: false })
+    const prompted = vi.fn()
+    ctx.on('approval/request', () => { prompted(); return Promise.resolve<ApprovalOutcome>('allowed-once') })
+    const result = await call(ctx, 'bash', { ...escalate, run_in_background: true }, sandboxAgent())
+    expect(text(result)).toContain('invalid arguments: run_in_background is disabled for this deployment (enableRunInBackground: false)')
+    expect(result).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    expect(prompted).not.toHaveBeenCalled()
+    expect(bash.modes).toEqual([])
+  })
+
   it('rejects injected escalation without a sandbox and narrower escalation without prompting', async () => {
     const plain = await setup()
-    const unavailable = await call(plain, 'bash', escalate)
-    expect(text(unavailable)).toContain('invalid arguments: sandbox_permissions is not available in this composition')
-    expect(unavailable).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    const { command, description, sandbox_permissions, justification } = escalate
+    for (const args of [escalate, { command, description, sandbox_permissions }, { command, description, justification }]) {
+      const unavailable = await call(plain, 'bash', args)
+      expect(text(unavailable)).toContain('invalid arguments: sandbox_permissions and justification are not available in this composition')
+      expect(unavailable).toMatchObject({ error: { info: { name: 'ToolArgsError', code: 'INVALID_ARGS' } } })
+    }
 
     const { ctx } = await setupSandboxed(true)
     const prompted = vi.fn()
