@@ -1922,7 +1922,7 @@ export interface ImConfig {
     maxBytes: number
     /** Maximum resources downloaded for one message (default 9). */
     maxItems: number
-    /** Deadline of one inbound fetch, body and address lookup included, ms (default 30 s). */
+    /** Deadline of the address lookup of one inbound fetch, and then of the fetch with its body, ms (default 30 s). */
     timeoutMs: number
     /**
      * Sources a received message may make this host fetch. A message is written by a chat member, not by the session

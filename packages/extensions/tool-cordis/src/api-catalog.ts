@@ -1835,6 +1835,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the message as the store holds it, with a merged forward\'s entries filled in when the platform has them.',
       },
       {
+        signature: 'async members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage>',
+        description: 'One page of the people a chat lists as its members: the id a mention addresses and the name to show.',
+        parameters: [{ name: 'chat', description: 'chat whose members are listed; its bot answers the platform request.' }, { name: 'cursor', description: '`page_token` of the previous page.' }, { name: 'limit', description: 'page-size hint; the platform bounds it.' }],
+        returns: 'the page the adapter read.',
+      },
+      {
         signature: 'status(): ImStatus',
         description: 'A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.',
         parameters: [],
@@ -7080,7 +7086,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImConfig',
-    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n        source: {\n            file: boolean;\n            internal: boolean;\n        };\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
+    declaration: 'export interface ImConfig {\n    sources: ImSourceConfig[];\n    retentionMs: number;\n    maxRecords: number;\n    maxInputBytes: number;\n    retryIntervalMs: number;\n    platformTimeoutMs: number;\n    media: {\n        download: boolean;\n        maxBytes: number;\n        maxItems: number;\n        timeoutMs: number;\n        source: {\n            file: boolean;\n            internal: boolean;\n        };\n    };\n    send: {\n        maxMediaBytes: number;\n        operationTimeoutMs: number;\n    };\n    tools: {\n        readOnly: boolean;\n        maxReadBytes: number;\n        maxHistoryItems: number;\n        maxMembers: number;\n        fileDir: string;\n    };\n    defaultDispatch?: ImDispatcherConfig | undefined;\n}',
   },
   {
     name: 'ImDelivery',
@@ -7124,7 +7130,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImIntake',
-    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
+    declaration: 'export class ImIntake {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly store: ImStore, readonly host: ImIntakeHost);\n    async receive(session: Session): Promise<void>;\n    outbound(bot: Bot, result: SendResult): Promise<ImMessage | undefined>;\n    async announced(key: ImMessageKey): Promise<ImMessage | undefined>;\n    hold(): void;\n    release(): void;\n    pump(): void;\n    async idle(): Promise<void>;\n    async dispose(): Promise<void>;\n}',
   },
   {
     name: 'ImIntakeHost',

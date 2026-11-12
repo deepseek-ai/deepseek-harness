@@ -134,6 +134,15 @@ chat(key: ImChatKey): ImChat | undefined
 async readMessage(chat: ImChatKey, id: string): Promise<ImMessage>
 
 /**
+ * One page of the people a chat lists as its members: the id a mention addresses and the name to show.
+ * @param chat - chat whose members are listed; its bot answers the platform request.
+ * @param cursor - `page_token` of the previous page.
+ * @param limit - page-size hint; the platform bounds it.
+ * @returns the page the adapter read.
+ */
+async members(chat: ImChatKey, cursor?: string, limit?: number): Promise<MembersPage>
+
+/**
  * A snapshot of the deployment: bots, sources, sessions, pending work and recent messages.
  * @returns the current status.
  */

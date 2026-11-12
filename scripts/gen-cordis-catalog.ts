@@ -1063,6 +1063,7 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   Bot: 'Satori v4 bot contract is owned by vendor/plugin-im-core (vendored upstream fork)',
   Capabilities: 'Satori v4 capability view is owned by vendor/plugin-im-core (vendored upstream fork)',
   Fragment: 'Satori v4 element fragment is owned by vendor/plugin-im-core and vendor/satori-element (vendored upstream fork)',
+  MembersPage: 'Satori v4 member page is owned by vendor/plugin-im-core (vendored upstream fork)',
   MessageStream: 'Satori v4 message stream is owned by vendor/plugin-im-core (vendored upstream fork)',
   StreamOptions: 'Satori v4 stream options are owned by vendor/plugin-im-core (vendored upstream fork)',
   McpResourceProvider: 'scoped resource provider is owned by packages/mcp/mcp-resources/README.md',
