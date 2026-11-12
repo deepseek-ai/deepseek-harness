@@ -143,7 +143,14 @@ export function useShareCreateForm({
         sessionMode,
         allowsFork,
       })
-      if (!created.ok) throw new Error('share rejected')
+      // A Host whose share state another running process holds refuses the write; that is the owner's
+      // to act on in the process holding it, not an unreachable share service.
+      if (!created.ok) {
+        onError(created.error.code === 'liveshareShares/owner-state-held'
+          ? t('dialog.ownerStateHeld')
+          : t('dialog.hostUnavailable'))
+        return
+      }
       const data = created.value
       // The Host's own record is the only statement of what it stored. Its answer carries the stored
       // tier, read through this build's vocabulary, so a Host that still names the withdrawn

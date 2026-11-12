@@ -22,7 +22,12 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 class StubRuntime extends PtcRuntime {
   resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
 
-  readonly language = 'typescript'
+  readonly language: string
+
+  constructor(ctx: Context, config: { language?: string } = {}) {
+    super(ctx)
+    this.language = config.language ?? 'typescript'
+  }
   readonly isolation = 'stub'
 
   run(_request: PtcRunRequest): Promise<PtcRunResult> {
@@ -31,13 +36,13 @@ class StubRuntime extends PtcRuntime {
 }
 
 /** A host plane with one tool, optionally carrying a PTC runtime. */
-async function host(options: { runtime?: boolean } = {}) {
+async function host(options: { runtime?: boolean; language?: string } = {}) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(NativeToolExecutor)
-  if (options.runtime !== false) await ctx.plugin(StubRuntime)
+  if (options.runtime !== false) await ctx.plugin(StubRuntime, options.language === undefined ? {} : { language: options.language })
   ctx.tools.register(defineTool({
     name: 'echo',
     description: 'Echo tool.',
@@ -114,6 +119,15 @@ describe('the tool-presentation row', () => {
 
     const assembly = await ctx.systemPrompt.assemble({ scope: agent })
     expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
+  })
+
+  it.each([false, true])('rejects an unsupported runtime without inheriting native execution (delayed: %s)', async (delayed) => {
+    const ctx = await host({ runtime: !delayed, language: 'python' })
+    const { agent } = await mount(ctx, { mode: 'ptc' })
+    if (delayed) await ctx.plugin(StubRuntime, { language: 'python' })
+    await expect(ctx.systemPrompt.assemble({ scope: agent })).rejects.toThrow(expect.objectContaining({
+      name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE',
+    }))
   })
 
   it('requires a mode rather than defaulting one', () => {

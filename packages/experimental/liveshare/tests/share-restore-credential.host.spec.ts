@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { WebSocketServer } from 'ws'
 import { afterEach, describe, expect, it } from 'vitest'
+import { ownerHostClaimPath } from '../src/host/owner-host-claim.ts'
 import { apply, type Config } from '../src/host/share-host.ts'
 import type {} from '../src/index.ts'
 
@@ -258,4 +259,46 @@ describe('restoring a share with a credential this host reads as expired', () =>
     })
     await expect.poll(async () => (await listedShares(host))[0]?.online, { timeout: 15_000 }).toBe(true)
   }, 40_000)
+})
+
+describe('a credential imported by a host that does not own the owner state', () => {
+  it('is stored without re-registering or claiming the shares the holder serves', async () => {
+    // The shares a second host holds are its restore snapshot and all offline, so re-registering them
+    // would send an add-share for every one and move the registrations away from the holder.
+    const relay = await relayStandIn(() => true)
+    const directory = stateDirectory()
+    const stateFile = ownerStateFile(directory, relay.origin)
+    // Another live host holds the claim: the record names a process this spec did not start.
+    writeFileSync(ownerHostClaimPath(directory), JSON.stringify({ hostId: 'holder', pid: process.ppid }))
+    const { routes, host } = ownerRoutes()
+    const dispose = await apply(host, {
+      ownerStateFile: stateFile,
+      ownerCredentialFile: join(directory, 'owner-credential.json'),
+    } satisfies Config)
+    disposers.push(async () => { await dispose(); await relay.close() })
+    const holderClaim = readFileSync(ownerHostClaimPath(directory), 'utf8')
+
+    const imported = await routes.get('/api/liveshare.ownerCredential')?.(new Request(
+      'http://owner.local/api/liveshare.ownerCredential',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ credential: RENEWED_TOKEN }),
+      },
+    ))
+    expect(imported?.status).toBe(200)
+    // The sign-in is this host's own, so it commits and reads back as the credential it holds.
+    expect(JSON.parse(readFileSync(join(directory, 'owner-credential.json'), 'utf8'))).toMatchObject({
+      relay: relay.origin,
+      credential: RENEWED_TOKEN,
+    })
+    // The identity this host reports is its own sign-in, which it can read; every owner action that
+    // would change the shares is refused, and nothing it did reached the Relay.
+    await expect(host.liveshareShares.identity({ relay: relay.origin }))
+      .resolves.toMatchObject({ state: 'verified' })
+    await expect(host.liveshareShares.addSessions({ shareId: SHARE_ID, sessionIds: [SESSION_ID] }))
+      .rejects.toMatchObject({ code: 'liveshareShares/owner-state-held' })
+    expect(readFileSync(ownerHostClaimPath(directory), 'utf8')).toBe(holderClaim)
+    expect(relay.upgrades).toHaveLength(0)
+  }, 20_000)
 })

@@ -1198,6 +1198,9 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 240
+            },
+            "useSystemPointer": {
+              "type": "boolean"
             }
           },
           "required": [

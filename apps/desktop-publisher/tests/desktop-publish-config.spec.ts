@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { readDesktopPublishConfig, readDesktopUploadCredentials } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
+import { readDesktopPublishConfig, readDesktopUploadCredentials, requireDesktopEdgeOneZoneId } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 
 it('reads public settings without opening the absent credential file and requires production App settings', async () => {
   const root = await mkdtemp(join(tmpdir(), 'publish-config-'))
@@ -42,6 +42,24 @@ it('rejects multiline App outputs before writing Actions output fields', async (
     ]) {
       await writeFile(join(root, 'publishing/production.json'), JSON.stringify({ ...config, githubApp }))
       await expect(readDesktopPublishConfig(root, 'production')).rejects.toThrow(/single-line/u)
+    }
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('validates optional EdgeOne settings and requires them only for website operations', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'publish-zone-'))
+  try {
+    await mkdir(join(root, 'publishing'))
+    const config = { bucket: 'test-123', origin: 'https://example.com', credentialsFile: join(root, 'absent.json') }
+    const file = join(root, 'publishing/test.json')
+    await writeFile(file, JSON.stringify(config))
+    const selected = await readDesktopPublishConfig(root, 'test')
+    expect(() => requireDesktopEdgeOneZoneId(selected)).toThrow('edgeOneZoneId in publishing/production.json')
+    await writeFile(file, JSON.stringify({ ...config, edgeOneZoneId: 'zone-fixture' }))
+    expect(requireDesktopEdgeOneZoneId(await readDesktopPublishConfig(root, 'test'))).toBe('zone-fixture')
+    for (const edgeOneZoneId of ['', 'invalid', 'zone-example\n', 123]) {
+      await writeFile(file, JSON.stringify({ ...config, edgeOneZoneId }))
+      await expect(readDesktopPublishConfig(root, 'test')).rejects.toHaveProperty('issues.0.path', ['edgeOneZoneId'])
     }
   } finally { await rm(root, { recursive: true, force: true }) }
 })

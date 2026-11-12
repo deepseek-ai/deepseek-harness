@@ -3,15 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { expect, it, onTestFinished } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import { resolvePersistentExecution } from '../src/configuration.ts'
 import { mountRuntime } from './setup.ts'
 
 async function scopedReplRuntime() {
-  const { runtime } = await mountRuntime(new Context(), { executionMode: 'persistent-in-memory', replScoped: true })
+  const ctx = new Context()
+  const { runtime } = await mountRuntime(ctx, { executionMode: 'persistent-in-memory', replScoped: true })
   const stateOwner = {}
   const run = (program: string) => runtime.run(runtime.resolve({ program, bindings: [], stateOwner }))
-  return { runtime, stateOwner, run }
+  return { ctx, runtime, stateOwner, run }
 }
 
 it('advertises retained scoped REPL syntax with its complete model guidance', async () => {
@@ -24,22 +25,26 @@ it('advertises retained scoped REPL syntax with its complete model guidance', as
     + 'Use inspect(...values) to display output. Do not use console. '
     + 'The program runs in strict mode: assigning an undeclared name throws, so use globalThis for intentional globals; eval and new Function are unavailable. '
     + 'Variables, functions, and imported modules remain in memory for this Agent across calls. '
-    + 'Each call starts with copies of the top-level bindings left by earlier calls and may declare any of those names again with any keyword. '
-    + 'A new declaration applies to this and later calls; functions and still-running code from earlier calls keep the values they captured. '
-    + 'Assigning to an earlier name without declaring it, even one declared with const, changes only the copy seen by this and later calls. '
-    + 'A let, const, or class declaration cannot read the earlier value of its own name, so let total = total + 1 throws; '
-    + 'assign to the name or use a new name instead. A var declaration of an earlier name starts from the earlier value. '
-    + 'var declarations become top-level names of the call even inside blocks; other declarations inside blocks stay in their block. '
-    + 'Assignments that earlier code makes later, such as from timers, are not visible to later calls; keep shared mutable state in objects. '
-    + "If a call fails before a let, const, class, or var declaration of an existing name finishes, later calls keep that name's earlier value. "
-    + "Use await import(...) for modules; require is unavailable, and relative specifiers resolve from the working directory of this environment's first call. "
+    + 'Each call runs one program in its own top-level scope. '
+    + 'Its top-level let, const, var, class, and function declarations, and the names it received from earlier programs, '
+    + 'are copied into the top-level scope of later programs: later programs receive copies of these variables, not references to them, '
+    + 'so an object they hold is still shared. '
+    + 'In one program, either use a copied name or declare it again; do not declare a name and also use its copied value. '
+    + "Assigning to a copied name, even one declared with const, changes only this program's copy, which later programs receive. "
+    + 'Do not declare var inside blocks; a block-level var changes which value later programs copy. '
+    + 'Functions and still-running code from earlier programs keep the values they captured, and assignments they make later are not copied; '
+    + 'keep shared mutable state in objects. '
+    + "If a program fails before a declaration of an existing name finishes, later programs keep that name's earlier value. "
+    + 'Use await import(...) for modules; require and module are unavailable. '
+    + "Relative import specifiers resolve from the working directory of this environment's first program, "
+    + "while process.cwd() and relative file paths follow each program's working directory. "
     + "Direct filesystem access follows the environment's launch-time sandbox policy; process.env starts empty. "
     + 'Timeout and cancellation results say whether retained variables were preserved or cleared. '
     + 'Restart, sandbox changes, output overflow, or process failure clears them. '
     + 'Recreate missing variables and resources; conversation history does not restore state. Earlier mutations and tool effects are not rolled back. '
-    + 'Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before returning; unfinished tools reject. '
+    + 'Approved sandbox escalations use a fresh environment and discard its variables afterward. Await tools and cleanup before the program ends; unfinished tools reject. '
     + 'After completion, timeout, or cancellation, new tool calls are rejected and captured output is discarded; background work may still change state. '
-    + 'Await child-process completion before returning; raw output belongs to the active evaluation.',
+    + 'Await child-process completion before the program ends; raw output belongs to the active evaluation.',
   )
 })
 
@@ -95,6 +100,29 @@ it('rejects code containing the reserved prefix before running it', async () => 
   const { run } = await scopedReplRuntime()
   expect((await run('globalThis.ran = true\ntypeof __$binding_getters')).error?.message).toContain("Names starting with '__$binding_' are reserved")
   expect(await run('typeof ran')).toMatchObject({ value: 'undefined' })
+})
+
+it.each(['global', 'errorClass'] as const)('rejects a reserved scoped REPL %s name before starting a process', async (field) => {
+  const { ctx, runtime, stateOwner, run } = await scopedReplRuntime()
+  const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+  try {
+    const spec = runtime.resolve({ program: '1', stateOwner, bindings: [{
+      global: field === 'global' ? '__$binding_tools' : 'tools', functions: {},
+      ...field === 'errorClass' ? { errorClass: { name: '__$binding_error', memberNameProperty: 'toolName' } } : {},
+    }] })
+    await expect(runtime.run(spec)).rejects.toMatchObject({ name: 'PtcRuntimeError', code: 'PTC_RUNTIME_INVALID_ARGUMENT' })
+    expect(spawn).not.toHaveBeenCalled()
+    expect(await run('1')).toMatchObject({ value: 1 })
+  } finally { spawn.mockRestore() }
+})
+
+it('accepts ordinary dollar bindings and error classes in scoped REPL', async () => {
+  const { runtime, stateOwner } = await scopedReplRuntime()
+  const result = await runtime.run(runtime.resolve({
+    program: 'let caught; try { await $tools.fail({}) } catch (error) { caught = [error instanceof $ToolError, error.toolName] } caught', stateOwner,
+    bindings: [{ global: '$tools', functions: { fail: async () => { throw new Error('denied') } }, errorClass: { name: '$ToolError', memberNameProperty: 'toolName' } }],
+  }))
+  expect(result).toMatchObject({ value: [true, 'fail'] })
 })
 
 it('passes a host binding named module through to the program', async () => {
