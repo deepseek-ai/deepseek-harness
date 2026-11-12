@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Rolldown } from 'tsdown'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
@@ -118,4 +118,38 @@ describe('packaged imports plugin', () => {
     const output = await generate('require', policy, 'cjs')
     expect(output.output.map(chunk => chunk.fileName)).toEqual(['require.js'])
   })
+})
+
+interface RuntimeManifest {
+  name: string
+  dependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
+}
+
+it('supplies required workspace peers of the Electron production dependency tree', () => {
+  const root = resolve(import.meta.dirname, '../../..')
+  const manifests = new Map(globSync(['apps/*/package.json', 'packages/*/*/package.json', 'vendor/*/package.json'], { cwd: root })
+    .map((path) => {
+      const manifest = JSON.parse(readFileSync(join(root, path), 'utf8')) as RuntimeManifest
+      return [manifest.name, manifest] as const
+    }))
+  const desktop = JSON.parse(readFileSync(join(root, 'apps/desktop/package.json'), 'utf8')) as RuntimeManifest
+  const shipped = new Set<string>()
+  const visit = (name: string): void => {
+    if (shipped.has(name)) return
+    shipped.add(name)
+    for (const dependency of Object.keys(manifests.get(name)?.dependencies ?? {})) visit(dependency)
+  }
+  for (const dependency of Object.keys(desktop.dependencies ?? {})) visit(dependency)
+  const missing: string[] = []
+  for (const name of shipped) {
+    const manifest = manifests.get(name)
+    for (const peer of Object.keys(manifest?.peerDependencies ?? {})) {
+      if (manifests.has(peer) && !shipped.has(peer) && !manifest?.peerDependenciesMeta?.[peer]?.optional) {
+        missing.push(`${name} requires ${peer}`)
+      }
+    }
+  }
+  expect(missing).toEqual([])
 })
