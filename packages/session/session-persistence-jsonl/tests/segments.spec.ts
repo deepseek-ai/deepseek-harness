@@ -9,7 +9,6 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { Context } from '@deepseek-ai/cordis'
 import * as persistence from '../src/index.ts'
 import { generationLogPath } from '../src/format.ts'
-import { SEGMENT_STORAGE_DEFAULTS } from '../src/trace/index.ts'
 import { SCHEMA_VERSION, SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import { runPersistenceContract } from '../../session-persistence/tests/contract.ts'
 import { runLiveWritePathContract } from '../../session-persistence/tests/live-write-contract.ts'
@@ -26,7 +25,7 @@ runPersistenceContract('segments', async () => {
     dispose: async () => { try { await primary.dispose() } finally { await rm(root, { recursive: true, force: true }) } } }
 })
 
-runLiveWritePathContract('segments', SEGMENT_STORAGE_DEFAULTS.flushDelayMs, {
+runLiveWritePathContract('segments', 200, {
   failWrites: (_ctx, failure, sessionId) => {
     // oxlint-disable-next-line typescript/unbound-method -- Called with the intercepted store as receiver below.
     const original = SqliteLogs.prototype.append
@@ -65,7 +64,7 @@ it('creates the SQLite schema when the provider mounts with new Sessions enabled
   } finally { db.close() }
 })
 
-it('creates SQLite events when segmentStorage is omitted', async () => {
+it('creates SQLite events with the original plugin configuration', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-lazy-jsonl-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()

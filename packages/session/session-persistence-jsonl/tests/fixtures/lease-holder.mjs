@@ -9,9 +9,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 
-const [root, sessionId, storage, pending, database] = process.argv.slice(2)
+const [root, sessionId, storage, pending] = process.argv.slice(2)
 const ctx = new Context()
-await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none', segmentStorage: { ...database === undefined ? {} : { path: database } } })
+await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
 const handle = await ctx.sessionPersistence.create({
   version: SESSION_FORMAT_VERSION,
   id: sessionId,

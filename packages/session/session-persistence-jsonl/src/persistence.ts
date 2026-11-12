@@ -4,38 +4,19 @@ import { link, mkdir, open, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import { settleLimited, settledValues } from '../listing.ts'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
 import { SessionPersistence, SessionAlreadyExistsError, SessionPersistenceNotFoundError, materializeCreateHeader } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionPersistenceCreateOptions, SessionPersistenceOpenOptions,
   SessionPersistenceStatOptions, SessionPersistenceListOptions } from '@deepseek-ai/dsh-session-persistence'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
-import { publishNewFileWin32, ensureDurableDirectoryWin32 } from '../win32.ts'
+import { publishNewFileWin32, ensureDurableDirectoryWin32 } from './win32.ts'
 import { SqliteLogs } from '@deepseek-ai/dsh-session-persistence-sqlite'
-import { SessionWriteLease } from '../lease.ts'
-import { sessionDir } from '../format.ts'
+import { SessionWriteLease } from './lease.ts'
+import { sessionDir } from './format.ts'
 import { LegacySessionMigration } from './migration.ts'
 import type { JsonlBackend } from './migration.ts'
 export type { JsonlBackend } from './migration.ts'
-
-/** Tuning defaults shared by the plugin schema and direct provider construction. */
-export const SEGMENT_STORAGE_DEFAULTS = { busyTimeoutMs: 5000, flushDelayMs: 200, maxBufferedEvents: 256 } as const
-
-/** SQLite storage location and scheduling. */
-export interface SegmentStorageConfig {
-  /**
-   * SQLite file, defaulting to `.segments/sessions.sqlite` beneath the JSONL root;
-   * a relative path resolves against the process working directory.
-   */
-  path?: string
-  /** Milliseconds to wait for a locked database before failing; an integer of at least 0. Default 5000. */
-  busyTimeoutMs?: number
-  /** Maximum intentional batching wait in milliseconds; an integer of at least 1. Default 200. */
-  flushDelayMs?: number
-  /** Admitted live events that start a write before the delay; an integer of at least 1, not a memory limit. Default 256. */
-  maxBufferedEvents?: number
-}
 
 const marker = z.object({ id: z.string().transform(SessionId), database: z.string() }).strict()
 
@@ -47,17 +28,13 @@ export class TracePersistence extends SessionPersistence {
   private readonly rootPath: string
   private readonly jsonl: JsonlBackend
   constructor(ctx: Context, owner: Context, root: string,
-    jsonl: JsonlBackend,
-    config?: SegmentStorageConfig) {
+    jsonl: JsonlBackend) {
     super(ctx)
     this.rootPath = resolve(root)
     this.directory = join(this.rootPath, '.segments')
     this.sqlite = new SqliteLogs({
-      path: resolve(config?.path ?? join(this.directory, 'sessions.sqlite')),
+      path: join(this.directory, 'sessions.sqlite'),
       legacyRoot: this.rootPath,
-      busyTimeoutMs: config?.busyTimeoutMs ?? SEGMENT_STORAGE_DEFAULTS.busyTimeoutMs,
-      flushDelayMs: config?.flushDelayMs ?? SEGMENT_STORAGE_DEFAULTS.flushDelayMs,
-      maxBufferedEvents: config?.maxBufferedEvents ?? SEGMENT_STORAGE_DEFAULTS.maxBufferedEvents,
       publish: id => this.publish(id),
       acquireCreationLease: header => this.acquireCreationLease(header),
       report: (id, error) => { owner.logger.error(`Segment persistence failed for ${id}; durability checkpoint will reject: ${String(error)}`) },
@@ -76,13 +53,12 @@ export class TracePersistence extends SessionPersistence {
   }
 
   /**
-   * Claim a new identity across backends before its first write, retaining both locks until handle close.
+   * Claim the existing artifact lock before a new Session first commits.
    * @param header - pending Session metadata.
-   * @returns the artifact lock and its root-wide creation guard.
+   * @returns the held artifact lock.
    */
   protected async acquireCreationLease(header: SessionHeader): Promise<SessionWriteLease> {
-    const guard = join(this.rootPath, '.creation-locks', createHash('sha256').update(header.id).digest('hex'))
-    const lease = await SessionWriteLease.acquire(sessionDir(this.rootPath, header.cwd, header.id), header.id, guard)
+    const lease = await SessionWriteLease.acquire(sessionDir(this.rootPath, header.cwd, header.id), header.id)
     try {
       if (await this.jsonl.hasStoredJsonl(header.id)) {
         throw new SessionAlreadyExistsError(header.id)
@@ -209,7 +185,7 @@ export class TracePersistence extends SessionPersistence {
     // A row omitted for its header is still stored; only a routing record without a row is lost state.
     const known = new Set([...segmented.map(entry => entry.header.id), ...omitted])
     const entries = await this.jsonl.list(options, known)
-    settledValues(await settleLimited(this.jsonl.listLimit, names.filter(name => name.endsWith('.json')), async (name) => {
+    const routes = await Promise.allSettled(names.filter(name => name.endsWith('.json')).map(name => this.jsonl.listLimit(async () => {
       options?.signal?.throwIfAborted()
       const path = join(this.directory, name)
       const text = await readFile(path, { encoding: 'utf8', signal: options?.signal })
@@ -221,7 +197,8 @@ export class TracePersistence extends SessionPersistence {
       if (!known.has(stored.id)) {
         throw new HarnessError('Recorded Segment Session is missing; restore its database before listing Sessions', 'SESSION_STORAGE_MISSING')
       }
-    }))
+    })))
+    for (const route of routes) if (route.status === 'rejected') throw route.reason
     options?.signal?.throwIfAborted()
     return [...entries.filter(entry => !known.has(entry.header.id)), ...segmented]
   }

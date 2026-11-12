@@ -12,10 +12,10 @@ export interface LegacySessionSnapshot {
   readonly events: readonly SessionEvent[]
 }
 
-/** Prepared logical history with source revalidation shared by destination commits. */
+/** Prepared logical history retained under Session ownership until import. */
 export interface PreparedLegacySession extends LegacySessionSnapshot {
   /**
-   * Recheck the prepared source before the destination transaction while Session ownership remains held.
+   * Commit the prepared history while Session ownership remains held.
    * @param publish - destination-owned atomic import of the prepared snapshot.
    * @returns completed destination commit.
    */

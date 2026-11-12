@@ -45,7 +45,7 @@ async function storedFiles(root: string): Promise<{ jsonl: boolean; database: bo
 }
 
 describe('two-process SQLite write lock (built lib)', () => {
-  it('excludes an pending creator in another project and releases the guard on crash', async () => {
+  it('excludes a pending creator in another project and releases the Session lock on crash', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-create-2proc-'))
     dirs.push(root)
     const ctx = new Context()
@@ -167,26 +167,4 @@ describe('two-process Segment database writers (built lib)', () => {
     expect((await ctx.sessionPersistence.list()).map(entry => entry.header.id).sort()).toEqual(ids)
     expect(await storedFiles(root)).toEqual({ jsonl: false, database: true })
   })
-})
-
-it('excludes a second process with another root sharing the same database, then releases ownership on crash', async () => {
-  const base = await mkdtemp(join(tmpdir(), 'dsh-db-lease-2proc-'))
-  dirs.push(base)
-  const path = join(base, 'shared.sqlite')
-  const ctx = new Context()
-  contexts.push(ctx)
-  await ctx.plugin(JsonlSessionPersistence, { root: join(base, 'reader-root'), compression: 'none',
-    segmentStorage: { path } })
-  const holder = spawn(process.execPath, [HOLDER, join(base, 'writer-root'), SESSION, 'segments', '', path],
-    { stdio: ['pipe', 'pipe', 'inherit'] })
-  const exited = new Promise<void>((resolve) => { holder.once('exit', () => { resolve() }) })
-  try {
-    await Promise.race([once(holder.stdout, 'data'), exited.then(() => { throw new Error('Writer exited before acquiring its lease') })])
-    await expect(ctx.sessionPersistence.open(SessionId(SESSION), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
-    holder.kill('SIGKILL')
-    await exited
-    const resumed = await ctx.sessionPersistence.open(SessionId(SESSION), 'write')
-    try { expect((await resumed.read()).events.map(event => event.type)).toEqual(['turn/start', 'turn/end']) }
-    finally { await resumed.close() }
-  } finally { holder.kill('SIGKILL'); await exited }
 })

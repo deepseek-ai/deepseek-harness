@@ -11,7 +11,7 @@ import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import { SessionWriteLease } from '../src/lease.ts'
 import { SqliteLogs, SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import * as persistence from '../src/index.ts'
-import { JsonlReader } from '../src/reader.ts'
+import type { JsonlBackend } from '../src/migration.ts'
 import { eventLines, generationLogPath, sessionDir, toHeaderLine } from '../src/format.ts'
 import { compressZstdFrame } from '../src/zstd.ts'
 import { oneTurnLog, meta } from '../../session-persistence/tests/contract.ts'
@@ -121,11 +121,11 @@ it('refuses import while a legacy writer owns the artifact and succeeds after re
 it('excludes another provider during import, then serves the committed Session without reimporting', async () => {
   const b = await fixture(), other = await b.mount()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the reader receiver below.
-  const prepare = JsonlReader.prototype.prepare
-  const spy = vi.spyOn(JsonlReader.prototype, 'prepare').mockImplementationOnce(async function (this: JsonlReader, ...args) {
+  const legacy = Reflect.get(b.ctx.sessionPersistence, 'jsonl') as JsonlBackend
+  const prepare = legacy.prepare.bind(legacy)
+  const spy = vi.spyOn(legacy, 'prepare').mockImplementationOnce(async (...args) => {
     entered.resolve(undefined); await release.promise
-    return prepare.call(this, ...args)
+    return prepare(...args)
   })
   const opening = b.ctx.sessionPersistence.open(b.header.id, 'read')
   try {
@@ -140,11 +140,11 @@ it('excludes another provider during import, then serves the committed Session w
 it.each(['read', 'write'] as const)('cancels a %s import before commit, releasing ownership for a later open', async (access: SessionAccess) => {
   const b = await fixture(), controller = new AbortController()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the reader receiver below.
-  const prepare = JsonlReader.prototype.prepare
-  vi.spyOn(JsonlReader.prototype, 'prepare').mockImplementationOnce(async function (this: JsonlReader, ...args) {
+  const legacy = Reflect.get(b.ctx.sessionPersistence, 'jsonl') as JsonlBackend
+  const prepare = legacy.prepare.bind(legacy)
+  vi.spyOn(legacy, 'prepare').mockImplementationOnce(async (...args) => {
     entered.resolve(undefined); await release.promise
-    return prepare.call(this, ...args)
+    return prepare(...args)
   })
   const pending = b.ctx.sessionPersistence.open(b.header.id, access, { signal: controller.signal })
   const refused = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
@@ -202,11 +202,11 @@ it.each(['missing database', 'missing row', 'corrupt database'] as const)('refus
 it('waits for an admitted import before provider teardown closes SQLite', async () => {
   const b = await fixture()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
-  // oxlint-disable-next-line typescript/unbound-method -- Forwarded with the reader receiver below.
-  const prepare = JsonlReader.prototype.prepare
-  vi.spyOn(JsonlReader.prototype, 'prepare').mockImplementationOnce(async function (this: JsonlReader, ...args) {
+  const legacy = Reflect.get(b.ctx.sessionPersistence, 'jsonl') as JsonlBackend
+  const prepare = legacy.prepare.bind(legacy)
+  vi.spyOn(legacy, 'prepare').mockImplementationOnce(async (...args) => {
     entered.resolve(undefined); await release.promise
-    return prepare.call(this, ...args)
+    return prepare(...args)
   })
   const opening = b.ctx.sessionPersistence.open(b.header.id, 'read')
   await entered.promise

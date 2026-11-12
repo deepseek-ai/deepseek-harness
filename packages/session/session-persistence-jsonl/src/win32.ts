@@ -1,5 +1,5 @@
 /**
- * Windows durable namespace helpers for Session persistence backends.
+ * Windows durable namespace helpers for the JSONL backend.
  *
  * POSIX publishes a newly-created log by creating a directory entry and then
  * fsyncing the parent directory. Windows does not expose that parent-directory

@@ -118,30 +118,10 @@ export class JsonlGenerationSourceChangedError extends Error {
   }
 }
 
-/** Stable JSONL source decoding and related history facts, independent of the destination. */
-export interface PrepareJsonlSourceOptions<T> {
-  readonly sourcePath: string
-  /** Decode or migrate the selected bytes into the destination's logical input. */
-  readonly decode: (bytes: Buffer) => Promise<T>
-  readonly validateRelatedSources?: () => Promise<void>
-  readonly signal?: AbortSignal
-}
-
-/** Prepared source whose commit rechecks the history observed during decoding. */
-export interface PreparedJsonlSource<T> {
+/** Current logical state prepared independently from durable publication. */
+export interface PreparedJsonlMigration {
   readonly sourceIdentity: JsonlPhysicalIdentity
-  readonly artifact: T
-  /**
-   * Recheck source and related histories, then invoke the destination's atomic write.
-   * The caller retains Session write ownership until this operation settles.
-   * @param publish - destination-owned commit of the prepared logical input.
-   * @returns the destination's committed result.
-   */
-  commit<R>(publish: (artifact: T) => Promise<R>): Promise<R>
-}
-
-/** Current logical state prepared independently from durable JSONL publication. */
-export interface PreparedJsonlMigration extends PreparedJsonlSource<SessionFormatArtifact> {
+  readonly artifact: SessionFormatArtifact
   /** Encode, verify, and exclusively publish once; every call shares the same success or failure. */
   publish(): Promise<JsonlPhysicalIdentity>
 }
@@ -223,7 +203,6 @@ export type JsonlGenerationRuntimeOverrides = Partial<Omit<JsonlGenerationIntern
 /** Bound generation operations used by production defaults and deterministic tests. */
 export interface JsonlGenerationRuntime {
   readStable(path: string, signal?: AbortSignal): Promise<StablePhysicalFile>
-  prepareSource<T>(options: PrepareJsonlSourceOptions<T>): Promise<PreparedJsonlSource<T>>
   prepare(options: PrepareJsonlMigrationOptions): Promise<PreparedJsonlMigration>
   verify(
     path: string,
@@ -429,17 +408,7 @@ async function consumeMigrationBytes(
   }
 }
 
-/**
- * Decode JSONL bytes through the selected codec and its adjacent version migration chain.
- * @param bytes - stable physical source snapshot.
- * @param compression - physical source encoding.
- * @param sourceVersion - version selected from the source filename.
- * @param format - source codec and logical migration factory.
- * @param validateHistoricalHeader - optional source identity check.
- * @param signal - optional cancellation during decoding.
- * @returns current logical header, inheritance count, and events.
- */
-export async function decodeJsonlSource(
+async function decodeStreamingMigration(
   bytes: Buffer,
   compression: JsonlCompression,
   sourceVersion: number,
@@ -915,12 +884,12 @@ function withOverrides(overrides: JsonlGenerationRuntimeOverrides): JsonlGenerat
 async function publishPreparedMigration(
   options: PrepareJsonlMigrationOptions,
   suffix: string,
-  source: PreparedJsonlSource<SessionFormatArtifact>,
+  artifact: SessionFormatArtifact,
+  sourceIdentity: JsonlPhysicalIdentity,
   internals: JsonlGenerationInternals,
 ): Promise<JsonlPhysicalIdentity> {
   await scheduler.yield()
-  const { currentPath, compression, verifyCurrentFile } = options
-  const artifact = source.artifact
+  const { sourcePath, currentPath, compression, verifyCurrentFile } = options
   const eventCount = artifact.events.length
   let staged = await writeSyncedTemp(currentPath, suffix, compression, artifact, options.format, undefined, internals)
   try {
@@ -934,7 +903,12 @@ async function publishPreparedMigration(
       throw new Error('staged session generation changed during verification')
     }
     await internals.barrier('before-source-check', 1)
-    const published = await source.commit(() => publishCurrentExclusive(staged.path, currentPath, internals))
+    await options.validateRelatedSources?.()
+    const beforePublish = await internals.fs.stat(sourcePath)
+    if (identity(beforePublish) !== identity(sourceIdentity)) {
+      throw new JsonlGenerationSourceChangedError(sourcePath)
+    }
+    const published = await publishCurrentExclusive(staged.path, currentPath, internals)
     if (published && internals.platform === 'win32') staged = { ...staged, path: '' }
     await internals.barrier('after-publication', 1)
     let currentIdentity: JsonlPhysicalIdentity
@@ -969,30 +943,6 @@ async function publishPreparedMigration(
   }
 }
 
-async function prepareSource<T>(
-  options: PrepareJsonlSourceOptions<T>,
-  internals: JsonlGenerationInternals,
-): Promise<PreparedJsonlSource<T>> {
-  const { sourcePath, signal } = options
-  const source = await readStableSnapshot(sourcePath, signal, internals.fs)
-  const artifact = await options.decode(source.bytes)
-  signal?.throwIfAborted()
-  await options.validateRelatedSources?.()
-  return {
-    sourceIdentity: source.identity,
-    artifact,
-    async commit<R>(publish: (artifact: T) => Promise<R>): Promise<R> {
-      signal?.throwIfAborted()
-      await options.validateRelatedSources?.()
-      if (identity(await internals.fs.stat(sourcePath)) !== identity(source.identity)) {
-        throw new JsonlGenerationSourceChangedError(sourcePath)
-      }
-      signal?.throwIfAborted()
-      return publish(artifact)
-    },
-  }
-}
-
 async function prepareMigration(
   options: PrepareJsonlMigrationOptions,
   internals: JsonlGenerationInternals,
@@ -1008,50 +958,45 @@ async function prepareMigration(
   if (sourceVersion >= format.currentVersion) {
     throw new Error(`migration preparation requires a historical source, got v${sourceVersion}`)
   }
-  const source = await prepareSource<SessionFormatArtifact>({
-    sourcePath,
-    ...signal === undefined ? {} : { signal },
-    ...options.validateRelatedSources === undefined ? {} : { validateRelatedSources: options.validateRelatedSources },
-    async decode(bytes) {
-      let artifact: SessionFormatArtifact
-      try {
-        artifact = await decodeJsonlSource(bytes, compression, sourceVersion, format, options.validateHistoricalHeader, signal)
-      } catch (error: unknown) {
-        if (format.isUnsupportedMigrationError?.(error) === true) {
-          throw new JsonlGenerationUnsupportedMigrationError(sourceVersion, error)
-        }
-        throw error
-      }
-      if (artifact.header.version !== format.currentVersion) {
-        throw new Error(`format migration returned v${artifact.header.version}, expected v${format.currentVersion}`)
-      }
-      return artifact
-    },
-  }, internals)
+  const source = await readStableSnapshot(sourcePath, signal, internals.fs)
+  let artifact: SessionFormatArtifact
+  try {
+    artifact = await decodeStreamingMigration(
+      source.bytes,
+      compression,
+      sourceVersion,
+      format,
+      options.validateHistoricalHeader,
+      signal,
+    )
+  } catch (error: unknown) {
+    if (format.isUnsupportedMigrationError?.(error) === true) {
+      throw new JsonlGenerationUnsupportedMigrationError(sourceVersion, error)
+    }
+    throw error
+  }
+  if (artifact.header.version !== format.currentVersion) {
+    throw new Error(`format migration returned v${artifact.header.version}, expected v${format.currentVersion}`)
+  }
+  await options.validateRelatedSources?.()
+  const sourceIdentity = source.identity
   let publication: Promise<JsonlPhysicalIdentity> | undefined
   return {
-    ...source,
+    sourceIdentity,
+    artifact,
     publish() {
       if (publication === undefined) {
         publication = publishPreparedMigration(
           options,
           suffix,
-          source,
+          artifact,
+          sourceIdentity,
           internals,
         )
       }
       return publication
     },
   }
-}
-
-/**
- * Prepare a stable JSONL snapshot for a destination-owned commit without writing another JSONL generation.
- * @param options - source path, logical decoder, related-source checks, and cancellation.
- * @returns decoded input and a commit operation that rechecks its source snapshot.
- */
-export function prepareJsonlSource<T>(options: PrepareJsonlSourceOptions<T>): Promise<PreparedJsonlSource<T>> {
-  return defaultGenerationRuntime.prepareSource(options)
 }
 
 /**
@@ -1076,7 +1021,6 @@ export function createJsonlGenerationRuntime(
   const internals = withOverrides(overrides)
   return {
     readStable: (path, signal) => readStableSnapshot(path, signal, internals.fs),
-    prepareSource: options => prepareSource(options, internals),
     prepare: options => prepareMigration(options, internals),
     verify: (path, compression, expectedId, expectedEventCount, expectedPrefix) => verifyCurrentGeneration(
       path, compression, expectedId, expectedEventCount, internals.fs, expectedPrefix,
@@ -1106,7 +1050,7 @@ export async function readDecodedJsonlSource(
   const source = await readStableJsonlFile(path, signal)
   let artifact: SessionFormatArtifact
   try {
-    artifact = await decodeJsonlSource(source.bytes, compression, version, format, undefined, signal)
+    artifact = await decodeStreamingMigration(source.bytes, compression, version, format, undefined, signal)
   } catch (error: unknown) {
     if (signal?.aborted || error instanceof SessionFormatError) throw error
     throw new SessionFormatError(String(error), { cause: error })

@@ -13,7 +13,7 @@ import { z } from 'zod'
 import * as plugin from '../src/index.ts'
 import { sessionDir } from '../src/format.ts'
 import { SessionWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
-import { TracePersistence } from '../src/trace/index.ts'
+import { TracePersistence } from '../src/persistence.ts'
 import { SqliteLogs, SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
 import { forkTrace, routeOf, sqliteLogs } from './fixtures/segments.ts'
 

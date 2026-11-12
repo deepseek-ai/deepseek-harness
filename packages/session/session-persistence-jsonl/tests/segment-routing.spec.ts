@@ -3,8 +3,7 @@ import pLimit from 'p-limit'
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-import { TracePersistence } from '../src/trace/index.ts'
-import type { SegmentStorageConfig } from '../src/trace/index.ts'
+import { TracePersistence } from '../src/persistence.ts'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -58,7 +57,7 @@ vi.mock('../src/win32.ts', async (importOriginal) => {
 
 class Adapter extends TracePersistence {
   readonly fileFlush: ReturnType<typeof vi.fn<SessionPersistence['flush']>>
-  constructor(ctx: Context, root: string, config?: SegmentStorageConfig) {
+  constructor(ctx: Context, root: string) {
     const fileFlush = vi.fn<SessionPersistence['flush']>(async () => {})
     super(ctx, ctx, root, {
       listLimit: pLimit(3),
@@ -66,7 +65,7 @@ class Adapter extends TracePersistence {
       async stat() { return undefined },
       async list() { return [] },
       async hasStoredJsonl() { return false },
-    }, config)
+    })
     this.fileFlush = fileFlush
   }
   publishRoute(id: SessionId) { return this.publish(id) }
@@ -76,12 +75,12 @@ afterEach(() => {
   faults.directory = ''; faults.directorySyncs = 0; faults.directoryCloses = 0
   vi.restoreAllMocks()
 })
-async function fixture(config?: SegmentStorageConfig) {
+async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-routing-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  const storage = new Adapter(ctx, root, config)
+  const storage = new Adapter(ctx, root)
   return { root, ctx, storage }
 }
 const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: SessionId('selected'), createdAt: 0, isSeeded: false }
@@ -94,14 +93,14 @@ it('uses the resolved defaults for SQLite creation', async () => {
 })
 
 it('validates routing read failures rather than treating them as absence', async () => {
-  const { storage } = await fixture({ })
+  const { storage } = await fixture()
   faults.op = 'readFile'; faults.error = Object.assign(new Error('routing denied'), { code: 'EACCES' })
   await expect(storage.stat(header.id)).rejects.toThrow('routing denied')
   faults.op = ''
 })
 
 it('rejects an unreadable routing directory and preserves explicit absence', async () => {
-  const { storage } = await fixture({ })
+  const { storage } = await fixture()
   faults.op = 'readdir'; faults.error = Object.assign(new Error('directory denied'), { code: 'EACCES' })
   await expect(storage.list()).rejects.toThrow('directory denied')
   faults.op = ''
@@ -110,7 +109,7 @@ it('rejects an unreadable routing directory and preserves explicit absence', asy
 })
 
 it('propagates routing directory read failures during create', async () => {
-  const { storage } = await fixture({ })
+  const { storage } = await fixture()
   faults.op = 'readdir'
   faults.error = Object.assign(new Error('routing directory denied'), { code: 'EACCES' })
   await expect(storage.create(header)).rejects.toThrow('routing directory denied')
@@ -131,7 +130,7 @@ it.each(['linux', 'win32'])('publishes routing using the %s durable namespace', 
 })
 
 it.each(['identity', 'parse', 'race', 'link-failure'] as const)('retains routing publication failure for %s', async (fault) => {
-  const { root, storage } = await fixture({ })
+  const { root, storage } = await fixture()
   const writer = await storage.create(header); await writer.flush(); await writer.close()
   const { readdir, readFile } = await import('node:fs/promises')
   const directory = join(root, '.segments')

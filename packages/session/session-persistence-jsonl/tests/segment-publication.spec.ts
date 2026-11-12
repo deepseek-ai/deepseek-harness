@@ -25,23 +25,18 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 const header: SessionHeader = { version: SESSION_FORMAT_VERSION, id: SessionId('unpublished'), createdAt: 0, isSeeded: false }
 const event = (seq: number): SessionEvent<'turn/start'> => ({ type: 'turn/start', seq: SessionSeq(seq), time: 0, data: { turn: seq + 1 } })
 
-async function mount(root: string, path: string | undefined) {
+async function mount(root: string) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
-  await ctx.plugin(plugin, { root, compression: 'none', segmentStorage: { ...path === undefined ? {} : { path } } })
+  await ctx.plugin(plugin, { root, compression: 'none' })
   return ctx
 }
 
-it.each([
-  { database: 'default' },
-  { database: 'custom' },
-] as const)('serves a committed Session without its routing record to a fresh provider with a $database database path', async ({ database }) => {
+it('serves a committed Session without its routing record to a fresh provider', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-segment-publication-'))
   onTestFinished(() => rm(root, { recursive: true, force: true }))
   onTestFinished(() => { faults.routes = false })
-  // A custom database lives outside the routing directory.
-  const path = database === 'custom' ? join(root, 'database', 'sessions.sqlite') : undefined
-  const first = await mount(root, path)
+  const first = await mount(root)
   const writer = await first.sessionPersistence.create(header)
   faults.routes = true
   const failure = await writer.append([event(0)]).then(() => undefined, (error: unknown) => error)
@@ -53,7 +48,7 @@ it.each([
   expect((await readdir(join(root, '.segments'))).filter(name => name.endsWith('.json'))).toEqual([])
 
   // The committed row selects SQLite without a routing record.
-  const fresh = await mount(root, path)
+  const fresh = await mount(root)
   expect(await fresh.sessionPersistence.stat(header.id)).toMatchObject({ header, eventCount: 1 })
   expect((await fresh.sessionPersistence.list()).map(entry => [entry.header.id, entry.eventCount])).toEqual([[header.id, 1]])
   const reopened = await fresh.sessionPersistence.open(header.id, 'write')

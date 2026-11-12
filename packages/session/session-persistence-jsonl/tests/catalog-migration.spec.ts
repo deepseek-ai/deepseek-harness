@@ -1,14 +1,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { SessionId, SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionFormatUnsupportedError, SessionPersistenceCorruptionError } from '@deepseek-ai/dsh-session-persistence'
-import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlSessionPersistence from './fixtures/legacy-persistence.ts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { generationLogPath } from '../src/format.ts'
 import { prepareCatalogFacts } from '../src/catalog-migration.ts'
-import { importedRows } from './fixtures/segments.ts'
 import { compressZstdFrame } from '../src/zstd.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -81,7 +80,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
       expect(await f.read()).toMatchObject(expected)
       const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
       try { expect((await writer.read()).events).toMatchObject(expected) } finally { await writer.close() }
-      expect(importedRows(f.root, f.parent).slice(1)).toMatchObject(expected)
+      expect(await readFile(generationLogPath(f.root, undefined, f.parent, 4, compression))).not.toHaveLength(0)
       for (const access of ['read', 'write'] as const) {
         await expect(f.ctx.sessionPersistence.open(brandString<SessionId>('unrelated'), access)).rejects.toThrow()
       }
@@ -122,9 +121,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     expect((await f.ctx.sessionPersistence.list()).find(row => row.header.id === f.parent)?.revision).toBe(first)
     const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
     await writer.close()
-    const imported = (await f.ctx.sessionPersistence.stat(f.parent))!.revision
-    expect(imported).not.toBe(first)
-    expect((await f.ctx.sessionPersistence.stat(f.parent))!.revision).toBe(imported)
+    expect((await f.ctx.sessionPersistence.stat(f.parent))!.revision).toBe(first)
   })
 
   it('invalidates historical revisions when selected children disappear or gain an opaque successor', async () => {
@@ -256,7 +253,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     try { expect((await child.read()).events).toEqual(events) } finally { await child.close() }
     expect(await Promise.all([readFile(parentPath), readFile(childPath)])).toEqual(original)
     expect((await readdir(dirname(parentPath))).filter(name => name !== 'session.lock').sort())
-      .toEqual(compression === 'none' ? ['session.v3.jsonl'] : ['session.v3.jsonl.zstd'])
+      .toEqual(compression === 'none' ? ['session.v3.jsonl', 'session.v4.jsonl'] : ['session.v3.jsonl.zstd', 'session.v4.jsonl.zstd'])
   })
 
   it.each([false, true])('omits an unsupported child generation (prepared=%s)', async (prepared) => {
@@ -264,7 +261,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     await f.write('child', [f.descriptor], true)
     if (prepared) expect(await f.read()).toHaveLength(1)
     await f.write('child', [], true, 5)
-    expect(await f.read()).toHaveLength(prepared ? 1 : 0)
+    expect(await f.read()).toEqual([])
     const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
     await writer.close()
     await expect(f.ctx.sessionPersistence.open(brandString<SessionId>('child'), 'read')).rejects.toBeInstanceOf(SessionFormatUnsupportedError)
@@ -310,14 +307,37 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     await writer.close()
   })
 
-  it('keeps the imported parent catalog fixed when legacy child files subsequently change', async () => {
+  it('detects children added after preparation instead of publishing incomplete membership', async () => {
     const f = await fixture()
     expect(await f.read()).toEqual([])
     await f.write('child', [f.descriptor], true)
+    await expect(f.ctx.sessionPersistence.open(f.parent, 'write')).rejects.toThrow(generationLogPath(f.root, undefined, brandString<SessionId>('child'), 3, compression))
+    expect(await f.read()).toHaveLength(1)
     const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
-    try { expect((await writer.read()).events).toEqual([]) } finally { await writer.close() }
-    const child = await f.ctx.sessionPersistence.open(brandString<SessionId>('child'), 'read')
-    try { expect((await child.read()).events).toEqual([f.descriptor]) } finally { await child.close() }
+    await writer.close()
+  })
+
+  it('recollects newly available discovery fields before publishing a prepared parent', async () => {
+    const f = await fixture()
+    const childPath = await f.write('child', [], true)
+    expect(await f.read()).toMatchObject([{ type: 'subagent/catalog', data: { childId: 'child', mode: 'unknown' } }])
+    await f.write('child', [f.descriptor], true)
+    await expect(f.ctx.sessionPersistence.open(f.parent, 'write')).rejects.toThrow(childPath)
+    const parentPath = generationLogPath(f.root, undefined, f.parent, 3, compression)
+    expect((await readdir(dirname(parentPath))).filter(name => name !== 'session.lock'))
+      .toEqual([compression === 'none' ? 'session.v3.jsonl' : 'session.v3.jsonl.zstd'])
+    expect(await f.read()).toMatchObject([{ type: 'subagent/catalog', data: { childId: 'child', label: 'old child' } }])
+    const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
+    await writer.close()
+  })
+
+  it('reads current children without recursive migration and preserves current parent fast reads', async () => {
+    const f = await fixture()
+    await f.write('child', [f.descriptor], true, 4)
+    expect(await f.read()).toHaveLength(1)
+    await f.write(f.parent, [], false, 4)
+    await f.write('child', [], true, 4)
+    expect(await f.read()).toEqual([])
   })
 
   it('refuses publication when a related child disappears', async () => {
@@ -354,7 +374,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
     await writer.close()
     expect(await Promise.all([readFile(parentPath), readFile(childPath)])).toEqual(before)
-    expect((await readdir(dirname(parentPath))).filter(name => name !== 'session.lock')).toHaveLength(1)
+    expect((await readdir(dirname(parentPath))).filter(name => name !== 'session.lock')).toHaveLength(2)
   })
 
   it('lists historical headers, prepares read-only membership, and publishes an unchanged-prefix successor', async () => {
@@ -388,7 +408,7 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
       expect(expected).toEqual([{ type: 'subagent/catalog', seq: 0, time: 1, data: {
         version: 0, childId: child, childCreatedAt: 2, mode: 'one-shot', label: 'old child',
       } }])
-      expect((await readdir(dirname(sourcePaths[0]!))).filter(name => name !== 'session.lock')).toEqual([compression === 'none' ? 'session.v3.jsonl' : 'session.v3.jsonl.zstd'])
+      expect(await readdir(dirname(sourcePaths[0]!))).toEqual([compression === 'none' ? 'session.v3.jsonl' : 'session.v3.jsonl.zstd'])
     } finally { await reader.close() }
     const writer = await ctx.sessionPersistence.open(parent, 'write')
     try { expect((await writer.read()).events).toEqual(expected) } finally { await writer.close() }
@@ -412,12 +432,13 @@ describe.each(['none', 'zstd'] as const)('historical catalog publication (%s)', 
     await f.write('child', [{ type: 'future/required', seq: 0, time: 2, data: {} }], true)
     const writer = await f.ctx.sessionPersistence.open(f.parent, 'write')
     await writer.close()
-    const published = importedRows(f.root, f.parent)
+    const current = generationLogPath(f.root, undefined, f.parent, 4, compression)
+    const published = await readFile(current)
     await f.write('child', [f.descriptor], true)
     const child = await f.ctx.sessionPersistence.open(brandString<SessionId>('child'), 'read')
     try { expect((await child.read()).events).toEqual([f.descriptor]) } finally { await child.close() }
     expect(await f.read()).toMatchObject([{ data: { childId: 'child', mode: 'unknown' } }])
-    expect(importedRows(f.root, f.parent)).toEqual(published)
+    expect(await readFile(current)).toEqual(published)
   })
 
   it('completes only the opened parent catalog and defers its child catalog', async () => {

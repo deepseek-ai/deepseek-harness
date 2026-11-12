@@ -1,6 +1,6 @@
 /** Session creation identity and consumer teardown across persistence instances. @module */
 import { Context } from '@deepseek-ai/cordis'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
@@ -26,19 +26,6 @@ async function fixture() {
   return { root, mount }
 }
 
-it('ignores lock and database directories when scanning JSONL Sessions', async () => {
-  const { mount, root } = await fixture()
-  const ctx = await mount(), writer = await ctx.sessionPersistence.create(header)
-  await writer.append([event(1)]); await writer.close()
-  for (const name of ['.creation-locks', '.segments']) {
-    const dir = join(root, name, 'private')
-    await mkdir(dir, { recursive: true })
-    await writeFile(join(dir, `session.v${SESSION_FORMAT_VERSION}.jsonl.zstd`), 'metadata is not a Session')
-  }
-  const restarted = await mount()
-  expect((await restarted.sessionPersistence.list()).map(entry => entry.header.id)).toEqual([header.id])
-})
-
 it('preserves the identity refusal and release failure without retaining either lock', async () => {
   const { mount, root } = await fixture()
   const a = await mount(), b = await mount()
@@ -59,7 +46,7 @@ it('preserves the identity refusal and release failure without retaining either 
   await second.close()
 })
 
-it('excludes another provider while the first creation holds a root-wide identity lock', async () => {
+it('excludes another provider while the first creation holds the Session write lock', async () => {
   const { mount, root } = await fixture()
   const a = await mount(), b = await mount()
   const first = await a.sessionPersistence.create(header)

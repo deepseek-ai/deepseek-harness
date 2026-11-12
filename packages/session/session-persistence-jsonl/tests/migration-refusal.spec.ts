@@ -1,6 +1,6 @@
 /** Durable EOF refusals preserve historical generations and never fall back from the selected generation. */
 
-import { JsonlReader } from '../src/reader.ts'
+import type { JsonlBackend } from '../src/migration.ts'
 import { Context } from '@deepseek-ai/cordis'
 import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalogWithChildren } from '@deepseek-ai/dsh-session-format-catalog'
@@ -497,7 +497,8 @@ describe.each(modes)('EOF migration refusal ($compression, $access)', ({ compres
       const lowerPath = await store(2, compression, prefix)
       const lower = await observe(lowerPath)
       const ctx = await mount(compression)
-      const preview = await new JsonlReader(ctx, { root, compression }).prepare(id)
+      const legacy = Reflect.get(ctx.sessionPersistence, 'jsonl') as JsonlBackend
+      const preview = await legacy.prepare(id)
       expect(preview.header.version).toBe(SESSION_FORMAT_VERSION)
       expect(preview.events.map(event => event.type)).toEqual([
         'turn/start', 'step/start', 'system/message', 'user/message', 'system/message', 'request/header',

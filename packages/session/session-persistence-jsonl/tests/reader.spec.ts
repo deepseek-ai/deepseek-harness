@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { generationLogPath, toHeaderLine } from '../src/format.ts'
-import { JsonlReader } from '../src/reader.ts'
+import * as persistence from '../src/index.ts'
 import { meta } from '../../session-persistence/tests/contract.ts'
 
 const probe = vi.hoisted(() => ({ path: '', opens: 0 }))
@@ -27,7 +27,8 @@ async function fixture() {
   await mkdir(dirname(path), { recursive: true })
   probe.path = path
   probe.opens = 0
-  return { path, header, reader: new JsonlReader(ctx, { root, compression: 'none' }) }
+  await ctx.plugin(persistence, { root, compression: 'none' })
+  return { path, header, reader: ctx.sessionPersistence }
 }
 
 it('reuses unchanged legacy headers and detaches each returned header from its cache', async () => {

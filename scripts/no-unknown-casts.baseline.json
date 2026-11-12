@@ -1503,12 +1503,28 @@
     "cdd46c8ceda6d5707bc2abfba329351ba06bcc030b314a3c799d72a4971bd5a4": 2,
     "f36c9eb275a387531e7c9c193c1fddf984cc8ff8a8fd3a95474630a737b5f728": 1
   },
+  "packages/session/session-persistence-jsonl/tests/jsonl.spec.ts": {
+    "1058f7a4a2b920b8693144d4c329875739c05b83bcae4d1378427cc1d5f141a0": 1,
+    "2f28d83ee100961d65baf06b0b57ff95b046c36d1e135dab4195ffbd6420a7fd": 1,
+    "a7d8cc8d42e37ad5cc4882241492ac572ed8163c7fb8663180e893c7178e906f": 1,
+    "aca72c9c675ac6aab8379d5d137eac122eb59803238c3e652bbea6e3e26da35b": 1,
+    "b40f3bbda2adba664b54271ea4b552ffb2c78a239d39d8b1e882cca164d21c4f": 12,
+    "b9fc932acb5b23fefbcc63e176999dd795d7cf7323a66a9a4de4c07b20d9c33c": 1,
+    "c5d92cfb860759a6a1fd46a250b0c5be0e9b5779224b72f3dbbe0ace562a9f69": 1,
+    "cc4c2ee361b8bd0a257383b90983432e1f707057eb6d90935bc023483858aa39": 1,
+    "cdd46c8ceda6d5707bc2abfba329351ba06bcc030b314a3c799d72a4971bd5a4": 1,
+    "ef31bd7c393b53eb4da79f4cf8fb5caa4d3628076458dbafd2fdb18ac88df9c9": 1
+  },
+  "packages/session/session-persistence-jsonl/tests/lease.spec.ts": {
+    "94e6c4d15a19729cf60005d29c0985aa4e5bd984b92f40c2b5d8e996bb651997": 1
+  },
   "packages/session/session-persistence-jsonl/tests/native-source-admission.spec.ts": {
     "24b3f41708c436a3b161317d9b04439dff484aa8f5a913ed3c68a299f490e3b9": 1
   },
   "packages/session/session-persistence-jsonl/tests/zstd.spec.ts": {
     "71b7a878e6188e21f9e735a03a79e060e88184269c9890e414a4eef5ae58878f": 1,
-    "aa35ddb1a441f4aa934fca868f66fb0899db603c8a222ca86a138e23741c350e": 2
+    "aa35ddb1a441f4aa934fca868f66fb0899db603c8a222ca86a138e23741c350e": 2,
+    "b40f3bbda2adba664b54271ea4b552ffb2c78a239d39d8b1e882cca164d21c4f": 3
   },
   "packages/session/session-persistence/tests/contract.ts": {
     "1a732182a70f9e0e8ea0e11f07e9bc1c8e56b5769056aab5040f3691b21d554c": 1,

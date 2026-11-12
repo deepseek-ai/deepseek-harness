@@ -11,9 +11,8 @@
  * pinned by lease.two-process.e2e.ts.
  */
 
-import { DatabaseSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,10 +25,9 @@ import {
   SessionPersistenceNotFoundError,
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
-import * as JsonlSessionPersistence from '../src/index.ts'
+import * as JsonlSessionPersistence from './fixtures/legacy-persistence.ts'
 import { LEASE_FILENAME, SessionWriteLease } from '../src/lease.ts'
-import { SessionWriteLease as SqliteWriteLease } from '@deepseek-ai/dsh-session-persistence-sqlite/src/lease.ts'
-import type { SqliteTrace } from '@deepseek-ai/dsh-session-persistence-sqlite/src/sqlite.ts'
+import type { JsonlSessionHandle } from '../src/storage.ts'
 import { sessionDir } from '../src/format.ts'
 import { brandString } from '@deepseek-ai/dsh-brand'
 
@@ -144,8 +142,8 @@ function lockPath(root: string, id: string, cwd = '/work'): string {
  * close(2) that freed the descriptor but returned EIO would.
  */
 function failReleaseOnce(): void {
-  const spy = vi.spyOn(SqliteWriteLease.prototype, 'release')
-  spy.mockImplementationOnce(async function (this: SqliteWriteLease) {
+  const spy = vi.spyOn(SessionWriteLease.prototype, 'release')
+  spy.mockImplementationOnce(async function (this: SessionWriteLease) {
     spy.mockRestore()
     await this.release()
     throw Object.assign(new Error('EIO: injected release failure'), { code: 'EIO' })
@@ -203,8 +201,6 @@ describe('cross-process write lock', () => {
     // The documented escape hatch for a live-but-stuck holder: deleting the
     // lock file orphans the held inode, and a successor locks the fresh one.
     await rm(lockPath(root, 'wedged'))
-    await expect(second.open(brandString<SessionId>('wedged'), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
-    await wedged.close()
     const successor = await second.open(brandString<SessionId>('wedged'), 'write')
     await successor.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
     await successor.close()
@@ -371,10 +367,12 @@ describe('cross-process write lock', () => {
     const writer = await backend.create(meta('open-and-release-fail'))
     await writer.append([...EVENTS])
     await writer.close()
-    const db = new DatabaseSync(join(root, '.segments', 'sessions.sqlite'))
-    try {
-      db.exec("DROP TRIGGER events_no_update; UPDATE events SET payload = 'null'")
-    } finally { db.close() }
+    // Corrupt the stored header line so the open fails after the lock is
+    // acquired (a garbled tail would be recovered as torn, not refused).
+    const dir = join(lockPath(root, 'open-and-release-fail'), '..')
+    const log = (await readdir(dir)).find(name => name.endsWith('.jsonl'))
+    const stored = await readFile(join(dir, String(log)), 'utf8')
+    await writeFile(join(dir, String(log)), `#${stored.slice(1)}`)
 
     failReleaseOnce()
     const outcome = await backend.open(brandString<SessionId>('open-and-release-fail'), 'write').then(() => undefined, (error: unknown) => error)
@@ -385,18 +383,18 @@ describe('cross-process write lock', () => {
     expect(String(errors[1])).toMatch(/injected release failure/)
     // The original diagnostic survives, and the claim is freed: the next
     // attempt reports the corruption again rather than a phantom owner.
-    await expect(backend.open(brandString<SessionId>('open-and-release-fail'), 'write')).rejects.toThrow(/invalid/i)
+    await expect(backend.open(brandString<SessionId>('open-and-release-fail'), 'write')).rejects.toThrow(/corrupt/i)
   })
 
   it('a drain failure and a release failure reject close as one AggregateError', async () => {
     const root = await freshRoot()
     const backend = await mount(root)
-    const holder = await backend.create(meta('drain-and-release-fail')) as SqliteTrace
+    const holder = await backend.create(meta('drain-and-release-fail')) as JsonlSessionHandle
     await holder.append([...EVENTS])
 
-    vi.spyOn(Reflect.get(backend, 'sqlite') as { append: () => Promise<void> }, 'append')
+    vi.spyOn(backend as unknown as { persistBatch: () => Promise<void> }, 'persistBatch')
       .mockRejectedValueOnce(new Error('injected drain refusal'))
-    await holder.receive({ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } })
+    holder.enqueueLive({ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }, () => {})
     failReleaseOnce()
     const outcome = await holder.close().then(() => undefined, (error: unknown) => error)
     expect(outcome).toBeInstanceOf(AggregateError)
@@ -420,58 +418,6 @@ describe('cross-process write lock', () => {
     expect(existsSync(join(dir, LOCK))).toBe(true)
   })
 
-
-  it('releases a creation guard when the artifact lock is already owned', async () => {
-    const root = await freshRoot(), dir = join(root, 'artifact'), guard = join(root, 'guard'), id = brandString<SessionId>('guard-rollback')
-    const holder = await SessionWriteLease.acquire(dir, id)
-    try {
-      await expect(SessionWriteLease.acquire(dir, id, guard)).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
-      const available = await SessionWriteLease.acquire(guard, id)
-      await available.release()
-    } finally { await holder.release() }
-  })
-
-  it('preserves acquisition and guard-release failures while freeing the guard', async () => {
-    const root = await freshRoot(), dir = join(root, 'artifact'), guard = join(root, 'guard'), id = brandString<SessionId>('guard-release')
-    const holder = await SessionWriteLease.acquire(dir, id)
-    const failure = new Error('guard release failed')
-    const spy = vi.spyOn(SessionWriteLease.prototype, 'release').mockImplementationOnce(async function (this: SessionWriteLease) {
-      spy.mockRestore()
-      await this.release()
-      throw failure
-    })
-    try {
-      await expect(SessionWriteLease.acquire(dir, id, guard)).rejects.toMatchObject({
-        errors: [expect.any(SessionAlreadyOwnedError), failure],
-      })
-    } finally { spy.mockRestore(); await holder.release() }
-    const available = await SessionWriteLease.acquire(guard, id)
-    await available.release()
-  })
-
-  it.skipIf(process.platform === 'win32')('attempts both lock releases and preserves both failures', async () => {
-    const root = await freshRoot(), dir = join(root, 'artifact'), guard = join(root, 'guard'), id = brandString<SessionId>('two-releases')
-    const fs = await import('node:fs/promises'), open = fs.open
-    const failures: Error[] = []
-    const spy = vi.spyOn(fs, 'open').mockImplementation(async (...args) => {
-      const handle = await open(...args), close = handle.close.bind(handle)
-      handle.close = async () => {
-        await close()
-        const failure = new Error('lock descriptor close failed')
-        failures.push(failure)
-        throw failure
-      }
-      return handle
-    })
-    let lease: SessionWriteLease
-    try { lease = await SessionWriteLease.acquire(dir, id, guard) }
-    finally { spy.mockRestore() }
-    await expect(lease.release()).rejects.toMatchObject({ errors: failures })
-    expect(failures).toHaveLength(2)
-    await lease.release()
-    const available = await SessionWriteLease.acquire(dir, id, guard)
-    await available.release()
-  })
 
   it('keeps distinct sessions independently lockable', async () => {
     const root = await freshRoot()

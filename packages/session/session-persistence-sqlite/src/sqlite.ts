@@ -68,11 +68,11 @@ export interface SqliteLogsOptions {
   /** Resolved JSONL root holding the per-Session write-lock directories and `.segments` routing records. */
   readonly legacyRoot: string
   /** SQLite writer wait in milliseconds. */
-  readonly busyTimeoutMs: number
+  readonly busyTimeoutMs?: number
   /** Maximum intentional live write delay in milliseconds. */
-  readonly flushDelayMs: number
+  readonly flushDelayMs?: number
   /** Admitted live event count that starts a write before the delay elapses. */
-  readonly maxBufferedEvents: number
+  readonly maxBufferedEvents?: number
   /** Publish a Session's routing record after its first commit. */
   readonly publish: (id: SessionId) => Promise<void>
   /** Claim a new Session across the provider's physical backends. */
@@ -111,9 +111,9 @@ export class SqliteLogs {
   constructor(options: SqliteLogsOptions) {
     this.path = options.path
     this.legacyRoot = options.legacyRoot
-    this.busyTimeoutMs = options.busyTimeoutMs
-    this.flushDelayMs = options.flushDelayMs
-    this.maxBufferedEvents = options.maxBufferedEvents
+    this.busyTimeoutMs = options.busyTimeoutMs ?? 5000
+    this.flushDelayMs = options.flushDelayMs ?? 200
+    this.maxBufferedEvents = options.maxBufferedEvents ?? 256
     this.published = options.publish
     this.acquireCreationLease = options.acquireCreationLease
     this.report = options.report

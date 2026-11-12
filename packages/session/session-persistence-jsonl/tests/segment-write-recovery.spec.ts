@@ -17,7 +17,7 @@ async function fixture(_sqlite: boolean) {
     finally { await rm(root, { recursive: true, force: true }) }
   })
   await ctx.plugin(SessionStore)
-  await ctx.plugin(plugin, { root, compression: 'none', segmentStorage: { maxBufferedEvents: 1 } })
+  await ctx.plugin(plugin, { root, compression: 'none' })
   return { ctx, root }
 }
 
