@@ -36,7 +36,7 @@ const provider = {
   },
 }
 
-async function setup(presetIds = ['standard', 'ptc'], withSandbox = true) {
+async function setup(presetIds: readonly string[] | false = ['standard', 'ptc'], withSandbox = true) {
   const ctx = new Context()
   onTestFinished(() => ctx.fiber.dispose())
   ctx.baseUrl = import.meta.url
@@ -47,11 +47,13 @@ async function setup(presetIds = ['standard', 'ptc'], withSandbox = true) {
   await mountAgentLoopTestHarness(ctx)
   await ctx.plugin(ComputerUseRegistry)
   await ctx.plugin(Subprocess, [])
-  await ctx.plugin(AgentPresets, { default: 'standard' })
-  for (const id of presetIds) {
-    await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
-      yield await owner.agentPresets.register({ id, plugins: [] })
-    } })
+  if (presetIds !== false) {
+    await ctx.plugin(AgentPresets, { default: 'standard' })
+    for (const id of presetIds) {
+      await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
+        yield await owner.agentPresets.register({ id, plugins: [] })
+      } })
+    }
   }
   const create = (id: string, preset: string) => ctx.agents.create({
     sessionId: brandString<SessionId>(id), setup: async (owner) => { await ctx.agentPresets.mount(owner, preset) },
@@ -74,7 +76,7 @@ it.each([
   expect(CuaConfig({ standaloneRunCode: { runtime: { timeoutMs: 1000 } } }).standaloneRunCode.runtime.timeoutMs).toBe(1000)
 })
 
-it('gives every other composed preset a program tool without changing the shared runtime', async () => {
+it('gives every Agent off the configured preset a program tool without changing the shared runtime', async () => {
   const { ctx, create } = await setup(['standard', 'ptc', 'cordis', 'minimal', 'custom'])
   const shared = { programFormat: 'function-body', retainsState: false }
   ctx.provide('ptcRuntime', shared)
@@ -88,8 +90,9 @@ it('gives every other composed preset a program tool without changing the shared
     expect(ctx.tools.get('cua_run_code', handle.agent)).toBeUndefined()
   }
   const uncomposed = await ctx.agents.create({ sessionId: brandString<SessionId>('cua-uncomposed') })
-  expect(ctx.tools.get('cua_run_code', uncomposed.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua_run_code', uncomposed.agent)).toBeDefined()
   expect(ctx.tools.get('cua', uncomposed.agent)).toBeUndefined()
+  expect(await cuaPrompts(ctx, uncomposed.agent)).toEqual([programPrompt])
   expect(ctx.get('ptcRuntime')).toMatchObject(shared)
   // The program service lives with the dedicated runtime and leaves with the provider; an Agent without an
   // environment has nothing to release.
@@ -109,6 +112,46 @@ it('keeps explicitly configured global raw-tool registration', async () => {
   expect(ctx.get('cuaPrograms')).toBeUndefined()
   await mounted.dispose()
   expect(ctx.tools.get('cua', handle.agent)).toBeUndefined()
+})
+
+it('gives Agents a program tool in a composition without a preset registry', async () => {
+  const { ctx } = await setup(false)
+  expect(ctx.get('agentPresets')).toBeUndefined()
+  const existing = await ctx.agents.create({ sessionId: brandString<SessionId>('no-registry-existing') })
+  const mounted = await ctx.plugin(provider, {})
+  await expect.poll(() => ctx.tools.get('cua_run_code', existing.agent)).toBeDefined()
+  const fresh = await ctx.agents.create({ sessionId: brandString<SessionId>('no-registry-fresh') })
+  expect(ctx.tools.schemas(fresh.agent).map(tool => tool.name)).toContain('cua_run_code')
+  expect(ctx.tools.get('cua', fresh.agent)).toBeUndefined()
+  expect(await cuaPrompts(ctx, fresh.agent)).toEqual([programPrompt])
+  await fresh.dispose()
+  expect(ctx.tools.get('cua_run_code', fresh.agent)).toBeUndefined()
+  await mounted.dispose()
+  expect(ctx.tools.get('cua_run_code', existing.agent)).toBeUndefined()
+  expect(await cuaPrompts(ctx, existing.agent)).toEqual([])
+  expect(ctx.get('cuaPrograms')).toBeUndefined()
+})
+
+it('switches the tool form when the preset registry loads and unloads', async () => {
+  const { ctx } = await setup(false)
+  await ctx.plugin(provider, {})
+  const early = await ctx.agents.create({ sessionId: brandString<SessionId>('registry-early') })
+  expect(ctx.tools.get('cua_run_code', early.agent)).toBeDefined()
+  const registry = await ctx.plugin(AgentPresets, { default: 'ptc' })
+  await ctx.plugin({ inject: ['agentPresets'], async* apply(owner: Context) {
+    yield await owner.agentPresets.register({ id: 'ptc', plugins: [] })
+  } })
+  const ptc = await ctx.agents.create({
+    sessionId: brandString<SessionId>('registry-ptc'), setup: async (owner) => { await ctx.agentPresets.mount(owner, 'ptc') },
+  })
+  expect(ctx.tools.get('cua', ptc.agent)).toBeDefined()
+  expect(ctx.tools.get('cua_run_code', ptc.agent)).toBeUndefined()
+  expect(ctx.tools.get('cua_run_code', early.agent)).toBeDefined()
+  expect(ctx.tools.get('cua', early.agent)).toBeUndefined()
+  await registry.dispose()
+  await expect.poll(() => ctx.tools.get('cua_run_code', ptc.agent)).toBeDefined()
+  expect(ctx.tools.get('cua', ptc.agent)).toBeUndefined()
+  expect(await cuaPrompts(ctx, ptc.agent)).toEqual([programPrompt])
 })
 
 it('selects one CUA transport for existing and new Agents and removes both on unload', async () => {
@@ -218,6 +261,8 @@ it('creates raw Agents while private runtime startup is pending', async () => {
   expect(raw).toBeDefined()
   expect((await cuaPrompts(ctx, ptc.agent)).join('')).toContain('Fixture CUA guidance')
   await expect(create('private-pending-standard', 'standard')).rejects.toThrow('CUA program tool is unavailable')
+  await expect(ctx.agents.create({ sessionId: brandString<SessionId>('private-pending-uncomposed') }))
+    .rejects.toThrow('CUA program tool is unavailable')
   await ctx.plugin(Sandbox)
   const standard = await create('private-restored-standard', 'standard')
   expect(ctx.tools.get('cua_run_code', standard.agent)).toBeDefined()

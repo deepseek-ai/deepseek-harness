@@ -57,7 +57,7 @@ Source builds default to `sourceSigning: ad-hoc`, without creating certificates 
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `agentPreset` | `ptc` | Give this preset raw `cua` and other composed presets `cua_run_code`; `false` registers raw `cua` globally. |
+| `agentPreset` | `ptc` | Give this preset raw `cua` and every other Agent, with or without a preset, `cua_run_code`; `false` registers raw `cua` globally. |
 | `standaloneRunCode.runtime` / `standaloneRunCode.executor` | shared Node / PTC limits | Resource, launch, and nested-call settings for the dedicated CUA runtime; see [CUA](../cua/README.md). |
 | `screenshotTarget` | unset | Fixed `{ longEdge, maxBytes }` request-image target for screenshots. Unset resolves the target from the Agent's model route and refuses capture when that route declares no image input. |
 | `allowedApps` | `[]` | Legacy path/signature grants, imported once for removal; they do not authorize new bundle-ID identities. |
@@ -103,7 +103,7 @@ Native preparation serializes building and signing with a file lock. It retains 
 
 ### Connect an external execution environment
 
-To run through persistent PTC, add `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`. In other composed presets, `cua_run_code` already supplies the global object and retains variables through the [shared CUA package](../cua/README.md):
+To run through persistent PTC, add `--patch packages/experimental/cua-macos/examples/persistent-ptc.cordis.yml` after the macOS overlay. This provider keeps variables for the live Agent and applies the selected file sandbox policy. The caller imports the bridge and supplies the current authorized `tools.cua` binding. Persistent PTC receives an installation-owned bridge file URL in its CUA instructions, so the project does not need to install this package. The example below is for an external host that resolves the package from its own installation and supplies `tools`. For other Agents, `cua_run_code` already supplies the global object and retains variables through the [shared CUA package](../cua/README.md):
 
 ```javascript
 import { connectCua } from '@deepseek-ai/dsh-cua/bridge'
@@ -177,7 +177,7 @@ Node roles and metadata share one AX batch per observation. Group and scroll-are
 
 #### What the model sees
 
-The configured PTC preset receives one `cua` operation tool with method-specific parameters through `run_code`. Other composed presets receive `cua_run_code`, with the global `cua` object ready to use and only `tools.cua` bound inside the program. The verbatim block below shows the PTC operation guidance, which uses `tools.write`, `tools.grep`, and `tools.read` for large AX trees. The `cua_run_code` variant uses `node:fs/promises` to save a tree and ordinary session tools outside the program to search it; initialization and program instructions are selected by the [shared CUA package](../cua/README.md#model-experience).
+The configured PTC preset receives one `cua` operation tool with method-specific parameters through `run_code`. Other Agents receive `cua_run_code`, with the global `cua` object ready to use and only `tools.cua` bound inside the program. The verbatim block below shows the PTC operation guidance, which uses `tools.write`, `tools.grep`, and `tools.read` for large AX trees. The `cua_run_code` variant uses `node:fs/promises` to save a tree and ordinary session tools outside the program to search it; initialization and program instructions are selected by the [shared CUA package](../cua/README.md#model-experience).
 
 ##### PTC operation guidance (verbatim)
 
