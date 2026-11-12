@@ -1497,11 +1497,32 @@ describe('mountForgePanel review page changes view', () => {
     await expect(f.view.localCommits(null, signal)).rejects.toThrow(refusal)
     const lens: ForgeLensRequest = { source: { kind: 'change', url, commits: null }, version: 'v1', lens: 'exports' }
     expect(() => f.view.changesLens(lens, signal)).toThrow('forge-panel: the review page runs no lenses')
-    expect(f.view.addReviewToInput(selection)).toBe(false)
-    expect(f.view.addThreadToInput(reviewThread({ path: 'a.ts' }), url, null)).toBe(false)
     f.view.createChangeRequest()
     expect(f.notice()).toBeNull()
     await f.dispose()
+  })
+
+  it('quotes comments and threads in the draft of the Session the page names, numbered after the quotes already there', async () => {
+    const f = await fixture()
+    try {
+      const value = f.entry('main', ReviewPage)?.inject?.()
+      assert(value !== undefined && isReviewPageFace(value))
+      const scope = f.sessions.scope(S1)
+      assert(scope !== undefined)
+      let draft = ''
+      const insertQuote = vi.fn((text: string, _summary?: QuoteSummary) => { draft += `\n> ${text}`; return true })
+      const input = { state: { getSnapshot: () => ({ draft }) }, insertQuote, focus: vi.fn() }
+      // Only the input methods the quotes use are supplied by the Session fixture.
+      vi.spyOn(scope, 'get').mockImplementation(name => name === 'conversation' ? { input: { for: () => input } } as never : undefined)
+      expect(value.quoteReview(S1, selection)).toBe(true)
+      expect(value.quoteReview(S1, selection)).toBe(true)
+      expect(value.quoteThread(S1, reviewThread({ path: 'a.ts' }), url, 'R1')).toBe(true)
+      expect(insertQuote.mock.calls.map(([text]) => text.split('\n')[0]))
+        .toEqual(['## User Comment 1', '## User Comment 2', '## Review Thread 1'])
+      expect(f.sessions.scope).toHaveBeenCalledWith(S1)
+      insertQuote.mockReturnValueOnce(false)
+      expect(value.quoteReview(S1, selection)).toBe(false)
+    } finally { await f.dispose() }
   })
 
   it('reads and writes the change request by its URL through the review Remote, keeping its viewed marks in the browser', async () => {
@@ -1677,16 +1698,14 @@ describe('mountForgePanel review page chat', () => {
     const f = await chatFace()
     const reference = f.chat.retain(S1, new AbortController().signal)
     const empty = conversationInput(f, '  ')
-    f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
-    await settle()
+    await f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
     expect(empty.setDraft).not.toHaveBeenCalled()
     expect(empty.insertQuote).toHaveBeenCalledWith(tEn('reviewPage.chat.reference', { name: '#7', title: 'Change 7', url }),
       { label: '#7', title: 'Change 7', detail: url, body: '' })
     expect(empty.focus).toHaveBeenCalledOnce()
 
     const written = conversationInput(f, 'Look at the parser')
-    f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
-    await settle()
+    await f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
     expect(written.insertQuote).not.toHaveBeenCalled()
     expect(written.focus).not.toHaveBeenCalled()
     await f.dispose()
@@ -1696,8 +1715,7 @@ describe('mountForgePanel review page chat', () => {
     const f = await chatFace()
     const reference = f.chat.retain(S1, new AbortController().signal)
     const input = conversationInput(f, 'Look at the parser')
-    f.chat.fill(reference, { kind: 'prompt', frame: reviewed(7, null), text: 'Review this change request' })
-    await settle()
+    await f.chat.fill(reference, { kind: 'prompt', frame: reviewed(7, null), text: 'Review this change request' })
     expect(input.setDraft).toHaveBeenCalledWith('Review this change request')
     expect(input.insertQuote).toHaveBeenCalledWith(tEn('reviewPage.chat.reference', { name: '#7', title: url, url }),
       { label: '#7', title: url, detail: url, body: '' })
@@ -1712,8 +1730,7 @@ describe('mountForgePanel review page chat', () => {
     assert(scope !== undefined)
     const get = vi.spyOn(scope, 'get').mockReturnValue(undefined)
     if (missing === 'no Session scope') f.sessions.scope.mockReturnValue(undefined)
-    f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
-    await settle()
+    await f.chat.fill(reference, { kind: 'reference', frame: reviewed(7) })
     expect(f.sessions.scope).toHaveBeenLastCalledWith(S1)
     expect(get.mock.calls.length > 0).toBe(missing === 'no conversation')
     await f.dispose()
@@ -1724,8 +1741,7 @@ describe('mountForgePanel review page chat', () => {
     const failure = new Error('closed')
     f.sessions.retain.mockReturnValueOnce({ sessionId: S1, ready: Promise.reject(failure) })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    f.chat.fill(f.chat.retain(S1, new AbortController().signal), { kind: 'reference', frame: reviewed(7) })
-    await settle()
+    await f.chat.fill(f.chat.retain(S1, new AbortController().signal), { kind: 'reference', frame: reviewed(7) })
     expect(warn).toHaveBeenCalledWith('forge-panel: the review conversation did not open:', failure)
     await f.dispose()
   })

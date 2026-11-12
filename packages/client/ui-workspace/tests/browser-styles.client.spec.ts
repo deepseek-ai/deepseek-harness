@@ -184,19 +184,13 @@ describe('WorkspaceBrowser.module.css list', () => {
   })
 
   it('marquees a clipped session title on row hover', () => {
-    // The crawl itself is scripted in Rows.tsx frame by frame, so the title
-    // declares no scroll-behavior; the stylesheet keeps the hovered cell
-    // unclipped and fades whichever edges cut text mid-travel, on the title
-    // span itself so the status slot beside it keeps its full color.
+    // The shared title marquee scripts the crawl frame by frame and fades the
+    // clipping edges through its own class, so the title declares no
+    // scroll-behavior or mask; the stylesheet keeps the hovered cell unclipped.
     expect(rowDeclarations('.sessionRow .title')?.get('flex')).toBe('1')
     expect(rowDeclarations('.sessionRow .title')?.get('scroll-behavior')).toBeUndefined()
     expect(rowDeclarations('.sessionRow:hover .title')?.get('text-overflow')).toBe('clip')
-    expect(rowDeclarations('.sessionRow .title[data-scrolled]')?.get('mask-image'))
-      .toBe('linear-gradient(to right, transparent, #000 12px)')
-    expect(rowDeclarations('.sessionRow .title[data-clipped]')?.get('mask-image'))
-      .toBe('linear-gradient(to left, transparent, #000 12px)')
-    expect(rowDeclarations('.sessionRow .title[data-scrolled][data-clipped]')?.get('mask-image'))
-      .toBe('linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent)')
+    expect(rowsCss).not.toContain('mask-image')
   })
 
   it('pins both rail controls to the shared left anchor during the column slide', () => {

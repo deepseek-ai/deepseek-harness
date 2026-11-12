@@ -176,7 +176,7 @@ describe('createReviewStore', () => {
     const { actions } = store
     expect(store.getSnapshot()).toEqual({
       selected: null, tab: 'summary', listHidden: false, folded: {}, repository: null, query: '', directOnly: false, conversations: {},
-      byTab: {},
+      view: 'detailed', unseenQuotes: {}, byTab: {},
     })
     actions.tabbed('chat')
     actions.select('https://github.com/octo/demo/pull/7')
@@ -207,5 +207,38 @@ describe('createReviewStore', () => {
     actions.navigated('review:https://github.com/octo/demo/pull/7', 1)
     actions.toggledSplit('review:https://github.com/octo/demo/pull/7')
     expect(store.getSnapshot().byTab['review:https://github.com/octo/demo/pull/7']).toMatchObject({ split: false, navigated: 1 })
+  })
+
+  it('shows the list in the view the reader chose', () => {
+    const store = createReviewStore().create()
+    store.actions.viewed('compact')
+    expect(store.getSnapshot().view).toBe('compact')
+    store.actions.viewed('detailed')
+    expect(store.getSnapshot().view).toBe('detailed')
+  })
+
+  it('counts the quotes added to each change request\'s conversation until its chat tab shows', () => {
+    const store = createReviewStore().create()
+    const { actions } = store
+    const seven = 'https://github.com/octo/demo/pull/7'
+    const eight = 'https://github.com/octo/demo/pull/8'
+    actions.quoted(seven)
+    actions.select(seven)
+    actions.quoted(seven)
+    actions.tabbed('changes')
+    actions.quoted(eight)
+    expect(store.getSnapshot().unseenQuotes).toEqual({ [seven]: 2, [eight]: 1 })
+
+    actions.tabbed('chat')
+    expect(store.getSnapshot().unseenQuotes).toEqual({ [seven]: 0, [eight]: 1 })
+    // A quote into the conversation the reader is looking at is seen at once; another change request's still counts.
+    actions.quoted(seven)
+    actions.quoted(eight)
+    expect(store.getSnapshot().unseenQuotes).toEqual({ [seven]: 0, [eight]: 2 })
+
+    // With nothing selected the chat tab clears no count.
+    actions.select(null)
+    actions.tabbed('chat')
+    expect(store.getSnapshot().unseenQuotes).toEqual({ [seven]: 0, [eight]: 2 })
   })
 })

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 /**
  * The review page: its lists beside the shown change request, the reader's choices in the page store, the refresh,
- * the conversation it records for a change request, the changes view it embeds, and that view without plugin slots.
+ * the conversation it records for a change request, the changes view it embeds with its quotes into that conversation,
+ * and that view without plugin slots.
  */
 import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
@@ -11,7 +12,7 @@ import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/c
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionAreaProps } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ChangeRequestSnapshot, ForgeCommitList } from '@deepseek-ai/dsh-experimental-forge/types'
+import type { ChangeRequestSnapshot, ForgeCommitList, ForgeReviewThread, ForgeThreadId } from '@deepseek-ai/dsh-experimental-forge/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -34,6 +35,7 @@ import type {
 } from '../src/types.ts'
 import { entry, ready, snapshot } from './client-fixtures.client.ts'
 import { description, fed, frame, host, list, prUrl, reviewed, summary, type Fed } from './review-fixtures.client.ts'
+import { reviewThread } from './thread-fixtures.client.ts'
 
 const t = makeTranslate(en)
 const S1 = brandString<SessionId>('s1')
@@ -79,8 +81,14 @@ const APP: ForgeDiffFile = {
 const CHANGE: ForgeChangeRequestDiff = { headSha: HEAD, files: [APP], localAhead: null, fileUrls: {} }
 const COMMITS: ForgeCommitList = { headSha: HEAD, commits: [], truncated: false }
 
-/** The reads and writes of a changes view showing #7, each recorded. */
-function changesFaces(): ReviewChangesFace {
+/** A thread on the new side of line 4 of `src/app.ts`, written at the head. */
+const THREAD: ForgeReviewThread = reviewThread({
+  id: 't1' as ForgeThreadId, path: 'src/app.ts', current: { commit: HEAD, startLine: 4, endLine: 4 },
+  original: { commit: HEAD, startLine: 4, endLine: 4 }, diffHunk: APP.hunks[0]?.lines.join('\n') ?? null,
+})
+
+/** The reads and writes of a changes view showing #7 with `threads`, each recorded. */
+function changesFaces(threads: readonly ForgeReviewThread[] = []): ReviewChangesFace {
   const local = async (): Promise<never> => await Promise.reject(new Error('no local changes'))
   return {
     localDiff: vi.fn(local),
@@ -94,13 +102,11 @@ function changesFaces(): ReviewChangesFace {
     setFileViewed: vi.fn(async () => ok(undefined)),
     changeRequestText: vi.fn(async () => ok(APP_TEXT)),
     changeRequestReview: vi.fn(async () => ok({
-      headSha: HEAD, viewer: 'lin', threads: [], truncated: false, pendingReview: null, viewerCanReview: true,
+      headSha: HEAD, viewer: 'lin', threads, truncated: false, pendingReview: null, viewerCanReview: true,
     })),
     changeRequestReviewWrite: vi.fn(async () => ok({ ok: true as const })),
     submitReview: vi.fn(async () => ok({ ok: true as const, url: URL7 })),
     reviewQueue: vi.fn(() => new ReviewQueue('review-page-test')),
-    addReviewToInput: vi.fn(() => false),
-    addThreadToInput: vi.fn(() => false),
     openLink: vi.fn(),
     copyPath: vi.fn(),
     createChangeRequest: vi.fn(),
@@ -109,20 +115,20 @@ function changesFaces(): ReviewChangesFace {
   }
 }
 
-/** Render the review page with hand-fed list and change request streams and every face recorded. */
-function renderPage() {
+/** Render the review page with hand-fed list and change request streams, review `threads`, and every face recorded. */
+function renderPage(threads: readonly ForgeReviewThread[] = []) {
   const store = createReviewStore().create()
   const lists: Fed<ForgeReviewFrame>[] = []
   const details: Fed<ForgeReviewChangeRequest>[] = []
   const refreshes: ReturnType<typeof deferred<undefined>>[] = []
   const shown: (() => void)[] = []
-  const changes = changesFaces()
+  const changes = changesFaces(threads)
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
     // Only the identity the chat tab hands back to the face is supplied.
     retain: vi.fn<ReviewChatFace['retain']>(sessionId => ({ sessionId }) as SessionReference),
     stage: vi.fn<ReviewChatFace['stage']>(),
-    fill: vi.fn<ReviewChatFace['fill']>(),
+    fill: vi.fn<ReviewChatFace['fill']>(async () => {}),
     openInMain: vi.fn<ReviewChatFace['openInMain']>(),
     requestWorktree: vi.fn<ReviewChatFace['requestWorktree']>(),
   }
@@ -160,6 +166,8 @@ function renderPage() {
     changes,
     copyText: vi.fn(),
     chat,
+    quoteReview: vi.fn<ReviewPageProps['quoteReview']>(() => true),
+    quoteThread: vi.fn<ReviewPageProps['quoteThread']>(() => true),
     useStore: bindSnapshotSelector(store),
     actions: store.actions,
     renderSlot,
@@ -192,6 +200,27 @@ async function select(b: ReturnType<typeof renderPage>): Promise<void> {
   await settle()
 }
 
+/** Show the changes tab of #7 and return its `src/app.ts` section once read. */
+async function showChanges(b: ReturnType<typeof renderPage>): Promise<HTMLElement> {
+  await select(b)
+  fireEvent.click(b.view.getByRole('tab', { name: /^Changes/ }))
+  await settle()
+  const section = b.view.container.querySelector('[data-forge-diff-file="src/app.ts"]')
+  if (!(section instanceof HTMLElement)) throw new Error('no section for src/app.ts')
+  return section
+}
+
+/** Write `body` on line R4 of the section and add it to the chat. */
+async function quoteComment(section: HTMLElement, body: string): Promise<void> {
+  fireEvent.click(within(section).getByRole('button', { name: 'Select line R4' }))
+  fireEvent.click(within(section).getByRole('button', { name: 'Add comment' }))
+  const composer = section.querySelector('[data-forge-comment]')
+  if (!(composer instanceof HTMLElement)) throw new Error('no comment form')
+  fireEvent.change(within(composer).getByRole('textbox'), { target: { value: body } })
+  fireEvent.click(within(composer).getByRole('button', { name: 'Add to chat' }))
+  await settle()
+}
+
 describe('ReviewPage lists', () => {
   it('lists the change requests of every repository beside a placeholder until one is chosen', async () => {
     const b = renderPage()
@@ -203,11 +232,12 @@ describe('ReviewPage lists', () => {
     expect(b.view.container.querySelector(`[data-forge-review-item="${URL7}"]`)).not.toBeNull()
   })
 
-  it('reads the lists of the chosen repository, searches, folds, and leaves out team requests in the page store', async () => {
+  it('reads the chosen repository\'s lists and keeps the request filter, list view, search, and folds in the page store', async () => {
     const b = renderPage()
     b.list().push(frame(host({ 'review-requested': list([summary(7)]) })))
     await settle()
     fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: /^Repository/ }))
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'octo/demo' }))
     expect(b.store.getSnapshot().repository).toEqual({ owner: 'octo', name: 'demo' })
     expect(b.lists[0]?.disposed).toHaveBeenCalledOnce()
@@ -215,6 +245,12 @@ describe('ReviewPage lists', () => {
     fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
     fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Only requests made of me' }))
     expect(b.store.getSnapshot().directOnly).toBe(true)
+    fireEvent.click(b.view.getByRole('button', { name: 'Filter' }))
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Compact' }))
+    expect(b.store.getSnapshot().view).toBe('compact')
+    b.list().push(frame(host({ 'review-requested': list([summary(7)]) })))
+    await settle()
+    expect(b.view.container.querySelector(`[data-forge-review-item="${URL7}"]`)?.matches(`.${css.compactItem}`)).toBe(true)
 
     fireEvent.change(b.view.getByRole('textbox'), { target: { value: 'parser' } })
     expect(b.store.getSnapshot().query).toBe('parser')
@@ -298,10 +334,10 @@ describe('ReviewPage detail', () => {
     expect(lifetime?.aborted).toBe(true)
   })
 
-  it('asks the Agent in the chat tab, records the conversation for the change request, and forgets it for a new one', async () => {
+  it('starts the conversation in the chat tab, records it for the change request, and forgets it for a new one', async () => {
     const b = renderPage()
     await select(b)
-    fireEvent.click(b.view.getByRole('button', { name: 'Ask Agent' }))
+    fireEvent.click(b.view.getByRole('tab', { name: 'Chat' }))
     expect(b.store.getSnapshot().tab).toBe('chat')
     expect(b.chat.connect).toHaveBeenCalledWith(reviewed(7))
     await settle()
@@ -313,6 +349,76 @@ describe('ReviewPage detail', () => {
     fireEvent.click(b.view.getByRole('button', { name: 'New conversation' }))
     expect(b.store.getSnapshot().conversations).toEqual({})
     expect(b.chat.connect).toHaveBeenCalledTimes(2)
+  })
+
+  it('quotes a comment from the changes tab into the conversation it starts, counting it on the chat tab until shown', async () => {
+    const b = renderPage()
+    const section = await showChanges(b)
+    expect(within(section).queryByRole('button', { name: 'Add to input' })).toBeNull()
+    await quoteComment(section, 'Why y?')
+    expect(b.chat.connect).toHaveBeenCalledWith(reviewed(7))
+    expect(b.store.getSnapshot().conversations).toEqual({ [URL7]: S1 })
+    expect(b.chat.retain).toHaveBeenCalledOnce()
+    expect(b.chat.stage).toHaveBeenCalledWith(S1, URL7)
+    expect(b.chat.fill).toHaveBeenCalledOnce()
+    expect(b.chat.fill).toHaveBeenCalledWith({ sessionId: S1 }, { kind: 'reference', frame: reviewed(7) })
+    const [quotedIn, quoted] = vi.mocked(b.props.quoteReview).mock.calls[0] ?? []
+    expect(quotedIn).toBe(S1)
+    expect(quoted?.source).toMatchObject({ kind: 'change', url: URL7 })
+    expect(quoted?.comment).toMatchObject({ path: 'src/app.ts', side: 'R', startLine: 4, endLine: 4, body: 'Why y?' })
+    expect(within(section).queryByRole('textbox')).toBeNull()
+    expect(within(section).getByText('Added to chat')).toBeTruthy()
+    expect(b.store.getSnapshot().unseenQuotes).toEqual({ [URL7]: 1 })
+    expect(b.view.getByRole('tab', { name: /^Chat/ }).textContent).toBe('Chat1')
+
+    // A second quote goes into the same conversation.
+    await quoteComment(section, 'And x?')
+    expect(b.chat.connect).toHaveBeenCalledOnce()
+    expect(b.props.quoteReview).toHaveBeenCalledTimes(2)
+    expect(b.view.getByRole('tab', { name: /^Chat/ }).textContent).toBe('Chat2')
+    fireEvent.click(b.view.getByRole('tab', { name: /^Chat/ }))
+    expect(b.store.getSnapshot().unseenQuotes).toEqual({ [URL7]: 0 })
+    expect(b.view.getByRole('tab', { name: 'Chat' }).textContent).toBe('Chat')
+  })
+
+  it('keeps the comment open with the refusal when the draft refuses the quote or no conversation could start', async () => {
+    const b = renderPage()
+    vi.mocked(b.props.quoteReview).mockReturnValue(false)
+    const section = await showChanges(b)
+    await quoteComment(section, 'Why y?')
+    expect(within(section).getByRole('alert').textContent).toBe('Couldn\'t add to chat')
+    expect(within(section).getByRole('textbox')).toBeTruthy()
+    expect(b.store.getSnapshot().unseenQuotes).toEqual({})
+    cleanup()
+
+    const none = renderPage()
+    none.chat.connect.mockResolvedValue(undefined)
+    const empty = await showChanges(none)
+    await quoteComment(empty, 'Why y?')
+    expect(within(empty).getByRole('alert').textContent).toBe('Couldn\'t add to chat')
+    expect(none.props.quoteReview).not.toHaveBeenCalled()
+    fireEvent.click(none.view.getByRole('tab', { name: 'Chat' }))
+    expect(none.view.getByRole('status').textContent).toBe('Conversation unavailable')
+  })
+
+  it('quotes a review thread from the changes tab into the conversation, and reports a refused one', async () => {
+    const b = renderPage([THREAD])
+    await showChanges(b)
+    const card = (): HTMLElement => {
+      const element = b.view.container.querySelector('[data-forge-thread="t1"]')
+      if (!(element instanceof HTMLElement)) throw new Error('no thread card')
+      return element
+    }
+    fireEvent.click(within(card()).getByRole('button', { name: 'Add to chat' }))
+    await settle()
+    expect(b.props.quoteThread).toHaveBeenCalledWith(S1, THREAD, URL7, 'R4')
+    expect(b.store.getSnapshot().unseenQuotes).toEqual({ [URL7]: 1 })
+    expect(b.changes.report).not.toHaveBeenCalled()
+    vi.mocked(b.props.quoteThread).mockReturnValue(false)
+    fireEvent.click(within(card()).getByRole('button', { name: 'Add to chat' }))
+    await settle()
+    expect(b.changes.report).toHaveBeenCalledWith('reviewPage.addToChatFailed')
+    expect(b.store.getSnapshot().unseenQuotes).toEqual({ [URL7]: 1 })
   })
 })
 
@@ -334,7 +440,7 @@ describe('ChangesView without a target', () => {
     }) as ChangesTabProps['renderSlot']
     const head: ChangeRequestSnapshot = snapshot(7)
     const props: ChangesViewProps = {
-      ...faces,
+      ...faces, addReviewToInput: vi.fn(() => false), addThreadToInput: vi.fn(() => false),
       tab, source: { kind: 'change', url: URL7 }, target: null, annotations, openFile: undefined,
       snapshot: { state: ready({ changeRequests: [entry(7, head)] }), disconnected: false },
       reconnect: vi.fn(),

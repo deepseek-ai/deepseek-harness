@@ -138,9 +138,15 @@ export function useReviewConversation(
     held.current = { sessionId: id, controller, reference: retained }
     setReference({ sessionId: id, reference: retained })
   }, [chat])
-  useEffect(() => () => {
-    held.current?.controller.abort()
-    held.current = null
+  // A conversation that connects after the page stopped showing the change request is recorded but not retained.
+  const alive = useRef(true)
+  useEffect(() => {
+    alive.current = true
+    return () => {
+      alive.current = false
+      held.current?.controller.abort()
+      held.current = null
+    }
   }, [])
   const fillOnce = useCallback(async (retained: SessionReference, shown: ForgeReviewChangeRequest): Promise<void> => {
     let filling = filled.current.get(retained.sessionId)
@@ -166,19 +172,24 @@ export function useReviewConversation(
     if (shown === undefined) return undefined
     let id = sessionId
     if (id === undefined) {
-      connecting.current ??= chat.connect(shown).catch(() => undefined)
+      // Quotes that start the conversation together share one connection, retention, binding, and record.
+      connecting.current ??= chat.connect(shown).catch(() => undefined).then((connected) => {
+        connecting.current = null
+        if (connected === undefined) {
+          if (alive.current) setFailed(true)
+          return undefined
+        }
+        chat.stage(connected, shown.url)
+        latest.current.onConversation(connected)
+        if (alive.current) hold(connected)
+        return connected
+      })
       id = await connecting.current
-      connecting.current = null
-      if (id === undefined) {
-        setFailed(true)
-        return undefined
-      }
-      hold(id)
-      chat.stage(id, shown.url)
-      latest.current.onConversation(id)
+      if (id === undefined || !alive.current) return undefined
     }
     hold(id)
     const retained = held.current?.reference
+    /* v8 ignore next -- defensive: hold(id) above has just set held.current. */
     if (retained === undefined) return undefined
     await fillOnce(retained, shown)
     return retained

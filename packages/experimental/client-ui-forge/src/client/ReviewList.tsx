@@ -6,10 +6,9 @@
 import { useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  Button, HoverCard, IconChevronDownOutlineRegular, IconFlatListOutlineRegular, IconFolderCloseRegular, IconLayersOutlineRegular,
-  IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, IconUserOutlineRegular, IconUsersOutlineRegular, Input, Menu, titleMarqueeClass,
-  Tooltip, useTitleMarquee,
-  type MenuEntry,
+  Button, HoverCard, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconFlatListOutlineRegular, IconFolderCloseRegular,
+  IconLayersOutlineRegular, IconSearchOutlineRegular, IconSlidersTwoOutlineRegular, IconUserOutlineRegular, IconUsersOutlineRegular,
+  Input, Menu, titleMarqueeClass, Tooltip, useTitleMarquee, type MenuEntry,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChecksRollup, ForgeViewerFilter } from '@deepseek-ai/dsh-experimental-forge/types'
@@ -76,6 +75,21 @@ export interface ReviewListProps {
   readonly t: Translate
 }
 
+/**
+ * A submenu row's label with the tick a chosen row shows, since a submenu does not mark its own choice.
+ * @param text - the row's text.
+ * @param chosen - whether the row is the current choice.
+ * @returns the label.
+ */
+function chosenLabel(text: string, chosen: boolean): ReactNode {
+  return (
+    <span className={css.menuRow} data-chosen={chosen ? '' : undefined}>
+      <span>{text}</span>
+      {chosen && <IconCheckOutlineRegular size={14} className={css.menuCheck} />}
+    </span>
+  )
+}
+
 /** The view menu, laid out like the Session list's: the list view, the repository the lists are read in, and whether team requests show. */
 function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDirect, onView, t }: Pick<ReviewListProps,
   'frame' | 'repository' | 'directOnly' | 'view' | 'onScope' | 'onToggleDirect' | 'onView' | 't'>): ReactNode {
@@ -101,9 +115,9 @@ function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDire
         </span>
       ),
       submenu: [
-        { id: 'repo:', label: t('reviewPage.filter.allRepositories') },
+        { id: 'repo:', label: chosenLabel(t('reviewPage.filter.allRepositories'), chosen === null) },
         { type: 'separator', id: 'repo-separator' },
-        ...offered.map(item => ({ id: `repo:${item.owner}/${item.name}`, label: `${item.owner}/${item.name}` })),
+        ...offered.map(item => `${item.owner}/${item.name}`).map(name => ({ id: `repo:${name}`, label: chosenLabel(name, name === chosen) })),
       ],
     },
     { type: 'separator', id: 'requests-separator' },
@@ -135,7 +149,8 @@ function FilterMenu({ frame, repository, directOnly, view, onScope, onToggleDire
         if (id === 'view:detailed' || id === 'view:compact') onView(id === 'view:compact' ? 'compact' : 'detailed')
         else if (id === 'requests:all' || id === 'requests:direct') {
           if ((id === 'requests:direct') !== directOnly) onToggleDirect()
-        } else if (id.startsWith('repo:')) {
+        } else {
+          // Menu never selects a submenu parent, so every remaining row is a `repo:` row.
           const [owner = '', name = ''] = id.slice('repo:'.length).split('/')
           onScope(id === 'repo:' ? null : { owner, name })
         }

@@ -9,6 +9,7 @@ import type { PointerEvent, RefObject } from 'react'
 import css from './TitleMarquee.module.css'
 
 /** Class that fades a marquee title's clipping edges while it travels; add it to the title element. */
+/* v8 ignore next -- the stylesheet defines .marquee; the fallback only satisfies the class map's index signature. */
 export const titleMarqueeClass: string = css.marquee ?? ''
 
 /* Overflow this small hides no meaningful tail; scrolling for it reads as an

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 /**
- * The review page's chat tab: starting the conversation in a Workspace's blank Session, retaining and binding it, the
- * draft reference and suggested prompts, switching Workspaces, and the embedded conversation's phase.
+ * The review page's chat tab and the conversation the page keeps for it: starting the conversation in a Workspace's blank
+ * Session on first show or for a quote, retaining and binding it, the draft reference and suggested prompts, switching
+ * Workspaces, and the embedded conversation's phase.
  */
 import type { ReactNode } from 'react'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionListState, SessionReference, SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ConversationSnapshot, ConversationViewsProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -15,9 +16,11 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { en } from '../src/client/locales.ts'
 import {
-  ReviewChat, ReviewChatView, ReviewConversation, type ReviewChatFace, type ReviewChatProps, type ReviewConversationProps,
+  ReviewChat, ReviewChatView, ReviewConversation, useReviewConversation, type ReviewChatFace, type ReviewChatProps,
+  type ReviewConversationProps,
 } from '../src/client/ReviewChat.tsx'
 import type { ForgeReviewConversationProps } from '../src/client/slots.ts'
+import type { ForgeReviewChangeRequest } from '../src/types.ts'
 import { snapshot } from './client-fixtures.client.ts'
 import { prUrl, reviewed } from './review-fixtures.client.ts'
 
@@ -47,8 +50,8 @@ interface Retained {
   readonly signal: AbortSignal
 }
 
-/** Render the chat tab of #7 with a chat face that records every call and connects to `S1`. */
-function renderChat(overrides: Partial<ReviewChatProps> = {}) {
+/** A chat face that records every call, connects to `S1`, and fills a draft at once. */
+function chatFace() {
   const retained: Retained[] = []
   const chat = {
     connect: vi.fn<ReviewChatFace['connect']>(async () => S1),
@@ -59,10 +62,26 @@ function renderChat(overrides: Partial<ReviewChatProps> = {}) {
       return reference
     }),
     stage: vi.fn<ReviewChatFace['stage']>(),
-    fill: vi.fn<ReviewChatFace['fill']>(),
+    fill: vi.fn<ReviewChatFace['fill']>(async () => {}),
     openInMain: vi.fn<ReviewChatFace['openInMain']>(),
     requestWorktree: vi.fn<ReviewChatFace['requestWorktree']>(),
   }
+  return { chat, retained }
+}
+
+/** Props of the chat tab apart from the conversation, which {@link ChatTab} keeps. */
+type ChatTabProps = Omit<ReviewChatProps, 'conversation'>
+
+/** The chat tab with the conversation the review page keeps for its change request. */
+function ChatTab(props: ChatTabProps): ReactNode {
+  const conversation = useReviewConversation(props.frame, props.sessionId, props.onConversation, props.chat)
+  return <ReviewChat {...props} conversation={conversation} />
+}
+
+/** Render the chat tab of #7 with a chat face that records every call and connects with `connect`, to `S1` by default. */
+function renderChat(overrides: Partial<ChatTabProps> = {}, connect?: ReviewChatFace['connect']) {
+  const { chat, retained } = chatFace()
+  if (connect !== undefined) chat.connect.mockImplementation(connect)
   const slots: ForgeReviewConversationProps[] = []
   const renderSlot = ((_key: string, owner: ForgeReviewConversationProps) => {
     slots.push(owner)
@@ -73,11 +92,11 @@ function renderChat(overrides: Partial<ReviewChatProps> = {}) {
     provided.push(session)
     return <>{children}</>
   }
-  const props: ReviewChatProps = {
+  const props: ChatTabProps = {
     frame: reviewed(7), sessionId: undefined, onConversation: vi.fn(), chat, renderSlot, SessionProvider, t, ...overrides,
   }
-  const view = render(<ReviewChat {...props} />)
-  const rerender = (next: Partial<ReviewChatProps>): void => { view.rerender(<ReviewChat {...props} {...next} />) }
+  const view = render(<ChatTab {...props} />)
+  const rerender = (next: Partial<ChatTabProps>): void => { view.rerender(<ChatTab {...props} {...next} />) }
   const slot = (): ForgeReviewConversationProps => {
     const owner = slots.at(-1)
     if (owner === undefined) throw new Error('no conversation drawn')
@@ -87,44 +106,39 @@ function renderChat(overrides: Partial<ReviewChatProps> = {}) {
 }
 
 describe('ReviewChat start', () => {
-  it('starts a conversation about the change request once and records it', async () => {
+  it('starts a conversation about the change request once, retains it, binds the change request, and quotes it in the draft', async () => {
     const b = renderChat()
     expect(b.chat.connect).toHaveBeenCalledWith(b.props.frame)
     expect(b.view.container.textContent).toBe('')
     await settle()
+    expect(b.chat.connect).toHaveBeenCalledOnce()
+    expect(b.chat.retain).toHaveBeenCalledOnce()
+    expect(b.chat.retain).toHaveBeenCalledWith(S1, b.retained[0]?.signal)
+    expect(b.chat.stage).toHaveBeenCalledWith(S1, URL7)
     expect(b.props.onConversation).toHaveBeenCalledWith(S1)
-    expect(b.chat.retain).not.toHaveBeenCalled()
+    expect(b.chat.fill).toHaveBeenCalledOnce()
+    expect(b.chat.fill).toHaveBeenCalledWith(b.retained[0]?.reference, { kind: 'reference', frame: b.props.frame })
+
+    // Once the page records the conversation, the tab shows it without retaining or quoting it again.
+    b.rerender({ sessionId: S1 })
+    expect(b.chat.retain).toHaveBeenCalledOnce()
+    expect(b.chat.fill).toHaveBeenCalledOnce()
+    expect(b.provided).toContain(b.retained[0]?.reference)
+    expect(b.slot().headline).toBe('Review demo #7')
   })
 
   it.each([
     ['without any Workspace', async (): Promise<undefined> => { await Promise.resolve() }],
     ['when the Workspace does not open', async (): Promise<SessionId | undefined> => { throw new Error('connect failed') }],
-  ] as const)('shows the conversation as unavailable %s', async (_label, connect) => {
-    const b = renderChat()
-    b.chat.connect.mockImplementation(connect)
-    b.rerender({ frame: reviewed(7, snapshot(7, { title: 'Renamed' })) })
+  ] as const)('shows the conversation as unavailable %s, and does not try again', async (_label, connect) => {
+    const b = renderChat({}, connect)
     await settle()
     expect(b.view.getByRole('status').textContent).toBe('Conversation unavailable')
     expect(b.props.onConversation).not.toHaveBeenCalled()
-  })
-
-  it('ignores a connection that settles after the tab closed', async () => {
-    const resolved = deferred<SessionId | undefined>()
-    const rejected = deferred<SessionId | undefined>()
-    const first = renderChat()
-    first.chat.connect.mockReturnValueOnce(resolved.promise)
-    first.rerender({ frame: reviewed(7, snapshot(7, { title: 'Renamed' })) })
-    first.view.unmount()
-    const second = renderChat()
-    second.chat.connect.mockReturnValueOnce(rejected.promise)
-    second.rerender({ frame: reviewed(7, snapshot(7, { title: 'Renamed' })) })
-    second.view.unmount()
-    resolved.settle(S1)
-    rejected.fail(new Error('late'))
+    expect(b.chat.retain).not.toHaveBeenCalled()
+    b.rerender({ frame: reviewed(7, snapshot(7, { title: 'Renamed' })) })
     await settle()
-    expect(first.props.onConversation).not.toHaveBeenCalled()
-    expect(second.props.onConversation).not.toHaveBeenCalled()
-    expect(second.view.container.innerHTML).toBe('')
+    expect(b.chat.connect).toHaveBeenCalledOnce()
   })
 })
 
@@ -192,6 +206,96 @@ describe('ReviewChat conversation', () => {
     expect(b.chat.fill).toHaveBeenCalledOnce()
     b.view.unmount()
     expect(b.retained[1]?.signal.aborted).toBe(true)
+  })
+})
+
+describe('useReviewConversation', () => {
+  /** Keep the conversation of #7, or of a change request with no frame yet, through the hook alone. */
+  function renderConversation(frame: ForgeReviewChangeRequest | undefined, sessionId: SessionId | undefined) {
+    const face = chatFace()
+    const onConversation = vi.fn<(sessionId: SessionId | null) => void>()
+    const hook = renderHook(() => useReviewConversation(frame, sessionId, onConversation, face.chat))
+    return { ...face, onConversation, hook }
+  }
+
+  it('starts and retains nothing before the change request\'s first frame', async () => {
+    const b = renderConversation(undefined, S1)
+    expect(await b.hook.result.current.start()).toBeUndefined()
+    expect(b.chat.connect).not.toHaveBeenCalled()
+    expect(b.chat.retain).not.toHaveBeenCalled()
+    expect(b.hook.result.current.reference).toBeNull()
+    b.hook.unmount()
+  })
+
+  it('connects once for quotes that arrive together, and hands the conversation out once its draft names the change request', async () => {
+    const b = renderConversation(reviewed(7), undefined)
+    const connected = deferred<SessionId | undefined>()
+    const filled = deferred<undefined>()
+    b.chat.connect.mockReturnValueOnce(connected.promise)
+    b.chat.fill.mockReturnValueOnce(filled.promise)
+    const started: (SessionReference | undefined)[] = []
+    act(() => {
+      void b.hook.result.current.start().then((value) => { started.push(value) })
+      void b.hook.result.current.start().then((value) => { started.push(value) })
+    })
+    expect(b.chat.connect).toHaveBeenCalledOnce()
+    connected.settle(S1)
+    await settle()
+    expect(b.chat.retain).toHaveBeenCalledOnce()
+    expect(b.onConversation).toHaveBeenCalledWith(S1)
+    expect(b.chat.fill).toHaveBeenCalledOnce()
+    expect(started).toEqual([])
+    filled.settle(undefined)
+    await settle()
+    expect(started).toEqual([b.retained[0]?.reference, b.retained[0]?.reference])
+  })
+
+  it('records but neither retains nor reports a conversation that connects after the page stopped showing it', async () => {
+    const b = renderConversation(reviewed(7), undefined)
+    const connected = deferred<SessionId | undefined>()
+    b.chat.connect.mockReturnValueOnce(connected.promise)
+    const started: (SessionReference | undefined)[] = []
+    act(() => { void b.hook.result.current.start().then((value) => { started.push(value) }) })
+    b.hook.unmount()
+    connected.settle(S1)
+    await settle()
+    expect(started).toEqual([undefined])
+    expect(b.chat.stage).toHaveBeenCalledOnce()
+    expect(b.chat.stage).toHaveBeenCalledWith(S1, reviewed(7).url)
+    expect(b.onConversation).toHaveBeenCalledWith(S1)
+    expect(b.chat.retain).not.toHaveBeenCalled()
+  })
+
+  it('reports no failure for a connection that fails after the page stopped showing it', async () => {
+    const b = renderConversation(reviewed(7), undefined)
+    const connected = deferred<SessionId | undefined>()
+    b.chat.connect.mockReturnValueOnce(connected.promise)
+    let started: SessionReference | undefined | null = null
+    act(() => { void b.hook.result.current.start().then((value) => { started = value }) })
+    const failed = b.hook.result.current.failed
+    b.hook.unmount()
+    connected.settle(undefined)
+    await settle()
+    expect([failed, started]).toEqual([false, undefined])
+    expect(b.onConversation).not.toHaveBeenCalled()
+  })
+
+  it('hands out the recorded conversation once the draft it is filling names the change request', async () => {
+    const face = chatFace()
+    const filled = deferred<undefined>()
+    face.chat.fill.mockReturnValueOnce(filled.promise)
+    const hook = renderHook(() => useReviewConversation(reviewed(7), S1, vi.fn(), face.chat))
+    expect(face.chat.fill).toHaveBeenCalledOnce()
+    const started: (SessionReference | undefined)[] = []
+    void hook.result.current.start().then((value) => { started.push(value) })
+    await settle()
+    expect(started).toEqual([])
+    filled.settle(undefined)
+    await settle()
+    expect(started).toEqual([face.retained[0]?.reference])
+    expect(hook.result.current.reference).toBe(face.retained[0]?.reference)
+    expect(face.chat.connect).not.toHaveBeenCalled()
+    expect(face.chat.fill).toHaveBeenCalledOnce()
   })
 })
 

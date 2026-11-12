@@ -65,7 +65,7 @@ function renderDetail(overrides: Partial<ReviewDetailProps> = {}) {
   const props: ReviewDetailProps = {
     url: URL7, read, tab: 'summary', onTab: vi.fn(), listHidden: false, onToggleList: vi.fn(), onBack: vi.fn(), now: NOW, locale: 'en',
     actions, readDescription: vi.fn(async () => ok(description('Body'))),
-    renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), askAgent: vi.fn(), t, ...overrides,
+    renderChanges: vi.fn(() => <p>changes body</p>), renderChat: vi.fn(() => <p>chat body</p>), unseenQuotes: 0, t, ...overrides,
   }
   const view = render(<ReviewDetail {...props} />)
   const rerender = (next: Partial<ReviewDetailProps>): void => { view.rerender(<ReviewDetail {...props} {...next} />) }
@@ -163,10 +163,8 @@ describe('ReviewDetail header', () => {
     expect(b.view.container.querySelector(`.${css.detailMeta}`)?.textContent).toBe('·Created 8 d ago·feat → main')
   })
 
-  it('asks the Agent in the chat tab, offers the primary action, and opens, copies, or reads the status from the More menu', () => {
+  it('offers the primary action, and opens, copies, or reads the status from the More menu', () => {
     const b = renderDetail({ read: stream(changed({ draft: true })) })
-    fireEvent.click(b.view.getByRole('button', { name: 'Ask Agent' }))
-    expect(b.props.askAgent).toHaveBeenCalledOnce()
     const primary = b.view.getByRole('button', { name: 'Ready for review' })
     expect(primary.closest(`.${css.primary}`)).not.toBeNull()
     fireEvent.click(primary)
@@ -217,6 +215,17 @@ describe('ReviewDetail tabs', () => {
     expect(b.view.getByText('chat body')).toBeTruthy()
     expect(b.props.renderChat).toHaveBeenLastCalledWith(b.props.read.frame)
     expect(b.props.renderChanges).toHaveBeenLastCalledWith(b.props.read.frame)
+  })
+
+  it('counts on the chat tab the quotes added to the conversation while the tab was not shown', () => {
+    const b = renderDetail()
+    const chat = (): HTMLElement => b.view.getByRole('tab', { name: /^Chat/ })
+    expect(chat().textContent).toBe('Chat')
+    b.rerender({ unseenQuotes: 2 })
+    expect(chat().textContent).toBe('Chat2')
+    expect(within(chat()).getByLabelText('2 quotes to send').matches(`.${css.tabBadge}`)).toBe(true)
+    b.rerender({ unseenQuotes: 0 })
+    expect(chat().textContent).toBe('Chat')
   })
 })
 

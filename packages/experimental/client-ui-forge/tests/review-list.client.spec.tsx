@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { titleMarqueeClass } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChangeRequestIssue, ChangeRequestLabel, ChangeRequestSummary } from '@deepseek-ai/dsh-experimental-forge/types'
 import { en } from '../src/client/locales.ts'
@@ -20,6 +21,7 @@ import { failedList, frame, host, list, prUrl, summary } from './review-fixtures
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
@@ -31,9 +33,9 @@ const NOW = Date.parse('2026-10-09T00:05:00Z')
 function renderList(overrides: Partial<ReviewListProps> = {}) {
   const props: ReviewListProps = {
     frame: undefined, stopped: null, selected: null, query: '', repository: null, directOnly: false, folded: {}, refreshing: false,
-    now: NOW,
-    onSelect: vi.fn(), onSearch: vi.fn(), onScope: vi.fn(), onToggleDirect: vi.fn(), onFold: vi.fn(), onRefresh: vi.fn(), onRetry: vi.fn(),
-    copyText: vi.fn(), t, ...overrides,
+    now: NOW, view: 'detailed',
+    onSelect: vi.fn(), onSearch: vi.fn(), onScope: vi.fn(), onToggleDirect: vi.fn(), onView: vi.fn(), onFold: vi.fn(), onRefresh: vi.fn(),
+    onRetry: vi.fn(), copyText: vi.fn(), t, ...overrides,
   }
   const view = render(<ReviewList {...props} />)
   /** The section of one list. */
@@ -182,14 +184,14 @@ describe('ReviewList items', () => {
       ]),
     })) })
     const first = b.item(prUrl(1))
-    expect(first.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#1·octo·5 min ago⊙#5')
-    expect(first.querySelector(`.${css.itemHint}`)?.textContent).toBe('You requested changes · Requested again')
+    expect(first.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#1·octo·5 min ago·⊙#5·You requested changes · Requested again')
+    expect(first.querySelector(`.${css.itemMeta} .${css.itemHint}`)?.textContent).toBe('You requested changes · Requested again')
     expect(first.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('error')
     expect(first.querySelector('[data-forge-glyph]')?.getAttribute('data-tone')).toBe('open')
     expect(first.querySelector('[data-checks]')?.getAttribute('data-checks')).toBe('success')
 
     const second = b.item(prUrl(2))
-    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#2⊙#5and 2 more')
+    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#2·⊙#5and 2 more')
     expect(second.querySelector(`.${css.itemHint}`)).toBeNull()
     expect(second.querySelector('[data-checks]')).toBeNull()
 
@@ -198,6 +200,7 @@ describe('ReviewList items', () => {
     expect(third.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('success')
 
     const fourth = b.item(prUrl(4))
+    expect(fourth.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#4·octo·5 min ago·Team octo/core')
     expect(fourth.querySelector(`.${css.itemHint}`)?.textContent).toBe('Team octo/core')
     expect(fourth.querySelector(`.${css.itemHint}`)?.hasAttribute('data-tone')).toBe(false)
     expect(fourth.querySelector('[data-forge-glyph]')?.getAttribute('data-tone')).toBe('blocked')
@@ -207,6 +210,76 @@ describe('ReviewList items', () => {
     const b = renderList({ frame: frame(host({ authored: list([summary(1), inRepository(2, 'acme', 'widgets')]) })) })
     expect(b.item(prUrl(1)).querySelector(`.${css.itemMeta}`)?.firstChild?.textContent).toBe('demo#1')
     expect(b.item(prUrl(2)).querySelector(`.${css.itemMeta}`)?.firstChild?.textContent).toBe('widgets#2')
+  })
+})
+
+describe('ReviewList compact view', () => {
+  it('shows each item on one line with its glyph, its title, and the short update time, and shows the chosen one', () => {
+    const b = renderList({ view: 'compact', selected: prUrl(1), frame: frame(host({ authored: list([
+      summary(1), summary(2, { updatedAt: 'not a time', checksRollup: 'none' }),
+    ]) })) })
+    expect(b.section('authored').querySelector('ul')?.getAttribute('data-view')).toBe('compact')
+    const first = b.item(prUrl(1))
+    expect(first.matches(`.${css.compactItem}`)).toBe(true)
+    expect(first.textContent).toBe('Change 15min')
+    expect(first.querySelector(`.${css.compactTime}`)?.textContent).toBe('5min')
+    expect(first.getAttribute('aria-current')).toBe('true')
+    expect(first.querySelector('[data-checks]')?.getAttribute('data-checks')).toBe('success')
+    expect(first.querySelector(`.${css.compactTitle}`)?.classList.contains(titleMarqueeClass)).toBe(true)
+    expect(first.querySelector(`.${css.itemMeta}`)).toBeNull()
+
+    const second = b.item(prUrl(2))
+    expect(second.textContent).toBe('Change 2')
+    expect(second.hasAttribute('aria-current')).toBe(false)
+    expect(second.querySelector('[data-checks]')).toBeNull()
+    fireEvent.click(second)
+    expect(b.props.onSelect).toHaveBeenCalledWith(prUrl(2))
+  })
+
+  it('names the full title and every fact of the detailed item in a hover card that copies the title', () => {
+    vi.useFakeTimers()
+    const b = renderList({ view: 'compact', frame: frame(host({ 'review-requested': list([
+      summary(1, {
+        viewerReview: { verdict: 'changes-requested', reviewedSha: null }, viewerRequest: { team: null }, closingIssues: [issue(5)],
+      }),
+      inRepository(2, 'acme', 'widgets', { author: null, updatedAt: 'not a time' }),
+    ]) })) })
+    fireEvent.pointerEnter(b.item(prUrl(1)))
+    fireEvent.pointerEnter(b.item(prUrl(2)))
+    act(() => { vi.advanceTimersByTime(799) })
+    expect(screen.queryByRole('button', { name: /^Copy title/ })).toBeNull()
+    act(() => { vi.advanceTimersByTime(1) })
+    const first = screen.getByRole('button', { name: 'Copy title: Change 1' })
+    expect(first.querySelector(`.${css.compactCardTitle}`)?.textContent).toBe('Change 1')
+    expect(first.querySelector(`.${css.itemMeta}`)?.textContent).toBe('octo/demo#1·octo·5 min ago·⊙#5')
+    expect(first.querySelector(`.${css.itemHint}`)?.textContent).toBe('You requested changes · Requested again')
+    expect(first.querySelector(`.${css.itemHint}`)?.getAttribute('data-tone')).toBe('error')
+    const second = screen.getByRole('button', { name: 'Copy title: Change 2' })
+    expect(second.querySelector(`.${css.itemMeta}`)?.textContent).toBe('acme/widgets#2')
+    expect(second.querySelector(`.${css.itemHint}`)).toBeNull()
+    cleanup()
+
+    // Within one repository the card names the change request by its number alone.
+    const single = renderList({ view: 'compact', frame: frame(host({ authored: list([summary(3)]) })) })
+    fireEvent.pointerEnter(single.item(prUrl(3)))
+    act(() => { vi.advanceTimersByTime(800) })
+    const card = screen.getByRole('button', { name: 'Copy title: Change 3' })
+    expect(card.querySelector(`.${css.itemMeta}`)?.textContent).toBe('#3·octo·5 min ago')
+  })
+
+  it('marquees a clipped title while the item is hovered and returns it on leave', () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)' })))
+    const b = renderList({ view: 'compact', frame: frame(host({ authored: list([summary(1)]) })) })
+    const item = b.item(prUrl(1))
+    const title = item.querySelector<HTMLElement>(`.${css.compactTitle}`)
+    if (title === null) throw new Error('no title')
+    // jsdom lays out nothing: the title's clipped geometry is stated outright.
+    Object.defineProperty(title, 'scrollWidth', { value: 300, configurable: true })
+    Object.defineProperty(title, 'clientWidth', { value: 100, configurable: true })
+    fireEvent.pointerEnter(item)
+    expect(title.scrollLeft).toBe(200)
+    fireEvent.pointerLeave(item)
+    expect(title.scrollLeft).toBe(0)
   })
 })
 
@@ -240,22 +313,63 @@ describe('ReviewList search', () => {
 
 describe('ReviewList filter menu', () => {
   const lists = frame(host({ authored: list([summary(1), inRepository(2, 'acme', 'widgets')]) }))
+  const CHECK = '[data-icon="dsw-icon-check-outline-regular"]'
 
-  it('reads the lists in one repository or in all of them, and closes after a choice', () => {
-    const b = renderList({ frame: lists })
+  /** Open the menu from its button. */
+  function open(b: ReturnType<typeof renderList>): HTMLElement {
     const button = b.view.getByRole('button', { name: 'Filter' })
-    expect(button.matches(`.${css.iconButtonActive}`)).toBe(false)
     fireEvent.click(button)
+    return button
+  }
+
+  /** The labels of the shown rows, each with whether it is marked as chosen. */
+  function rows(): (readonly [string | null, boolean])[] {
+    return within(document.body).getAllByRole('menuitem').map(row => [row.textContent, row.querySelector(CHECK) !== null] as const)
+  }
+
+  /** Open the repository submenu and return the labels of its rows. */
+  function repositories(): (string | null)[] {
+    const parent = within(document.body).getByRole('menuitem', { name: /^Repository/ })
+    fireEvent.click(parent)
+    expect(parent.getAttribute('aria-expanded')).toBe('true')
+    const child = within(document.body).getAllByRole('menu').find(menu => !menu.contains(parent))
+    if (child === undefined) throw new Error('no repository submenu')
+    return within(child).getAllByRole('menuitem').map(row => row.textContent)
+  }
+
+  it('lays out the view, the repository, and the review requests, marking each choice, and closes after a choice', () => {
+    const b = renderList({ frame: lists })
+    const button = open(b)
+    expect(button.matches(`.${css.iconButtonActive}`)).toBe(false)
     expect(button.getAttribute('aria-expanded')).toBe('true')
     const menu = within(document.body)
-    expect(menu.getByText('Repository')).toBeTruthy()
-    expect(menu.getAllByRole('menuitem').map(row => row.textContent))
-      .toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'Only requests made of me'])
-    fireEvent.click(menu.getByRole('menuitem', { name: 'acme/widgets' }))
+    for (const label of ['View', 'Review requests']) expect(menu.getByText(label)).toBeTruthy()
+    expect(rows()).toEqual([
+      ['Detailed', true], ['Compact', false], ['RepositoryAll repositories', false], ['Include team requests', true],
+      ['Only requests made of me', false],
+    ])
+    fireEvent.click(menu.getByRole('menuitem', { name: 'Compact' }))
+    expect(b.props.onView).toHaveBeenCalledWith('compact')
+    expect(button.getAttribute('aria-expanded')).toBe('false')
+    cleanup()
+
+    const compact = renderList({ frame: lists, view: 'compact' })
+    open(compact)
+    expect(rows().slice(0, 2)).toEqual([['Detailed', false], ['Compact', true]])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Detailed' }))
+    expect(compact.props.onView).toHaveBeenCalledWith('detailed')
+  })
+
+  it('reads the lists in one repository or in all of them from the repository submenu', () => {
+    const b = renderList({ frame: lists })
+    const button = open(b)
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'acme/widgets' }))
     expect(b.props.onScope).toHaveBeenCalledWith({ owner: 'acme', name: 'widgets' })
     expect(button.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(button)
-    fireEvent.click(menu.getByRole('menuitem', { name: 'All repositories' }))
+    open(b)
+    repositories()
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'All repositories' }))
     expect(b.props.onScope).toHaveBeenLastCalledWith(null)
     fireEvent.click(button)
     fireEvent.click(button)
@@ -265,25 +379,39 @@ describe('ReviewList filter menu', () => {
     expect(button.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it('keeps offering a chosen repository whose lists are empty, and toggles requests made only of the user\'s teams', () => {
-    const b = renderList({ frame: lists, repository: { owner: 'zeta', name: 'empty' }, directOnly: true })
-    const button = b.view.getByRole('button', { name: 'Filter' })
+  it('keeps offering a chosen repository whose lists are empty, and names the chosen repository on its row', () => {
+    const b = renderList({ frame: lists, repository: { owner: 'zeta', name: 'empty' } })
+    const button = open(b)
     expect(button.matches(`.${css.iconButtonActive}`)).toBe(true)
-    fireEvent.click(button)
-    const rows = within(document.body).getAllByRole('menuitem')
-    expect(rows.map(row => row.textContent))
-      .toEqual(['All repositories', 'zeta/empty', 'acme/widgets', 'octo/demo', 'Only requests made of me'])
-    expect(rows.at(-1)?.querySelector('svg')).not.toBeNull()
-    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Only requests made of me' }))
-    expect(b.props.onToggleDirect).toHaveBeenCalledOnce()
-    expect(button.getAttribute('aria-expanded')).toBe('false')
+    expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryzeta/empty')
+    expect(repositories()).toEqual(['All repositories', 'zeta/empty', 'acme/widgets', 'octo/demo'])
     cleanup()
 
     const listed = renderList({ frame: lists, repository: { owner: 'acme', name: 'widgets' } })
-    fireEvent.click(listed.view.getByRole('button', { name: 'Filter' }))
-    const offered = within(document.body).getAllByRole('menuitem')
-    expect(offered.map(row => row.textContent)).toEqual(['All repositories', 'acme/widgets', 'octo/demo', 'Only requests made of me'])
-    expect(offered.at(-1)?.querySelector(`.${css.menuIconSpace}`)).not.toBeNull()
+    open(listed)
+    expect(within(document.body).getByRole('menuitem', { name: /^Repository/ }).textContent).toBe('Repositoryacme/widgets')
+    expect(repositories()).toEqual(['All repositories', 'acme/widgets', 'octo/demo'])
+  })
+
+  it('toggles requests made only of the user\'s teams only when the reader picks the other choice', () => {
+    const b = renderList({ frame: lists })
+    open(b)
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Include team requests' }))
+    expect(b.props.onToggleDirect).not.toHaveBeenCalled()
+    open(b)
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Only requests made of me' }))
+    expect(b.props.onToggleDirect).toHaveBeenCalledOnce()
+    cleanup()
+
+    const direct = renderList({ frame: lists, directOnly: true })
+    const button = open(direct)
+    expect(button.matches(`.${css.iconButtonActive}`)).toBe(true)
+    expect(rows().slice(3)).toEqual([['Include team requests', false], ['Only requests made of me', true]])
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Only requests made of me' }))
+    expect(direct.props.onToggleDirect).not.toHaveBeenCalled()
+    open(direct)
+    fireEvent.click(within(document.body).getByRole('menuitem', { name: 'Include team requests' }))
+    expect(direct.props.onToggleDirect).toHaveBeenCalledOnce()
   })
 })
 
