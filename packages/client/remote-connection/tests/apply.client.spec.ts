@@ -152,7 +152,7 @@ describe('remote connection settings registration', () => {
     })
     const { ctx, slots, close } = await bench(call)
     render(createElement(Fragment, null, slots.renderSlot('root', {})))
-    fireEvent.click(await screen.findByRole('button', { name: '生成登录二维码' }))
+    fireEvent.click(await screen.findByRole('button', { name: '生成二维码' }))
     await screen.findByRole('img', { name: '一次性登录二维码' })
 
     const replacement = ctx.plugin(replacementPlugin)

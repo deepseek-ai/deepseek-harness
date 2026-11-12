@@ -2,11 +2,11 @@
   - heading "远程连接" [level=2]
   - region "二维码登录":
     - heading "二维码登录" [level=3]
-    - button "生成新二维码"
+    - button "重新生成"
     - status:
       - paragraph: 二维码已过期，请生成新二维码登录
   - region "链接登录":
     - heading "链接登录" [level=3]
     - paragraph: 复制登录链接，在另一台设备的浏览器中打开
     - code: {{access-address}}?token={{login-token}}
-    - button "复制登录链接"
+    - button "复制链接"

@@ -2,8 +2,8 @@
   - heading "远程连接" [level=2]
   - region "二维码登录":
     - heading "二维码登录" [level=3]
-    - button "生成新二维码" [disabled]
-    - button "取消二维码" [disabled]
+    - button "重新生成" [disabled]
+    - button "取消" [disabled]
     - status "正在生成登录二维码"
     - paragraph:
       - text: 扫码后直接登录
@@ -14,4 +14,4 @@
     - heading "链接登录" [level=3]
     - paragraph: 复制登录链接，在另一台设备的浏览器中打开
     - code: {{access-address}}?token={{login-token}}
-    - button "复制登录链接"
+    - button "复制链接"
