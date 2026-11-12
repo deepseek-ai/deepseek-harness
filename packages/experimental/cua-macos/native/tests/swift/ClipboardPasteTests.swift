@@ -1,5 +1,6 @@
 // Each clipboard case owns a named pasteboard rather than touching the user's clipboard.
 import AppKit
+import ApplicationServices
 import Foundation
 import Testing
 @testable import CuaNative
@@ -133,4 +134,64 @@ import Testing
         Issue.record("Unsupported Paste command completed successfully")
     } catch let error as NativeFailure { #expect(error.code == "UNSUPPORTED") }
     #expect(board.string(forType: .string) == "original")
+}
+
+/// Search and clipboard transaction run together. The synthetic menu owns no desktop input.
+@Test @MainActor func pasteRequiresOneCommandAcrossAllRecoveredBranches() async throws {
+    let root = AXUIElementCreateApplication(10)
+    let first = AXUIElementCreateApplication(11)
+    let other = AXUIElementCreateApplication(12)
+    var requests = 2
+    let restored = AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { range in
+        .values(range.lowerBound == 0 ? [other] : [first])
+    }
+    let cases: [(AXObservedChildren, Set<AXUIElement>, String?)] = [
+        (restored, [first], nil),
+        (.init(entries: [other, first, first]), [first], nil),
+        (.init(entries: [first, nil]), [first], "incomplete"),
+        (.init(entries: [nil, first]), [first], "incomplete"),
+        (.init(entries: [first, nil, other]), [first, other], "ambiguous"),
+        (.init(entries: [first], parentIncomplete: true), [first], "incomplete"),
+        (.init(entries: [first], elementLimitReached: true), [first], "incomplete"),
+    ]
+    for (list, commands, reason) in cases {
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        #expect(board.setString("original", forType: .string))
+        var received: [AXUIElement] = []
+        do {
+            try await ClipboardPaste(pasteboard: board).perform(text: "payload", format: "text", maxBytes: 1024,
+                readTimeout: .seconds(1)) { ownership in
+                let command = try AXAccess.pasteCommand(in: root, maxElements: 10, maxDepth: 2,
+                    matches: commands.contains, children: { $0 == root ? list : .init() })
+                try ownership()
+                received.append(command)
+                #expect(board.string(forType: .string) == "payload")
+            }
+            #expect(reason == nil)
+        } catch let error as NativeFailure {
+            #expect(error.code == "UNSUPPORTED")
+            #expect(error.message.contains(try #require(reason)))
+            #expect(error.message.contains("No input was dispatched. Read fresh state"))
+        }
+        #expect(received == (reason == nil ? [first] : []))
+        #expect(board.string(forType: .string) == "original")
+    }
+}
+
+@Test func pasteTraversalLimitsApplyAfterFindingACandidate() {
+    let root = AXUIElementCreateApplication(10), candidate = AXUIElementCreateApplication(11)
+    let nested = AXUIElementCreateApplication(12)
+    for (count, depth) in [(2, 5), (10, 1)] {
+        do {
+            _ = try AXAccess.pasteCommand(in: root, maxElements: count, maxDepth: depth, matches: { $0 == candidate }) {
+                if $0 == root { return .init(entries: [candidate]) }
+                return .init(entries: $0 == candidate ? [nested] : [])
+            }
+            Issue.record("A traversal limit hid a possible second Paste command")
+        } catch let error as NativeFailure {
+            #expect(error.code == "UNSUPPORTED")
+            #expect(error.message.contains("No input was dispatched. Read fresh state"))
+        } catch { Issue.record("Unexpected error: \(error)") }
+    }
 }
