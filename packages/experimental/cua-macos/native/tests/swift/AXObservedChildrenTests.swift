@@ -10,7 +10,9 @@ import Testing
         range.contains(17) ? .unreadable : .values(Array(nodes[range]))
     }
     #expect(children.incomplete)
-    #expect(children.entries == Array(nodes[..<17]) + [nil] + Array(nodes[18...]))
+    var expected = nodes.map(Optional.some)
+    expected[17] = nil
+    #expect(children.entries == expected)
     #expect(requests > 0)
 }
 

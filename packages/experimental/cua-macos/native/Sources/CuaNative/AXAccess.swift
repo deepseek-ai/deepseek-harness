@@ -124,7 +124,7 @@ final class AXAccess {
         try prepare(element)
         var count = 0
         let error = AXUIElementGetAttributeValueCount(element, kAXChildrenAttribute as CFString, &count)
-        if absent(error) || error == .failure { return .unavailable }
+        if absent(error) || error == .failure || error == .illegalArgument { return .unavailable }
         guard error == .success else { throw failure(error, "count AXChildren") }
         return try AXObservedChildren.readRanges(count: count, limit: limit, requests: &requests) { range in
             try prepare(element)
@@ -641,7 +641,7 @@ final class AXAccess {
         var indexed: [Int: AXUIElement] = [:]
         let rootEntries: [AXUIElement?]
         if requested == nil {
-            rootEntries = appChildren.entries + roots.dropFirst(appRootCount)
+            rootEntries = appChildren.entries + roots.dropFirst(appRootCount).map(Optional.some)
             unreportedParents.remove(app)
             if appChildren.parentIncomplete { lines.append("[Some children of AXApplication could not be read.]") }
         } else {
@@ -661,16 +661,16 @@ final class AXAccess {
         }
         while let (entry, level, depth) = pending.popLast() {
             try cancellation.check()
+            let hash = entry.map { CFHash($0) }
+            if let element = entry, let hash, visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
+            guard count < maxElements else { elementLimitReached = true; break }
             guard depth <= maxDepth else { depthLimitReached = true; continue }
-            guard let element = entry else {
+            count += 1
+            guard let element = entry, let hash else {
                 lines.append(String(repeating: "  ", count: level) + "[One child could not be read.]")
                 continue
             }
-            let hash = CFHash(element)
-            if visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
-            guard count < maxElements else { elementLimitReached = true; break }
             visited[hash, default: []].append(element)
-            count += 1
             let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
             let role = observation.role
             let observed = observation.attribute
