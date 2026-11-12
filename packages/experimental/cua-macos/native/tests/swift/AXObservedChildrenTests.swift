@@ -40,7 +40,7 @@ import Testing
     var requests = 10
     let changed = AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { range in
         if range.count == 2 { return .unreadable }
-        return range.lowerBound == 0 ? .values([node]) : .unavailable
+        return range.lowerBound == 0 ? .values([node]) : .positionsUnknown
     }
     #expect(changed.incomplete)
     #expect(changed.entries == [node])
@@ -72,4 +72,46 @@ func failingListsUpToFiveReadIndividualItemsAndLongerListsSplitFirst(count: Int)
     #expect(ranges == expected)
     #expect(result.entries == Array(repeating: Optional(element), count: failed) + [nil])
     #expect(!result.parentIncomplete)
+}
+
+@Test func zeroChildrenAndAnEntirelyReadablePrefixDistinguishLimitsFromMissingValues() {
+    let node = AXUIElementCreateApplication(1)
+    var requests = 3
+    let empty = AXObservedChildren.readRanges(count: 0, limit: 1, requests: &requests) { _ in
+        Issue.record("An empty list has no ranges")
+        return .unreadable
+    }
+    #expect(!empty.incomplete && !empty.elementLimitReached)
+    for limit in [0, 1] {
+        let limited = AXObservedChildren.readRanges(count: 3, limit: limit, requests: &requests) { range in
+            #expect(range == 0..<1)
+            return .values([node])
+        }
+        #expect(limited.elementLimitReached && !limited.incomplete)
+        #expect(limited.entries.count == limit)
+    }
+    #expect(requests == 2)
+}
+
+@Test func onlyAChildrenFailureCanReuseDiscovery() throws {
+    let ref = AXUIElementCreateApplication(24)
+    let equivalent = AXUIElementCreateApplication(24)
+    let retained = [ref: AXObservedChildren(entries: [nil, ref])]
+    func prior() throws -> AXObservedChildren { try #require(retained[equivalent]) }
+    func failure(_ name: String, _ code: AXError) -> NativeFailure {
+        NativeFailure(code: "NATIVE_ERROR", message: name, accessibilityError: code.rawValue, attribute: name)
+    }
+    let fresh = try AXObservedChildren.observing({ [ref] }, recover: prior)
+    #expect(!fresh.incomplete)
+    let repeated = try AXObservedChildren.observing({ throw failure("AXChildren", .failure) }, recover: prior)
+    #expect(repeated.entries == [nil, ref])
+    for (name, code) in [("AXRole", AXError.failure), ("AXChildren", .invalidUIElement),
+                         ("AXChildren", .cannotComplete), ("AXChildren", .apiDisabled)] {
+        do {
+            _ = try AXObservedChildren.observing({ throw failure(name, code) }, recover: prior)
+            Issue.record("A current AX failure was hidden by window discovery")
+        } catch let error as NativeFailure {
+            #expect(error.attribute == name && error.accessibilityError == code.rawValue)
+        }
+    }
 }

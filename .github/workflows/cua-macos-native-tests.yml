@@ -1,0 +1,24 @@
+name: macOS CUA native tests
+
+on:
+  pull_request:
+    paths:
+      - 'packages/experimental/cua-macos/native/**'
+      - '.github/workflows/cua-macos-native-tests.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cua-macos-native-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  swift:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - run: python3 packages/experimental/cua-macos/native/tests/test_swift.py

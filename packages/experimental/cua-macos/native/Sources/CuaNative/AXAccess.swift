@@ -11,6 +11,7 @@ struct AXProjection {
     let indexed: [Int: AXUIElement]
     let focusedWindowID: UInt32?
     let truncated: Bool
+    let incomplete: Bool
 }
 
 struct AXNodeObservation {
@@ -118,8 +119,8 @@ final class AXAccess {
         }
         return try array.map { try elementValue($0, name) }
     }
-    private func recoverChildren(_ element: AXUIElement, limit: Int, requests: inout Int) throws -> AXObservedChildren {
-        guard requests > 0 else { return .unavailable }
+    private func recoverChildren(_ element: AXUIElement, limit: Int, requests: inout Int, deadline: ContinuousClock.Instant) throws -> AXObservedChildren {
+        guard requests > 0, ContinuousClock.now < deadline else { return .unavailable }
         requests -= 1
         try prepare(element)
         var count = 0
@@ -127,15 +128,18 @@ final class AXAccess {
         if absent(error) || error == .failure || error == .illegalArgument { return .unavailable }
         guard error == .success else { throw failure(error, "count AXChildren") }
         return try AXObservedChildren.readRanges(count: count, limit: limit, requests: &requests) { range in
-            try prepare(element)
+            try cancellation.check()
+            guard ContinuousClock.now < deadline else { return .positionsUnknown }
             var values: CFArray?
             let error = AXUIElementCopyAttributeValues(element, kAXChildrenAttribute as CFString,
                                                        range.lowerBound, range.count, &values)
             if error == .failure { return .unreadable }
-            if absent(error) || error == .illegalArgument { return .unavailable }
+            if absent(error) || error == .illegalArgument { return .positionsUnknown }
             guard error == .success else { throw failure(error, "read AXChildren range") }
-            guard let values, CFArrayGetCount(values) <= range.count else { return .unavailable }
-            return .values(try childValues(values, attribute: "AXChildren"))
+            guard let values, CFArrayGetCount(values) <= range.count else { return .positionsUnknown }
+            return .values((values as [AnyObject]).map { value in
+                CFGetTypeID(value) == AXUIElementGetTypeID() ? unsafeDowncast(value, to: AXUIElement.self) : nil
+            })
         }
     }
     func windowID(_ element: AXUIElement) throws -> UInt32? {
@@ -566,14 +570,15 @@ final class AXAccess {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
         var recoveryRequests = maxElements
+        var recoveryTime = Duration.seconds(Double(timeout))
         // Window discovery and traversal can both enumerate the same parent.
         var discovery: [AXUIElement: AXObservedChildren] = [:]
         func observedChildren(_ parent: AXUIElement, _ value: @autoclosure () throws -> CFTypeRef?, duringDiscovery: Bool = false) throws -> AXObservedChildren {
-            if let cached = discovery[parent] { return cached }
-            do {
-                return try AXObservedChildren(entries: childValues(value(), attribute: "AXChildren"))
-            } catch let error as NativeFailure where error.attribute == "AXChildren" && error.accessibilityError == AXError.failure.rawValue {
-                let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests)
+            try AXObservedChildren.observing({ try childValues(value(), attribute: "AXChildren") }) {
+                if let cached = discovery[parent] { return cached }
+                let start = ContinuousClock.now
+                defer { recoveryTime -= start.duration(to: .now) }
+                let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests, deadline: start + recoveryTime)
                 if duringDiscovery { discovery[parent] = children }
                 return children
             }
@@ -613,8 +618,12 @@ final class AXAccess {
             if matches.isEmpty {
                 _ = try NativePlatform.ownedWindow(identity.pid, requested)
                 let incomplete = discovery.values.contains(where: \.incomplete)
-                let tree = incomplete ? "[Window discovery incomplete. Some children could not be read.]" : ""
-                return AXProjection(tree: tree, elements: [], indexed: [:], focusedWindowID: focusedID, truncated: incomplete)
+                let limited = discovery.values.contains(where: \.elementLimitReached)
+                var lines: [String] = []
+                if incomplete { lines.append(AXTextFormatter.incompleteDiscovery) }
+                if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
+                return AXProjection(tree: lines.joined(separator: "\n"), elements: [], indexed: [:], focusedWindowID: focusedID,
+                                    truncated: limited, incomplete: incomplete)
             }
             let dialog = try matches.contains { root in
                 let role = try string(root, "AXRole")
@@ -631,10 +640,9 @@ final class AXAccess {
         }
         var visited: [CFHashCode: [AXUIElement]] = [:]
         var count = 0
-        var elementLimitReached = false
+        var elementLimitReached = appChildren.elementLimitReached
         var depthLimitReached = false
-        var unreportedParents = Set(discovery.compactMap { $0.value.incomplete ? $0.key : nil })
-        var childrenMissing = !unreportedParents.isEmpty
+        var childrenMissing = appChildren.incomplete
         var menusCollapsed = false
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
@@ -642,21 +650,17 @@ final class AXAccess {
         let rootEntries: [AXUIElement?]
         if requested == nil {
             rootEntries = appChildren.entries + roots.dropFirst(appRootCount).map(Optional.some)
-            unreportedParents.remove(app)
-            if appChildren.parentIncomplete { lines.append("[Some children of AXApplication could not be read.]") }
+            if appChildren.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: 0, positioned: false)) }
         } else {
             rootEntries = roots
+            if appChildren.incomplete { lines.append(AXTextFormatter.incompleteDiscovery) }
         }
         var pending = rootEntries.reversed().map { (element: $0, level: 0, depth: 0) }
         func enqueueChildren(_ parent: AXUIElement, observation: AXNodeObservation, level: Int, depth: Int) throws {
             let children = try observedChildren(parent, observation.attribute("AXChildren"))
-            if children.incomplete {
-                childrenMissing = true
-                unreportedParents.remove(parent)
-            }
-            if children.parentIncomplete {
-                lines.append(String(repeating: "  ", count: level) + "[Some children of " + observation.role + " could not be read.]")
-            }
+            if children.incomplete { childrenMissing = true }
+            if children.elementLimitReached { elementLimitReached = true }
+            if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: false)) }
             for child in children.entries.reversed() { pending.append((child, level, depth)) }
         }
         while let (entry, level, depth) = pending.popLast() {
@@ -667,7 +671,7 @@ final class AXAccess {
             guard depth <= maxDepth else { depthLimitReached = true; continue }
             count += 1
             guard let element = entry, let hash else {
-                lines.append(String(repeating: "  ", count: level) + "[One child could not be read.]")
+                lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: true))
                 continue
             }
             visited[hash, default: []].append(element)
@@ -733,8 +737,7 @@ final class AXAccess {
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         let truncated = elementLimitReached || depthLimitReached
         if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        if !unreportedParents.isEmpty { lines.append("[Some children could not be read during window discovery.]") }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated || childrenMissing)
+        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated, incomplete: childrenMissing)
     }
 
     func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {

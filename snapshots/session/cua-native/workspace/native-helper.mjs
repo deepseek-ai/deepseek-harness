@@ -181,8 +181,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
-        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
-        elements: [], windows: windows(), truncated: false,
+        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  [One child could not be read.]\n  - AXStaticText "Floating count: ${application.panelCount}"`,
+        elements: [], windows: windows(), truncated: false, incomplete: true,
       }
       if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }
@@ -190,10 +190,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
         tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16\n- [0] AXButton "Increment"\nAccessibility tree truncated (maxElements=1).`,
         elements: [], windows: windows(), truncated: true }
       return { appHandle: app.appHandle, windowId: params.windowId ?? null,
-        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=${writableFailure === 'AXValue' ? 'unknown' : 'true'} selectionWritable=${writableFailure === 'AXSelectedTextRange' ? 'unknown' : 'true'} value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"\n  [One child could not be read.]\n  - [4] AXMenuItem "Close"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
+        snapshotId: `${scope}-snapshot-${generation}`, tree: `AX scope=${params.windowId === undefined ? 'application' : 'window'} offsets=UTF-16${params.details ? ' bounds=global-points' : ''}\n- [0] AXButton "Increment"${params.details ? ' id="increment" actions=["AXPress"] bounds=[60,80,100,20]' : ''}\n- [1] AXTextField valueWritable=${writableFailure === 'AXValue' ? 'unknown' : 'true'} selectionWritable=${writableFailure === 'AXSelectedTextRange' ? 'unknown' : 'true'} value=${JSON.stringify(application.value)} placeholder="Fixture text"\n- AXStaticText "Count: ${application.count}"${application.hovering ? '\n- AXStaticText "Hover information"' : ''}\n- [2] AXMenuBarItem "File"${params.includeMenus ? '\n  - [3] AXMenuItem "Fixture command"' : '\nMenu contents omitted; request includeMenus=true to expand.'}`,
         elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
           identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
-        focusedWindowId: window.windowId, windows: windows(), truncated: params.includeMenus === true }
+        focusedWindowId: window.windowId, windows: windows(), truncated: false }
     }
     if (params.windowId === '9' && ['screenshot', 'mouseMove', 'click', 'scroll', 'drag'].includes(method) && params.elementId === undefined) {
       refuse('WINDOW_CHANGED', 'Window display and accessibility bounds disagree. Read fresh state; if unchanged, use AX actions or explicitly restore the window before capture or coordinate input')
