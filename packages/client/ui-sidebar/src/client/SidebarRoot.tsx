@@ -98,9 +98,9 @@ function PanelRow({
               {label}
             </span>
           )}
+          <span id={trailing} className={css.panelTrailing}>{renderFactorySlot('sidebar.panel.trailing', { id, wide, active })}</span>
         </button>
       </Tooltip>
-      <span id={trailing} className={css.panelTrailing}>{renderFactorySlot('sidebar.panel.trailing', { id, wide, active })}</span>
       {wide && canUnpin && <Tooltip label={unpinTooltip} side="bottom" align="end" delayMs={500} portal>
         <button type="button" className={css.panelUnpin} aria-label={unpinLabel} onClick={(event) => {
           // Unpin is rendered only while this navigation also renders More.

@@ -545,6 +545,13 @@ describe('sidebar panel trailing content', () => {
     expect(within(described as HTMLElement).getByTestId('count').dataset).toMatchObject({ wide: 'true', active: 'false' })
     expect(document.getElementById(beta.getAttribute('aria-describedby') ?? '')?.textContent).toBe('')
     expect(view.getAllByTestId('count')).toHaveLength(1)
+    // The content sits inside the row button after its title; the slot wrappers are inline spans, so nesting stays valid.
+    expect(alpha.contains(described)).toBe(true)
+    expect(described?.previousElementSibling?.textContent).toBe('Alpha panel')
+    const wrappers = [...(described?.querySelectorAll('[data-slot]') ?? [])]
+    expect(wrappers.length).toBeGreaterThan(0)
+    expect(wrappers.every(wrapper => wrapper.tagName === 'SPAN')).toBe(true)
+    expect(described?.querySelector('div')).toBeNull()
 
     fireEvent.click(alpha)
     await waitFor(() => { expect(view.getByTestId('count').dataset.active).toBe('true') })
