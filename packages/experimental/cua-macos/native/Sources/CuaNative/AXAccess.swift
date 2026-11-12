@@ -162,6 +162,13 @@ final class AXAccess {
             })
         }
     }
+    private func processID(_ element: AXUIElement) throws -> pid_t {
+        try cancellation.check()
+        var pid: pid_t = 0
+        let error = AXUIElementGetPid(element, &pid)
+        guard error == .success else { throw failure(error, "identify element owner") }
+        return pid
+    }
     func windowID(_ element: AXUIElement) throws -> UInt32? {
         try prepare(element)
         guard let windowFunction else { return nil }
@@ -432,10 +439,7 @@ final class AXAccess {
             guard try string(node, "AXRole") == "AXMenuItem", try string(node, "AXMenuItemCmdChar")?.lowercased() == "v",
                   let raw = try attribute(node, "AXMenuItemCmdModifiers"), CFGetTypeID(raw) == CFNumberGetTypeID(),
                   let number = raw as? NSNumber, number.intValue == 0, try actions(node, requireKnown: true).contains("AXPress") else { return false }
-            var owner: pid_t = 0
-            let error = AXUIElementGetPid(node, &owner)
-            guard error == .success else { throw failure(error, "identify Paste command owner") }
-            guard owner == pid else { throw Self.beforeInput("UNSUPPORTED", "Paste command belongs to another process.") }
+            guard try processID(node) == pid else { throw Self.beforeInput("UNSUPPORTED", "Paste command belongs to another process.") }
             return true
         }, children: { try readChildren($0, budget: &budget) })
     }
@@ -505,7 +509,7 @@ final class AXAccess {
         return try bounds(position: position, size: attribute(element, "AXSize"))
     }
     /// WindowServer IDs identify a window or sheet even when other branches are incomplete.
-    func windowElement(_ id: UInt32, owner: ProcessIdentity, budget: inout AXChildRecoveryBudget) throws -> AXUIElement? {
+    func windowElement(_ id: UInt32, owner: ProcessIdentity, budget: inout AXChildRecoveryBudget, requireComplete: Bool) throws -> AXUIElement? {
         let app = AXUIElementCreateApplication(owner.pid)
         var seen = Set<AXUIElement>()
         var windows: [AXUIElement] = []
@@ -528,7 +532,7 @@ final class AXAccess {
             incomplete = incomplete || list.incomplete
             index += 1
         }
-        guard !incomplete else { throw Self.beforeInput("WINDOW_UNAVAILABLE", "Window or sheet discovery is incomplete.") }
+        guard !requireComplete || !incomplete else { throw Self.beforeInput("WINDOW_UNAVAILABLE", "Window or sheet discovery is incomplete.") }
         return nil
     }
     private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
@@ -795,7 +799,12 @@ final class AXAccess {
     }
     /// A system file panel renders in its host window but receives input in the panel service's window.
     func filePanelRecipient(_ node: AXUIElement, owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot, budget: inout AXChildRecoveryBudget) throws -> (process: ProcessIdentity, windowID: UInt32)? {
-        let identifier = try stringValue(attribute(node, "AXIdentifier", allowMissingMetadata: false), attribute: "AXIdentifier")
+        let identifier: String?
+        do { identifier = try stringValue(attribute(node, "AXIdentifier", allowMissingMetadata: false), attribute: "AXIdentifier") }
+        catch let error as NativeFailure where error.attribute == "AXIdentifier" && error.accessibilityError == AXError.failure.rawValue {
+            if let role = try string(node, "AXRole"), role != "AXWindow" && role != "AXSheet" { return nil }
+            throw Self.beforeInput("PANEL_NOT_READY", "Could not identify the window or sheet.")
+        }
         guard ["open-panel", "save-panel"].contains(identifier ?? "") else { return nil }
         guard let hostID = try windowID(node) else { throw Self.beforeInput("PANEL_NOT_READY", "File panel has no window ID.") }
         _ = try NativePlatform.ownedWindow(owner.pid, hostID)
@@ -804,7 +813,12 @@ final class AXAccess {
         guard !children.incomplete else { throw Self.beforeInput("PANEL_NOT_READY", "File panel recipient discovery is incomplete.") }
         let windows = NativePlatform.windows(allLayers: true)
         for case let child? in children.entries {
-            guard let id = try windowID(child), let window = windows.first(where: { $0.windowID == id }) else {
+            guard let id = try windowID(child) else {
+                // A local control without a window cannot be the panel service's input window.
+                if try processID(child) == owner.pid, let role = try string(child, "AXRole"), role != "AXWindow" && role != "AXSheet" { continue }
+                throw Self.beforeInput("PANEL_NOT_READY", "File panel child window could not be identified.")
+            }
+            guard let window = windows.first(where: { $0.windowID == id }) else {
                 throw Self.beforeInput("PANEL_NOT_READY", "File panel child window could not be identified.")
             }
             guard window.pid != owner.pid else { continue }
@@ -825,8 +839,7 @@ final class AXAccess {
         throw Self.beforeInput("PANEL_NOT_READY", "System file panel focus changed.")
     }
 
-    func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
-        var budget = AXChildRecoveryBudget(timeout: timeout)
+    func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot, budget: inout AXChildRecoveryBudget) throws -> ProcessIdentity {
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")
         var visited: [AXUIElement] = []
         for _ in 0..<100 {

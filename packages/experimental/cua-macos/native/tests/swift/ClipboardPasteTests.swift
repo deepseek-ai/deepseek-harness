@@ -141,8 +141,12 @@ import Testing
     let root = AXUIElementCreateApplication(10)
     let first = AXUIElementCreateApplication(11)
     let other = AXUIElementCreateApplication(12)
+    var requests = 2
+    let restored = AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { range in
+        .values(range.lowerBound == 0 ? [other] : [first])
+    }
     let cases: [(AXObservedChildren, Set<AXUIElement>, String?)] = [
-        (.init(entries: [first, other]), [first], nil),
+        (restored, [first], nil),
         (.init(entries: [other, first, first]), [first], nil),
         (.init(entries: [first, nil]), [first], "incomplete"),
         (.init(entries: [nil, first]), [first], "incomplete"),
@@ -172,5 +176,22 @@ import Testing
         }
         #expect(received == (reason == nil ? [first] : []))
         #expect(board.string(forType: .string) == "original")
+    }
+}
+
+@Test func pasteTraversalLimitsApplyAfterFindingACandidate() {
+    let root = AXUIElementCreateApplication(10), candidate = AXUIElementCreateApplication(11)
+    let nested = AXUIElementCreateApplication(12)
+    for (count, depth) in [(2, 5), (10, 1)] {
+        do {
+            _ = try AXAccess.pasteCommand(in: root, maxElements: count, maxDepth: depth, matches: { $0 == candidate }) {
+                if $0 == root { return .init(entries: [candidate]) }
+                return .init(entries: $0 == candidate ? [nested] : [])
+            }
+            Issue.record("A traversal limit hid a possible second Paste command")
+        } catch let error as NativeFailure {
+            #expect(error.code == "UNSUPPORTED")
+            #expect(error.message.contains("No input was dispatched. Read fresh state"))
+        } catch { Issue.record("Unexpected error: \(error)") }
     }
 }

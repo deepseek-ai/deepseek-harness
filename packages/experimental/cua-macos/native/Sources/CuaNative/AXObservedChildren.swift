@@ -7,7 +7,7 @@ struct AXChildRecoveryBudget: Sendable {
     var requests: Int
     var time: Duration
 
-    init(maxElements: Int = NativeProtocol.elementRange.upperBound, timeout: Float) {
+    init(maxElements: Int, timeout: Float) {
         limit = maxElements
         requests = maxElements
         time = .seconds(Double(timeout))

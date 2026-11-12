@@ -118,7 +118,7 @@ import ApplicationServices
         let goodID = UInt32(good.windowNumber), badID = UInt32(bad.windowNumber)
         app.setAccessibilityWindows([good, bad])
         var exhausted = AXChildRecoveryBudget(maxElements: 0, timeout: 0)
-        let exact = try access.windowElement(badID, owner: identity, budget: &exhausted)
+        let exact = try access.windowElement(badID, owner: identity, budget: &exhausted, requireComplete: true)
         try check(exact == badRoot, "An earlier window's unreadable children blocked an exact ID")
 
         app.setAccessibilityWindows([good])
@@ -126,15 +126,18 @@ import ApplicationServices
         for children: [Any] in [[bad, NSNull()], [NSNull(), bad]] {
             good.childList = children
             var budget = AXChildRecoveryBudget(maxElements: 16, timeout: 3)
-            let sheet = try access.windowElement(badID, owner: identity, budget: &budget)
+            let sheet = try access.windowElement(badID, owner: identity, budget: &budget, requireComplete: true)
             try check(sheet == badRoot && budget.requests < 16, "A recovered sheet was lost at the gap")
             let left = budget.requests
-            _ = try access.windowElement(goodID, owner: identity, budget: &budget)
+            _ = try access.windowElement(goodID, owner: identity, budget: &budget, requireComplete: true)
             try check(budget.requests == left, "An exact window consumed additional recovery requests")
             for (requests, time): (Int, Float) in [(1, 3), (16, 0)] {
                 var insufficient = AXChildRecoveryBudget(maxElements: requests, timeout: time)
+                var geometryBudget = insufficient
+                let geometry = try access.windowElement(badID, owner: identity, budget: &geometryBudget, requireComplete: false)
+                try check(geometry == nil, "Incomplete optional AX geometry should leave the CG frame available")
                 do {
-                    _ = try access.windowElement(badID, owner: identity, budget: &insufficient)
+                    _ = try access.windowElement(badID, owner: identity, budget: &insufficient, requireComplete: true)
                     throw NativeFailure(code: "FIXTURE", message: "Unseen sheet accepted after recovery exhausted")
                 } catch let failure as NativeFailure where failure.code == "WINDOW_UNAVAILABLE" {
                     try check(failure.message.contains("No input was dispatched. Read fresh state"), failure.message)
