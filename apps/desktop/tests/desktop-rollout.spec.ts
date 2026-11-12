@@ -166,13 +166,21 @@ it('keeps rollout approval and website recovery separate without tag creation or
   const workflow = load(text) as {
     name: string
     on: { workflow_dispatch: { inputs: Record<string, { required?: boolean; default?: unknown }> } }
-    jobs: Record<string, { environment?: unknown; env?: Record<string, string>; needs?: string[] }>
+    jobs: Record<string, { if?: string; environment?: unknown; env?: Record<string, string>; needs?: string[] }>
   }
   expect(workflow.name).toBe('Publish Desktop · Rollout & Website')
   expect(workflow.on.workflow_dispatch.inputs.package_run_attempt!.required).toBe(true)
   expect(workflow.on.workflow_dispatch.inputs.upload_website!.default).toBe(false)
   expect(workflow.on.workflow_dispatch.inputs.rollout_percentage!.default).toBe('')
   expect(workflow.jobs.publish!.environment).toContain('desktop-production')
+  expect(workflow.jobs.publish!.if).toBe("inputs.rollout_percentage != ''")
+  const upload = workflow.jobs['upload-website-installer']!
+  const purge = workflow.jobs['purge-website-installer']!
+  expect(upload.environment).toBe('desktop-production')
+  expect(upload.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && inputs.rollout_percentage == '')) }}")
+  expect(purge.environment).toBeUndefined()
+  expect(purge.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.outputs.preset != 'test' && needs.upload-website-installer.result == 'success' }}")
+  expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
   expect(workflow.jobs['upload-website-installer']!.needs).toContain('publish')
   expect(workflow.jobs['purge-website-installer']!.needs).toContain('upload-website-installer')
   expect(text).not.toMatch(/create-github-app-token|publish-desktop-ci.ts|resolve-retained-desktop-publish-ci.ts/u)
