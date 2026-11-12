@@ -32,6 +32,9 @@
     { "path": "../../session/session-projection" },
     { "path": "../liveshare-protocol/tsconfig.host.json" },
     { "path": "../../client/modules" },
-    { "path": "../../host/frontend-static" }
+    { "path": "../../host/frontend-static" },
+    {
+      "path": "../../util/error"
+    }
   ]
 }
