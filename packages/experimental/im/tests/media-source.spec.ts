@@ -20,7 +20,9 @@ const PUBLIC_MEDIA_HOST = 'media.example'
 
 describe('isPublicAddress', () => {
   it('accepts addresses that belong to nobody in particular', () => {
-    for (const address of ['93.184.216.34', '1.1.1.1', '2606:4700:4700::1111']) {
+    for (const address of [
+      '93.184.216.34', '1.1.1.1', '2606:4700:4700::1111', '64:ff9b::5db8:d822', '2002:5db8:d822::1', '::5db8:d822',
+    ]) {
       expect(isPublicAddress(address), address).toBe(true)
     }
   })
@@ -42,6 +44,14 @@ describe('isPublicAddress', () => {
       'fe80::1',
       '::ffff:127.0.0.1',
       '::ffff:10.0.0.1',
+      // IPv6 forms that route to an embedded IPv4 address, judged by that address.
+      '64:ff9b::a9fe:a9fe',
+      '64:ff9b::127.0.0.1',
+      '2002:7f00:1::',
+      '2002:a9fe:a9fe:1::1',
+      '::127.0.0.1',
+      '::a00:1',
+      'fec0::1',
     ]) {
       expect(isPublicAddress(address), address).toBe(false)
     }
@@ -54,23 +64,25 @@ describe('isPublicAddress', () => {
 
 describe('admitMediaSource', () => {
   const resolve = resolving({ [PUBLIC_MEDIA_HOST]: ['93.184.216.34'], metadata: ['169.254.169.254'] })
+  const receiver = { platform: 'lark', selfId: 'ou_bot' }
+  const at = { timeout: 1000, resolve, receiver }
 
-  it('accepts the sources whose bytes come from this deployment', async () => {
+  it('accepts inline sources, a public host, and a resource of the receiving bot', async () => {
     for (const src of [
-      'satori:attachment/1',
+      'satori:lark/ou_bot/messages/om_1/resources/file_1?type=image',
       'data:image/png;base64,iVBORw0KGgo=',
       'base64://iVBORw0KGgo=',
       `https://${PUBLIC_MEDIA_HOST}/a.png`,
     ]) {
-      await expect(admitMediaSource(src, REFUSING, resolve), src).resolves.toBeUndefined()
+      await expect(admitMediaSource(src, REFUSING, at), src).resolves.toBeUndefined()
     }
   })
 
   it('refuses a file: source a chat member named, naming the switch that would accept it', async () => {
     const src = 'file:///home/u/.ssh/id_rsa'
-    await expect(admitMediaSource(src, REFUSING, resolve)).rejects.toThrow(RefusedSourceError)
-    await expect(admitMediaSource(src, REFUSING, resolve)).rejects.toThrow('media.source.file')
-    await expect(admitMediaSource(src, ACCEPTING, resolve)).resolves.toBeUndefined()
+    await expect(admitMediaSource(src, REFUSING, at)).rejects.toThrow(RefusedSourceError)
+    await expect(admitMediaSource(src, REFUSING, at)).rejects.toThrow('media.source.file')
+    await expect(admitMediaSource(src, ACCEPTING, at)).resolves.toBeUndefined()
   })
 
   it('refuses a non-public address a chat member named', async () => {
@@ -81,47 +93,59 @@ describe('admitMediaSource', () => {
       'http://[::1]/x.png',
       'http://[::ffff:127.0.0.1]/x.png',
     ]) {
-      await expect(admitMediaSource(src, REFUSING, resolve), src).rejects.toThrow(RefusedSourceError)
+      await expect(admitMediaSource(src, REFUSING, at), src).rejects.toThrow(RefusedSourceError)
     }
   })
 
   it('refuses a name that resolves to a non-public address, and accepts it once internal is on', async () => {
     const src = 'http://metadata/computeMetadata/v1/'
-    await expect(admitMediaSource(src, REFUSING, resolve)).rejects.toThrow('non-public address')
-    await expect(admitMediaSource(src, ACCEPTING, resolve)).resolves.toBeUndefined()
+    await expect(admitMediaSource(src, REFUSING, at)).rejects.toThrow('non-public address')
+    await expect(admitMediaSource(src, ACCEPTING, at)).resolves.toBeUndefined()
   })
 
   it('refuses a name when any of its addresses is non-public', async () => {
     const split = resolving({ mixed: ['93.184.216.34', '10.0.0.5'] })
-    await expect(admitMediaSource('https://mixed/x.png', REFUSING, split)).rejects.toThrow('10.0.0.5')
+    await expect(admitMediaSource('https://mixed/x.png', REFUSING, { ...at, resolve: split })).rejects.toThrow('10.0.0.5')
   })
 
   it('refuses localhost through the system resolver', async () => {
     // The default resolver, not a stub: a name that only ever points at this host is refused like the literal address.
-    await expect(admitMediaSource('http://localhost/x.png', REFUSING)).rejects.toThrow('non-public address')
-    await expect(admitMediaSource('http://localhost/x.png', ACCEPTING)).resolves.toBeUndefined()
+    await expect(admitMediaSource('http://localhost/x.png', REFUSING, { timeout: 5000 })).rejects.toThrow('non-public address')
+    await expect(admitMediaSource('http://localhost/x.png', ACCEPTING, { timeout: 5000 })).resolves.toBeUndefined()
   })
 
   it('refuses a name it cannot classify instead of leaving the decision to the fetch', async () => {
     // The fetch resolves the name again; a resolver that answers differently then is the case this rule cannot judge.
-    await expect(admitMediaSource('https://nowhere.example/x.png', REFUSING, resolve)).rejects.toThrow('did not resolve')
+    await expect(admitMediaSource('https://nowhere.example/x.png', REFUSING, at)).rejects.toThrow('did not resolve')
   })
 
   it('refuses a host whose lookup outlives the deadline', async () => {
     const hanging: HostResolver = () => new Promise(() => {})
-    await expect(admitMediaSource('https://slow.example/x.png', REFUSING, hanging, 10)).rejects.toThrow('did not resolve')
+    await expect(admitMediaSource('https://slow.example/x.png', REFUSING, { timeout: 10, resolve: hanging })).rejects.toThrow('did not resolve')
+  })
+
+  it('refuses a satori: resource of another bot, and every one when the receiver is unknown', async () => {
+    for (const src of [
+      'satori:lark/ou_other/messages/om_1/resources/file_1?type=image',
+      'satori:qq/ou_bot/messages/om_1/resources/file_1',
+      'satori:lark/ou_bot_2/images/img_1',
+    ]) {
+      await expect(admitMediaSource(src, ACCEPTING, at), src).rejects.toThrow('not a resource of the bot that received')
+    }
+    const own = 'satori:lark/ou_bot/images/img_1'
+    await expect(admitMediaSource(own, ACCEPTING, { timeout: 1000, resolve })).rejects.toThrow(RefusedSourceError)
   })
 
   it('refuses a scheme and a source it cannot parse', async () => {
-    await expect(admitMediaSource('ftp://files.example/x.png', REFUSING, resolve)).rejects.toThrow('scheme')
-    await expect(admitMediaSource('', REFUSING, resolve)).rejects.toThrow('is not a URL')
-    await expect(admitMediaSource('not a url', REFUSING, resolve)).rejects.toThrow('is not a URL')
+    await expect(admitMediaSource('ftp://files.example/x.png', REFUSING, at)).rejects.toThrow('scheme')
+    await expect(admitMediaSource('', REFUSING, at)).rejects.toThrow('is not a URL')
+    await expect(admitMediaSource('not a url', REFUSING, at)).rejects.toThrow('is not a URL')
   })
 
   it('keeps a diagnostic short for a source that carries megabytes', async () => {
     const src = `data:image/png;base64,${'A'.repeat(4096)}`
-    await expect(admitMediaSource(src, REFUSING, resolve)).resolves.toBeUndefined()
-    await expect(admitMediaSource('file:///' + 'a'.repeat(4096), REFUSING, resolve))
+    await expect(admitMediaSource(src, REFUSING, at)).resolves.toBeUndefined()
+    await expect(admitMediaSource('file:///' + 'a'.repeat(4096), REFUSING, at))
       .rejects.toThrow(/^file:\/\/\/a+… names a path/)
   })
 })

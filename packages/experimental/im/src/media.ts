@@ -330,7 +330,7 @@ export class ImMediaStore {
    */
   private async admitAs(ref: ImMediaRef, signal: AbortSignal | undefined, as: 'image' | 'file'): Promise<ImMediaFileItem> {
     try {
-      const fetched = await this.fetch(ref.src, signal)
+      const fetched = await this.fetch(ref, signal)
       const bytes = fetched.data.byteLength
       if (bytes > this.config.media.maxBytes) return { ref, bytes, skipped: 'too-large' }
       const attachments = this.ctx.get('attachments')
@@ -385,17 +385,38 @@ export class ImMediaStore {
 
   /**
    * Bytes of a src: `satori:` internal resources, http(s), and inline `data:`/`base64:` forms, refused past
-   * `media.maxBytes` while they are read. A `file:` source, and an http(s) one on a non-public address, is refused
-   * before any I/O unless `media.source` accepts it; the fetch that follows reaches only the admitted URL (it follows
-   * no redirect) and ends at `media.timeoutMs`.
+   * `media.maxBytes` while they are read. A `file:` source and an http(s) one on a non-public address are refused
+   * before any I/O unless `media.source` accepts them, and a `satori:` one outside the receiving bot's route always is.
+   * The fetch then follows no redirect and ends at `media.timeoutMs`, its body included.
    */
-  private async fetch(src: string, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
-    await admitMediaSource(src, this.config.media.source, this.resolveHost, this.config.media.timeoutMs)
+  private async fetch(ref: ImMediaRef, signal: AbortSignal | undefined): Promise<{ data: Uint8Array; mime?: string }> {
+    const src = ref.src
+    await admitMediaSource(src, this.config.media.source, {
+      timeout: this.config.media.timeoutMs,
+      resolve: this.resolveHost,
+      ...src.trim().startsWith('satori:') ? { receiver: this.receiver(ref.chat) } : {},
+    })
     this.fetcher ??= createResourceFetcher(this.ctx, {
       maxBytes: this.config.media.maxBytes,
       redirect: 'error',
       timeout: this.config.media.timeoutMs,
     })
     return this.fetcher(src, signal ?? new AbortController().signal)
+  }
+
+  /**
+   * The platform route of the bot that received a chat's messages, which bounds the `satori:` sources they may name.
+   * @param chat - the chat the media element belongs to.
+   * @returns the bot's platform and self id, or undefined when no mounted bot serves the chat.
+   */
+  private receiver(chat: ImChatKey): { platform: string; selfId: string } | undefined {
+    try {
+      const bot = this.ctx.get('im')?.bot(chat)
+      return bot === undefined ? undefined : { platform: bot.platform, selfId: bot.selfId }
+    } catch (error: unknown) {
+      // An unmounted bot is an unknown receiver, whose `satori:` sources are all refused; anything else is a fault.
+      if (error instanceof ImError) return undefined
+      throw error
+    }
   }
 }

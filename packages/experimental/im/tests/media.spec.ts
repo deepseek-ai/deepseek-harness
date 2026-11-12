@@ -239,6 +239,17 @@ describe('ImMediaStore.admit', () => {
     expect(await store.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'disabled' }])
   })
 
+  it('admits a satori: resource only under the route of the bot that serves the chat', async () => {
+    const im = { bot: () => ({ platform: 'lark', selfId: 'ou_bot' }) }
+    const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving(), im }), config())
+    const [own, other] = await store.admit([
+      imageRef(1, 'satori:lark/ou_bot/messages/om_1/resources/img_1?type=image'),
+      imageRef(2, 'satori:lark/ou_other/messages/om_1/resources/img_1?type=image'),
+    ])
+    expect(own?.image?.attachment).toMatchObject({ mediaType: 'image/png' })
+    expect(other?.skipped).toContain('not a resource of the bot that received')
+  })
+
   it('skips a source a received message may not make this host fetch', async () => {
     // The chat member writes the message, so the src is their choice: a path of this host and an internal address are
     // reported as skipped instead of being fetched into the transcript.
@@ -450,17 +461,31 @@ describe('ImMediaStore.read', () => {
       .rejects.toThrow('gone')
   })
 
-  it('asks the transport to reach the admitted URL only, inside the media deadline', async () => {
-    const asked: { redirect?: RequestRedirect | undefined; timeout?: number | undefined }[] = []
+  it('asks the transport to reach the admitted URL only', async () => {
+    const asked: { redirect?: RequestRedirect | undefined }[] = []
     const recording: FakeHttp = {
       get: async (_src, init) => {
-        asked.push({ redirect: init.redirect, timeout: init.timeout })
+        asked.push({ redirect: init.redirect })
         return { headers: { get: () => 'image/png' }, arrayBuffer: async () => PNG_BYTES.slice().buffer }
       },
     }
     await storeWith([imageMessage(12)], { http: recording }).read(CHAT.key, '12.1')
     // Without `redirect: 'error'` the transport follows a 302 to any host, which is the address the admission refused.
-    expect(asked).toEqual([{ redirect: 'error', timeout: 30000 }])
+    expect(asked).toEqual([{ redirect: 'error' }])
+  })
+
+  it('skips a picture whose body is still dripping at media.timeoutMs, with no caller signal at all', async () => {
+    // The headers arrive at once and the body never ends: `ctx.http` clears its own timer at the headers, so only the
+    // fetch deadline ends this. The automatic delivery path passes no signal, which is the case this pins.
+    const dripping: FakeHttp = {
+      get: async () => ({
+        headers: { get: () => null },
+        body: new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(1)) } }),
+        arrayBuffer: async () => new Promise<ArrayBuffer>(() => {}),
+      }),
+    }
+    const item = await storeWith([imageMessage(12)], { http: dripping, media: { timeoutMs: 30 } }).read(CHAT.key, '12.1')
+    expect(item.skipped).toContain('did not arrive within 30 ms')
   })
 
   it('reads the entries of a merged forward before resolving its picture', async () => {
