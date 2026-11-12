@@ -3,6 +3,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { createCuaApi } from '../src/api.ts'
+import { NativeError } from '../src/native-client.ts'
 import type { CuaApp, CuaCapabilities, CuaCoordinateOptions, CuaElementId, CuaOperation, CuaWindow } from '../src/types.ts'
 
 /** Element ids are opaque strings; these fixtures use the macOS decimal form. */
@@ -622,13 +623,29 @@ describe('application and window observations', () => {
     } })
   })
 
-  it('clears a failed refresh and requires a new read before element operations', async () => {
+  it('keeps marked partial trees usable through the latest snapshot without retrying input', async () => {
+    const f = fixture()
+    const app = await f.api.getApp('Editor')
+    await app.getAccessibilityTree()
+    await app.pressKey('Return')
+    const tree = '- [0] AXButton "Save"\n- [unavailable branch 0.1: invalidUIElement; contents unknown]'
+    f.dispatch.mockResolvedValueOnce(state({ tree, incomplete: true }))
+    await expect(app.getAccessibilityTree()).resolves.toBe(tree)
+    await app.invoke(element('0'))
+    expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'invoke', params: {
+      appHandle: 'app-17', snapshotId: 'changed', elementId: '0',
+    } })
+    expect(f.dispatch.mock.calls.filter(([operation]) => operation.method === 'pressKey')).toHaveLength(1)
+    expect(f.dispatch.mock.calls.filter(([operation]) => operation.method === 'getState')).toHaveLength(2)
+  })
+
+  it.each(['AX_OBSERVATION_UNAVAILABLE', 'AX_COMMUNICATION_FAILED', 'PERMISSION_DENIED'])('preserves %s and requires a new read before element operations', async (code) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     await app.getAccessibilityTree()
     const window = await app.getWindow('23')
     await window.getAccessibilityTree()
-    const failure = new Error('Native app is busy')
+    const failure = new NativeError(code, 'Observation failed')
     f.dispatch.mockRejectedValueOnce(failure)
     await expect(app.getAccessibilityTree()).rejects.toBe(failure)
     await expect(window.setValue(element('0'), 'stale')).rejects.toThrow('Read getAccessibilityTree')

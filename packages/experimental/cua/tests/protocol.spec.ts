@@ -12,6 +12,9 @@ it('preserves opaque window IDs in requests and results', () => {
   expect(WindowsResult.parse(windows)).toEqual(windows)
   const state = { appHandle: 'app', windowId, focusedWindowId: windowId, snapshotId: 'snapshot', tree: '', windows, truncated: false }
   expect(StateResult.parse(state)).toEqual(state)
+  expect(StateResult.parse({ ...state, incomplete: true })).toEqual({ ...state, incomplete: true })
+  expect(StateResult.parse({ ...state, incomplete: false })).toEqual({ ...state, incomplete: false })
+  expect(StateResult.safeParse({ ...state, incomplete: 'true' }).success).toBe(false)
   expect(ShowResult.parse({ dispatched: true, foregroundChanged: false, windowId }).windowId).toBe(windowId)
   const nativeImage = { mimeType: 'image/png', data: 'AQ==', pixelWidth: 1, pixelHeight: 1,
     windowId, bounds: windows[0]!.bounds, coordinateSpace: 'window-pixels' }

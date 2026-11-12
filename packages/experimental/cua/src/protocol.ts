@@ -148,6 +148,8 @@ export const StateResult = z.object({
   focusedWindowId: windowId.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
   tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
+  /** Whether branches could not be read; omitted when the provider does not report completeness. */
+  incomplete: z.boolean().optional(),
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())

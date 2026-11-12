@@ -38,6 +38,7 @@
   ],
   "localFiles": [
     "Sources/CuaNative/AXTextFormatter.swift",
+    "Sources/CuaNative/AXTreeProjection.swift",
     "Sources/CuaNative/AXWorker.swift",
     "Sources/CuaNative/ApplicationAuthorization.swift",
     "Sources/CuaNative/ApplicationDiscovery.swift",

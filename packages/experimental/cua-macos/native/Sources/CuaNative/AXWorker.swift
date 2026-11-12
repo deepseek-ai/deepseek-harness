@@ -201,9 +201,14 @@ actor AXWorker {
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
-        guard failure.accessibilityError == AXError.invalidUIElement.rawValue else { return failure }
-        return NativeFailure(code: "STALE_SNAPSHOT",
-                             message: "Accessibility tree changed during observation; read fresh getAccessibilityTree",
+        let code: String
+        switch failure.accessibilityError {
+        case AXError.invalidUIElement.rawValue: code = "AX_OBSERVATION_UNAVAILABLE"
+        case AXError.cannotComplete.rawValue: code = "AX_COMMUNICATION_FAILED"
+        default: return failure
+        }
+        return NativeFailure(code: code,
+                             message: "Accessibility observation failed: \(failure.message). Read fresh state or use a screenshot; do not repeat input automatically",
                              accessibilityError: failure.accessibilityError)
     }
 
@@ -340,7 +345,7 @@ actor AXWorker {
                 "windowId": window.map { .string(String($0)) } ?? .null,
                 "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
-                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]))
+                "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated), "incomplete": .bool(projection.incomplete)]))
         case "screenshot":
             trace?.mark("screen-permission.begin")
             try NativePlatform.requireScreenRecording()

@@ -81,12 +81,17 @@ private func wrappedAXError(_ code: AXError) throws -> AXValue {
     }
 }
 
-@Test func invalidElementsInvalidateObservationsWithoutWeakeningInputOrOtherErrors() {
+@Test func observationFailuresDistinguishUnavailableTreesFromCommunicationAndInput() {
     let access = AXAccess(timeout: 1, cancellation: CancellationLatch())
     let stale = access.failure(.invalidUIElement, "read AXRole")
     #expect(stale.code == "NATIVE_ERROR")
-    #expect(AXWorker.observationFailure(stale).code == "STALE_SNAPSHOT")
-    for code in [AXError.apiDisabled, .cannotComplete, .failure, .illegalArgument] {
+    #expect(AXWorker.observationFailure(stale).code == "AX_OBSERVATION_UNAVAILABLE")
+    #expect(AXWorker.observationFailure(stale).message.contains("read AXRole"))
+    let communication = access.failure(.cannotComplete, "read AXChildren")
+    #expect(communication.code == "NATIVE_ERROR")
+    #expect(AXWorker.observationFailure(communication).code == "AX_COMMUNICATION_FAILED")
+    #expect(AXWorker.observationFailure(communication).message.contains("read AXChildren"))
+    for code in [AXError.apiDisabled, .failure, .illegalArgument] {
         let original = access.failure(code, "read AXRole")
         let observed = AXWorker.observationFailure(original)
         #expect(observed.code == original.code)
@@ -175,7 +180,7 @@ func consumedContainerMetadataPreservesStaleAndCommunicationErrors(role: String)
             } catch let error as NativeFailure {
                 #expect(error.accessibilityError == code.rawValue)
                 #expect(error.code == (code == .apiDisabled ? "PERMISSION_DENIED" : "NATIVE_ERROR"))
-                if code == .invalidUIElement { #expect(AXWorker.observationFailure(error).code == "STALE_SNAPSHOT") }
+                if code == .invalidUIElement { #expect(AXWorker.observationFailure(error).code == "AX_OBSERVATION_UNAVAILABLE") }
             }
         }
     }

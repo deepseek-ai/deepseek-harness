@@ -46,6 +46,14 @@ struct AXTextNode {
         return !hasMeaning && valueWritable != true && selectionWritable != true
             && actions.allSatisfy { ["AXShowMenu", "AXScrollToVisible", "AXCancel"].contains($0) }
     }
+
+    var addressable: Bool {
+        enabled != false && (!actions.isEmpty || valueWritable == true || selectionWritable == true)
+    }
+
+    var omitted: Bool {
+        transparent || (!addressable && !hasMeaning && role != "AXWindow" && role != "AXSheet")
+    }
 }
 
 enum AXTextFormatter {
