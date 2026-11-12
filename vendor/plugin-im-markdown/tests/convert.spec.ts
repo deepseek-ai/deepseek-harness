@@ -316,6 +316,26 @@ const corpus: Case[] = [
     markdown: '<li>孤儿项</li>',
     xml: '<message><p>孤儿项</p></message>',
   },
+  {
+    name: 'a soft break beside inline formatting stays a break',
+    markdown: 'first\n**second**\nthird',
+    xml: '<message><p>first<br/><b>second</b><br/>third</p></message>',
+  },
+  {
+    name: 'a soft break beside a link stays a break',
+    markdown: '[a](https://example.com/a)\nb',
+    xml: '<message><p><a href="https://example.com/a">a</a><br/>b</p></message>',
+  },
+  {
+    name: 'a name an object inherits is not a tag',
+    markdown: '<constructor>hello</constructor> <toString>x</toString>',
+    xml: '<message><p>hello x</p></message>',
+  },
+  {
+    name: 'Feishu everyone id is the all mention, not a user',
+    markdown: '<at user_id="all">所有人</at> <at id="here"></at>',
+    xml: '<message><p><at type="all" name="所有人"/> <at type="here"/></p></message>',
+  },
 ]
 
 describe('fromMarkdown: element trees', () => {

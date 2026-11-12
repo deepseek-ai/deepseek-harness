@@ -122,8 +122,8 @@ const SELF_CLOSING = /<([a-zA-Z][\w-]*)((?:[^>"']|"[^"]*"|'[^']*')*)\/>/g
  */
 function resolveTag(name: string): Tag | undefined {
   const lower = name.toLowerCase()
-  const alias = tagAliases[lower]
-  if (alias) return alias
+  // `tagAliases` is a plain object: `constructor` and the other inherited names are not spellings of a tag.
+  if (Object.hasOwn(tagAliases, lower)) return tagAliases[lower]
   return isTag(lower) ? lower : undefined
 }
 
@@ -201,6 +201,13 @@ function attrsOf(tag: Tag, properties: HastElement['properties'] | undefined): R
     if (attrs.id === undefined && typeof attrs.user_id === 'string') attrs.id = attrs.user_id
     delete attrs.user_id
     attrs.type ??= 'user'
+    // Feishu spells "everyone" as the id `all`. Written that way it is the `all` mention, not a user whose id happens
+    // to be `all`: a mode decides whether to render a mention from its `type`, and `allowAtAll: false` only withholds
+    // the `all` variant, so a `user` carrying that id would reach the platform as @everyone.
+    if (attrs.type === 'user' && (attrs.id === 'all' || attrs.id === 'here')) {
+      attrs.type = attrs.id
+      delete attrs.id
+    }
   }
   return attrs
 }
@@ -264,9 +271,10 @@ function soleBlock(children: readonly HastNode[]): HastElement | undefined {
  */
 function convert(nodes: readonly HastNode[], parent: Tag | undefined): Element[] {
   const out: Element[] = []
-  for (const node of nodes) {
+  for (const [index, node] of nodes.entries()) {
     if (node.type === 'text') {
-      pushText(out, node.value, parent)
+      const verbatim = parent !== undefined && elementInfo[parent].content === 'text'
+      pushText(out, verbatim ? node.value : trimLineEdges(node.value, nodes[index - 1], nodes[index + 1]), parent)
       continue
     }
     if (!isElement(node)) continue
@@ -275,14 +283,50 @@ function convert(nodes: readonly HastNode[], parent: Tag | undefined): Element[]
   return out
 }
 
+/** HTML elements that end a line by themselves, besides the vocabulary's block elements. */
+const HTML_BLOCKS: ReadonlySet<string> = new Set([
+  'address', 'article', 'aside', 'blockquote', 'dd', 'div', 'dl', 'dt', 'figure', 'footer', 'header', 'hr', 'li',
+  'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
+])
+
+/**
+ * Whether a sibling of a text run already ends the line on its side: a `<br>`, a block element, or the edge of the
+ * container (`undefined`). The newline the source writes next to it is that same line end, not another one.
+ */
+function endsLine(node: HastNode | undefined): boolean {
+  if (node === undefined) return true
+  if (!isElement(node)) return false
+  if (node.tagName === 'br' || HTML_BLOCKS.has(node.tagName)) return true
+  const tag = resolveTag(node.tagName)
+  return tag !== undefined && elementInfo[tag].position === 'block'
+}
+
+/**
+ * Drop the newline at either end of a text run whose neighbour already ends the line there (`a<br>\nb`, `a\n<ul>`, the
+ * first and last line of `<div>\nraw\n</div>`). A newline next to inline content stays, and becomes a break.
+ */
+function trimLineEdges(value: string, before: HastNode | undefined, after: HastNode | undefined): string {
+  let start = 0
+  let end = value.length
+  if (endsLine(before) && value.startsWith('\n')) start = 1
+  if (endsLine(after) && end > start && value.endsWith('\n')) end -= 1
+  return value.slice(start, end)
+}
+
 /** One text run: a newline becomes `<br>`, except where the element holds text verbatim. */
 function pushText(out: Element[], value: string, parent: Tag | undefined): void {
   const verbatim = parent !== undefined && elementInfo[parent].content === 'text'
-  if (!verbatim && !value.trim() && isStructural(parent)) return
-  const lines = (verbatim ? [value] : value.split('\n')).filter(line => line !== '')
-  lines.forEach((line, index) => {
+  if (verbatim) {
+    if (value) out.push(text(value))
+    return
+  }
+  // Whitespace between blocks (at the top level, or in a container of elements) is layout, not content.
+  if (!value.trim() && (parent === undefined || isStructural(parent))) return
+  // Every newline is a break, including one at either end of the run: in `first\n**second**\nthird` the breaks are
+  // the last character of `first\n` and the first of `\nthird`, so the empty pieces a split leaves there still count.
+  value.split('\n').forEach((line, index) => {
     if (index) out.push(h('br'))
-    out.push(text(line))
+    if (line) out.push(text(line))
   })
 }
 
