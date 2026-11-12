@@ -19,6 +19,7 @@ import { useRelativeClock } from './relative-clock.ts'
 import { formatScheduleFrequency, nextRunParts, taskName, zoneLabel } from './schedule-format.ts'
 import type { FrequencyZone } from './schedule-format.ts'
 import { ScheduleEmptyIllustration } from './ScheduleEmptyIllustration.tsx'
+import { ScheduleRecommendations } from './ScheduleRecommendations.tsx'
 import css from './TaskManagerPage.module.css'
 
 /** Injected catalog and task actions for the management page. */
@@ -30,6 +31,12 @@ export interface TaskManagerInjected extends TaskDetailInjected {
    * schedule it, using the existing new-conversation action.
    */
   readonly onNewTask: () => void
+  /**
+   * Start a new Session with a recommended task's request prefilled, through
+   * the same new-conversation action as `onNewTask`.
+   * @param prompt - the recommendation's localized request.
+   */
+  readonly onUseRecommendation: (prompt: string) => void
   /**
    * Remove every ended Host task, after this page has confirmed the action.
    *
@@ -58,7 +65,7 @@ type StatusFilter = 'all' | ScheduleCatalogEntry['status']
  * @returns the searchable task list beside the selected task's detail.
  */
 export function TaskManagerPage(props: TaskManagerPageProps) {
-  const { useCatalog, onNewTask, onClearEnded, onRetry, onCreateTask, t } = props
+  const { useCatalog, onNewTask, onUseRecommendation, onClearEnded, onRetry, onCreateTask, t } = props
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
   const catalog = useCatalog(snapshot => snapshot)
@@ -104,6 +111,8 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
       Date.parse(taskNextRunAt(left)) - Date.parse(taskNextRunAt(right)))
   }, [records, search, statusFilter])
 
+  const showRecommendations = status === 'ready' && rows.length === 0 && search.trim() === ''
+    && (statusFilter === 'active' || statusFilter === 'all')
   const emptyTitle = search.trim() !== '' ? 'list.noMatches'
     : statusFilter === 'paused' ? 'list.emptyPaused'
       : statusFilter === 'ended' ? 'list.emptyInactive'
@@ -288,6 +297,7 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
                   {t('empty.action')}
                 </Button>
               </div>}
+              {showRecommendations && <ScheduleRecommendations t={t} onUse={onUseRecommendation} />}
               <ul className={css.listRows} aria-label={t('list.label')} aria-busy={status === 'loading'}>
                 {rows.map((record) => {
                   // One pair per row: the same absolute stamp and distance reach
