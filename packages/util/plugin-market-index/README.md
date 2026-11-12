@@ -28,6 +28,8 @@ It is a library, not a service or plugin: no `ctx`, no registrations, no state, 
 
 Parse the fetched document as JSON, then pass the value and the URL it was read from to `parseMarketIndex`. The first violated rule throws `MarketIndexError` with the JSON path of the offending value. A successful result drops members the format does not define, fills absent `metadata` groups, `keywords`, `labels`, `sortKeys`, and `engines` with empty values, orders each plugin's `versions` by descending SemVer precedence, and replaces each relative `icon` reference with its absolute URL.
 
+Within plugin metadata, `null` means unavailable: the metadata object and its fields normalize like absent input, and null sort values are omitted. Numeric zero is retained. Generators omit unavailable metadata and values. Unknown object fields are ignored, while declared map entries, known fields, and source discriminators remain validated.
+
 Install one version with `marketInstallTarget(name, version)`: it returns the exact pnpm spec, `name@version` for npm and a commit-pinned `git+https` URL with an optional `path:` parameter for Git, and the registry to ask first when the version names one.
 
 -----

@@ -375,7 +375,7 @@ import { FS_ERROR_CODES } from '@deepseek-ai/dsh-fs'
 type FsErrorCode = typeof FS_ERROR_CODES[number]
 ```
 
-目录列表使用 `FS_NOT_DIRECTORY`、`FS_PERMISSION_DENIED` 与 `FS_IO_ERROR` 区分已存在但并非目录的目标、被拒绝的列表操作和意外的后端 I/O 失败。`FS_SANDBOX_DENIED` 是强制执行沙箱的后端（`dsh-fs-sandbox`）所作的策略拒绝——模式边界拒绝了变更——与 `FS_PERMISSION_DENIED`（宿主内核拒绝）不同。`FS_NOT_OBSERVED` 表示策略插件没有此所有者的先前观测记录（或 `createIfAbsent` 遇到了现有文件）。`FS_NOT_FOUND` 也表示策略因确认缺失而拒绝 edit。`FS_STALE_VERSION` 表示后端版本不再与观测到的版本匹配（或提供方本身收到针对缺失目标的 edit）。新鲜度授权没有部分/完整之分，因此不存在 `FS_PARTIAL_OBSERVATION`。
+目录列表使用 `FS_NOT_DIRECTORY`、`FS_PERMISSION_DENIED` 与 `FS_IO_ERROR` 区分已存在但并非目录的目标、被拒绝的列表操作和意外的后端 I/O 失败。`FS_SANDBOX_DENIED` 是强制执行沙箱的后端（`dsh-fs-sandbox`）所作的策略拒绝——模式边界拒绝了变更——与 `FS_PERMISSION_DENIED`（宿主内核拒绝）不同。`FS_NOT_OBSERVED` 表示策略插件没有此所有者的先前观测记录（或 `createIfAbsent` 遇到了现有文件）。`FS_NOT_FOUND` 也表示策略因确认缺失而拒绝 edit。`FS_STALE_VERSION` 表示后端版本不再与观测到的版本匹配（或提供方本身收到针对缺失目标的 edit）。新鲜度授权没有部分/完整之分，因此不存在 `FS_PARTIAL_OBSERVATION`。`FS_ALREADY_EXISTS` 表示仅创建的工具命令遇到了已存在的目标；调用方应换一个路径或编辑现有文件。`dsh-fs-local` 与 `dsh-fs-sandbox` 的包含性检查用 `dsh-fs` 的函数 `fsErrorFromErrno` 分类解析、元数据、读取与目录列表中的 errno 失败：`ENOENT` 与 `ENOTDIR` 报告 `FS_NOT_FOUND`，`EACCES` 与 `EPERM` 报告 `FS_PERMISSION_DENIED`，`EISDIR` 报告 `FS_NOT_REGULAR_FILE`，其他 errno 报告 `FS_IO_ERROR`，均以 Node 错误为 `cause`。
 
 ## 文件 IO 不设超时
 

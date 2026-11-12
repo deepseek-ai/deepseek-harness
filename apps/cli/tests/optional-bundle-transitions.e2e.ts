@@ -10,9 +10,10 @@ import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { ProfileContext } from '@deepseek-ai/dsh-app-boot'
-import { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-hmr'
 import type {} from '@deepseek-ai/dsh-plugin-manager'
@@ -140,7 +141,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
 
   async function agent(preset = 'standard', cwd = workspace): Promise<AgentHandle> {
     const handle = await ctx.agents.create({
-      sessionId: SessionId(`optional-${preset}-${randomUUID()}`), meta: { cwd, agentPreset: preset },
+      sessionId: brandString<SessionId>(`optional-${preset}-${randomUUID()}`), meta: { cwd, agentPreset: preset },
       agentOptions: { provider: 'bundle-test', model: 'scripted' },
       setup: scoped => ctx.agentPresets.mount(scoped, preset).then(() => undefined),
     })
@@ -173,7 +174,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     const standard = await agent()
     expect(names()).toEqual(['team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
     expect(names(minimal.agent)).toEqual([process.platform === 'win32' ? 'pwsh' : 'bash', 'read_image', 'team_task_create', 'team_task_get', 'team_task_list', 'team_task_update', 'working_directory'])
-    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'ralph']) expect(names(standard.agent)).not.toContain(name)
+    for (const name of ['str_replace_editor', 'session_search', 'terminal_open', 'user_terminal_list', 'ralph']) expect(names(standard.agent)).not.toContain(name)
     expect((await ctx.skills.list({ cwd: workspace, scope: standard.agent })).some(skill => skill.name === 'dsh-badge')).toBe(false)
   })
 
@@ -189,7 +190,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(names(minimal.agent)).toContain('session_search')
     await turn(coded.agent, 'Read this session lineage through run_code.', [
       toolCallResponse('ptc-search', 'run_code', {
-        code: 'console.log(await tools.session_trace({}));',
+        code: 'inspect(await tools.session_trace({}));',
         description: 'Read the current session lineage',
       }), textResponse('PTC_SEARCH_DONE'),
     ])
@@ -234,7 +235,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('loads the actual badge asset only while its bundle is selected', async () => {
     const owner = await agent()
     const load = (callId: string) => executeToolFixture(ctx, {
-      callId: ToolCallId(callId), name: 'skill', arguments: { name: 'dsh-badge' },
+      callId: brandString<ToolCallId>(callId), name: 'skill', arguments: { name: 'dsh-badge' },
       agent: owner.agent, signal: new AbortController().signal,
     })
     expect((await load('badge-before')).isError).toBe(true)
@@ -254,6 +255,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
   it('runs and closes a real persistent terminal delivered by its bundle', async () => {
     await select(bundles.terminal, true)
     const owner = await agent()
+    expect(names(owner.agent)).toEqual(expect.arrayContaining(['terminal_open', 'user_terminal_list', 'user_terminal_read']))
     const target = join(workspace, 'terminal-output.txt')
     let terminalId: string | undefined
     const id = () => {
@@ -280,6 +282,7 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     expect(toolResult(owner.agent, 'terminal-close')).toContain('closed terminal session')
     await select(bundles.terminal, false)
     expect(names((await agent()).agent)).not.toContain('terminal_open')
+    expect(names((await agent()).agent)).not.toContain('user_terminal_list')
   })
 
   it('runs a real fresh-Agent Ralph workflow through the selected bundle', async () => {
@@ -332,13 +335,13 @@ describe.skipIf(!existsSync(join(root, 'apps/cli/lib/bin.js')))('Official option
     let coded: Agent | undefined
     for (const preset of ['standard', 'cordis', 'ptc', 'minimal']) {
       const owner = await agent(preset)
-      expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'ralph']))
+      expect(names(owner.agent)).toEqual(expect.arrayContaining(['session_search', 'terminal_open', 'user_terminal_read', 'ralph']))
       if (preset === 'ptc') coded = owner.agent
     }
     if (coded === undefined) throw new Error('the PTC Agent was not created')
     await turn(coded, 'Read this session lineage and load the badge through one program.', [
       toolCallResponse('combined-program', 'run_code', {
-        code: 'console.log(await tools.session_trace({})); console.log(await tools.skill({ name: "dsh-badge" }));',
+        code: 'inspect(await tools.session_trace({})); inspect(await tools.skill({ name: "dsh-badge" }));',
         description: 'Use optional session search and badge together',
       }), textResponse('COMBINED_DONE'),
     ])

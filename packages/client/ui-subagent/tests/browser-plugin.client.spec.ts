@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
-  SessionListState, SessionSnapshot, SessionSummary,
+  SessionListState, SessionSnapshot, SessionSummary, SessionProjectionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -35,7 +35,8 @@ const sid = (id: string) => id as SessionId
 function sessionsWith(sessions: SessionSummary[]) {
   const byId: Record<string, SessionSummary> = {}
   for (const s of sessions) byId[s.id] = s
-  const snapshot: SessionListState = { ids: sessions.map(s => s.id), byId, phase: 'ready', projectionsBySession: {} }
+  const projections: Record<SessionId, SessionProjectionSnapshot> = {}
+  const snapshot: SessionListState = { ids: sessions.map(s => s.id), byId, phase: 'ready', projectionsBySession: projections }
   const actionCalls: { method: string; args: unknown[] }[] = []
   const address: SubagentAddress = {
     parentSessionId: sid('parent'),
@@ -48,6 +49,7 @@ function sessionsWith(sessions: SessionSummary[]) {
       subscribe: () => () => {},
     },
     actionCalls,
+    projections,
     subagentAddress: (childSessionId: SessionId) => childSessionId === address.childSessionId
       ? address
       : undefined,
@@ -86,6 +88,7 @@ async function fullBench(sessions: SessionSummary[]) {
     },
   } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('uiSession.sessionStatus', createSnapshotStore(new Map()) as never)
   ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
   await provideSlotFaces(ctx)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
@@ -105,7 +108,7 @@ const FAMILY: SessionSummary[] = [
 
 describe('apply', () => {
   it('declares the services it binds', () => {
-    expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight'])
+    expect(inject).toEqual(['sessions', 'uiWorkspace', 'slots', 'locale', 'sidebarRight', 'uiSession.sessionStatus'])
   })
 
   it('keeps the root catalog extension available when optional Sidebar services arrive', async () => {
@@ -119,6 +122,40 @@ describe('apply', () => {
     await vi.waitFor(() => { expect(registerResource).toHaveBeenCalledOnce() })
     expect(registerTab).toHaveBeenCalledOnce()
     expect(ctx.slots.entries('conversation.session.header.actions.subagent.footer')).toHaveLength(1)
+  })
+
+  it('reads direct child catalogs sequentially after reading the parent', async () => {
+    const { ctx, face } = await fullBench([...FAMILY, summary({ id: sid('legacy'), formatStatus: 'migration-required' })])
+    onTestFinished(() => ctx.fiber.dispose())
+    const entry = ctx.slots.entries('conversation.session.header.lineage')
+      .find(entry => entry.component === SubagentHeaderLineage)!
+    const actions = (entry.inject as (id: SessionId) => SubagentCatalogInjected)(sid('parent'))
+    const projections = face.projections
+    const held = Promise.withResolvers<undefined>()
+    const refresh = vi.spyOn(face, 'refreshProjections').mockImplementation(async (id) => {
+      if (id === sid('parent')) projections[id] = { state: 'ready', error: null, values: { subagentCatalog: [
+        { id: sid('external'), mode: 'external', createdAt: 1 },
+        ...['c1', 'c2', 'legacy', 'blocked', 'failed'].map(id => ({ id: sid(id), mode: 'one-shot' as const, createdAt: 1 })),
+      ] } }
+      if (id === sid('c1')) {
+        await held.promise
+        projections[id] = { state: 'ready', error: null, values: { subagentCatalog: [
+          { id: sid('grandchild'), mode: 'one-shot', createdAt: 1 },
+        ] } }
+      }
+    })
+    onTestFinished(() => { refresh.mockRestore() })
+    projections[sid('blocked')] = { state: 'migration-required', error: null, values: {} }
+    projections[sid('failed')] = { state: 'error', error: null, values: {} }
+    const reading = actions.prepareCatalog(sid('parent'))
+    await vi.waitFor(() => { expect(refresh.mock.calls).toEqual([[sid('parent')], [sid('c1')]]) })
+    held.resolve(undefined)
+    await reading
+    expect(refresh.mock.calls).toEqual([[sid('parent')], [sid('c1')], [sid('c2')]])
+    await actions.prepareCatalog(sid('c2'))
+    projections[sid('c2')] = { state: 'ready', error: null, values: {} }
+    await actions.prepareCatalog(sid('c2'))
+    expect(refresh.mock.calls.slice(3)).toEqual([[sid('c2')], [sid('c2')]])
   })
 
   it('registers catalog actions and selects read-only subagent composers from session facts', async () => {

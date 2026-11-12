@@ -4,9 +4,9 @@ English | [中文](computer-use.zh.md)
 
 Computer use lets a model observe and operate the local desktop through a configured provider. The shared DSH capability is called **computer use**; **Cua Driver** names the upstream implementation.
 
-[Computer Use](../../packages/experimental/cua-bundle/README.md) provides an optional experimental switch for macOS CUA permission setup.
+[Computer Use](../../packages/experimental/cua-bundle/README.md) is an optional experimental bundle for macOS and Windows.
 
-The [`macOS CUA provider`](../../packages/experimental/cua-macos/README.md) uses the [shared CUA objects and executor](../../packages/experimental/cua/README.md), which enforce application consent through User Questions and profile configuration.
+Both native providers use the [shared CUA library](../../packages/experimental/cua/README.md#use-this-package) to check configured and saved application grants. When a decision is needed, the library asks the user through User Questions.
 
 The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit system requests, and application revocation. Its [permission page](../../packages/experimental/cua/README.md) projects these controls; app/window operations enforce the provider's consent policy before dispatch.
 
@@ -14,19 +14,27 @@ The CUA provider owns `ctx.cuaAccess` for system-permission status, explicit sys
 |---|---|
 | `CuaApplicationId`, `CuaApplicationGrant` | A platform-provided application identity and its displayed saved decision. |
 | `CuaSystemPermission` | Accessibility or Screen Recording, selected by the human. |
-| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native privilege checks, observed helper/parent processes, and the application identified by macOS process responsibility at helper startup. The independent helper uses its own bundle when system attribution is unavailable; application metadata is absent if neither bundle can be identified. |
+| `CuaPermissionProcess`, `CuaSystemPermissionState` | Native access observations tagged `darwin` or `windows`, with the helper’s name and path when available. macOS includes permission checks, numeric helper and parent PIDs, and responsible-application metadata when available (falling back to the helper’s own bundle); Windows includes desktop lock, capture availability and elevation status, and omits the helper PID. |
 | `CuaApplicationState` | Saved grants, refused applications, and whether persistence is available. Session-only grants remain internal to the provider. System observations and application icons are queried separately so the page can display each result as it arrives. |
+
+The [shared object API](../../packages/experimental/cua/README.md) uses `connectCua` to select an application, then `app.getWindows()` and `app.getWindow(windowId)` to select a window for screenshots and pointer input. Accessibility operations use element IDs from the latest tree for that application handle. Providers declare keyboard scopes and application-level accessibility in `getCapabilities()`.
+
+## Serve Computer Use to another harness
+
+[Computer use MCP server](../../packages/experimental/cua-mcp/README.md) is a shipped optional bundle that composes the standalone `cua-mcp` profile; a profile manifest that selects it alone is the whole setup. `dsh --profile cua-mcp` serves `cua_get_api_reference`, `cua_run_code`, and `cua_reset` to one MCP client such as Codex or Claude Code; each connection owns one Agent whose programs retain application and window objects, and consent is granted unattended or forwarded to the client as an elicitation. The profile runs no model turn and records no root tool calls in its Session.
 
 ## Choose a provider
 
-Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. Both Cua Driver providers are experimental public npm packages and require explicit activation.
+Mount [`dsh-computer-use`](../../packages/computer-use/computer-use/README.md) and one provider in the same composition. The Computer Use bundle selects the native provider for the host platform. Custom compositions can also mount a provider directly.
 
 | Provider | Runtime |
 |---|---|
+| [macOS CUA](../../packages/experimental/cua-macos/README.md) | Swift helper using macOS Accessibility |
+| [Windows CUA](../../packages/experimental/cua-windows/README.md) | .NET helper using Windows UI Automation |
 | [Cua Driver MCP](../../packages/experimental/computer-use-cua-driver-mcp/README.md) | An already installed `cua-driver` executable connected through MCP |
 | [Cua Driver native](../../packages/experimental/computer-use-cua-driver-native/README.md) | The platform-native runtime installed with the npm dependency |
 
-Each provider supplies its upstream tool catalog. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
+The two Cua Driver providers are public experimental npm packages. Mount one explicitly to expose its upstream tool catalog. The shared service registers only a name and rejects any second provider, including another instance with the same name. It has no common desktop-operation methods or model-controlled selector.
 
 ## Lifetime and desktop sharing
 
@@ -92,7 +100,7 @@ Browser controls for provider-owned native permission and application decisions.
 
 /**
  * Inspect system privileges independently of application decisions and icons.
- * @returns Fresh native preflight and launch metadata.
+ * @returns Platform-tagged access observations and native process metadata.
  */
 @Remote async systemStatus(): Promise<CuaSystemPermissionState>
 
@@ -134,4 +142,38 @@ Browser controls for provider-owned native permission and application decisions.
 ```
 
 Source: [`packages/experimental/cua/src/access.ts`](../../packages/experimental/cua/src/access.ts)
+
+<a id="ctxcuaprograms--cuaprograms"></a>
+
+### `ctx.cuaPrograms` — `CuaPrograms`
+
+Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.
+
+```ts cordis-catalog
+/**
+ * Release one Agent's retained program environment with the dedicated runtime's owner release. The program
+ * process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code`
+ * call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native
+ * connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent's
+ * programs until the release settles, so the caller holds them back; after a failed release it rejects them
+ * until a later release succeeds. Resolves when no environment exists.
+ * @param agent - Agent whose `cua_run_code` state owner is released.
+ * @returns Completion after the process has exited and its output has drained.
+ * @throws When the process cleanup fails.
+ */
+release(agent: Agent): Promise<void>
+
+/**
+ * Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured.
+ * A host that forwards screenshots outside a model request reads the same request version with it, so the
+ * image a caller sees matches the coordinate space the provider mapped.
+ * @param image - Durable screenshot attachment from a `cua` result.
+ * @returns The fixed target, or undefined when the Agent's model route selects the delivered version.
+ */
+screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined
+```
+
+Types: [Agent](core.md) · [ImageAttachmentRef](attachment.md) · [ImageRequestTarget](attachment.md)
+
+Source: [`packages/experimental/cua/src/tool-registration.ts`](../../packages/experimental/cua/src/tool-registration.ts)
 <!-- END GENERATED cordis-surface -->

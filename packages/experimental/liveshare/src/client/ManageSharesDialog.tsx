@@ -55,7 +55,14 @@ export function LiveshareManageSharesDialog({ shares, onOpenShare, onClose, t }:
     setError('')
     try {
       const stopped = await shares.stop({ shareId: target.shareId })
-      if (!stopped.ok) throw new Error('stop refused')
+      // A Host whose share state another running process holds refuses the write; the share stays
+      // listed, and the owner acts on it in the process holding the state.
+      if (!stopped.ok) {
+        setError(stopped.error.code === 'liveshareShares/owner-state-held'
+          ? t('dialog.ownerStateHeld')
+          : t('dialog.stopFailed'))
+        return
+      }
       setShareList(current => current.filter(share => share.shareId !== target.shareId))
       setStopTarget(undefined)
       setStopAcknowledged(false)
@@ -81,33 +88,39 @@ export function LiveshareManageSharesDialog({ shares, onOpenShare, onClose, t }:
         {loaded && shareList.length === 0 ? <p className={css.noRequests}>{t('manage.empty')}</p> : null}
         {shareList.length === 0 ? null : (
           <ul className={css.outgoingList}>
-            {shareList.map(share => (
-              <li key={share.shareId} className={css.outgoingItem}>
-                <div className={css.managerRow}>
-                  <strong title={share.sessionTitle}>{share.sessionTitle}</strong>
-                  <span className={share.online ? css.online : css.offline}>
-                    {t(share.online ? 'dialog.share.online' : 'dialog.share.offline')}
-                  </span>
-                  <div className={css.managerActions}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={onOpenShare === undefined}
-                      onClick={() => { onOpenShare?.(share.sessionId, share.sessionTitle) }}
-                    >
-                      {t('manage.open')}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => { setStopTarget(share); setStopAcknowledged(false) }}
-                    >
-                      {t('manage.cancelShare')}
-                    </Button>
+            {shareList.map((share) => {
+              const primary = share.sessionIds?.[0] ?? share.sessionId ?? ''
+              const open = primary === '' || onOpenShare === undefined
+                ? undefined
+                : () => { onOpenShare(primary, share.sessionTitle) }
+              return (
+                <li key={share.shareId} className={css.outgoingItem}>
+                  <div className={css.managerRow}>
+                    <strong title={share.sessionTitle}>{share.sessionTitle}</strong>
+                    <span className={share.online ? css.online : css.offline}>
+                      {t(share.online ? 'dialog.share.online' : 'dialog.share.offline')}
+                    </span>
+                    <div className={css.managerActions}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={open === undefined}
+                        onClick={open}
+                      >
+                        {t('manage.open')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setStopTarget(share); setStopAcknowledged(false) }}
+                      >
+                        {t('manage.cancelShare')}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         )}
         {error === '' ? null : <div className={css.error} role="alert">{error}</div>}

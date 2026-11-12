@@ -8,9 +8,10 @@ import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
 import type { PtcRunRequest, PtcRunSpec, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { estimateContent } from '@deepseek-ai/dsh-token-meter/estimate'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import { SpillLocator, SpillStore, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { Session, type SessionId } from '@deepseek-ai/dsh-session'
+import { type SpillLocator, SpillStore, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import * as SpillPolicy from '@deepseek-ai/dsh-spill-policy'
 import { formatSpillNotice } from '@deepseek-ai/dsh-spill-policy/notice'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -21,7 +22,7 @@ import { describe, expect, it } from 'vitest'
 import { isSpilledShellCall, terminalCardModel } from '../src/client/tool/models/terminal-card-model.ts'
 
 const spillReference = {
-  locator: SpillLocator('/spill/shell.txt'),
+  locator: brandString<SpillLocator>('/spill/shell.txt'),
   retrievalHint: 'Read the saved text.',
 }
 
@@ -62,7 +63,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
           if (tool === undefined) throw new Error('missing fixture binding')
           const blocks = await tool(shellArgs)
           expect(blocks).toEqual([{ type: 'text', text }])
-          return { logs: [], value: true }
+          return { output: [{ type: 'text', text: 'true' }] }
         }
       }
       await ctx.plugin(BindingRuntime)
@@ -76,17 +77,17 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
       },
       async execute() { return [{ type: 'text', text }] },
     })))
-    const session = Session.create(SessionId('spill-terminal'))
+    const session = Session.create(brandString<SessionId>('spill-terminal'))
     // Nested PTC registers retained-environment cleanup on the owning context.
     const agent = { ctx, session } as Agent
-    const callId = ToolCallId('shell-call')
+    const callId = brandString<ToolCallId>('shell-call')
     const result = await executeModelToolFixture(ctx, {
       callId,
       agent,
       signal: new AbortController().signal,
       name: nested ? 'run_code' : name,
       arguments: nested ? {
-        code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); return blocks[0].text === ${JSON.stringify(text)};`,
+        code: `const blocks = await tools.${name}(${JSON.stringify(shellArgs)}); inspect(blocks[0].text === ${JSON.stringify(text)});`,
         description: 'Dispatch shell fixture through the tool pipeline',
       } : shellArgs,
     })
@@ -95,7 +96,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
 
     let block: ToolResultNode
     if (nested) {
-      expect(result.value).toMatchObject({ result: true })
+      expect(result.value).toMatchObject({ logs: ['true'] })
       const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
       expect(dispatches).toHaveLength(1)
       const event = dispatches[0]!

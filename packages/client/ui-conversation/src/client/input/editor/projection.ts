@@ -207,7 +207,11 @@ export function $projectComposer(idOf: (key: NodeKey) => number): EditorProjecti
   for (const segment of layout.segments) {
     if (segment.kind !== 'chip') continue
     if ($isQuoteNode(segment.node)) {
-      quotes.push({ offset: segment.clipboardStart, length: segment.clipboardLength, text: segment.node.getQuoteText() })
+      const summary = segment.node.getQuoteSummary()
+      quotes.push({
+        offset: segment.clipboardStart, length: segment.clipboardLength, text: segment.node.getQuoteText(),
+        ...(summary === undefined ? {} : { summary }),
+      })
       continue
     }
     if (!$isReferenceChipNode(segment.node)) continue

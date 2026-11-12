@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Backend de terminales de la barra lateral",
+    "description": "Ejecuta las terminales persistentes del agente como pestañas de la barra lateral que el usuario puede observar y controlar, y permite al agente leer las terminales del propio usuario."
+  }
+}

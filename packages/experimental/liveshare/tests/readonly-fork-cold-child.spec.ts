@@ -26,7 +26,7 @@ afterEach(() => {
 
 const share: ForkShareState = {
   shareId: 'share-1',
-  sessionId: 'session-shared',
+  sessionIds: ['session-shared'],
   sessionMode: 'view',
   allowsFork: true,
   viewerAdmitted: true,
@@ -99,7 +99,7 @@ function service(
   })
   const read = createViewerReadService({
     connection: owner.connection,
-    sharedSessionId: () => 'session-shared',
+    sharedSessionIds: () => ['session-shared'],
     forkStateOf: state,
     forks,
     writeRefusal: writeRefusalOver(forks, state),
@@ -130,7 +130,7 @@ describe('cold fork child', () => {
       const owner = ownerConnection(() => Promise.resolve(Response.json({ result: { ok: true, value: { sessionId: child } } })))
       const read = createViewerReadService({
         connection: owner.connection,
-        sharedSessionId: () => 'session-shared',
+        sharedSessionIds: () => ['session-shared'],
         forkStateOf: () => ({ ...share, sessionMode }),
         forks,
         enforceChild: (_childSessionId, options) => {
@@ -203,7 +203,7 @@ describe('cold fork child', () => {
     })
     const read = createViewerReadService({
       connection: owner.connection,
-      sharedSessionId: () => 'session-shared',
+      sharedSessionIds: () => ['session-shared'],
       forkStateOf: publishedShare,
       forks,
       writeRefusal: writeRefusalOver(forks, publishedShare),

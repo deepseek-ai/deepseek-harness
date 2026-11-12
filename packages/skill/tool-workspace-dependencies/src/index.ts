@@ -5,6 +5,9 @@ import { dirname, isAbsolute, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { WorkspaceDependencyError } from './error.ts'
+
+export { WorkspaceDependencyError, type WorkspaceDependencyErrorCode } from './error.ts'
 
 /** Cordis plugin identity. */
 export const name = 'tool-workspace-dependencies'
@@ -57,6 +60,10 @@ export interface WorkspaceDependencies {
   readonly pythonDistributions: Readonly<Record<string, string>>
 }
 
+function invalidPayload(message: string, cause?: unknown): WorkspaceDependencyError {
+  return new WorkspaceDependencyError(message, 'WORKSPACE_DEPENDENCY_INVALID_PAYLOAD', cause === undefined ? undefined : { cause })
+}
+
 const VERSION = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/u
 const PLATFORMS = ['win32', 'darwin', 'linux']
 
@@ -77,14 +84,15 @@ function isDistributionMap(value: unknown): value is Readonly<Record<string, str
  * Validate payload JSON and normalize legacy component fields to top-level versions.
  * @param value - Untrusted decoded runtime.json contents.
  * @returns Canonical metadata with one Python distribution map and no components field.
- * @throws For malformed or mixed formats, duplicate distribution names, or inconsistent legacy metadata.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` for malformed or mixed
+ *   formats, duplicate distribution names, or inconsistent legacy metadata.
  */
 export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
-  if (!isRecord(value)) throw new Error('primary runtime: invalid metadata')
+  if (!isRecord(value)) throw invalidPayload('primary runtime: invalid metadata')
   const legacy = value.components !== undefined
   const versions = legacy ? value.components : value
   if (!isRecord(versions) || (legacy && ['python', 'node', 'pnpm'].some(key => value[key] !== undefined))) {
-    throw new Error('primary runtime: invalid metadata')
+    throw invalidPayload('primary runtime: invalid metadata')
   }
   const { desktopVersion, platform, arch, payloadDigest } = value
   const { python, node, pnpm } = versions
@@ -97,18 +105,18 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
     || (pnpm !== undefined && (!isVersion(pnpm) || node === undefined))
     || (payloadDigest !== undefined && (typeof payloadDigest !== 'string' || !/^[a-f0-9]{64}$/u.test(payloadDigest)))
     || !isDistributionMap(pythonPackages)) {
-    throw new Error('primary runtime: invalid metadata')
+    throw invalidPayload('primary runtime: invalid metadata')
   }
   const entries = Object.entries(pythonPackages)
   const distributions = new Map(entries.map(([name, version]) => [name.toLowerCase().replace(/[-_.]+/gu, '-'), version]))
-  if (distributions.size !== entries.length) throw new Error('primary runtime: invalid metadata')
+  if (distributions.size !== entries.length) throw invalidPayload('primary runtime: invalid metadata')
   // Only the old on-disk format duplicates these versions. New manifests use the distribution map alone.
   if (legacy) {
     for (const name of ['numpy', 'pandas'] as const) {
-      if (!isVersion(versions[name])) throw new Error('primary runtime: invalid metadata')
+      if (!isVersion(versions[name])) throw invalidPayload('primary runtime: invalid metadata')
       const version = distributions.get(name)
       if (version !== undefined && version !== versions[name]) {
-        throw new Error(`primary runtime: conflicting ${name} distribution version`)
+        throw invalidPayload(`primary runtime: conflicting ${name} distribution version`)
       }
     }
   }
@@ -126,9 +134,24 @@ export function parsePrimaryRuntime(value: unknown): PrimaryRuntimeManifest {
  * Read and normalize build metadata without rewriting the source file.
  * @param root - Installed or bundled primary runtime directory.
  * @returns Validated top-level versions and target identifiers, including for legacy components manifests.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when `runtime.json` is missing or
+ *   invalid; other read failures, such as `EACCES`, propagate unchanged.
  */
 export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeManifest> {
-  const value: unknown = JSON.parse(await readFile(join(root, 'runtime.json'), 'utf8'))
+  let text: string
+  try {
+    text = await readFile(join(root, 'runtime.json'), 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    throw invalidPayload('primary runtime: runtime.json is missing', error)
+  }
+  let value: unknown
+  try {
+    value = JSON.parse(text)
+  } catch (error) {
+    // JSON.parse rejects only with SyntaxError.
+    throw invalidPayload(`primary runtime: runtime.json is not valid JSON: ${(error as SyntaxError).message}`, error)
+  }
   return parsePrimaryRuntime(value)
 }
 
@@ -137,7 +160,8 @@ export async function readPrimaryRuntime(root: string): Promise<PrimaryRuntimeMa
  * @param root - Payload directory.
  * @param manifest - Validated payload metadata.
  * @returns Relative alias paths mapped to their sibling interpreter filename; regular command files are omitted.
- * @throws When an interpreter alias does not point directly to the versioned regular file.
+ * @throws {WorkspaceDependencyError} `WORKSPACE_DEPENDENCY_INVALID_PAYLOAD` when an interpreter alias
+ *   does not point directly to the versioned regular file.
  */
 export async function primaryRuntimePythonAliases(root: string, manifest: PrimaryRuntimeManifest): Promise<ReadonlyMap<string, string>> {
   const aliases = new Map<string, string>()
@@ -153,7 +177,7 @@ export async function primaryRuntimePythonAliases(root: string, manifest: Primar
     if (!entry.isSymbolicLink()) continue
     if (await readlink(join(root, path)) !== interpreter
       || !(await lstat(join(root, 'dependencies/python/bin', interpreter))).isFile()) {
-      throw new Error(`primary runtime: invalid Python alias ${path}`)
+      throw invalidPayload(`primary runtime: invalid Python alias ${path}`)
     }
     aliases.set(path, interpreter)
   }
@@ -203,9 +227,13 @@ async function validatePayloadEntries(paths: WorkspaceDependencies): Promise<voi
     [paths.pythonPackages, 'directory'], [paths.nodePackages, 'directory'],
   ] as const) {
     if (path === undefined) continue
-    const entry = await stat(path)
+    let entry
+    try { entry = await stat(path) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      throw invalidPayload(`primary runtime: expected ${kind} at ${path}`, error)
+    }
     if (!(kind === 'file' ? entry.isFile() : entry.isDirectory())) {
-      throw new Error(`primary runtime: expected ${kind} at ${path}`)
+      throw invalidPayload(`primary runtime: expected ${kind} at ${path}`)
     }
   }
 }
@@ -222,7 +250,7 @@ async function exists(path: string): Promise<boolean> {
 
 async function compatibleManifest(source: string): Promise<PrimaryRuntimeManifest> {
   const manifest = await readPrimaryRuntime(source)
-  if (manifest.platform !== process.platform || manifest.arch !== process.arch) throw new Error('primary runtime: incompatible platform or architecture')
+  if (manifest.platform !== process.platform || manifest.arch !== process.arch) throw new WorkspaceDependencyError('primary runtime: incompatible platform or architecture', 'WORKSPACE_DEPENDENCY_UNSUPPORTED_PLATFORM')
   return manifest
 }
 
@@ -313,7 +341,12 @@ export function apply(ctx: Context, config: Config): void {
       preparation ??= (config.root === undefined ? resolvePrimaryRuntime(config.source) : installPrimaryRuntime(config.source, config.root))
         .catch((error: unknown) => {
           preparation = undefined
-          throw error
+          if (error instanceof WorkspaceDependencyError) throw error
+          // Preparation runs only filesystem calls and local checks, which reject with Error instances.
+          throw new WorkspaceDependencyError(
+            `primary runtime: preparation failed: ${(error as Error).message}`,
+            'WORKSPACE_DEPENDENCY_PREPARATION_FAILED', { cause: error },
+          )
         })
       return preparation
     },

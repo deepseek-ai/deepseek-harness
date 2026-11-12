@@ -1,0 +1,52 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-windows/README.md
+/:
+  en: d66919d08b144c72
+  zh: 08566047a1f34c68
+/deepseek-ai-dsh-cua-windows:
+  en: a1211ae1bdb841b5
+  zh: 47b1b00b712658c5
+/deepseek-ai-dsh-cua-windows/summary:
+  en: 81514122b1550aae
+  zh: 05cfa346553c5283
+/deepseek-ai-dsh-cua-windows/table-of-contents:
+  en: 8ee204b4021505b9
+  zh: 67040b79fcd9643b
+/deepseek-ai-dsh-cua-windows/setup-and-configuration:
+  en: 879fde2d14869543
+  zh: 69d4c6c2c2823edc
+/deepseek-ai-dsh-cua-windows/interface-semantics:
+  en: 13ff5154e3ed57cf
+  zh: b6a976028b104068
+/deepseek-ai-dsh-cua-windows/interface-semantics/application-discovery:
+  en: 50a841cef8bc070c
+  zh: 3f4bdedd4cb64cd0
+/deepseek-ai-dsh-cua-windows/interface-semantics/application-and-window-selection:
+  en: ea1d0bc4fd95bec1
+  zh: 242e07a4d73ac771
+/deepseek-ai-dsh-cua-windows/interaction-rules:
+  en: 1c1cc6aebddbc8e8
+  zh: 5d3bb99a205c8365
+/deepseek-ai-dsh-cua-windows/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations:
+  en: 38b3250d6ae0f3d6
+  zh: 33d056c416e11d75
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/what-the-model-sees:
+  en: 8445a0a43022223e
+  zh: 48d5a3c726bc4bb6
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/token-effect:
+  en: 39eebd53ee226af7
+  zh: ba7b352cf1e23c3c
+/deepseek-ai-dsh-cua-windows/model-experience/explicit-application-and-window-operations/kv-cache-effect:
+  en: db3e2957041fafbb
+  zh: 34f953887dff37f7
+/deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work:
+  en: 93e47def8054cd3f
+  zh: 20c19872c775ea98
+/deepseek-ai-dsh-cua-windows/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

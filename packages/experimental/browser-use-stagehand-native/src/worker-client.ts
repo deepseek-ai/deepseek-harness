@@ -1,7 +1,7 @@
 /** Isolated Stagehand Workers own CDP connections; the host owns browser processes. */
 
 import { Worker } from 'node:worker_threads'
-import { StagehandDrainError } from './native.ts'
+import { StagehandDrainError, StagehandError } from './error.ts'
 import type { NativeBrowserConfig, NativeBrowserRuntime } from './native.ts'
 import { request } from './worker-rpc.ts'
 
@@ -32,8 +32,8 @@ export async function openBrowserWorker(
   let termination: Promise<number> | undefined
   const terminate = () => termination ??= worker.terminate()
   const lifetime = new AbortController()
-  worker.once('error', (error) => { lifetime.abort(error) })
-  worker.once('exit', (code) => { lifetime.abort(new Error(`Stagehand browser Worker exited (${code})`)) })
+  worker.once('error', (error) => { lifetime.abort(new StagehandError(error.message, 'STAGEHAND_WORKER_FAILED', { cause: error })) })
+  worker.once('exit', (code) => { lifetime.abort(new StagehandError(`Stagehand browser Worker exited (${code})`, 'STAGEHAND_WORKER_FAILED')) })
   let closing: Promise<void> | undefined
   const close = () => closing ??= (async () => {
     let timeout: ReturnType<typeof setTimeout> | undefined
@@ -71,7 +71,7 @@ export async function openBrowserWorker(
     async execute(method, args, signal) {
       signal?.throwIfAborted()
       lifetime.signal.throwIfAborted()
-      if (closing !== undefined) throw new Error('Stagehand browser Worker is closed')
+      if (closing !== undefined) throw new StagehandError('Stagehand browser Worker is closed', 'STAGEHAND_WORKER_FAILED')
       const canceled = () => { void close().catch((error: unknown) => { lifetime.abort(error) }) }
       signal?.addEventListener('abort', canceled, { once: true })
       try {

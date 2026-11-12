@@ -7,14 +7,20 @@
   },
   "files": [
     "src/index.ts",
+    "src/commit-range.ts",
     "src/diff.ts",
     "src/git.ts",
     "src/local-diff.ts",
+    "src/layers.ts",
+    "src/lens-version.ts",
+    "src/lenses.ts",
     "src/panel.ts",
     "src/parse.ts",
     "src/patch-cache.ts",
+    "src/review-cache.ts",
     "src/states.ts",
     "src/types.ts",
+    "src/wildmatch.ts",
     "src/worktree.ts"
   ],
   "references": [
@@ -62,6 +68,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../../util/brand"
     },
     {
       "path": "../../util/timeout"

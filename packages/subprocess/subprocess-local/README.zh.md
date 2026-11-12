@@ -69,7 +69,7 @@ Linux 普通进程和终端进程即使在 bootstrap 消费启动请求前被取
 
 ### 可能出错的地方
 
-无法解析的可执行文件会明确报出稳定错误。当 spawn 或提供方故障使 direct outcome 无法产生时，`done` 会 reject；该 rejection 不能证明 target 是否已经开始执行。若所选 owner 无法再证明其范围为空，`waitForExit()` 会 reject，清理仍会尝试终止。越过保留尾部的读取是 `lossy` 的，并在 spill 文件存在时指向它。fallback 进程组或已观察终端 session 可能遗漏在观察前逃逸的后代——见下文限制。
+无法解析的可执行文件会明确报出稳定错误。当 spawn 或提供方故障使 direct outcome 无法产生时，`done` 会 reject；该 rejection 不能证明 target 是否已经开始执行：平台 spawn 错误保持为原始 Node 错误，而 Windows Job runner 启动后失败或其 IPC 通道损坏时以 `SubprocessError` 的 `SUBPROCESS_RUNNER_FAILED` 或 `SUBPROCESS_RUNNER_IPC_FAILED` reject。在无法加载 node-pty 的主机上请求终端会抛出 `SUBPROCESS_PTY_UNAVAILABLE`。若所选 owner 无法再证明其范围为空，`waitForExit()` 会 reject，清理仍会尝试终止。越过保留尾部的读取是 `lossy` 的，并在 spill 文件存在时指向它。fallback 进程组或已观察终端 session 可能遗漏在观察前逃逸的后代——见下文限制。
 
 -----
 
@@ -104,7 +104,7 @@ Linux 普通进程和终端进程即使在 bootstrap 消费启动请求前被取
 
 ### 主流程
 
-一次 spawn 会同步校验最终 argv、cwd 与环境，在用户命令可能运行前选择 containment，并在目标身份保持私有的情况下返回句柄。Linux 普通命令与终端启动使用私有的一次性请求；scope 内的 bootstrap 会恢复目标 cwd 与环境、解析可执行文件、清除 fd 0 至 fd 2 及可选控制 fd 7 的 close-on-exec 标记，再以原始 argv 进入 libc `execve()`。Windows 普通命令会隔离 runner 的 fd 0 至 fd 2、把 fd 3 留给 IPC，并用 fd 4 至 fd 6 承载 target stdio，在请求控制时还使用 fd 7；runner 把这些 CRT 描述符解析成 OS handle，以 suspended 状态创建 target，将其加入 Job、恢复运行，再关闭自身的标准流载体及可选 fd-7 载体。`done` 会在 direct command 及其 stdio 屏障结算后完成，`waitForExit()` 则分别等待所选 scope、Job、进程组或已观察会话变空。
+一次 spawn 会同步校验最终 argv、cwd 与环境，在用户命令可能运行前选择 containment，并在目标身份保持私有的情况下返回句柄。Linux 普通命令与终端启动使用私有的一次性请求；scope 内的 bootstrap 会恢复目标 cwd 与环境、解析可执行文件、清除 fd 0 至 fd 2 及可选控制 fd 7 的 close-on-exec 标记，再以原始 argv 进入 libc `execve()`。Windows 普通命令会隔离 runner 的 fd 0 至 fd 2、把 fd 3 留给 IPC，并用 fd 4 至 fd 6 承载 target stdio，在请求控制时还使用 fd 7；runner 把这些 CRT 描述符解析成 OS handle，以 suspended 状态创建 target，将其加入 Job、恢复运行，再关闭自身的标准流载体及可选 fd-7 载体。`done` 会在 direct command 及其 stdio 屏障结算后完成，`waitForExit()` 则分别等待所选 scope、Job、进程组或已观察会话变空。 Linux 仅清除为子进程新建的标准流管道上的 `O_NONBLOCK`，继承的标准流及 PTY 保留原有文件状态标志。
 
 ### 安全不变式
 

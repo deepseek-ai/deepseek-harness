@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-05-harness-error-dependency-free-base.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-harness-error-dependency-free-base.md
+/agent-note-keep-the-harnesserror-base-in-a-dependency-free-package:
+  en: 6ff178be521c3318
+  zh: 18a9a8cc261fe975
+/agent-note-keep-the-harnesserror-base-in-a-dependency-free-package/problem:
+  en: 29880462facde90c
+  zh: d07805b2000c85b1
+/agent-note-keep-the-harnesserror-base-in-a-dependency-free-package/decision:
+  en: caec42054c040d37
+  zh: d726f0da57dc1e68
+/agent-note-keep-the-harnesserror-base-in-a-dependency-free-package/alternatives-considered:
+  en: 8245e473d4e90250
+  zh: fe7883dfe13070a9
+/agent-note-keep-the-harnesserror-base-in-a-dependency-free-package/consequences:
+  en: 9a577f5c3bb9fa15
+  zh: 4c18ec885768b9d3

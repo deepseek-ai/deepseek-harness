@@ -1,6 +1,7 @@
 /** Translate Messages events while preserving block order and cumulative usage. */
 
-import { LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmError, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { object, replayState } from './replay.ts'
 import type { ReplayBlock } from './replay.ts'
@@ -53,7 +54,7 @@ function startBlock(event: Record<string, unknown>, index: number): Block {
       replay = { type: 'reasoning', ...native.signature === undefined ? {} : { signature: string(native.signature) } }
       break
     case 'tool_use':
-      content = { type: 'tool-call', id: ToolCallId(string(native.id)), name: string(native.name), arguments: JSON.stringify(object(native.input)) }
+      content = { type: 'tool-call', id: brandString<ToolCallId>(string(native.id)), name: string(native.name), arguments: JSON.stringify(object(native.input)) }
       if (!content.id || !content.name) return malformed('empty tool identity')
       replay = { type: 'tool-call' }
       break

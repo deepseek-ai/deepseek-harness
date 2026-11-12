@@ -15,9 +15,8 @@ import { MAX_INLINE_ICON_BYTES } from '@deepseek-ai/dsh-plugin-market-index'
 import { writeIfChanged } from './files.ts'
 import { generate } from './generate.ts'
 import { GENERATED_ICON } from './metadata.ts'
+import { PUBLIC_NPM_REGISTRY } from './fetchers.ts'
 import { parseSources } from './sources.ts'
-
-const PUBLIC_REGISTRY = 'https://registry.npmjs.org/'
 
 /** Parsed command-line options. */
 interface Options {
@@ -51,7 +50,7 @@ function program(): Command {
     .requiredOption('--title <text>', 'market title')
     .option('--description <text>', 'market description')
     .option('--cache <dir>', 'cache directory (default: .plugin-market-cache beside the input list)')
-    .option('--registry <url>', 'npm registry', PUBLIC_REGISTRY)
+    .option('--registry <url>', 'npm registry', PUBLIC_NPM_REGISTRY)
     .addOption(new Option('--inline-icon-bytes <n>', `largest icon embedded as a data URL, at most ${String(MAX_INLINE_ICON_BYTES)}`)
       .argParser(integer(MAX_INLINE_ICON_BYTES)).default(16384))
     .addOption(new Option('--concurrency <n>', 'sources read at once').argParser(integer()).default(4))
@@ -68,11 +67,13 @@ async function run(options: Options): Promise<number> {
   const input = resolve(base, options.input)
   const output = resolve(base, options.output)
   const registry = new URL(options.registry).href.replace(/\/?$/u, '/')
+  const githubToken = process.env.GITHUB_TOKEN?.trim() || undefined
   const result = await generate({
     sources: parseSources(readFileSync(input, 'utf8')),
     cacheDir: options.cache === undefined ? join(dirname(input), '.plugin-market-cache') : resolve(base, options.cache),
     registry,
-    recordRegistry: registry !== PUBLIC_REGISTRY,
+    recordRegistry: registry !== PUBLIC_NPM_REGISTRY,
+    ...githubToken === undefined ? {} : { githubToken },
     title: options.title,
     ...options.description === undefined ? {} : { description: options.description },
     inlineIconBytes: options.inlineIconBytes,

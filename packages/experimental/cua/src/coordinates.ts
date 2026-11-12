@@ -1,4 +1,4 @@
-/** Agent-owned mapping from observed screenshot pixels or integer ratios to native window points. */
+/** Agent-owned mapping from observed screenshot pixels or integer ratios to native window coordinates. */
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import type { CuaAppHandle, CuaOperation, CuaWindowInfo } from './types.ts'
@@ -12,7 +12,7 @@ interface Frame {
 
 /** Tracks only the current window geometry and last successfully prepared screenshot. */
 export class CuaCoordinates {
-  private readonly applications = new Map<CuaAppHandle, Map<number, Frame>>()
+  private readonly applications = new Map<CuaAppHandle, Map<string, Frame>>()
 
   /**
    * Invalidate screenshot mappings when a window closes or changes size.
@@ -20,9 +20,9 @@ export class CuaCoordinates {
    * @param windows - freshly observed windows.
    * @param windowId - selected window for a scoped observation; omission means a complete application inventory.
    */
-  observe(appHandle: CuaAppHandle, windows: readonly CuaWindowInfo[], windowId?: number): void {
+  observe(appHandle: CuaAppHandle, windows: readonly CuaWindowInfo[], windowId?: string): void {
     const previous = this.applications.get(appHandle)
-    const current = new Map<number, Frame>(windowId === undefined ? [] : previous)
+    const current = new Map<string, Frame>(windowId === undefined ? [] : previous)
     if (windowId !== undefined && !windows.some(window => window.windowId === windowId)) current.delete(windowId)
     for (const window of windows) {
       const { width, height } = window.bounds
@@ -36,11 +36,11 @@ export class CuaCoordinates {
    * Bind the exact image delivered to the model to its native window size.
    * @param appHandle - native application selection.
    * @param windowId - selected native window.
-   * @param bounds - capture-time window size in points.
+   * @param bounds - capture-time window size in the provider’s native units.
    * @param image - encoded model-request image dimensions.
    */
   screenshot(
-    appHandle: CuaAppHandle, windowId: number, bounds: { width: number; height: number }, image: { width: number; height: number },
+    appHandle: CuaAppHandle, windowId: string, bounds: { width: number; height: number }, image: { width: number; height: number },
   ): void {
     let frames = this.applications.get(appHandle)
     if (!frames) { frames = new Map(); this.applications.set(appHandle, frames) }

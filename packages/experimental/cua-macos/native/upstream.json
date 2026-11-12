@@ -28,16 +28,18 @@
     {
       "local": "Sources/CuaNative/AXAccess.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
-      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, checked discovery failures, AX-less owned windows and DSH system-panel ownership validation. Batch per-node observation attributes while retaining per-attribute errors and individual reads for unsupported batch APIs. Resolve exact-window AX frames for DSH capture and pointer geometry checks. Include value writability, disabled and selected state in the model-facing tree. Select uniquely matched literal text through AXSelectedTextRange and verify the UTF-16 range without rewriting content."
+      "changes": "Reimplement AX traversal, selected-window filtering and display projection in Swift. Retain CFEqual identity handling, scoped AX references, invalid-root isolation across discovery and window selection, checked unresolved-scope failures, AX-less owned windows and DSH system-panel ownership validation. Batch per-node observation attributes while retaining per-attribute errors and individual reads for unsupported batch APIs. Resolve exact-window AX frames for DSH capture and pointer geometry checks. Include value writability, disabled and selected state in the model-facing tree. Select uniquely matched literal text through AXSelectedTextRange and verify the UTF-16 range without rewriting content."
     },
     {
       "local": "Sources/CuaNative/NativePlatform.swift",
       "upstream": "libs/cua-driver/rust/crates/platform-macos/src/apps/mod.rs",
-      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor."
+      "changes": "Reimplement application and window discovery using Swift AppKit/CoreGraphics, preserve process-lifetime checks, and isolate AppKit access on the main actor. App discovery also includes visible auxiliary windows; foreground diagnostics use normal windows."
     }
   ],
   "localFiles": [
+    "Sources/CuaNative/AXObservedChildren.swift",
     "Sources/CuaNative/AXTextFormatter.swift",
+    "Sources/CuaNative/AXTreeProjection.swift",
     "Sources/CuaNative/AXWorker.swift",
     "Sources/CuaNative/ApplicationAuthorization.swift",
     "Sources/CuaNative/ApplicationDiscovery.swift",

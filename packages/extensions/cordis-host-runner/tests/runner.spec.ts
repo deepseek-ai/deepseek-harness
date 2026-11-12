@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ApprovalRequestId } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   ApprovalRequestId as ApprovalRequestIdType, CordisDynamicPluginId,
 } from '../src/types.ts'
@@ -319,7 +319,7 @@ describe('dynamic runner dispatch', () => {
   it('accepts and ignores an answer to a request nobody is waiting for', async () => {
     const { runner } = await setup()
 
-    await expect(runner.resolveRequestRun(ApprovalRequestId('approval-404'), {
+    await expect(runner.resolveRequestRun(brandString<ApprovalRequestIdType>('approval-404'), {
       ok: true, pluginRunId: 'run-1' as never,
     }))
       .resolves.toEqual({ accepted: false })
@@ -488,7 +488,7 @@ describe('dynamic runner teardown', () => {
 
   it('answers a missing definition with the memory-only explanation', async () => {
     const { runner } = await setup()
-    const receipt = await runner.undefine(AGENT_A, 'dyn-404' as CordisDynamicPluginId)
+    const receipt = await runner.undefine(AGENT_A, brandString<CordisDynamicPluginId>('dyn-404'))
 
     expect(receipt).toMatchObject({ ok: false, reason: 'plugin-missing' })
     expect((receipt as { message: string }).message).toContain('lost on DSH restart')

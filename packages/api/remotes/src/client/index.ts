@@ -8,7 +8,7 @@ import userQuestionsRemote from '@deepseek-ai/dsh-user-questions/remote'
 import commandsRemote from '@deepseek-ai/dsh-commands/remote'
 import agentTeamsRemote from '@deepseek-ai/dsh-agent-team/remote'
 export type {} from '@deepseek-ai/dsh-agent-team/remote'
-import accountRemote from '@deepseek-ai/dsh-api-account-controller/remote'
+import accountRemote from '@deepseek-ai/dsh-deepseek-account/remote'
 import settingsControllerRemote from '@deepseek-ai/dsh-api-settings-controller/remote'
 import officeKitRemote from '@deepseek-ai/dsh-office-kit/remote'
 import goalsRemote from '@deepseek-ai/dsh-goal/remote'
@@ -27,6 +27,8 @@ import sessionFeedbackRemote from '@deepseek-ai/dsh-command-feedback/remote'
 import fileUploadsRemote from '@deepseek-ai/dsh-client-file-upload/remote'
 import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import subagentsRemote from '@deepseek-ai/dsh-subagent/remote'
+import sessionStatusRemote from '@deepseek-ai/dsh-client-ui-session-status/remote'
+export type {} from '@deepseek-ai/dsh-client-ui-session-status/remote'
 import sessionRemote from '@deepseek-ai/dsh-api-session-controller/remote'
 import jobRemote from '@deepseek-ai/dsh-api-job-controller/remote'
 import workspaceRemote from '@deepseek-ai/dsh-api-workspace-controller/remote'
@@ -60,7 +62,7 @@ export type {} from '@deepseek-ai/dsh-user-questions/remote'
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-web/remote'
 export type {} from '@deepseek-ai/dsh-api-settings-controller/remote'
-export type {} from '@deepseek-ai/dsh-api-account-controller/remote'
+export type {} from '@deepseek-ai/dsh-deepseek-account/remote'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-schedule/remote'
 export type {} from '@deepseek-ai/dsh-office-kit/remote'
@@ -203,7 +205,8 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       toolResultsRemote,
       messageFeedbackRemote, sessionFeedbackRemote,
       fileUploadsRemote, sessionReferencesRemote,
-      permissionPresetsRemote, subagentsRemote, sessionRemote, jobRemote, workspaceRemote, workspaceFilesRemote, terminalRemote,
+      permissionPresetsRemote, subagentsRemote, sessionRemote, sessionStatusRemote, jobRemote,
+      workspaceRemote, workspaceFilesRemote, terminalRemote,
       officeKitRemote, userQuestionsRemote, webRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))

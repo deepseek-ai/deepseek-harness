@@ -52,7 +52,6 @@ const DUPLICATE_SAFE_PACKAGES: readonly string[] = [
  */
 const SAFE_HOST_DEPENDENCY_EXPORTS = {
   '@deepseek-ai/dsh-atomic-write': ['withFileLock', 'writeFileAtomic'],
-  '@deepseek-ai/dsh-computer-use/brand': ['ComputerUseProviderName'],
   '@deepseek-ai/dsh-credentials': ['credentialKey'],
   '@deepseek-ai/dsh-deque': ['Deque'],
   // Builds a dispatcher from the resolved proxy policy; the caller owns and closes it.
@@ -66,10 +65,11 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
   // The shipped profile templates are plain data; a consumer reads their bundle names only.
   '@deepseek-ai/dsh-official-bundles': ['PROFILE_TEMPLATES'],
   '@deepseek-ai/dsh-llm': ['callConfigEquals'],
-  '@deepseek-ai/dsh-session': ['SessionId'],
   '@deepseek-ai/dsh-session-format': ['sessionFormatLogFilename'],
   '@deepseek-ai/dsh-storage-domain': ['defineDomain'],
   '@deepseek-ai/dsh-timeout': ['MAX_TIMER_DELAY_MS'],
+  // Both operate only on the caller's subprocess service and handle; the module memoizes only the binary path.
+  '@deepseek-ai/dsh-util-ripgrep': ['readRipgrepLines', 'spawnRipgrep'],
   '@deepseek-ai/schemastery': ['default'],
 } as const satisfies HostDependencyExports
 
@@ -77,22 +77,30 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 const PEER_REQUIRED_HOST_EXPORTS = {
   // Profile settings must match the installed Node provider's configuration schema.
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
-  // CUA checks UserQuestionError and preserves AttachmentError from image admission.
-  '@deepseek-ai/dsh-attachment': ['admitEncodedImages'],
+  // CUA mounts the installed provider and shares executor error classes with PTC.
+  '@deepseek-ai/dsh-ptc-runtime-node': ['default'],
+  '@deepseek-ai/dsh-tool-executor-ptc/run-code': ['RunCodeConfig', 'createRunCodeTool'],
+  // CUA checks UserQuestionError and preserves AttachmentError from image admission; longEdgeDimensions is pure
+  // arithmetic that rides the same peer.
+  '@deepseek-ai/dsh-attachment': ['admitEncodedImages', 'longEdgeDimensions'],
   '@deepseek-ai/dsh-user-questions': ['UserQuestionError'],
+  // The tool registry and every subclass rely on `instanceof` against one HarnessError class.
+  '@deepseek-ai/dsh-error': ['HarnessError'],
   // `instanceof` checks need the translator's own class instance.
   '@deepseek-ai/dsh-experimental-translator': ['TranslationError'],
   // Stateless; a safe classification would turn the forge panel's forge and worktree peers into dependencies.
   '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
-  '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName'],
+  '@deepseek-ai/dsh-experimental-worktree': ['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'],
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
+  // Error classes have instance identity; CUA and Liveshare throw the registry's own copy so `instanceof` against it matches.
+  '@deepseek-ai/dsh-tools': ['ToolArgsError', 'ToolContextUnavailableError'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
-  '@deepseek-ai/dsh-timeout': ['deadline'],
+  '@deepseek-ai/dsh-timeout': ['deadline', 'timeoutOf'],
 } as const satisfies HostDependencyExports
 
 /** Exact import specifier to reviewed runtime exports. */

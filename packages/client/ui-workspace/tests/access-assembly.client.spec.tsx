@@ -4,13 +4,14 @@
  *
  * Hand-built row props spread allow-all access Hooks, so they cannot show that the browsing region
  * reads the Hooks a page actually binds. This spec replaces the runtime's allow-all access row with the
- * remote-access snapshot owner itself and renders the real slot tree, so the global and Workspace
- * access Hooks are the renderer's bindings over one non-owner snapshot.
+ * remote-access snapshot owner itself and renders the real slot tree, so the Workspace access Hooks
+ * are the renderer's bindings over one non-owner snapshot.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, screen } from '@testing-library/react'
-import type { TypertResourceKind } from '@deepseek-ai/dsh-api-remote-access/client'
+import type { AccessEffect, RemoteEndpoint, TypertResourceKind } from '@deepseek-ai/dsh-api-remote-access/client'
 import { ClientAccessState } from '@deepseek-ai/dsh-api-remote-access/src/client/state.ts'
+import { whenAllowed } from '@deepseek-ai/dsh-api-remote-access/src/client/when-allowed.ts'
 import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -48,6 +49,8 @@ async function bench(access: ClientAccessState, options: { ungroupedSession?: Se
     apply(ctx) {
       ctx.provide('remoteAccess', {
         source: (kind: TypertResourceKind, id: string, action: string) => access.resource(kind, id, action),
+        whenAccess: (action: RemoteEndpoint, callback: () => AccessEffect) =>
+          whenAllowed(ctx, access.global(action), callback, `access-assembly: ${action}`),
       })
       ctx.slots.provideRoot({ keyedHooks: { remoteAccess: action => access.global(action) } })
     },
@@ -131,7 +134,7 @@ describe('Workspace header actions under the page access snapshot', () => {
     }
   })
 
-  it('asks the global resource before the Ungrouped header offers New Session', async () => {
+  it('never offers New Session on the Ungrouped header, even under a global grant', async () => {
     const access = new ClientAccessState({ type: 'baseline', owner: false, grants: [] })
     const runtime = await bench(access, { ungroupedSession: 'loose' as SessionId })
     try {
@@ -141,7 +144,7 @@ describe('Workspace header actions under the page access snapshot', () => {
       act(() => {
         access.update({ type: 'upsert', grant: { resource: { kind: 'global' }, actions: ['session/create'] } })
       })
-      expect(screen.getByRole('button', { name: '在“未分组”中新建会话' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: '在“未分组”中新建会话' })).toBeNull()
     } finally {
       await runtime.dispose()
     }

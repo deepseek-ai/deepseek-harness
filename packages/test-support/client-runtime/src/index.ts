@@ -1,7 +1,8 @@
 /**
  * jsdom slot test runtime: a real small runtime — Cordis `Context`, the
- * renderer-owned `SlotRegistry`, the `ui-session` adapter, and the UI renderer — assembled around
- * test-owned session/workspace doubles and a fail-loud file-upload stub, so feature specs exercise
+ * renderer-owned `SlotRegistry`, the `ui-session` adapter, the
+ * `ui-session-status` table, and the UI renderer — assembled around
+ * test-owned session/workspace doubles and fail-loud file-upload and reading-mark stubs, so feature specs exercise
  * declaration, registration, scope, store, inject, rendering, updates, and
  * disposal without hand-building the machinery per suite.
  *
@@ -28,6 +29,9 @@ import { createSlotRenderer as createRenderer } from '@deepseek-ai/dsh-client-ui
 import {
   apply as applyUiSession, inject as uiSessionInject,
 } from '@deepseek-ai/dsh-client-ui-session/client'
+import {
+  apply as applySessionStatus, inject as sessionStatusInject,
+} from '@deepseek-ai/dsh-client-ui-session-status/client'
 import type { SessionReference } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -267,6 +271,10 @@ export class SlotTestRuntime {
     ctx.provide('sessions', this.sessions)
     ctx.provide('workspaces', this.workspaces)
     ctx.provide('fileUpload', this.fileUpload as never)
+    this.remote.provideNamespaces({ sessionStatus: {
+      follow: (signal: AbortSignal) => idleReadingStream(signal),
+      mark: () => Promise.reject(new Error('client test runtime: reading mark is not stubbed')),
+    } })
     this.disposeWorkspaceSource = slots.provideRoot({ hooks: { workspaces: this.workspaces.list } })
     this.disposePanelInfoSource = slots.provideRoot({ hooks: { panelInfo: this.panelInfo } })
     // Capturing install: the production renderer does the rendering; the
@@ -293,6 +301,7 @@ export class SlotTestRuntime {
     const runtime = new SlotTestRuntime(ctx, ctx.get('slots') as SlotRegistry)
     await ctx.plugin(allowAllAccessPlugin).await()
     await ctx.plugin({ inject: [...uiSessionInject], apply: applyUiSession }).await()
+    await ctx.plugin({ inject: [...sessionStatusInject], apply: applySessionStatus }).await()
     return runtime
   }
 
@@ -487,4 +496,11 @@ export class SlotTestRuntime {
     await this.stabilizer(() => this.ctx.fiber.dispose())
     localStorage.clear()
   }
+}
+
+/** Empty reading baseline held open until the stream generation is cancelled. */
+async function *idleReadingStream(signal: AbortSignal): AsyncGenerator<{ readonly type: 'baseline'; readonly items: readonly [] }> {
+  yield { type: 'baseline', items: [] }
+  signal.throwIfAborted()
+  await new Promise<void>((resolve) => { signal.addEventListener('abort', () => { resolve() }, { once: true }) })
 }

@@ -56,6 +56,7 @@ kind: "package-group"
 | [`webhook-github`](webhook-github/README.zh.md) | 带签名的 GitHub webhook 入口 | — |
 | [`session-title-all-prompts-llm`](session-title-all-prompts-llm/README.zh.md) | 根据所有人类提示生成会话标题 | — |
 | [`tool-terminal`](tool-terminal/README.zh.md) | 持久终端工具 | — |
+| [`terminal-panel`](terminal-panel/README.zh.md) | Web 侧栏中的 Agent 终端与只读的用户终端工具 | — |
 | [`tool-ralph`](tool-ralph/README.zh.md) | 有界重复委派任务 | — |
 | [`skill-badge`](skill-badge/README.zh.md) | powered-by-dsh 徽章技能 | — |
 | [`translator`](translator/README.zh.md) | 免登录 Google 与 Bing 文本翻译 | `ctx.translator` |
@@ -75,10 +76,11 @@ kind: "package-group"
 | [`tool-subagent-oar`](tool-subagent-oar/README.zh.md) | 为每项委派任务选择配置的外部代理 | `ctx.tools` |
 | [`claude-code-mods`](claude-code-mods/README.zh.md) | 把 Claude Code 模组作为插件运行：钩子链落在 harness 扩展点上，并在提示框上方绘制横幅 | `ctx.claudeCodeMods` |
 | [`client-ui-claude-code-mods`](client-ui-claude-code-mods/README.zh.md) | 在提示框上方绘制模组树并把按钮点击发回的 Web 横幅 | — |
-| [`ptc-runtime-python`](ptc-runtime-python/README.zh.md) | PTC 执行 seam 的 CPython 子进程后端 | `ctx.ptcRuntime` |
 | [CUA](cua/README.zh.md) | 应用与窗口对象、授权执行和权限控件。 | `ctx.cuaAccess` |
 | [macOS CUA](cua-macos/README.zh.md) | Swift 原生执行与平台组件准备。 | `ctx.computerUse` |
+| [Windows CUA](cua-windows/README.zh.md) | 通过 Windows UI Automation 操作应用与窗口。 | `ctx.computerUse` |
 | [`cua-bundle`](cua-bundle/README.zh.md) | 面向 PTC 会话、默认关闭的 Computer Use 开关 | — |
+| [`cua-mcp`](cua-mcp/README.zh.md) | 由 `cua-mcp` profile 向外部 agent harness 提供的 Computer Use MCP stdio 服务器 | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.zh.md) | 通过 MCP 使用已安装的 Cua Driver | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.zh.md) | 嵌入 Cua Driver 原生 npm 运行时 | `ctx.computerUse` |
 | [`browser-use-playwright-mcp`](browser-use-playwright-mcp/README.zh.md) | 通过 MCP 提供 Playwright 浏览器工具 | `ctx.browserUse` |

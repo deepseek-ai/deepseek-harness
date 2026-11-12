@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-app-boot",
   "description": "Shared boot glue for the app bins: .env loading, fail-loud Loader guards, snapshot-aware config resolution, and the Loader boot sequence",
-  "version": "0.2.2-rc.1",
+  "version": "0.2.2-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -43,7 +43,8 @@
     "js-yaml": "^4.3.2",
     "node-addon-require-builtin": "^0.1.9",
     "resolve.exports": "^2.0.3",
-    "semver": "^7.8.5"
+    "semver": "^7.8.5",
+    "@deepseek-ai/dsh-native-command": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis-plugin-group": "workspace:~",

@@ -6,26 +6,26 @@
   en: ed2539c6d12f814a
   zh: 55a6c9d7f0d21fb7
 /deepseek-ai-dsh-cua:
-  en: 0ef7ee882840cf1b
-  zh: 01b9e768eff2d302
+  en: f5a4153faa0d6942
+  zh: 7458bb626dd74b6d
 /deepseek-ai-dsh-cua/summary:
-  en: f4d9cc48587d62a2
-  zh: d1bac6c1fe7eb29e
+  en: 23eb2a4f1cb71986
+  zh: 62e2bec7155ed063
 /deepseek-ai-dsh-cua/table-of-contents:
   en: 5db4d4fea25493b9
   zh: 65ab64fc24eb0d09
 /deepseek-ai-dsh-cua/use-this-package:
-  en: ed736a45140a6d56
-  zh: 8dc89373a0a88fcc
+  en: 682b311d79c66d0f
+  zh: 07cb3285e02beb26
 /deepseek-ai-dsh-cua/use-this-package/permission-controls:
-  en: d92d5948a7941e8d
-  zh: d43491ae6521b87e
+  en: 754ca69ec462325a
+  zh: 440d76acf2666689
 /deepseek-ai-dsh-cua/understand-the-implementation:
-  en: 90e8fcb6ebe271d1
-  zh: f0c90834bec8c73a
+  en: 1466856a9cf848fe
+  zh: 4ef0d79f573c70a6
 /deepseek-ai-dsh-cua/further-exploration:
-  en: 166e3c1f9a67f753
-  zh: 698c5136c5350052
+  en: c174fb5a00ea3681
+  zh: 039340042676881d
 /deepseek-ai-dsh-cua/model-experience:
   en: 215e7ba838619b7b
   zh: a311da3843709f90
@@ -33,17 +33,17 @@
   en: 0faf1e4d409d61aa
   zh: 1866dd0b702f2a26
 /deepseek-ai-dsh-cua/model-experience/authorized-application-operations/what-the-model-sees:
-  en: 4f90c4a6b121bce0
-  zh: c36ab4b80985c76e
+  en: b613371a761f0ab8
+  zh: 826a85089ee3518c
 /deepseek-ai-dsh-cua/model-experience/authorized-application-operations/token-effect:
-  en: 88463f0304c207bd
-  zh: 6d3ae2f1b8e45747
+  en: b9b9827c0baf946d
+  zh: 137bf1a711bba968
 /deepseek-ai-dsh-cua/model-experience/authorized-application-operations/kv-cache-effect:
   en: 2d5df52dafa1d940
   zh: 06e815759b9150c3
 /deepseek-ai-dsh-cua/known-limitations-and-deferred-work:
-  en: a4b9d44dec85b0d1
-  zh: 3a393e508397ecc2
+  en: 038cdfe9432c7979
+  zh: cb48131a2f71b12b
 /deepseek-ai-dsh-cua/known-limitations-and-deferred-work/dev-note:
   en: 0a1253c6f7b5e8b9
   zh: 9f56528562c7c914

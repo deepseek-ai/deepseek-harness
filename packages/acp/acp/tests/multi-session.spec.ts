@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { makeBridgeHarness, textResponse, type BridgeHarness, type CapturedUpdate } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 function messageTextFor(
   updates: { sessionId: string; update: CapturedUpdate }[],
@@ -47,7 +48,7 @@ describe('ACP multi-session isolation', () => {
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
 
     const pendingA = harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'hang A' }] })
-    await vi.waitFor(() => { expect(harness!.ctx.agents.get(SessionId(a))?.status).toBe('running') })
+    await vi.waitFor(() => { expect(harness!.ctx.agents.get(brandString<SessionId>(a))?.status).toBe('running') })
     await harness.client.cancel({ sessionId: a })
     await expect(pendingA).resolves.toEqual({ stopReason: 'cancelled' })
     await expect(harness.client.prompt({ sessionId: b, prompt: [{ type: 'text', text: 'go B' }] }))
@@ -63,8 +64,8 @@ describe('ACP multi-session isolation', () => {
     const pendingA = harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'A' }] })
     const pendingB = harness.client.prompt({ sessionId: b, prompt: [{ type: 'text', text: 'B' }] })
     await vi.waitFor(() => {
-      expect(harness!.ctx.agents.get(SessionId(a))?.status).toBe('running')
-      expect(harness!.ctx.agents.get(SessionId(b))?.status).toBe('running')
+      expect(harness!.ctx.agents.get(brandString<SessionId>(a))?.status).toBe('running')
+      expect(harness!.ctx.agents.get(brandString<SessionId>(b))?.status).toBe('running')
     })
 
     await expect(harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'again' }] }))
@@ -79,8 +80,8 @@ describe('ACP multi-session isolation', () => {
     await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
     const a = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
     const b = (await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })).sessionId
-    const agentA = harness.ctx.agents.get(SessionId(a))!
-    const agentB = harness.ctx.agents.get(SessionId(b))!
+    const agentA = harness.ctx.agents.get(brandString<SessionId>(a))!
+    const agentB = harness.ctx.agents.get(brandString<SessionId>(b))!
     void harness.client.prompt({ sessionId: a, prompt: [{ type: 'text', text: 'A' }] }).catch(() => {})
     void harness.client.prompt({ sessionId: b, prompt: [{ type: 'text', text: 'B' }] }).catch(() => {})
     await vi.waitFor(() => {
@@ -89,7 +90,7 @@ describe('ACP multi-session isolation', () => {
     })
 
     await harness.acpFiber.dispose()
-    expect(harness.ctx.agents.get(SessionId(a))).toBeUndefined()
-    expect(harness.ctx.agents.get(SessionId(b))).toBeUndefined()
+    expect(harness.ctx.agents.get(brandString<SessionId>(a))).toBeUndefined()
+    expect(harness.ctx.agents.get(brandString<SessionId>(b))).toBeUndefined()
   })
 })

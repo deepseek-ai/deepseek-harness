@@ -1,6 +1,7 @@
 {
   "nsisLanguage": "RUSSIAN",
   "strings": {
+    "INSTALLER_UPDATE_WAIT": "Идёт установка обновления. После установки приложение перезапустится автоматически.",
     "INSTALLER_INSTALL": "Установить сейчас",
     "INSTALLER_FINISH": "Готово",
     "INSTALLER_NATIVE_PROGRESS": "Подготовка установки… %d%%",

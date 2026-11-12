@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { ToolCallId, MessageId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId, MessageId } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { assistantUpdates, toolCallUpdate, toolResultUpdate } from '../src/updates.ts'
 
@@ -19,7 +20,7 @@ function assistantEvent(
       turn: 1,
       step: 1,
       message: {
-        id: MessageId('message-1'),
+        id: brandString<MessageId>('message-1'),
         role: 'assistant',
         source: { kind: 'model', provider: 'mock', model: 'mock' },
         content,
@@ -35,7 +36,7 @@ describe('standard ACP update projection', () => {
     const session = { requestContext: () => undefined } as unknown as Session
     const event = assistantEvent([
       { type: 'reasoning', text: '' },
-      { type: 'tool-call', id: ToolCallId('call-hidden'), name: 'hidden', arguments: '{}' },
+      { type: 'tool-call', id: brandString<ToolCallId>('call-hidden'), name: 'hidden', arguments: '{}' },
     ])
 
     await expect(assistantUpdates(ctx, session, event)).resolves.toEqual([])
@@ -61,7 +62,7 @@ describe('standard ACP update projection', () => {
       type: 'tool/call',
       seq: SessionSeq(0),
       time: 0,
-      data: { turn: 1, step: 1, callId: ToolCallId('call-bad'), name: 'broken', arguments: '{' },
+      data: { turn: 1, step: 1, callId: brandString<ToolCallId>('call-bad'), name: 'broken', arguments: '{' },
     })
     const result = await toolResultUpdate({ get: () => undefined } as unknown as Context, {
       type: 'tool/result',
@@ -72,11 +73,11 @@ describe('standard ACP update projection', () => {
         turn: 1,
         step: 1,
         message: {
-          id: MessageId('tool-message'),
+          id: brandString<MessageId>('tool-message'),
           role: 'tool',
-          toolCallId: ToolCallId('call-bad'),
+          toolCallId: brandString<ToolCallId>('call-bad'),
           isError: true,
-          source: { kind: 'tool', callId: ToolCallId('call-bad') },
+          source: { kind: 'tool', callId: brandString<ToolCallId>('call-bad') },
           content: [{ type: 'reasoning', text: 'hidden' }],
         },
       },

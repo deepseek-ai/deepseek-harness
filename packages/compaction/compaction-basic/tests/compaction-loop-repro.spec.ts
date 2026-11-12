@@ -3,7 +3,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage, createSystemMessage, CONTEXT_WINDOW_EXCEEDED_CODE, LlmError, resolveRetryPolicy , createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, LlmResolvedModelInfo, ResolvedRetryPolicy, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { type ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -11,7 +12,7 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import * as LlmRetry from '@deepseek-ai/dsh-llm-retry'
-import { Session, SessionId, type SessionEvent, type SurfaceEvent } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, type SessionEvent, type SurfaceEvent } from '@deepseek-ai/dsh-session'
 
 /**
  * CBR-001 regression through the real loop. A replacement checkpoint has a high
@@ -50,7 +51,7 @@ class StepwiseToolAdapter extends LlmAdapter {
     const n = this.calls
     this.calls += 1
     if (n < this.toolSteps) {
-      const id = ToolCallId(`c${n}`)
+      const id = brandString<ToolCallId>(`c${n}`)
       const args = `{"i":${n}}`
       yield { type: 'block-start', index: 0, blockType: 'text' }
       yield { type: 'block-end', index: 0, block: { type: 'text', text: `step ${n}` } }
@@ -174,7 +175,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
 }
 
 function overflowHistorySeed(): readonly SessionEvent[] {
-  const session = Session.create(SessionId('overflow-history-seed'))
+  const session = Session.create(brandString<SessionId>('overflow-history-seed'))
   for (let turn = 1; turn <= 2; turn += 1) {
     const sentinel = turn === 1 ? 'OLD HISTORY SENTINEL' : 'RECENT HISTORY'
     session.append('turn/start', {
@@ -208,7 +209,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('uses the recorded model selection for post-step pressure', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('routed-pressure'), {
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('routed-pressure'), {
         provider: 'unconfigured-agent-fallback',
         model: 'unconfigured-agent-fallback',
       })
@@ -230,7 +231,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('runs automatic pressure between the completed tool step and the next step', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('post-step-order'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('post-step-order'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do tool work' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -262,7 +263,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
   it('the head checkpoint the loop lands is a balanced cut on both sides', async () => {
     const { ctx } = await harness(8)
     try {
-      const agent = await ctx.agentLoop.create(SessionId('repro'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('repro'), { provider: 'mock', model: 'mock' })
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a long multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
@@ -327,7 +328,7 @@ describe('token pressure after loop-admitted system prompts', () => {
         }, { surfaceOp: { op: 'replace', startSeq: node, endSeq: node }, sourceEventSeqs: [node] })
         return { kind: 'retry' }
       })
-      const agent = await ctx.agentLoop.create(SessionId('prompt-pressure'), { provider: 'mock', model: 'mock' })
+      const agent = await ctx.agentLoop.create(brandString<SessionId>('prompt-pressure'), { provider: 'mock', model: 'mock' })
       // Eager replay must observe the same anchor as a fresh reader of the finished log.
       ctx.tokenMeter.measure(agent.session)
       for (const nextPrompt of [prompt, 'expanded guidance '.repeat(20), 'short', '']) {
@@ -341,7 +342,7 @@ describe('token pressure after loop-admitted system prompts', () => {
         expect(measured.baseline).toEqual({ kind: 'usage', tokens: 1110, usage })
         expect(measured.surfaceDeltaTokens).toBe(0)
         expect(measured.totalTokens).toBe(1110)
-        const replay = Session.create(SessionId('prompt-pressure-replay'), agent.session.snapshotEvents())
+        const replay = Session.create(brandString<SessionId>('prompt-pressure-replay'), agent.session.snapshotEvents())
         expect(ctx.tokenMeter.measure(replay)).toMatchObject({
           baseline: measured.baseline, surfaceDeltaTokens: 0, totalTokens: 1110, nodes: measured.nodes,
         })
@@ -389,7 +390,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
 
       try {
         const { agent } = await ctx.agentLoop.createAgent(ctx, {
-          sessionId: SessionId(`overflow-${delivery}`),
+          sessionId: brandString<SessionId>(`overflow-${delivery}`),
           seed: overflowHistorySeed(),
           agentOptions: {
             provider: 'unconfigured-agent-fallback',
@@ -466,7 +467,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
 
     try {
       const { agent } = await ctx.agentLoop.createAgent(ctx, {
-        sessionId: SessionId('alternating-recovery'),
+        sessionId: brandString<SessionId>('alternating-recovery'),
         seed: overflowHistorySeed(),
         agentOptions: { provider: 'mock', model: 'mock' },
       })
@@ -483,6 +484,117 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
         type: 'turn/end',
         data: { reason: { kind: 'completed' } },
       })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
+const SMALL_WINDOW = 4_000
+
+/** `big` accepts every request; `small` counts one token per character and rejects above its window. */
+class TwoWindowAdapter extends LlmAdapter {
+  readonly requests: Array<{ kind: 'chat' | 'summary'; model: string; overflow: boolean }> = []
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+      context: { contextWindow: model === 'small' ? SMALL_WINDOW : 1_000_000 },
+    })
+  }
+
+  override async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    const characters = options.messages.reduce((total, message) => total + message.content
+      .reduce((sum, block) => sum + (block.type === 'text' ? block.text.length : 0), 0), 0)
+    const kind = options.purpose === 'compaction' ? 'summary' : 'chat'
+    const overflow = options.model === 'small' && characters > SMALL_WINDOW
+    this.requests.push({ kind, model: options.model, overflow })
+    if (overflow) {
+      yield {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: { message: `prompt is too long: ${characters} tokens > ${SMALL_WINDOW} maximum`, code: CONTEXT_WINDOW_EXCEEDED_CODE },
+        },
+      }
+      return
+    }
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text: kind === 'summary' ? 'SWITCH CHECKPOINT' : 'answer' } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
+describe('summary route after a switch to a model that undercounts in the estimate', () => {
+  /**
+   * Four `big` turns of CJK text: the fixed heuristic prices the history near
+   * 2,000 tokens, below the 3,200-token `small` threshold, so the switch check
+   * admits the request, while `small` counts about 8,000 tokens and rejects it.
+   */
+  async function switchedHistory(maxOverflowRetries: number): Promise<{
+    ctx: Context
+    adapter: TwoWindowAdapter
+    compact: BasicCompactionEngine
+    agent: Agent
+    prompt: (text: string) => Promise<void>
+  }> {
+    const ctx = new Context()
+    await mountAgentLoopTestDependencies(ctx)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await ctx.plugin(TokenMeter)
+    const adapter = new TwoWindowAdapter()
+    ctx.llm.registerAdapter(['big', 'small', 'other'], adapter)
+    const compact = new BasicCompactionEngine(ctx, { headroomTokens: 0, maxTokens: 64, maxOverflowRetries })
+    const agent = await ctx.agentLoop.create(brandString<SessionId>(`switch-${maxOverflowRetries}`), { provider: 'big', model: 'big' })
+    const prompt = async (text: string): Promise<void> => {
+      agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
+      await agent.whenIdle()
+    }
+    for (let turn = 0; turn < 4; turn += 1) await prompt('上下文'.repeat(667))
+    adapter.requests.length = 0
+    agent.model.select({ provider: 'small', model: 'small' })
+    return { ctx, adapter, compact, agent, prompt }
+  }
+
+  it('recovers the overflowed request by summarizing on the route that last answered', async () => {
+    const { ctx, adapter, agent, prompt } = await switchedHistory(1)
+    try {
+      await prompt('继续')
+
+      expect(adapter.requests).toEqual([
+        { kind: 'chat', model: 'small', overflow: true },
+        { kind: 'summary', model: 'big', overflow: false },
+        { kind: 'chat', model: 'small', overflow: false },
+      ])
+      const events = agent.session.snapshotEvents()
+      expect(events.findLast(event => event.type === 'compaction/summary')?.data)
+        .toMatchObject({ provider: 'big', model: 'big' })
+      expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
+      expect(agent.session.requestHeader()?.config.model).toBe('small')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('summarizes manual compaction on the route that last answered, not the failed header or a pending selection', async () => {
+    const { ctx, adapter, compact, agent, prompt } = await switchedHistory(0)
+    try {
+      await prompt('继续')
+      expect(adapter.requests).toEqual([{ kind: 'chat', model: 'small', overflow: true }])
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+        type: 'turn/end', data: { reason: { kind: 'error', error: { code: CONTEXT_WINDOW_EXCEEDED_CODE } } },
+      })
+      expect(agent.session.requestHeader()?.config.model).toBe('small')
+
+      adapter.requests.length = 0
+      agent.model.select({ provider: 'other', model: 'other' })
+      const result = await compact.compactNow(agent, new AbortController().signal)
+
+      expect(adapter.requests).toEqual([{ kind: 'summary', model: 'big', overflow: false }])
+      expect(result?.summary).toEqual([{ type: 'text', text: 'SWITCH CHECKPOINT' }])
+      expect(agent.model.current()).toMatchObject({ provider: 'other', model: 'other' })
     } finally {
       await ctx.fiber.dispose()
     }

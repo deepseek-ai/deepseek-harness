@@ -12,6 +12,8 @@ import type {} from '../src/index.ts'
 import type { ForkToolExecution } from '../src/host/fork-tool-guard.ts'
 import { FakeTunnelWorker } from './tunnel-supervision-fake-worker.ts'
 import { shareViewerPrincipal } from '../src/host/viewer-principal.ts'
+import { denial } from './fork-denial.ts'
+import type { ForkToolDenial } from '../src/host/fork-errors.ts'
 
 vi.mock('../src/host/tunnel-worker.ts', async () => {
   const { FakeTunnelWorker: Fake } = await import('./tunnel-supervision-fake-worker.ts')
@@ -140,17 +142,17 @@ describe('configuration guards', () => {
     // A record restored from an older owner state carries no tier; drop it after typing the record so
     // the published facts show the field absent rather than defaulted.
     const legacy: OwnerShare = {
-      shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+      shareId: 'share-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
       gatewayToken: 'token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
       allowsFork: false, online: false, link: '', relay: RELAY, revision: 0, sessionMode: 'view',
     }
     delete (legacy as { sessionMode?: OwnerShare['sessionMode'] }).sessionMode
     expect(publishedShareState(legacy)).toEqual({
-      shareId: 'share-1', sessionId: 'session-1', allowsFork: false, viewerAdmitted: true,
+      shareId: 'share-1', sessionIds: ['session-1'], allowsFork: false, viewerAdmitted: true,
       stopped: false, sessionMode: undefined,
     })
     expect(publishedShareState({
-      shareId: 'share-2', sessionId: 'session-2', sessionTitle: 'Session', accessMode: 'open',
+      shareId: 'share-2', sessionIds: ['session-2'], sessionTitle: 'Session', accessMode: 'open',
       gatewayToken: 'token', allowedSubjectIds: [], createdAt: '2026-01-01T00:00:00Z',
       allowsFork: true, online: true, link: '', relay: RELAY, revision: 0,
       sessionMode: 'write', expiresAt: '2026-01-02T00:00:00Z',
@@ -322,7 +324,7 @@ describe('viewer turn confinement', () => {
     const mounted = await mount({ state: stateFile({ shares: [stored()] }) })
     const root = '/workspace'
     const registered = new Map<string, ToolDefinition>()
-    let guard: ((execution: ForkToolExecution) => string | undefined) | undefined
+    let guard: ((execution: ForkToolExecution) => ForkToolDenial | undefined) | undefined
     const read: ToolDefinition = {
       name: 'read', description: 'a deployment read', parameters: {},
       output: {
@@ -352,7 +354,7 @@ describe('viewer turn confinement', () => {
         registered.set(definition.name, definition)
         return () => { registered.delete(definition.name) }
       },
-      guard: (registeredGuard: (execution: ForkToolExecution) => string | undefined) => {
+      guard: (registeredGuard: (execution: ForkToolExecution) => ForkToolDenial | undefined) => {
         guard = registeredGuard
         return () => { guard = undefined }
       },
@@ -382,23 +384,23 @@ describe('viewer turn confinement', () => {
 
     // A viewer-started turn is confined: the shell is not a name this installation replaced.
     await expect(runStep(1, [viewerMessage])).resolves.toMatchObject({ kind: 'enter' })
-    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toMatch(/may not use bash/u)
+    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toEqual(denial(/may not use bash/u, 'FORK_TOOL_NOT_PERMITTED'))
     // The owner's steering input joins that same turn, which stays confined.
     await expect(runStep(1, [ownerMessage])).resolves.toMatchObject({ kind: 'enter' })
-    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toMatch(/may not use bash/u)
+    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toEqual(denial(/may not use bash/u, 'FORK_TOOL_NOT_PERMITTED'))
 
     // The next turn is the owner's: the deployment's own tools run, unchanged by the mounted layer.
     await expect(runStep(2, [ownerMessage])).resolves.toMatchObject({ kind: 'enter' })
     expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toBeUndefined()
     // An execution this host cannot attribute to an Agent is confined rather than escaping the layer.
     expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: { id: 42 } }))
-      .toMatch(/may not use bash/u)
+      .toEqual(denial(/may not use bash/u, 'FORK_TOOL_NOT_PERMITTED'))
     // A viewer message in a later step of the owner's running turn narrows that same turn.
     await expect(runStep(2, [viewerMessage])).resolves.toMatchObject({ kind: 'enter' })
-    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toMatch(/may not use bash/u)
+    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toEqual(denial(/may not use bash/u, 'FORK_TOOL_NOT_PERMITTED'))
     // A viewer's later turn is confined again.
     await expect(runStep(3, [viewerMessage])).resolves.toMatchObject({ kind: 'enter' })
-    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toMatch(/may not use bash/u)
+    expect(guard()?.({ name: 'bash', arguments: { command: 'ls' }, agent: live })).toEqual(denial(/may not use bash/u, 'FORK_TOOL_NOT_PERMITTED'))
     await mounted.ctx.fiber.dispose()
   })
 })

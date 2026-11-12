@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox` 和 `sandboxPolicy` 提供方一起挂载。模型需要此操作时，再添加工具包。
+将服务与 `workingDirectory`、`fs`、`subprocess`、`sandbox`、`sandboxPolicy` 和 `sessionProjections` 提供方一起挂载。归档清理还需要 `workspaceRegistry` 与 `sessionQuery`，并在挂载了 `sessionProjectionCache` 时使用它；缺少前两者时服务只创建与恢复。模型需要此操作时，再添加工具包。
 
 ```yaml
 - name: '@deepseek-ai/dsh-experimental-worktree'
@@ -36,7 +36,11 @@ kind: "package-reference"
 
 `ctx.worktrees.restore(agent, { path, branch, baseCommit, repositoryRoot }, signal?, onPhase?)` 在记录的目录重新检出被删除的 worktree。它在修改前校验记录中的仓库根目录、完整提交对象名、分支和配置池内的规范目标路径。它只通过 `git worktree remove` 移除缺失目标的未锁定登记；其他 worktree 与锁定登记保持不变。随后在分支仍存在时检出该分支，否则在 `baseCommit` 重新创建同名分支，并通过 `branchRecreated` 报告是哪种情况。目录已存在时会报错。调用方 Session 的工作目录不变，从未提交的修改无法恢复。检出与创建时一样禁用过滤器。`onPhase` 在检查目录、清理登记与创建分支之前收到 `prepare`，在写入文件之前收到 `checkout`；它不能抛出异常。
 
-默认检出目录是 `<current checkout root>/.agents/worktrees/<name>`。返回的 `repositoryRoot` 是调用方当前检出目录的顶层目录；如果它是链接检出目录，工作树父目录就嵌套在其中。省略名称时，名称由前缀 `dsh-`、Session id 中 UUID 的前 8 位十六进制数、一个连字符和 4 位随机十六进制数组成，例如 `dsh-6b1f02c4-9a3e`；Session id 不含 UUID 时，前缀后接 8 位随机十六进制数。`generatedWorktreeName` 导出同一规则，供在创建前确定名称的调用方使用。仅当服务的分配操作创建了父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`；已有文件与忽略规则保持不变。相对路径 `directory`、生成名称使用的 `namePrefix`、可执行程序与进程限制可在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-worktree)中查阅。
+每次创建都会在目录切换之后向 Session 日志追加一条 `plugin:worktree/created` 事件，因此 `worktree` 投影列出该 Session 的检出目录，位于 fork 继承前缀内的条目 `owned` 为 false。Workspace 归档某个 Session 时，服务为该 Session 自己创建的第一个检出目录登记一条 `scheduled` 清理并立即返回；检查在后台进行。`retainOnArchive` 开启时，归档不登记任何清理，所有检出目录都保留；该字段是 volatile 字段，每次归档时读取，[Forge 面板](../client-ui-forge/README.zh.md)在插件页该套件的 worktree 行上以开关编辑它。只要任一未归档 Session 仍引用该目录——通过记录的创建，或通过位于其中的工作目录（祖先子代理已归档的 Session 视为已归档；冷 Session 从投影缓存或其日志读取）——或创建者的沙箱策略为只读，目录就保留。符合条件的目录在路径锁内再做一次使用检查后，用创建者的策略执行不带 force 的 `git worktree remove`；路径锁同时通过 `working-directory/access` 阻塞进入该路径的 `ensure` 与 `set`；分支及其提交保留。跟踪文件改动、未跟踪文件、已初始化的子模块（仓库位于检出目录管理目录的 `modules` 中）、锁、分离 HEAD、分支不匹配以及位于配置池之外的目标都会保留目录。被忽略的文件以及对 skip-worktree 或 assume-unchanged 文件的改动不会：`git status` 不报告这两类内容，Git 删除目录时一并丢弃它们。检查不识别已提交的内嵌仓库；Git 会拒绝这类删除，本次尝试以 `failed` 结束。检查读到 `git status` 的第一条记录即停止，并以流式读取工作树列表，查找该检出目录期间在内存中保留其条目；两者的输出都不受 `maxOutputBytes` 限制。不检查进程：仍在写入的进程会让 Git 拒绝删除，空闲进程的下一条命令会失败。取消归档会取消尚未获准的删除，并等待已获准的删除结束。`cleanupOf(session, revision)` 读取本次尝试，或等待指定修订号结束，状态为 `scheduled`、`retained`、`removed` 或 `failed`；失败时 Session 仍保持归档并记录警告。此事件存在之前创建的检出目录，以及更早归档的 Session，不会被扫描。
+
+预期失败抛出 `WorktreeError`，其 `code` 为：名称被 Git 或池规则拒绝、起始修订为空或恢复记录违反文档约束时为 `WORKTREE_INVALID_ARGUMENT`，Git 无法解析的起始修订或基础提交则以 `WORKTREE_COMMAND_FAILED` 失败；分支或路径已存在时为 `WORKTREE_ALREADY_EXISTS`；登记被锁定时为 `WORKTREE_LOCKED`；命令以失败状态退出、超过 `maxOutputBytes` 或超过 `timeoutMs` 时分别为 `WORKTREE_COMMAND_FAILED`、`WORKTREE_OUTPUT_TOO_LARGE` 和 `WORKTREE_TIMEOUT`；服务释放后为 `WORKTREE_UNAVAILABLE`。目录分配之后的失败会在消息中加入保留产物的说明，并保留原错误的 `name` 与 `code`；调用方取消仍是 `AbortError`。
+
+默认检出目录是 `<current checkout root>/.agents/worktrees/<name>`。返回的 `repositoryRoot` 是调用方当前检出目录的顶层目录；如果它是链接检出目录，工作树父目录就嵌套在其中。省略名称时，名称由前缀 `dsh-`、Session id 中 UUID 的前 8 位十六进制数、一个连字符和 4 位随机十六进制数组成，例如 `dsh-6b1f02c4-9a3e`；Session id 不含 UUID 时，前缀后接 8 位随机十六进制数。`generatedWorktreeName` 导出同一规则，供在创建前确定名称的调用方使用。仅当服务的分配操作创建了父目录时，服务才会写入内容为 `*` 加换行符的 `.gitignore`；已有文件与忽略规则保持不变。每条 Git 和 Node 命令各自受 `timeoutMs` 时限约束，默认 5 分钟，使大仓库在较慢的文件系统上也能完成检出；取消仍会终止正在运行的命令。相对路径 `directory`、生成名称使用的 `namePrefix`、可执行程序、进程限制与 `retainOnArchive` 可在[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-experimental-worktree)中查阅。
 
 -----
 
@@ -84,7 +88,7 @@ Git 与目录分配通过挂载的子进程及沙箱提供方执行，沿用调�
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **保留产物**——离开工作树会保留其分支和文件。初始化失败也可能留下部分产物；移除检出目录与删除分支由用户或其他消费方负责。
+- **保留的产物**——离开工作树时保留其分支和文件，归档清理也从不删除分支。安装失败同样可能保留部分产物；删除失败可能留下部分目录，可在保留的分支上恢复覆盖。
 - **仅限本地提交**——创建操作不会获取远端提交或部分克隆中缺失的对象、初始化子模块、安装依赖或复制未提交文件。Git 满足执行要求时，本地对象缺失会导致创建失败。
 - **过滤器处理前的内容**——检出时跳过已配置的过滤器，以避免执行仓库配置的程序或隐式下载。Git LFS 指针与加密 blob 保持存储时的形式；拉取实体内容或解密由用户另行执行。
 - **执行要求**——子进程提供方必须在与文件系统提供方相同的执行环境中提供 Git 与 Node。Git 必须识别 `GIT_NO_LAZY_FETCH`：Git 2.45 及 2.39.4、2.40.2、2.41.1、2.42.2、2.43.4、2.44.1 维护版本均支持；更早的版本会忽略该变量并继续执行而不报错，因此创建操作可能从 promisor 远程获取缺失的部分克隆对象。`git --no-lazy-fetch` 选项会拒绝这些版本，但它仅在 Git 2.45 及以后存在，也会拒绝上述已修补的维护版本。现有沙箱必须允许写入检出目录与共享 Git 元数据。

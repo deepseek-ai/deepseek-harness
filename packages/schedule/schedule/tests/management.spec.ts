@@ -1,14 +1,20 @@
 /** Host-wide management of Host tasks: identities, listing, atomic edits, revision checks, notices, and manual runs. */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
-  createAfterScheduleRecord, createAtScheduleRecord, createCronScheduleRecord, createDailyScheduleRecord,
-  createEveryScheduleRecord, createWeeklyScheduleRecord, ScheduleId,
+  createAfterScheduleRecord,
+  createAtScheduleRecord,
+  createCronScheduleRecord,
+  createDailyScheduleRecord,
+  createEveryScheduleRecord,
+  createWeeklyScheduleRecord,
 } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import { createRRuleScheduleRecord } from '../src/domain.ts'
 import { scheduleDomain, scheduleTaskSchema } from '../src/storage.ts'
 import { agentFor, boundTask, gatedScheduleBackend, harness, seededTask, seedTasks, storedSession, type HarnessAgent } from './harness.ts'
 import { MemoryMediaPool } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const active: Awaited<ReturnType<typeof harness>>[] = []
 const once = 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY;COUNT=1'
@@ -45,15 +51,15 @@ it('manages Host tasks globally with Host-generated ids', async () => {
   const { service } = await setup()
   const created = await service.create({
     title: 'Release check', prompt: 'Inspect the release', timing: { kind: 'rrule', rrule: once },
-    target: { kind: 'session', sessionId: SessionId('target') },
-  }, SessionId('actor'))
+    target: { kind: 'session', sessionId: brandString<SessionId>('target') },
+  }, brandString<SessionId>('actor'))
   expect(created.id).toMatch(/^schedule-/)
   expect(created.title).toBe('Release check')
-  expect(created.target).toEqual({ kind: 'session', sessionId: SessionId('target') })
-  expect(created.involvedSessionIds).toEqual([SessionId('actor'), SessionId('target')])
+  expect(created.target).toEqual({ kind: 'session', sessionId: brandString<SessionId>('target') })
+  expect(created.involvedSessionIds).toEqual([brandString<SessionId>('actor'), brandString<SessionId>('target')])
   expect((await service.view({ id: created.id }))).toEqual(created)
-  expect(await service.view({ id: ScheduleId('missing') })).toEqual({
-    id: ScheduleId('missing'), code: 'schedule_not_found',
+  expect(await service.view({ id: brandString<ScheduleId>('missing') })).toEqual({
+    id: brandString<ScheduleId>('missing'), code: 'schedule_not_found',
   })
 })
 
@@ -91,17 +97,17 @@ it('updates title, prompt, rule, target and lifecycle atomically, then deletes g
     id: created.id, action: 'update',
     patch: {
       title: 'After', prompt: 'After prompt', active: false,
-      target: { kind: 'session', sessionId: SessionId('designated') },
+      target: { kind: 'session', sessionId: brandString<SessionId>('designated') },
     },
-  }, SessionId('editor'))
+  }, brandString<SessionId>('editor'))
   expect(paused).toMatchObject({
     id: created.id, title: 'After', prompt: 'After prompt', status: 'paused',
-    target: { kind: 'session', sessionId: SessionId('designated') },
-    involvedSessionIds: [SessionId('editor'), SessionId('designated')],
+    target: { kind: 'session', sessionId: brandString<SessionId>('designated') },
+    involvedSessionIds: [brandString<SessionId>('editor'), brandString<SessionId>('designated')],
   })
   const resumed = await service.edit({ id: created.id, action: 'update', patch: { active: true, timing: { kind: 'rrule', rrule: once } } })
   expect(resumed).toMatchObject({ status: 'active', rrule: once })
-  expect(await service.edit({ id: created.id, action: 'delete' }, SessionId('other')))
+  expect(await service.edit({ id: created.id, action: 'delete' }, brandString<SessionId>('other')))
     .toEqual({ id: created.id, deleted: true })
   expect((await service.list({})).total).toBe(0)
 })
@@ -163,7 +169,7 @@ it('keeps a pending per-run Session identity across descriptive edits and drops 
 
 it('rejects a missing designated Session before storing the task', async () => {
   const test = await setup()
-  const target = { kind: 'session', sessionId: SessionId('missing') } as const
+  const target = { kind: 'session', sessionId: brandString<SessionId>('missing') } as const
   test.stat.mockRejectedValueOnce(new Error('missing'))
   await expect(test.service.remoteCreate({ title: 'Missing', prompt: 'Prompt', timing: { kind: 'rrule', rrule: daily }, target })).rejects.toMatchObject({
     code: 'schedule/input-invalid', message: expect.stringContaining('does not exist') as string, details: { code: 'invalid_rule' },
@@ -182,7 +188,7 @@ it('rejects a missing designated Session before storing the task', async () => {
 
 it.each([false, true])('rejects an archived target without activation, live Agent: %s', async (live) => {
   const test = await setup()
-  const sessionId = SessionId('archived-target')
+  const sessionId = brandString<SessionId>('archived-target')
   if (live) await test.ctx.agents.register(agentFor(test.ctx, sessionId))
   test.ctx.provide('workspaceRegistry', { archivedSessionIds: [sessionId] })
   await expect(test.service.remoteCreate({ title: 'Archived', prompt: 'Prompt', timing: { kind: 'rrule', rrule: daily },
@@ -196,7 +202,7 @@ it.each([false, true])('rejects an archived target without activation, live Agen
 it.each(['session', 'new_once'] as const)('refuses to re-arm an archived %s target but permits pausing and descriptive edits', async (kind) => {
   const test = await setup()
   const created = await test.service.remoteCreate({ title: 'Before', prompt: 'Prompt', timing: { kind: 'rrule', rrule: daily },
-    target: kind === 'session' ? { kind, sessionId: SessionId('existing') } : { kind } })
+    target: kind === 'session' ? { kind, sessionId: brandString<SessionId>('existing') } : { kind } })
   if (created.target.kind === 'new') throw new Error('expected a stable target')
   test.ctx.provide('workspaceRegistry', { archivedSessionIds: [created.target.sessionId] })
   const paused = await test.service.edit({ id: created.id, action: 'update', patch: { active: false, title: 'Paused' } })
@@ -231,7 +237,7 @@ it.each(['create', 'edit'] as const)('checks target availability inside the %s F
   gateNext = true
   const blocking = test.service.create({ ...request, target: { kind: 'new' } })
   await entered.promise
-  const sessionId = SessionId('archived-while-queued')
+  const sessionId = brandString<SessionId>('archived-while-queued')
   const inspected = Promise.withResolvers<undefined>()
   test.stat.mockImplementationOnce(async (id) => { inspected.resolve(undefined); return storedSession(id) })
   const queued = operation === 'create'
@@ -248,8 +254,8 @@ it.each(['create', 'edit'] as const)('checks target availability inside the %s F
 })
 
 it.each([false, true])('re-arms a reserved target without a creation provider only when its Session exists: %s', async (exists) => {
-  const record = createRRuleScheduleRecord(ScheduleId('reserved'), 'Reserved', 'Prompt', daily, Date.now())
-  const target = { kind: 'new_once', sessionId: SessionId('reserved-session'), create: {} } as const
+  const record = createRRuleScheduleRecord(brandString<ScheduleId>('reserved'), 'Reserved', 'Prompt', daily, Date.now())
+  const target = { kind: 'new_once', sessionId: brandString<SessionId>('reserved-session'), create: {} } as const
   const test = await harness({ sessionController: false, beforeService: (_ctx, facility) =>
     seedTasks(facility, [seededTask(record, target, { status: 'paused' })]),
   })
@@ -286,7 +292,7 @@ it.each(['new_once', 'new'] as const)('refuses a queued %s destination when its 
     apply(ctx: typeof test.ctx) { ctx.provide('sessionController', { resolveAgent: test.resolve, create: test.createSession } as never) },
   })
   const request = { title: 'Queued', prompt: 'Prompt', timing: { kind: 'rrule', rrule: daily } } as const
-  const blocking = test.service.create({ ...request, target: { kind: 'session', sessionId: SessionId('existing') } })
+  const blocking = test.service.create({ ...request, target: { kind: 'session', sessionId: brandString<SessionId>('existing') } })
   await entered.promise
   test.stat.mockResolvedValue(undefined)
   const queued = test.service.create({ ...request, target: { kind } })
@@ -313,7 +319,7 @@ it('rejects invalid rules, empty creation values, empty updates, and pagination 
   await expect(service.remoteEdit({ id: created.id, action: 'update', patch: {} }))
     .rejects.toMatchObject({ code: 'schedule/input-invalid', details: { code: 'invalid_rule' } })
   // An empty patch rejects before the task lookup.
-  await expect(service.edit({ id: ScheduleId('missing'), action: 'update', patch: {} })).rejects.toThrow('at least one')
+  await expect(service.edit({ id: brandString<ScheduleId>('missing'), action: 'update', patch: {} })).rejects.toThrow('at least one')
   for (const page of [{ limit: 0 }, { limit: 501 }, { limit: 1.5 }, { offset: -1 }, { offset: 0.5 }]) {
     await expect(service.remoteList(page)).rejects.toMatchObject({ code: 'schedule/input-invalid', details: { code: 'invalid_rule' } })
   }
@@ -333,7 +339,7 @@ it('orders historical ended tasks by creation time or the saved occurrence when 
     { id: 'created-only', at: '2026-09-19T00:00:00.000Z', createdAt: '2026-09-15T00:00:00.000Z' },
     { id: 'scheduled-earlier', at: '2026-09-17T00:00:00.000Z' },
   ].map(({ id, at, ...metadata }) => scheduleTaskSchema.parse({
-    record: createAtScheduleRecord(ScheduleId(id), id, at, Date.now(), id),
+    record: createAtScheduleRecord(brandString<ScheduleId>(id), id, at, Date.now(), id),
     target: { kind: 'new' }, status: 'ended', ...metadata,
   }))
   const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, rows) } })
@@ -351,7 +357,7 @@ it('lists all target kinds in operational order with stable tie breakers', async
   })
   const designated = await service.remoteCreate({
     title: 'Designated', prompt: 'Designated', timing: { kind: 'rrule', rrule: daily },
-    target: { kind: 'session', sessionId: SessionId('designated') },
+    target: { kind: 'session', sessionId: brandString<SessionId>('designated') },
   })
   expect(first.target).toEqual({ kind: 'new_once', sessionId: expect.stringMatching(/^session-/) as string, create: {} })
   expect(first.involvedSessionIds).toEqual([first.target.kind === 'new_once' ? first.target.sessionId : undefined])
@@ -372,15 +378,15 @@ it('lists all target kinds in operational order with stable tie breakers', async
 })
 
 it('describes the rule that owns dispatch of each Session-bound task and lists those rules for their Session', async () => {
-  const sessionId = SessionId('owner')
+  const sessionId = brandString<SessionId>('owner')
   const now = Date.now()
   const rules = [
-    createAfterScheduleRecord(ScheduleId('after'), 'After', 60, now, 'After'),
-    createAtScheduleRecord(ScheduleId('at'), 'At', '2026-09-16T02:00:00Z', now, 'At'),
-    createEveryScheduleRecord(ScheduleId('every'), 'Every', 3600, now, 'Every'),
-    createDailyScheduleRecord(ScheduleId('daily'), 'Daily', { time: '09:00:00', time_zone: 'Asia/Shanghai' }, now, 'Daily'),
-    createWeeklyScheduleRecord(ScheduleId('weekly'), 'Weekly', { time: '09:00:00', time_zone: 'UTC', weekdays: [1, 5] }, now, 'Weekly'),
-    createCronScheduleRecord(ScheduleId('cron'), 'Cron', { expression: '0 9 * * 1-5', time_zone: 'Asia/Shanghai' }, now, 'Cron'),
+    createAfterScheduleRecord(brandString<ScheduleId>('after'), 'After', 60, now, 'After'),
+    createAtScheduleRecord(brandString<ScheduleId>('at'), 'At', '2026-09-16T02:00:00Z', now, 'At'),
+    createEveryScheduleRecord(brandString<ScheduleId>('every'), 'Every', 3600, now, 'Every'),
+    createDailyScheduleRecord(brandString<ScheduleId>('daily'), 'Daily', { time: '09:00:00', time_zone: 'Asia/Shanghai' }, now, 'Daily'),
+    createWeeklyScheduleRecord(brandString<ScheduleId>('weekly'), 'Weekly', { time: '09:00:00', time_zone: 'UTC', weekdays: [1, 5] }, now, 'Weekly'),
+    createCronScheduleRecord(brandString<ScheduleId>('cron'), 'Cron', { expression: '0 9 * * 1-5', time_zone: 'Asia/Shanghai' }, now, 'Cron'),
   ]
   const test = await harness({ beforeService: (_ctx, facility) => seedTasks(facility, rules.map(rule => boundTask(sessionId, rule))) })
   active.push(test)
@@ -392,8 +398,8 @@ it('describes the rule that owns dispatch of each Session-bound task and lists t
 })
 
 it('retargets any timing kind without converting its authoritative rule', async () => {
-  const sessionId = SessionId('owner')
-  const rule = createEveryScheduleRecord(ScheduleId('bound'), 'Check', 3600, Date.now(), 'Check')
+  const sessionId = brandString<SessionId>('owner')
+  const rule = createEveryScheduleRecord(brandString<ScheduleId>('bound'), 'Check', 3600, Date.now(), 'Check')
   const test = await harness({ beforeService: (_ctx, facility) => seedTasks(facility, [boundTask(sessionId, rule)]) })
   active.push(test)
   expect(await test.service.edit({ id: rule.id, action: 'update', patch: { target: { kind: 'new' } } }))
@@ -404,7 +410,7 @@ it('retargets any timing kind without converting its authoritative rule', async 
 
 it('returns not found for unknown task updates and deletions', async () => {
   const { service } = await setup()
-  const missing = ScheduleId('missing')
+  const missing = brandString<ScheduleId>('missing')
   expect(await service.edit({ id: missing, action: 'update', patch: { title: 'Any' } })).toEqual({ id: missing, code: 'schedule_not_found' })
   expect(await service.edit({ id: missing, action: 'delete' })).toEqual({ id: missing, code: 'schedule_not_found' })
 })
@@ -465,7 +471,7 @@ it('tells other live involved Sessions about Session-bound updates and deletions
   await test.ctx.agents.register(editor)
   const created = await test.service.create({ prompt: 'Keep', title: 'Keep', timing: { kind: 'every', every_seconds: 300 }, target: { kind: 'session', sessionId: owner.session.id } }, owner.session.id)
   // A stored Session without a live Agent, then a live editor, become involved through the shared management API.
-  await test.service.edit({ id: created.id, action: 'update', patch: { title: 'Stored edit' } }, SessionId('stored'))
+  await test.service.edit({ id: created.id, action: 'update', patch: { title: 'Stored edit' } }, brandString<SessionId>('stored'))
   await test.service.edit({ id: created.id, action: 'update', patch: { title: 'Editor edit' } }, editor.session.id)
   await vi.waitFor(() => { expect(owner.inject).toHaveBeenCalledTimes(2) })
   owner.inject.mockClear()
@@ -549,28 +555,28 @@ it('queues one manual execution until whole-agent idle and consolidates repeated
   const settled = await test.service.view({ id: created.id })
   expect(settled).not.toHaveProperty('executionActive')
   expect(settled).not.toHaveProperty('deliveryFloorEndsAt')
-  expect(await test.service.run({ id: ScheduleId('missing') })).toEqual({
-    id: ScheduleId('missing'), code: 'schedule_not_found',
+  expect(await test.service.run({ id: brandString<ScheduleId>('missing') })).toEqual({
+    id: brandString<ScheduleId>('missing'), code: 'schedule_not_found',
   })
 })
 
 it('rejects durable key/record identity mismatches and mutations after shutdown', async () => {
   await expect(harness({ direct: true, beforeService: async (_ctx, facility) => {
     const domain = await facility.open(scheduleDomain)
-    const record = createRRuleScheduleRecord(ScheduleId('right'), 'Task', 'Prompt', daily, Date.now())
-    await domain.table('tasks').put(ScheduleId('wrong'), seededTask(record, { kind: 'new', create: {} }))
+    const record = createRRuleScheduleRecord(brandString<ScheduleId>('right'), 'Task', 'Prompt', daily, Date.now())
+    await domain.table('tasks').put(brandString<ScheduleId>('wrong'), seededTask(record, { kind: 'new', create: {} }))
     await domain.close()
   } })).rejects.toThrow(/differs from record id/)
 
   const test = await setup()
   await test.ctx.fiber.dispose()
-  await expect(test.service.edit({ id: ScheduleId('gone'), action: 'delete' }))
+  await expect(test.service.edit({ id: brandString<ScheduleId>('gone'), action: 'delete' }))
     .rejects.toThrow('Schedule service is stopping')
 })
 
 it('resumes a stored RFC-valid RRULE without reapplying the stricter new-rule authoring check', async () => {
   const record = {
-    id: ScheduleId('valid-rule'), kind: 'rrule' as const, title: 'Weekdays', prompt: 'Check',
+    id: brandString<ScheduleId>('valid-rule'), kind: 'rrule' as const, title: 'Weekdays', prompt: 'Check',
     rrule: 'DTSTART:20260916T010000Z\nRRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1',
     scheduledAt: '2026-09-16T01:00:00.000Z',
   }

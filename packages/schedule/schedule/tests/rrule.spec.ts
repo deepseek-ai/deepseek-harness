@@ -1,12 +1,13 @@
 /** RFC 5545 recurrence validation, occurrence arithmetic, and strict decoding of Host task records. */
 import { describe, expect, it } from 'vitest'
 import { MAX_FOUR_DIGIT_YEAR_MS, MIN_FOUR_DIGIT_YEAR_MS } from '@deepseek-ai/dsh-util-time'
-import { ScheduleId } from '../src/domain.ts'
+import type { ScheduleId } from '../src/types.ts'
 import type { RecurringOccurrence } from '../src/domain.ts'
 import {
   createRRuleScheduleRecord, decodeRRuleScheduleRecord, formatScheduleLocalTime,
   normalizeRRule, resolveRRuleOccurrence, updateRRuleScheduleRecord,
 } from '../src/domain.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Join a DTSTART line and an RRULE body. */
 function rule(body: string, start = 'DTSTART:20260916T010000Z'): string {
@@ -20,13 +21,13 @@ const NOT_FUTURE = 'rrule must contain an occurrence strictly in the future.'
 
 /** Return the occurrence that creation commits at a time. */
 function first(rrule: string, at = now): string {
-  return createRRuleScheduleRecord(ScheduleId('task'), 'Task', 'Prompt', rrule, at).scheduledAt
+  return createRRuleScheduleRecord(brandString<ScheduleId>('task'), 'Task', 'Prompt', rrule, at).scheduledAt
 }
 
 /** Resolve a stored record with a committed target at an admission time. */
 function resolve(rrule: string, scheduledAt: string, acceptedAt: string): RecurringOccurrence {
   return resolveRRuleOccurrence(
-    { kind: 'rrule', id: ScheduleId('task'), title: 'Task', prompt: 'Prompt', rrule, scheduledAt },
+    { kind: 'rrule', id: brandString<ScheduleId>('task'), title: 'Task', prompt: 'Prompt', rrule, scheduledAt },
     Date.parse(acceptedAt),
   )
 }
@@ -53,7 +54,7 @@ describe('RRULE Schedule policy', () => {
   })
 
   it('states an instant as wall time with its offset in the DTSTART zone', () => {
-    const record = createRRuleScheduleRecord(ScheduleId('task'), 'Task', 'Prompt', daily, now)
+    const record = createRRuleScheduleRecord(brandString<ScheduleId>('task'), 'Task', 'Prompt', daily, now)
     expect(formatScheduleLocalTime(record, '2026-09-16T01:02:59.999Z')).toBe('2026-09-16T01:02:59+00:00')
     const zoned = rule('FREQ=DAILY', 'DTSTART;TZID=Asia/Shanghai:20260916T090000')
     expect(formatScheduleLocalTime({ ...record, rrule: zoned }, '2026-09-16T16:30:00.000Z')).toBe('2026-09-17T00:30:00+08:00')
@@ -74,13 +75,13 @@ describe('RRULE Schedule policy', () => {
 })
 
 describe('RRULE task records', () => {
-  const created = createRRuleScheduleRecord(ScheduleId('task'), ' Title ', ' Prompt ', ` ${daily}\n`, now)
+  const created = createRRuleScheduleRecord(brandString<ScheduleId>('task'), ' Title ', ' Prompt ', ` ${daily}\n`, now)
 
   it('creates a frozen record with trimmed text and its first future occurrence', () => {
     expect(created).toEqual({ id: 'task', kind: 'rrule', title: 'Title', prompt: 'Prompt', rrule: daily, scheduledAt: '2026-09-16T01:00:00.000Z' })
     expect(Object.isFrozen(created)).toBe(true)
     const longest = 'x'.repeat(120)
-    expect(createRRuleScheduleRecord(ScheduleId('long'), ` ${longest} `, 'Prompt', daily, now).title).toBe(longest)
+    expect(createRRuleScheduleRecord(brandString<ScheduleId>('long'), ` ${longest} `, 'Prompt', daily, now).title).toBe(longest)
   })
 
   it.each<[string, string, string, string]>([
@@ -89,7 +90,7 @@ describe('RRULE task records', () => {
     ['a blank prompt', 'Title', ' ', 'prompt must be non-empty after trimming.'],
   ])('rejects %s at creation and update', (_case, title, prompt, message) => {
     const failure = expect.objectContaining({ code: 'invalid_prompt', message }) as Error
-    expect(() => createRRuleScheduleRecord(ScheduleId('task'), title, prompt, daily, now)).toThrow(failure)
+    expect(() => createRRuleScheduleRecord(brandString<ScheduleId>('task'), title, prompt, daily, now)).toThrow(failure)
     expect(() => updateRRuleScheduleRecord(created, { title, prompt }, now, false)).toThrow(failure)
   })
 
@@ -117,7 +118,7 @@ describe('RRULE task records', () => {
         + 'BYSETPOS selects among the occurrences of one period; for example, '
         + 'FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1 selects the last weekday of each month.',
     }) as Error
-    expect(() => createRRuleScheduleRecord(ScheduleId('task'), 'Title', 'Prompt', rule(body), now)).toThrow(failure)
+    expect(() => createRRuleScheduleRecord(brandString<ScheduleId>('task'), 'Title', 'Prompt', rule(body), now)).toThrow(failure)
     expect(() => updateRRuleScheduleRecord(created, { rrule: rule(body) }, now, true)).toThrow(failure)
   })
 

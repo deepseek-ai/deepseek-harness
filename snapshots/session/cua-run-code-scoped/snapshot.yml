@@ -1,0 +1,10 @@
+version: 1
+scenario: cua-run-code-scoped
+profile: headless
+composition: default
+recording: authored
+header:
+  class: cua-run-code-scoped
+  pin: true
+  systemPromptSource: cua-run-code
+permission: danger-full-access

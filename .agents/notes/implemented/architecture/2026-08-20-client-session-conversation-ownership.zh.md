@@ -57,7 +57,7 @@ UI 层可以同时读取多个 Controller 做一次导航决定，但不得把�
 | `useSessions` | `client/ui-session` | Session Controller 全局列表 |
 | `useSession` | `client/ui-session` | 已绑定会话快照 |
 | `useProjection` | `client/ui-session` | 已绑定会话的键控投影 |
-| `useSessionStatus` | `client/ui-session` | 运行状态、有效待处理请求和未读完成提醒 |
+| `useSessionStatus` | `client/ui-session-status` | 运行状态、有效待处理请求和未读完成提醒 |
 | `useSessionRetainInfo` | `client/ui-session` | 控制器的只读引用来源计数 |
 | `useWorkspaces` | `client/ui-workspace` | Workspace Controller 列表 |
 | `useConversation` | `client/ui-conversation` | Conversation binding snapshot |
@@ -80,7 +80,8 @@ UI 层可以同时读取多个 Controller 做一次导航决定，但不得把�
 | --- | --- | --- |
 | `api/session-controller/client` | 会话对象、目录、引用、来源计数、命令、投影、事件窗口与 Agent Context | 导航、完成提醒、Conversation target、React、Slot、Workspace |
 | `api/workspace-controller/client` | Workspace 对象、顺序、归档、命令和 snapshot | React、Session 导航策略、目录 UI |
-| `client/ui-session` | 显式会话作用域、标准数据源、`SessionProvider` 与统一 UI 状态 | 会话传输、引用所有权、Conversation 组装、Approval/Question 结果 |
+| `client/ui-session` | 显式会话作用域、标准数据源、`SessionProvider` 与有效待处理交互 | 会话传输、引用所有权、Conversation 组装、Approval/Question 结果、统一 UI 状态 |
+| `client/ui-session-status` | 统一 UI 状态：运行状态、有效待处理请求与完成提醒；宿主阅读记录及其前端副本；主视图阅读确认 | 待处理交互登记、会话传输、React |
 | `client/ui-workspace` | Workspace 钩子、浏览器 UI、主区域引用与跨控制器导航策略 | Workspace 传输、会话数据副本 |
 | `client/ui-conversation` | Conversation core、registry、binding、shell、input、composer、queue 和 View 导航 | Session transport、Chat/Trajectory snapshot |
 | `client/ui-chat` | Chat target、Node definitions、renderer、selection、details 和 locale | Session 生命周期、通用 View 导航、Trajectory、历史图片 cache |
@@ -120,7 +121,7 @@ Session 数据按以下路径进入 UI：
 
 Workspace 数据由 `ctx.remote.workspace` 进入 Workspace 控制器，再由 `ui-workspace` 通过 `useWorkspaces` 提供。`ui-workspace` 为跨领域导航读取显式目标并持有主区域引用，不把它变为默认业务 Context。
 
-Approval 与 Question 通过 `ctx.remote.$on` 从 Host waterfall 到达各自的 UI owner。各 owner 发布 Pending 对象；`ui-session.sessionStatus` 向 Workspace 标识和 Conversation composer 选择提供同一个有效对象。
+Approval 与 Question 通过 `ctx.remote.$on` 从 Host waterfall 到达各自的 UI owner。各 owner 通过 `ui-session` 发布 Pending 对象；`ui-session-status` 提供的 `ctx.uiSession.sessionStatus` 向 Workspace 标识和 Conversation composer 选择提供同一个有效对象。
 
 ## Session Controller Client
 
@@ -178,9 +179,9 @@ Session Controller 对外提供三个互不替代的读取面：
 - 提供 `SessionProvider` 的呈现语义；
 - 内建 session snapshot、projection 和 sessionId source；
 - 接收其他领域 package 的 Session-scoped source contribution；
-- 在 `sessionStatus` 中组合领域持有的待处理交互、运行事实和完成提醒。
+- 为每个会话选出领域持有的有效待处理交互，并以只读的 `pendingInteractions` 发布。
 
-它不拥有 Session transport、event folding、Conversation target 或具体业务结果。
+它不拥有 Session transport、event folding、Conversation target 或具体业务结果。`client/ui-session-status` 在 `uiSession.sessionStatus` 服务中把有效待处理交互与运行事实、完成提醒组合起来，以 `ctx.uiSession.sessionStatus` 读取。
 
 ### 标准 source 注册
 
@@ -221,7 +222,7 @@ Contribution roster 变化会重建已 materialize 的 binding 并发布新的 s
 
 `ui-session` 使用各 domain 的 precedence 选出每个 Session 当前生效的对象。较高 precedence 胜出，相同 precedence 下后遍历到的有效对象胜出。
 
-待处理聚合是 `ui-session` 的私有实现；其有效请求原样出现在 `sessionStatus.getSnapshot().get(id)?.pendingInteraction` 中。`useSessionStatus` 是公开 UI 读取接口。
+待处理聚合是 `ui-session` 的私有实现；`pendingInteractions` 以只读方式提供每个会话的有效请求，同一个对象原样出现在 `ctx.uiSession.sessionStatus.getSnapshot().get(id)?.pendingInteraction` 中。`useSessionStatus` 是公开 UI 读取接口。
 
 Session 导航状态和 composer takeover 必须读取同一个 effective object，不得分别维护 status map 或 takeover roster。
 

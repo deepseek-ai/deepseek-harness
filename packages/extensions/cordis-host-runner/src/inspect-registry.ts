@@ -3,6 +3,7 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import type {} from '@deepseek-ai/dsh-api-gateway'
 import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import { assertSupportedJsonSchema, validateJsonSchemaValue } from '@deepseek-ai/dsh-tools'
@@ -12,6 +13,42 @@ import type {
   CordisInspectProviderView, CordisInspectQueryRequest, CordisInspectQueryResolution,
   CordisInspectRequestId, CordisInspectResolveAck,
 } from './types.ts'
+
+/**
+ * Every {@link InspectError} code:
+ * - `INSPECT_PROVIDER_NOT_FOUND`: no provider with the requested id is registered on the platform.
+ * - `INSPECT_METHOD_NOT_FOUND`: the provider declares no method with the requested name.
+ * - `INSPECT_TARGET_NOT_FOUND`: the query names a target, such as a Loader entry, that the provider does not have.
+ * - `INSPECT_INVALID_INPUT`: the input violates the method's input schema.
+ * - `INSPECT_INVALID_OUTPUT`: the provider returned a non-JSON value or a value outside its output schema.
+ * - `INSPECT_CLIENT_UNAVAILABLE`: no Harness page is connected to answer a Client query, or the registry was disposed while it waited.
+ * - `INSPECT_TIMEOUT`: no valid Client response arrived within the query timeout.
+ * - `INSPECT_FAILED`: a Host provider failed without its own error code; `cause` is the original error.
+ */
+export const INSPECT_ERROR_CODES = [
+  'INSPECT_PROVIDER_NOT_FOUND',
+  'INSPECT_METHOD_NOT_FOUND',
+  'INSPECT_TARGET_NOT_FOUND',
+  'INSPECT_INVALID_INPUT',
+  'INSPECT_INVALID_OUTPUT',
+  'INSPECT_CLIENT_UNAVAILABLE',
+  'INSPECT_TIMEOUT',
+  'INSPECT_FAILED',
+] as const
+
+/** One {@link InspectError} code. */
+export type InspectErrorCode = typeof INSPECT_ERROR_CODES[number]
+
+/** Typed Cordis inspect query failure; `code` is one of {@link INSPECT_ERROR_CODES}. */
+export class InspectError extends HarnessError {
+  override readonly code: InspectErrorCode
+
+  constructor(message: string, code: InspectErrorCode, options?: ErrorOptions) {
+    super(message, code, options)
+    this.name = 'InspectError'
+    this.code = code
+  }
+}
 
 /** Context supplied to a Host inspect query. */
 export interface HostCordisInspectQueryContext {
@@ -115,6 +152,9 @@ export class CordisInspectRegistryService extends Service {
    * @param signal - tool-call cancellation.
    * @returns provider JSON data; Client queries fail fast when Gateway has no live Client
    * and retain only the first observed failure diagnostic for timeout reporting.
+   * @throws {InspectError} for an unknown provider or method, invalid input or output, a missing
+   *   Client, a Client timeout, or a Host provider failure without its own `HarnessError`; cancellation
+   *   rethrows the signal's reason.
    */
   async query(
     platform: CordisInspectPlatform,
@@ -126,11 +166,23 @@ export class CordisInspectRegistryService extends Service {
   ): Promise<JsonValue> {
     if (platform === 'host') {
       const registration = this.providers.get(providerId)
-      if (registration === undefined) throw new Error(`Host Cordis inspect provider "${providerId}" is not registered`)
+      if (registration === undefined) {
+        throw new InspectError(`Host Cordis inspect provider "${providerId}" is not registered`, 'INSPECT_PROVIDER_NOT_FOUND')
+      }
       const method = findMethod(registration.manifest, methodName)
       validateInput('Host', providerId, method, input)
       signal.throwIfAborted()
-      const data = await registration.query(methodName, input, { agent, signal })
+      let data: JsonValue
+      try {
+        data = await registration.query(methodName, input, { agent, signal })
+      } catch (error) {
+        // The cancellation itself passes through for the tool registry to classify as ABORTED.
+        if (error instanceof HarnessError || isCancellation(error, signal)) throw error
+        throw new InspectError(
+          `Host Cordis inspect ${providerId}.${methodName} failed: ${error instanceof Error ? error.message : String(error)}`,
+          'INSPECT_FAILED', { cause: error },
+        )
+      }
       signal.throwIfAborted()
       return validateOutput('Host', providerId, method, data)
     }
@@ -177,13 +229,18 @@ export class CordisInspectRegistryService extends Service {
     signal: AbortSignal,
   ): Promise<JsonValue> {
     const provider = this.clientManifest?.find(candidate => candidate.id === providerId)
-    if (provider === undefined) throw new Error(`Client Cordis inspect provider "${providerId}" is not registered`)
+    if (provider === undefined) {
+      throw new InspectError(`Client Cordis inspect provider "${providerId}" is not registered`, 'INSPECT_PROVIDER_NOT_FOUND')
+    }
     const method = findMethod(provider, methodName)
     validateInput('Client', providerId, method, input)
     signal.throwIfAborted()
     const gateway = this.ctx.get('typertGateway')
     if (gateway !== undefined && !gateway.hasLiveClient()) {
-      throw new Error(`Client inspect query ${providerId}.${methodName} has no connected Harness page. Open or reconnect the Harness page, then retry.`)
+      throw new InspectError(
+        `Client inspect query ${providerId}.${methodName} has no connected Harness page. Open or reconnect the Harness page, then retry.`,
+        'INSPECT_CLIENT_UNAVAILABLE',
+      )
     }
     const requestId = `inspect-${this.nextRequest++}` as CordisInspectRequestId
     const request: CordisInspectQueryRequest = {
@@ -232,7 +289,12 @@ export class CordisInspectRegistryService extends Service {
       if (signal.aborted) onAbort()
       else this.ctx.emit('cordis/inspect-query', request)
       const resolution = await result
-      if (!resolution.ok) throw new Error(`${providerId}.${methodName}: ${resolution.message}`)
+      if (!resolution.ok) {
+        signal.throwIfAborted()
+        // Locally settled failures: the response deadline, or registry disposal reported as cancellation.
+        const code = resolution.reason === 'cancelled' ? 'INSPECT_CLIENT_UNAVAILABLE' : 'INSPECT_TIMEOUT'
+        throw new InspectError(`${providerId}.${methodName}: ${resolution.message}`, code)
+      }
       return resolution.data
     } finally {
       clearTimeout(timer)
@@ -240,6 +302,11 @@ export class CordisInspectRegistryService extends Service {
       this.pending.delete(requestId)
     }
   }
+}
+
+/** Whether a rejection is the caller's cancellation rather than a failure of its own. */
+function isCancellation(error: unknown, signal: AbortSignal): boolean {
+  return signal.aborted && (error === signal.reason || (error instanceof Error && error.name === 'AbortError'))
 }
 
 function view(platform: CordisInspectPlatform, manifest: CordisInspectProviderManifest): CordisInspectProviderView {
@@ -264,7 +331,7 @@ function validateManifest(manifest: CordisInspectProviderManifest): CordisInspec
 
 function findMethod(manifest: CordisInspectProviderManifest, name: string): CordisInspectMethodManifest {
   const method = manifest.methods.find(candidate => candidate.name === name)
-  if (method === undefined) throw new Error(`Cordis inspect provider "${manifest.id}" has no method "${name}"`)
+  if (method === undefined) throw new InspectError(`Cordis inspect provider "${manifest.id}" has no method "${name}"`, 'INSPECT_METHOD_NOT_FOUND')
   return method
 }
 
@@ -275,7 +342,9 @@ function validateInput(
   input: JsonValue | undefined,
 ): void {
   const violations = validateJsonSchemaValue(method.inputSchema as JsonSchemaNode, input ?? {}, 'input')
-  if (violations.length > 0) throw new Error(`${platform} Cordis inspect ${provider}.${method.name} rejected input: ${violations.join('; ')}`)
+  if (violations.length > 0) {
+    throw new InspectError(`${platform} Cordis inspect ${provider}.${method.name} rejected input: ${violations.join('; ')}`, 'INSPECT_INVALID_INPUT')
+  }
 }
 
 function validateOutput(
@@ -285,8 +354,12 @@ function validateOutput(
   data: JsonValue,
 ): JsonValue {
   const snapshot = snapshotJsonValue(data)
-  if (snapshot === undefined) throw new Error(`${platform} Cordis inspect ${provider}.${method.name} returned a non-JSON value`)
+  if (snapshot === undefined) {
+    throw new InspectError(`${platform} Cordis inspect ${provider}.${method.name} returned a non-JSON value`, 'INSPECT_INVALID_OUTPUT')
+  }
   const violations = validateJsonSchemaValue(method.outputSchema as JsonSchemaNode, snapshot, 'output')
-  if (violations.length > 0) throw new Error(`${platform} Cordis inspect ${provider}.${method.name} returned invalid output: ${violations.join('; ')}`)
+  if (violations.length > 0) {
+    throw new InspectError(`${platform} Cordis inspect ${provider}.${method.name} returned invalid output: ${violations.join('; ')}`, 'INSPECT_INVALID_OUTPUT')
+  }
   return snapshot
 }

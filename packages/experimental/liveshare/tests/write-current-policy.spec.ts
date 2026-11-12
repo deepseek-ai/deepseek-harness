@@ -7,10 +7,11 @@ import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-test
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import * as FsObservationPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import SandboxedFileSystem from '@deepseek-ai/dsh-fs-sandbox'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SandboxPolicyService, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
@@ -94,7 +95,7 @@ beforeEach(async ({ onTestFinished }) => {
   await ctx.plugin(ToolFs)
   if (!(ctx.fs instanceof SandboxedFileSystem)) throw new Error('the fixture requires the sandboxed filesystem')
   backend = ctx.fs
-  const key = standInAgent(SessionId('liveshare-policy-session'), root)
+  const key = standInAgent(brandString<SessionId>('liveshare-policy-session'), root)
   let minted: Scope | undefined
   await ctx.plugin(Object.assign(
     (inner: Context) => { minted = createScope(inner, key) },
@@ -140,7 +141,7 @@ async function install(kind: AccessKind): Promise<void> {
 function call(name: string, args: unknown) {
   return executeOneTool(ctx, {
     signal: new AbortController().signal,
-    callId: ToolCallId(`current-policy-${++calls}`), name, arguments: args, agent,
+    callId: brandString<ToolCallId>(`current-policy-${++calls}`), name, arguments: args, agent,
   })
 }
 
@@ -255,6 +256,7 @@ describe('LiveShare current write policy', () => {
       const result = await pending
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('does not allow writing this Session')
+      expect(result.error?.info).toEqual({ name: 'LiveshareForkDeniedError', code: 'FORK_TOOL_NOT_PERMITTED' })
       // The final gate asked again after the refresh; trusting the first verdict would have let this write
       // reach fs.writeText.
       expect(mayWriteChecks).toBe(2)

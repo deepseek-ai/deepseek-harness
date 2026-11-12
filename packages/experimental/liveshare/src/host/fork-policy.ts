@@ -51,8 +51,8 @@ export interface ForkViewer {
 /** What the Relay knows about the share a fork request arrived through. */
 export interface ForkShareState {
   readonly shareId: string
-  /** Session this share points at; a fork may only ever fork this one. */
-  readonly sessionId: string
+  /** Source Sessions this share serves, primary first; a fork may only ever fork one of them. */
+  readonly sessionIds: readonly string[]
   /**
    * Whether the owner allowed forking at all.
    *
@@ -91,7 +91,7 @@ export interface ForkShareState {
 /** One fork attempt, already carried over the Relay channel with trusted metadata. */
 export interface ForkRequest {
   readonly shareId: string
-  /** Session the caller believes it is forking; must equal the share's own session. */
+  /** Session the caller believes it is forking; must be one of the share's sources. */
   readonly sourceSessionId: string
   /** Completed prefix to fork at; absent forks the whole committed history. */
   readonly atSeq?: number
@@ -203,12 +203,12 @@ export function decideFork(
   if (!share.viewerAdmitted) {
     return { ok: false, code: 'viewer-not-authorized', message: 'viewer may not fork this share' }
   }
-  // The share names its own session, so a caller cannot point a fork at another session it can name.
-  if (request.sourceSessionId !== share.sessionId) {
+  // The share names its own sources, so a caller cannot point a fork at another session it can name.
+  if (!share.sessionIds.includes(request.sourceSessionId)) {
     return {
       ok: false,
       code: 'source-session-mismatch',
-      message: 'the requested session is not the session this share carries',
+      message: 'the requested session is not one this share carries',
     }
   }
   return { ok: true, boundary: request.atSeq ?? 0, ceiling: READ_ONLY_FORK_CEILING, requestKey: request.requestKey }

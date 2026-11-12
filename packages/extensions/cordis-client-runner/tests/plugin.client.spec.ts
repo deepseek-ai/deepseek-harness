@@ -9,6 +9,7 @@
 /* oxlint-disable typescript/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { TimerService } from '@deepseek-ai/cordis-plugin-timer'
 import { describe, expect, it, vi } from 'vitest'
 import type {
@@ -21,9 +22,9 @@ import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as NodeHalf from '../src/index.ts'
 import * as ClientHalf from '../src/client/index.ts'
 
-const PLUGIN = 'dyn-1' as CordisDynamicPluginId
-const PACKAGE = 'pkg-1' as CordisDynamicPackageId
-const RUN = 'run-1' as CordisDynamicPluginRunId
+const PLUGIN = brandString<CordisDynamicPluginId>('dyn-1')
+const PACKAGE = brandString<CordisDynamicPackageId>('pkg-1')
+const RUN = brandString<CordisDynamicPluginRunId>('run-1')
 const AGENT = 's-1' as SessionId
 const USER_RUN = {
   agentId: AGENT, pluginId: PLUGIN, packageId: PACKAGE, mode: 'run' as const, hasClientHalf: true,
@@ -383,7 +384,7 @@ describe('browser half', () => {
 
   it('answers a run request after the surface approves it', async () => {
     const bench = await boot()
-    const request = 'rr-1' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-1')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,
@@ -416,7 +417,7 @@ describe('browser half', () => {
 
   it('drops the affordance when another page answers the request', async () => {
     const bench = await boot()
-    const request = 'rr-2' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-2')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,
@@ -440,7 +441,7 @@ describe('browser half', () => {
 
   it('exposes the refusal and the load observer on the face', async () => {
     const bench = await boot()
-    const request = 'rr-3' as ApprovalRequestId
+    const request = brandString<ApprovalRequestId>('rr-3')
     bench.forward('cordis/request-run', {
       requestId: request,
       agentId: AGENT,

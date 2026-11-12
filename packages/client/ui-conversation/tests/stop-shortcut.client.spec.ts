@@ -137,6 +137,17 @@ describe('fixed stop routing', () => {
     expect(b.cancel).toHaveBeenCalledOnce()
   })
 
+  it("keeps this Session's double-Escape sequence when another Session gains a pending interaction", async () => {
+    const b = await bench()
+    const publish = b.runtime.ctx.uiSession.registerPendingInteraction<SessionPendingInteractionBase>(() => 0)
+    b.press()
+    const remove = publish({ kind: 'approval', key: 'request-other', sessionId: 's2' as SessionId }, async () => {})
+    b.press()
+    await Promise.resolve()
+    expect(b.cancel).toHaveBeenCalledOnce()
+    remove()
+  })
+
   it('excludes terminal, iframe, approval and inert descendants even inside Conversation', async () => {
     const b = await bench()
     for (const [tag, attribute] of [['div', 'class'], ['iframe', ''], ['div', 'data-approval-key'], ['div', 'inert']]) {

@@ -5,12 +5,13 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { expect, it } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { initialShortcutConfig, parseShortcutDefinitions, parseShortcutEdit } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import type { DesktopShortcutInput, DesktopShortcutsApi, ShortcutCommandId, ShortcutRevision } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { desktopKeybindings } from '../../desktop/src/keybindings.ts'
 import { acknowledgeReloadConnectionLoss, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole, webSnapshotMode } from './scaffold.ts'
 import { writeComposerDraft } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 declare global {
   interface Window {
@@ -34,7 +35,7 @@ it.each([
   try {
     const scaffold = await launchWebScaffold({ developerTools: false })
     try {
-      await seedSession(scaffold, await readFile(seed, 'utf8'), SessionId('desktop-shortcuts-source'))
+      await seedSession(scaffold, await readFile(seed, 'utf8'), brandString<SessionId>('desktop-shortcuts-source'))
       const browser = await chromium.launch()
       try {
         const page = await browser.newPage({ locale: 'en-US', viewport: { width: 1440, height: 1000 } })
@@ -120,8 +121,9 @@ it.each([
         await selectDraft()
         await deliverPrimary('KeyP')
         expect(await files.count()).toBe(1)
-        expect(await panel.locator('[data-dockkit-pane]').evaluate(pane => document.activeElement === pane)).toBe(true)
-        expect(await page.evaluate(() => document.getSelection()?.toString())).toBe('Desktop')
+        // Once the files page is shown, the shortcut opens its search bar and the search field takes the keyboard.
+        await expect.poll(() => panel.locator('[data-files-search-toggle]').getAttribute('aria-expanded')).toBe('true')
+        await expect.poll(() => panel.locator('[data-files-search]').evaluate(input => document.activeElement === input)).toBe(true)
         await composer.click()
         const pane = panel.locator('[data-dockkit-pane]')
         await pane.click({ position: { x: 20, y: 2 } })

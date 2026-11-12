@@ -11,7 +11,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { TeamDisableConfirmation, type TeamDisableConfirmationInjected, type TeamDisableRequest } from './TeamDisableConfirmation.tsx'
-import { TeamModeToggle, type TeamModeToggleInjected } from './TeamModeToggle.tsx'
+import { TeamModePane, TeamModeToggle, type TeamModePaneInjected } from './TeamModeToggle.tsx'
 import { TeamBoard } from './TeamBoard.tsx'
 import { TeamCommandRow } from './TeamCommandRow.tsx'
 import { en, ja, es, fr, de, ru, pt, NS, zh, type TeamKey } from './locales.ts'
@@ -58,11 +58,14 @@ export function registerAgentTeamUi(ctx: ClientContext): void {
         name: 'conversation.input.model.options',
         id: 'agent-team',
         locale: NS,
-        inject: (sessionId): TeamModeToggleInjected => ({
+      }, TeamModeToggle))
+      yield scope.slots.inject('conversation.input.model.pane', () => scope.slots.register({
+        name: 'conversation.input.model.pane', key: 'agent-team', locale: NS,
+        inject: (sessionId): TeamModePaneInjected => ({
           selectTeamMode: enabled => selectTeamMode(sessionId, enabled),
           requestDisableConfirmation: () => { disableRequest.set({ sessionId }) },
         }),
-      }, TeamModeToggle))
+      }, TeamModePane))
     })
   })
   ctx.slots.inject('conversation.session.header.actions.subagent.footer', () => ctx.slots.register({

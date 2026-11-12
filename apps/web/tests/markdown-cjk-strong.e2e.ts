@@ -3,7 +3,7 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, Session, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
   assertFixtureInventory,
@@ -16,6 +16,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot, WEB_FIXTURE_TIME } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/markdown-cjk-strong', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('./expected/markdown-cjk-strong/ui.expected.md', import.meta.url))
@@ -35,7 +36,7 @@ const CASES = [
 
 /** Build one settled assistant reply covering CJK-adjacent strong punctuation boundaries. */
 function markdownFixture(): string {
-  const session = Session.create(SessionId('markdown-cjk-strong-source'))
+  const session = Session.create(brandString<SessionId>('markdown-cjk-strong-source'))
   session.append('turn/start', { turn: 1 })
   const user = session.append('user/message', createUserMessage({
     content: [{ type: 'text', text: 'Render adjacent CJK strong emphasis.' }],
@@ -123,6 +124,36 @@ describe('web e2e: CJK-adjacent Markdown strong emphasis', () => {
     expect(await strong.allTextContents()).toEqual(CASES.map(([, expected]) => expected))
     for (const [, , paragraph] of CASES) {
       expect(await page.getByText(paragraph, { exact: true }).count()).toBe(1)
+    }
+
+    const viewport = page.viewportSize()!
+    try {
+      for (const size of [{ width: 390, height: 844 }, { width: 951, height: 669 }, { width: 669, height: 951 }]) {
+        await page.setViewportSize(size)
+        expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('-webkit-text-size-adjust')))
+          .toBe('100%')
+        expect(await strong.evaluateAll(elements => elements.map(element => getComputedStyle(element).fontSize)))
+          .toEqual(CASES.map(() => '14px'))
+      }
+      const restoreFont = await page.evaluateHandle(() => {
+        const style = document.body.style
+        const before = style.getPropertyValue('--dsh-content-font-size')
+        const priority = style.getPropertyPriority('--dsh-content-font-size')
+        style.setProperty('--dsh-content-font-size', '18px')
+        return () => {
+          if (before) style.setProperty('--dsh-content-font-size', before, priority)
+          else style.removeProperty('--dsh-content-font-size')
+        }
+      })
+      try {
+        expect(await strong.evaluateAll(elements => elements.map(element => getComputedStyle(element).fontSize)))
+          .toEqual(CASES.map(() => '18px'))
+      } finally {
+        await restoreFont.evaluate((restore) => { restore() })
+        await restoreFont.dispose()
+      }
+    } finally {
+      await page.setViewportSize(viewport)
     }
 
     const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))

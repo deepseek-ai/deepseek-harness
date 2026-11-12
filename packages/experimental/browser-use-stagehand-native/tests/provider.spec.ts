@@ -8,10 +8,11 @@ import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
-import { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/brand'
-import { LlmAdapter, ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { BrowserUseProviderName } from '@deepseek-ai/dsh-browser-use/types'
+import { LlmAdapter, type ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as Provider from '../src/index.ts'
 import { fixture, nativeModel, resetFixture } from './fixtures/stagehand.ts'
 
@@ -42,6 +43,7 @@ vi.mock('../src/launch.ts', async (importActual) => {
 })
 vi.mock('../src/worker-client.ts', async () => {
   const { openNativeBrowser } = await import('../src/native.ts')
+  const { StagehandError } = await import('../src/error.ts')
   return {
     async openBrowserWorker(config: NativeBrowserConfig, signal: AbortSignal, warn: (message: string) => void) {
       acquisition.signal = signal
@@ -54,7 +56,7 @@ vi.mock('../src/worker-client.ts', async () => {
       })()
       return {
         async execute(method: import('../src/native.ts').BrowserMethod, args: unknown, signal?: AbortSignal) {
-          if (closing !== undefined) throw new Error('Fixture connection is closed')
+          if (closing !== undefined) throw new StagehandError('Fixture connection is closed', 'STAGEHAND_WORKER_FAILED')
           const cancel = () => { void close().catch(() => {}) }
           signal?.addEventListener('abort', cancel, { once: true })
           try { return await native.execute(method, args) } finally { signal?.removeEventListener('abort', cancel) }
@@ -84,14 +86,16 @@ beforeEach(async () => {
   await ctx.plugin(BrowserUseRegistry)
   ctx.llm.registerAdapter(['fixture'], new IndependentSessionModel())
   const harness = await mountAgentLoopTestHarness(ctx)
-  first = await harness.create(SessionId('stagehand-first'), { provider: 'fixture', model: 'structured' })
-  second = await harness.create(SessionId('stagehand-second'), { provider: 'fixture', model: 'structured' })
+  first = await harness.create(brandString<SessionId>('stagehand-first'), { provider: 'fixture', model: 'structured' })
+  second = await harness.create(brandString<SessionId>('stagehand-second'), { provider: 'fixture', model: 'structured' })
 })
 
 afterEach(async () => { await ctx.fiber.dispose() })
 
+const INVALID_ARGS = { name: 'ToolArgsError', code: 'INVALID_ARGS' }
+
 function execute(agent: Agent, suffix: string, args: unknown, signal = new AbortController().signal) {
-  return executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`test-${suffix}`), signal })
+  return executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: brandString<ToolCallId>(`test-${suffix}`), signal })
 }
 
 it('lazily launches distinct browsers and preserves each Session tab state', async () => {
@@ -119,11 +123,27 @@ it('lazily launches distinct browsers and preserves each Session tab state', asy
 it('reserves an attached browser for one live owner and rejects model connection overrides', async () => {
   await ctx.plugin(Provider, { model: nativeModel, mode: 'attach', cdpEndpoint: 'http://localhost:9222' })
   expect((await execute(first, 'tabs', { action: 'list' })).isError).toBe(false)
-  expect((await execute(second, 'tabs', { action: 'list' })).isError).toBe(true)
+  expect((await execute(second, 'tabs', { action: 'list' })).error?.info).toEqual({ name: 'BrowserSessionError', code: 'BROWSER_LOCKED' })
   expect(fixture.browsers).toHaveLength(1)
   expect(fixture.browsers[0]?.options).toEqual({ cdpUrl: 'http://localhost:9222' })
-  expect((await execute(first, 'navigate', { url: 'https://example.com', cdpEndpoint: 'http://other' })).isError).toBe(true)
-  expect((await execute(first, 'act', { instruction: 'click', model: 'other' })).isError).toBe(true)
+  expect((await execute(first, 'navigate', { url: 'https://example.com', cdpEndpoint: 'http://other' })).error?.info).toEqual(INVALID_ARGS)
+  expect((await execute(first, 'act', { instruction: 'click', model: 'other' })).error?.info).toEqual(INVALID_ARGS)
+  const malformed = await execute(first, 'navigate', { url: 'not a url' })
+  expect(malformed.error?.info).toEqual(INVALID_ARGS)
+  expect(malformed.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: arguments.url: Invalid URL' }])
+})
+
+it('rejects invalid arguments before acquiring a browser', async () => {
+  await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
+  expect((await execute(first, 'navigate', { url: 'not a url' })).error?.info).toEqual(INVALID_ARGS)
+  expect(fixture.browsers).toEqual([])
+})
+
+it('reads non-object arguments as an empty request, as the MCP bridge does', async () => {
+  await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
+  const result = await execute(first, 'screenshot', null)
+  expect(result.isError).toBe(false)
+  expect(fixture.browsers).toHaveLength(1)
 })
 
 it('uses its independent model for actions, observations, and a caller-selected extraction schema', async () => {
@@ -142,16 +162,17 @@ it('uses its independent model for actions, observations, and a caller-selected 
   fixture.actResult = { success: false, message: 'Fixture button unavailable' }
   fixture.result = { extraction: 'Missing button' }
   const refused = await execute(first, 'act', { instruction: 'Click the missing button' })
-  expect(refused.isError).toBe(true)
+  expect(refused.error?.info).toEqual({ name: 'StagehandError', code: 'STAGEHAND_ACT_FAILED' })
   expect(JSON.stringify(refused.content)).toContain('Fixture button unavailable')
 })
 
 it('refuses unavailable tabs and calls without an exact live Agent', async () => {
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
-  expect((await execute(first, 'navigate', { url: 'https://example.com', pageId: 'missing' })).isError).toBe(true)
-  expect((await executeToolFixture(ctx, { name: 'stagehand_tabs', arguments: { action: 'list' }, callId: ToolCallId('agentless'), signal: new AbortController().signal })).isError).toBe(true)
+  expect((await execute(first, 'navigate', { url: 'https://example.com', pageId: 'missing' })).error?.info).toEqual({ name: 'StagehandError', code: 'STAGEHAND_TAB_NOT_FOUND' })
+  expect((await executeToolFixture(ctx, { name: 'stagehand_tabs', arguments: { action: 'list' }, callId: brandString<ToolCallId>('agentless'), signal: new AbortController().signal })).error?.info)
+    .toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
   ctx.tools.register({ name: 'unrelated', description: 'An independent tool.', parameters: { type: 'object' }, output: { schema: { type: 'boolean' }, render: () => [{ type: 'text', text: 'independent' }] }, execute: async () => true })
-  const unrelated = await executeToolFixture(ctx, { agent: first, name: 'unrelated', arguments: {}, callId: ToolCallId('unrelated'), signal: new AbortController().signal })
+  const unrelated = await executeToolFixture(ctx, { agent: first, name: 'unrelated', arguments: {}, callId: brandString<ToolCallId>('unrelated'), signal: new AbortController().signal })
   expect(unrelated.isError).toBe(false)
 })
 
@@ -182,7 +203,7 @@ it('holds the provider reservation until browser cleanup settles', async () => {
   try {
     await started.promise
     expect(ctx.tools.schemas()).toEqual([])
-    expect(() => ctx.browserUse.register(BrowserUseProviderName('other'))).toThrow('already registered')
+    expect(() => ctx.browserUse.register(brandString<BrowserUseProviderName>('other'))).toThrow('already registered')
   } finally {
     settle.resolve()
     await closing
@@ -241,7 +262,9 @@ it.each(['cancel', 'dispose'] as const)('drains native inference before completi
   } finally {
     release.resolve()
     await disposal
-    expect((await operation).isError).toBe(true)
+    const settled = await operation
+    expect(settled.isError).toBe(true)
+    if (reason === 'cancel') expect(settled.error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
   }
   expect(fixture.browsers[0]?.stagehandClosed).toBe(true)
   expect(fixture.browsers[0]?.closed).toBe(false)
@@ -286,13 +309,13 @@ it.each([false, true])('disposes a real AgentHandle while its screenshot waits, 
   fixture.browserClose = async () => { stopped.resolve() }
   class ScreenshotModel extends LlmAdapter {
     async * stream(): AsyncIterable<StreamChunk> {
-      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: ToolCallId('blocked-screenshot'), name: 'stagehand_screenshot', arguments: '{}' } }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id: brandString<ToolCallId>('blocked-screenshot'), name: 'stagehand_screenshot', arguments: '{}' } }
       yield { type: 'finish', reason: { kind: 'tool-calls' } }
     }
   }
   ctx.llm.registerAdapter(['screenshot'], new ScreenshotModel())
   await ctx.plugin(Provider, { model: nativeModel, mode: 'launch' })
-  const owner = await ctx.agents.create({ sessionId: SessionId('screenshot-disposal'), agentOptions: { provider: 'screenshot', model: 'fixture' } })
+  const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('screenshot-disposal'), agentOptions: { provider: 'screenshot', model: 'fixture' } })
   try {
     owner.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Take a screenshot.' }], source: { kind: 'user' } }))
     await entered.promise
@@ -412,9 +435,9 @@ it('blocks reconnection and another owner after canceled native work fails to dr
   } finally {
     release.resolve()
   }
-  expect((await operation).isError).toBe(true)
-  expect((await execute(first, 'tabs', { action: 'list' })).isError).toBe(true)
-  expect((await execute(second, 'tabs', { action: 'list' })).isError).toBe(true)
+  expect((await operation).error?.info).toEqual({ name: 'AbortError', code: 'ABORTED' })
+  expect((await execute(first, 'tabs', { action: 'list' })).error?.info).toEqual({ name: 'StagehandError', code: 'STAGEHAND_WORKER_FAILED' })
+  expect((await execute(second, 'tabs', { action: 'list' })).error?.info).toEqual({ name: 'BrowserSessionError', code: 'BROWSER_LOCKED' })
   expect(fixture.browsers).toHaveLength(1)
   await provider.dispose()
   expect(fixture.browsers[0]?.closed).toBe(false)

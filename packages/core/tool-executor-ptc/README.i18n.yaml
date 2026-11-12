@@ -15,14 +15,14 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-tool-executor-ptc/use-this-package:
-  en: 2db07bc05f05d202
-  zh: 4efdaab79fcc00af
+  en: a883aa8ddca03a66
+  zh: c926a9100d2b506f
 /deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation:
   en: 78708b3779d999a9
   zh: ad6173f9f01630de
 /deepseek-ai-dsh-tool-executor-ptc/understand-the-implementation/ptc-mode:
-  en: 5623dd6cdd26bda2
-  zh: 0b93be49e84ef52c
+  en: d93c8f10d1247f80
+  zh: a35d953631ca1c83
 /deepseek-ai-dsh-tool-executor-ptc/further-exploration:
   en: ee69078c38c655a9
   zh: fb0873407f23c8c5
@@ -33,8 +33,8 @@
   en: eaefd7303f22977d
   zh: 9c425f9501128224
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees:
-  en: 3c4ee15c38a82543
-  zh: c032ede27425f917
+  en: 169bc639d757f8af
+  zh: e77c4bf66a8ebd1b
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/what-the-model-sees/typescript-ptc-mode-sdk-instructions-with-bash:
   en: 3a8df15e4ae32f9e
   zh: fc4a800ba363e835
@@ -47,9 +47,21 @@
 /deepseek-ai-dsh-tool-executor-ptc/model-experience/ptc-mode-schema-and-system-prompt/kv-cache-effect:
   en: 4bf1cd2890cfe6c4
   zh: 5b230b0adc09ddfb
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools:
+  en: 9253b0d52c38cad9
+  zh: e2d41d32791c46b1
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/what-the-model-sees:
+  en: 71ee0ac3a10cd438
+  zh: cc8a730e4589510a
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/token-effect:
+  en: b9f8f6c9ee03641c
+  zh: 64e2a8d7f6f58021
+/deepseek-ai-dsh-tool-executor-ptc/model-experience/registered-program-tools/kv-cache-effect:
+  en: f4703836365dc3d4
+  zh: a09ff48a6550fd69
 /deepseek-ai-dsh-tool-executor-ptc/known-limitations-and-deferred-work:
-  en: 86d79fbb28aced73
-  zh: aac0ffa1c3ad5e9a
+  en: b45acbcff554e15a
+  zh: 170ec90af3d0adc3
 /deepseek-ai-dsh-tool-executor-ptc/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

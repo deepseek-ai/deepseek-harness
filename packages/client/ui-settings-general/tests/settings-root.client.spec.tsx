@@ -8,12 +8,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createSettingsShellStore } from '../src/client/shell-store.ts'
 import { allowAllAccess, bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SettingsRootComponentProps } from '../src/client/shell-contract.ts'
 import { SettingsRoot } from '../src/client/SettingsRoot.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import type { DesktopUpdateView } from '../src/types.ts'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 // Every fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
 const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined, reload: () => {} })) as GlobalStandardProps['useResource']
@@ -92,7 +93,7 @@ function mount({
       return SEAT_CONTENT[key] ?? opts?.fallback
     }) as SettingsRootComponentProps['renderSlot'],
   )
-  const activeId = SessionId('active-session')
+  const activeId = brandString<SessionId>('active-session')
   const sessions: SessionListState = {
     ids: [activeId],
     byId: {
@@ -522,6 +523,14 @@ it('opens Account from the contributed sidebar launcher', () => {
   expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.launcher').at(-1)?.[1]).toMatchObject({ settingsOpen: true })
   fireEvent.keyDown(document, { key: 'Escape' })
   expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.launcher').at(-1)?.[1]).toMatchObject({ settingsOpen: false })
+})
+
+it('opens the section requested by the contributed sidebar launcher', () => {
+  const { renderSlot } = mount({ rows: [{ id: 'general', order: 0, label: 'General' }, { id: 'account', order: 1, label: 'Account' }] })
+  const launcher = renderSlot.mock.calls.find(call => call[0] === 'settings.launcher')!
+  act(() => { (launcher[1] as { openSettings: (sectionId?: string) => void }).openSettings('account') })
+  expect(screen.getByTestId('section-account')).toBeTruthy()
+  expect(screen.queryByTestId('section-general')).toBeNull()
 })
 
 it('shows the effective settings binding on focus and exposes it to assistive technology', () => {

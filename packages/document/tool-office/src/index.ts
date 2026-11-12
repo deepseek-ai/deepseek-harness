@@ -12,14 +12,16 @@ import { basename } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
-import type { FsInfo, FsTarget } from '@deepseek-ai/dsh-fs'
+import { AttachmentError, type ImageAttachmentRef, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import { FsError, type FsInfo, type FsTarget } from '@deepseek-ai/dsh-fs'
 import type {} from '@deepseek-ai/dsh-llm'
 import { SubagentError } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-skill'
-import { OfficeKitError, OfficeSourceKey, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { OfficeSourceKey } from '@deepseek-ai/dsh-office-kit/types'
+import { OfficeKitError, type OfficeDocumentExtension, type OfficeImageInputExtension, type OfficeKit,
   type OfficeKitSource, type OfficeWorkbookExtension } from '@deepseek-ai/dsh-office-kit'
-import { defineTool, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError, type ToolActivationContext, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-working-directory'
 import { checkParameterNames, checkRenderArguments, checkConversionArguments, extensionOf, inputFamily, OUTPUT_FORMATS,
   RECALCULATION_FORMATS,
@@ -27,6 +29,9 @@ import { checkParameterNames, checkRenderArguments, checkConversionArguments, ex
   type OfficeToolName } from './formats.ts'
 import { renderFileContent, renderImagesContent, type OfficeFileFormats, type OfficeFileValue,
   type OfficeRenderValue } from './content.ts'
+import { OFFICE_KIT_FAILURE_CODES, OfficeToolError } from './error.ts'
+
+export type { OfficeToolErrorCode } from './error.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'tool-office'
@@ -225,7 +230,7 @@ export function apply(ctx: Context, config: Config): void {
 async function prepareInput(ctx: Context, exec: ToolExecution, operation: OfficeOperationName, input: string) {
   const { agent, signal } = exec
   // Conditional registrations execute only through a step tool set, which the calling Agent resolves.
-  if (agent === undefined) throw new Error(`cannot ${operation} "${input}": Office tools run only in an Agent step`)
+  if (agent === undefined) throw new ToolContextUnavailableError(`cannot ${operation} "${input}": Office tools run only in an Agent step`)
   const kit = ctx.get('officeKit')
   if (kit === undefined) {
     throw officeFailure(operation, input, new OfficeKitError('unavailable', 'The document converter is unavailable.'))
@@ -244,8 +249,8 @@ async function readableInput(
 ): Promise<{ target: FsTarget; info: FsInfo }> {
   const target = await ctx.fs.resolve(path, options)
   const info = await ctx.fs.stat(target, options.signal)
-  if (info === undefined) throw new Error(`cannot read "${target.displayPath}": not found`)
-  if (info.type !== 'file') throw new Error(`cannot read "${target.displayPath}": not a regular file`)
+  if (info === undefined) throw new FsError(`cannot read "${target.displayPath}": not found`, 'FS_NOT_FOUND')
+  if (info.type !== 'file') throw new FsError(`cannot read "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')
   return { target, info }
 }
 
@@ -267,7 +272,7 @@ async function authorizeContent(ctx: Context, target: FsTarget, info: FsInfo, si
 /** A deferred bounded read that refuses a source changed since its authorizing stat. */
 function officeSource(ctx: Context, agent: Agent, target: FsTarget, info: FsInfo): OfficeKitSource {
   return {
-    key: OfficeSourceKey(JSON.stringify([agent.session.id, ctx.fs.processPath(target)])),
+    key: brandString<OfficeSourceKey>(JSON.stringify([agent.session.id, ctx.fs.processPath(target)])),
     version: info.version,
     ...info.size === undefined ? {} : { bytes: info.size },
     async read(signal, maxBytes) {
@@ -286,14 +291,17 @@ function codeOf(error: unknown): unknown {
   return typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
 }
 
-/** Model-facing failure for a classified Office service error; other failures pass through unchanged. */
+/**
+ * Model-facing failure for a classified Office service error, with the matching `OfficeToolError` code and the
+ * service error as `cause`; other failures pass through unchanged.
+ */
 function officeFailure(verb: string, path: string, error: unknown): unknown {
   if (!(error instanceof OfficeKitError)) return error
   const hint = error.code === 'unavailable'
     ? ' Tell the user this operation is unavailable, or retry later if the cause may be temporary; do not substitute system soffice, npx, or another converter.'
     : error.code === 'busy' ? ' Retry after other document operations finish.'
       : error.code === 'output-too-large' && verb === 'render' ? ' Select fewer pages, a smaller range, or a lower dpi.' : ''
-  return new Error(`cannot ${verb} "${path}": ${error.message}${hint}`, { cause: error })
+  return new OfficeToolError(`cannot ${verb} "${path}": ${error.message}${hint}`, OFFICE_KIT_FAILURE_CODES[error.code], { cause: error })
 }
 
 /**
@@ -306,10 +314,12 @@ async function assertRenderRoute(ctx: Context, agent: Agent, signal: AbortSignal
   const model = header?.model ?? agent.options.model
   const provider = header?.provider ?? agent.options.provider
   if (llm === undefined || provider === undefined || model === undefined) {
-    throw new Error(`cannot render "${displayPath}": the current model route could not be resolved`)
+    throw new ToolContextUnavailableError(`cannot render "${displayPath}": the current model route could not be resolved`)
   }
   const { inputModalities = [] } = await llm.resolveModelInfo(provider, model, signal)
-  if (!inputModalities.includes('image')) throw new Error(`cannot render "${displayPath}": model "${model}" does not accept images`)
+  if (!inputModalities.includes('image')) {
+    throw new OfficeToolError(`cannot render "${displayPath}": model "${model}" does not accept images`, 'MODEL_DOES_NOT_SUPPORT_IMAGES')
+  }
 }
 
 async function render(
@@ -318,7 +328,9 @@ async function render(
 ): Promise<OfficeRenderValue> {
   const path = ctx.fs.processPath(target)
   const attachments = ctx.get('attachments')
-  if (attachments === undefined) throw new Error(`cannot render "${target.displayPath}": no attachment service is mounted`)
+  if (attachments === undefined) {
+    throw new ToolContextUnavailableError(`cannot render "${target.displayPath}": no attachment service is mounted`)
+  }
   await assertRenderRoute(ctx, agent, signal, target.displayPath)
   const limits = attachments.imageLimits
   let result
@@ -339,7 +351,7 @@ async function render(
   } catch (error) { throw officeFailure('render', target.displayPath, error) }
   const oversized = result.images.find(image => image.png.byteLength > limits.maxImageBytes)
   if (oversized !== undefined) {
-    throw new Error(`cannot render "${target.displayPath}": an image exceeds the ${limits.maxImageBytes}-byte image limit; select a smaller range or a lower dpi`)
+    throw new OfficeToolError(`cannot render "${target.displayPath}": an image exceeds the ${limits.maxImageBytes}-byte image limit; select a smaller range or a lower dpi`, 'OFFICE_OUTPUT_TOO_LARGE')
   }
   const stem = basename(target.displayPath)
   let refs: readonly ImageAttachmentRef[]
@@ -349,7 +361,7 @@ async function render(
     })))
   } catch (error) {
     if (!attachments.isAttachmentError(error)) throw error
-    throw new Error(`cannot render "${target.displayPath}": ${error.message}`, { cause: error })
+    throw new AttachmentError(`cannot render "${target.displayPath}": ${error.message}`, error.code, { cause: error })
   }
   return {
     operation: 'render', path, pageCount: result.pageCount, dpi: result.dpi, missingFonts: result.missingFonts,
@@ -357,7 +369,7 @@ async function render(
       // saveImages returns one reference per input, in input order.
       const ref = refs[index] as ImageAttachmentRef
       const { mediaType } = ref
-      // Normalization of a PNG yields PNG, JPEG, or WebP.
+      // Normalization of a PNG yields PNG, JPEG, or WebP; a GIF is an attachment service defect.
       if (mediaType === 'image/gif') throw new Error(`cannot render "${target.displayPath}": the attachment service stored a rendered PNG as GIF`)
       return {
         ...image.page === undefined ? {} : { page: image.page },
@@ -394,7 +406,7 @@ async function convertFile<Operation extends 'convert' | 'recalculate'>(
 ): Promise<OfficeFileValue<Operation>> {
   const { format } = args
   if (ctx.fs.processPathFromHostPath(kit.outputDirectory) === undefined) {
-    throw new Error(`cannot ${operation} "${target.displayPath}": converted files are not available when the workspace is on a remote host`)
+    throw new OfficeToolError(`cannot ${operation} "${target.displayPath}": converted files are not available when the workspace is on a remote host`, 'OFFICE_UNSUPPORTED_REMOTE_WORKSPACE')
   }
   const extension = extensionOf(args.input)
   const stem = basename(target.displayPath).replace(/\.[^.]*$/u, '')

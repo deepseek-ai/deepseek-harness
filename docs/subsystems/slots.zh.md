@@ -61,7 +61,7 @@ Slot 声明固定两个相互独立的维度。
 | cardinality | `list` | cell 由必填 `id` 定址，先按 `order`、再按注册顺序排列。 |
 | cardinality | `keyed` | owner 传入 `entryKey`；匹配 cell 以该 key 对应的 props 渲染。 |
 | cardinality | `chain` | 每个 entry 提供纯 `select(owner)` 函数；按 priority 顺序遇到的第一个非 null 结果获选，并以 `matched` 传给组件；全部拒绝时渲染 owner fallback。 |
-| cardinality | `hoc` | entry 层层包裹 owner 经 `renderSlot(key, owner, { children })` 传入的内容，最小者在最外层；见 [Hoc 层](#hoc-layers)。 |
+| cardinality | `hoc` | entry 层层包裹 owner 经 `renderSlot(key, owner, { children })` 传入的内容，最小者在最外层；可选的 `key` 按 owner 的 `entryKey` 选层。见 [Hoc 层](#hoc-layers)。 |
 | scope | `root` | 一个 root 作用域组件和 store 实例。 |
 | scope | `session-maybe` | 继承外围 Provider binding，但没有 binding 时仍可渲染；Session 值是可选的。 |
 | scope | `session` | 要求可解析的外围 Provider binding，并收到确定存在的 Session 值。 |
@@ -72,11 +72,13 @@ Slot 声明固定两个相互独立的维度。
 
 ### Hoc 层
 
-hoc entry 是以必填 `id` 寻址的一层。各层依次按 `order`、`priority`、注册顺序升序嵌套，最小者在最外层。每层收到同一份 owner props，并以 `children` 收到内一层（最内层是 owner 的内容），且只渲染一次；owner props 不得使用 `children` 这个名字。省略 `children` 时各层包裹空内容；没有存活的层时原样渲染内容。
+hoc entry 是以必填 `id` 和可选 `key` 寻址的一层。不带 `key` 的层是通配层，作用于每次分派；带 `key` 的层只在 owner 向 `renderSlot` 传入相同 `entryKey` 时生效，省略 `entryKey` 的 owner 只得到通配层。每个 `(key, id)` 组合（通配视为单独的 key）是一个遮蔽 cell；同一 `id` 下，精确 key 的层替换该 key 的通配层。
 
-- 重新挂载：增减一层会让其内部内容重新挂载，崩溃的层退出 slot 也是如此；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载。
-- 错误：崩溃的层渲染它的 `children` 并退出 slot。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
-- 布局：outlet 会在 owner 与内容之间插入一个 `display: contents` 的 `[data-slot]` 元素，所以 owner 侧的选择器不能假定内容是直接子元素。层自身不得产生盒子——例如应使用 `display: contents`——否则内容会脱离父元素的布局。
+各层依次按 `order`、`priority`、注册顺序升序嵌套，最小者在最外层。每层收到同一份 owner props，并以 `children` 收到内一层（最内层是 owner 的内容），且至多渲染一次；不渲染 `children` 的层替换其内部的全部内容。owner props 不得使用 `children` 这个名字。省略 `children` 时各层包裹空内容；没有适用的层时原样渲染内容。
+
+- 重新挂载：增减一个适用于本次分派的层会让其内部内容重新挂载；`session` 或 `session-maybe` 作用域的层在 Session binding 变化时也会让内部内容重新挂载。分派同一 key 的 outlet 共享一条编译好的层链，因此为其他 key 注册的层不会让它们的内容重新挂载；outlet 切换 `entryKey` 时会换到另一条层链，即使生效的层相同，内容也会重新挂载。
+- 错误：崩溃的层照常上报错误，并在出错的那一处渲染它的 `children`，直到该处本次挂载结束，owner props 变化也不恢复。该层保持注册，因此其他出现处（包括分派同一 key 的出现处）仍保留它，重新挂载的出现处会再次渲染它。被包裹内容抛出的错误穿过所有层，不记到任何层名下；层如果自己在 `children` 外包错误边界，捕获到的是内部包装错误而不是原始错误。
+- 布局：outlet 会在 owner 与内容之间插入一个 `display: contents` 的 `[data-slot]` 元素，所以 owner 侧的选择器不能假定内容是直接子元素。包裹 `children` 的层自身不得产生盒子（其 slot 另有说明的除外）——例如应使用 `display: contents`——否则内容会脱离父元素的布局。
 
 <a id="component-inputs"></a>
 
@@ -106,7 +108,8 @@ hoc entry 是以必填 `id` 寻址的一层。各层依次按 `order`、`priorit
 
 | 可用范围 | Props | Owner |
 |---|---|---|
-| 所有 scope | `useSessions`、`useSessionStatus`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessions`、`useSessionRetainInfo`、`useSessionAccess` | `ui-session` |
+| 所有 scope | `useSessionStatus` | `ui-session-status` |
 | 所有 scope | `useWorkspaces`、`useWorkspaceAccess` | `ui-workspace` |
 | 所有 scope | `useRemoteAccess`（`global` 资源） | `api-remote-access` |
 | 所有作用域 | `usePanelInfo` | `ui-layout` |
@@ -156,6 +159,7 @@ Factory: conversation.content [ConversationContent]
 │  └─ conversation.view
 │     ├─ id=chat [ChatView]
 │     │  ├─ conversation.chat.text-interaction [list]
+│     │  ├─ conversation.chat.markdown.fence [hoc, keyed by fence language]
 │     │  └─ conversation.chat.flow [ChatFlow]
 │     │     └─ conversation.chat.node [ChatNodeSeat dispatch]
 │     │        ├─ key=user [UserMessageNodeView]

@@ -12,7 +12,7 @@ const OWNER = { providerId: 'owner-p', tenantId: 'owner-t', subjectId: 'owner', 
 
 function storedShare(overrides: Partial<OwnerShare> = {}): OwnerShare {
   return {
-    shareId: 'share-1', sessionId: 'session-1', sessionTitle: 'Session', accessMode: 'open',
+    shareId: 'share-1', sessionIds: ['session-1'], sessionTitle: 'Session', accessMode: 'open',
     link: `${RELAY}/?shareId=share-1`, relay: RELAY, gatewayToken: 'gateway-token',
     allowedSubjectIds: [], revision: 1, createdAt: '2026-01-01T00:00:00.000Z',
     allowsFork: false, sessionMode: 'view', online: true, ...overrides,
@@ -152,7 +152,7 @@ describe('relay access adoption', () => {
     const h = harness()
     const admitted = { providerId: 'p', tenantId: 't', subjectId: 'alice' }
     const revoked = { providerId: 'p', tenantId: 't', subjectId: 'bob' }
-    h.ownerShares.set('share-1', storedShare({ sessionMode: 'write', allowsFork: true, sessionId: 'session-1' }))
+    h.ownerShares.set('share-1', storedShare({ sessionMode: 'write', allowsFork: true }))
     h.authority.applyRelayAccess('share-1', frame({
       version: 1, sessionMode: 'write', allowsFork: true, allowedSubjectIds: ['alice', 'bob'],
     }))
@@ -168,8 +168,8 @@ describe('relay access adoption', () => {
     expect(h.viewerRead.recheckAdmission).toHaveBeenCalledWith('share-1')
     expect(h.viewerRead.closeViewerStreams).toHaveBeenCalledWith('share-1', revoked)
     expect(h.cancelChildTurns).toHaveBeenCalledWith('share-1', revoked)
-    // A narrower admission can have ended a viewer's grant, and the host attributes no turn to a
-    // requester: it stops whatever the Session runs now.
+    // A narrower admission can have ended a viewer's grant, so the host stops the turns a viewer
+    // started; the owner's own turn keeps running.
     expect(h.cancelShareTurn).toHaveBeenCalledWith('share-1')
     // The Session's sandbox follows its shares, so the host reconciles it after the change.
     expect(h.reconcileSourceAccess).toHaveBeenCalledWith('session-1')
@@ -252,15 +252,16 @@ describe('relay authority reads', () => {
     expect(h.cancelShareTurn).not.toHaveBeenCalled()
   })
 
-  it('invalidates held authority for an answer whose JSON cannot be read', async () => {
+  it('keeps held authority for an answer whose JSON cannot be read', async () => {
     const h = harness()
     h.ownerShares.set('share-1', storedShare())
     vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 200 })))
     await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
-    expect(h.viewerRead.closeShare).toHaveBeenCalledWith('share-1')
+    expect(h.viewerRead.closeShare).not.toHaveBeenCalled()
+    expect(h.cancelShareTurn).not.toHaveBeenCalled()
   })
 
-  it('invalidates held authority for a refused or unreadable answer', async () => {
+  it('keeps held authority for a failed or unreadable answer', async () => {
     for (const answer of [
       () => Promise.resolve(new Response('no', { status: 500 })),
       () => Promise.resolve(Response.json('not a record')),
@@ -271,8 +272,42 @@ describe('relay authority reads', () => {
       h.ownerShares.set('share-1', storedShare({ online: true }))
       vi.stubGlobal('fetch', vi.fn(answer))
       await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      expect(h.viewerRead.closeShare).not.toHaveBeenCalled()
+      expect(h.cancelShareTurn).not.toHaveBeenCalled()
+      expect(h.cancelChildTurns).not.toHaveBeenCalled()
+    }
+  })
+
+  it('ends admission but not the owner turn when the Relay refuses this host', async () => {
+    for (const status of [401, 403]) {
+      const h = harness()
+      h.ownerShares.set('share-1', storedShare({ online: true }))
+      h.authority.applyRelayAccess('share-1', frame())
+      // A fork a viewer started stays listed here, so its streams are released with the admission.
+      h.forks.listForShare.mockReturnValue([{ childSessionId: 'child', creator: VIEWER }] as never)
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('no', { status })))
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
+      // No viewer input is served through the share any more: open calls and streams are released.
+      expect(h.viewerRead.closeShare).toHaveBeenCalledWith('share-1')
+      expect(h.viewerRead.closeViewerStreams).toHaveBeenCalledWith('share-1', VIEWER)
+      expect(h.authority.viewerAdmitted('share-1', { providerId: 'mock', tenantId: 'tenant', subjectId: 'viewer' }))
+        .toBe(false)
+      await expect(h.authority.refreshRelayAccess('share-1')).rejects.toThrow('unavailable')
+      // The owner's own turn keeps running, which is the difference from a withdrawn share.
+      expect(h.cancelShareTurn).not.toHaveBeenCalled()
+      expect(h.cancelChildTurns).not.toHaveBeenCalled()
+    }
+  })
+
+  it('ends held authority when the Relay states the share is gone', async () => {
+    for (const status of [404, 410]) {
+      const h = harness()
+      h.ownerShares.set('share-1', storedShare({ online: true }))
+      vi.stubGlobal('fetch', vi.fn(async () => new Response('gone', { status })))
+      await expect(h.authority.readRelayAuthority(share())).resolves.toEqual({ ok: false })
       expect(h.viewerRead.closeShare).toHaveBeenCalledWith('share-1')
       expect(h.cancelShareTurn).toHaveBeenCalledWith('share-1')
+      expect(h.cancelChildTurns).toHaveBeenCalledWith('share-1')
     }
   })
 

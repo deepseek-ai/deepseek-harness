@@ -6,11 +6,73 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
 import { expect, vi, type MockInstance } from 'vitest'
+import type { RegionRect } from '@deepseek-ai/dsh-client-web/src/window-drag/regions.ts'
 
 /** The built page under test; `pnpm run test:web` rebuilds it before running. */
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
 
 export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
+
+/** A visible control, including controls that declare no native window region. */
+interface WindowControlBox extends Omit<RegionRect, 'draggable'> {
+  /** Sample points where the browser hit test reaches this control or its content. */
+  readonly hits: readonly (readonly [number, number])[]
+}
+
+/** Native region owners and optional control probes from one browser evaluation. */
+export interface CollectedWindowSurface {
+  readonly regions: readonly RegionRect[]
+  /** Empty when no control probe was requested. */
+  readonly controls: readonly WindowControlBox[]
+}
+
+/** Controls to probe alongside the native region owners. */
+interface WindowControlProbe {
+  readonly selector: string
+  /** Containers whose nested drag rows own their pixels independently of the container. */
+  readonly containersWithDragRows: string
+}
+
+/**
+ * Collect visible native window regions in DOM order and optionally probe controls in the same frame.
+ * Controls with computed `none` contribute no native rectangle but still receive hit-test probes.
+ * @param page - Page whose current layout is sampled.
+ * @param controlProbe - Control selectors; omit when only native regions are needed.
+ * @returns Native regions with unclipped bounds and independently sampled controls.
+ */
+export async function collectWindowSurface(page: Page, controlProbe?: WindowControlProbe): Promise<CollectedWindowSurface> {
+  return page.evaluate((probe) => {
+    const regions: RegionRect[] = []
+    const controls: WindowControlBox[] = []
+    for (const element of document.querySelectorAll('*')) {
+      const style = getComputedStyle(element)
+      const region = style.getPropertyValue('-webkit-app-region')
+      if (style.visibility === 'hidden' || style.display === 'none') continue
+      const rect = element.getBoundingClientRect()
+      if (rect.width === 0 || rect.height === 0) continue
+      const box = { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      if (region === 'drag' || region === 'no-drag') regions.push({ ...box, draggable: region === 'drag' })
+      if (probe === undefined || !element.matches(probe.selector)) continue
+      const insetX = Math.min(2, rect.width / 4)
+      const insetY = Math.min(2, rect.height / 4)
+      const samples: [number, number][] = [
+        [rect.x + rect.width / 2, rect.y + rect.height / 2],
+        [rect.x + insetX, rect.y + insetY],
+        [rect.x + rect.width - insetX, rect.y + insetY],
+        [rect.x + insetX, rect.y + rect.height - insetY],
+        [rect.x + rect.width - insetX, rect.y + rect.height - insetY],
+      ]
+      const hits = samples.filter(([x, y]) => {
+        const top = document.elementFromPoint(x, y)
+        const strip = top?.closest('[data-window-drag]')
+        if (element.matches(probe.containersWithDragRows) && strip != null && element.contains(strip)) return false
+        return top !== null && (top === element || element.contains(top))
+      })
+      controls.push({ ...box, hits })
+    }
+    return { regions, controls }
+  }, controlProbe)
+}
 
 /**
  * Read the `meta.description` an experimental bundle's plugin page shows for one locale.
@@ -169,6 +231,17 @@ export async function scrollIntoView(target: Locator): Promise<void> {
     element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' })
     return true
   }), { timeout: 10_000 }).toBe(true)
+}
+
+/**
+ * Request one earlier page without scrolling the transcript to its automatic pagination threshold.
+ * @param page - Page showing the English Chat history control.
+ */
+export async function loadEarlierChatPage(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Load earlier', exact: true }).evaluate((button) => {
+    button.focus({ preventScroll: true })
+  })
+  await page.keyboard.press('Enter')
 }
 
 /**
@@ -405,4 +478,14 @@ export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Prom
   }
   await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
+}
+
+/**
+ * The right Sidebar's fullscreen panel box: 1px wider than the viewport, so the
+ * first column's divider sits past the window's left edge where the frame clips it.
+ * @param viewport - the page viewport size.
+ * @returns the panel's expected bounding box.
+ */
+export function fullscreenBox(viewport: { width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  return { x: -1, y: 0, width: viewport.width + 1, height: viewport.height }
 }

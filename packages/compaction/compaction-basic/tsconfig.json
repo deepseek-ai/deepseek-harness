@@ -7,6 +7,9 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -23,6 +26,9 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-projection"
     },
     {
       "path": "../../core/agent"

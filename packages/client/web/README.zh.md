@@ -29,7 +29,7 @@ kind: "package-library"
 
 静态应用页面在入口运行前安装 `__DSH_BOOT_READY__`。`run()` 等待期间会立即显示启动页；页面所有者通过 `applyIndexInjections`（也从 `./injections` 导出）应用 Host 注入项，并在所有脚本完成后兑现延迟对象。延迟对象拒绝时显示启动失败；若调用方提供 `run(onFailure)`，则由外部呈现错误并保留加载页。Desktop 使用该回调请求原生恢复。Desktop 与 WebWorker 共享注入解释器；服务端 `tapIndex` HTML 转换仅适用于服务端提供的文档。
 
-外壳基础样式会在支持的浏览器中为普通内容自动添加中西文间距。语义化代码以及终端、diff、读取和搜索输出容器会保留源码中的原始间距和列对齐；不支持 `text-autospace` 的浏览器会忽略这两项声明。
+外壳基础样式会在移动浏览器旋转或展开屏幕时保持页面设定的字号，浏览器缩放和外观字号设置仍可使用。它还会在支持的浏览器中为普通内容自动添加中西文间距。语义化代码以及终端、diff、读取和搜索输出容器会保留源码中的原始间距和列对齐；不支持 `text-autospace` 的浏览器会忽略这两项声明。
 
 Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../apps/web/katex-fonts.ts)以 WOFF2 保留全部 KaTeX 字体样式，并排除 WOFF/TTF 后备格式；任一字体样式缺少 WOFF2 都会使构建失败。字体的字形、字重、样式和布局规则保持不变。
 
@@ -58,6 +58,8 @@ Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../
 ## 理解实现
 
 菜单采用共享 `MenuSurface` 材质，包括用于背景模糊的 macOS 底层；自定义内容遵循[菜单规则](../../../docs/web-styling.zh.md#component-rules)。
+
+在 macOS 上，原生窗口区域使用元素完整矩形，不考虑 overflow 裁剪。Shell 重置继承的区域，并将控件的自动排除限制在 `data-window-drag` 行或显式 `data-window-drag-controls` 范围内。范围外的滚动内容不会获得自动排除。不含嵌套拖动行的交互视口使用 `data-window-drag-exclude`，仅排除自身矩形；覆盖浮层和含自有拖动行的容器单独声明区域。Body portal 必须具有实际矩形，否则需在可见内容上显式声明排除。
 
 <details>
 <summary>实现细节——点击展开</summary>

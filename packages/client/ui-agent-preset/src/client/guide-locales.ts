@@ -11,6 +11,7 @@ export const guideEn = {
   guideStandardExplanation: [
     '### How it works',
     'The agent calls tools directly to read and edit files, search, and run terminal commands. It includes Skills, planning, goals, subagents, workflows, plugin management, and context compaction.',
+    'For questions about DSH and plugin or preset work you request, the dsh-doc skill guides the agent to the installed documentation and source. Its instructions load only when requested or relevant; loading it does not change files, tools, or the profile.',
     '### When to choose it',
     'Start here for everyday coding, file work, and research. Standard mode can also write scripts and process files in batches. PTC changes how tool calls are organized; it is not required for batch tasks.',
   ].join('\n\n'),
@@ -54,7 +55,7 @@ export const guideEn = {
   guideCordisIntro: 'Choose Creator mode for a new task. Describe the capability you want, where it should appear, and how you will verify it.',
   guideCordisExplanation: [
     '### What you can create',
-    'Creator mode includes the standard task tools plus runtime inspection and guidance for authoring Cordis plugins and agent presets. It can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
+    'Creator mode includes the standard task tools and adds runtime inspection. Standard and Creator share the dsh-doc guidance for plugin and preset development. The agent can create a plugin that adds a capability or UI, or a preset that combines tools and prompts for a particular job.',
     '### Plugins and modes',
     'A plugin adds capabilities to DSH, such as a tool, a service connection, or a UI entry. A mode is an agent preset that selects tools and defines how the agent works in a task. A plugin can be included in a custom preset.',
     '### How the result takes effect',
@@ -89,6 +90,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideStandardExplanation: [
     '### 工作方式',
     'Agent 直接调用工具来读写文件、检索资料和执行终端命令。包含 Skills、计划、目标、子 Agent、工作流、插件管理和上下文压缩等能力。',
+    '对于 DSH 相关问题以及你要求的插件或预设工作，dsh-doc skill 引导 Agent 查阅已安装的文档和源码。其指令仅在被要求加载或与当前任务相关时加载；加载该 skill 不会改变文件、工具或 profile。',
     '### 什么时候选',
     '日常编程、文件处理和资料整理可以从这里开始。标准模式也能编写脚本、批量处理文件；PTC 改变的是工具调用方式，批量任务并不必须使用 PTC。',
   ].join('\n\n'),
@@ -132,7 +134,7 @@ export const guideZh: Record<PresetGuideKey, string> = {
   guideCordisIntro: '新建任务时选择「创造模式」，说明希望增加什么能力、从哪里使用，以及怎样验证效果。',
   guideCordisExplanation: [
     '### 可以创造什么',
-    '创造模式具备标准任务工具，并增加运行时检查，以及 Cordis 插件和 Agent 预设的开发指引。可以编写插件来添加功能或界面，也可以组合工具和提示词，创建适合特定任务的模式。',
+    '创造模式包含标准任务工具，并增加了运行时检查。标准模式和创造模式共用 dsh-doc 指引，用于插件和预设开发。Agent 可以创建插件来添加能力或界面，也可以创建预设，为特定工作组合工具和提示词。',
     '### 插件与模式的关系',
     '插件为 DSH 增加能力，例如工具、服务连接或界面入口。模式是一份 Agent 预设，用来选择任务可用的工具，并约定 Agent 的工作方式。自定义模式中也可以使用自己开发的插件。',
     '### 怎样让成果生效',

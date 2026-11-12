@@ -206,7 +206,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .status {

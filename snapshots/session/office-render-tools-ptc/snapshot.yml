@@ -12,3 +12,6 @@ header:
   class: office-render-tools-ptc
 workspace:
   setup: office-retired-ptc
+# Adapt the retained retired-tool program to current explicit output.
+replay:
+  override: true

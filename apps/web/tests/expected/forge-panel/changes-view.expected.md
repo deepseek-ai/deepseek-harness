@@ -1,8 +1,12 @@
 - img "变更请求状态：需要处理"
 - text: "Add the pull request panel #7"
+- button "查看的提交：全部提交": 全部提交
 - button "提交评审"
 - button "在浏览器中打开"
 - button "全部 2 个文件"
+- button "分层透镜：全部": 全部
+- switch "隐藏测试文件"
+- progressbar "已审阅的文件": 已审阅 0 / 2
 - text: +4 −2
 - button "刷新变更"
 - button "全部折叠"
@@ -11,6 +15,7 @@
 - region "全部 2 个文件":
   - button "收起 panel.md" [expanded]
   - text: docs/panel.md 新文件 +2 −0
+  - checkbox "将 panel.md 标记为已审阅"
   - button "panel.md 的更多操作"
   - button "选择第 R1 行": "1"
   - text: "+ # Panel"
@@ -18,6 +23,7 @@
   - text: + Shows the change requests of a Session.
   - button "收起 panel.ts" [expanded]
   - text: src/panel.ts +2 −2
+  - checkbox "将 panel.ts 标记为已审阅"
   - button "panel.ts 的更多操作"
   - button "选择第 L1 行": "1"
   - text: export const n1 = 1

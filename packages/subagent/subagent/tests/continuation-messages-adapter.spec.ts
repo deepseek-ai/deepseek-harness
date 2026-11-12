@@ -9,12 +9,13 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { DeepSeekAdapter, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { end, MODEL, server, sse, start } from '../../../llm/llm-deepseek/tests/helpers.ts'
 import SubagentRuntime, { type SubagentRunEndInfo } from '../src/index.ts'
 import { loadStoredSession } from './persistence-helpers.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it('continues the parent through default Messages after a reasoning-bearing continuable child settles', async () => {
   const root = mkdtempSync(join(tmpdir(), 'dsh-settlement-messages-'))
@@ -49,7 +50,7 @@ it('continues the parent through default Messages after a reasoning-bearing cont
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     ctx.llm.registerAdapter(['deepseek-official'], adapter)
-    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'deepseek-official', model: MODEL })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('parent'), { provider: 'deepseek-official', model: MODEL })
     const ends: SubagentRunEndInfo[] = []
     const settled = Promise.withResolvers<undefined>()
     ctx.on('subagent/end', (info) => {
@@ -91,8 +92,8 @@ it('continues the parent through default Messages after a reasoning-bearing cont
       ...closingContent,
       {
         type: 'text',
-        text: 'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
-          + `Current working directory: ${JSON.stringify(process.cwd())}.`,
+        text: '<system-reminder>\nThe following information describes your current session:\n\n'
+          + `Current working directory: ${JSON.stringify(process.cwd())}.\n</system-reminder>`,
       },
     ]
     expect(requests[1]?.body).toMatchObject({ messages: [{ role: 'user', content: noticeWithContext }] })

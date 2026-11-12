@@ -27,7 +27,7 @@ const PARTS = ['title', 'intro', 'toolbar', 'tabs'] as const
 /**
  * Measure the existing resting and compact CSS layouts in an inert, out-of-flow copy.
  * Their independent flex wrapping requires pixel measurements; interpolating only positioned
- * contents leaves the real header's resting footprint and the scroll range unchanged.
+ * contents leaves the header bar's resting footprint and the scroll range unchanged.
  * @returns A ref callback that disposes its element observers and scroll listener on detachment.
  */
 export function createPluginHeaderRef(): (element: HTMLDivElement | null) => void {

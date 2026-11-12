@@ -1,0 +1,17 @@
+# Opt-in sidebar terminal composition for the terminal panel snapshot scenario.
+# The fixture stands in for the Web terminal controller with one user terminal.
+- insert:
+    - id: terminal-controller-fixture
+      name: './terminal-controller-fixture.mjs'
+    - id: optional-persistent-terminals
+      name: cordis:group
+      group: true
+      isolate:
+        terminals: true
+      config:
+        - id: pty
+          name: '@deepseek-ai/dsh-terminal'
+        - id: terminal-panel
+          name: '@deepseek-ai/dsh-terminal-panel'
+        - id: tool-terminal
+          name: '@deepseek-ai/dsh-tool-terminal'

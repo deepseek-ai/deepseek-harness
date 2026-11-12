@@ -12,7 +12,12 @@ import { base64Url } from './base64-url.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import type { IdentityActor, TunnelShareSpec, TunnelWorkerEvent } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import type {
+  IdentityActor,
+  LiveshareOwnerPlatform,
+  TunnelShareSpec,
+  TunnelWorkerEvent,
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import type {
   ClaimOutcome,
   OwnerIdentityStatus,
@@ -22,6 +27,7 @@ import { relayRefusalStatus } from '../owner-gateway/relay-refusal.ts'
 import type { RelayConnectivityView, RelayPublishView } from '../share-api-types.ts'
 import { parseViewerRequest } from '../viewer-channel.ts'
 import type { ViewerSessionMode } from './fork-policy.ts'
+import { primarySessionIdOf } from './source-sessions.ts'
 import type { PendingRelayRemoval } from './owner-persistence.ts'
 import {
   ownerCredentialState,
@@ -56,7 +62,7 @@ interface PendingShare {
 /** Fields one gateway registration needs from a share, before it is stored as an OwnerShare. */
 type ShareRegistrationSource = Pick<
   OwnerShare,
-  'shareId' | 'sessionId' | 'sessionTitle' | 'accessMode' | 'relay' | 'gatewayToken' | 'allowedSubjectIds'
+  'shareId' | 'sessionIds' | 'sessionTitle' | 'accessMode' | 'relay' | 'gatewayToken' | 'allowedSubjectIds'
 > & {
   readonly expiresAt?: string
   readonly allowsFork: boolean
@@ -117,7 +123,7 @@ export interface TunnelSupervisionDeps {
   readonly viewerRead: () => ViewerReadService
   /** Tell remote access that reader answers may have changed. */
   readonly accessChanged: () => void
-  /** Stop whatever turn one share's Session is running. */
+  /** Stop the turn that admitted share-viewer input for one share's Session. */
   readonly cancelShareTurn: (shareId: string) => void
   /** Reconcile one Session's sandbox after a share stopped or expired. */
   readonly reconcileSourceAccess: (sessionId: string) => void
@@ -275,6 +281,23 @@ function bundleVersion(): string | undefined {
   }
   /* v8 ignore next -- the package manifest ships beside both entries this reads it from. */
   return undefined
+}
+
+/**
+ * Map this owner's runtime platform onto the wire enum.
+ *
+ * The enum names a display class, not a kernel: a system outside it reports nothing, so the Relay
+ * shows no platform instead of receiving a name neither peer agreed on.
+ * @param platform - Runtime platform to map, defaulting to the one this process reports.
+ * @returns The matching enum value, or undefined when the system is outside the enum.
+ */
+export function ownerPlatform(platform: NodeJS.Platform = process.platform): LiveshareOwnerPlatform | undefined {
+  switch (platform) {
+    case 'darwin': return 'macos'
+    case 'win32': return 'windows'
+    case 'linux': return 'linux'
+    default: return undefined
+  }
 }
 
 /**
@@ -438,17 +461,17 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     expiryTimers.delete(share.shareId)
     const at = share.expiresAt === undefined ? undefined : Date.parse(share.expiresAt)
     if (at === undefined || !Number.isFinite(at)) return
-    armShareExpiry(share.shareId, share.sessionId, at - Date.now())
+    armShareExpiry(share.shareId, share.sessionIds, at - Date.now())
   }
 
   /** One wait for a deadline, re-armed when the deadline is further away than a single timeout may wait. */
-  const armShareExpiry = (shareId: string, sessionId: string, delayMs: number): void => {
+  const armShareExpiry = (shareId: string, sessionIds: readonly string[], delayMs: number): void => {
     const timer = setTimeout(() => {
       expiryTimers.delete(shareId)
       const at = deps.ownerShares.get(shareId)?.expiresAt
       const deadline = at === undefined ? undefined : Date.parse(at)
       if (deadline !== undefined && Number.isFinite(deadline) && deadline > Date.now()) {
-        armShareExpiry(shareId, sessionId, deadline - Date.now())
+        armShareExpiry(shareId, sessionIds, deadline - Date.now())
         return
       }
       // The deadline passed, so this share can no longer drive anything: its running turn is stopped and
@@ -458,7 +481,9 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
       deps.cancelChildTurns(shareId)
       deps.viewerRead().closeShare(shareId)
       // A Session whose shares have all passed their deadlines gets its own tools back.
-      deps.reconcileSourceAccess(sessionId)
+      for (const sessionId of deps.ownerShares.get(shareId)?.sessionIds ?? sessionIds) {
+        deps.reconcileSourceAccess(sessionId)
+      }
       deps.accessChanged()
     }, Math.max(0, Math.min(delayMs, MAX_EXPIRY_TIMER_MS)))
     // An armed deadline is not work the process owes anyone: it must never hold a host open by itself.
@@ -551,7 +576,7 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
     const titles = deps.ctx.get('sessionTitle') as SessionTitleLookup | undefined
     if (sessions === undefined || titles === undefined) return
     for (const share of [...deps.ownerShares.values()]) {
-      const session = sessions.get(share.sessionId)
+      const session = sessions.get(primarySessionIdOf(share))
       if (session === undefined) continue
       const snapshot = titles.get(session)
       const title = refreshedShareTitle(share.sessionTitle, snapshot?.title)
@@ -592,19 +617,23 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
    * the shares this profile reconnected with, and a reader's admission is derived from these fields
    * either way, so both sites build the row here instead of keeping two copies in step by hand.
    */
-  const ownerIdentityRow = (relay: string, credential: StoredOwnerCredential | undefined) => ({
-    ...deps.ownerContext,
-    ownerDisplayName: readerFacingOwnerName(relay, credential),
-    /* v8 ignore next -- the version is read from the package manifest beside this module. */
-    ...(dshVersion === undefined ? {} : { dshVersion }),
-    ownerInstanceId: deps.instanceId,
-  })
+  const ownerIdentityRow = (relay: string, credential: StoredOwnerCredential | undefined) => {
+    const platform = ownerPlatform()
+    return {
+      ...deps.ownerContext,
+      ownerDisplayName: readerFacingOwnerName(relay, credential),
+      /* v8 ignore next -- the version is read from the package manifest beside this module. */
+      ...(dshVersion === undefined ? {} : { dshVersion }),
+      ...(platform === undefined ? {} : { platform }),
+      ownerInstanceId: deps.instanceId,
+    }
+  }
 
   const shareSpec = (share: ShareRegistrationSource, credential: StoredOwnerCredential | undefined): TunnelShareSpec => {
     const ownerCredential = registrableCredentialForRelay(share.relay, credential)
     return {
       shareId: share.shareId,
-      sessionId: share.sessionId,
+      sessionId: primarySessionIdOf(share),
       sessionTitle: share.sessionTitle,
       // A share loaded from a state file written before the allowlist mode was renamed keeps that
       // mode: the stored ACL still decides who may read the share, and the Relay accepts the name.

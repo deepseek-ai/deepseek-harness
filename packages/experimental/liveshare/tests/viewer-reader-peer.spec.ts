@@ -46,7 +46,7 @@ function reader(fetch?: ReaderFetch, admitted: (subjectId: string) => boolean = 
   const read = createViewerReadService({
     connection: peers.connection,
     gateway,
-    sharedSessionId: () => 'source',
+    sharedSessionIds: () => ['source'],
     viewerStillAdmitted: (_shareId, actor) => admitted(actor.subjectId),
   })
   onTestFinished(() => { read.close() })

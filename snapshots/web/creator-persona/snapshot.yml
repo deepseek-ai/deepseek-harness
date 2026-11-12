@@ -1,0 +1,8 @@
+version: 1
+scenario: creator-persona
+profile: web
+composition: web-creator
+recording: authored
+header:
+  class: web-creator
+  pin: true

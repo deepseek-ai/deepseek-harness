@@ -15,7 +15,7 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type OfficeKit from '@deepseek-ai/dsh-office-kit'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SqliteSessionQueryEngine from '@deepseek-ai/dsh-session-query-sqlite'
@@ -63,6 +63,7 @@ import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
 import TerminalSessionService from '@deepseek-ai/dsh-terminal'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
+import * as TerminalPanel from '@deepseek-ai/dsh-terminal-panel'
 import * as ToolGoal from '@deepseek-ai/dsh-tool-goal'
 import * as ToolSchedule from '@deepseek-ai/dsh-tool-schedule'
 import ScheduleService from '@deepseek-ai/dsh-schedule'
@@ -91,6 +92,7 @@ import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import * as ToolWorkspaceDependencies from '@deepseek-ai/dsh-tool-workspace-dependencies'
 import { githubSlug } from './verify-md-links.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Attachment seam marker that makes the attachments-conditional `read_image` schema harvestable. */
 class CatalogAttachmentStore extends AttachmentStore {
@@ -298,7 +300,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(NodePtcRuntime)
     },
     note:
-      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated SDK in the runtime’s language. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
+      'The PTC executor exposes only run_code to the model and declares other visible capabilities in a generated TypeScript SDK. Program bindings enter the shared guarded tool pipeline in submission order; concurrency-safe bodies overlap up to maxParallelSubCalls, and nested results remain linked to the outer program. The resolved timeout and maxSubCallsPerMinute set the total call allowance; exceeding it terminates the program.',
   },
   {
     pkg: '@deepseek-ai/dsh-plan-mode',
@@ -475,6 +477,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
       'The six terminal tools are opt-in and complement one-shot shell/filesystem tools. `terminal_send(run_in_background: true)` registers with `ctx.jobs`; TUI, named key sequences, BEL, resize, auto-start, and cross-agent sharing are absent from the schema.',
   },
   {
+    pkg: '@deepseek-ai/dsh-terminal-panel',
+    dir: 'terminal-panel',
+    source: 'packages/experimental/terminal-panel/src/tools.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.terminals', 'ctx.terminalController', 'ctx.sandboxPolicy', 'a calling Agent'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      // Schema harvest never opens or reads a terminal.
+      ctx.provide('terminalController', {} as Context['terminalController'])
+      await ctx.plugin(SandboxPolicy)
+      await ctx.plugin(TerminalSessionService)
+      await ctx.plugin(TerminalPanel, TerminalPanel.Config({}))
+    },
+    note:
+      'The package also serves the six `terminal_*` tools from Web sidebar terminals. `user_terminal_list` and `user_terminal_read` only read terminals the user controls; `readUserTerminals: false` removes both.',
+  },
+  {
     pkg: '@deepseek-ai/dsh-tool-goal',
     dir: 'tool-goal',
     source: 'packages/goal/tool-goal/src/index.ts',
@@ -647,7 +665,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       await ctx.plugin(SubagentRuntime)
       await ctx.plugin(CatalogSessionPersistence)
       await ctx.plugin(TeamService)
-      const session = ctx.sessions.create(SessionId('tool-catalog-team-lead'))
+      const session = ctx.sessions.create(brandString<SessionId>('tool-catalog-team-lead'))
       let agent!: Agent
       await ctx.plugin(Object.assign(async (inner: Context) => {
         agent = {

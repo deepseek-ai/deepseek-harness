@@ -40,8 +40,9 @@ export const remoteDefaultResponses: RemoteTable = {
     'account/getProfile': ok(null),
     'account/getBalance': ok(null),
     // ui-settings-account bonus notice read and acknowledgement at signing in.
-    'account/getUnnotifiedBonuses': ok(null),
-    'account/ackBonusNotified': ok(true),
+    'account/getNotifications': ok(null),
+    'account/getNotificationContent': ok(null),
+    'account/reportNotificationEvent': ok(true),
   },
   // Stream endpoints the roster opens later than boot; declared so a spec that forgets the script gets a stream miss.
   streams: [
@@ -49,13 +50,16 @@ export const remoteDefaultResponses: RemoteTable = {
     'session/follow',
   ],
   stream: {
+    'sessionStatus/follow': openStream([{ type: 'baseline', items: [] }]),
     // api-session-controller client `apply`: the control stream's opening baseline, then open.
     'session/control': openStream([{ type: 'baseline', value: { projections: {} } }]),
     // ui-settings-account shares the account snapshot across settings and the sidebar menu.
-    'account/watch': openStream([{ status: 'signed-out', attempt: null, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } }]),
+    'account/watch': openStream([{ type: 'snapshot', state: { status: 'signed-out', attempt: null, links: { usageUrl: 'https://platform.deepseek.com/usage', topUpUrl: 'https://platform.deepseek.com/top_up' } } }]),
     // api-workspace-controller client `apply`: the follow stream's opening baseline, then open.
     'workspace/follow': openStream([{ type: 'baseline', value: { items: [], archivedSessionIds: [], pinnedSessionIds: [] } }]),
     // api-remote-access client `mountAccess`: the owner's access snapshot, then open.
     'remoteAccess/follow': openStream([{ type: 'baseline', owner: true }]),
+    // ui-sidebar-terminal header entry `agent-terminals`: the displayed Session's terminal roster, then open.
+    'terminal/watch': openStream([[]]),
   },
 }

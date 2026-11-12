@@ -2,7 +2,9 @@
 
 [English](liveshare.md) | 中文
 
-可选的 LiveShare bundle（`@deepseek-ai/dsh-experimental-liveshare`）让一位所有者通过独立的 Liveshare 服务端 把一个会话分享给外部 viewer。viewer 永远拿不到所有者的工具：所有者宿主机自己读取 viewer 的每个请求，以该 viewer 自己的 Peer 分派它，Gateway 依据本包注册的 [remote access](../../packages/api/remote-access/README.zh.md) 策略判定该 Peer 的 `share-viewer` principal，并把共享会话代表 viewer 运行的一切限制在分享所授予的工作区内。[包 README](../../packages/experimental/liveshare/README.zh.md)负责配置、客户端界面与限制；[Owner 说明](../../.agents/notes/implemented/feature/2026-09-13-liveshare-protocol-and-owner-surfaces.zh.md)负责其背后的安全姿态。
+可选的 LiveShare bundle（`@deepseek-ai/dsh-experimental-liveshare`）让一位所有者通过独立的 Liveshare 服务端把一个或多个会话分享给外部 viewer。viewer 永远拿不到所有者的工具：所有者宿主机自己读取 viewer 的每个请求，以该 viewer 自己的 Peer 分派它，Gateway 依据本包注册的 [remote access](../../packages/api/remote-access/README.zh.md) 策略判定该 Peer 的 `share-viewer` principal，并把共享会话代表 viewer 运行的一切限制在分享所授予的工作区内。[包 README](../../packages/experimental/liveshare/README.zh.md)负责配置、客户端界面与限制；[Owner 说明](../../.agents/notes/implemented/feature/2026-09-13-liveshare-protocol-and-owner-surfaces.zh.md)负责其背后的安全姿态。
+
+分享以创建它时的会话来开始，`liveshareShares.addSessions` 可以为它增加更多源会话。每个源会话都按该分享的 ACL、档位、有效期、fork 开关与暴露的插件端点提供服务；Relay 注册与 viewer 页面保留第一个源会话，读者通过策略现在绑定的会话列表访问其余源会话。每个源会话必须属于该分享的同一个工作区：Host 会拒绝无法放进该工作区的源，因此所有读者都停留在同一个工作区根目录内。停止该分享会结束它的全部源会话。
 
 源码：[`packages/experimental/liveshare/src/host/fork-enforcement.ts`](../../packages/experimental/liveshare/src/host/fork-enforcement.ts)
 
@@ -30,15 +32,15 @@ fork 创建查看者拥有的新会话，源会话保持不变。Fork 授权检�
 
 同一个逻辑 fork 请求可能被发送多次。其身份绑定可信 viewer、分享、源会话与调用方的操作 id；边界是与该身份比较而非折入其中，因此重试会重复它已经产生的分叉会话，同一身份指向另一个边界会冲突而不是悄悄拿到更早的分叉会话，且预留在任何分叉会话存在之前就已持久化。宿主机记录 owner 的 fork 应答返回的分叉会话，重试已记录的操作会重放该应答。owner 的 `SessionForkRequest` 自己生成分叉会话 id，因此在创建分叉会话与记录它之间崩溃的宿主机重试时无法指名该分叉会话，会再创建一个；要关闭这一窗口，需要 Session Controller 的请求接受调用方提供的分叉会话身份。
 
-分叉会话工具守卫重新检查分享当前模式、有效期、查看者准入与撤销记录。撤回查看者会取消受影响的分叉会话工作与未决调用。`write` 降级为 `view` 后，写入守卫拒绝后续写入，不授予任何新工具，也不承诺立即取消正在运行的轮次。移除分享撤销已记录分叉会话并停止该会话正在运行的轮次；源执行层在该会话不再有任何分享时释放，并随 Agent 释放。已撤销分叉会话保留日志，源会话所有者可见历史绝不改写。
+分叉会话工具守卫重新检查分享当前模式、有效期、查看者准入与撤销记录。撤回查看者会取消受影响的分叉会话工作与未决调用。`write` 降级为 `view` 后，写入守卫拒绝后续写入，不授予任何新工具，也不承诺立即取消正在运行的轮次。移除分享撤销已记录分叉会话，并在该轮次由查看者发起时停止它；源执行层在该会话不再有任何分享时释放，并随 Agent 释放。已撤销分叉会话保留日志，源会话所有者可见历史绝不改写。
 
 ## 约束共享会话
 
 每个分享都让它的 viewer 通过正常 prompt 路径驱动*源*会话，任一档位的分享在活跃期间都会安装有界沙箱。`installSourceSessionAccess` 在该会话自身作用域中为部署提供的每个读取与检索面工具注册受限替代，并在任一同会话分享允许写入时再注册有界 `edit` 与 `write` 替代。执行层挂在会话上，但只约束分享查看者发起的轮次：`agent/pre-step` 在 Host 内存中记录一个轮次的已准入输入是否带有 share-viewer principal，守卫与替代定义对该轮次的每次执行读取这一结论。查看者发起的轮次只能运行这些替代定义；所有者自己发起的轮次保留会话原生工具，包括 `bash` 与不受限的文件工具。该结论在轮次准入时确定，不写入会话日志；重启后从下一个准入步骤重新计算。所有者在查看者轮次中追加的输入仍留在该受限轮次内。该会话的所有分享停止后执行层被释放，会话恢复自己的工具；最后一个可写分享降为 `view` 时重装只读层。
 
-安装结果报告源会话是否真正受到限制。没有 `read` 工具的部署或拒绝该替代注册的作用域会保留守卫并报告失败；某个工具自己的替代注册失败时，该工具保持拒绝，其余工具面照常运行。读取处理器以 `source-write-unavailable` 拒绝消息：限制未安装时，共享会话中查看者发起的轮次不会用所有者工具驱动。
+安装结果报告源会话是否真正受到限制。没有 `read` 工具的部署或拒绝该替代注册的作用域会保留守卫并报告失败；某个工具自己的替代注册失败时，该工具保持拒绝，其余工具面照常运行。读取处理器以 `source-write-unavailable` 拒绝消息：限制未安装时，共享会话中查看者发起的轮次不会用所有者工具驱动。无论由守卫还是受限工具判定，拒绝都记录同一标识：授权范围外的路径为 `FsError` `FS_SANDBOX_DENIED`，其他授权拒绝为 `LiveshareForkDeniedError` 及 `FORK_*` code。
 
-每次操作都会重新读取维持该会话可驱动的分享的 Relay 授权，且读取与其授权的工具调用在同一同步步骤内完成，因此排队超过其准入授权的输入无法凭过期准入行动。执行层按会话安装：同一会话的多个分享共用一个安装；分享收窄或结束时改变该层允许的操作——没有任何活跃分享可写时拒绝有界写入，会话不再有分享时释放执行层。Host 不把正在运行的轮次归属给准入它的查看者，因此结束某个分享的授权会停止该会话正在运行的轮次，而不是只挑出该查看者的工作；内存中的查看者轮次标记只决定该轮次运行哪套工具面。
+每次操作都会重新读取维持该会话可驱动的分享的 Relay 授权，且读取与其授权的工具调用在同一同步步骤内完成，因此排队超过其准入授权的输入无法凭过期准入行动。执行层按会话安装：同一会话的多个分享共用一个安装，一条携带多个源会话的分享则为每个源会话各安装一层；分享收窄或结束时改变该层允许的操作——没有任何活跃分享可写时拒绝有界写入，会话不再有分享时释放执行层。只有 Relay 明确回答没有该分享——404 或 410——才撤回分享：结束它持有的授权，并停止查看者发起的轮次。Relay 拒绝的读取——401 或 403——结束准入而不撤回分享：不再服务任何查看者输入，已打开的调用与流被释放，所有者自己的轮次继续运行。读取超时、以其它状态失败或响应无法解析时保留所持有的声明及其允许的一切，而查看者入口在读取重新成功前保持拒绝。授权确实结束时，由内存中的查看者轮次标记决定停止什么：查看者发起的轮次会被停止，所有者自己发起的轮次继续运行，并按该轮次在各自源会话中记录的来源判定。查看者自己的 Stop 与其他输入一样进入会话控制器，因此仍会停止该会话当前运行的轮次。
 
 受限文件工具解析其自身参数声明的每个路径，检查获授根目录包含每个目标，再以目标的规范路径委托。无路径的 `glob` 或 `grep` 搜索会话的工作目录，由替代定义补齐并按命名路径一样检查；`present` 调用检查它列出的每个文件；无本地文件副作用的工具原样委托。有界编辑执行同样的包含检查，使用 `fs/edit-intent`，并发布 `editText` 返回的版本；有界写入使用 `fs/write-intent`，并发布 `writeText` 返回的版本。异步意图等待后，Host 解析当前会话沙箱策略并重新检查分享授权。该策略作为 `editText` 或 `writeText` 的第五个参数，位于 `signal` 之后，由沙箱后端据此限制变更。包含关系按路径检查，若本地进程在检查与打开之间把获授范围内的目录换成符号链接，操作可能被改指别处；基于目录句柄锚定操作留待单独变更引入。
 
@@ -50,7 +52,7 @@ fork 创建查看者拥有的新会话，源会话保持不变。Fork 授权检�
 
 一次以拒绝结束的 viewer 读取会指明它自己的状态，而不是让所有原因共用一种失败：链接不存在、owner 已停止分享、分享已过期、owner 的机器没有路由、登录已过期、读者尚未申请、申请仍在等待、申请被 owner 拒绝、owner 从未收到通知，每种都有各自的 HTTP 状态与错误码；页面联系不上 Liveshare 服务端时由页面自己陈述。`@deepseek-ai/dsh-experimental-liveshare-protocol` 中的 `VIEWER_STATE_ANSWERS` 就是这份词汇表，每种状态对应的答案由 [共享协议](../../packages/experimental/liveshare-protocol/README.zh.md) 维护。没有任何一种答案会扩大 viewer 能读到的内容：owner 离线、分享已停止、申请被拒，三者都是拒绝。
 
-viewer 页面渲染所用的工作区流与会话列表经同一策略过滤：只要工作区还持有共享会话或该 viewer 自己创建的分支就会下发，其成员与手工顺序只保留这些。失去它们的工作区要到该工作区或工作区顺序下次变化时才离开工作区流，届时流替换读者的基线；仅访问变化不会发送帧。因此读者看到的是围绕它被授予的那一个会话的 owner 工作区名称与分组，而不是 owner 其余的工作区。
+viewer 页面渲染所用的工作区流与会话列表经同一策略过滤：只要工作区还持有共享会话或该 viewer 自己创建的分支就会下发，其成员与手工顺序只保留这些。失去它们的工作区要到该工作区或工作区顺序下次变化时才离开工作区流，届时流替换读者的基线；仅访问变化不会发送帧。因此读者看到的是围绕它被授予的每个会话的 owner 工作区名称与分组，而不是 owner 其余的工作区。
 
 查看流在轮询、替换与取消时均绑定打开它的主体。会话通知、控制基线与工作区成员只暴露源会话及该主体的分叉会话：Gateway 只向读者转发策略在这些会话上允许的 `api-session/*` 通知，Session 与 Workspace 控制器也经同一策略过滤其列表和流；交互审批与提问保留在 Host。被拒绝的读取不创建上游订阅。过期与撤权取消受影响的未决调用和流；120 秒未轮询的流被回收。Worker IPC 响应与取消必须匹配请求 token、分享 ID、Liveshare 服务端 ID 及原始 socket 或 worker generation；迟到响应不能结算替换请求。
 
@@ -81,7 +83,14 @@ The Gateway decides each call through remote access, so a `share-viewer` Peer is
 @Remote('create') create(request: CreateShareRequest): Promise<CreatedShare>
 
 /**
- * Refresh titles and Liveshare server authority, then list this host's shares.
+ * Add source Sessions to one share this host already publishes.
+ * @param request - Share and the Sessions to add.
+ * @returns The source Sessions the share now serves.
+ */
+@Remote('addSessions') addSessions(request: AddShareSessionsRequest): Promise<ShareSessions>
+
+/**
+ * List this host's shares, refreshing titles and Liveshare server authority when this host owns the state.
  * @returns Every share this host publishes.
  */
 @Remote('list') list(): Promise<OwnerShareList>

@@ -81,7 +81,7 @@ Children never inherit the harness's ambient secrets: credential-shaped names an
 
 ### What can go wrong
 
-An executable that cannot be resolved fails loudly with a stable error. A spawn that never starts rejects `done`; there is no buffered output for a process that never ran. `waitForExit()` also rejects when the provider cannot prove its selected range is empty, and a provider fallback may not own descendants that escape its process group or observed session. When a transport owns its own spawn (the SDK client, MCP), route around the service and import `scrubbedParentEnv` directly so environment policy stays single-sourced.
+Coded failures are `SubprocessError` instances whose `code` is one of `SUBPROCESS_ERROR_CODES`: an empty argv is `SUBPROCESS_INVALID_ARGV`, an executable lookup miss is `SubprocessExecutableNotFoundError` (`SUBPROCESS_EXECUTABLE_NOT_FOUND`), a provider's private runner that fails or breaks its channel is `SUBPROCESS_RUNNER_FAILED` or `SUBPROCESS_RUNNER_IPC_FAILED`, and an unloadable terminal implementation is `SUBPROCESS_PTY_UNAVAILABLE`. A spawn requested on an already aborted signal throws an error named `AbortError`. A spawn that never starts rejects `done` with the platform's original error, so consumers can inspect its errno fields; a consumer that reports the rejection as its own failure converts it with `subprocessSpawnFailure()`, which turns an error with a string errno `code` into `SUBPROCESS_SPAWN_NOT_FOUND` for `ENOENT` and `SUBPROCESS_SPAWN_FAILED` for any other errno, and returns every other value unchanged. There is no buffered output for a process that never ran. `waitForExit()` also rejects when the provider cannot prove its selected range is empty, and a provider fallback may not own descendants that escape its process group or observed session. When a transport owns its own spawn (the SDK client, MCP), route around the service and import `scrubbedParentEnv` directly so environment policy stays single-sourced.
 
 -----
 
@@ -103,6 +103,7 @@ The seam is built on one separation: the service owns process coordinates and li
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: abstract `SubprocessRuntime`, `ctx.subprocess` registration, the shared `scrubbedParentEnv` scrub |
 | [`src/types.ts`](src/types.ts) | Vocabulary: spawn spec, stdio modes, handles, readers, outcomes, `DSH_*` namespace |
+| [`src/error.ts`](src/error.ts) | `SubprocessError`, its closed code list, and spawn-rejection classification |
 
 ### Data model and flow
 

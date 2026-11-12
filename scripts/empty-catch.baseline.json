@@ -1,0 +1,283 @@
+{
+  "apps/cli/tests/built-bin.e2e.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "apps/desktop/src/client/WelcomePage.tsx": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "apps/desktop/src/preload-platform-account.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "apps/web/tests/chat-scroll-contract.e2e.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "apps/web/tests/support.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/api/gateway/src/client/remote-stream.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/api/gateway/tests/gateway-stream.host.spec.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/api/workspace-files/src/client/change-feed.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/boot/app-boot/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/boot/plugin-manager/src/registry.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/boot/plugin-manager/tests/operations-process.spec.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/boot/plugin-market/src/repository-cache.ts": {
+    "3d8f6e3468aecc6e006ee3e5f20a5c6c5277316636c8849756fc6d710e9d907b": 1
+  },
+  "packages/client/modules/src/index.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/client/store/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/client/ui-open-in-app/src/client/controller.ts": {
+    "ea86beefffc83e1b3c38c7961e9dd8faf194c917ab229aac53c7716cb5b36687": 1
+  },
+  "packages/client/ui-open-in-app/src/client/open-path.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/client/ui-schedule/src/client/recent-time-zones.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/client/ui-sidebar-browser/src/client/browser/url.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/client/ui-sidebar-right/src/client/tab-inventory.ts": {
+    "ee22b9dbd07fc0b76f0464bf59386efb6925dab82c4539a2772b909b944ee33c": 1
+  },
+  "packages/client/ui-skill/src/client/SkillRow.tsx": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/context/file-reference-local/tests/search.spec.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/credentials/deepseek-account/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/credentials/deepseek-account/src/logout.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/experimental/client-ui-forge/src/panel.ts": {
+    "ea86beefffc83e1b3c38c7961e9dd8faf194c917ab229aac53c7716cb5b36687": 1
+  },
+  "packages/experimental/inspector/src/client/bridge/transport.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/client/cdp/console.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 2
+  },
+  "packages/experimental/inspector/src/client/inspection/realm.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/experimental/inspector/src/worker/bridge/hub.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/experimental/inspector/src/worker/bridge/runtime-rpc.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 4
+  },
+  "packages/experimental/inspector/src/worker/bridge/session.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/cdp/domains/dom/model.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/cdp/realm-sessions.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/inspection/cordis-store.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/inspection/network-store.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/experimental/inspector/src/worker/inspection/query-router.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/inspection/realm-store.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/inspector/src/worker/realms/host/bridge.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 3
+  },
+  "packages/experimental/inspector/src/worker/realms/host/sources.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/liveshare/src/client/owner-login.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 3
+  },
+  "packages/experimental/liveshare/src/client/share-relay-address.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/experimental/liveshare/src/client/ShareEditPanel.tsx": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 2
+  },
+  "packages/experimental/liveshare/src/host/shareable-catalog.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 2
+  },
+  "packages/experimental/liveshare/src/host/tunnel-supervision.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/liveshare/src/host/viewer-dispatch.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/experimental/liveshare/tests/fixtures/base-llm.mjs": {
+    "8b2766548472fe722af04dc7c95b06d303bb164fd12fbec87a07ea6eaae7146a": 1
+  },
+  "packages/experimental/webhook-github/src/handler.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/webworker-runtime/src/client/client.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/webworker-runtime/src/transport/tunnel.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/webworker-runtime/tests/compile/transform-corpus-check.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/experimental/webworker-runtime/tests/polyfill/als-shim.spec.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/host/directory-picker-browse/tests/service.spec.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/host/open-in-app/src/icons.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/host/open-in-app/src/resolver.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/identity/anonymous-user-id/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/llm/llm-deepseek/src/file-store.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/llm/llm-deepseek/src/files-api.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/llm/llm-pi-ai/src/replay.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/llm/llm/src/adapter-failure.ts": {
+    "19186deef10a7178489ddf20fcaf6688a0baf38bf6d9933cb78fe65023f3280f": 1
+  },
+  "packages/lsp/lsp-stdio/src/instance.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/session-query/session-query-sqlite/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/session-query/session-query/src/cold-read.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/session/session-persistence-jsonl/src/generation.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/session/session-persistence-jsonl/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/session/session-persistence-jsonl/tests/zstd.spec.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/shell/bash-local/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/shell/pwsh-local/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/skill/skill-filesystem/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/skill/skill/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/spill/spill-local/src/cleanup.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subagent/subagent-acp/src/run.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subagent/subagent-claude-code/src/run.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subagent/subagent-codex/src/run.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/subagent/subagent-dsh-sdk/src/index.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subagent/subagent-dsh-sdk/src/run.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subagent/subagent/src/out-of-process.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subprocess/subprocess-local/src/index.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/subprocess/subprocess-local/src/linux-scope.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 5
+  },
+  "packages/subprocess/subprocess-local/src/output.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/subprocess/subprocess-local/src/runner-protocol.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/subprocess/subprocess-local/src/spawn-runner.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 2,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 4
+  },
+  "packages/subprocess/subprocess-local/src/spawn.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 3
+  },
+  "packages/subprocess/subprocess-local/src/windows-job.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "packages/subprocess/subprocess-local/tests/native-containment.spec.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 2
+  },
+  "packages/subprocess/subprocess-local/tests/native-windows.spec.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "packages/subprocess/subprocess-local/tests/spawn.spec.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 5
+  },
+  "packages/test-support/client-runtime/src/assembly/test-client.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "scripts/gen-session-format-catalog.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "scripts/run-gates.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 2,
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "scripts/slot-walk.ts": {
+    "10ea16f7e56fe8d9176f54f90b2c2137b20e2c60e3f5cb45d6dc09fe23c52eae": 1
+  },
+  "vitest.e2e.config.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  },
+  "vitest.web.config.ts": {
+    "cf101add035f69891416d7350e9a824c2de6c0d1b7a253de6a73da923023b073": 1
+  }
+}

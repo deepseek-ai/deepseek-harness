@@ -49,7 +49,7 @@ kind: "package-reference"
 | `fetchBaseURL` | 省略 | Fetch API 基础地址，包含路径前缀；追加 `/fetch`，默认值规则相同 |
 | `fetchApiKeyEnv` | 省略 | Fetch 凭据引用，默认值规则相同 |
 
-两个字段都未设置的能力按其计费方式，请求所选 DeepSeek 模型路由解析后的 Messages 基础地址的 origin 下的 `/v1/tools/search` 与 `/v1/tools/fetch`，因此官方 `https://api.deepseek.com/anthropic` 或 `DEEPSEEK_BASE_URL` 覆盖值分别得到 `https://api.deepseek.com/v1/tools`，或覆盖值的 origin 加 `/v1/tools`。单独配置的基础地址填写完整的 API 基础地址，包含路径前缀，但不包含操作名；使用其他前缀（例如 `/api/v1/tools`）的部署需要填写其完整基础地址。空字段视为未设置。这些单独配置的字段只能在 YAML 中设置，优先于计费方式；设置页只为这两个提供方显示计费方式下拉框。早期设置中保存的 `baseURL`、`apiKeyEnv` 与 `apiKey` 字段可以正常加载，但不再生效。
+两个字段都未设置的能力按其计费方式，请求所选 DeepSeek 模型路由解析后的 Messages 基础地址的 origin 下的 `/v1/tools/search` 与 `/v1/tools/fetch`，因此官方 `https://api.deepseek.com/anthropic` 或 `DEEPSEEK_BASE_URL` 覆盖值分别得到 `https://api.deepseek.com/v1/tools`，或覆盖值的 origin 加 `/v1/tools`。`dsh` 启动器从启动环境或 `$DSH_HOME/.env` 接受 `DEEPSEEK_BASE_URL`，绝不从项目 `.env` 接受（[app-boot](../../boot/app-boot/README.zh.md)）。单独配置的基础地址填写完整的 API 基础地址，包含路径前缀，但不包含操作名；使用其他前缀（例如 `/api/v1/tools`）的部署需要填写其完整基础地址。空字段视为未设置。这些单独配置的字段只能在 YAML 中设置，优先于计费方式；设置页只为这两个提供方显示计费方式下拉框。早期设置中保存的 `baseURL`、`apiKeyEnv` 与 `apiKey` 字段可以正常加载，但不再生效。
 
 真实 API 测试要求同时设置 `DEEPSEEK_API_KEY` 和 `DEEPSEEK_SEARCH_API_TEST_BASE_URL`，后者包含 API 路径前缀。
 

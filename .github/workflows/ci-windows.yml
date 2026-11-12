@@ -23,6 +23,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-publisher:
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-2vcpu-windows-2025'
+          || vars.DSH_CI_FAILOVER_WINDOWS == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "dsh-win-ci", "windows"]')
+          || 'dsh-windows-2025-16core' }}
+    defaults:
+      run:
+        shell: pwsh
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          path: publisher-isolated
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Check preflights before dependency installation
+        working-directory: publisher-isolated
+        run: node apps/desktop-publisher/tests/preinstall.mjs
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: publisher-isolated/package.json
+          dest: ${{ runner.temp }}/setup-pnpm-js-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      - name: Install only publisher production dependencies
+        working-directory: publisher-isolated
+        run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
+      - name: Load publisher without Desktop or root development dependencies
+        working-directory: publisher-isolated/apps/desktop-publisher
+        run: node --import tsx tests/isolated-install.mjs
+
   # Native builds and process tests block pull requests independently of coverage.
   # Observational checks reuse the successful build and remain non-blocking.
   # Dependabot PRs are excluded from the self-hosted pool and stay queued for
@@ -30,6 +63,7 @@ jobs:
   # Blacksmith uses 2 vCPU for file-serial native tests and 16 for coverage
   # and the shared build/observational workspace.
   windows-build:
+    needs: windows-publisher
     if: github.event_name == 'pull_request'
     runs-on: >-
       ${{ vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
@@ -258,7 +292,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [windows-build, windows-native-tests]
+    needs: [windows-publisher, windows-build, windows-native-tests]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed

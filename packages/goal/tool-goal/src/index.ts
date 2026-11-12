@@ -6,8 +6,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { GoalId } from '@deepseek-ai/dsh-goal'
-import type { GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { GoalId, GoalRef, GoalView } from '@deepseek-ai/dsh-goal/types'
 import { boundContextSummary, createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -150,7 +150,7 @@ function goalRef(goalId: string, revision: number): GoalRef {
       'GOAL_TOOL_INVALID_UPDATE',
     )
   }
-  return { id: GoalId(goalId), revision }
+  return { id: brandString<GoalId>(goalId), revision }
 }
 
 /** Stable compact model result; activation is an observation, not replay state. */

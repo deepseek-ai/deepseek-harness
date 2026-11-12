@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 最小配置
 
-加载 web 服务与本提供方；密钥在已挂载 `ctx.credentials` 服务时从其解析，否则从进程环境解析。辅助搜索调用有独立的端点设置，使用 Anthropic 兼容基址 `https://api.deepseek.com/anthropic/v1`，并追加 `/messages`。它读取 `$DEEPSEEK_SEARCH_BASE_URL`，与会话适配器的 `$DEEPSEEK_BASE_URL` 相互独立。
+加载 web 服务与本提供方；密钥在已挂载 `ctx.credentials` 服务时从其解析，否则从进程环境解析。辅助搜索调用有独立的端点设置，使用 Anthropic 兼容基址 `https://api.deepseek.com/anthropic/v1`，并追加 `/messages`。它读取 `$DEEPSEEK_SEARCH_BASE_URL`，与会话适配器的 `$DEEPSEEK_BASE_URL` 相互独立；`dsh` 启动器从启动环境或 `$DSH_HOME/.env` 接受这两个变量，绝不从项目 `.env` 接受（[app-boot](../../boot/app-boot/README.zh.md)）。
 
 ```yaml
 - name: '@deepseek-ai/dsh-web'
