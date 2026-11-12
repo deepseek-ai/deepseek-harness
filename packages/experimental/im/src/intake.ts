@@ -316,8 +316,8 @@ export class ImIntake {
     const timeout = this.config.platformTimeoutMs
     let timer: ReturnType<typeof setTimeout> | undefined
     const deadline = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error(`the platform did not answer within ${timeout} ms`)), timeout)
-      timer.unref?.()
+      timer = setTimeout(() => { reject(new Error(`the platform did not answer within ${timeout} ms`)) }, timeout)
+      timer.unref()
     })
     try {
       return await Promise.race([read, deadline])
