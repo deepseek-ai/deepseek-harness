@@ -7,13 +7,14 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LlmRuntime, { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import * as CheckpointPolicy from '@deepseek-ai/dsh-session-checkpoint-policy'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse } from './mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const fixtures: { ctx: Context; agent?: Agent; root: string }[] = []
 afterEach(async () => {
@@ -47,7 +48,7 @@ async function harness() {
   await ctx.plugin(AgentLoop, { agents: [] })
   const adapter = new MockAdapter(Array.from({ length: 5 }, () => textResponse('ok')))
   ctx.llm.registerAdapter(['mock'], adapter)
-  const handle = await ctx.agents.create({ sessionId: SessionId('diagnostic'), agentOptions: { provider: 'mock', model: 'mock' } })
+  const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('diagnostic'), agentOptions: { provider: 'mock', model: 'mock' } })
   fixture.agent = handle.agent
   return { ctx, root, adapter, handle, agent: handle.agent }
 }
@@ -140,7 +141,7 @@ it('keeps creation resources alive until an interrupted creation listener finish
   const entered = Promise.withResolvers<Agent>()
   const release = Promise.withResolvers<undefined>()
   const signal = new AbortController()
-  const id = SessionId('interrupted-announcement')
+  const id = brandString<SessionId>('interrupted-announcement')
   const stop = ctx.on('agent/created', async ({ agent }) => {
     if (agent.id !== id) return
     entered.resolve(agent)

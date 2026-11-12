@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
+import { FsError } from '@deepseek-ai/dsh-fs'
 import WorktreeService from '../src/index.ts'
 import type { RestoreWorktreeRequest } from '../src/index.ts'
 import { contents, git, harness, repository, testAgent } from './harness.ts'
@@ -186,7 +187,9 @@ describe('creating and entering retained worktrees', () => {
     ctx = await harness(partial)
     const agent = testAgent(ctx, partial)
 
-    await expect(ctx.worktrees.create(agent, { name: 'local-only' })).rejects.toThrow('worktree command failed')
+    await expect(ctx.worktrees.create(agent, { name: 'local-only' })).rejects.toMatchObject({
+      code: 'WORKTREE_COMMAND_FAILED', message: expect.stringContaining('worktree command failed') as string,
+    })
 
     expect(await git(partial, 'rev-list', '--objects', '--missing=print', 'HEAD')).toBe(missing)
     expect(ctx.workingDirectory.get(agent.session)).toBe(partial)
@@ -210,7 +213,9 @@ describe('creating and entering retained worktrees', () => {
       return resolveExecutable(command, env, signal)
     })
     const operation = service.create(testAgent(ctx, root), { name: 'cancelled' })
-    const rejection = expect(operation).rejects.toThrow('worktree service disposed')
+    const rejection = expect(operation).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_UNAVAILABLE', message: 'worktree service disposed',
+    })
     let disposal: Promise<void> | undefined
     try {
       const signal = await entered.promise
@@ -227,7 +232,9 @@ describe('creating and entering retained worktrees', () => {
       await disposal
       expect(disposed).toBe(true)
       expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
-      await expect(service.create(testAgent(ctx, root, 'after-disposal'))).rejects.toThrow('worktree service disposed')
+      await expect(service.create(testAgent(ctx, root, 'after-disposal'))).rejects.toMatchObject({
+        name: 'WorktreeError', code: 'WORKTREE_UNAVAILABLE', message: 'worktree service disposed',
+      })
     } finally {
       release.resolve(undefined)
       await Promise.allSettled([operation, rejection, disposal])
@@ -275,24 +282,41 @@ describe('creating and entering retained worktrees', () => {
     const agent = testAgent(ctx, root)
     await git(root, 'branch', 'existing')
     await mkdir(join(root, '.agents/worktrees/occupied'), { recursive: true })
-    await expect(ctx.worktrees.create(agent, { name: 'existing' })).rejects.toThrow('branch already exists')
-    await expect(ctx.worktrees.create(agent, { name: 'occupied' })).rejects.toThrow('path already exists')
-    await expect(ctx.worktrees.create(agent, { name: 'missing', from: 'unavailable' })).rejects.toThrow('command failed')
-    await expect(ctx.worktrees.create(agent, { name: '../escape' })).rejects.toThrow('relative Git branch')
-    await expect(ctx.worktrees.create(agent, { name: 'invalid name' })).rejects.toThrow('command failed')
-    await expect(ctx.worktrees.create(agent, { from: '' })).rejects.toThrow('from must name')
+    await expect(ctx.worktrees.create(agent, { name: 'existing' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS', message: expect.stringContaining('branch already exists') as string,
+    })
+    await expect(ctx.worktrees.create(agent, { name: 'occupied' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS', message: expect.stringContaining('path already exists') as string,
+    })
+    await expect(ctx.worktrees.create(agent, { name: 'missing', from: 'unavailable' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_COMMAND_FAILED',
+    })
+    await expect(ctx.worktrees.create(agent, { name: '../escape' })).rejects.toMatchObject({
+      code: 'WORKTREE_INVALID_ARGUMENT', message: expect.stringContaining('relative Git branch') as string,
+    })
+    await expect(ctx.worktrees.create(agent, { name: 'invalid name' })).rejects.toMatchObject({
+      code: 'WORKTREE_INVALID_ARGUMENT', message: 'worktree name must be a valid Git branch name',
+    })
+    await expect(ctx.worktrees.create(agent, { from: '' })).rejects.toMatchObject({
+      code: 'WORKTREE_INVALID_ARGUMENT', message: expect.stringContaining('from must name') as string,
+    })
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await git(root, 'worktree', 'list', '--porcelain')).not.toContain('/occupied')
     expect(await readdir(join(root, '.agents/worktrees'))).toEqual(['occupied'])
   })
 
-  it('retains the checkout and branch if publishing the new cwd fails', async () => {
+  it.each([
+    ['an unclassified failure', new Error('directory publication failed'), { name: 'Error' }],
+    ['a classified failure', new FsError('directory publication failed', 'FS_NOT_FOUND'), { name: 'FsError', code: 'FS_NOT_FOUND' }],
+  ])('retains the checkout and branch if publishing the new cwd fails with %s', async (_label, failure, identity) => {
     const root = await repo()
     ctx = await harness(root)
     const agent = testAgent(ctx, root)
     await ctx.workingDirectory.ensure(agent)
-    vi.spyOn(ctx.workingDirectory, 'set').mockRejectedValueOnce(new Error('directory publication failed'))
-    await expect(ctx.worktrees.create(agent, { name: 'retained' })).rejects.toThrow('Any created checkout and branch are retained')
+    vi.spyOn(ctx.workingDirectory, 'set').mockRejectedValueOnce(failure)
+    await expect(ctx.worktrees.create(agent, { name: 'retained' })).rejects.toMatchObject({
+      ...identity, message: expect.stringContaining('Any created checkout and branch are retained') as string,
+    })
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await git(root, 'branch', '--list', 'retained')).toContain('retained')
     expect(await contents(join(root, '.agents/worktrees/retained/tracked.txt'))).toBe('initial\n')
@@ -342,9 +366,42 @@ describe('creating and entering retained worktrees', () => {
     const root = await repo()
     ctx = await harness(root, { maxOutputBytes: 1 })
     const agent = testAgent(ctx, root)
-    await expect(ctx.worktrees.create(agent, { name: 'bounded' })).rejects.toThrow('output exceeds maxOutputBytes')
+    await expect(ctx.worktrees.create(agent, { name: 'bounded' })).rejects.toMatchObject({
+      code: 'WORKTREE_OUTPUT_TOO_LARGE', message: 'worktree command output exceeds maxOutputBytes',
+    })
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
     expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
+  })
+
+  it('reports an elapsed command deadline as a timeout', async () => {
+    const root = await repo()
+    ctx = await harness(root, { timeoutMs: 20 })
+    const agent = testAgent(ctx, root)
+    vi.spyOn(ctx.subprocess, 'resolveExecutable').mockImplementation((_command, _env, signal) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => { reject(signal.reason as Error) }, { once: true })
+    }))
+    await expect(ctx.worktrees.create(agent, { name: 'slow' })).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_TIMEOUT', message: 'worktree command exceeded 20ms; inspect the repository before retrying',
+    })
+    expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
+  })
+
+  it.each([
+    ['a separate AbortError', () => new DOMException('publication aborted', 'AbortError'), 'AbortError'],
+    ['a distinct failure', () => new Error('publication failed during cancellation'), 'Error'],
+  ])('classifies %s thrown after caller cancellation', async (_label, failure, name) => {
+    const root = await repo()
+    ctx = await harness(root)
+    const agent = testAgent(ctx, root)
+    await ctx.workingDirectory.ensure(agent)
+    const controller = new AbortController()
+    vi.spyOn(ctx.workingDirectory, 'set').mockImplementationOnce(() => {
+      controller.abort('caller stopped')
+      return Promise.reject(failure())
+    })
+    await expect(ctx.worktrees.create(agent, { name: 'cancelled-publication' }, controller.signal)).rejects.toMatchObject({
+      name, message: expect.stringContaining('Any created checkout and branch are retained') as string,
+    })
   })
 
   it('retains a caller cancellation reason when allocation is cancelled before its child starts', async () => {
@@ -358,7 +415,9 @@ describe('creating and entering retained worktrees', () => {
       return resolveExecutable(command, env, signal)
     })
     try {
-      await expect(ctx.worktrees.create(agent, { name: 'cancelled-allocation' }, controller.signal)).rejects.toThrow('caller stopped')
+      await expect(ctx.worktrees.create(agent, { name: 'cancelled-allocation' }, controller.signal)).rejects.toMatchObject({
+        name: 'AbortError', message: expect.stringContaining('caller stopped') as string,
+      })
       expect(ctx.workingDirectory.get(agent.session)).toBe(root)
       expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
     } finally {
@@ -458,7 +517,9 @@ describe('restoring removed worktrees', () => {
     const created = await ctx.worktrees.create(agent, { name: 'topic' })
     const spawn = vi.spyOn(ctx.subprocess, 'spawn')
 
-    await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow(`worktree path already exists: ${created.path}`)
+    await expect(ctx.worktrees.restore(agent, created)).rejects.toMatchObject({
+      code: 'WORKTREE_ALREADY_EXISTS', message: `worktree path already exists: ${created.path}`,
+    })
 
     expect(spawn).not.toHaveBeenCalled()
   })
@@ -469,7 +530,9 @@ describe('restoring removed worktrees', () => {
     const agent = testAgent(ctx, root)
     const path = join(root, '.agents/worktrees/vanished')
     const request: RestoreWorktreeRequest = { path, branch: 'vanished', baseCommit: 'f'.repeat(40), repositoryRoot: root }
-    await expect(ctx.worktrees.restore(agent, request)).rejects.toThrow('worktree command failed')
+    await expect(ctx.worktrees.restore(agent, request)).rejects.toMatchObject({
+      code: 'WORKTREE_COMMAND_FAILED', message: expect.stringContaining('worktree command failed') as string,
+    })
     await expect(access(path)).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await git(root, 'branch', '--list', 'vanished')).toBe('')
     expect(ctx.workingDirectory.get(agent.session)).toBe(root)
@@ -489,7 +552,9 @@ describe('restoring removed worktrees', () => {
     })
     try {
       await expect(ctx.worktrees.restore(agent, created, controller.signal))
-        .rejects.toThrow(`Could not restore worktree topic at ${created.path}. Any created checkout and branch are retained. caller stopped`)
+        .rejects.toMatchObject({
+          name: 'AbortError', message: `Could not restore worktree topic at ${created.path}. Any created checkout and branch are retained. caller stopped`,
+        })
       await expect(access(created.path)).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       probe.mockRestore()
@@ -509,7 +574,9 @@ describe('restoring removed worktrees', () => {
 
     await expect(service.restore(agent, request, AbortSignal.abort(new Error('cancelled')))).rejects.toThrow('cancelled')
     await fiber!.dispose()
-    await expect(service.restore(agent, request)).rejects.toThrow('worktree service disposed')
+    await expect(service.restore(agent, request)).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_UNAVAILABLE', message: 'worktree service disposed',
+    })
 
     expect(spawn).not.toHaveBeenCalled()
     expect(await readdir(root)).toEqual(['.git', 'tracked.txt'])
@@ -536,7 +603,7 @@ describe('restoration validation', () => {
       request.repositoryRoot = join(root, '.agents')
       request.path = join(request.repositoryRoot, '.agents/worktrees/topic')
     }
-    await expect(ctx.worktrees.restore(agent, request)).rejects.toThrow()
+    await expect(ctx.worktrees.restore(agent, request)).rejects.toMatchObject({ name: 'WorktreeError', code: 'WORKTREE_INVALID_ARGUMENT' })
     expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
     await expect(access(created.path)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(access(join(root, 'outside'))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -550,7 +617,9 @@ describe('restoration validation', () => {
     await git(root, 'worktree', 'lock', created.path)
     await rm(created.path, { recursive: true, force: true })
     const before = await git(root, 'worktree', 'list', '--porcelain')
-    await expect(ctx.worktrees.restore(agent, created)).rejects.toThrow('worktree is locked')
+    await expect(ctx.worktrees.restore(agent, created)).rejects.toMatchObject({
+      name: 'WorktreeError', code: 'WORKTREE_LOCKED', message: expect.stringContaining('worktree is locked') as string,
+    })
     expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
   })
 })
@@ -567,7 +636,9 @@ it('rejects a restore path redirected outside the pool by a symlink', async () =
   await mkdir(outside)
   await symlink(outside, link, 'junction')
   const before = await git(root, 'worktree', 'list', '--porcelain')
-  await expect(ctx.worktrees.restore(agent, { ...created, path: join(link, 'topic') })).rejects.toThrow('configured pool')
+  await expect(ctx.worktrees.restore(agent, { ...created, path: join(link, 'topic') })).rejects.toMatchObject({
+    code: 'WORKTREE_INVALID_ARGUMENT', message: expect.stringContaining('configured pool') as string,
+  })
   expect(await readdir(outside)).toEqual([])
   expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
 })

@@ -109,7 +109,13 @@ export class WorkflowExecution {
       const value = raw === undefined ? null : this.materializeResult(raw)
       return { value, stopReason: 'completed', agentsStarted: this.started }
     } catch (error: unknown) {
-      return { value: null, stopReason: 'error', error: renderThrown(error), agentsStarted: this.started }
+      return {
+        value: null,
+        stopReason: 'error',
+        error: renderThrown(error),
+        ...error instanceof WorkflowError ? { errorCode: error.code } : {},
+        agentsStarted: this.started,
+      }
     }
   }
 

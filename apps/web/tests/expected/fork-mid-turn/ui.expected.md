@@ -2,6 +2,7 @@
 - button "Copy"
 - status: Completed
 - button "Completed in {{duration}}"
+- separator "Inherited history above"
 - text: FORK_BRANCH_USER Summarize what this branch knows about the reads. {{clock}}
 - button "Copy"
 - status: Completed

@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/cua-windows/native/capture-probe/README.md
+/:
+  en: eeabe421bc58f08c
+  zh: decfb432f67c7a10
+/windows-capture-experiment:
+  en: 04636b80e16e9c77
+  zh: 1939a876909a0728
+/windows-capture-experiment/summary:
+  en: b7d5300b63fbf75d
+  zh: 7ac6fff1d0e0ff39
+/windows-capture-experiment/table-of-contents:
+  en: 5fe6d5c7d6ef2980
+  zh: 1b6c59a3a0dae8cd
+/windows-capture-experiment/run-the-experiment:
+  en: 0a3af6cd49068299
+  zh: 8efa8e90294c4f28
+/windows-capture-experiment/interpret-the-output:
+  en: aa765881c455c6c0
+  zh: 6d76f02d287f5260
+/windows-capture-experiment/further-exploration:
+  en: e886759b879c9754
+  zh: 0dfaea2ea703055f
+/windows-capture-experiment/further-exploration/dev-note:
+  en: 8a4492cdafa89a70
+  zh: b2d7be08c34a0b10

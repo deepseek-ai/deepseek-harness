@@ -4,8 +4,9 @@ import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { expect, it, onTestFinished } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import SessionToolResults, { type Config } from '../src/index.ts'
@@ -26,7 +27,7 @@ async function setup(value: JsonValue = { answer: 42 }, config: Partial<Config> 
   await mountAgentLoopTestHarness(ctx)
   let agent!: Agent
   const owner = ctx.plugin({ inject: ['agentLoop'], async apply(inner: Context) {
-    agent = await inner.agentLoop.create(SessionId('live-values'))
+    agent = await inner.agentLoop.create(brandString<SessionId>('live-values'))
   } })
   await owner
   const events: SessionEvent[] = []
@@ -35,7 +36,7 @@ async function setup(value: JsonValue = { answer: 42 }, config: Partial<Config> 
   async function execute() {
     await ctx.tools.execute({
       agent, signal: new AbortController().signal, log: { turn: 1, step: 1 },
-      calls: [{ type: 'tool-call', id: ToolCallId(`value-call-${call++}`), name: 'value', arguments: '{}' }],
+      calls: [{ type: 'tool-call', id: brandString<ToolCallId>(`value-call-${call++}`), name: 'value', arguments: '{}' }],
     })
     const event = events.findLast(event => event.type === 'tool/result')
     if (event === undefined) throw new Error('tool result missing')
@@ -82,10 +83,10 @@ it('retains the latest 1000 results and invalidates an inspector when its result
 it('keeps one result per Session with a limit of one, independently of other Sessions', async () => {
   const { ctx, execute, watch } = await setup(null, { maxResultsPerSession: 1 })
   const first = await execute()
-  const other = await ctx.agentLoop.create(SessionId('other-values'))
+  const other = await ctx.agentLoop.create(brandString<SessionId>('other-values'))
   await ctx.tools.execute({
     agent: other, signal: new AbortController().signal, log: { turn: 1, step: 1 },
-    calls: [{ type: 'tool-call', id: ToolCallId('other-call'), name: 'value', arguments: '{}' }],
+    calls: [{ type: 'tool-call', id: brandString<ToolCallId>('other-call'), name: 'value', arguments: '{}' }],
   })
   expect((await watch(first.seq).next()).value).toEqual({ available: true, value: null })
   const latest = await execute()
@@ -100,7 +101,7 @@ it('counts pending PTC results toward the same limit and cannot restore an evict
   const firstObserver = watch(first.seq)
   expect((await firstObserver.next()).value).toEqual({ available: true, value: false })
   const evicted = firstObserver.next()
-  const callIds = ['pending-1', 'pending-2', 'pending-3'].map(ToolCallId)
+  const callIds = ['pending-1', 'pending-2', 'pending-3'].map(brandString<ToolCallId>)
   for (const id of callIds) {
     await ctx.tools.execute({
       agent, signal: new AbortController().signal,
@@ -110,7 +111,7 @@ it('counts pending PTC results toward the same limit and cannot restore an evict
   expect((await evicted).value).toEqual({ available: false })
   for (const [index, subCallId] of callIds.entries()) {
     const event = agent.session.append('tool/ptc-dispatch', {
-      rootCallId: ToolCallId('pending'), parentCallId: ToolCallId('pending'), subCallId,
+      rootCallId: brandString<ToolCallId>('pending'), parentCallId: brandString<ToolCallId>('pending'), subCallId,
       name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
     })
     expect((await watch(event.seq).next()).value).toEqual(index === 0
@@ -144,13 +145,13 @@ it('observes the final post-policy value and keeps historical and failed results
 
 it('pairs PTC dispatch values with their committed event sequence', async () => {
   const { ctx, agent, watch } = await setup()
-  const callId = ToolCallId('nested:ptc:1')
+  const callId = brandString<ToolCallId>('nested:ptc:1')
   await ctx.tools.execute({
     agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: callId, name: 'value', arguments: '{}' }],
   })
   const event = agent.session.append('tool/ptc-dispatch', {
-    rootCallId: ToolCallId('nested'), parentCallId: ToolCallId('nested'), subCallId: callId,
+    rootCallId: brandString<ToolCallId>('nested'), parentCallId: brandString<ToolCallId>('nested'), subCallId: callId,
     name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
   })
   expect(event.data).not.toHaveProperty('value')
@@ -168,7 +169,7 @@ it('does not let closing one inspector discard values used by another', async ()
 
 it('publishes a committed value to concurrent observers and releases only the closed observer', async () => {
   const { ctx, agent, watch } = await setup()
-  const callId = ToolCallId('observed:ptc:1')
+  const callId = brandString<ToolCallId>('observed:ptc:1')
   await ctx.tools.execute({
     agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: callId, name: 'value', arguments: '{}' }],
@@ -181,7 +182,7 @@ it('publishes a committed value to concurrent observers and releases only the cl
   await first.return?.()
   const changed = second.next()
   agent.session.append('tool/ptc-dispatch', {
-    rootCallId: ToolCallId('observed'), parentCallId: ToolCallId('observed'), subCallId: callId,
+    rootCallId: brandString<ToolCallId>('observed'), parentCallId: brandString<ToolCallId>('observed'), subCallId: callId,
     name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
   })
   expect((await changed).value).toEqual({ available: true, value: { answer: 42 } })
@@ -234,7 +235,7 @@ it('ends a subscription whose signal was aborted before opening', async () => {
 
 it('discards pending PTC values if the Session unloads before its result is committed', async () => {
   const { ctx, agent, owner, watch } = await setup()
-  const callId = ToolCallId('unloaded:ptc:1')
+  const callId = brandString<ToolCallId>('unloaded:ptc:1')
   await ctx.tools.execute({
     agent, signal: new AbortController().signal,
     calls: [{ type: 'tool-call', id: callId, name: 'value', arguments: '{}' }],
@@ -246,7 +247,7 @@ it('discards pending PTC values if the Session unloads before its result is comm
   expect((await unloaded).value).toEqual({ available: false })
   const resumed = ctx.sessions.create(agent.id)
   const committed = resumed.append('tool/ptc-dispatch', {
-    rootCallId: ToolCallId('unloaded'), parentCallId: ToolCallId('unloaded'), subCallId: callId,
+    rootCallId: brandString<ToolCallId>('unloaded'), parentCallId: brandString<ToolCallId>('unloaded'), subCallId: callId,
     name: 'value', arguments: {}, content: [{ type: 'text', text: 'rendered' }], isError: false,
   })
   expect((await watch(committed.seq).next()).value).toEqual({ available: false })

@@ -14,9 +14,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import BrowserUseRegistry from '@deepseek-ai/dsh-browser-use'
-import { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { LlmAdapter, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import * as Provider from '../src/index.ts'
 import { stagehandModelSchema } from '../src/native.ts'
 import { nativeModel } from './fixtures/stagehand.ts'
@@ -49,9 +50,9 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1')('launches and attaches to insta
     await ctx.plugin(LocalAttachmentStore, { dshHome: root })
     ctx.llm.registerAdapter(['visual-fixture'], new ImageCapabilities())
     const harness = await mountAgentLoopTestHarness(ctx)
-    const agent = await harness.create(SessionId('stagehand-live'), { provider: 'visual-fixture', model: 'vision' })
+    const agent = await harness.create(brandString<SessionId>('stagehand-live'), { provider: 'visual-fixture', model: 'vision' })
     const execute = (suffix: string, args: unknown) => executeToolFixture(ctx, {
-      agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`live-${suffix}`), signal,
+      agent, name: `stagehand_${suffix}`, arguments: args, callId: brandString<ToolCallId>(`live-${suffix}`), signal,
     })
     const launched = ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: executable })
     await launched
@@ -123,8 +124,8 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1' || !process.env.DSH_STAGEHAND_MO
     await ctx.plugin(BrowserUseRegistry)
     await ctx.plugin(Provider, { model: stagehandModelSchema.parse({ modelName: process.env.DSH_STAGEHAND_MODEL, apiKey: process.env.DSH_STAGEHAND_MODEL_API_KEY }), mode: 'launch', ...process.env.DSH_BROWSER_EXECUTABLE === undefined ? {} : { executablePath: process.env.DSH_BROWSER_EXECUTABLE } })
     const harness = await mountAgentLoopTestHarness(ctx)
-    const agent = await harness.create(SessionId('stagehand-real-model'), {})
-    const execute = (suffix: string, args: unknown) => executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: ToolCallId(`api-${suffix}`), signal })
+    const agent = await harness.create(brandString<SessionId>('stagehand-real-model'), {})
+    const execute = (suffix: string, args: unknown) => executeToolFixture(ctx, { agent, name: `stagehand_${suffix}`, arguments: args, callId: brandString<ToolCallId>(`api-${suffix}`), signal })
     const navigation = await execute('navigate', { url: `http://127.0.0.1:${address.port}` })
     expect(navigation.isError, JSON.stringify(navigation.content)).toBe(false)
     const result = await execute('extract', {
@@ -183,9 +184,9 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1' || process.platform === 'win32')
     await ctx.plugin(BrowserUseRegistry)
     await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: wrapper })
-    const owner = await ctx.agents.create({ sessionId: SessionId('stagehand-stalled-init') })
+    const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('stagehand-stalled-init') })
     const operation = owner.agent.runMaintenance(signal => executeToolFixture(ctx, {
-      agent: owner.agent, name: 'stagehand_tabs', arguments: { action: 'list' }, callId: ToolCallId('stalled-init'), signal,
+      agent: owner.agent, name: 'stagehand_tabs', arguments: { action: 'list' }, callId: brandString<ToolCallId>('stalled-init'), signal,
     }))
     await connected.promise
     const browser = JSON.parse(await readFile(marker, 'utf8')) as { pid: number; token: unknown; identity: unknown; publicValue: string; profile: string }
@@ -232,9 +233,9 @@ it.skipIf(process.env.DSH_STAGEHAND_E2E !== '1')('drains canceled navigation bef
     await ctx.plugin(BrowserUseRegistry)
     await mountAgentLoopTestHarness(ctx)
     await ctx.plugin(Provider, { model: nativeModel, mode: 'launch', executablePath: executable })
-    const owner = await ctx.agents.create({ sessionId: SessionId('stagehand-cancel-reconnect') })
+    const owner = await ctx.agents.create({ sessionId: brandString<SessionId>('stagehand-cancel-reconnect') })
     const call = (method: string, args: unknown) => owner.agent.runMaintenance(signal => executeToolFixture(ctx, {
-      agent: owner.agent, name: `stagehand_${method}`, arguments: args, callId: ToolCallId(`reconnect-${method}`), signal,
+      agent: owner.agent, name: `stagehand_${method}`, arguments: args, callId: brandString<ToolCallId>(`reconnect-${method}`), signal,
     }))
     expect((await call('navigate', { url: url.replace('/pending', '/retained') })).isError).toBe(false)
     const navigation = call('navigate', { url })

@@ -4,12 +4,14 @@ import * as PtcToolExecutor from '@deepseek-ai/dsh-tool-executor-ptc'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { provideWorkingDirectoryFixture } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import type { ToolExecutionToken, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import { Session, SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
+import { Session, type SessionId, SESSION_FORMAT_VERSION, type SessionEvent, type UserMessage } from '@deepseek-ai/dsh-session'
 import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import UserQuestionService, {
@@ -51,17 +53,17 @@ async function agentWithSession(
 ): Promise<Agent & { session: Session }> {
   // A live store session when a store is mounted (the command executor logs
   // lifecycle events through it); bare otherwise (fold/tool-only benches).
-  const session = Session.create(SessionId(id), undefined, owner === undefined ? undefined : {
-    version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 0, isSeeded: false, origin: 'subagent', parentSession: owner.id,
+  const session = Session.create(brandString<SessionId>(id), undefined, owner === undefined ? undefined : {
+    version: SESSION_FORMAT_VERSION, id: brandString<SessionId>(id), createdAt: 0, isSeeded: false, origin: 'subagent', parentSession: owner.id,
   })
   const agent = {
-    id: SessionId(id),
+    id: brandString<SessionId>(id),
     session,
     options: {},
     inject(message: UserMessage) {
       session.append('user/message', message, { surfaceOp: 'append' })
     },
-  } as unknown as Agent & { session: Session }
+  } as Agent & { session: Session }
   let scoped!: Context
   await ctx.plugin(Object.assign((inner: Context) => { scoped = createScope(inner, agent).ctx }, {
     inject: ['tools'],
@@ -183,7 +185,7 @@ function expectPlanPtcSdkBindings(sdk: string): void {
 let callCounter = 0
 function execute(ctx: Context, name: string, agent?: Agent) {
   return executeToolFixture(ctx, {
-    callId: ToolCallId(`call-${++callCounter}`),
+    callId: brandString<ToolCallId>(`call-${++callCounter}`),
     name,
     arguments: {},
     signal: new AbortController().signal,
@@ -216,7 +218,7 @@ describe('resolveConfig', () => {
 
 describe('foldPlanMode', () => {
   it('folds an empty log to inactive and takes the last plan/mode otherwise', () => {
-    const session = Session.create(SessionId('fold'))
+    const session = Session.create(brandString<SessionId>('fold'))
     expect(foldPlanMode(session.snapshotEvents())).toBe(false)
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
@@ -225,7 +227,7 @@ describe('foldPlanMode', () => {
   })
 
   it('folds a prefix when `end` is given', () => {
-    const session = Session.create(SessionId('fold-prefix'))
+    const session = Session.create(brandString<SessionId>('fold-prefix'))
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
     expect(foldPlanMode(session.snapshotEvents(), 1)).toBe(true)
@@ -503,7 +505,7 @@ describe('the soft layer', () => {
 
       readonly language = 'typescript'
       readonly isolation = 'fake'
-      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ logs: [] }) }
+      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ output: [] }) }
     }
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
@@ -528,7 +530,7 @@ describe('the soft layer', () => {
 
       readonly language = 'typescript'
       readonly isolation = 'fake'
-      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ logs: [] }) }
+      run(_request: PtcRunRequest): Promise<PtcRunResult> { return Promise.resolve({ output: [] }) }
     }
     const withPlanMode = new Context()
     await withPlanMode.plugin(SystemPrompt)
@@ -802,7 +804,7 @@ describe('exit_plan_mode', () => {
     const toolSet = agent === undefined ? undefined : await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal })
     return executeToolFixture(ctx, {
       ...toolSet === undefined ? {} : { toolSet },
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan },
       signal: new AbortController().signal,
@@ -840,11 +842,15 @@ describe('exit_plan_mode', () => {
     const exit = ctx.tools.get(EXIT_PLAN_MODE)
     expect(exit).toBeDefined()
     const exec: ToolRunContext = {
-      callId: ToolCallId('direct-exit'), rootCallId: ToolCallId('direct-exit'), name: EXIT_PLAN_MODE,
+      callId: brandString<ToolCallId>('direct-exit'), rootCallId: brandString<ToolCallId>('direct-exit'), name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' }, token: Symbol('direct-exit') as ToolExecutionToken, signal: testToolSignal,
       deferContext() {}, concludeTurn() {},
     }
-    await expect(exit?.execute({ plan: '# P' }, exec)).rejects.toThrow(`${EXIT_PLAN_MODE} is only available in plan mode`)
+    await expect(exit?.execute({ plan: '# P' }, exec)).rejects.toMatchObject({
+      name: 'ToolContextUnavailableError',
+      code: 'TOOL_CONTEXT_UNAVAILABLE',
+      message: `${EXIT_PLAN_MODE} requires a calling agent`,
+    })
   })
 
   it('keeps the exit tool after leaving plan mode and rejects a call outside it', async () => {
@@ -855,6 +861,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode is only available in plan mode' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_NOT_ACTIVE' })
   })
 
   it('admits the exit tool for a selected entry but rejects a call before the entry is logged', async () => {
@@ -866,6 +873,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode is only available in plan mode' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_NOT_ACTIVE' })
   })
 
   it('rejects an empty or heading-less plan before asking the reviewer', async () => {
@@ -873,7 +881,8 @@ describe('exit_plan_mode', () => {
     for (const plan of ['', 'do things']) {
       const result = await callExit(ctx, agent, plan)
       expect(result.isError).toBe(true)
-      expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode requires a non-empty markdown plan starting with a # heading' }])
+      expect(result.content).toEqual([{ type: 'text', text: 'Error: invalid arguments: exit_plan_mode requires a non-empty markdown plan starting with a # heading' }])
+      expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
     }
     expect(asked).toHaveLength(0)
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
@@ -885,6 +894,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: no user-questions channel is available to review the plan; ask the user to switch the session mode instead' }])
+    expect(result.error?.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -944,7 +954,7 @@ describe('exit_plan_mode', () => {
       async run(request: PtcRunRequest): Promise<PtcRunResult> {
         const exit = request.bindings[0]?.functions[EXIT_PLAN_MODE]
         if (exit === undefined) throw new Error('missing exit_plan_mode binding')
-        return { logs: [], value: await exit({ plan }) }
+        return { output: [], value: await exit({ plan }) }
       }
     }
     const ctx = new Context()
@@ -967,7 +977,7 @@ describe('exit_plan_mode', () => {
 
     const result = await executeModelToolFixture(ctx, {
       toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: RUN_CODE_NAME,
       arguments: { code: `return await tools.${EXIT_PLAN_MODE}({ plan: ${JSON.stringify(plan)} })`, description: 'Submit the plan for review' },
       signal: new AbortController().signal,
@@ -1022,6 +1032,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: consider the resume path' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1030,6 +1041,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
   })
 
   it('a custom-text-only answer is feedback, never consent', async () => {
@@ -1037,6 +1049,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: add tests first' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1045,6 +1058,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1053,6 +1067,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: change the tests' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1067,6 +1082,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1076,6 +1092,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVISION_REQUESTED' })
   })
 
   it('declares the plan-review presentation intent naming its approve option', async () => {
@@ -1120,7 +1137,7 @@ describe('exit_plan_mode', () => {
     const controller = new AbortController()
     const result = await executeToolFixture(ctx, {
       toolSet: await ctx.tools.resolve({ agent, modelSelection: TEST_MODEL_SELECTION, signal: testToolSignal }),
-      callId: ToolCallId(`call-exit-${++callCounter}`),
+      callId: brandString<ToolCallId>(`call-exit-${++callCounter}`),
       name: EXIT_PLAN_MODE,
       arguments: { plan: '# P' },
       agent,
@@ -1153,6 +1170,7 @@ describe('exit_plan_mode', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: the plan-mode service was reloaded while the plan was under review; present the plan again' }])
+    expect(result.error?.info).toEqual({ name: 'PlanModeError', code: 'PLAN_REVIEW_INTERRUPTED' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
@@ -1162,6 +1180,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: review aborted' }])
+    expect(result.error?.info).toEqual({ name: 'UserQuestionError', code: 'PROVIDER_ERROR' })
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 

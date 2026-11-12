@@ -14,12 +14,13 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
-import { createAssistantMessage, createUserMessage, ToolCallId as ToolCallIdOf } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import { createAssistantMessage, createUserMessage, type ToolCallId as ToolCallIdOf } from '@deepseek-ai/dsh-llm'
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment/types'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
-import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionEvent } from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
@@ -122,7 +123,7 @@ async function harness(
   ctx.llm.registerAdapter(['mock'], adapter)
   return {
     ctx, adapter, workspace, mods, info, warn,
-    agent: id => ctx.agentLoop.create(SessionId(id ?? 'a1'), { provider: 'mock', model: 'mock' }, { cwd: workspace }),
+    agent: id => ctx.agentLoop.create(brandString<SessionId>(id ?? 'a1'), { provider: 'mock', model: 'mock' }, { cwd: workspace }),
     async turn(agent, text) {
       agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
       await agent.whenIdle()
@@ -294,7 +295,7 @@ describe('prompt.submit: rewrite and drop', () => {
     const h = await harness([mod], adapter)
     const agent = await h.agent()
     // Injected context alone is not a prompt: no prompt.submit is raised for it.
-    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'injected only' }], source: { kind: 'user-question-reply', callId: ToolCallIdOf('q0'), outcome: 'answered' } }))
+    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'injected only' }], source: { kind: 'user-question-reply', callId: brandString<ToolCallIdOf>('q0'), outcome: 'answered' } }))
     await h.turn(agent, '  hello there  ')
     const entered = events(agent).find(e => e.type === 'user/message' && e.data.source.kind === 'user')
     expect(entered?.type === 'user/message' && entered.data.content).toEqual([{ type: 'text', text: 'HELLO THERE' }])
@@ -417,7 +418,7 @@ describe('tool.call: answers and rewrites', () => {
       'claude-code-mods: reroute-mod: tool.call hook skipped: rerouted the call from echo to Read; the logged call runs the tool it named',
     )
     // A call without an agent (a host-side execute) is answered by the same schema rule.
-    const direct = await executeToolFixture(h.ctx, { callId: ToolCallIdOf('direct'), name: 'greet', arguments: {}, signal: new AbortController().signal })
+    const direct = await executeToolFixture(h.ctx, { callId: brandString<ToolCallIdOf>('direct'), name: 'greet', arguments: {}, signal: new AbortController().signal })
     expect(direct.isError).toBe(false)
     expect(direct.content).toEqual([{ type: 'text', text: 'rendered hello from answer-mod' }])
     const refusals = h.warn.mock.calls.map(call => String(call[0])).filter(line => line.includes('rewrote the arguments of echo'))
@@ -729,6 +730,8 @@ describe('mod tools: registration errors and unanswered calls', () => {
     expect(results[0]).toEqual([true, { type: 'text', text: "Error: tools-mod registered mcp__tools-mod__orphan but no tool.call hook answered it; add on('tool.call', { tool: 'mcp__tools-mod__orphan' }, hook)" }])
     expect(results[1]).toEqual([false, { type: 'text', text: '{"structured":true}' }])
     expect(results[2]).toEqual([false, { type: 'text', text: '' }])
+    const unanswered = events(agent).find(e => e.type === 'tool/result')
+    expect(unanswered?.type === 'tool/result' && unanswered.data.error).toEqual({ name: 'ModUnansweredError', code: 'MOD_UNANSWERED' })
   })
 })
 
@@ -759,8 +762,8 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
     `)
     const malformedCall = [
       { type: 'block-start' as const, index: 0, blockType: 'tool-call' as const },
-      { type: 'tool-call-delta' as const, index: 0, id: ToolCallIdOf('m1'), name: 'echo', argumentsDelta: '{bad json' },
-      { type: 'block-end' as const, index: 0, block: { type: 'tool-call' as const, id: ToolCallIdOf('m1'), name: 'echo', arguments: '{bad json' } },
+      { type: 'tool-call-delta' as const, index: 0, id: brandString<ToolCallIdOf>('m1'), name: 'echo', argumentsDelta: '{bad json' },
+      { type: 'block-end' as const, index: 0, block: { type: 'tool-call' as const, id: brandString<ToolCallIdOf>('m1'), name: 'echo', arguments: '{bad json' } },
       { type: 'finish' as const, reason: { kind: 'tool-calls' as const } },
     ]
     const adapter = new MockAdapter([
@@ -771,7 +774,7 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
     h.ctx.tools.register(echoTool('echo'))
     const root = await h.agent()
     const child = await h.ctx.agentLoop.createAgent(h.ctx, {
-      sessionId: SessionId('child-1'), agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
+      sessionId: brandString<SessionId>('child-1'), agentOptions: { provider: 'mock', model: 'mock' }, meta: { cwd: h.workspace, origin: 'subagent' },
     })
     await h.turn(child.agent, 'child task')
     await child.dispose()
@@ -787,7 +790,7 @@ describe('subagents, programmatic calls, and malformed tool arguments', () => {
       'watch-mod: tool.call echo agent=root n=1',
       'watch-mod: turn.complete agent=root inputs=[{}]',
     ])
-    const direct = await executeToolFixture(h.ctx, { callId: ToolCallIdOf('direct'), name: 'echo', arguments: { command: 'direct' }, signal: new AbortController().signal })
+    const direct = await executeToolFixture(h.ctx, { callId: brandString<ToolCallIdOf>('direct'), name: 'echo', arguments: { command: 'direct' }, signal: new AbortController().signal })
     expect(direct.isError).toBe(false)
     // The nested `$.tool.call` reaches only mods loaded before watch-mod, so its own hook is not re-entered.
     expect(h.info).toHaveBeenCalledWith('watch-mod: direct saw echo and {"result":"ran nested"}')
@@ -824,7 +827,7 @@ describe('turn.complete reasons and sessions the bridge did not follow from the 
     agent.session.append('turn/end', { turn: 9, reason: { kind: 'completed' } })
     await waitFor(() => lines().length === 4)
     expect(lines()[3]).toBe('ends-mod: turn.complete 9 answer aborted=false answer="" usage=none')
-    const orphan = h.ctx.sessions.create(SessionId('orphan'))
+    const orphan = h.ctx.sessions.create(brandString<SessionId>('orphan'))
     orphan.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(lines()).toHaveLength(4)
@@ -837,7 +840,7 @@ describe('turn.complete reasons and sessions the bridge did not follow from the 
       }
     `)
     const h = await harness([mod], new MockAdapter([]))
-    const handle = await h.ctx.agentLoop.createAgent(h.ctx, { sessionId: SessionId('ends'), agentOptions: { provider: 'mock', model: 'mock' } })
+    const handle = await h.ctx.agentLoop.createAgent(h.ctx, { sessionId: brandString<SessionId>('ends'), agentOptions: { provider: 'mock', model: 'mock' } })
     // An assistant message outside any turn the bridge follows is left alone.
     handle.agent.session.append('assistant/message', {
       turn: 0, step: 0, stream: [],
@@ -988,7 +991,7 @@ describe('post-execute interplay and prompt rewrites with images', () => {
     const agent = await h.agent()
     const image = { type: 'image' as const, attachment: { attachmentId: 'att-1', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } as ImageAttachmentRef }
     // Injected context from another plugin is claimed with the waking prompt; only the human's message is the prompt.
-    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'injected by a plugin' }], source: { kind: 'user-question-reply', callId: ToolCallIdOf('q1'), outcome: 'answered' } }))
+    agent.inject(createUserMessage({ content: [{ type: 'text', text: 'injected by a plugin' }], source: { kind: 'user-question-reply', callId: brandString<ToolCallIdOf>('q1'), outcome: 'answered' } }))
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'first' }, image, { type: 'text', text: 'second' }], source: { kind: 'user' } }))
     await agent.whenIdle()
     const entered = () => events(agent).filter(e => e.type === 'user/message').map(e => e.type === 'user/message' && e.data.content)
@@ -1006,7 +1009,7 @@ describe('post-execute interplay and prompt rewrites with images', () => {
     agent.followup(createUserMessage({ content: [image], source: { kind: 'user' } }))
     await agent.whenIdle()
     expect(entered().at(-1)).toEqual([image, { type: 'text', text: 'rewritten: ' }])
-    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'from a plugin' }], source: { kind: 'user-question-reply', callId: ToolCallIdOf('q2'), outcome: 'answered' } }))
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'from a plugin' }], source: { kind: 'user-question-reply', callId: brandString<ToolCallIdOf>('q2'), outcome: 'answered' } }))
     await agent.whenIdle()
     expect(entered().at(-1)).toEqual([{ type: 'text', text: 'from a plugin' }])
   })

@@ -1,7 +1,7 @@
 import { PROGRAM_PROTOCOL_VERSION } from '../src/protocol.ts'
 import { setImmediate } from 'node:timers/promises'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { PtcBindingFunction, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
@@ -9,12 +9,13 @@ import type { Config } from '../src/index.ts'
 import { mountRuntime } from './setup.ts'
 import { fakeChild, NO_INITIAL_FRAME } from './fake-child.ts'
 import { encodePtcJsonWire } from '../src/json-wire.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const request: PtcRunRequest = { program: '1', bindings: [], stateOwner: {} }
 async function setup(config: Config = {}) {
   const ctx = new Context()
   onTestFinished(async () => { await ctx.fiber.dispose() })
-  const { runtime, fiber } = await mountRuntime(ctx, { ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
+  const { runtime, fiber } = await mountRuntime(ctx, { replScoped: false, ...config, executionMode: config.executionMode ?? 'persistent-in-memory' })
   return { ctx, fiber, runtime, ...fakeChild(ctx, runtime, request) }
 }
 
@@ -23,7 +24,7 @@ const bound: PtcRunRequest = { ...request, bindings: [{ global: 'tools', functio
 
 it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when its Session policy changes before process launch', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('policy-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('policy-admission'))
   const policy = h.ctx.sandboxPolicy.resolve({ session })
   expect(policy.mode).toBe('danger-full-access')
   h.receive((message) => {
@@ -48,7 +49,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('cancels a %s call when i
 
 it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider %s call when the standing mode is unchanged', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('temporary-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('temporary-admission'))
   setSandboxMode(session, 'read-only')
   const standing = h.ctx.sandboxPolicy.resolve({ session })
   h.receive((message) => {
@@ -69,7 +70,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps an approved wider 
 
 it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled when policy changes back during earlier cleanup', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('waiting-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('waiting-admission'))
   const booted = Promise.withResolvers<undefined>()
   const cleaning = Promise.withResolvers<undefined>()
   const cleanup = Promise.withResolvers<boolean>()
@@ -101,7 +102,7 @@ it.each(['per-call', 'persistent-in-memory'] as const)('keeps a %s call canceled
 
 it.each(['persistent-in-memory', 'per-call'] as const)('rejects admission when %s unloads during earlier policy cleanup', async (executionMode) => {
   const h = await setup({ executionMode })
-  const session = h.ctx.sessions.create(SessionId('unloading-admission'))
+  const session = h.ctx.sessions.create(brandString<SessionId>('unloading-admission'))
   const entered: PromiseWithResolvers<void> = Promise.withResolvers()
   h.onBoot(() => {
     if (executionMode === 'persistent-in-memory') h.complete({})
@@ -135,6 +136,78 @@ it.each(['persistent-in-memory', 'per-call'] as const)('rejects admission when %
     cleanup.resolve(true)
     await Promise.allSettled([first, pending, rejected, closing])
   }
+})
+
+it('requires Host acceptance before a newly initialized environment can succeed', async () => {
+  const h = await setup()
+  onTestFinished(h.runtime.registerEnvironmentInitializer(''))
+  h.onBoot(() => { h.complete({ value: encodePtcJsonWire(42) }) })
+  const result = await h.start()
+  expect(result.error?.kind).toBe('protocol')
+  expect(result.error?.message).toContain('without Host acceptance')
+  expect(h.terminate).toHaveBeenCalledOnce()
+  expect(h.waitForExit).toHaveBeenCalledOnce()
+})
+
+it.each([false, true])('rejects unsolicited initialization acceptance with readiness %s', async (ready) => {
+  const h = await setup()
+  const acknowledgement = { t: 'q', i: 'initialized', m: 'initialized', a: [] }
+  h.onBoot(() => { h.emit(acknowledgement) })
+  const result = ready ? await h.start() : await h.start(request, acknowledgement)
+  expect(result.error?.kind).toBe('protocol')
+  expect(result.error?.message).toContain('unexpected environment initialization')
+})
+
+it('keeps failed initializer removal closed until cleanup is retried', async () => {
+  const h = await setup()
+  const remove = h.runtime.registerEnvironmentInitializer('')
+  onTestFinished(remove)
+  h.receive((message) => {
+    if (typeof message !== 'object' || message === null) return
+    if ('m' in message && message.m === 'run') h.emit({ t: 'q', i: 'initialized', m: 'initialized', a: [] })
+    else if ('t' in message && message.t === 's' && 'i' in message && message.i === 'initialized') h.complete({})
+  })
+  expect((await h.start()).error).toBeUndefined()
+  const failure = new Error('initializer cleanup failed')
+  h.waitForExit.mockRejectedValue(failure)
+  try {
+    await expect(remove()).rejects.toBe(failure)
+    await expect(h.runtime.run(h.runtime.resolve(request))).rejects.toThrow('cleanup is incomplete')
+    h.waitForExit.mockResolvedValue(true)
+    await remove()
+    await remove()
+    expect(h.waitForExit).toHaveBeenCalledTimes(2)
+  } finally { h.waitForExit.mockResolvedValue(true); await remove() }
+})
+
+it('rejects registration once a run is admitted, before process readiness', async () => {
+  const h = await setup()
+  h.onBoot(() => { h.complete({}) })
+  const pending = h.start()
+  expect(() => h.runtime.registerEnvironmentInitializer('')).toThrow('before the first run')
+  expect((await pending).error).toBeUndefined()
+})
+
+it('waits for canceled startup when an initializer is removed', async () => {
+  const h = await setup()
+  const remove = h.runtime.registerEnvironmentInitializer('')
+  onTestFinished(remove)
+  const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+  const lookup = Promise.withResolvers<string>()
+  h.resolveExecutable.mockImplementation(() => { entered.resolve(); return lookup.promise })
+  const pending = h.start(request, NO_INITIAL_FRAME)
+  await entered.promise
+  let removed = false
+  const closing = remove().then(() => { removed = true })
+  try {
+    await setImmediate()
+    expect(removed).toBe(false)
+    expect(h.spawn).not.toHaveBeenCalled()
+    lookup.resolve(process.execPath)
+    await closing
+    expect((await pending).error?.kind).toBe('abort')
+    expect(h.spawn).not.toHaveBeenCalled()
+  } finally { lookup.resolve(process.execPath); await closing; await pending }
 })
 
 describe('persistent PTC host protocol', () => {
@@ -233,11 +306,11 @@ describe('persistent PTC host protocol', () => {
       h.stderr.write('stderr')
       h.complete({})
     })
-    expect(await h.start()).toMatchObject({ logs: ['stdout', 'stderr'] })
+    expect(await h.start()).toMatchObject({ output: [{ type: 'text', text: 'stdout' }, { type: 'text', text: 'stderr' }] })
     h.stdout.write('idle stdout')
     h.stderr.write('idle stderr')
     h.onBoot(() => { h.complete({}) })
-    expect(await h.start(request, NO_INITIAL_FRAME)).toMatchObject({ logs: [] })
+    expect(await h.start(request, NO_INITIAL_FRAME)).toMatchObject({ output: [] })
     expect(h.terminate).not.toHaveBeenCalled()
   })
 
@@ -340,7 +413,7 @@ describe('persistent PTC host protocol', () => {
       })
       const result = await h.start()
       expect(result.error?.kind).toBe('worker-exit')
-      expect(result.logs).toEqual([])
+      expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual([])
     }
   })
 
@@ -357,12 +430,12 @@ describe('persistent PTC host protocol', () => {
   ])('bounds cleanup failure after parse diagnostics overflow a $maxOutputBytes-byte budget', async ({ maxOutputBytes, kind }) => {
     const h = await setup({ maxOutputBytes })
     h.onBoot(() => { h.complete({}) })
-    expect(await h.start()).toMatchObject({ logs: [] })
+    expect(await h.start()).toMatchObject({ output: [] })
     h.waitForExit.mockRejectedValue(new Error('x'))
     const result = await h.runtime.run(h.runtime.resolve({ ...request, program: 'return 1' }))
     expect(result.error?.kind).toBe(kind)
     if (kind === 'worker-exit') expect(result.error?.message).toContain('cleanup failed: x')
-    const bytes = Buffer.byteLength(JSON.stringify(result.logs)) + Buffer.byteLength(JSON.stringify(result.error?.message))
+    const bytes = Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text))) + Buffer.byteLength(JSON.stringify(result.error?.message))
     expect(bytes).toBeLessThanOrEqual(maxOutputBytes)
     expect(h.terminate).toHaveBeenCalledTimes(1)
     expect(h.waitForExit).toHaveBeenCalledTimes(1)
@@ -608,6 +681,6 @@ it('preserves logs in a result-level failure when temporary process pipes do not
     h.stdout.destroy()
   })
   const result = await h.start({ program: '1', bindings: [] })
-  expect(result.logs).toEqual(['captured before cleanup'])
+  expect(result.output.filter(block => block.type === 'text').map(block => block.text)).toEqual(['captured before cleanup'])
   expect(result.error).toEqual({ kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
 })

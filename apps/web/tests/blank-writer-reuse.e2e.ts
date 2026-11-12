@@ -2,13 +2,14 @@
 
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage } from './support.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
-const HELD = SessionId('blank-held')
-const FREE = SessionId('blank-free')
+const HELD = brandString<SessionId>('blank-held')
+const FREE = brandString<SessionId>('blank-free')
 
 describe.each([false, true])('web e2e: selected blank writer held: %s', (held) => {
   let scaffold: WebScaffold
@@ -66,7 +67,7 @@ describe.each([false, true])('web e2e: selected blank writer held: %s', (held) =
       const id = await selected(first)
       return id !== undefined && (!held || id !== HELD)
     }).toBe(true)
-    const selectedId = SessionId((await selected(first))!)
+    const selectedId = brandString<SessionId>((await selected(first))!)
     expect(selectedId).not.toBe(FREE)
     await expect.poll(() => scaffold.ctx.agents.get(selectedId)).toBeDefined()
     if (!held) {

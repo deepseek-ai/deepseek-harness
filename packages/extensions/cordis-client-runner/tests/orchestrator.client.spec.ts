@@ -8,6 +8,7 @@
 /* oxlint-disable typescript/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type {
   ApprovalRequestId, CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId,
   DynamicCordisClientSource, DynamicCordisHostHalfResult, DynamicCordisResolveAck, SessionId,
@@ -16,11 +17,11 @@ import { CordisRunOrchestrator } from '../src/client/orchestrator.ts'
 import type { CordisUserRunRequest } from '../src/client/orchestrator.ts'
 import type { DynamicCordisLoadResult, DynamicCordisPackageRunner } from '../src/client/runtime.ts'
 
-const PLUGIN = 'dyn-1' as CordisDynamicPluginId
-const PACKAGE = 'pkg-1' as CordisDynamicPackageId
-const RUN = 'run-1' as CordisDynamicPluginRunId
+const PLUGIN = brandString<CordisDynamicPluginId>('dyn-1')
+const PACKAGE = brandString<CordisDynamicPackageId>('pkg-1')
+const RUN = brandString<CordisDynamicPluginRunId>('run-1')
 const AGENT = 's-1' as SessionId
-const REQ = 'rr-1' as ApprovalRequestId
+const REQ = brandString<ApprovalRequestId>('rr-1')
 const HOST_OK: Extract<DynamicCordisHostHalfResult, { ok: true }> = {
   ok: true,
   pluginId: PLUGIN,
@@ -188,7 +189,7 @@ describe('the waiting affordance', () => {
     let release = (): void => {}
     const bench = boot({ hostHalf: () => new Promise((resolve) => { release = (): void => { resolve(HOST_OK) } }) })
     const running = bench.orchestrator.startUserRun(DUAL)
-    const late = 'rr-late-decline' as ApprovalRequestId
+    const late = brandString<ApprovalRequestId>('rr-late-decline')
     ask(bench, late)
     await bench.orchestrator.decline(late)
     expect(bench.answers).toEqual([]) // the decision was made; a refusal now would contradict it
@@ -198,13 +199,13 @@ describe('the waiting affordance', () => {
 
   it('ignores a close for a request it never saw', () => {
     const bench = boot()
-    bench.orchestrator.close('rr-unknown' as ApprovalRequestId)
+    bench.orchestrator.close(brandString<ApprovalRequestId>('rr-unknown'))
     expect(bench.orchestrator.activeRuns.getSnapshot().size).toBe(0)
   })
 
   it('closes a request whose activity is already gone', async () => {
     const bench = boot()
-    const second = 'rr-second' as ApprovalRequestId
+    const second = brandString<ApprovalRequestId>('rr-second')
     ask(bench)
     ask(bench, second) // same definition asked twice: the first keeps the affordance
     await bench.orchestrator.approve(REQ, false) // settles and clears the activity
@@ -216,7 +217,7 @@ describe('the waiting affordance', () => {
     let release = (): void => {}
     const bench = boot({ hostHalf: () => new Promise((resolve) => { release = (): void => { resolve(HOST_OK) } }) })
     const started = bench.orchestrator.startUserRun(DUAL)
-    ask(bench, 'rr-late' as ApprovalRequestId)
+    ask(bench, brandString<ApprovalRequestId>('rr-late'))
     // A request arriving mid-orchestration must not offer a decision already made.
     expect(bench.orchestrator.activeRuns.getSnapshot().get(PLUGIN)).toEqual({
       phase: 'orchestrating', agentId: AGENT, packageId: PACKAGE, mode: 'run',
@@ -368,7 +369,7 @@ describe('decline', () => {
 
   it('ignores an unknown request', async () => {
     const bench = boot()
-    await bench.orchestrator.decline('rr-unknown' as ApprovalRequestId)
+    await bench.orchestrator.decline(brandString<ApprovalRequestId>('rr-unknown'))
     expect(bench.answers).toEqual([])
   })
 })

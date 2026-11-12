@@ -184,7 +184,7 @@ Append-only: added context and submitted prompts follow the reusable request pre
 
 #### What the model sees
 
-A `{ deny: reason }` answer renders `Error: <reason>` as the tool result. A `{ result }` answer renders through the tool's own presenter when the tool is mod-registered or the value satisfies the tool's output schema, and as an error-shaped result carrying the text otherwise. A result rewritten after `next` replaces the tool's content text. A dropped prompt ends the turn as `blocked` with no model-visible message. A mod that holds a `tool.call` (Blast Radius) delays the result until a button decides; the model sees only the outcome.
+A `{ deny: reason }` answer renders `Error: <reason>` as the tool result. A `{ result }` answer renders through the tool's own presenter when the tool is mod-registered or the value satisfies the tool's output schema, and as an error-shaped result carrying the text otherwise. A deny records `ModDenied` with `MOD_DENIED`, an error-shaped answer records `ModAnswered` with `MOD_ANSWERED`, and a call to a mod-registered tool that no `tool.call` hook answers fails with `ModUnansweredError` and `MOD_UNANSWERED`. A result rewritten after `next` replaces the tool's content text. A dropped prompt ends the turn as `blocked` with no model-visible message. A mod that holds a `tool.call` (Blast Radius) delays the result until a button decides; the model sees only the outcome.
 
 #### Token effect
 

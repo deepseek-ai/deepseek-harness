@@ -3,8 +3,8 @@ import { load } from 'js-yaml'
 import { z } from 'zod'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { desktopWebsiteInstallerUrl } from './desktop-auto-update-environment.mjs'
-import type { DesktopRetainedSource } from './desktop-release-store.ts'
+import { desktopWebsiteInstallerUrl } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
+import type { DesktopRetainedSource } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
 
 function text(value: string): string {

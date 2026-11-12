@@ -2,7 +2,7 @@
 import { load } from 'js-yaml'
 import { z } from 'zod'
 import type { DesktopUploadPlan } from './desktop-upload-plan.ts'
-import { desktopArtifactDigest, type DesktopPublishOperations, type DesktopRemoteObject } from './desktop-publish.ts'
+import { desktopArtifactDigest, type DesktopPublishOperations, type DesktopRemoteObject } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish.ts'
 
 /** Outcome of an explicitly requested channel restoration. */
 export interface DesktopRollbackResult {

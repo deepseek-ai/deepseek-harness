@@ -6,8 +6,10 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-remote-access'
 import { changeRequestKey } from '@deepseek-ai/dsh-experimental-forge'
 import type {
-  ChangeRequestRef, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList, ForgeFailure, ForgeLineComment, ForgeReviewData,
-  ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite, ForgeReviewWriteResult, MergeMethod,
+  BranchUpdateMethod, ChangeRequestKey, ChangeRequestRef, ChangeRequestReviewer, ChangeRequestSnapshot, ForgeActionFailure, ForgeCommitList,
+  ForgeFailure,
+  ForgeLineComment, ForgeRerunRequest, ForgeReviewData, ForgeReviewerCandidate, ForgeReviewRequest, ForgeReviewResult, ForgeReviewWrite,
+  ForgeReviewWriteResult, ForgeViewedFiles, ForgeViewedRequest, MergeMethod,
 } from '@deepseek-ai/dsh-experimental-forge'
 import type { SessionChangeRequest } from '@deepseek-ai/dsh-experimental-forge-session'
 import type { WorktreeCleanup } from '@deepseek-ai/dsh-experimental-worktree/types'
@@ -24,8 +26,12 @@ import type { Inspection } from './git.ts'
 import { parseDiff } from './diff.ts'
 import {
   aheadOf, BaseMissing, baseBranches, chosenForkPoint, CommitsMissing, CommitsNotLinear, DiffTooLarge, FilterConfigError, forkPoint,
-  localCommits, localDiff, localText, NoForkPoint,
+  localCommits, localDiff, localOldText, localText, NoForkPoint,
 } from './local-diff.ts'
+import type { ForkPoint } from './local-diff.ts'
+import { LensCache, LensFailed, lensFrames, LensRegistry, LensWithdrawn, runLens } from './lenses.ts'
+import type { LensSubject } from './lenses.ts'
+import { lensVersion } from './lens-version.ts'
 import { rangeStart } from './commit-range.ts'
 import { ATTRIBUTES_PATH, FileLayers } from './layers.ts'
 import { missingWorktree, SessionPanel } from './panel.ts'
@@ -34,8 +40,9 @@ import { ReviewCache } from './review-cache.ts'
 import { ChangeRequestStates, changeRequestStatesDomain } from './states.ts'
 import type { PanelConfig } from './panel.ts'
 import type {
-  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeLocalCommits,
-  ForgeLocalDiff, ForgeLocalScope, ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
+  Config, ForgeBaseBranches, ForgeBranches, ForgeChangeRequestDiff, ForgeChangeRequestStatesFrame, ForgeCommitRange, ForgeDiffFile,
+  ForgeExtensionState, ForgeLens, ForgeLensFrame, ForgeLensRequest, ForgeLocalCommits, ForgeLocalDiff, ForgeLocalScope,
+  ForgeMissingWorktree, ForgePanelState, ForgeSessionWorktree, ForgeWorktreeState,
 } from './types.ts'
 import { forgeWorktreeProjection, messageOf, within, WORKTREE_RECORD, WorktreeCreations } from './worktree.ts'
 import type { HeldWork } from './worktree.ts'
@@ -49,8 +56,16 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Panel limits plus the branch and commit listing limits and the worktree branch prefix. */
-type ControllerConfig = PanelConfig & { readonly maxBranches: number; readonly maxCommits: number; readonly worktreePrefix: string }
+/** Panel limits plus the branch and commit listing limits, the worktree branch prefix, and the lens and annotation limits. */
+type ControllerConfig = PanelConfig & {
+  readonly maxBranches: number
+  readonly maxCommits: number
+  readonly worktreePrefix: string
+  readonly lensTimeoutMs: number
+  readonly maxLensReadBytes: number
+  readonly maxCachedLensBytes: number
+  readonly maxAnnotationsPerFile: number
+}
 
 /**
  * Serves the forge panel. Following a Session inspects the checkout of its
@@ -88,6 +103,10 @@ export class ForgePanelController extends TypertRemoteService {
     interfacePaths: z.array(z.string()).default([]),
     maxCachedReviewBytes: z.number().default(16_777_216),
     reviewRefreshMs: z.number().default(60_000),
+    lensTimeoutMs: z.number().default(60_000),
+    maxLensReadBytes: z.number().default(33_554_432),
+    maxCachedLensBytes: z.number().default(4_194_304),
+    maxAnnotationsPerFile: z.number().default(100),
   })
 
   private readonly home: Context
@@ -98,6 +117,10 @@ export class ForgePanelController extends TypertRemoteService {
   private readonly patches: PatchCache
   private readonly layers: FileLayers
   private readonly reviews: ReviewCache
+  private readonly lenses = new LensRegistry()
+  private readonly lensResults: LensCache
+  /** Review changes `forge/review-changed` announced per change request, which each panel entry reports. */
+  private readonly reviewRevisions = new Map<ChangeRequestKey, number>()
   private states: ChangeRequestStates | undefined
   private readonly stopPanels: () => Promise<void>
   private readonly stopStates: () => Promise<void>
@@ -106,13 +129,16 @@ export class ForgePanelController extends TypertRemoteService {
     super(ctx, 'forgePanel')
     const resolved = config as Required<Config>
     if (resolved.gitCommand.trim().length === 0) throw new Error('forge-panel: gitCommand must not be empty')
-    for (const key of ['gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs', 'reviewRefreshMs'] as const) {
+    for (const key of ['gitTimeoutMs', 'graceMs', 'maxOutputBytes', 'readinessTimeoutMs', 'reviewRefreshMs', 'lensTimeoutMs'] as const) {
       const value = resolved[key]
       if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
         throw new Error(`forge-panel: ${key} must be a positive integer no greater than ${MAX_TIMER_DELAY_MS}`)
       }
     }
-    for (const key of ['maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes', 'maxCommits', 'maxCachedReviewBytes'] as const) {
+    for (const key of [
+      'maxBranches', 'maxDiffBytes', 'maxUntrackedFiles', 'maxCachedDiffBytes', 'maxCommits', 'maxCachedReviewBytes', 'maxLensReadBytes',
+      'maxCachedLensBytes', 'maxAnnotationsPerFile',
+    ] as const) {
       if (!Number.isSafeInteger(resolved[key]) || resolved[key] <= 0) throw new Error(`forge-panel: ${key} must be a positive integer`)
     }
     if (!branchPrefix(resolved.worktreePrefix)) throw new Error('forge-panel: worktreePrefix must start a valid Git branch name')
@@ -124,6 +150,8 @@ export class ForgePanelController extends TypertRemoteService {
     this.config = resolved
     this.patches = new PatchCache(resolved.maxCachedDiffBytes)
     this.reviews = new ReviewCache(resolved.maxCachedReviewBytes, resolved.reviewRefreshMs)
+    this.lensResults = new LensCache(resolved.maxCachedLensBytes)
+    ctx.effect(() => () => { this.lenses.close() }, 'forge-panel: lens streams')
     this.stopPanels = ctx.effect(() => async () => {
       const panels = [...this.panels.values()]
       this.panels.clear()
@@ -152,6 +180,7 @@ export class ForgePanelController extends TypertRemoteService {
     const events = ctx.on('session/event', (session: Session, event: SessionEvent) => {
       this.panels.get(session)?.observe(event)
     })
+    const reviewChanges = ctx.on('forge/review-changed', (ref: ChangeRequestRef) => { this.reviewChanged(ref) })
     const services = ctx.on('internal/service', (name: string) => {
       if (name !== 'worktrees') return
       for (const panel of this.panels.values()) panel.updateWorktree()
@@ -161,6 +190,7 @@ export class ForgePanelController extends TypertRemoteService {
       yield stateOwner.dispose
       yield inbox
       yield events
+      yield reviewChanges
       yield services
       yield stopPanels
       yield stopStates
@@ -417,16 +447,13 @@ export class ForgePanelController extends TypertRemoteService {
     if (update === null || !('snapshot' in update)) {
       throw new RemoteError('forgePanel/diff-failed', 'The change request status has not been read yet', {})
     }
-    if (commits !== null) return await this.commitsDiff(ref, commits, signal)
-    const { headSha, headBranch, baseBranch } = update.snapshot
-    const key = changeRequestKey(ref)
-    const version = JSON.stringify([headSha, baseBranch])
-    let read = this.patches.get(key, version)
-    if (read === undefined) {
-      read = await this.patchAt(ref, headSha, async operation => await this.home.forge.diff(ref, headSha, operation), signal)
-      this.patches.set(key, version, read)
+    if (commits !== null) {
+      const { files } = await this.commitFiles(ref, commits, signal)
+      const fileUrls = Object.fromEntries(files.map(file => [file.path, this.home.forge.fileUrl(ref, commits.to, file.path)]))
+      return { headSha: commits.to, files, localAhead: null, fileUrls }
     }
-    const files = this.layers.classify(parseDiff(read.patch), read.attributes)
+    const { headSha, headBranch } = update.snapshot
+    const files = await this.headFiles(ref, update.snapshot, signal)
     let localAhead: number | null = null
     try {
       localAhead = await aheadOf(
@@ -459,6 +486,129 @@ export class ForgePanelController extends TypertRemoteService {
     const text = await this.home.forge.fileText(this.bound(session, url).ref, commit, path, signal)
     if (typeof text !== 'string') throw readError(text)
     return text
+  }
+
+  /**
+   * Register a filter lens as an effect on the calling fiber. The changes views list it while it is registered; ending
+   * the registration aborts its running classifications and waits for them.
+   * @param lens - the lens.
+   * @returns the disposer that unregisters the lens and waits for its classifications to stop.
+   * @throws when another registration holds `lens.id`.
+   */
+  registerLens(lens: ForgeLens): () => Promise<void> {
+    const dispose = this.ctx.effect(() => this.lenses.add(lens), 'forge-panel: lens')
+    return async () => { await dispose() }
+  }
+
+  /**
+   * Stream the facts every changes view reads about the panel's extensions: the current facts first, then the facts
+   * after each lens registration or withdrawal. The stream ends when `signal` aborts or the Remote stops.
+   * @param signal - ends the stream.
+   * @returns the registered lenses and the annotation limit, in publication order.
+   */
+  @Remote({ mode: 'stream' })
+  async *extensions(signal: AbortSignal): AsyncIterable<ForgeExtensionState> {
+    for await (const lenses of this.lenses.follow(signal)) yield { lenses, maxAnnotationsPerFile: this.config.maxAnnotationsPerFile }
+  }
+
+  /**
+   * Classify the files a changes view of a Session shows with one registered lens: progress frames while the lens
+   * runs, then the files it keeps. Results for the same files, lens, and lens version are reused from memory until
+   * `maxCachedLensBytes` evicts them. Local changes are read with the Session's permissions; a change request's files
+   * are those `changeRequestDiff` reads.
+   * @param session - Session whose checkout or binding the view shows.
+   * @param request - the view's source, the version of the files it shows, and the lens.
+   * @param signal - ends the classification.
+   * @returns progress frames, then one result frame.
+   * @throws `forgePanel/lens-missing` while no lens holds the identity or once its registration ends;
+   * `forgePanel/lens-stale` before a change request's status was read, when the files differ from `request.version`, and
+   * when local files changed while the lens ran;
+   * `forgePanel/lens-failed` when the lens fails, runs past `lensTimeoutMs`, reads past `maxLensReadBytes`, or answers
+   * over `maxCachedLensBytes`; the errors of `localDiff` and `changeRequestDiff` for the files.
+   */
+  @Remote({ mode: 'stream' })
+  async *changesLens(session: Session, request: ForgeLensRequest, signal: AbortSignal): AsyncIterable<ForgeLensFrame> {
+    signal.throwIfAborted()
+    const registration = this.lenses.get(request.lens)
+    if (registration === undefined) throw new RemoteError('forgePanel/lens-missing', `No lens "${request.lens}" is registered`, {})
+    const subject = await this.lensSubject(session, request.source, signal)
+    // The registration may have ended while the files were read; its lens neither runs nor answers from memory then.
+    signal.throwIfAborted()
+    if (registration.lifetime.aborted) throw new RemoteError('forgePanel/lens-missing', `No lens "${request.lens}" is registered`, {})
+    if (lensVersion(subject.files) !== request.version) {
+      throw new RemoteError('forgePanel/lens-stale', 'The changes were read again since the view showed them', {})
+    }
+    const key = JSON.stringify([subject.key, request.version, request.lens, registration.lens.version])
+    const kept = this.lensResults.get(key)
+    if (kept !== undefined) {
+      yield { kind: 'result', files: kept }
+      return
+    }
+    const limits = {
+      timeoutMs: this.config.lensTimeoutMs, maxReadBytes: this.config.maxLensReadBytes, maxResultBytes: this.config.maxCachedLensBytes,
+    }
+    try {
+      for await (const frame of lensFrames(progress => runLens(registration, subject, limits, signal, progress))) {
+        if (frame.kind === 'result') {
+          // Local files can change while the lens reads them; a result about other contents is neither kept nor sent.
+          if (request.source.kind === 'local') {
+            const now = await this.lensSubject(session, request.source, signal)
+            if (lensVersion(now.files) !== request.version) {
+              throw new RemoteError('forgePanel/lens-stale', 'The changes moved while the lens read them', {})
+            }
+          }
+          this.lensResults.set(key, frame.files)
+        }
+        yield frame
+      }
+    } catch (error) {
+      if (error instanceof LensWithdrawn) throw new RemoteError('forgePanel/lens-missing', error.message, {})
+      if (error instanceof LensFailed) throw new RemoteError('forgePanel/lens-failed', error.message, {})
+      throw error
+    }
+  }
+
+  /**
+   * Read the signed-in user's viewed marks on the files of a change request of a Session, which the host keeps for the
+   * whole change request.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param headSha - head commit of the shown diff; marks read at another head are refused.
+   * @param signal - request cancellation.
+   * @returns the marks at `headSha`, or null when the provider keeps no viewed marks.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `headSha`, which is then polled again; `forgePanel/viewed-failed`
+   * when the host does not provide the marks otherwise.
+   */
+  @Remote
+  async changeRequestViewed(session: Session, url: string, headSha: string, signal: AbortSignal): Promise<ForgeViewedFiles | null> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.viewedFiles(this.bound(session, url).ref, headSha, signal)
+    if (result === undefined) return null
+    if ('code' in result) {
+      throw new RemoteError(result.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/viewed-failed', result.message, {})
+    }
+    return result
+  }
+
+  /**
+   * Set or clear the signed-in user's viewed mark on one file of a change request of a Session.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - the file, its mark, and the head commit of the shown diff.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+   * reason when the host refuses, cannot be reached, or keeps no viewed marks; `forgePanel/action-unknown` when the host
+   * did not confirm whether it saved the mark.
+   */
+  @Remote
+  async setFileViewed(session: Session, url: string, request: ForgeViewedRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (request.path === '') throw new Error('Invalid viewed file')
+    const failure = await this.home.forge.setViewed(ref, request, signal)
+    if (failure !== undefined) throw actionError(failure)
   }
 
   /**
@@ -585,6 +735,85 @@ export class ForgePanelController extends TypertRemoteService {
   async merge(session: Session, url: string, method: MergeMethod, headSha: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted()
     const failure = await this.home.forge.merge(this.bound(session, url).ref, { method, headSha }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Rerun the failed checks of a change request of a Session while its head is still the commit whose checks the user
+   * saw; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param request - the head commit whose checks the user saw.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `request.headSha`; `forgePanel/action-failed` with the host's
+   * reason when the host refuses, cannot be reached, or reruns no checks; `forgePanel/action-unknown` when the host did
+   * not confirm whether it started the rerun.
+   */
+  @Remote
+  async rerunChecks(session: Session, url: string, request: ForgeRerunRequest, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.rerunChecks(this.bound(session, url).ref, request, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * Request reviews of a change request of a Session from more reviewers; the change request is polled again once the
+   * host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param reviewers - the reviewers to ask, by kind and login.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/action-failed` with the host's reason when the host refuses, cannot be reached, or requests no reviews;
+   * `forgePanel/action-unknown` when the host did not confirm whether it requested the reviews.
+   */
+  @Remote
+  async requestReviews(
+    session: Session, url: string, reviewers: readonly Pick<ChangeRequestReviewer, 'kind' | 'login'>[], signal: AbortSignal,
+  ): Promise<void> {
+    signal.throwIfAborted()
+    const { ref } = this.bound(session, url)
+    if (reviewers.length === 0 || reviewers.some(reviewer => reviewer.login.trim() === '')) throw new Error('Invalid reviewers')
+    const failure = await this.home.forge.requestReviews(ref, { reviewers }, signal)
+    if (failure !== undefined) throw actionError(failure)
+  }
+
+  /**
+   * List accounts a review of a change request of a Session can be requested from.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param query - text the login or name contains; empty for the host's suggestions and first accounts.
+   * @param signal - request cancellation.
+   * @returns the accounts, the host's suggestions first.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/reviewers-failed` when the host does not list them.
+   */
+  @Remote
+  async reviewerCandidates(session: Session, url: string, query: string, signal: AbortSignal): Promise<readonly ForgeReviewerCandidate[]> {
+    signal.throwIfAborted()
+    const result = await this.home.forge.reviewerCandidates(this.bound(session, url).ref, query, signal)
+    if ('code' in result) throw new RemoteError('forgePanel/reviewers-failed', result.message, {})
+    return result
+  }
+
+  /**
+   * Bring the base branch's new commits into the head branch of a change request of a Session while its head is still
+   * `headSha`; the change request is polled again once the host answers.
+   * @param session - Session the change request is bound to.
+   * @param url - binding URL of the change request.
+   * @param method - merge commit or rebase.
+   * @param headSha - head commit the user confirmed.
+   * @param signal - request cancellation.
+   * @throws `forgePanel/not-bound` unless the URL is a visible binding of the Session that a provider serves;
+   * `forgePanel/stale-head` when the head moved past `headSha`; `forgePanel/action-failed` with the host's reason when
+   * the host refuses, cannot be reached, or updates no branches; `forgePanel/action-unknown` when the host did not
+   * confirm whether it started the update.
+   */
+  @Remote
+  async updateBranch(session: Session, url: string, method: BranchUpdateMethod, headSha: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const failure = await this.home.forge.updateBranch(this.bound(session, url).ref, { method, headSha }, signal)
     if (failure !== undefined) throw actionError(failure)
   }
 
@@ -747,8 +976,23 @@ export class ForgePanelController extends TypertRemoteService {
     return this.home.workingDirectory.get(session) === directory ? missing : null
   }
 
-  /** The changes of consecutive commits of a change request, from the first one's first parent to the last. */
-  private async commitsDiff(ref: ChangeRequestRef, commits: ForgeCommitRange, signal: AbortSignal): Promise<ForgeChangeRequestDiff> {
+  /** The files of a change request at the head a status recorded, read once per head and base branch while the cache keeps them. */
+  private async headFiles(ref: ChangeRequestRef, snapshot: ChangeRequestSnapshot, signal: AbortSignal): Promise<ForgeDiffFile[]> {
+    const { headSha, baseBranch } = snapshot
+    const key = changeRequestKey(ref)
+    const version = JSON.stringify([headSha, baseBranch])
+    let read = this.patches.get(key, version)
+    if (read === undefined) {
+      read = await this.patchAt(ref, headSha, async operation => await this.home.forge.diff(ref, headSha, operation), signal)
+      this.patches.set(key, version, read)
+    }
+    return this.layers.classify(parseDiff(read.patch), read.attributes)
+  }
+
+  /** The files of consecutive commits of a change request, from the first one's first parent, which is returned too, to the last. */
+  private async commitFiles(
+    ref: ChangeRequestRef, commits: ForgeCommitRange, signal: AbortSignal,
+  ): Promise<{ readonly files: ForgeDiffFile[]; readonly parent: string }> {
     const list = await this.home.forge.commits(ref, signal)
     if (list === undefined) throw new RemoteError('forgePanel/diff-failed', 'The code host provider does not read commits', {})
     if ('code' in list) throw readError(list)
@@ -760,9 +1004,7 @@ export class ForgePanelController extends TypertRemoteService {
     const { patch, attributes } = await this.patchAt(
       ref, commits.to, async operation => await this.home.forge.compare(ref, parent, commits.to, operation), signal,
     )
-    const files = this.layers.classify(parseDiff(patch), attributes)
-    const fileUrls = Object.fromEntries(files.map(file => [file.path, this.home.forge.fileUrl(ref, commits.to, file.path)]))
-    return { headSha: commits.to, files, localAhead: null, fileUrls }
+    return { files: this.layers.classify(parseDiff(patch), attributes), parent }
   }
 
   /**
@@ -897,10 +1139,95 @@ export class ForgePanelController extends TypertRemoteService {
     return this.states
   }
 
+  /** Drop the threads kept for a change request after an accepted review change and let its panel entries report it. */
+  private reviewChanged(ref: ChangeRequestRef): void {
+    const key = changeRequestKey(ref)
+    this.reviews.drop(key)
+    this.reviewRevisions.set(key, (this.reviewRevisions.get(key) ?? 0) + 1)
+    for (const panel of this.panels.values()) panel.reviewChanged()
+  }
+
+  /** The files a lens request names with their reader and the key results for them are kept under. */
+  private async lensSubject(
+    session: Session, source: ForgeLensRequest['source'], signal: AbortSignal,
+  ): Promise<LensSubject & { readonly key: string }> {
+    if (source.kind === 'local') {
+      const inspection = await this.checkoutOf(session, signal)
+      const root = inspection.checkout.root
+      const { scope } = source
+      const fork: ForkPoint | null = scope.kind !== 'branch' ? null : await diffing(scope.base === null
+        ? forkPoint(gitIn(this.home, this.config, session, root, signal), inspection, this.worktreeState(session).created)
+        : chosenForkPoint(gitIn(this.home, this.config, session, root, signal), scope.base))
+      const { files } = await diffing(localDiff(this.home, this.config, session, root, fork, scope, this.layers, signal))
+      return {
+        key: JSON.stringify(['local', session.id, scope]),
+        source: { kind: 'local', scope },
+        files,
+        read: async (side, file, inner) => {
+          if (file.binary || (side === 'old' ? file.status === 'added' : file.status === 'deleted')) return null
+          return side === 'new'
+            ? await diffing(localText(this.home, this.config, session, root, scope, file.path, inner))
+            : await diffing(localOldText(this.home, this.config, session, root, scope, fork, file.previousPath ?? file.path, inner))
+        },
+      }
+    }
+    const { ref, update } = this.bound(session, source.url)
+    if (update === null || !('snapshot' in update)) {
+      throw new RemoteError('forgePanel/lens-stale', 'The change request status has not been read yet', {})
+    }
+    const { snapshot } = update
+    const { commits } = source
+    let files: ForgeDiffFile[]
+    let newCommit: string
+    let oldCommit: (inner: AbortSignal) => Promise<string>
+    if (commits === null) {
+      files = await this.headFiles(ref, snapshot, signal)
+      newCommit = snapshot.headSha
+      // One merge base serves every old side of the run; a failed lookup is tried again by the next read.
+      let base: Promise<string> | undefined
+      oldCommit = async (inner) => {
+        base ??= this.mergeBaseOf(ref, snapshot, inner)
+        try {
+          return await base
+        } catch (error) {
+          base = undefined
+          throw error
+        }
+      }
+    } else {
+      const read = await this.commitFiles(ref, commits, signal)
+      files = read.files
+      newCommit = commits.to
+      oldCommit = () => Promise.resolve(read.parent)
+    }
+    return {
+      key: JSON.stringify(['change', changeRequestKey(ref), newCommit, commits]),
+      source: { kind: 'change', ref, headSha: snapshot.headSha, commits },
+      files,
+      read: async (side, file, inner) => {
+        if (file.binary || (side === 'old' ? file.status === 'added' : file.status === 'deleted')) return null
+        const commit = side === 'new' ? newCommit : await oldCommit(inner)
+        const text = await this.home.forge.fileText(ref, commit, side === 'new' ? file.path : file.previousPath ?? file.path, inner)
+        if (typeof text === 'string') return text
+        if (text.code === 'not-found') return null
+        throw new Error(text.message)
+      },
+    }
+  }
+
+  /** The merge base whose files the old side of a change request's diff at the status's head shows. */
+  private async mergeBaseOf(ref: ChangeRequestRef, snapshot: ChangeRequestSnapshot, signal: AbortSignal): Promise<string> {
+    if (snapshot.baseSha === undefined) throw new Error('The code host provider reports no base commit to read the old side at')
+    const base = await this.home.forge.mergeBase(ref, snapshot.baseSha, snapshot.headSha, signal)
+    if (typeof base !== 'string') throw new Error(base.message)
+    return base
+  }
+
   private panelOf(session: Session): SessionPanel {
     let panel = this.panels.get(session)
     if (panel === undefined) {
-      const created: SessionPanel = new SessionPanel(this.home, this.config, session, this.worktreeStates, this.creations, () => {
+      const revision = (ref: ChangeRequestRef): number => this.reviewRevisions.get(changeRequestKey(ref)) ?? 0
+      const created: SessionPanel = new SessionPanel(this.home, this.config, session, this.worktreeStates, this.creations, revision, () => {
         if (this.panels.get(session) !== created) return
         this.panels.delete(session)
         void created.dispose()
@@ -1014,7 +1341,9 @@ async function diffing<T>(reading: Promise<T>): Promise<T> {
  * @returns the Remote error to throw.
  */
 function actionError(failure: ForgeActionFailure): RemoteError {
-  return new RemoteError(failure.code === 'stale' ? 'forgePanel/stale-head' : 'forgePanel/action-failed', failure.message, {})
+  const code = failure.code === 'stale' ? 'forgePanel/stale-head' : failure.code === 'unknown' ? 'forgePanel/action-unknown'
+    : 'forgePanel/action-failed'
+  return new RemoteError(code, failure.message, {})
 }
 
 /**

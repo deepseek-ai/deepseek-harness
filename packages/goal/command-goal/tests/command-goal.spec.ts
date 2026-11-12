@@ -5,11 +5,12 @@ import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
-import type { GoalRef } from '@deepseek-ai/dsh-goal'
-import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { GoalError, type GoalRef } from '@deepseek-ai/dsh-goal'
+import SessionStore, { Session, type SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as commandGoal from '@deepseek-ai/dsh-command-goal'
 import { unsupportedModel, createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 interface Harness {
   readonly ctx: Context
@@ -21,7 +22,7 @@ interface Harness {
 /** Build a live idle agent accepted by the exact-identity goal service. */
 function stubAgent(ctx: Context, id: string): { agent: Agent; session: Session } {
   // Store-created: the command executor durably logs lifecycle events on it.
-  const session = ctx.sessions.create(SessionId(id))
+  const session = ctx.sessions.create(brandString<SessionId>(id))
   const inbox = createInboxStub()
   let status: AgentStatus = 'idle'
   const agent: Agent = {
@@ -236,6 +237,13 @@ describe('/goal human command', () => {
     const test = await harness()
     vi.spyOn(test.ctx.goals, 'get').mockImplementationOnce(() => { throw new Error('unexpected failure') })
     await expect(run(test)).rejects.toThrow('unexpected failure')
+  })
+
+  it('reports corrupt goal state instead of the generic invalid-command result', async () => {
+    const test = await harness()
+    const corrupt = new GoalError('goal replay failed at session event 3: invalid goal stream', 'GOAL_STATE_CORRUPT')
+    vi.spyOn(test.ctx.goals, 'get').mockImplementationOnce(() => { throw corrupt })
+    await expect(run(test)).rejects.toBe(corrupt)
   })
 })
 

@@ -4,10 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import COS from 'cos-nodejs-sdk-v5'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createDesktopCos, DESKTOP_COS_REGION } from '../scripts/desktop-cos.ts'
+import { createDesktopCos, DESKTOP_COS_REGION } from '@deepseek-ai/dsh-desktop-publisher/desktop-cos.ts'
 import { uploadDesktopRelease } from '../scripts/desktop-upload-run.ts'
 import type { DesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
-import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackRequest } from './cos-loopback.ts'
+// Repository-only fixture: deliberately excluded from the publisher runtime exports.
+import { answer, cosError, startCosLoopback, type CosLoopback, type CosLoopbackRequest } from '../../desktop-publisher/tests/cos-loopback.ts'
 
 const roots: string[] = []
 const loopbacks: CosLoopback[] = []
@@ -107,7 +108,7 @@ describe('release upload audit with the real COS SDK and an isolated loopback or
     expect(plan.sourceSha256['upload-target.ts']).toBe(createHash('sha256')
       .update(await readFile(join(import.meta.dirname, '../scripts/upload-target.ts'))).digest('hex'))
     expect(plan.sourceSha256['desktop-cos.ts']).toBe(createHash('sha256')
-      .update(await readFile(join(import.meta.dirname, '../scripts/desktop-cos.ts'))).digest('hex'))
+      .update(await readFile(join(import.meta.dirname, '../../desktop-publisher/src/desktop-cos.ts'))).digest('hex'))
     const result = await json(join(directory, 'result.json'))
     expect(result).toMatchObject({ success: true, stage: 'complete', confirmedPuts: 2, publicReadback: 'not-performed' })
     const events = await journal(join(directory, 'events.jsonl'))

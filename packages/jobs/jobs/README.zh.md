@@ -79,9 +79,9 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `JobRegistry` 服务及其约定 |
-| [`src/types.ts`](src/types.ts) | 共享词汇：`JobSpec`、`JobHandle`、`JobHooks`、`JobOutcome`、`JobEvent` 与读取结果 |
+| [`src/types.ts`](src/types.ts) | 纯类型 `/types` 入口：共享 job 类型和 `JobId` 再导出 |
+| [`src/brand.ts`](src/brand.ts) | `JobId` 定义与兼容构造函数 |
 | [`src/view.ts`](src/view.ts) | 客户端安全叶子：`JobView`、`JobChunk`、`JobStatus` 与可合并扩展的 `JobKindMap` |
-| [`src/brand.ts`](src/brand.ts) | 带类型标记的 `JobId` 标识符，无需 agent 依赖即可导入 |
 | [`src/error.ts`](src/error.ts) | `JobError` 及其封闭的 `JOB_ERROR_CODES` 列表 |
 | [`src/archive-admission.ts`](src/archive-admission.ts) | Workspace 注册表归档准入中的 `job` 族，由接缝构造函数为每个实现安装 |
 

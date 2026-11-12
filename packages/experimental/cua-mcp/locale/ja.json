@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Computer Use MCP サーバー",
+    "description": "cua-mcp プロファイルから Codex、Claude Code などの MCP クライアントに Computer Use を提供します。cua_run_code はデスクトップアプリに対して永続的なプログラムを実行し、cua_reset はそれをクリアします。"
+  }
+}

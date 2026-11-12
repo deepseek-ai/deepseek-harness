@@ -62,6 +62,7 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   edit: 'edit',
   apply_patch: 'edit',
   run_code: 'code',
+  cua_run_code: 'code',
   cordis_package_inspect: 'read',
   cordis_runtime_inspect: 'read',
   // The three run-control verbs take one package id and produce a receipt, so
@@ -202,21 +203,26 @@ function deriveAutoReviewDenial(block: ToolCallBlock): AutoReviewDenial | null {
 
 /**
  * Flatten a settled result's content blocks to display text: text blocks
- * verbatim, other block shapes as pretty JSON. Empty content on a failed call
- * falls back to the structured error's `name: code` line.
+ * verbatim, images through the supplied formatter, and other blocks
+ * as pretty JSON. Empty failure content falls back to the structured error's
+ * `name: code` line.
  * @param node - the settled result node.
+ * @param formatImage - Optional formatter for unvalidated image attachments; omission or undefined preserves image JSON.
  * @returns the flattened result text (may be empty).
  */
-export function resultText(node: ToolResultNode): string {
+export function resultText(node: ToolResultNode, formatImage?: (image: unknown) => string | undefined): string {
   const parts: string[] = []
   for (const block of node.content) {
     if (block.type === 'text') parts.push(block.text)
-    else parts.push(JSON.stringify(block, null, 2))
+    else {
+      const image = block.type === 'image' ? formatImage?.(block.attachment) : undefined
+      parts.push(image ?? JSON.stringify(block, null, 2))
+    }
   }
   if (parts.length === 0 && node.error !== undefined) {
     parts.push(`${node.error.name}: ${node.error.code}`)
   }
-  return parts.join('\n')
+  return parts.reduce((text, part, index) => text + (index === 0 || text.endsWith('\n') ? '' : '\n') + part, '')
 }
 
 function parseArgs(argsRaw: string): unknown {
@@ -367,9 +373,13 @@ export function formatToolBody(variant: ToolRowVariant, argsRaw: string): string
  * @param block - preparing call, dispatched call, or result from the snapshot.
  * @param cwd - session workspace root; workspace-rooted path summaries display relative to it.
  * @param home - host account home; a leftover POSIX home path displays as `~`.
+ * @param formatImage - Optional image formatter; omission preserves image JSON.
  * @returns the row model.
  */
-export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: string, home?: string): ToolRowModel {
+export function toolRowModel(
+  toolName: string, block: ToolCallBlock, cwd?: string, home?: string,
+  formatImage?: (image: unknown) => string | undefined,
+): ToolRowModel {
   const variant = classifyTool(toolName)
   const titleKey = toolTitleKey(toolName)
   const done = 'kind' in block
@@ -403,7 +413,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   // The empty string is "no text" for both derived result fields: a settled
   // call with blank content has nothing to expand, and a blank first line
   // would erase the collapsed error row's summary slot.
-  const output = done ? (resultText(block) || null) : null
+  const output = done ? (resultText(block, formatImage) || null) : null
   const errorSummary = state === 'error' && output !== null ? firstLine(output) : null
   const bodyRaw = argsRaw === '' ? null : argsRaw
   return {

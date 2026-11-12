@@ -2,12 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { MessageId } from '@deepseek-ai/dsh-llm/types'
 import SessionStore, { SessionLogOffset,
   SESSION_FORMAT_VERSION,
   Session,
-  SessionId,
+  type SessionId,
   type SessionEvent,
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
@@ -15,7 +16,7 @@ import SessionPersistence, {
   SessionAlreadyExistsError,
   SessionHandleClosedError,
   SessionPersistenceNotFoundError,
-  SessionPersistenceRevision,
+  type SessionPersistenceRevision,
   SessionReadOnlyError,
   type SessionAccess,
   type SessionHandle,
@@ -85,7 +86,7 @@ export function messageFixture(
   rawId: string,
   options: { readonly createdAt?: number; readonly cwd?: string } = {},
 ): MessageFixture {
-  const id = SessionId(rawId)
+  const id = brandString<SessionId>(rawId)
   const header: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id,
@@ -139,13 +140,13 @@ class TestPersistence extends SessionPersistence {
     await this.onStat?.()
     const stored = this.durable.get(id)
     if (stored === undefined) return undefined
-    return { header: stored.meta, revision: SessionPersistenceRevision(`test:${id}:${stored.events.length}`) }
+    return { header: stored.meta, revision: brandString<SessionPersistenceRevision>(`test:${id}:${stored.events.length}`) }
   }
 
   async list(): Promise<SessionPersistenceSnapshot[]> {
     return [...this.durable.entries()].map(([id, stored]) => ({
       header: stored.meta,
-      revision: SessionPersistenceRevision(`test:${id}:${stored.events.length}`),
+      revision: brandString<SessionPersistenceRevision>(`test:${id}:${stored.events.length}`),
     }))
   }
 

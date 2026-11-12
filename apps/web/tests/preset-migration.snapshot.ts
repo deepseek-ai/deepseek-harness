@@ -5,13 +5,14 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { zstdCompressSync, zstdDecompressSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
-import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionId } from '@deepseek-ai/dsh-session'
 import { generationLogPath } from '../../../packages/session/session-persistence-jsonl/src/format.ts'
 import { scanZstdFrames } from '../../../packages/session/session-persistence-jsonl/src/zstd.ts'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { normalizeSessionSnapshots } from '@deepseek-ai/dsh-session-snapshot'
 import { launchWebScaffold, webSnapshotMode } from './scaffold.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const childFixturePath = fileURLToPath(new URL('../../../snapshots/web/preset-migration/session.1.v2.jsonl', import.meta.url))
 const fixturePath = fileURLToPath(new URL('../../../snapshots/web/preset-migration/session.v2.jsonl', import.meta.url))
@@ -20,7 +21,7 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
   it.each([false, true])('resumes code as PTC (selection events=%s)', async (withSelections) => {
     const scaffold = await launchWebScaffold()
     try {
-      const id = SessionId('preset-migration')
+      const id = brandString<SessionId>('preset-migration')
       const fixture = await readFile(fixturePath, 'utf8')
       const [fixtureHeader, ...fixtureEvents] = fixture.trimEnd().split('\n')
         .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
@@ -33,8 +34,8 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
       await mkdir(dirname(predecessor), { recursive: true })
       await writeFile(predecessor, source)
 
-      const childId = SessionId('preset-migration-child')
-      const brokenId = SessionId('preset-migration-broken-child')
+      const childId = brandString<SessionId>('preset-migration-child')
+      const brokenId = brandString<SessionId>('preset-migration-broken-child')
       const childFixture = (await readFile(childFixturePath, 'utf8')).trimEnd().split('\n')
         .map((line): Record<string, unknown> => JSON.parse(line) as Record<string, unknown>)
       const childRows: Record<string, unknown>[] = childFixture.slice(1).map((row, seq) => ({ ...row, seq, time: seq + 3 }))
@@ -51,7 +52,7 @@ describe.skipIf(webSnapshotMode() === 'record')('historical preset restoration t
           data: { turn: 1, reason: { kind: 'completed' } } }) + '\n')),
       ]))
       const brokenSource = await readFile(brokenPath)
-      const corruptHeaderId = SessionId('preset-migration-corrupt-header')
+      const corruptHeaderId = brandString<SessionId>('preset-migration-corrupt-header')
       const corruptHeaderPath = generationLogPath(scaffold.persistenceRoot, scaffold.workspaceCwd, corruptHeaderId, 2, 'zstd')
       const corruptHeaderSource = Buffer.from('invalid Zstandard header frame')
       await mkdir(dirname(corruptHeaderPath), { recursive: true })

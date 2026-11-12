@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import { CommandId } from '@deepseek-ai/dsh-commands/brand'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { CommandId } from '@deepseek-ai/dsh-commands/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { IconUsersOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { TeamCommandRow, type TeamCommandRowProps } from '../src/client/TeamCommandRow.tsx'
@@ -11,7 +12,7 @@ afterEach(cleanup)
 
 type Node = TeamCommandRowProps['node']
 function command(args: string | null, outcome: Node['outcome']): Node {
-  return { kind: 'command', seq: 1, time: 1, commandId: CommandId('team-command'), name: 'team', args, outcome }
+  return { kind: 'command', seq: 1, time: 1, commandId: brandString<CommandId>('team-command'), name: 'team', args, outcome }
 }
 
 describe.each([

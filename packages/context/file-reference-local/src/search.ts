@@ -3,7 +3,7 @@
  * only: selected values remain ordinary prompt text and file contents stay
  * behind the model-facing `read` tool.
  *
- * @module @deepseek-ai/dsh-file-reference-local/search
+ * @module @deepseek-ai/dsh-file-reference-local/src/search
  */
 
 import { lstat, readdir } from 'node:fs/promises'

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
-import { SessionId } from '@deepseek-ai/dsh-session/types'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { LocalizedText } from '@deepseek-ai/dsh-package-manifest'
@@ -13,7 +14,7 @@ import { PluginCardBody, type CatalogDetails, type PluginCardProps } from '../sr
 import { de, en, es, fr, ja, pt, ru, zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
-const callId = ToolCallId('call-plugin-1')
+const callId = brandString<ToolCallId>('call-plugin-1')
 const ACTION = 'enable_official_plugin'
 type Act = (verb: string, payload?: ActionCardFields) => Promise<ActionCardResult | undefined>
 type Describe = PluginCardProps['describe']
@@ -29,7 +30,7 @@ function catalog() {
 function props(decision?: { phase: string; data?: ActionCardFields }, details: RecommendationDetails = available, store = catalog()) {
   return {
     proposal, decision: decision === undefined ? undefined : { callId, action: ACTION, ...decision },
-    sessionId: SessionId('session-1'), summary: <strong>{proposal.title}</strong>, Folded: FoldedText,
+    sessionId: brandString<SessionId>('session-1'), summary: <strong>{proposal.title}</strong>, Folded: FoldedText,
     act: vi.fn<Act>(async () => ({ status: 'settled', decision: { callId, action: ACTION, phase: 'enabled' } })),
     catalog: store, describe: vi.fn<Describe>(async () => details), openDetails: vi.fn<(name: string) => void>(),
     resolveText: (text: LocalizedText) => typeof text === 'string' ? text : text.zh ?? text.en,

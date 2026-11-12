@@ -208,14 +208,41 @@ final class AXAccess {
         guard error == .success else { throw failure(error, "read writability of \(name)") }
         return value
     }
+    /// Observation keeps unsupported writability unknown; mutation callers use strict writable checks.
+    static func observationWritability(role: String, probe: (String, Bool) throws -> Bool?) rethrows -> (value: Bool?, selection: Bool?) {
+        let value = AXTextNode.valueRoles.contains(role) ? try probe("AXValue", true) : nil
+        let selection = AXTextNode.textRoles.contains(role) ? try probe("AXSelectedTextRange", true) : nil
+        return (value, selection)
+    }
     func requireEnabled(_ element: AXUIElement) throws {
         if try boolean(element, "AXEnabled") == false { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility element is disabled") }
     }
     func perform(_ element: AXUIElement, _ action: String) throws {
         try requireEnabled(element)
-        try prepare(element)
-        let error = AXUIElementPerformAction(element, action as CFString)
-        guard error == .success else { throw failure(error, "perform \(action)") }
+        func dispatch() throws -> AXError {
+            try prepare(element)
+            return AXUIElementPerformAction(element, action as CFString)
+        }
+        let result: AXError
+        if action == "AXZoomWindow" {
+            let role = try? string(element, "AXRole")
+            let window = role == "AXWindow" ? element : try? self.element(element, "AXWindow")
+            result = try Self.performZoom(readSize: {
+                guard let window else { return nil }
+                return Self.dimensions(try? self.attribute(window, "AXSize"))
+            }, dispatch: dispatch)
+        } else {
+            result = try dispatch()
+        }
+        guard result == .success else { throw failure(result, "perform \(action)") }
+    }
+    /// Dispatch once. Only an observed resize of the same window can override attributeUnsupported.
+    static func performZoom(readSize: () -> CGSize?, dispatch: () throws -> AXError) rethrows -> AXError {
+        let before = readSize()
+        let result = try dispatch()
+        guard result == .attributeUnsupported, let before, before.width > 0, before.height > 0,
+              let after = readSize(), after.width > 0, after.height > 0, before != after else { return result }
+        return .success
     }
     func setAttribute(_ element: AXUIElement, _ attributeName: String, _ value: JSONValue?, expectedRole: String? = nil) throws {
         guard let value, value != .null else {
@@ -439,15 +466,18 @@ final class AXAccess {
         return nil
     }
     private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
-        guard let position, let size else { return nil }
-        guard CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
-        let positionValue = unsafeDowncast(position, to: AXValue.self)
-        let sizeValue = unsafeDowncast(size, to: AXValue.self)
+        guard let position, CFGetTypeID(position) == AXValueGetTypeID(), let dimensions = Self.dimensions(size) else { return nil }
         var point = CGPoint.zero
-        var dimensions = CGSize.zero
-        guard AXValueGetValue(positionValue, .cgPoint, &point), AXValueGetValue(sizeValue, .cgSize, &dimensions),
-              point.x.isFinite, point.y.isFinite, dimensions.width.isFinite, dimensions.height.isFinite else { return nil }
+        guard AXValueGetValue(unsafeDowncast(position, to: AXValue.self), .cgPoint, &point),
+              point.x.isFinite, point.y.isFinite else { return nil }
         return WindowBounds(x: point.x, y: point.y, width: dimensions.width, height: dimensions.height)
+    }
+    private static func dimensions(_ size: CFTypeRef?) -> CGSize? {
+        guard let size, CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+        var dimensions = CGSize.zero
+        guard AXValueGetValue(unsafeDowncast(size, to: AXValue.self), .cgSize, &dimensions),
+              dimensions.width.isFinite, dimensions.height.isFinite else { return nil }
+        return dimensions
     }
     private func controlValue(_ raw: CFTypeRef?) -> String? {
         guard let value = raw else { return nil }
@@ -590,10 +620,11 @@ final class AXAccess {
             let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
             let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
             let actionNames = try self.actions(element)
-            let valueWritable = AXTextNode.valueRoles.contains(role) ? try writable(element, "AXValue") : nil
+            let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
+            let valueWritable = writability.value
             let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
             let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = AXTextNode.textRoles.contains(role) ? try writable(element, "AXSelectedTextRange") : nil
+            let selectionWritable = writability.selection
             let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
             let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
             let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")

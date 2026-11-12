@@ -2,7 +2,7 @@
 import type { ModuleLoaderV2 } from '@deepseek-ai/cordis-plugin-loader'
 import { boot } from '@deepseek-ai/dsh-app-boot'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionSeq, type Session, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SqliteSessionQuery from '@deepseek-ai/dsh-session-query-sqlite'
 import * as Official from '@deepseek-ai/dsh-llm-deepseek-api-key'
@@ -17,6 +17,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import Translator, { type Config } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 /** Provider-visible request, without credential values. */
 export interface NativeRequest {
@@ -80,7 +81,7 @@ export async function paidFixture(cleanups: Array<() => Promise<void>>, options:
     else process.env.DSH_HOME = previousHome
   })
   const requests: NativeRequest[] = [], errors: unknown[] = [], handlers = new Set<Promise<void>>()
-  let auditId = SessionId('paid-translation')
+  let auditId = brandString<SessionId>('paid-translation')
   const server = createServer((request, response) => {
     const work = (async () => {
       if (request.method === 'GET' && request.url === '/models') {

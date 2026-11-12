@@ -39,6 +39,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-renderer/`](ui-renderer/README.md) | Binds slot data to React and mounts the assembled application | `ctx.uiRenderer` |
 | [`ui-slots/`](ui-slots/README.md) | Defines typed extension Slots and reusable Component Factories | — |
 | [`ui-session/`](ui-session/README.md) | Adapts Session Controller state into standard Slot sources and hooks | — |
+| [`ui-session-status/`](ui-session-status/README.md) | Keeps reading reminders in Host memory and combines running state, the effective pending interaction, and shared reminders into the Session status table behind `useSessionStatus` | `ctx.sessionStatus` / `ctx.uiSession.sessionStatus` |
 | [`ui-theme/`](ui-theme/README.md) | Applies the selected color theme | — |
 | [`ui-primitives/`](ui-primitives/README.md) | Provides shared React controls, icons, and content renderers | — |
 | [`ui-attachment/`](ui-attachment/README.md) | Registers composer and message-image attachment presentation | — |

@@ -6,7 +6,7 @@ import type { PeerId, PeerScope } from '@deepseek-ai/dsh-typert-protocol'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DynamicCordisRunnerService from '../src/index.ts'
-import { CordisInspectRegistryService } from '../src/inspect-registry.ts'
+import { CordisInspectRegistryService, InspectError } from '../src/inspect-registry.ts'
 import type { CordisInspectProviderManifest, CordisInspectQueryRequest, CordisInspectRequestId } from '../src/types.ts'
 import { AGENT_A, AGENT_B } from './helpers.ts'
 
@@ -20,7 +20,7 @@ const manifest: CordisInspectProviderManifest = {
     outputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
   }],
 }
-const timeout = 'Error: Service.listService: Client inspect query Service.listService timed out after 100ms. '
+const timeout = 'InspectError: Service.listService: Client inspect query Service.listService timed out after 100ms. '
 const failure = { ok: false, reason: 'provider-error', message: 'page failed' } as const
 
 let ctx: Context
@@ -67,7 +67,11 @@ function start() {
   let settled = false
   const result = registry.query('client', 'Service', 'listService', { service: 'remote' }, AGENT_A, controller.signal).then(
     (value) => { settled = true; return { value } },
-    (error: unknown) => { settled = true; return { error: String(error) } },
+    (error: unknown) => {
+      settled = true
+      const code = (error as { code?: unknown }).code
+      return { error: String(error), ...typeof code === 'string' ? { code } : {} }
+    },
   )
   results.push(result)
   return { controller, result, request: requests.at(-1)!, settled: () => settled }
@@ -116,7 +120,8 @@ describe('Client inspect completion', () => {
     expect(requests).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
     expect(await query.result).toEqual({
-      error: 'Error: Client inspect query Service.listService has no connected Harness page. Open or reconnect the Harness page, then retry.',
+      error: 'InspectError: Client inspect query Service.listService has no connected Harness page. Open or reconnect the Harness page, then retry.',
+      code: 'INSPECT_CLIENT_UNAVAILABLE',
     })
     expect(registry.list()).toHaveLength(1)
   })
@@ -130,7 +135,7 @@ describe('Client inspect completion', () => {
     await vi.advanceTimersByTimeAsync(99)
     expect(query.settled()).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
-    expect(await query.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.' })
+    expect(await query.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.', code: 'INSPECT_TIMEOUT' })
     expect(answer(query)).toEqual({ accepted: false })
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -143,7 +148,7 @@ describe('Client inspect completion', () => {
     await vi.advanceTimersByTimeAsync(99)
     expect(query.settled()).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
-    expect(await query.result).toEqual({ error: timeout + 'Client failure: provider-error: no catalogued Service named "remote"' })
+    expect(await query.result).toEqual({ error: timeout + 'Client failure: provider-error: no catalogued Service named "remote"', code: 'INSPECT_TIMEOUT' })
     expect(resolved).toEqual([query.request.requestId])
     expect(answer(query)).toEqual({ accepted: false })
     expect(vi.getTimerCount()).toBe(0)
@@ -165,7 +170,7 @@ describe('Client inspect completion', () => {
     registry.resolveClientQuery(AGENT_A, query.request.requestId, failure)
     registry.resolveClientQuery(AGENT_A, query.request.requestId, { ...failure, message: 'second failure' })
     await vi.advanceTimersByTimeAsync(100)
-    expect(await query.result).toEqual({ error: timeout + 'Client failure: provider-error: page failed' })
+    expect(await query.result).toEqual({ error: timeout + 'Client failure: provider-error: page failed', code: 'INSPECT_TIMEOUT' })
   })
 
   it('retains output validation errors for timeout diagnostics', async () => {
@@ -187,7 +192,7 @@ describe('Client inspect completion', () => {
     const query = start()
     expect(registry.resolveClientQuery(AGENT_B, query.request.requestId, failure)).toEqual({ accepted: false })
     await vi.advanceTimersByTimeAsync(100)
-    expect(await query.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.' })
+    expect(await query.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.', code: 'INSPECT_TIMEOUT' })
   })
 
   it('ends unanswered requests and accepts a fresh retry after manifest publication', async () => {
@@ -195,7 +200,7 @@ describe('Client inspect completion', () => {
     registry.syncClientManifest([manifest])
     expect(requests).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(100)
-    expect(await first.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.' })
+    expect(await first.result).toEqual({ error: timeout + 'Open or reconnect the Harness page, then retry.', code: 'INSPECT_TIMEOUT' })
     const retry = start()
     expect(retry.request.requestId).not.toBe(first.request.requestId)
     expect(answer(first)).toEqual({ accepted: false })
@@ -208,7 +213,7 @@ describe('Client inspect completion', () => {
     const query = start()
     const remove = vi.spyOn(query.controller.signal, 'removeEventListener')
     query.controller.abort()
-    expect(await query.result).toEqual({ error: 'Error: Service.listService: Client inspect query Service.listService was cancelled' })
+    expect(await query.result).toEqual({ error: 'AbortError: This operation was aborted' })
     expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
     expect(vi.getTimerCount()).toBe(0)
     expect(answer(query)).toEqual({ accepted: false })
@@ -229,7 +234,7 @@ describe('Client inspect completion', () => {
     const second = start()
     await fiber.dispose()
     for (const query of [first, second]) {
-      expect(await query.result).toEqual({ error: 'Error: Service.listService: Client inspect registry was disposed' })
+      expect(await query.result).toEqual({ error: 'InspectError: Service.listService: Client inspect registry was disposed', code: 'INSPECT_CLIENT_UNAVAILABLE' })
       expect(answer(query)).toEqual({ accepted: false })
     }
     expect(resolved).toEqual([first.request.requestId, second.request.requestId])
@@ -259,6 +264,53 @@ describe('Client inspect completion', () => {
       .resolves.toEqual({ name: 'local' })
     expect(requests).toEqual([])
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('Inspect query failure codes', () => {
+  const signal = new AbortController().signal
+  const host = (provider: string, method: string, input: unknown = {}) =>
+    registry.query('host', provider, method, input as never, AGENT_A, signal)
+
+  it('classifies unknown names, schema violations, and Host provider failures', async () => {
+    let result: unknown = {}
+    const providerFailure = new Error('provider exploded')
+    disposers.push(registry.register({ manifest, query: async () => {
+      if (result === providerFailure) throw providerFailure
+      return result as never
+    } }))
+    await expect(host('Missing', 'listService')).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_PROVIDER_NOT_FOUND' })
+    await expect(registry.query('client', 'Missing', 'listService', {}, AGENT_A, signal))
+      .rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_PROVIDER_NOT_FOUND' })
+    await expect(host('Service', 'missing')).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_METHOD_NOT_FOUND' })
+    await expect(host('Service', 'listService', { extra: true })).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_INVALID_INPUT' })
+    await expect(host('Service', 'listService')).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_INVALID_OUTPUT' })
+    result = undefined
+    await expect(host('Service', 'listService')).rejects.toMatchObject({ name: 'InspectError', code: 'INSPECT_INVALID_OUTPUT' })
+    result = providerFailure
+    await expect(host('Service', 'listService')).rejects.toMatchObject({
+      name: 'InspectError', code: 'INSPECT_FAILED', message: 'Host Cordis inspect Service.listService failed: provider exploded', cause: providerFailure,
+    })
+  })
+
+  it('keeps a Host provider HarnessError and its cancellation, and still classifies a distinct late failure', async () => {
+    const coded = new InspectError('unknown entry id "x"', 'INSPECT_TARGET_NOT_FOUND')
+    const reason = new Error('caller cancelled')
+    const late = new Error('cleanup failed')
+    let controller = new AbortController()
+    let thrown: unknown = coded
+    disposers.push(registry.register({ manifest, query: async () => {
+      if (thrown !== coded) controller.abort(reason)
+      throw thrown
+    } }))
+    await expect(host('Service', 'listService')).rejects.toBe(coded)
+    thrown = reason
+    await expect(registry.query('host', 'Service', 'listService', {}, AGENT_A, controller.signal)).rejects.toBe(reason)
+    controller = new AbortController()
+    thrown = late
+    await expect(registry.query('host', 'Service', 'listService', {}, AGENT_A, controller.signal)).rejects.toMatchObject({
+      name: 'InspectError', code: 'INSPECT_FAILED', cause: late,
+    })
   })
 })
 

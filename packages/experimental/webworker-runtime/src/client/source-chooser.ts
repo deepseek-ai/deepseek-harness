@@ -113,11 +113,23 @@ const CHOOSER_STYLE = `
     font-size: 14px;
     line-height: 24px;
   }
+  [data-preview-source-footer] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 16px;
+    margin: 24px 0 0;
+  }
+  [data-preview-source-link] {
+    color: #61666b;
+    text-underline-offset: 3px;
+  }
+  [data-preview-source-link]:hover { color: #0f1115; }
   [data-preview-source-submit] {
     display: block;
     min-width: 120px;
     height: 36px;
-    margin: 24px 0 0 auto;
+    margin: 0 0 0 auto;
     padding: 0 14px;
     border: 0;
     border-radius: 18px;
@@ -148,6 +160,8 @@ const CHOOSER_STYLE = `
     [data-preview-source-option]:has(input:checked) { background: rgb(255 255 255 / 8%); }
     [data-preview-source-option]:has(input:checked) { border-color: rgb(255 255 255 / 12%); }
     [data-preview-source-option] input { accent-color: #f9fafb; }
+    [data-preview-source-link] { color: #cfd3d6; }
+    [data-preview-source-link]:hover { color: #f9fafb; }
     [data-preview-source-submit] { color: #0f1115; background: #f9fafb; }
     [data-preview-source-submit]:hover:not(:disabled) { background: #ebeef2; }
     [data-preview-source-submit]:focus-visible { outline-color: rgb(255 255 255 / 20%); }
@@ -243,7 +257,10 @@ export async function choosePreviewSource(manifestUrl: URL): Promise<readonly UR
         <legend>Filesystem source</legend>
         ${choices.map(choice => optionMarkup(choice, selected)).join('')}
       </fieldset>
-      <button data-preview-source-submit type="submit">Start Preview</button>
+      <div data-preview-source-footer>
+        ${manifest.links.map(link => `<a data-preview-source-link href="${escapeMarkup(new URL(link.href, manifestUrl).href)}">${escapeMarkup(link.label)}</a>`).join('')}
+        <button data-preview-source-submit type="submit">Start Preview</button>
+      </div>
     </form>`
   root.prepend(chooser)
   const form = chooser.querySelector<HTMLFormElement>('[data-preview-source-card]')

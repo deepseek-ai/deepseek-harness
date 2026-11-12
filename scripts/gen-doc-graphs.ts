@@ -269,6 +269,11 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The native provider owns application consent and cancellation; the optional Client page queries and changes those decisions through its Remote.',
   },
   {
+    key: 'cuaPrograms', pkg: 'cua', title: 'Computer Use program environments',
+    mode: 'core', consumers: ['cua-mcp'],
+    note: 'The provider owns the retained cua_run_code runtime; a host without a model releases one Agent\'s environment and reads the configured screenshot request target through it.',
+  },
+  {
     key: 'officeKit', pkg: 'office-kit', title: 'Office rendering, conversion, and recalculation',
     mode: 'core', consumers: ['client-ui-sidebar-documentpreview', 'tool-office'],
     note: 'Authorized Office bytes are rendered as PDFs or images, converted, or recalculated on the Host using the declared native target engine, or Node WASM when no native target is declared.',
@@ -346,6 +351,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Experimental transcription Remote',
     mode: 'core',
     note: 'Validates bounded browser audio before provider dispatch.',
+  },
+  {
+    key: 'sessionStatus',
+    pkg: 'client-ui-session-status',
+    title: 'Host Session reading records',
+    mode: 'core',
+    consumers: ['client-ui-session-status'],
+    note: 'Stores owner reading acknowledgements and manual unread marks outside Session history; its Client half follows committed changes over Remote, acknowledges loaded completions, and serves the Session status table.',
   },
   {
     key: 'sessionController',
@@ -809,7 +822,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'ptc-runtime',
     title: 'PTC execution seam',
     mode: 'seam',
-    implementations: ['ptc-runtime-node', 'experimental-ptc-runtime-python'],
+    implementations: ['ptc-runtime-node'],
     consumers: ['tool-executor-ptc', 'workflow-ptc'],
     note: 'Runs programs against host-provided async bindings; tool-executor-ptc owns PTC presentation and workflow-ptc owns workflow orchestration.',
   },

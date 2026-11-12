@@ -13,7 +13,8 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import ComputerUseRegistry from '@deepseek-ai/dsh-computer-use'
 import FileSystem from '@deepseek-ai/dsh-fs-local'
-import LlmRuntime, { LlmAdapter, ToolCallId, createUserMessage, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import LlmRuntime, { LlmAdapter, type ToolCallId, createUserMessage, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
 import { inlineImages, prepareImages } from '@deepseek-ai/dsh-llm-deepseek/src/images.ts'
@@ -22,7 +23,7 @@ import { resolveRequestImageTarget } from '@deepseek-ai/dsh-llm-deepseek/src/req
 import NodePtcRuntime from '@deepseek-ai/dsh-ptc-runtime-node'
 import Sandbox from '@deepseek-ai/dsh-sandbox-local'
 import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubprocessLocal from '@deepseek-ai/dsh-subprocess-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -108,9 +109,9 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
       this.requests.push(options)
       if (this.requests.length === 1) {
         const code = 'const app = await tools.cua({ method: "getApp", params: { selector: "9" } }); '
-          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.appHandle, windowId: 7 } }); '
-          + 'return { mimeType: result.mimeType, encodedLength: result.data.length };'
-        const call = { type: 'tool-call' as const, id: ToolCallId('large-image-ptc'), name: 'run_code',
+          + 'const result = await tools.cua({ method: "screenshot", params: { appHandle: app.appHandle, windowId: "7" } }); '
+          + 'inspect({ path: result.path, width: result.width, height: result.height }, result);'
+        const call = { type: 'tool-call' as const, id: brandString<ToolCallId>('large-image-ptc'), name: 'run_code',
           arguments: JSON.stringify({ code, description: 'Inspect the generated large screenshot' }),
         }
         yield { type: 'block-start', index: 0, blockType: 'tool-call' }
@@ -138,7 +139,7 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   const saveImages = vi.spyOn(context.attachments, 'saveImages')
   const model = new VisionModel()
   context.llm.registerAdapter(['large-image-fixture'], model)
-  const handle = await context.agents.create({ sessionId: SessionId('large-image-ptc'), meta: { cwd: root },
+  const handle = await context.agents.create({ sessionId: brandString<SessionId>('large-image-ptc'), meta: { cwd: root },
     agentOptions: { provider: 'large-image-fixture', model: MODEL },
   })
   const idle: PromiseWithResolvers<void> = Promise.withResolvers()
@@ -157,26 +158,26 @@ it.skipIf(process.platform === 'win32')('delivers a valid PNG larger than 4 MiB 
   const result = messages.find(message => message.role === 'tool' && message.toolCallId === 'large-image-ptc')
   if (result?.role !== 'tool') throw new Error('The PTC result was not recorded')
   expect(result.isError, JSON.stringify(result.content)).toBe(false)
-  expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
-    .toContain(String(model.requestImages[0]?.toString('base64').length))
   const nextImages = model.requests[1]?.messages.flatMap(message => message.content).filter(block => block.type === 'image')
   expect(nextImages).toHaveLength(1)
   const image = nextImages?.[0]
   if (image === undefined) throw new Error('The next model request is missing the PTC screenshot')
-  expect(image.attachment).toMatchObject({ width: WIDTH, height: HEIGHT })
+  expect(image.attachment.width).toBeGreaterThan(0)
+  expect(image.attachment.width).toBeLessThan(WIDTH)
+  expect(result.content.filter(block => block.type === 'text').map(block => block.text).join('\n'))
+    .toContain(`width: ${image.attachment.width}`)
   const stored = await context.attachments.readImage(image.attachment)
   const path = context.attachments.imageHostPath(image.attachment)
   if (path === undefined) throw new Error('The real local attachment has no disk path')
   expect(await readFile(path)).toEqual(Buffer.from(stored.data))
   expect(stored.data.byteLength).toBe(image.attachment.bytes)
   const decodedStored = await sharp(stored.data).raw().toBuffer({ resolveWithObject: true })
-  expect(decodedStored.info).toMatchObject({ width: WIDTH, height: HEIGHT, channels: 3 })
+  expect(decodedStored.info).toMatchObject({ width: image.attachment.width, height: image.attachment.height, channels: 3 })
   const dispatches = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
   expect(dispatches).toHaveLength(2)
   expect(dispatches.every(event => event.data.name === 'cua' && !event.data.isError)).toBe(true)
   expect(dispatches[1]?.data.content.find(block => block.type === 'image')?.attachment).toEqual(image.attachment)
-  expect(messages.filter(message => message.source.kind === 'ptc-mode').flatMap(message => message.content))
-    .toContainEqual({ type: 'image', attachment: image.attachment })
+  expect(result.content).toContainEqual({ type: 'image', attachment: image.attachment })
   expect(JSON.stringify(model.requests[1]?.messages)).not.toContain(source.toString('base64'))
 
   expect(model.requestImages).toHaveLength(1)

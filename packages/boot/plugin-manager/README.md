@@ -152,7 +152,7 @@ The `@deepseek-ai/dsh-plugin-manager/diagnostic` entry supplies Desktop Host and
 
 #### What the model sees
 
-The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents.
+The [`plugin_manager` tool](../../../docs/tool-catalog.md#deepseek-aidsh-plugin-manager) lists plugin entries and bundles and performs profile-wide changes. Its results include saved-state changes, application status and package diagnostics. A change result that is not plainly applied adds `nextStep`, a sentence derived from its application status, refusal code, package-manager failure kind or restart reason that says what the model does next or tells the user. Management operations do not inject messages into Agents. A missing or unbounded argument fails as `ToolArgsError` with `INVALID_ARGS`. A failure before a change starts or while reading the profile throws `PluginManagerError`: `PLUGIN_MANAGER_PROFILE_READ_FAILED` when a profile or installation manifest or the profile patches cannot be read, and `PLUGIN_MANAGER_UNAVAILABLE` after the manager is disposed; another writer holding the profile lock past `lockWaitMs` fails with the atomic-write `FileLockError` `FILE_LOCK_TIMEOUT`; other operation failures stay in the change result.
 
 #### Token effect
 

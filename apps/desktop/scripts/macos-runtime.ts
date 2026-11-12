@@ -16,7 +16,7 @@ const MACH_O_MAGICS = new Set(['cafebabe', 'cafebabf', 'cefaedfe', 'cffaedfe', '
  * `native/bin/darwin-<arch>/<generation>/<name>.app`. Other bundles, such as LibreOffice's unsigned application,
  * are not matched and keep per-file runtime signing.
  */
-const CUA_HELPER_BUNDLE = /^(node_modules\/@deepseek-ai\/dsh-experimental-cua-macos\/native\/bin\/darwin-[^/]+\/[^/]+\/[^/]+\.app)\//u
+const CUA_HELPER_BUNDLE = /^(node_modules\/@deepseek-ai\/dsh-cua-macos\/native\/bin\/darwin-[^/]+\/[^/]+\/[^/]+\.app)\//u
 
 function magic(path: string): string {
   const descriptor = openSync(path, 'r')

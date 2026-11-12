@@ -42,7 +42,7 @@ import type { TrajectoryTurnModel } from './layout.ts'
 import { trajectoryPreviewText } from './trajectory-preview.ts'
 import type { TrajectoryKey, TrajectoryTranslate } from './locales.ts'
 import { COMPACTION_INTERRUPTED_ERROR } from './copy-codes.ts'
-import { codeProgram, PTC_TOOL_NAME, type CodeProgram } from './code-program.ts'
+import { codeProgram, isProgramTool, type CodeProgram } from './code-program.ts'
 import css from './TrajectoryTable.module.css'
 
 const BOTTOM_FOLLOW_THRESHOLD_PX = 2
@@ -1030,7 +1030,7 @@ function detailTabs(record: TableRecord): readonly DetailTabItem[] {
 function recordDisplayText(cell: TrajectoryCellProps, t: TrajectoryTranslate): string {
   if (isToolCallOnly(cell, t)) return ''
   const program = codeProgram(cell)
-  if (program !== undefined) return `${PTC_TOOL_NAME} · ${program.description.replace(/\s+/g, ' ')}`
+  if (program !== undefined) return `${cell.toolName} · ${program.description.replace(/\s+/g, ' ')}`
   if (cell.previewMarkdown !== undefined) {
     const preview = trajectoryPreviewText(cell.previewMarkdown)
     if (cell.text === '') return preview
@@ -1056,7 +1056,7 @@ function toolCallTextParts(
   text: string,
 ): ToolCallTextParts | undefined {
   if (cell.kind !== 'tool' && cell.kind !== 'subtool') return undefined
-  const program = cell.toolName === PTC_TOOL_NAME
+  const program = isProgramTool(cell.toolName)
   const separator = text.indexOf(' · ')
   if (separator === -1) return { name: text, program }
   return {

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { DynamicCordisLivePackage } from '@deepseek-ai/dsh-cordis-client-runner/client'
 import { PartialArguments } from '@deepseek-ai/dsh-util-values'
 import type {
@@ -9,9 +10,9 @@ import { cordisDefineCard, cordisRunCard } from '../src/client/card-model.ts'
 import { CordisRunCardRegistry, cordisToolViewKey } from '../src/client/run-card-index.ts'
 import { cordisVisibleStatus } from '../src/client/status.ts'
 
-const PLUGIN = 'clock-1' as CordisDynamicPluginId
-const PACKAGE = 'pkg-1' as CordisDynamicPackageId
-const RUN = 'run-1' as CordisDynamicPluginRunId
+const PLUGIN = brandString<CordisDynamicPluginId>('clock-1')
+const PACKAGE = brandString<CordisDynamicPackageId>('pkg-1')
+const RUN = brandString<CordisDynamicPluginRunId>('run-1')
 
 const row = (client: boolean): DynamicCordisInventoryRow => ({
   pluginId: PLUGIN,
@@ -108,7 +109,7 @@ describe('Cordis run-card ownership', () => {
     const key = cordisToolViewKey(PLUGIN, PACKAGE)
 
     store.observe({ key, callId: 'new', seq: 20, pluginRunId: RUN })
-    store.observe({ key, callId: 'old', seq: 10, pluginRunId: 'run-0' as CordisDynamicPluginRunId })
+    store.observe({ key, callId: 'old', seq: 10, pluginRunId: brandString<CordisDynamicPluginRunId>('run-0') })
 
     expect(store.getSnapshot().get(key)?.callId).toBe('new')
     expect(changed).toHaveBeenCalledTimes(1)
