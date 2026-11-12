@@ -92,7 +92,7 @@ export function apply(ctx: ClientContext): void {
     }, PanelIcon)
     yield ctx.slots.registerFactory({
       name: 'sidebar.panel.trailing', scope: 'root',
-      children: { 'sidebar.panellist.trailing': { kind: 'list', scope: 'root' } },
+      children: { 'sidebar.panellist.trailing': { kind: 'list', scope: 'root', inline: true } },
     }, PanelTrailing)
     yield ctx.slots.register({
       name: 'sidebar',

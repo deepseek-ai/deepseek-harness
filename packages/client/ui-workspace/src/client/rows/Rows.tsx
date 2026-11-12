@@ -55,7 +55,6 @@ function displayTitle(node: SessionNode, t: RowTranslate): string {
   return node.blank ? t('session.new') : (node.title || t('session.untitled'))
 }
 
-
 /** Localized compact relative time ("刚刚"/"5分钟" in zh, "now"/"5min" in en). */
 function timeLabel(updatedAt: number, now: number, t: RowTranslate): string {
   const { unit, n } = relativeTime(updatedAt, now)

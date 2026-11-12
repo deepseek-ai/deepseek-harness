@@ -29,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
     'sidebar.panel.trailing': {
       scope: 'root'
       props: SidebarPanelTrailingOwnerProps & { readonly id: string }
-      children: { 'sidebar.panellist.trailing': { kind: 'list'; scope: 'root' } }
+      children: { 'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; inline: true } }
     }
   }
   interface SlotMap {
@@ -52,12 +52,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
     /**
-     * Non-interactive content at the end of a panel's navigation row, registered with the panel's id, such as a count.
-     * The expanded row shows it at its trailing edge and hides it while the row's unpin action shows; the collapsed rail
-     * shows it over the icon's top trailing corner. Its text describes the row's button for assistive technology, so
-     * decorative parts are `aria-hidden`.
+     * Non-interactive inline content at the end of a panel's navigation row, registered with the panel's id, such as a
+     * count. The expanded row lays it out after its title, before the space its unpin action takes, so a row without
+     * content keeps its full title width; the collapsed rail shows it over the icon's top trailing corner. It renders
+     * inside the row's button: its text describes that button for assistive technology, so decorative parts are
+     * `aria-hidden`, and it holds no interactive elements.
      */
-    'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; owner: SidebarPanelTrailingOwnerProps }
+    'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; inline: true; owner: SidebarPanelTrailingOwnerProps }
     /** Rows of the panel list's More menu; the sidebar shows More only while this list has registrations. */
     'sidebar.panellist.actions': { kind: 'list'; scope: 'root'; owner: SidebarPanelActionsOwnerProps }
     /**

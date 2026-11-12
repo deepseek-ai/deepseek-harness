@@ -4718,7 +4718,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.footer.action\', () => ctx.slots.register(\n      { name: \'sidebar.footer.action\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:88',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:89',
   },
   {
     key: 'sidebar.panellist',
@@ -4828,14 +4828,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.panellist.actions\', () => ctx.slots.register(\n      { name: \'sidebar.panellist.actions\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:62',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:63',
   },
   {
     key: 'sidebar.panellist.trailing',
     kind: 'list',
     scope: 'root',
-    summary: 'Non-interactive content at the end of a panel\'s navigation row, registered with the panel\'s id, such as a count.',
-    doc: 'Non-interactive content at the end of a panel\'s navigation row, registered with the panel\'s id, such as a count.\nThe expanded row shows it at its trailing edge and hides it while the row\'s unpin action shows; the collapsed rail\nshows it over the icon\'s top trailing corner. Its text describes the row\'s button for assistive technology, so\ndecorative parts are `aria-hidden`.',
+    summary: 'Non-interactive inline content at the end of a panel\'s navigation row, registered with the panel\'s id, such as a count.',
+    doc: 'Non-interactive inline content at the end of a panel\'s navigation row, registered with the panel\'s id, such as a\ncount. The expanded row lays it out after its title, before the space its unpin action takes, so a row without\ncontent keeps its full title width; the collapsed rail shows it over the icon\'s top trailing corner. It renders\ninside the row\'s button: its text describes that button for assistive technology, so decorative parts are\n`aria-hidden`, and it holds no interactive elements.',
     registerOptions: [
       {
         name: 'id',
@@ -4881,7 +4881,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'none',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.panellist.trailing\', () => ctx.slots.register(\n      { name: \'sidebar.panellist.trailing\', id: \'my-entry\', order: 100, label: \'My entry\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:60',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:61',
   },
   {
     key: 'sidebar.right.pane.tab',
@@ -5754,7 +5754,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.settings\', () => ctx.slots.register(\n      { name: \'sidebar.settings\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:83',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:84',
   },
   {
     key: 'sidebar.toggle.badge',
@@ -5820,7 +5820,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'sidebar.workspaces\', () => ctx.slots.register(\n      { name: \'sidebar.workspaces\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:71',
+    source: 'packages/client/ui-sidebar/src/client/contract/slots.ts:72',
   },
   {
     key: 'sidebar.workspaces.directoryFlow',
