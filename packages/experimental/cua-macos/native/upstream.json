@@ -37,6 +37,7 @@
     }
   ],
   "localFiles": [
+    "Sources/CuaNative/AXObservedChildren.swift",
     "Sources/CuaNative/AXTextFormatter.swift",
     "Sources/CuaNative/AXWorker.swift",
     "Sources/CuaNative/ApplicationAuthorization.swift",
