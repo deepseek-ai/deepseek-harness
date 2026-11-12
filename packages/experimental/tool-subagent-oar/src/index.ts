@@ -2,8 +2,8 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { defineTool } from '@deepseek-ai/dsh-tools'
-import type {} from '@deepseek-ai/dsh-subagent'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
+import { SubagentError } from '@deepseek-ai/dsh-subagent'
 
 export const name = 'experimental-tool-subagent-oar'
 export const inject = ['tools', 'subagents']
@@ -84,12 +84,12 @@ export function apply(ctx: Context, config: Config): void {
     isConcurrencySafe: () => true,
     async execute(args, exec) {
       const parent = exec.agent
-      if (parent === undefined) throw new Error('subagent_oar requires a calling agent')
+      if (parent === undefined) throw new ToolContextUnavailableError('subagent_oar requires a calling agent')
       // The parameter enum admits only keys from this immutable configuration.
       const providerName = providers.get(args.runtime) as string
       const provider = ctx.subagents.getProvider(providerName)
       if (provider !== undefined && (provider.prepareContinuable !== undefined || provider.inheritsParentContext)) {
-        throw new Error('subagent_oar requires a one-shot provider with independent conversation context')
+        throw new SubagentError('subagent_oar requires a one-shot provider with independent conversation context', 'UNSUPPORTED_CAPABILITY')
       }
       const activation = await ctx.subagents.startActivation({
         provider: providerName,
