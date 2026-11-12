@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { teo } from 'tencentcloud-sdk-nodejs-teo'
+import { readDesktopPublishConfig } from '@deepseek-ai/dsh-desktop-publisher/desktop-publish-config.ts'
 import { createDesktopUploadPlan } from '../scripts/desktop-upload-plan.ts'
 import { desktopBuildRecordFilename, desktopWebsiteInstallerUrl } from '@deepseek-ai/dsh-desktop-publisher/desktop-auto-update-environment.mjs'
 import { dump, load } from 'js-yaml'
@@ -157,7 +158,7 @@ it('requires initial publication evidence and prepares approval without installe
     await expect(prepareDesktopRolloutCi({ ...env, RUNNER_NAME: 'other' })).rejects.toThrow(/original machine/u)
     await expect(prepareDesktopRolloutCi({ ...env, DESKTOP_UPLOAD_WEBSITE: 'true' })).rejects.toThrow(/edgeOneZoneId/u)
     const configPath = join(config, 'publishing/production.json')
-    const settings = JSON.parse(await readFile(configPath, 'utf8'))
+    const settings = await readDesktopPublishConfig(config, 'production')
     await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-example' }))
     const websiteEnv = { ...env, DESKTOP_ROLLOUT_PERCENTAGE: '', DESKTOP_UPLOAD_WEBSITE: 'true' }
     const websiteContext = await prepareDesktopRolloutCi(websiteEnv)
@@ -354,7 +355,7 @@ it.each(['missing-yaml', 'wrong-approval', 'not-uploaded', 'wrong-zone', 'not-se
       }))
       if (scenario === 'wrong-zone') {
         const configPath = join(config, 'publishing/production.json')
-        const settings = JSON.parse(await readFile(configPath, 'utf8'))
+        const settings = await readDesktopPublishConfig(config, 'production')
         await writeFile(configPath, JSON.stringify({ ...settings, edgeOneZoneId: 'zone-changed' }))
       }
       await rm(join(f.directory, f.filename))
