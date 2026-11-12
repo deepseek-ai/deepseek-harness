@@ -32,6 +32,53 @@ struct AXAttributeSetTarget: Sendable {
     }
 }
 
+/// Retains invalid roots for partial projection and rejects unresolved windows after incomplete discovery.
+struct AXRootDiscovery {
+    private(set) var roots: [AXUIElement]
+    private(set) var invalidRoots: [AXUIElement: NativeFailure] = [:]
+    private var invalidFailure: NativeFailure?
+
+    static func discover(roots initial: [AXUIElement], maxElements: Int,
+                         role: (AXUIElement) throws -> String?,
+                         children: (AXUIElement) throws -> [AXUIElement]) throws -> AXRootDiscovery {
+        var discovery = AXRootDiscovery(roots: initial)
+        var cursor = 0
+        while cursor < discovery.roots.count && cursor < maxElements {
+            let root = discovery.roots[cursor]
+            cursor += 1
+            do {
+                let rootRole = try role(root)
+                guard rootRole == "AXWindow" || rootRole == "AXSheet" else { continue }
+                for child in try children(root) where discovery.roots.count < maxElements {
+                    do {
+                        if try role(child) == "AXSheet", !discovery.roots.contains(where: { CFEqual($0, child) }) {
+                            discovery.roots.append(child)
+                        }
+                    } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                        if discovery.invalidFailure == nil { discovery.invalidFailure = failure }
+                    }
+                }
+            } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                discovery.recordInvalidRoot(root, failure: failure)
+            }
+        }
+        return discovery
+    }
+
+    /// Preserve the root's failure for projection and the first discovery failure for an unresolved window.
+    mutating func recordInvalidRoot(_ root: AXUIElement, failure: NativeFailure) {
+        invalidRoots[root] = failure
+        if invalidFailure == nil { invalidFailure = failure }
+    }
+
+    /// Only a successful discovery can establish that an owned window has no AX surface.
+    func validateWindowSelection(hasMatch: Bool, verifyOwnership: () throws -> Void) throws {
+        guard !hasMatch else { return }
+        try verifyOwnership()
+        if let invalidFailure { throw invalidFailure }
+    }
+}
+
 final class AXAccess {
     let timeout: Float
     let cancellation: CancellationLatch
@@ -576,14 +623,14 @@ final class AXAccess {
         var recoveryRequests = maxElements
         var recoveryTime = Duration.seconds(Double(timeout))
         // Window discovery and traversal can both enumerate the same parent.
-        var discovery: [AXUIElement: AXObservedChildren] = [:]
+        var recoveryCache: [AXUIElement: AXObservedChildren] = [:]
         func observedChildren(_ parent: AXUIElement, _ value: @autoclosure () throws -> CFTypeRef?, duringDiscovery: Bool = false) throws -> AXObservedChildren {
             try AXObservedChildren.observing({ try childValues(value(), attribute: "AXChildren") }) {
-                if let cached = discovery[parent] { return cached }
+                if let cached = recoveryCache[parent] { return cached }
                 let start = ContinuousClock.now
                 defer { recoveryTime -= start.duration(to: .now) }
                 let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests, deadline: start + recoveryTime)
-                if duringDiscovery { discovery[parent] = children }
+                if duringDiscovery { recoveryCache[parent] = children }
                 return children
             }
         }
@@ -596,33 +643,40 @@ final class AXAccess {
         for root in try children(app, "AXWindows") { appendUnique(root) }
         let focused = try element(app, "AXFocusedWindow")
         if let focused { appendUnique(focused) }
-        var cursor = 0
-        while cursor < roots.count && cursor < maxElements {
-            let root = roots[cursor]
-            cursor += 1
-            let role = try string(root, "AXRole")
-            guard role == "AXWindow" || role == "AXSheet" else { continue }
-            for case let child? in try observedChildren(root, attribute(root, "AXChildren"), duringDiscovery: true).entries where roots.count < maxElements {
-                if try string(child, "AXRole") == "AXSheet" { appendUnique(child) }
+        var rootDiscovery = try AXRootDiscovery.discover(roots: roots, maxElements: maxElements,
+            role: { try self.string($0, "AXRole") }, children: {
+                try observedChildren($0, self.attribute($0, "AXChildren"), duringDiscovery: true).entries.compactMap { $0 }
+            })
+        roots = rootDiscovery.roots
+        var focusedID: UInt32?
+        if let focused, rootDiscovery.invalidRoots[focused] == nil {
+            do { focusedID = try windowID(focused) }
+            catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                rootDiscovery.recordInvalidRoot(focused, failure: failure)
             }
         }
-        let focusedID = try focused.flatMap { try windowID($0) }
         if let requested {
             var matches: [AXUIElement] = []
-            var nonWindows: [AXUIElement] = []
+            var nonWindows: [(element: AXUIElement, role: String)] = []
             var anonymousSheets: [AXUIElement] = []
-            for root in roots {
-                let role = try string(root, "AXRole") ?? ""
-                if role == "AXWindow" || role == "AXSheet" {
-                    let id = try windowID(root)
-                    if id == requested { matches.append(root) }
-                    else if role == "AXSheet" && id == nil { anonymousSheets.append(root) }
-                } else { nonWindows.append(root) }
+            for root in roots where rootDiscovery.invalidRoots[root] == nil {
+                do {
+                    let role = try string(root, "AXRole") ?? ""
+                    if role == "AXWindow" || role == "AXSheet" {
+                        let id = try windowID(root)
+                        if id == requested { matches.append(root) }
+                        else if role == "AXSheet" && id == nil { anonymousSheets.append(root) }
+                    } else { nonWindows.append((root, role)) }
+                } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                    rootDiscovery.recordInvalidRoot(root, failure: failure)
+                }
+            }
+            try rootDiscovery.validateWindowSelection(hasMatch: !matches.isEmpty) {
+                _ = try NativePlatform.ownedWindow(identity.pid, requested)
             }
             if matches.isEmpty {
-                _ = try NativePlatform.ownedWindow(identity.pid, requested)
-                let hasUnreadableElements = discovery.values.contains(where: \.hasUnreadableElements)
-                let limited = discovery.values.contains(where: \.elementLimitReached)
+                let hasUnreadableElements = recoveryCache.values.contains(where: \.hasUnreadableElements)
+                let limited = recoveryCache.values.contains(where: \.elementLimitReached)
                 var lines: [String] = []
                 if hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
                 if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
@@ -630,118 +684,70 @@ final class AXAccess {
                                     truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
             let dialog = try matches.contains { root in
-                let role = try string(root, "AXRole")
-                let subrole = try string(root, "AXSubrole")
-                let identifier = try string(root, "AXIdentifier")
-                return role == "AXSheet" || ["AXDialog", "AXSystemDialog", "AXSheet"].contains(subrole ?? "") || ["open-panel", "save-panel"].contains(identifier ?? "")
+                do {
+                    let role = try string(root, "AXRole")
+                    let subrole = try string(root, "AXSubrole")
+                    let identifier = try string(root, "AXIdentifier")
+                    return role == "AXSheet" || ["AXDialog", "AXSystemDialog", "AXSheet"].contains(subrole ?? "") || ["open-panel", "save-panel"].contains(identifier ?? "")
+                } catch let failure as NativeFailure where failure.accessibilityError == AXError.invalidUIElement.rawValue {
+                    rootDiscovery.recordInvalidRoot(root, failure: failure)
+                    // Unknown dialog metadata cannot establish that application menus belong in this scope.
+                    return true
+                }
             }
-            roots = matches
-            for root in nonWindows {
-                let role = try string(root, "AXRole")
-                if !dialog || role != "AXMenuBar" { roots.append(root) }
-            }
-            if !dialog { roots.append(contentsOf: anonymousSheets) }
+            roots = matches + nonWindows.filter { !dialog || $0.role != "AXMenuBar" }.map(\.element)
+                + (dialog ? [] : anonymousSheets)
         }
-        var visited: [CFHashCode: [AXUIElement]] = [:]
-        var count = 0
-        var elementLimitReached = appChildren.elementLimitReached
-        var depthLimitReached = false
-        var childrenMissing = appChildren.hasUnreadableElements
-        var menusCollapsed = false
-        var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
-        var elements: [JSONValue] = []
-        var indexed: [Int: AXUIElement] = [:]
-        let rootEntries: [AXUIElement?]
-        if requested == nil {
-            rootEntries = appChildren.entries + roots.dropFirst(appRootCount).map(Optional.some)
-            if appChildren.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: 0, positioned: false)) }
-        } else {
-            rootEntries = roots
-            if appChildren.hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
-        }
-        var pending = rootEntries.reversed().map { (element: $0, level: 0, depth: 0) }
-        func enqueueChildren(_ parent: AXUIElement, observation: AXNodeObservation, level: Int, depth: Int) throws {
-            let children = try observedChildren(parent, observation.attribute("AXChildren"))
-            if children.hasUnreadableElements { childrenMissing = true }
-            if children.elementLimitReached { elementLimitReached = true }
-            if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: false)) }
-            for child in children.entries.reversed() { pending.append((child, level, depth)) }
-        }
-        while let (entry, level, depth) = pending.popLast() {
-            try cancellation.check()
-            let hash = entry.map { CFHash($0) }
-            if let element = entry, let hash, visited[hash, default: []].contains(where: { CFEqual($0, element) }) { continue }
-            guard count < maxElements else { elementLimitReached = true; break }
-            guard depth <= maxDepth else { depthLimitReached = true; continue }
-            count += 1
-            guard let element = entry, let hash else {
-                lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: true))
-                continue
-            }
-            visited[hash, default: []].append(element)
-            let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
-            let role = observation.role
-            let observed = observation.attribute
-            let title = try stringValue(observed("AXTitle"), attribute: "AXTitle")
-            let value = try controlValue(observed("AXValue"))
-            let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
-            let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
-            let actionNames = try self.actions(element)
-            let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
-            let valueWritable = writability.value
-            let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
-            let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
-            let selectionWritable = writability.selection
-            let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
-            let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
-            let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")
-            let subrole = try stringValue(observed("AXSubrole"), attribute: "AXSubrole")
-            let help = try stringValue(observed("AXHelp"), attribute: "AXHelp")
-            let rawURL = try observed("AXURL")
-            let url: String?
-            if let rawURL, CFGetTypeID(rawURL) == CFURLGetTypeID() { url = (rawURL as? URL)?.absoluteString }
-            else { url = try stringValue(rawURL, attribute: "AXURL") }
-            let focused = try booleanValue(observed("AXFocused"), attribute: "AXFocused")
-            let expanded = try booleanValue(observed("AXExpanded"), attribute: "AXExpanded")
-            let addressable = enabled != false && (!actionNames.isEmpty || valueWritable == true || selectionWritable == true)
-            var node = AXTextNode(index: nil, role: role, title: title, value: value, description: description,
-                                  actions: actionNames, enabled: enabled, valueWritable: valueWritable,
-                                  selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
-                                  selectedText: selectedText, subrole: subrole, placeholder: placeholder, help: help,
-                                  identifier: identifier, url: url, focused: focused, expanded: expanded)
-            node.validateSelection()
-            if node.transparent || (!addressable && !node.hasMeaning && role != "AXWindow" && role != "AXSheet") {
-                try enqueueChildren(element, observation: observation, level: level, depth: depth + 1)
-                continue
-            }
-            let index: Int? = addressable ? indexed.count : nil
-            if let index { indexed[index] = element }
-            node.index = index
-            let frame: WindowBounds?
-            if let position = try observed("AXPosition") { frame = try bounds(position: position, size: observed("AXSize")) }
-            else { frame = nil }
-            node.bounds = frame
-            lines.append(AXTextFormatter.line(node, level: level, details: details))
-            if let index {
-                let frameJSON: JSONValue = frame.map { .array([.number($0.x), .number($0.y), .number($0.width), .number($0.height)]) } ?? .null
-                elements.append(.object([
-                    "elementId": .string(String(index)), "role": .string(role), "title": title.map(JSONValue.string) ?? .null,
-                    "value": value.map(JSONValue.string) ?? .null, "description": description.map(JSONValue.string) ?? .null,
-                    "identifier": identifier.map(JSONValue.string) ?? .null,
-                    "bounds": frameJSON, "actions": .array(actionNames.map(JSONValue.string)), "enabled": enabled.map(JSONValue.bool) ?? .null,
-                    "valueWritable": valueWritable.map(JSONValue.bool) ?? .null, "selectionWritable": selectionWritable.map(JSONValue.bool) ?? .null,
-                    "selected": selected.map(JSONValue.bool) ?? .null,
-                    "selectedText": node.selectedText.map(JSONValue.string) ?? .null,
-                    "selectedRange": node.selectedRange.map { .array([.number(Double($0.location)), .number(Double($0.length))]) } ?? .null,
-                ]))
-            }
-            if role == "AXMenuBarItem" && !includeMenus { menusCollapsed = true; continue }
-            try enqueueChildren(element, observation: observation, level: level + 1, depth: depth + 1)
-        }
-        if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
-        let truncated = elementLimitReached || depthLimitReached
-        if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated, hasUnreadableElements: childrenMissing)
+        let rootObservation = AXObservedChildren(
+            entries: requested == nil ? appChildren.entries + roots.dropFirst(appRootCount).map(Optional.some) : roots.map(Optional.some),
+            parentIncomplete: requested == nil ? appChildren.parentIncomplete : appChildren.hasUnreadableElements,
+            elementLimitReached: appChildren.elementLimitReached)
+        return try AXTreeProjection.project(roots: rootObservation, focusedWindowID: focusedID, windowScoped: requested != nil,
+            maxElements: maxElements, maxDepth: maxDepth, includeMenus: includeMenus, details: details,
+            checkCancellation: { try self.cancellation.check() }, read: { element in
+                if let failure = rootDiscovery.invalidRoots[element] { throw failure }
+                return try self.readNode(element, includeMenus: includeMenus, readChildren: { observation in
+                    try observedChildren(element, observation.attribute("AXChildren"))
+                })
+            })
+    }
+
+    private func readNode(_ element: AXUIElement, includeMenus: Bool,
+                          readChildren: (AXNodeObservation) throws -> AXObservedChildren) throws -> AXReadNode {
+        let observation = try nodeObservation(attributes: metadata(element), fallback: { try self.attribute(element, $0) })
+        let role = observation.role
+        let observed = observation.attribute
+        let title = try stringValue(observed("AXTitle"), attribute: "AXTitle")
+        let value = try controlValue(observed("AXValue"))
+        let placeholder = try stringValue(observed("AXPlaceholderValue"), attribute: "AXPlaceholderValue")
+        let description = try stringValue(observed("AXDescription"), attribute: "AXDescription")
+        let actionNames = try self.actions(element)
+        let writability = try Self.observationWritability(role: role) { try writable(element, $0, forDiscovery: $1) }
+        let valueWritable = writability.value
+        let enabled = try booleanValue(observed("AXEnabled"), attribute: "AXEnabled")
+        let selected = try booleanValue(observed("AXSelected"), attribute: "AXSelected")
+        let selectionWritable = writability.selection
+        let selectedRange = AXTextNode.textRoles.contains(role) ? try textRange(observed("AXSelectedTextRange")) : nil
+        let selectedText = AXTextNode.textRoles.contains(role) ? try stringValue(observed("AXSelectedText"), attribute: "AXSelectedText") : nil
+        let identifier = try stringValue(observed("AXIdentifier"), attribute: "AXIdentifier")
+        let subrole = try stringValue(observed("AXSubrole"), attribute: "AXSubrole")
+        let help = try stringValue(observed("AXHelp"), attribute: "AXHelp")
+        let rawURL = try observed("AXURL")
+        let url: String?
+        if let rawURL, CFGetTypeID(rawURL) == CFURLGetTypeID() { url = (rawURL as? URL)?.absoluteString }
+        else { url = try stringValue(rawURL, attribute: "AXURL") }
+        let focused = try booleanValue(observed("AXFocused"), attribute: "AXFocused")
+        let expanded = try booleanValue(observed("AXExpanded"), attribute: "AXExpanded")
+        var node = AXTextNode(index: nil, role: role, title: title, value: value, description: description,
+                              actions: actionNames, enabled: enabled, valueWritable: valueWritable,
+                              selectionWritable: selectionWritable, selected: selected, selectedRange: selectedRange,
+                              selectedText: selectedText, subrole: subrole, placeholder: placeholder, help: help,
+                              identifier: identifier, url: url, focused: focused, expanded: expanded)
+        node.validateSelection()
+        let omitted = node.omitted
+        if !omitted, let position = try observed("AXPosition") { node.bounds = try bounds(position: position, size: observed("AXSize")) }
+        let children = role == "AXMenuBarItem" && !includeMenus && !omitted ? AXObservedChildren() : try readChildren(observation)
+        return AXReadNode(text: node, children: children)
     }
 
     func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {

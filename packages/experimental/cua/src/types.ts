@@ -89,8 +89,9 @@ export interface CuaSurface {
    */
   show(): Promise<CuaShowResult>
   /**
-   * Read the full accessibility tree, with menu contents collapsed by default.
+   * Read the accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
+   * Providers may mark unavailable branches whose contents are unknown and have no element ids.
    * @param options - Traversal limits, menu expansion and field detail options.
    * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
