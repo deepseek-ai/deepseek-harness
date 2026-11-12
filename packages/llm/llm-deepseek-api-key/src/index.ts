@@ -32,12 +32,14 @@ interface OfficialConnection extends ResolvedDeepSeekOptions {
 }
 
 export function apply(ctx: Context, config: Config): void {
+  /** Settings namespace of this mount, which the provider directory lists and credential diagnostics name. */
+  const settingsNs = ctx.fiber.entry?.options.id ?? name
   const options = () => resolveAdapterOptions(plainOptions(config), launchEnvironmentOf(ctx))
   options()
   /** The validated API key, or `undefined` when none is configured; store and format failures propagate. */
   const resolveApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
     const value = await resolveCredentialRef(ctx, connection.apiKeyEnv)
-    return value === undefined ? undefined : assertUsableApiKey(value, 'llm-deepseek', connection.apiKeyEnv)
+    return value === undefined ? undefined : assertUsableApiKey(value, settingsNs, connection.apiKeyEnv)
   }
   const resolveAuth = async (connection: ResolvedDeepSeekOptions): Promise<DeepSeekRequestAuth | undefined> => {
     const key = await resolveApiKey(connection)
@@ -70,7 +72,7 @@ export function apply(ctx: Context, config: Config): void {
     return { ...connection, models: catalog.resolution, offered: catalog.offered, refusals: catalog.refusals, badges: catalog.badges }
   }
   ctx.llm.registerConfigurableProviders([
-    { provider: PROVIDER, displayName: 'DeepSeek', settingsNs: ctx.fiber.entry?.options.id ?? name, settingsPath: [] },
+    { provider: PROVIDER, displayName: 'DeepSeek', settingsNs, settingsPath: [] },
   ])
   registerDeepSeekProvider<OfficialConnection>(ctx, PROVIDER, {
     providerName: 'DeepSeek',

@@ -160,7 +160,7 @@ export class LlmError extends HarnessError {
  * module stays dependency-free; both adapters share this one diagnosis instead
  * of keeping near-identical local copies.
  * @param raw - the credential exactly as supplied.
- * @param pkg - the refusing package name, prefixed to the diagnostic.
+ * @param pkg - the refusing plugin's settings namespace or package name, prefixed to the diagnostic.
  * @param ref - the credential reference the value resolved through.
  * @returns the trimmed, usable key.
  */

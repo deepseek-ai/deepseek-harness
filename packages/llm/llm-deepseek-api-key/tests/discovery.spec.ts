@@ -32,13 +32,40 @@ it('advertises configured models with an API key', async () => {
   }
 })
 
-it('reports malformed credentials during discovery', async () => {
+it('reports malformed credentials during discovery under the settings namespace the provider directory lists', async () => {
   vi.stubEnv('DEEPSEEK_API_KEY', 'invalid\nheader')
   const ctx = new Context()
   try {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(ApiKey, {})
-    await expect(ctx.llm.listModels('deepseek-official')).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+    const [directory] = ctx.llm.listConfigurableProviders()
+    expect(directory?.settingsNs).toBe('llm-deepseek-api-key')
+    const failure = ctx.llm.listModels('deepseek-official')
+    await expect(failure).rejects.toMatchObject({ code: 'INVALID_CREDENTIAL' })
+    await expect(failure).rejects.toThrow('llm-deepseek-api-key: the API key resolved from DEEPSEEK_API_KEY contains characters')
+  } finally {
+    await ctx.fiber.dispose()
+    vi.unstubAllEnvs()
+  }
+})
+
+it('names the Loader entry id in credential diagnostics, as product profiles mount the route', async () => {
+  vi.stubEnv('DEEPSEEK_API_KEY', 'invalid\nheader')
+  const ctx = new Context()
+  try {
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin({
+      name: ApiKey.name, inject: ApiKey.inject, Config: ApiKey.Config,
+      apply: (inner: Context, config: ApiKey.Config) => {
+        // The Loader attaches the entry before a plugin applies; product profiles use the id `llm-deepseek`.
+        Object.defineProperty(inner.fiber, 'entry', { value: { options: { id: 'llm-deepseek' } } })
+        ApiKey.apply(inner, config)
+      },
+    }, {})
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.settingsNs)).toEqual(['llm-deepseek'])
+    await expect(ctx.llm.listModels('deepseek-official')).rejects.toThrow(
+      'llm-deepseek: the API key resolved from DEEPSEEK_API_KEY contains characters no HTTP header can carry',
+    )
   } finally {
     await ctx.fiber.dispose()
     vi.unstubAllEnvs()
