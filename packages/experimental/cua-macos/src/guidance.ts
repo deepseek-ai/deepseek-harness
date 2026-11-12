@@ -10,6 +10,7 @@ function operationGuidance(treeAdvice: string): string {
   const methodDetails = new Map<string, string>([
     ['cua.listApps', 'Each row represents one running process. To select one of several instances with the same name or bundle ID, pass String(row.pid) to cua.getApp.'],
     ['cua.findApps', 'Running installation matches include their process ID. Stopped matches have no pid.'],
+    ['sendKeyEvent', "Send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients."],
     ['getAccessibilityTree', `macOS accepts maxElements up to 100000 and maxDepth up to 512. If the tree is truncated, select a narrower window or raise the reported limit on the next read. ${treeAdvice} Use element ids from the file only while that observation is current.`],
     ['mouseMove', 'With useSystemPointer omitted or false, macOS uses accessibility hover without asking for mouse control. This requires both AXShowAlternateUI and AXShowDefaultUI on an enabled element or ancestor. Without that route, HOVER_UNAVAILABLE is returned before sending input. Physical movement requires an unobscured foreground target. Explain any necessary activation and observe the target again.'],
     ['drag', 'Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control. An explicit system drag shares the session decision with mouseMove and holds the chosen button along the path in the unobscured foreground window.'],
@@ -18,8 +19,6 @@ function operationGuidance(treeAdvice: string): string {
   return `${PLATFORM_GUIDANCE}
 
 ${catalog.replace(/^- ([\w.]+)\(.*$/gm, (entry, method: string) => {
-  if (method === 'pressKey') return `${entry}
-- sendKeyEvent(key: string, direction: 'down' | 'up') -> ActionResult — send 'down' to hold a key across tool calls in one program, for example W down, D down, D up, W up. Holding a key on a physical keyboard can produce repeated key-down events after a delay. To send one such repeat for a non-modifier key this run already holds, send 'down' again. Each call posts one event. A control can filter repeats. Use the app's response to decide whether and when to repeat or release the key. When this program returns, throws, or the user pauses it, macOS releases only its remaining keys at their original recipients.`
   const detail = methodDetails.get(method)
   const signature = method === 'drag' ? entry.replace('relative?: boolean }', 'relative?: boolean, useSystemPointer?: boolean }') : entry
   return detail ? `${signature} ${detail}` : signature

@@ -51,7 +51,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
   expect(GUIDANCE).toContain('returns, throws, or the user pauses')
-  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent(')
+  const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
+  expect(sharedKeyEvent).toBeDefined()
+  expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)
   expect(pressKey).toBe(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
   expect(GUIDANCE).toContain('W down, D down, D up, W up')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
@@ -72,13 +74,13 @@ it('enumerates every available method once in its catalog entry', () => {
     'app.show(', 'window.show(',
     ...accessibilityNames.map(name => `${name}(`),
     ...windowNames.filter(name => name !== 'windowId').map(name => `${name}(`),
-    ...['typeText', 'paste', 'pressKey'].map(name => `${name}(`),
+    ...['typeText', 'paste', 'pressKey', 'sendKeyEvent'].map(name => `${name}(`),
   ]
-  for (const catalog of [COMMON_GUIDANCE, GUIDANCE]) {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(24)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(23)
+  expect(signatures).toHaveLength(25)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(24)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })
