@@ -63,7 +63,9 @@ exports[`IM bundle rows > renders every configurable row through its own schema 
           "file": false,
           "internal": false,
         },
+        "timeoutMs": 30000,
       },
+      "platformTimeoutMs": 30000,
       "retentionMs": 2592000000,
       "retryIntervalMs": 5000,
       "send": {
