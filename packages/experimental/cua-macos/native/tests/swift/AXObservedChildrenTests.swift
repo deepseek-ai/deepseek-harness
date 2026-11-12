@@ -57,3 +57,19 @@ import Testing
     #expect(recovered.entries == [node])
     #expect(!recovered.incomplete)
 }
+
+@Test(arguments: [1, 5, 6])
+func failingListsUpToFiveReadIndividualItemsAndLongerListsSplitFirst(count: Int) {
+    let element = AXUIElementCreateApplication(1)
+    let failed = count - 1
+    var ranges: [Range<Int>] = []
+    var requests = 20
+    let result = AXObservedChildren.readRanges(count: count, limit: count, requests: &requests) { range in
+        ranges.append(range)
+        return range.contains(failed) ? .unreadable : .values(Array(repeating: element, count: range.count))
+    }
+    let expected = count <= 5 ? (0..<count).map { $0..<($0 + 1) } : [0..<3, 3..<6, 3..<4, 4..<5, 5..<6]
+    #expect(ranges == expected)
+    #expect(result.entries == Array(repeating: Optional(element), count: failed) + [nil])
+    #expect(!result.parentIncomplete)
+}

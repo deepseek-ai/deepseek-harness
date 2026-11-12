@@ -14,12 +14,20 @@ struct AXObservedChildren {
         case unavailable
     }
 
+    private static func smallerRanges(_ failed: Range<Int>) -> [Range<Int>] {
+        if failed.count <= 5 { return failed.map { $0..<($0 + 1) } }
+        let middle = failed.lowerBound + failed.count / 2
+        return [failed.lowerBound..<middle, middle..<failed.upperBound]
+    }
+
     /// A single observation shares its extra AX requests across all parents. Changed ranges lose their position guarantee.
     static func readRanges(count: Int, limit: Int, requests: inout Int,
                            read: (Range<Int>) throws -> RangeRead) rethrows -> Self {
         guard count > 0 else { return .unavailable }
         let end = min(count, limit)
-        var pending = [0..<end]
+        let prefix = 0..<end
+        // The full list already failed. A shorter prefix imposed by the node limit has not been read.
+        var pending = end < count ? [prefix] : Array(smallerRanges(prefix).reversed())
         var result = Self(parentIncomplete: end < count)
         while let range = pending.popLast() {
             guard requests > 0 else { result.parentIncomplete = true; break }
@@ -34,9 +42,7 @@ struct AXObservedChildren {
                 if range.count == 1 {
                     result.entries.append(nil)
                 } else {
-                    let middle = range.lowerBound + range.count / 2
-                    pending.append(middle..<range.upperBound)
-                    pending.append(range.lowerBound..<middle)
+                    pending.append(contentsOf: smallerRanges(range).reversed())
                 }
                 continue
             }
