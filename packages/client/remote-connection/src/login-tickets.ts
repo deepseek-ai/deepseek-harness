@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteLoginId, RemoteLoginState, RemoteLoginTicket } from './types.ts'
+import { encodeBase64Url } from './base64.ts'
 
 type Ticket = {
   readonly id: RemoteLoginId
@@ -23,7 +24,7 @@ export class LoginTickets {
    * @returns the only response carrying the plaintext credential.
    */
   create(root: string, lifetimeMs: number): RemoteLoginTicket {
-    const token = randomBytes(32).toString('base64url')
+    const token = encodeBase64Url(randomBytes(32))
     const id = brandString<RemoteLoginId>(randomUUID())
     const expiresAt = Date.now() + lifetimeMs
     const url = new URL('remote-login', root.endsWith('/') ? root : `${root}/`)

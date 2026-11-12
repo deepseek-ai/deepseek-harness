@@ -845,6 +845,29 @@ async function bootEmptyPreview(origin: string, browser: Browser): Promise<void>
       return body.result.value.items.length
     })
     expect(sessionCount).toBe(0)
+    const remoteStatus = await page.evaluate(async () => {
+      const transport = (globalThis as typeof globalThis & {
+        __DSH_TRANSPORT__?: { fetch(input: string, init: RequestInit): Promise<Response> }
+      }).__DSH_TRANSPORT__
+      if (transport === undefined) throw new Error('empty preview transport is absent after boot')
+      const response = await transport.fetch('/api/remoteConnection/status', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'client-request', rpcId: 'empty-preview-remote-status', method: 'remoteConnection/status',
+          payload: { args: { id: null } },
+        }),
+      })
+      const body = await response.json() as {
+        result: { ok: true; value: { url: string; availability: string; ticket: string; pollIntervalMs: number } }
+          | { ok: false; error: { message: string } }
+      }
+      if (!body.result.ok) throw new Error(`empty remoteConnection/status failed: ${body.result.error.message}`)
+      return body.result.value
+    })
+    expect(remoteStatus).toEqual({
+      url: 'http://127.0.0.1:3080', availability: 'unreachable-host', ticket: 'none', pollIntervalMs: 1000,
+    })
     expect(pageErrors.map(error => error.message)).toEqual([])
     // One accepted static-host 404: the open-in-app availability read has no
     // host routes — the controller publishes an empty list and the header

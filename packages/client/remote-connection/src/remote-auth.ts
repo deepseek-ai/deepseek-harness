@@ -5,6 +5,7 @@ import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
 import { HarnessError } from '@deepseek-ai/dsh-error'
 import type { ConnectionTrustRequest } from '@deepseek-ai/dsh-client-connection'
+import { decodeBase64Url as decode, encodeBase64Url as encode } from './base64.ts'
 
 const RECORD_KEY = credentialKey('client-remote-connection', 'browser-session')
 const VERSION = 1
@@ -36,12 +37,6 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function decode(value: string): Buffer | undefined {
-  if (!/^[A-Za-z0-9_-]+$/u.test(value) || value.length % 4 === 1) return undefined
-  const bytes = Buffer.from(value, 'base64url')
-  return bytes.toString('base64url') === value ? bytes : undefined
-}
-
 function readSecret(value: CredentialRecord | undefined): Buffer | undefined {
   if (value === undefined) return undefined
   if (value.kind !== 'grant' || !record(value.payload)
@@ -63,7 +58,7 @@ function readSecret(value: CredentialRecord | undefined): Buffer | undefined {
 }
 
 async function initializeSecret(credentials: CredentialProvider): Promise<Buffer> {
-  const payload = { version: VERSION, secret: randomBytes(SECRET_BYTES).toString('base64url') }
+  const payload = { version: VERSION, secret: encode(randomBytes(SECRET_BYTES)) }
   let stored: CredentialRecord | undefined
   try {
     stored = await credentials.modifyRecord(RECORD_KEY, (current) => {
@@ -108,7 +103,7 @@ function audience(request: ConnectionTrustRequest, secure: boolean): string | un
 }
 
 function cookieName(authority: string): string {
-  return `dsh-remote-${createHash('sha256').update(authority).digest('base64url')}`
+  return `dsh-remote-${encode(createHash('sha256').update(authority).digest())}`
 }
 
 function cookieValue(value: string, name: string): string | undefined {
@@ -168,9 +163,9 @@ export class RemoteBrowserAuth {
     const issuedAt = Date.now()
     const expiresAt = issuedAt + this.lifetimeMs
     const payload: CookiePayload = { version: VERSION, authority, issuedAt, expiresAt }
-    const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+    const body = encode(Buffer.from(JSON.stringify(payload)))
     const signed = `v${VERSION}.${body}`
-    const signature = createHmac('sha256', this.secret).update(signed).digest('base64url')
+    const signature = encode(createHmac('sha256', this.secret).update(signed).digest())
     const cookie = `${cookieName(authority)}=${signed}.${signature}; Max-Age=${String(this.lifetimeMs / 1000)}; Path=/; Expires=${new Date(expiresAt).toUTCString()}; HttpOnly; SameSite=Strict`
     return secure ? `${cookie}; Secure` : cookie
   }
