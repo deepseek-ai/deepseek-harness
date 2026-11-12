@@ -391,6 +391,18 @@ describe('im_read and im_history', () => {
     expect(value(await mounted.call('im_members', {}))).toMatchObject({ status: 'error', code: 'unavailable' })
   })
 
+  it('stops paging a roster no member of which matches the query', async () => {
+    const mounted = await mount()
+    let reads = 0
+    // A roster that never ends: without a page limit one unmatched query would read it for ever.
+    mounted.im.members = async (_chat: ImChatKey, cursor?: string): Promise<MembersPage> => {
+      reads++
+      return { data: [{ id: `ou_${cursor ?? 0}`, name: '李四' }], next: String(Number(cursor ?? 0) + 1) }
+    }
+    expect(value(await mounted.call('im_members', { query: '张' }))).toMatchObject({ members: [], total: 0, more: true })
+    expect(reads).toBe(10)
+  })
+
   it('reports an unknown message as a declared error', async () => {
     const mounted = await mount()
     expect(value(await mounted.call('im_read', { message: '9' })))

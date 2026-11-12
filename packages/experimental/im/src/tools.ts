@@ -361,21 +361,28 @@ function mentionSyntax(member: { id: string; name?: string }): string {
   return `<at user_id="${id}">${name}</at>`
 }
 
+/** Platform pages one `im_members` call reads at most. */
+const MAX_MEMBER_PAGES = 10
+
 /**
  * Page through one chat's members, keeping the ones `query` names, up to the configured bound.
  *
  * @param im - host slice holding the member read.
  * @param chat - chat whose members are listed.
  * @param query - case-insensitive text a member's name must carry; absent keeps every member.
+ * Reading stops after {@link MAX_MEMBER_PAGES} pages as well: a `query` no member matches would otherwise read the
+ * whole roster of a large chat, one platform request per page, inside one tool call.
+ *
  * @param config - operator configuration (`tools.maxMembers`).
- * @returns the members, and whether the bound left some out.
+ * @returns the members, and whether the bound or the page limit left some out.
  */
 async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined, config: ImConfig) {
   const bound = config.tools.maxMembers
   const needle = query?.trim().toLowerCase() ?? ''
   const members: MemberView[] = []
   let cursor: string | undefined
-  for (;;) {
+  for (let pages = 0; ; pages++) {
+    if (pages === MAX_MEMBER_PAGES) return { chat, members, total: members.length, more: true }
     const page: MembersPage = await im.members(chat, cursor)
     let full = false
     for (const member of page.data) {
@@ -392,7 +399,6 @@ async function roster(im: ImToolHost, chat: ImChatKey, query: string | undefined
     cursor = page.next
   }
 }
-
 
 /** One message as the tools show it (media labels stay usable with `im_read_image`). */
 interface MessageView {
