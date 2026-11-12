@@ -639,7 +639,7 @@ describe('application and window observations', () => {
     expect(f.dispatch.mock.calls.filter(([operation]) => operation.method === 'getState')).toHaveLength(2)
   })
 
-  it.each(['AX_OBSERVATION_UNAVAILABLE', 'AX_COMMUNICATION_FAILED', 'PERMISSION_DENIED'])('preserves %s and requires a new read before element operations', async (code) => {
+  it.each(['AX_OBSERVATION_UNAVAILABLE', 'PERMISSION_DENIED'])('preserves %s and requires a new read before element operations', async (code) => {
     const f = fixture()
     const app = await f.api.getApp('Editor')
     await app.getAccessibilityTree()

@@ -178,7 +178,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
       }
       if (communicationFailure) {
         communicationFailure = false
-        refuse('AX_COMMUNICATION_FAILED', 'Accessibility observation failed: Accessibility read AXChildren failed with error -25204. Read fresh state or use a screenshot; do not repeat input automatically')
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXChildren failed with error -25204. Read fresh state or use a screenshot; do not repeat input automatically')
       }
       for (const id of params.windowId === undefined ? windows().map(window => window.windowId) : [params.windowId]) observedWindows.add(id)
       generation++

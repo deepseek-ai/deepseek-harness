@@ -201,13 +201,9 @@ actor AXWorker {
     // Only observation failures allow a fresh read. Input failures can follow
     // partial effects and keep their original classification.
     static func observationFailure(_ failure: NativeFailure) -> NativeFailure {
-        let code: String
-        switch failure.accessibilityError {
-        case AXError.invalidUIElement.rawValue: code = "AX_OBSERVATION_UNAVAILABLE"
-        case AXError.cannotComplete.rawValue: code = "AX_COMMUNICATION_FAILED"
-        default: return failure
-        }
-        return NativeFailure(code: code,
+        guard failure.accessibilityError == AXError.invalidUIElement.rawValue
+                || failure.accessibilityError == AXError.cannotComplete.rawValue else { return failure }
+        return NativeFailure(code: "AX_OBSERVATION_UNAVAILABLE",
                              message: "Accessibility observation failed: \(failure.message). Read fresh state or use a screenshot; do not repeat input automatically",
                              accessibilityError: failure.accessibilityError, attribute: failure.attribute)
     }
