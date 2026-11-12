@@ -23,6 +23,7 @@ struct CaptureTarget: Sendable {
     let appHandle: String
     let process: ProcessIdentity
     let window: WindowInfo
+    let recovery: AXChildRecoveryBudget
 }
 struct ForegroundPlan: Sendable {
     let appHandle: String
@@ -172,7 +173,7 @@ actor AXWorker {
             throw NativeFailure(code: "STALE_SNAPSHOT", message: "Snapshot belongs to window \(source); read getAccessibilityTree on window \(windowID)")
         }
     }
-    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
+    private func coordinateWindow(_ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget, trace: ScreenshotTrace? = nil) throws -> WindowInfo {
         try WindowGeometry.resolve(owner: identity, windowID: windowID, readWindow: { pid, id in
             trace?.mark("window-info.begin")
             let window = try NativePlatform.ownedWindow(pid, id)
@@ -182,13 +183,13 @@ actor AXWorker {
             // Capture without Accessibility permission retains its CG/SCK checks.
             guard AXIsProcessTrusted() else { return nil }
             trace?.mark("ax-geometry.begin")
-            let bounds = try ax().windowBounds(windowID, owner: identity)
+            let bounds = try ax().windowElement(windowID, owner: identity, budget: &budget).flatMap { try ax().bounds($0) }
             trace?.mark("ax-geometry.end")
             return bounds
         }
     }
-    private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32) throws -> WindowInfo {
-        let window = try coordinateWindow(identity, windowID)
+    private func observedCoordinateWindow(_ handle: String, _ identity: ProcessIdentity, _ windowID: UInt32, budget: inout AXChildRecoveryBudget) throws -> WindowInfo {
+        let window = try coordinateWindow(identity, windowID, budget: &budget)
         try WindowGeometry.validateObservedSize(observed: observedWindowBounds[handle]?[windowID], current: window.bounds)
         return window
     }
@@ -296,6 +297,7 @@ actor AXWorker {
             else { observedWindowBounds.removeValue(forKey: handle) }
         }
         if method != "screenshot" { try NativePlatform.requireAccessibility() }
+        var recovery = AXChildRecoveryBudget(timeout: axTimeout)
         switch method {
         case "show":
             let windowID = try params.optionalWindowID()
@@ -348,9 +350,9 @@ actor AXWorker {
             try NativePlatform.requireScreenRecording()
             trace?.mark("screen-permission.end")
             trace?.mark("geometry.before.begin")
-            let window = try coordinateWindow(identity, params.windowID(), trace: trace)
+            let window = try coordinateWindow(identity, params.windowID(), budget: &recovery, trace: trace)
             trace?.mark("geometry.before.end")
-            return .capture(CaptureTarget(appHandle: handle, process: identity, window: window))
+            return .capture(CaptureTarget(appHandle: handle, process: identity, window: window, recovery: recovery))
         case "listActions":
             return .result(.array(try ax().listActions(element(handle, params)).map { .string($0) }))
         case "paste":
@@ -413,7 +415,7 @@ actor AXWorker {
             } else {
                 let id = try params.windowID()
                 try coordinateSnapshot(handle, params, id)
-                window = try observedCoordinateWindow(handle, identity, id)
+                window = try observedCoordinateWindow(handle, identity, id, budget: &recovery)
                 point = try params.point()
             }
             let route = WindowRoute(owner: identity, windowID: window.windowID, bounds: window.bounds)
@@ -427,8 +429,9 @@ actor AXWorker {
                 return .mouseMove(route, point)
             }
             var clickRoute = route
-            if AXIsProcessTrusted(), let node = try elementWindow ?? ax().windowElement(window.windowID, owner: identity),
-               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog) {
+            try NativePlatform.requireAccessibility()
+            if let node = try elementWindow ?? ax().windowElement(window.windowID, owner: identity, budget: &recovery),
+               let panel = try ax().filePanelRecipient(node, owner: identity, catalog: catalog, budget: &recovery) {
                 let serviceWindow = try NativePlatform.ownedWindow(panel.process.pid, panel.windowID)
                 guard serviceWindow.bounds == window.bounds else {
                     throw NativeFailure(code: "WINDOW_CHANGED", message: "File panel and its input window have different frames; read fresh window state")
@@ -441,7 +444,7 @@ actor AXWorker {
         case "scroll", "drag":
             let id = try params.windowID()
             try coordinateSnapshot(handle, params, id)
-            let window = try observedCoordinateWindow(handle, identity, id)
+            let window = try observedCoordinateWindow(handle, identity, id, budget: &recovery)
             let route = WindowRoute(owner: identity, windowID: id, bounds: window.bounds)
             if method == "scroll" {
                 let dx = params.contains("deltaLinesX") ? try params.integer("deltaLinesX", in: -10...10) : 0
@@ -516,7 +519,8 @@ actor AXWorker {
         try NativePlatform.requireUnlocked(observeSession())
         try NativePlatform.requireScreenRecording()
         trace?.mark("geometry.after.begin")
-        let after = try coordinateWindow(identity, target.window.windowID, trace: trace)
+        var recovery = target.recovery
+        let after = try coordinateWindow(identity, target.window.windowID, budget: &recovery, trace: trace)
         trace?.mark("geometry.after.end")
         guard after.bounds == target.window.bounds else { throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized during capture; observe again") }
         observedWindowBounds[target.appHandle, default: [:]][after.windowID] = after.bounds

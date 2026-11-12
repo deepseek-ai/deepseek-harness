@@ -1,12 +1,26 @@
 // A nil entry preserves the position of an unreadable child without creating an actionable AX reference.
 import ApplicationServices
 
+/// Extra AX count/range calls and time spent in recovery, shared by all child lists in one request.
+struct AXChildRecoveryBudget: Sendable {
+    let limit: Int
+    var requests: Int
+    var time: Duration
+
+    init(maxElements: Int = NativeProtocol.elementRange.upperBound, timeout: Float) {
+        limit = maxElements
+        requests = maxElements
+        time = .seconds(Double(timeout))
+    }
+}
+
 struct AXObservedChildren {
     var entries: [AXUIElement?] = []
     var parentIncomplete = false
     var elementLimitReached = false
 
     var hasUnreadableElements: Bool { parentIncomplete || entries.contains(nil) }
+    var incomplete: Bool { hasUnreadableElements || elementLimitReached }
     static var unavailable: Self { Self(parentIncomplete: true) }
 
     enum RangeRead {
@@ -29,7 +43,7 @@ struct AXObservedChildren {
         return [failed.lowerBound..<middle, middle..<failed.upperBound]
     }
 
-    /// A single observation shares its extra AX requests across all parents. Changed ranges lose their position guarantee.
+    /// A single request shares its extra AX requests across all parents. Changed ranges lose their position guarantee.
     static func readRanges(count: Int, limit: Int, requests: inout Int,
                            read: (Range<Int>) throws -> RangeRead) rethrows -> Self {
         guard count > 0 else { return Self() }

@@ -67,11 +67,11 @@ final class AXAccess {
                                      "AXSubrole", "AXHelp", "AXURL", "AXFocused", "AXExpanded", "AXEnabled", "AXSelected", "AXSelectedText", "AXSelectedTextRange", "AXPosition", "AXSize", "AXMain", "AXMinimized"]
         return optional.contains(attribute)
     }
-    func attribute(_ element: AXUIElement, _ name: String) throws -> CFTypeRef? {
+    func attribute(_ element: AXUIElement, _ name: String, allowMissingMetadata: Bool = true) throws -> CFTypeRef? {
         try prepare(element)
         var value: CFTypeRef?
         let error = AXUIElementCopyAttributeValue(element, name as CFString, &value)
-        if absent(error) || Self.optionalAttributeUnavailable(error, attribute: name) { return nil }
+        if absent(error) || (allowMissingMetadata && Self.optionalAttributeUnavailable(error, attribute: name)) { return nil }
         guard error == .success else { throw failure(error, "read \(name)", attribute: name) }
         guard let value else { throw NativeFailure(code: "NATIVE_ERROR", message: "Accessibility \(name) returned no value after success") }
         return value
@@ -124,7 +124,23 @@ final class AXAccess {
         if absent(error) || error == .failure || error == .illegalArgument { return nil }
         throw failure(error, "count AXChildren")
     }
+    private func readChildren(_ parent: AXUIElement, budget: inout AXChildRecoveryBudget,
+                              cached: AXObservedChildren? = nil, onRecovery: (AXObservedChildren) -> Void = { _ in },
+                              read: () throws -> [AXUIElement]) throws -> AXObservedChildren {
+        try AXObservedChildren.observing(read) {
+            if let cached { return cached }
+            let start = ContinuousClock.now
+            defer { budget.time -= start.duration(to: .now) }
+            let result = try recoverChildren(parent, limit: budget.limit, requests: &budget.requests, deadline: start + budget.time)
+            onRecovery(result)
+            return result
+        }
+    }
+    private func readChildren(_ parent: AXUIElement, budget: inout AXChildRecoveryBudget) throws -> AXObservedChildren {
+        try readChildren(parent, budget: &budget) { try children(parent) }
+    }
     private func recoverChildren(_ element: AXUIElement, limit: Int, requests: inout Int, deadline: ContinuousClock.Instant) throws -> AXObservedChildren {
+        try cancellation.check()
         guard requests > 0, ContinuousClock.now < deadline else { return .unavailable }
         requests -= 1
         try prepare(element)
@@ -411,28 +427,44 @@ final class AXAccess {
         guard let menu = try element(AXUIElementCreateApplication(pid), "AXMenuBar") else {
             throw NativeFailure(code: "UNSUPPORTED", message: "The application does not expose a Paste menu command")
         }
-        var pending: [(AXUIElement, Int)] = [(menu, 0)]
+        var budget = AXChildRecoveryBudget(maxElements: maxElements, timeout: timeout)
+        return try Self.pasteCommand(in: menu, maxElements: maxElements, maxDepth: maxDepth, matches: { node in
+            guard try string(node, "AXRole") == "AXMenuItem", try string(node, "AXMenuItemCmdChar")?.lowercased() == "v",
+                  let raw = try attribute(node, "AXMenuItemCmdModifiers"), CFGetTypeID(raw) == CFNumberGetTypeID(),
+                  let number = raw as? NSNumber, number.intValue == 0, try actions(node, requireKnown: true).contains("AXPress") else { return false }
+            var owner: pid_t = 0
+            let error = AXUIElementGetPid(node, &owner)
+            guard error == .success else { throw failure(error, "identify Paste command owner") }
+            guard owner == pid else { throw Self.beforeInput("UNSUPPORTED", "Paste command belongs to another process.") }
+            return true
+        }, children: { try readChildren($0, budget: &budget) })
+    }
+
+    private static func beforeInput(_ code: String, _ reason: String) -> NativeFailure {
+        NativeFailure(code: code, message: reason + " No input was dispatched. Read fresh state before retrying.")
+    }
+
+    /// A second command or an unexamined branch prevents selecting a unique Paste command.
+    static func pasteCommand(in menu: AXUIElement, maxElements: Int, maxDepth: Int,
+                             matches: (AXUIElement) throws -> Bool, children: (AXUIElement) throws -> AXObservedChildren) throws -> AXUIElement {
+        var pending = [(menu, 0)]
         var found: AXUIElement?
-        var seen: [CFHashCode: [AXUIElement]] = [:]
-        var count = 0
+        var seen = Set<AXUIElement>()
+        var incomplete = false
         while let (node, depth) = pending.popLast() {
-            let hash = CFHash(node)
-            if seen[hash, default: []].contains(where: { CFEqual($0, node) }) { continue }
-            seen[hash, default: []].append(node)
-            guard count < maxElements, depth <= maxDepth else {
-                throw NativeFailure(code: "UNSUPPORTED", message: "Paste menu discovery exceeded its observation limits")
+            guard seen.insert(node).inserted else { continue }
+            guard seen.count <= maxElements, depth <= maxDepth else {
+                throw beforeInput("UNSUPPORTED", "Paste menu discovery exceeded its observation limits.")
             }
-            count += 1
-            if try string(node, "AXRole") == "AXMenuItem", try string(node, "AXMenuItemCmdChar")?.lowercased() == "v" {
-                let raw = try attribute(node, "AXMenuItemCmdModifiers")
-                if let raw, CFGetTypeID(raw) == CFNumberGetTypeID(), let number = raw as? NSNumber, number.intValue == 0,
-                   try actions(node).contains("AXPress") {
-                    guard found == nil else { throw NativeFailure(code: "UNSUPPORTED", message: "The application exposes ambiguous Paste commands") }
-                    found = node
-                }
+            if try matches(node) {
+                guard found == nil else { throw beforeInput("UNSUPPORTED", "The application exposes ambiguous Paste commands.") }
+                found = node
             }
-            for child in try children(node) { pending.append((child, depth + 1)) }
+            let list = try children(node)
+            incomplete = incomplete || list.incomplete
+            for case let child? in list.entries { pending.append((child, depth + 1)) }
         }
+        guard !incomplete else { throw beforeInput("UNSUPPORTED", "Paste menu discovery is incomplete.") }
         guard let found else { throw NativeFailure(code: "UNSUPPORTED", message: "No standard Paste command is available") }
         return found
     }
@@ -472,25 +504,31 @@ final class AXAccess {
         guard let position = try attribute(element, "AXPosition") else { return nil }
         return try bounds(position: position, size: attribute(element, "AXSize"))
     }
-    /// Resolve an exact AX window or sheet without enabling accessibility or traversing its controls.
-    func windowBounds(_ id: UInt32, owner: ProcessIdentity) throws -> WindowBounds? {
-        guard let node = try windowElement(id, owner: owner) else { return nil }
-        return try bounds(node)
-    }
-    func windowElement(_ id: UInt32, owner: ProcessIdentity) throws -> AXUIElement? {
+    /// WindowServer IDs identify a window or sheet even when other branches are incomplete.
+    func windowElement(_ id: UInt32, owner: ProcessIdentity, budget: inout AXChildRecoveryBudget) throws -> AXUIElement? {
         let app = AXUIElementCreateApplication(owner.pid)
-        var windows = try children(app, "AXWindows")
-        if let focused = try element(app, "AXFocusedWindow"), !windows.contains(where: { CFEqual($0, focused) }) {
-            windows.append(focused)
+        var seen = Set<AXUIElement>()
+        var windows: [AXUIElement] = []
+        func matches(_ node: AXUIElement, sheetOnly: Bool = false) throws -> Bool {
+            guard seen.insert(node).inserted else { return false }
+            let role = try string(node, "AXRole")
+            guard role == "AXSheet" || (!sheetOnly && role == "AXWindow") else { return false }
+            windows.append(node)
+            return try windowID(node) == id
         }
-        for window in windows {
-            let role = try string(window, "AXRole")
-            guard role == "AXWindow" || role == "AXSheet" else { continue }
-            if try windowID(window) == id { return window }
-            for sheet in try children(window) where try string(sheet, "AXRole") == "AXSheet" {
-                if try windowID(sheet) == id { return sheet }
-            }
+        for window in try children(app, "AXWindows") where try matches(window) { return window }
+        if let focused = try element(app, "AXFocusedWindow"), try matches(focused) { return focused }
+        let roots = try readChildren(app, budget: &budget)
+        for case let root? in roots.entries where try matches(root) { return root }
+        var incomplete = roots.incomplete
+        var index = 0
+        while index < windows.count {
+            let list = try readChildren(windows[index], budget: &budget)
+            for case let child? in list.entries where try matches(child, sheetOnly: true) { return child }
+            incomplete = incomplete || list.incomplete
+            index += 1
         }
+        guard !incomplete else { throw Self.beforeInput("WINDOW_UNAVAILABLE", "Window or sheet discovery is incomplete.") }
         return nil
     }
     private func bounds(position: CFTypeRef?, size: CFTypeRef?) throws -> WindowBounds? {
@@ -573,18 +611,14 @@ final class AXAccess {
     func project(identity: ProcessIdentity, windowID requested: UInt32?, maxElements: Int, maxDepth: Int, includeMenus: Bool = false, details: Bool = false) throws -> AXProjection {
         let app = AXUIElementCreateApplication(identity.pid)
         try enableAX(app, identity: identity)
-        var recoveryRequests = maxElements
-        var recoveryTime = Duration.seconds(Double(timeout))
+        var budget = AXChildRecoveryBudget(maxElements: maxElements, timeout: timeout)
         // Window discovery and traversal can both enumerate the same parent.
         var discovery: [AXUIElement: AXObservedChildren] = [:]
         func observedChildren(_ parent: AXUIElement, _ value: @autoclosure () throws -> CFTypeRef?, duringDiscovery: Bool = false) throws -> AXObservedChildren {
-            try AXObservedChildren.observing({ try childValues(value(), attribute: "AXChildren") }) {
-                if let cached = discovery[parent] { return cached }
-                let start = ContinuousClock.now
-                defer { recoveryTime -= start.duration(to: .now) }
-                let children = try recoverChildren(parent, limit: maxElements, requests: &recoveryRequests, deadline: start + recoveryTime)
-                if duringDiscovery { discovery[parent] = children }
-                return children
+            try readChildren(parent, budget: &budget, cached: discovery[parent], onRecovery: { result in
+                if duringDiscovery { discovery[parent] = result }
+            }) {
+                try childValues(value(), attribute: "AXChildren")
             }
         }
         let appChildren = try observedChildren(app, attribute(app, "AXChildren"), duringDiscovery: true)
@@ -760,41 +794,49 @@ final class AXAccess {
         throw NativeFailure(code: "WINDOW_UNAVAILABLE", message: "Pointer input requires an enclosing window or sheet. For a menu item’s default action, use app.invoke(id)")
     }
     /// A system file panel renders in its host window but receives input in the panel service's window.
-    func filePanelRecipient(_ node: AXUIElement, owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> (process: ProcessIdentity, windowID: UInt32)? {
-        guard ["open-panel", "save-panel"].contains(try string(node, "AXIdentifier") ?? "") else { return nil }
-        guard let hostID = try windowID(node) else { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has no window ID") }
+    func filePanelRecipient(_ node: AXUIElement, owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot, budget: inout AXChildRecoveryBudget) throws -> (process: ProcessIdentity, windowID: UInt32)? {
+        let identifier = try stringValue(attribute(node, "AXIdentifier", allowMissingMetadata: false), attribute: "AXIdentifier")
+        guard ["open-panel", "save-panel"].contains(identifier ?? "") else { return nil }
+        guard let hostID = try windowID(node) else { throw Self.beforeInput("PANEL_NOT_READY", "File panel has no window ID.") }
         _ = try NativePlatform.ownedWindow(owner.pid, hostID)
         var recipient: (ProcessIdentity, UInt32)?
-        for child in try children(node) {
-            guard let id = try windowID(child), let window = NativePlatform.windows(allLayers: true).first(where: { $0.windowID == id }), window.pid != owner.pid else { continue }
+        let children = try readChildren(node, budget: &budget)
+        guard !children.incomplete else { throw Self.beforeInput("PANEL_NOT_READY", "File panel recipient discovery is incomplete.") }
+        let windows = NativePlatform.windows(allLayers: true)
+        for case let child? in children.entries {
+            guard let id = try windowID(child), let window = windows.first(where: { $0.windowID == id }) else {
+                throw Self.beforeInput("PANEL_NOT_READY", "File panel child window could not be identified.")
+            }
+            guard window.pid != owner.pid else { continue }
             guard catalog.application(window.pid)?.bundleID == "com.apple.appkit.xpc.openAndSavePanelService" else {
-                throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel refers to an unsupported remote process")
+                throw Self.beforeInput("PANEL_NOT_READY", "File panel refers to an unsupported remote process.")
             }
             let process = try NativePlatform.identity(window.pid)
-            if let old = recipient, old.0 != process || old.1 != id { throw NativeFailure(code: "PANEL_NOT_READY", message: "File panel has ambiguous remote recipients") }
+            if let old = recipient, old.0 != process || old.1 != id { throw Self.beforeInput("PANEL_NOT_READY", "File panel has ambiguous remote recipients.") }
             recipient = (process, id)
         }
-        guard let (process, id) = recipient else { throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel has no ready input recipient") }
+        guard let (process, id) = recipient else { throw Self.beforeInput("PANEL_NOT_READY", "System file panel has no ready input recipient.") }
         var focus = try element(AXUIElementCreateApplication(process.pid), "AXFocusedWindow")
         for _ in 0..<100 {
             guard let focused = focus else { break }
             if try windowID(focused) == id { try NativePlatform.verify(process); return (process, id) }
             focus = try element(focused, "AXParent")
         }
-        throw NativeFailure(code: "PANEL_NOT_READY", message: "System file panel focus changed; observe fresh state")
+        throw Self.beforeInput("PANEL_NOT_READY", "System file panel focus changed.")
     }
 
     func keyboardRecipient(_ owner: ProcessIdentity, catalog: ApplicationCatalogSnapshot) throws -> ProcessIdentity {
+        var budget = AXChildRecoveryBudget(timeout: timeout)
         var current = try element(AXUIElementCreateApplication(owner.pid), "AXFocusedWindow")
         var visited: [AXUIElement] = []
         for _ in 0..<100 {
             guard let node = current else { return owner }
             if visited.contains(where: { CFEqual($0, node) }) { break }
             visited.append(node)
-            if let panel = try filePanelRecipient(node, owner: owner, catalog: catalog) { return panel.process }
+            if let panel = try filePanelRecipient(node, owner: owner, catalog: catalog, budget: &budget) { return panel.process }
             current = try element(node, "AXParent")
         }
-        throw NativeFailure(code: "PANEL_NOT_READY", message: "Focused accessibility ancestry exceeds the traversal limit")
+        throw Self.beforeInput("PANEL_NOT_READY", "Focused accessibility ancestry exceeds the traversal limit.")
     }
 }
 
