@@ -35,7 +35,7 @@ Pressing an observable row expands its output panel, and pressing it again colla
 
 The `job.list` stream `ctx.jobs` mirrors is the single roster: each `JobView` row carries lifecycle, duration, the live `progress` line or the terminal `detail`, and its retained byte count — a live job, or a settled one with retained output, is what makes a row expandable. There is no second roster to join.
 
-Running job rows also carry a two-press stop control: the first press arms it and widens it into a “Confirm stop” button, the confirming press within three seconds calls `ctx.jobs.kill`, and the row converges through the roster stream (`stopping`, then the settled list, whose detail carries `cancelled by the user`). A rejected kill shows “Stop failed” for four seconds. The kill claims nothing in the model's notice ledger, so the owning agent still receives the standard completion notice — the model is told the user stopped its task rather than left to infer it ([reference](../../jobs/tool-jobs/README.md)).
+Running job rows also carry a two-press stop control, whose tooltip reads “Stop task” without the command, which the row's hover card already shows: the first press arms it and widens it into a “Confirm stop” button, the confirming press within three seconds calls `ctx.jobs.kill`, and the row converges through the roster stream (`stopping`, then the settled list, whose detail carries `cancelled by the user`). A rejected kill shows “Stop failed” for four seconds. The kill claims nothing in the model's notice ledger, so the owning agent still receives the standard completion notice — the model is told the user stopped its task rather than left to infer it ([reference](../../jobs/tool-jobs/README.md)).
 
 ### The expanded panel
 

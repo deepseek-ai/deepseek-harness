@@ -429,7 +429,7 @@ describe('JobsSection observation', () => {
 })
 
 describe('JobsSection human kill', () => {
-  const stopTitle = (label: string): string => zh['kill.stop'].replace('{label}', label)
+  const stopTitle = (label: string): string => zh['kill.stopAria'].replace('{label}', label)
 
   it('offers the stop control only on running rows', () => {
     render(<JobsSection {...props([
@@ -559,7 +559,7 @@ describe('JobsSection hover', () => {
     }
   })
 
-  it('reveals a clipped command on row hover instead of native titles, and names the stop control after 500ms', () => {
+  it('reveals a clipped command on row hover instead of native titles, and names only the stop action in a tooltip after 500ms', () => {
     vi.useFakeTimers()
     try {
       const view = render(<JobsSection {...props([job()])} />)
@@ -573,12 +573,12 @@ describe('JobsSection hover', () => {
       expect(label.scrollLeft).toBe(100)
       fireEvent.pointerLeave(row)
       expect(label.scrollLeft).toBe(0)
-      const stop = screen.getByRole('button', { name: zh['kill.stop'].replace('{label}', 'pnpm run build') })
+      const stop = screen.getByRole('button', { name: zh['kill.stopAria'].replace('{label}', 'pnpm run build') })
       fireEvent.pointerEnter(stop, { pointerType: 'mouse' })
       act(() => { vi.advanceTimersByTime(499) })
       expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
       act(() => { vi.advanceTimersByTime(1) })
-      expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(zh['kill.stop'].replace('{label}', 'pnpm run build'))
+      expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe(zh['kill.stop'])
     } finally {
       vi.useRealTimers()
     }
