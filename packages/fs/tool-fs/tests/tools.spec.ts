@@ -1146,11 +1146,15 @@ describe('sandbox escalation API (write/edit)', () => {
     expect(text(orphan)).toContain('justification is only valid together with sandbox_permissions')
   })
 
-  it('sandbox_permissions under a non-confining backend fails closed (unadvertised field still reaches execute)', async () => {
+  it.each([
+    { sandbox_permissions: 'workspace-write', justification: 'why' },
+    { sandbox_permissions: 'workspace-write' },
+    { justification: 'why' },
+  ])('rejects unadvertised escalation fields under a non-confining backend as argument errors: %o', async (fields) => {
     const { ctx } = await setup()
-    const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write', justification: 'why' }, escalationAgent())
+    const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', ...fields }, escalationAgent())
     expect(result.isError).toBe(true)
-    expect(text(result)).toContain('not available in this composition')
+    expect(text(result)).toContain('invalid arguments: sandbox_permissions and justification are not available in this composition')
     expect(result.error?.info).toEqual({ name: 'ToolArgsError', code: 'INVALID_ARGS' })
   })
 })
