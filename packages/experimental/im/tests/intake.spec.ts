@@ -188,11 +188,11 @@ describe('ImIntake admission', () => {
     expect(store.get(ImMessageKey('fake:bot', 'm-slow'))?.text).toBe('read back')
   })
 
-  it('acknowledges nothing for a frame that arrives after it stopped', async () => {
+  it('rejects a frame that arrives after it stopped, so the platform redelivers it', async () => {
     const { bot, store, intake } = await boot()
     await intake.dispose()
-    // The platform redelivers it to a process that can store it, so this one neither stores nor settles it.
-    await deliver(bot, 'evt-late', inbound({ id: 'm-late' }))
+    // A listener that returns is an accepted frame — the adapter acknowledges it — so this one rejects instead.
+    await expect(deliver(bot, 'evt-late', inbound({ id: 'm-late' }))).rejects.toThrow('shutting down')
     expect(store.get(ImMessageKey('fake:bot', 'm-late'))).toBeUndefined()
   })
 

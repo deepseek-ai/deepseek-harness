@@ -86,7 +86,8 @@ const ignore = (): Promise<ImOutcome> => Promise.resolve({ kind: 'ignored' })
  *
  * Contract:
  * - {@link receive} resolves only after the message record *and* the event receipt are durable; the adapter ACKs
- *   afterwards. A rejection (a storage failure) therefore leaves the platform event unacked and a redelivery is
+ *   afterwards. A rejection — a storage failure, or a frame arriving after {@link dispose} — therefore leaves the
+ *   platform event unacked and a redelivery is
  *   expected. A message over `maxInputBytes` is remembered and acknowledged instead: refusing it would have the
  *   platform redeliver a message that can never be accepted. The platform reads of a frame (a card, a merged forward,
  *   the text of a quoted reply) happen outside the store chain and in arrival order per chat, so a slow read delays
@@ -139,11 +140,12 @@ export class ImIntake {
    * @param session - the adapter session of one received platform message.
    */
   private async receiveFrame(session: Session): Promise<void> {
-    // A frame that arrives while this intake is shutting down is not acknowledged: the platform redelivers it to a
-    // process that can store it.
-    if (this.disposed) return
+    // A frame that arrives while this intake is shutting down rejects instead of returning: a listener that returns
+    // is an accepted frame, so the adapter would acknowledge a message this process never stored and the platform
+    // would never redeliver it.
+    if (this.disposed) throw new ImError('unavailable', 'The IM intake is shutting down; this frame was not stored.')
+    if (session.type !== 'message' || session.message === undefined) return
     const message = session.message
-    if (session.type !== 'message' || message === undefined) return
     const bot = session.bot
     // Some platforms echo the bot's own messages back; those are recorded through `outbound`, not intake.
     if (message.sender.id === bot.selfId) return
