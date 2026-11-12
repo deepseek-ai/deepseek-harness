@@ -39,7 +39,10 @@ export type { CuaPrograms } from './tool-registration.ts'
 export interface CuaConfig {
   /** Ask once per live Session before explicitly requested system-pointer moves or drags. */
   requireSystemPointerApproval: boolean
-  /** Preset receiving raw cua; other composed presets receive cua_run_code. False registers raw cua globally. */
+  /**
+   * Preset receiving raw cua; every other Agent, with or without a preset, receives cua_run_code while its
+   * program services are available. False registers raw cua globally.
+   */
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
   standaloneRunCode: CuaStandaloneRunCodeConfig
