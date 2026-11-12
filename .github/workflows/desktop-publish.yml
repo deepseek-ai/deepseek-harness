@@ -74,7 +74,6 @@ jobs:
       DESKTOP_STAGING_PERCENTAGE: ${{ inputs.staging_percentage }}
       DESKTOP_PACKAGE_SELECTION: ${{ needs.route.outputs.selection }}
       DESKTOP_UPLOAD_WEBSITE: ${{ inputs.upload_website }}
-      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
       DSH_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v7.0.1
@@ -188,7 +187,6 @@ jobs:
     env:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
-      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -233,7 +231,6 @@ jobs:
     env:
       DESKTOP_PUBLISH_ROUTE: ${{ needs.prepare.outputs.route }}
       DESKTOP_WEBSITE_APPROVAL: ${{ needs.prepare.outputs.website-approval }}
-      DOWNLOAD_PROD_EO_ZONE_ID: ${{ vars.DOWNLOAD_PROD_EO_ZONE_ID }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
