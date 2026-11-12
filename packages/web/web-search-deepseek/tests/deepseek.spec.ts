@@ -12,7 +12,7 @@ import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import type { DeepSeekAccount } from '@deepseek-ai/dsh-deepseek-account'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import type { RouteCredentialGrant } from '@deepseek-ai/dsh-llm'
+import type { RouteCredential, RouteCredentialGrant } from '@deepseek-ai/dsh-llm'
 import * as AccountRoute from '@deepseek-ai/dsh-llm-deepseek-account'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import WebRuntime, { WebError, type WebSearchResult } from '@deepseek-ai/dsh-web'
@@ -33,7 +33,7 @@ const searchProvider = (options: DeepSeekSearchProviderOptions): DeepSeekSearchP
 
 /**
  * The account credential resolver a route publishes over `token`, with `reject` observing each invalidated token;
- * a throwing observer is contained as the account service contains storage failures.
+ * a throwing observer rejects the grant's invalidation, as an owner that does not contain its storage failures does.
  */
 function accountCredential(
   token: (endpoint: string) => Promise<string | undefined>, reject?: (token: string) => Promise<void>,
@@ -41,9 +41,7 @@ function accountCredential(
   return async (endpoint) => {
     const value = await token(endpoint)
     if (value === undefined || value.length === 0) return undefined
-    return { headers: { 'x-dsh-auth-token': value }, value, ...reject === undefined ? {} : { reject: async () => {
-      try { await reject(value) } catch (_storageFailure) { /* Contained as the account service contains it. */ }
-    } } }
+    return { headers: { 'x-dsh-auth-token': value }, value, ...reject === undefined ? {} : { reject: () => reject(value) } }
   }
 }
 
@@ -57,6 +55,12 @@ async function rejectedWebError(operation: Promise<unknown>): Promise<WebError> 
   }
   throw new Error('expected search operation to reject')
 }
+
+/**
+ * Base URL of the account route the composed suites mount, set in the route's config so that a `DEEPSEEK_BASE_URL` in
+ * the environment running them cannot move the route off the origin of the default search endpoint.
+ */
+const ACCOUNT_ROUTE_BASE = 'https://api.deepseek.com/anthropic'
 
 const options = {
   apiKey: 'ds-key',
@@ -772,9 +776,12 @@ describe('web-search-deepseek account route selection', () => {
    * initiator whose latest request context names `provider`.
    * @param provider - route recorded by the initiating Session's request context; undefined runs the
    *   search without an initiator while a Session on the account route exists.
+   * @param routeBaseURL - base URL of the mounted account route, whose origin its credential is published for.
    * @returns the headers the search sent and the URLs the account was asked about.
    */
-  async function searchAs(provider: string | undefined): Promise<{ headers: Record<string, string>; asked: string[] }> {
+  async function searchAs(
+    provider: string | undefined, routeBaseURL = ACCOUNT_ROUTE_BASE,
+  ): Promise<{ headers: Record<string, string>; asked: string[] }> {
     const fetchMock = vi.fn(async (_input: string, _init?: RequestInit) => jsonResponse(searchResponse()))
     vi.stubGlobal('fetch', fetchMock)
     const asked: string[] = []
@@ -785,7 +792,7 @@ describe('web-search-deepseek account route selection', () => {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(LlmRuntime)
-      await ctx.plugin(AccountRoute, {})
+      await ctx.plugin(AccountRoute, { baseURL: routeBaseURL })
       ctx.provide('deepseekAccount', accountStub({ token: (url) => { asked.push(url); return 'account-token' } }))
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
       const session = ctx.sessions.create(SessionId(`web-search-account-${provider ?? 'none'}`))
@@ -808,6 +815,14 @@ describe('web-search-deepseek account route selection', () => {
     expect(headers).not.toHaveProperty('x-api-key')
   })
 
+  it('sends the API key when the account route publishes its credential for another origin, without asking the account', async () => {
+    // The stand-in account releases its token for every destination, so only the origin comparison withholds it.
+    const { headers, asked } = await searchAs('deepseek-account', 'https://other-deployment.test/anthropic')
+    expect(asked).toEqual([])
+    expect(headers['x-api-key']).toBe('ds-key')
+    expect(headers).not.toHaveProperty('x-dsh-auth-token')
+  })
+
   it('keeps a sign-in that replaced the sent token before its late 401', async () => {
     let current = 'old-token'
     const rejectToken = vi.fn(async (token: string) => { if (token === current) current = '' })
@@ -822,7 +837,7 @@ describe('web-search-deepseek account route selection', () => {
       await ctx.plugin(AgentRegistry)
       await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
       await ctx.plugin(LlmRuntime)
-      await ctx.plugin(AccountRoute, {})
+      await ctx.plugin(AccountRoute, { baseURL: ACCOUNT_ROUTE_BASE })
       ctx.provide('deepseekAccount', accountStub({ token: () => current, reject: rejectToken }))
       await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
       const session = ctx.sessions.create(SessionId('web-search-account-late-401'))
@@ -890,7 +905,7 @@ describe('web-search-deepseek search readiness', () => {
     mounted.push(ctx)
     await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(AccountRoute, {})
+    await ctx.plugin(AccountRoute, { baseURL: ACCOUNT_ROUTE_BASE })
     if (setup.credentialsDir !== undefined) {
       await ctx.plugin(LocalCredentialProvider, { path: join(setup.credentialsDir, '.credentials.yaml'), watch: false })
     }
@@ -942,6 +957,15 @@ describe('web-search-deepseek search readiness', () => {
     expect(asked).toEqual([])
   })
 
+  it('does not ask the account about a search endpoint at another origin than the account route\'s base URL', async () => {
+    const asked: string[] = []
+    // The stand-in account releases its token for every destination, so only the origin comparison withholds it.
+    const account = accountStub({ token: (url) => { asked.push(url); return 'account-token' } })
+    const ctx = await compose({ config: { baseURL: 'https://gateway.test/anthropic/v1' }, account })
+    expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
+    expect(asked).toEqual([])
+  })
+
   it.each<[string, Setup]>([
     ['a search endpoint outside the account origin', { config: { baseURL: 'https://gateway.test/anthropic/v1' }, account: officialOriginAccount() }],
     ['a signed-out account', { account: accountStub({ token: () => undefined }) }],
@@ -988,13 +1012,19 @@ describe('web-search-deepseek search readiness', () => {
     }
   })
 
-  it('is not ready and fails the search when the initiating route\'s settings do not resolve, despite a literal key', async () => {
+  it.each<[string, () => RouteCredential, string]>([
+    ['settings do not resolve', () => { throw new Error('route settings do not resolve') }, 'route settings do not resolve'],
+    ['published base URL does not parse', () => ({
+      kind: 'account', baseURL: 'not a url', configured: () => Promise.resolve(true),
+      resolve: () => Promise.resolve({ headers: { 'x-dsh-auth-token': 'account-token' }, value: 'account-token' }),
+    }), 'Invalid URL'],
+  ])('is not ready and fails the search when the initiating route\'s %s, despite a literal key', async (_fault, routeCredential, diagnostic) => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init: RequestInit = {}) => jsonResponse(searchResponse()))
     vi.stubGlobal('fetch', fetchMock)
     const ctx = new Context()
     mounted.push(ctx)
     await ctx.plugin(WebRuntime, { searchProvider: DEEPSEEK_PROVIDER_ID })
-    ctx.provide('llm', { routeCredential: () => { throw new Error('route settings do not resolve') } } as never)
+    ctx.provide('llm', { routeCredential } as never)
     await ctx.plugin(deepseekPlugin, { apiKey: 'ds-key' })
     expect(await ctx.web.searchReady('deepseek-account')).toBe(false)
     expect(await ctx.web.searchReady(undefined)).toBe(true)
@@ -1006,7 +1036,7 @@ describe('web-search-deepseek search readiness', () => {
     session.append('request/context', { provider: 'deepseek-account', model: 'deepseek-v4-flash' })
     const failure = await rejectedWebError(ctx.agents.withInitiator({ session } as Agent, () => ctx.web.search({ query: 'q' })))
     expect(failure.code).toBe('WEB_PROVIDER_ERROR')
-    expect(failure.message).toContain('route settings do not resolve')
+    expect(failure.message).toContain(diagnostic)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

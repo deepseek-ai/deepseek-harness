@@ -2,7 +2,8 @@
  * Register a DeepSeek-backed provider in `ctx.web`. It calls the Anthropic-compatible Messages API
  * with native `web_search_20250305`. A search initiated by a Session whose latest model request used
  * a route that publishes an account credential through `ctx.llm.routeCredential()` authenticates with
- * that credential when its owner allows the search endpoint; every other search reuses
+ * that credential when the search endpoint has the origin of that route's base URL and the
+ * credential's owner allows the endpoint; every other search reuses
  * `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`; auxiliary search has its own
  * endpoint configuration. The provider reports itself not ready for a model request whose search
  * would have no credential.
@@ -93,15 +94,19 @@ export const WEB_SEARCH_DEEPSEEK_SETTINGS_NAMESPACE = 'web-search-deepseek'
 type SearchOptions = DeepSeekSearchProviderOptions & { readonly apiKeyEnv: CredentialRef }
 
 /**
- * The account credential the model route `route` publishes, when it publishes one of that kind.
+ * The account credential the model route `route` publishes for the deployment that serves `endpoint`. A route's
+ * account credential is sent only to the origin of that route's base URL, whatever destinations its owner would
+ * release it for.
  * @param ctx - plugin context supplying the optional model service.
  * @param route - provider route of a model request; undefined names none.
- * @returns the route's account credential, or undefined for another kind, no credential, or no route.
- * @throws when the route's settings do not resolve.
+ * @param endpoint - absolute URL the search dispatches to.
+ * @returns the route's account credential, or undefined for another kind, another origin, no credential, or no route.
+ * @throws when the route's settings do not resolve, or its published base URL or `endpoint` does not parse.
  */
-function accountCredentialOf(ctx: Context, route: string | undefined): RouteCredential | undefined {
+function accountCredentialOf(ctx: Context, route: string | undefined, endpoint: string): RouteCredential | undefined {
   const credential = route === undefined ? undefined : ctx.get('llm')?.routeCredential(route)
-  return credential?.kind === 'account' ? credential : undefined
+  if (credential?.kind !== 'account') return undefined
+  return new URL(credential.baseURL).origin === new URL(endpoint).origin ? credential : undefined
 }
 
 /**
@@ -124,7 +129,8 @@ function resolveOptions(
     resolveAccountCredential: async (endpoint) => {
       // The latest request context names the route that served the model
       // request which called this search, as account sign-out reads it.
-      const credential = accountCredentialOf(ctx, ctx.get('agents')?.currentInitiator()?.session.requestContext()?.provider)
+      const route = ctx.get('agents')?.currentInitiator()?.session.requestContext()?.provider
+      const credential = accountCredentialOf(ctx, route, endpoint)
       return credential === undefined ? undefined : await credential.resolve(endpoint)
     },
     resolveApiKey: async () => {
@@ -150,8 +156,9 @@ function resolveOptions(
 
 /**
  * Whether the search a model request on `route` would make has a credential, checked in the order
- * the search resolves them: the account credential the route publishes first, then the API key. A
- * route whose settings do not resolve or a failed read answers false, because the search fails there
+ * the search resolves them: the account credential the route publishes for the origin of the search
+ * endpoint first, then the API key. A route whose settings do not resolve or whose published base URL
+ * does not parse, or a failed read, answers false, because the search fails there
  * instead of trying the next credential. Only presence is checked: the API key's value is not read
  * and the endpoint is not contacted, so a wrong key or an endpoint without native search still
  * counts as configured.
@@ -163,11 +170,12 @@ function resolveOptions(
 async function searchConfigured(
   ctx: Context, options: SearchOptions, route: string | undefined,
 ): Promise<boolean> {
+  const endpoint = `${options.baseURL}/messages`
   let account: RouteCredential | undefined
-  try { account = accountCredentialOf(ctx, route) }
+  try { account = accountCredentialOf(ctx, route, endpoint) }
   catch (_unresolvedRoute) { return false /* The search fails on this route before it reads any credential. */ }
   if (account !== undefined) {
-    try { if (await account.configured(`${options.baseURL}/messages`)) return true }
+    try { if (await account.configured(endpoint)) return true }
     catch (_unreadableGrant) { return false /* The search fails on this read before it tries the API key. */ }
   }
   if (options.apiKey !== undefined) return true

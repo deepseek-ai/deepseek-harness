@@ -18,8 +18,8 @@ function keyRef(resolve: () => Promise<string | undefined>, configured: () => Pr
 }
 /**
  * A route source on {@link ACCOUNT_BASE} whose account credential releases `resolveToken(endpoint)` as the token header;
- * an empty token releases nothing. `rejectToken` observes each invalidated token, and its failures are contained as the
- * account service contains them.
+ * an empty token releases nothing. `rejectToken` observes each invalidated token, and its failure rejects the grant's
+ * invalidation, as an owner that does not contain its storage failures does.
  */
 function accountSource(
   resolveToken: (endpoint: string) => Promise<string | undefined>, rejectToken: (token: string) => Promise<void> = async () => {},
@@ -27,9 +27,7 @@ function accountSource(
   const grant = async (endpoint: string) => {
     const token = await resolveToken(endpoint)
     if (token === undefined || token.length === 0) return undefined
-    return { headers: { 'x-dsh-auth-token': token }, value: token, reject: async () => {
-      try { await rejectToken(token) } catch (_storageFailure) { /* Contained as the account service contains it. */ }
-    } }
+    return { headers: { 'x-dsh-auth-token': token }, value: token, reject: () => rejectToken(token) }
   }
   return { kind: 'route', baseURL: ACCOUNT_BASE, credential: {
     kind: 'account', configured: async endpoint => (await grant(endpoint)) !== undefined, resolve: grant,

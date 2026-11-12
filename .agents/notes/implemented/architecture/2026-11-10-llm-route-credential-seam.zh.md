@@ -18,7 +18,7 @@ Status: implemented
 
 `@deepseek-ai/dsh-deepseek-account` 释放请求凭据。`resolveRequestCredential(url)` 返回 `x-dsh-auth-token` 请求头、裸 token 和 `reject()`；`reject()` 仅在授权仍一致时删除它并隔离存储失败。`registerRunningTaskReport(report)` 为 `hasRunningAccountTasks()` 提供答案。该服务不检查任何 Agent，也不依赖 `dsh-agent` 或 `dsh-llm`。包以不变的名字位于 `packages/account/` 组。
 
-Web 提供方消费这些发布的凭据。`web-deepseek-api` 从 `ctx.llm.routeCredential('deepseek-official')` 和 `routeCredential('deepseek-account')` 构造每次操作的有序凭据来源：路由来源把 `api-key` 授权的值作为 Bearer 令牌发送，其他种类的请求头原样发送，并通过授权的 `reject()` 作废。没有 API 密钥路由时，它通过引用函数读取 `DEEPSEEK_API_KEY`；没有账号路由时，它向账号服务索取发往 `DEEPSEEK_BASE_URL` 所指 origin 的凭据。`web-search-deepseek` 在发起会话的路由发布 `account` 种类时使用其账号凭据，否则使用引用函数。两个 Web 包都不再依赖 `llm-deepseek`、路由插件或 Loader，`web-search-deepseek` 也不再依赖账号服务。
+Web 提供方消费这些发布的凭据。`web-deepseek-api` 从 `ctx.llm.routeCredential('deepseek-official')` 和 `routeCredential('deepseek-account')` 构造每次操作的有序凭据来源：路由来源把 `api-key` 授权的值作为 Bearer 令牌发送，其他种类的请求头原样发送，并通过授权的 `reject()` 作废。没有 API 密钥路由时，它通过引用函数读取 `DEEPSEEK_API_KEY`；没有账号路由时，它向账号服务索取发往 `DEEPSEEK_BASE_URL` 所指 origin 的凭据。`web-search-deepseek` 在发起会话的路由发布 `account` 种类且搜索端点与该路由的基础地址同源时使用其账号凭据，否则使用引用函数；为其他 origin 发布的账号凭据不会被索取。两个 Web 消费方都会隔离失败的 `reject()`，因此对任何凭据种类，报告的都是 HTTP 拒绝。两个 Web 包都不再依赖 `llm-deepseek`、路由插件或 Loader，`web-search-deepseek` 也不再依赖账号服务。
 
 ## 考虑过的替代方案
 

@@ -161,7 +161,7 @@ interface SearchAuth {
   readonly endpoint: string
   /** Headers carrying the credential. */
   readonly headers: Readonly<Record<string, string>>
-  /** Request-bound invalidation of the sent credential, present when its grant offers one. */
+  /** Request-bound invalidation of the sent credential, present when its grant offers one; the dispatch contains its failure. */
   readonly reject?: () => Promise<void>
 }
 
@@ -230,7 +230,8 @@ export async function dispatchDeepSeekWeb<T>(
     if (status === 401) {
       // Invalidation can cancel this Session; finish reading the HTTP failure before it does. A cancelled read still
       // invalidates the credential the status rejected.
-      await auth.reject?.()
+      try { await auth.reject?.() }
+      catch (_invalidationFailed) { /* The HTTP rejection stays the reported failure when the invalidation itself fails. */ }
       // The account service released its credential only for its inference origin, so the endpoint is not what the
       // user must change.
       if (auth.kind === 'account') throw aborted ?? accountRejectedError(message)

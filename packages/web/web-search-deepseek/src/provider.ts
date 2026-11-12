@@ -96,7 +96,8 @@ export interface DeepSeekSearchProviderOptions {
   /**
    * Resolve the DeepSeek account credential for one search endpoint. A credential takes
    * precedence over every API key and is sent only through the headers of its grant, which
-   * also invalidates it after HTTP 401; `undefined` selects API-key authentication.
+   * also invalidates it after HTTP 401; a failure of that invalidation is contained, and the
+   * search reports the HTTP rejection. `undefined` selects API-key authentication.
    */
   resolveAccountCredential?: (endpoint: string) => Promise<RouteCredentialGrant | undefined>
   /** Literal DeepSeek API key; when present it wins over {@link resolveApiKey}. */
@@ -301,7 +302,8 @@ export class DeepSeekSearchProvider implements WebSearchProvider {
       if (status === 401 && auth.kind === 'account') {
         // Invalidation can cancel this Session; finish reading the HTTP failure before it does. A cancelled read
         // still invalidates the credential the status rejected.
-        await auth.reject?.()
+        try { await auth.reject?.() }
+        catch (_invalidationFailed) { /* The HTTP rejection stays the reported failure when the invalidation itself fails. */ }
         throw aborted ?? accountRejectedError(message)
       }
       if (aborted !== undefined) throw aborted
