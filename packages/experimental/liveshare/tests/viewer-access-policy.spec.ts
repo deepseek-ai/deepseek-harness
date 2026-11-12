@@ -419,6 +419,17 @@ describe('viewer page startup contract', () => {
     for (const action of ownerOnly) expect(granted.has(action)).toBe(false)
   })
 
+  it.each(['view', 'write'] as const)('keeps owner reading reminders private for a %s share', async (mode) => {
+    const { decide, grants } = await fixture({ mode })
+    const granted = new Set(grants().flatMap(grant => [...grant.actions]))
+    for (const action of ['sessionStatus/follow', 'sessionStatus/mark'] as const) {
+      for (const resource of [GLOBAL, session('source'), session('own-child')]) {
+        expect(decide(action, resource)).toEqual(deny('liveshare/read-only'))
+      }
+      expect(granted.has(action)).toBe(false)
+    }
+  })
+
   it('grants every action the served page’s startup and render paths need', async () => {
     // The page reads only this snapshot, so an action it needs here and the policy omits leaves a
     // surface silently stating the read-only fact instead of failing loudly.

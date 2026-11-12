@@ -154,7 +154,7 @@ export const StateResult = z.object({
   windowId: windowId.nullable(),
   focusedWindowId: windowId.nullable().optional(),
   snapshotId: z.string().min(1).transform(value => value as CuaSnapshotId),
-  tree: z.string(), windows: WindowsResult, truncated: z.boolean(),
+  tree: z.string(), windows: WindowsResult, truncated: z.boolean(), hasUnreadableElements: z.boolean().optional(),
 })
 /** Provider-defined action names for one element, including attribute-setting operations; an element may advertise none. */
 export const ActionNamesResult = z.array(z.string())

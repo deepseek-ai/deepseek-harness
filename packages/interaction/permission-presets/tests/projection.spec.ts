@@ -78,7 +78,7 @@ describe('permissions projection unit', () => {
     expect(permissionChanges).toHaveLength(3)
     expect(permissionChanges.at(-1)).toMatchObject({ key: 'permissions', value: { currentValue: 'danger-full-access' } })
     session.append('turn/start', { turn: 1 })
-    expect(changes).toHaveLength(3)
+    expect(changes.filter(change => change.key === 'permissions')).toEqual(permissionChanges)
   })
 
   it('projects custom as a current value when the knobs match no preset', async () => {
