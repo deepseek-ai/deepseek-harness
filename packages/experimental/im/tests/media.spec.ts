@@ -106,9 +106,9 @@ function config(overrides: Partial<ImConfig['media']> = {}): ImConfig {
     maxRecords: 100,
     maxInputBytes: 262144,
     retryIntervalMs: 5000,
-    media: { download: true, maxBytes: 1048576, maxItems: 9, source: { file: false, internal: false }, ...overrides },
+    media: { download: true, maxBytes: 1048576, maxItems: 9, timeoutMs: 30000, source: { file: false, internal: false }, ...overrides },
     send: { maxMediaBytes: 1048576, operationTimeoutMs: 30000 },
-    tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' },
+    tools: { readOnly: false, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' },
   }
 }
 

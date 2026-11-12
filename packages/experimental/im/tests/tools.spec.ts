@@ -265,7 +265,7 @@ describe('im tool registration', () => {
   })
 
   it('registers only the read tools when the preset is read-only', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
+    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
     expect(mounted.names()).toEqual(['im_read', 'im_history', 'im_members', 'im_read_image', 'im_read_file'])
   })
 
@@ -310,7 +310,7 @@ describe('im tool registration', () => {
   })
 
   it('guides a read-only session and a session without chats', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
+    const mounted = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
     expect(await mounted.prompt(fakeAgent(SessionId('im-session')))).toContain('this preset publishes nothing')
     const bareMounted = await mount()
     bareMounted.im.sessions.add('bare', [])
@@ -443,7 +443,7 @@ describe('im_read and im_history', () => {
   })
 
   it('bounds the rendered text of a read to maxReadBytes', async () => {
-    const mounted = await mount({ config: { tools: { readOnly: false, maxReadBytes: 80, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
+    const mounted = await mount({ config: { tools: { readOnly: false, maxReadBytes: 80, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
     expect(textOf(await mounted.call('im_history', {}))).toContain('truncated')
   })
 
@@ -678,7 +678,7 @@ describe('model-visible surface', () => {
     mounted.im.renderers.add('probe')
     const withRenderer = await mounted.prompt(fakeAgent(SessionId('rendered-pin')))
 
-    const readOnlyMount = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, fileDir: '.dsh/im' } } })
+    const readOnlyMount = await mount({ config: { tools: { readOnly: true, maxReadBytes: 65536, maxHistoryItems: 50, maxMembers: 200, fileDir: '.dsh/im' } } })
     const readOnly = await readOnlyMount.prompt(fakeAgent(SessionId('im-session')))
 
     const bareMount = await mount()
