@@ -2,16 +2,17 @@
 
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import type { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
+import { brandString } from '@deepseek-ai/dsh-brand'
 import type { FsObservation, FsTarget, FsWriteIntent } from '@deepseek-ai/dsh-fs'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
 import type { FsObservationActor } from '@deepseek-ai/dsh-fs-observation-policy'
 
 function target(path: string): FsTarget {
-  return { targetKey: FsTargetKey(path), displayPath: path }
+  return { targetKey: brandString<FsTargetKey>(path), displayPath: path }
 }
 const ownerExec = (session: object): FsObservationActor => ({ agent: { session } })
-const present = (version: string): FsObservation => ({ kind: 'present', version: FsVersion(version) })
+const present = (version: string): FsObservation => ({ kind: 'present', version: brandString<FsVersion>(version) })
 const absent: FsObservation = { kind: 'absent' }
 
 /** Dispatch the write-intent waterfall with the bare default thunk. */

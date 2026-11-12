@@ -60,16 +60,12 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
     'CREDENTIALS_FILENAME', 'DOCUMENT_VERSION', 'parseCredentialsDocument', 'renderFlatLayoutMigration', 'resolveSpec',
   ],
   '@deepseek-ai/dsh-cua': ['CuaConfig', 'installCua'],
+  '@deepseek-ai/dsh-cua-macos': ['GUIDANCE'],
   '@deepseek-ai/dsh-experimental-claude-code-mods': [
     'DEFAULT_TOOL_ALIASES', 'KNOWN_EVENTS', 'MODS_API_VERSION', 'SERVED_EVENTS', 'defineMod',
   ],
-  '@deepseek-ai/dsh-experimental-cua-macos': ['GUIDANCE'],
   '@deepseek-ai/dsh-experimental-forge': ['changeRequestKey'],
   '@deepseek-ai/dsh-experimental-inspector': ['resolveInspectorOptions', 'startInspector'],
-  '@deepseek-ai/dsh-experimental-ptc-runtime-python': [
-    'checkDoneValue', 'detachResidual', 'encodeJsonPlain', 'hasNonLosslessNumber', 'hasUnsafeIntegerToken',
-    'hostFrameParseCeiling', 'logTruncationMarker', 'readProcessStart', 'resolvePythonBin', 'validateChildFrame',
-  ],
   '@deepseek-ai/dsh-experimental-worktree': [
     'CREATED_RECORD', 'createdWorktreeSchema', 'generatedWorktreeName', 'worktreeProjection',
   ],

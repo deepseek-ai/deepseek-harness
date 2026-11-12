@@ -1,9 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
-import Sessions, { SessionId } from '@deepseek-ai/dsh-session'
+import Sessions, { type SessionId } from '@deepseek-ai/dsh-session'
 import SandboxPolicy, { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjections from '@deepseek-ai/dsh-session-projection'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { PolicyProcesses } from '../src/policy-processes.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function setup() {
   const ctx = new Context()
@@ -11,7 +12,7 @@ async function setup() {
   await ctx.plugin(Sessions)
   await ctx.plugin(SessionProjections)
   await ctx.plugin(SandboxPolicy, { mode: 'workspace-write' })
-  const session = ctx.sessions.create(SessionId('policy-processes'))
+  const session = ctx.sessions.create(brandString<SessionId>('policy-processes'))
   const processes = new PolicyProcesses(ctx)
   const policy = ctx.sandboxPolicy.resolve({ session })
   return { ctx, session, processes, policy }
@@ -24,7 +25,7 @@ it('starts cleanup without another execution and retains the Promise for subsequ
   processes.register(policy, release)
   try {
     session.append('turn/start', { turn: 1 })
-    setSandboxMode(ctx.sessions.create(SessionId('unrelated')), 'read-only')
+    setSandboxMode(ctx.sessions.create(brandString<SessionId>('unrelated')), 'read-only')
     setSandboxMode(session, 'workspace-write')
     expect(release).not.toHaveBeenCalled()
     setSandboxMode(session, 'read-only')
@@ -77,7 +78,7 @@ it('waits for all processes on owner unload and removes its policy observer', as
   const { ctx, session, processes, policy } = await setup()
   const cleanup = Promise.withResolvers<undefined>()
   const entered = Promise.withResolvers<undefined>()
-  processes.register({ ...policy, sessionId: SessionId('unpublished') }, async () => { entered.resolve(undefined); await cleanup.promise })
+  processes.register({ ...policy, sessionId: brandString<SessionId>('unpublished') }, async () => { entered.resolve(undefined); await cleanup.promise })
   const disposed = ctx.fiber.dispose()
   try {
     await entered.promise
@@ -92,7 +93,7 @@ it('cleans an explicit policy resource without a mounted Session store', async (
   onTestFinished(async () => { await ctx.fiber.dispose() })
   const processes = new PolicyProcesses(ctx)
   const release = vi.fn(async () => {})
-  processes.register({ sessionId: SessionId('external'), mode: 'read-only', workspaceRoot: process.cwd() }, release)
+  processes.register({ sessionId: brandString<SessionId>('external'), mode: 'read-only', workspaceRoot: process.cwd() }, release)
   await ctx.fiber.dispose()
   expect(release).toHaveBeenCalledTimes(1)
 })

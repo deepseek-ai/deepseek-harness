@@ -2,7 +2,7 @@
 import { stripTypeScriptTypes } from 'node:module'
 import { isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { PtcProgramFormat, PtcRunRequest, PtcRunResult, PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
+import { PtcRuntimeError, type PtcProgramFormat, type PtcRunRequest, type PtcRunResult, type PtcRunSpec } from '@deepseek-ai/dsh-ptc-runtime'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { clampTimeout } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedConfig } from './config.ts'
@@ -73,7 +73,7 @@ class NodeExecution {
   resolve(request: PtcRunRequest): PtcRunSpec {
     const sandboxPolicy = request.sandboxPolicy ?? this.ctx.sandboxPolicy.resolve()
     const cwd = request.cwd ?? sandboxPolicy.workspaceRoot
-    if (!isAbsolute(cwd)) throw new Error(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`)
+    if (!isAbsolute(cwd)) throw new PtcRuntimeError(`${this.mode.retainsState ? 'persistent PTC' : 'ptc-runtime-node'}: cwd must be absolute`, 'PTC_RUNTIME_INVALID_ARGUMENT')
     return { ...request, sandboxPolicy, cwd, timeoutMs: request.timeoutMs === null ? null : clampTimeout(request.timeoutMs, this.config.timeoutMs, this.config.maxTimeoutMs, this.mode.retainsState ? 'persistent PTC timeoutMs' : 'ptc-runtime-node: timeoutMs') }
   }
 
@@ -84,8 +84,8 @@ class NodeExecution {
    * @returns Captured logs, JSON completion, or a structured execution failure.
    */
   async run(spec: PtcRunSpec, initialization: string | undefined): Promise<PtcRunResult> {
-    if (spec.sandboxPolicy === undefined) throw new Error('ptc-runtime-node: run requires a resolved sandbox policy')
-    if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new Error('ptc-runtime-node: run requires resolved cwd and timeout')
+    if (spec.sandboxPolicy === undefined) throw new PtcRuntimeError('ptc-runtime-node: run requires a resolved sandbox policy', 'PTC_RUNTIME_INVALID_ARGUMENT')
+    if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new PtcRuntimeError('ptc-runtime-node: run requires resolved cwd and timeout', 'PTC_RUNTIME_INVALID_ARGUMENT')
     const bindings = validateBindings(spec)
     const owner = this.mode.retainsState ? spec.stateOwner : undefined
     let worker = owner === undefined ? undefined : this.owners.get(owner)
@@ -93,7 +93,7 @@ class NodeExecution {
     if (worker && !worker.closed && (worker.policy.mode !== spec.sandboxPolicy.mode
       || worker.policy.workspaceRoot !== spec.sandboxPolicy.workspaceRoot
       || worker.policy.sessionId !== spec.sandboxPolicy.sessionId)) {
-      throw new Error('persistent PTC: release the retained environment before changing its sandbox policy')
+      throw new PtcRuntimeError('persistent PTC: release the retained environment before changing its sandbox policy', 'PTC_RUNTIME_CONFLICT')
     }
     // Retained processes keep their launch-time directory grants until release.
     if (!worker || worker.closed) {

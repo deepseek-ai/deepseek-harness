@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import { afterEach, expect, it } from 'vitest'
 import { desktopReleasesRoot, retainDesktopCi, resolveDesktopRetentionRunner } from '../scripts/retain-desktop-ci.ts'
-import { verifyRetainedDesktopRelease } from '../scripts/desktop-release-store.ts'
+import { verifyRetainedDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 import { verifyDesktopArchive } from '../scripts/archive-desktop-ci.ts'
 import { prepareDesktopPublication } from '../scripts/publish-desktop-ci.ts'
 

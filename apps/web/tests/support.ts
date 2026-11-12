@@ -479,3 +479,13 @@ export async function openSettings(page: Page, locale: 'en' | 'zh' | 'ja'): Prom
   await trigger.click()
   await page.getByRole('menuitem', { name: labels[locale][1], exact: true }).click()
 }
+
+/**
+ * The right Sidebar's fullscreen panel box: 1px wider than the viewport, so the
+ * first column's divider sits past the window's left edge where the frame clips it.
+ * @param viewport - the page viewport size.
+ * @returns the panel's expected bounding box.
+ */
+export function fullscreenBox(viewport: { width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  return { x: -1, y: 0, width: viewport.width + 1, height: viewport.height }
+}

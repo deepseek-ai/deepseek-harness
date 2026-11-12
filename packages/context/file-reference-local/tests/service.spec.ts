@@ -9,13 +9,14 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
 import { FILE_REFERENCE_PROMPT } from '@deepseek-ai/dsh-file-reference'
 import LocalFileReferenceService from '../src/index.ts'
 import { WorkspaceFileSearch } from '../src/search.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const roots: string[] = []
 
@@ -45,7 +46,7 @@ async function stubAgent(
   const root = await mkdtemp(join(tmpdir(), 'dsh-file-reference-service-'))
   roots.push(root)
   await writeFile(join(root, 'README.md'), 'readme')
-  const session = ctx.sessions.create(SessionId(id), { meta: includeCwd ? { cwd: root } : {} })
+  const session = ctx.sessions.create(brandString<SessionId>(id), { meta: includeCwd ? { cwd: root } : {} })
   const agent = {
     id: session.id,
     options: {},
@@ -143,7 +144,7 @@ describe('LocalFileReferenceService', () => {
     expect(invalidate).toHaveBeenCalledOnce()
     ctx.emit('session/event', agent.session, { type: 'assistant/message', seq: 0, data: {} } as never)
     expect(invalidate).toHaveBeenCalledOnce()
-    const orphan = ctx.sessions.create(SessionId('file-reference-orphan'))
+    const orphan = ctx.sessions.create(brandString<SessionId>('file-reference-orphan'))
     ctx.emit('session/event', orphan, { type: 'tool/result', seq: 0, data: {} } as never)
     expect(invalidate).toHaveBeenCalledOnce()
 

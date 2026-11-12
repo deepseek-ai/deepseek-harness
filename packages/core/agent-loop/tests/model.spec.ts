@@ -3,11 +3,12 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { AgentModel, modelSelectionProjectionDefinition } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { type SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 async function dependencies() {
   const ctx = new Context()
@@ -40,10 +41,10 @@ describe('Agent model ownership', () => {
     })
     const loading = ctx.plugin(AgentLoop, { agents: [] })
     await entered.promise
-    await expect(ctx.agents.create({ sessionId: SessionId('too-early') })).rejects.toThrow('no agent factory registered')
+    await expect(ctx.agents.create({ sessionId: brandString<SessionId>('too-early') })).rejects.toThrow('no agent factory registered')
     ready.resolve(undefined)
     await loading
-    const handle = await ctx.agents.create({ sessionId: SessionId('ready'), agentOptions: INITIAL })
+    const handle = await ctx.agents.create({ sessionId: brandString<SessionId>('ready'), agentOptions: INITIAL })
     expect(handle.agent.model.current()).toEqual(INITIAL)
   })
 
@@ -51,14 +52,14 @@ describe('Agent model ownership', () => {
     const ctx = await dependencies()
     await ctx.plugin(AgentLoop, { agents: [] })
     const first = await ctx.agents.create({
-      sessionId: SessionId('first'),
+      sessionId: brandString<SessionId>('first'),
       agentOptions: INITIAL,
       setup: (_ctx, agent) => {
         expect(agent.model).toBeInstanceOf(AgentModel)
         agent.model.select(SELECTED)
       },
     })
-    const second = await ctx.agents.create({ sessionId: SessionId('second'), agentOptions: INITIAL })
+    const second = await ctx.agents.create({ sessionId: brandString<SessionId>('second'), agentOptions: INITIAL })
     expect(first.agent.model).not.toBe(second.agent.model)
     expect(first.agent.model.current()).toEqual(SELECTED)
     expect(second.agent.model.current()).toEqual(INITIAL)
@@ -74,7 +75,7 @@ describe('Agent model ownership', () => {
     const release = Promise.withResolvers<undefined>()
     onTestFinished(() => { release.resolve(undefined) })
     const handle = await ctx.agents.create({
-      sessionId: SessionId('cleanup'),
+      sessionId: brandString<SessionId>('cleanup'),
       agentOptions: INITIAL,
       setup: (agentCtx, agent) => {
         agentCtx.effect(() => async () => {

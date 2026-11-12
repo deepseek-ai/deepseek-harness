@@ -6,7 +6,7 @@ import type AgentRegistry from '@deepseek-ai/dsh-agent'
 import type TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
 import type { PendingRemoteEventInfo } from '@deepseek-ai/dsh-api-gateway'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, type SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +48,7 @@ async function fixture() {
   roots.push(ctx)
   await ctx.plugin(SessionStore)
   installSessionReadTestServices(ctx)
-  const session = ctx.sessions.create(SessionId('state-target'), { meta: { cwd: '/state-test' } })
+  const session = ctx.sessions.create(brandString<SessionId>('state-target'), { meta: { cwd: '/state-test' } })
   let agent: Agent | undefined
   const get = vi.fn(() => agent)
   const agents: Partial<AgentRegistry> = { get }
@@ -97,7 +97,7 @@ describe('StateController', () => {
 
   it('rejects a live state read whose Session records no cwd', async () => {
     const f = await fixture()
-    const session = f.ctx.sessions.create(SessionId('no-cwd-live'))
+    const session = f.ctx.sessions.create(brandString<SessionId>('no-cwd-live'))
     const partial: Partial<Agent> = {
       id: session.id, session, status: 'idle', inbox: createInboxStub(), whenIdle: vi.fn(() => Promise.resolve(undefined)),
     }
@@ -134,7 +134,7 @@ describe('StateController', () => {
     f.addPending('user-questions/request')
     f.addPending('fixture/request')
     f.addPending('approval/request')
-    f.addPending('ignored', SessionId('other'))
+    f.addPending('ignored', brandString<SessionId>('other'))
     expect(await f.controller.state(f.request, f.abort.signal)).toEqual({ ...emptyState, pendingInput: ['approval', 'question', 'other'] })
     expect(read).toHaveBeenCalledWith({ sessionId: f.session.id, projection: false }, f.abort.signal, expect.any(Function))
   })
@@ -356,7 +356,7 @@ describe('StateController', () => {
     const f = await fixture()
     const agent = f.live('idle')
     if (condition === 'missing-agent') f.setAgent(undefined)
-    else Object.assign(agent, { session: f.ctx.sessions.create(SessionId('replacement')) })
+    else Object.assign(agent, { session: f.ctx.sessions.create(brandString<SessionId>('replacement')) })
     vi.spyOn(StateListener.prototype, 'observeStates').mockImplementation(async function* () {
       yield { state: { ...emptyState, active: true, queue: [] }, revision: 0 }
       yield { state: emptyState, revision: 0 }
@@ -388,7 +388,7 @@ describe('StateController', () => {
     try {
       await entered.promise
       if (changed === 'agent') f.setAgent(undefined)
-      if (changed === 'session') Object.assign(agent, { session: f.ctx.sessions.create(SessionId('new-session')) })
+      if (changed === 'session') Object.assign(agent, { session: f.ctx.sessions.create(brandString<SessionId>('new-session')) })
       idle.resolve(undefined)
       await rechecked.promise
       next.resolve(undefined)
@@ -441,7 +441,7 @@ describe('StateListener', () => {
     const states = listener.observeStates()
     await states.next()
     const pending = tracked(states.next())
-    f.ctx.sessions.create(SessionId('unrelated'))
+    f.ctx.sessions.create(brandString<SessionId>('unrelated'))
     expect(read).toHaveBeenCalledOnce()
     await f.ctx.fiber.dispose()
     expect(await pending).toEqual({ done: true, value: undefined })

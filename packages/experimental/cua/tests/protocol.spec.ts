@@ -47,6 +47,15 @@ it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }
   expect(Request.safeParse(request).success).toBe(false)
 })
 
+it.each([
+  { method: 'click', params: { appHandle: 'app', windowId: '1', x: 1, y: 2 } },
+  { method: 'drag', params: { appHandle: 'app', windowId: '1', fromX: 1, fromY: 2, toX: 3, toY: 4 } },
+])('admits shared pointer modifiers for $method and rejects keyboard-only aliases', ({ method, params }) => {
+  const request = (modifiers: string[]) => ({ method, params: { ...params, modifiers } })
+  expect(Request.parse(request(['ctrl', 'alt', 'win']))).toEqual(request(['ctrl', 'alt', 'win']))
+  for (const name of ['cmd', 'unknown']) expect(Request.safeParse(request([name])).success).toBe(false)
+})
+
 it('admits arbitrary provider-defined pressKey modifier names', () => {
   const request = { method: 'pressKey', params: { appHandle: 'app', key: 'PlatformKey', modifiers: ['platform-modifier', 'shift'] } }
   expect(Request.parse(request)).toEqual(request)

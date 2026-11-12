@@ -6,8 +6,9 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SubagentRuntime, { NO_START_CAPABILITIES, SubagentError } from '@deepseek-ai/dsh-subagent'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { brandString } from '@deepseek-ai/dsh-brand'
+import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { JsonRpcLineTransport } from '@deepseek-ai/dsh-sdk-protocol'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -44,7 +45,7 @@ async function setup(enabled?: boolean, subagents = false) {
     ...(enabled === undefined ? {} : { approvalRequests: enabled }),
   })
   await client.request('session/working-directory/get', { sessionId: 'main' })
-  const agent = ctx.agents.get(SessionId('main'))!
+  const agent = ctx.agents.get(brandString<SessionId>('main'))!
   agent.session.append('turn/start', { turn: 1 })
   return { ctx, server, serverWire, client, agent, input }
 }
@@ -58,7 +59,7 @@ describe('SDK approval bridge', () => {
       return { outcome }
     })
     await expect(h.ctx.approval.request({
-      agent: h.agent, toolName: 'bash', callId: ToolCallId('call-1'), reason: 'write outside workspace',
+      agent: h.agent, toolName: 'bash', callId: brandString<ToolCallId>('call-1'), reason: 'write outside workspace',
     })).resolves.toBe(outcome)
     expect(h.agent.session.snapshotEvents().slice(-2).map(e => [e.type, e.data])).toEqual([
       ['approval/asked', expect.objectContaining({ toolName: 'bash', reason: 'write outside workspace' })],
@@ -134,7 +135,7 @@ describe('SDK approval bridge', () => {
   ])('does not claim an unrelated live Agent (subagents=$subagents, SDK lineage=$hasLineage)', async ({ subagents, hasLineage }) => {
     const h = await setup(true, subagents)
     const foreign = await h.ctx.agents.create({
-      sessionId: SessionId('foreign'),
+      sessionId: brandString<SessionId>('foreign'),
       meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id, origin: 'subagent' as const } : {}) },
     })
     onTestFinished(() => foreign.dispose())
@@ -149,13 +150,13 @@ describe('SDK approval bridge', () => {
   it.each([false, true])('serves runtime descendants with SDK session lineage: %s and preserves never policy', async (hasLineage) => {
     const h = await setup(true, true)
     const child = await h.ctx.agents.create({
-      sessionId: SessionId('child'),
+      sessionId: brandString<SessionId>('child'),
       meta: { cwd: process.cwd(), ...(hasLineage ? { parentSession: h.agent.session.id } : {}) },
     })
     onTestFinished(() => child.dispose())
     bindSubagentActivation(h.ctx, child.agent, h.agent)
     const grandchild = await h.ctx.agents.create({
-      sessionId: SessionId('grandchild'), meta: { cwd: process.cwd() },
+      sessionId: brandString<SessionId>('grandchild'), meta: { cwd: process.cwd() },
     })
     onTestFinished(() => grandchild.dispose())
     bindSubagentActivation(h.ctx, grandchild.agent, h.agent, [h.agent.id, child.agent.id])
@@ -221,10 +222,10 @@ describe('SDK approval bridge', () => {
 
   it('does not claim another runtime owner\'s child despite SDK session lineage', async () => {
     const h = await setup(true, true)
-    const owner = await h.ctx.agents.create({ sessionId: SessionId('foreign-owner') })
+    const owner = await h.ctx.agents.create({ sessionId: brandString<SessionId>('foreign-owner') })
     onTestFinished(() => owner.dispose())
     const child = await h.ctx.agents.create({
-      sessionId: SessionId('foreign-child'),
+      sessionId: brandString<SessionId>('foreign-child'),
       meta: { parentSession: h.agent.session.id },
     })
     onTestFinished(() => child.dispose())
@@ -242,7 +243,7 @@ describe('SDK approval bridge', () => {
     Object.assign(new Error('not a managed subagent'), { name: 'SubagentError', code: 'UNAUTHORIZED' }),
   ])('delegates approval for an unauthorized ownership lookup by error fields: %s', async (error) => {
     const h = await setup(true, true)
-    const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign') })
+    const foreign = await h.ctx.agents.create({ sessionId: brandString<SessionId>('foreign') })
     onTestFinished(() => foreign.dispose())
     foreign.agent.session.append('turn/start', { turn: 1 })
     vi.spyOn(h.ctx.subagents, 'rootOf').mockImplementationOnce(() => { throw error })
@@ -263,7 +264,7 @@ describe('SDK approval bridge', () => {
     { name: 'SubagentError', code: 'NOT_RESUMABLE' },
   ])('does not pass a failed ownership lookup to another approval answerer: %s', async (error) => {
     const h = await setup(true, true)
-    const foreign = await h.ctx.agents.create({ sessionId: SessionId('foreign') })
+    const foreign = await h.ctx.agents.create({ sessionId: brandString<SessionId>('foreign') })
     onTestFinished(() => foreign.dispose())
     foreign.agent.session.append('turn/start', { turn: 1 })
     vi.spyOn(h.ctx.subagents, 'rootOf').mockImplementationOnce(() => { throw error })
@@ -275,7 +276,7 @@ describe('SDK approval bridge', () => {
 
   it('does not claim a disposed Agent when an owned replacement reuses its id', async () => {
     const h = await setup(true, true)
-    const old = await h.ctx.agents.create({ sessionId: SessionId('reused') })
+    const old = await h.ctx.agents.create({ sessionId: brandString<SessionId>('reused') })
     bindSubagentActivation(h.ctx, old.agent, h.agent)
     await old.dispose()
     const replacement = await h.ctx.agents.create({ sessionId: old.agent.id })

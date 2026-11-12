@@ -3,10 +3,11 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { JsonStorageBackend } from '@deepseek-ai/dsh-storage-json'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { harness, storedUnit } from './harness.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 const contexts: Context[] = []
 const roots: string[] = []
@@ -25,7 +26,7 @@ it('reopens Host tasks of every target kind byte-identical without activating a 
   roots.push(root)
   const setup = () => harness({ backend: new JsonStorageBackend(root), onContext: ctx => contexts.push(ctx) })
   const first = await setup()
-  const owner = SessionId('restart-owner')
+  const owner = brandString<SessionId>('restart-owner')
   const created = [
     await first.service.remoteCreate({
       title: 'Existing', prompt: 'Check state', timing: { kind: 'rrule', rrule: RRULE }, target: { kind: 'session', sessionId: owner },

@@ -1,7 +1,8 @@
-import { AttachmentId } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import { expect, it } from 'vitest'
 import type { PtcOutput } from '@deepseek-ai/dsh-ptc-runtime'
 import { OutputLedger } from '../src/output-ledger.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it('accounts for exact JSON escaping, separators and optional completion values', () => {
   const ledger = new OutputLedger(20)
@@ -29,7 +30,7 @@ it('retains a bounded prefix when logs or a failure diagnostic exceed the limit'
 
 
 it('charges ordered image descriptors and text against one budget', () => {
-  const attachment = { attachmentId: AttachmentId('sha256:image'), mediaType: 'image/png' as const, bytes: 64, width: 8, height: 4 }
+  const attachment = { attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png' as const, bytes: 64, width: 8, height: 4 }
   const entry: PtcOutput = { type: 'image', attachment }
   const bytes = Buffer.byteLength(JSON.stringify([entry]))
   const ledger = new OutputLedger(bytes)
@@ -45,7 +46,7 @@ it('charges ordered image descriptors and text against one budget', () => {
 
 it('retains a fitting ordered image prefix with the overflow diagnostic', () => {
   const image: PtcOutput = { type: 'image', attachment: {
-    attachmentId: AttachmentId('sha256:image'), mediaType: 'image/png', bytes: 64, width: 8, height: 4,
+    attachmentId: brandString<AttachmentId>('sha256:image'), mediaType: 'image/png', bytes: 64, width: 8, height: 4,
   } }
   const before: PtcOutput = { type: 'text', text: 'before' }
   const after: PtcOutput = { type: 'text', text: 'after' }

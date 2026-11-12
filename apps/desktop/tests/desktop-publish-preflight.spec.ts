@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { preflightDesktopPublish } from '../scripts/preflight-desktop-publish.mjs'
+import { preflightDesktopPublish } from '@deepseek-ai/dsh-desktop-publisher/preflight-desktop-publish.mjs'
 
 it.each([
   ['macos-x64-unnotarized-debug-1.0.0-42-2', '跳过了公证'],

@@ -2,13 +2,14 @@ import { expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionId, Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import SubagentRuntime from '../src/index.ts'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { mountWorkingDirectoryFixture } from './working-directory-fixture.ts'
 import { managerState } from './manager-internals.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 it.each([false, true])('settles an activation after factory unload with queue-clear failure=%s', async (rejectQueueClear) => {
   const ctx = new Context()
@@ -21,7 +22,7 @@ it.each([false, true])('settles an activation after factory unload with queue-cl
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([textResponse('answer')]))
-    const parent = await ctx.agentLoop.create(SessionId('factory-unload-parent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(brandString<SessionId>('factory-unload-parent'), { provider: 'mock', model: 'mock' })
     ctx.on('session/flush', async (session) => {
       if (session.header.origin !== 'subagent') return
       flushing.resolve(undefined)

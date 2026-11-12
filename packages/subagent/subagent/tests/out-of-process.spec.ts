@@ -8,7 +8,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertPositiveFinite,
   assertUsableCwd,
@@ -16,6 +16,7 @@ import {
   settleRunResult,
   subprocessRunHandle,
 } from '../src/index.ts'
+import { brandString } from '@deepseek-ai/dsh-brand'
 
 describe('NO_START_CAPABILITIES', () => {
   it('advertises nothing and is frozen (shared by every out-of-process backend)', () => {
@@ -42,8 +43,8 @@ describe('assertPositiveFinite', () => {
 describe('child cwd resolution', () => {
   it('accepts an absolute enterable directory and rejects relative or missing paths', () => {
     expect(assertUsableCwd('p', 'config cwd', tmpdir())).toBe(tmpdir())
-    expect(() => assertUsableCwd('p', 'config cwd', 'relative/path')).toThrow('must be an absolute path')
-    expect(() => assertUsableCwd('p', 'config cwd', join(tmpdir(), 'dsh-no-such-dir-xyz'))).toThrow('not an accessible directory')
+    expect(() => assertUsableCwd('p', 'config cwd', 'relative/path')).toThrow(expect.objectContaining({ name: 'SubagentError', code: 'INVALID_CWD', message: expect.stringContaining('must be an absolute path') as string }))
+    expect(() => assertUsableCwd('p', 'config cwd', join(tmpdir(), 'dsh-no-such-dir-xyz'))).toThrow(expect.objectContaining({ name: 'SubagentError', code: 'INVALID_CWD', message: expect.stringContaining('not an accessible directory') as string }))
   })
 
   it('rejects an existing path that is a file, not a directory', () => {
@@ -51,7 +52,7 @@ describe('child cwd resolution', () => {
     const file = join(tmp, 'plain.txt')
     try {
       writeFileSync(file, 'not a dir\n')
-      expect(() => assertUsableCwd('p', 'config cwd', file)).toThrow('not an accessible directory')
+      expect(() => assertUsableCwd('p', 'config cwd', file)).toThrow(expect.objectContaining({ name: 'SubagentError', code: 'INVALID_CWD', message: expect.stringContaining('not an accessible directory') as string }))
     } finally {
       rmSync(tmp, { recursive: true, force: true })
     }
@@ -64,7 +65,7 @@ describe('child cwd resolution', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'oop-noexec-'))
     chmodSync(tmp, 0o600)
     try {
-      expect(() => assertUsableCwd('p', 'config cwd', tmp)).toThrow('not an accessible directory')
+      expect(() => assertUsableCwd('p', 'config cwd', tmp)).toThrow(expect.objectContaining({ name: 'SubagentError', code: 'INVALID_CWD', message: expect.stringContaining('not an accessible directory') as string }))
     } finally {
       chmodSync(tmp, 0o700)
       rmSync(tmp, { recursive: true, force: true })
@@ -149,7 +150,7 @@ describe('subprocessRunHandle', () => {
     const requestCancel = vi.fn()
     const teardown = vi.fn(() => Promise.resolve())
     const run = subprocessRunHandle({
-      id: SessionId('run-1'),
+      id: brandString<SessionId>('run-1'),
       result: Promise.resolve({ output: [], stopReason: 'completed' }),
       signal: controller.signal,
       onAbort,

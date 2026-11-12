@@ -1,7 +1,7 @@
 /** Discover the caller's entire subagent tree; the control plugin owns registration. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, ToolContextUnavailableError } from '@deepseek-ai/dsh-tools'
 import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
@@ -80,7 +80,7 @@ export function registerListAgents(ctx: Context): ToolDefinition {
       const parent = exec.agent
       if (!parent) {
         // Non-agent callers have no session whose children could be listed.
-        throw new Error('list_agents requires a calling agent (exec.agent was undefined)')
+        throw new ToolContextUnavailableError('list_agents requires a calling agent (exec.agent was undefined)')
       }
       const root = ctx.subagents.rootOf(parent)
       const entries = await ctx.subagents.listDescendants(root.id, exec.signal)

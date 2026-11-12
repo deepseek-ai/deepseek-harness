@@ -1,13 +1,15 @@
-/** Projection that folds shell results and binding records into one Session's change request bindings, and shows clients the bindings. */
+/** Projection that folds shell results, program shell dispatches, and binding records into one Session's change request bindings. */
 
 import { z } from 'zod'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { pluginRecordOf, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
+import type {} from '@deepseek-ai/dsh-tool-executor-ptc/types'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { changeRequestUrls, commandEvidence, commandOf, ownChangeRequestUrls, pushedBranches, sameChangeRequestUrl } from './commands.ts'
+import { changeRequestUrls, commandEvidence, commandIn, commandOf, ownChangeRequestUrls, pushedBranches, sameChangeRequestUrl } from './commands.ts'
 import type { PushedRef } from './commands.ts'
-import type { BindingOrigin, BindingRecord, BindingState, ForgeChangeRequestsState, PushedBranch } from './types.ts'
+import type { BindingOrigin, BindingRecord, BindingState, CommandEvidence, ForgeChangeRequestsState, PushedBranch } from './types.ts'
 
 /** Plugin record type of binding actions. */
 export const BINDING_RECORD = 'plugin:forge-session/binding'
@@ -62,15 +64,18 @@ const stateSchema: z.ZodType<ForgeChangeRequestsState> = z.object({
  * every pull request URL a `gh pr create` result prints; for the other `gh pr`
  * commands it binds the URL the command names and the URL the output prints
  * for its own change request; and it records the branches it reports as
- * pushed. Failed tool executions bind nothing; a nonzero exit status does not
- * matter, because the URL or ref line is the evidence. `turn/end` drops calls
- * that never received a result. Binding records bind, restore, and hide URLs.
- * Clients, including the Session summary, see the bindings; the array keeps
- * its reference while only pending calls and pushes change.
+ * pushed. A `tool/ptc-dispatch` event of a `bash` or `pwsh` call inside a
+ * program carries the arguments and the settled outcome together, so it
+ * applies the same rules without a pending entry. Failed tool executions bind
+ * nothing; a nonzero exit status does not matter, because the URL or ref line
+ * is the evidence. `turn/end` drops calls that never received a result.
+ * Binding records bind, restore, and hide URLs. Clients, including the
+ * Session summary, see the bindings; the array keeps its reference while only
+ * pending calls and pushes change.
  */
 export const forgeChangeRequestsProjection = {
   key: 'forgeChangeRequests',
-  stateVersion: 3,
+  stateVersion: 4,
   stateSchema,
   init: () => EMPTY,
   apply,
@@ -83,6 +88,8 @@ function apply(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChang
       return applyCall(state, event.data)
     case 'tool/result':
       return applyResult(state, event.data, event.seq)
+    case 'tool/ptc-dispatch':
+      return applyDispatch(state, event.data, event.seq)
     case 'turn/end':
       return state.pending.length === 0 ? state : { ...state, pending: EMPTY.pending }
     // Every other event type, including plugin records, which sit outside SessionEventMap.
@@ -103,15 +110,30 @@ function applyResult(state: ForgeChangeRequestsState, result: SessionEventMap['t
   const callId = result.message.toolCallId
   const pending = state.pending.find(entry => entry.callId === callId)
   if (pending === undefined) return state
-  const rest = state.pending.filter(entry => entry !== pending)
-  if (result.message.isError === true) return { ...state, pending: rest }
-  const text = result.message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
-  const printed = pending.urls === 'created' ? changeRequestUrls(text) : ownChangeRequestUrls(text)
-  return {
-    pending: rest,
-    bindings: pending.urls === null ? state.bindings : bind(state.bindings, [...pending.named, ...printed], pending.urls),
-    pushes: pending.pushes ? recordPushes(state.pushes, pushedBranches(text), seq) : state.pushes,
-  }
+  const settled = { ...state, pending: state.pending.filter(entry => entry !== pending) }
+  if (result.message.isError === true) return settled
+  return settle(settled, pending, textOf(result.message.content), seq)
+}
+
+function applyDispatch(state: ForgeChangeRequestsState, dispatch: SessionEventMap['tool/ptc-dispatch'], seq: SessionSeq): ForgeChangeRequestsState {
+  if (!SHELL_TOOLS.has(dispatch.name) || dispatch.isError) return state
+  const command = commandIn(dispatch.arguments)
+  const evidence = command === undefined ? undefined : commandEvidence(command)
+  if (evidence === undefined) return state
+  return settle(state, evidence, textOf(dispatch.content), seq)
+}
+
+/** Text blocks of a rendered shell result, joined by newlines. */
+function textOf(content: readonly ContentBlock[]): string {
+  return content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
+}
+
+/** Bind the URLs and record the pushes one successful shell result carries; returns the input state when nothing changes. */
+function settle(state: ForgeChangeRequestsState, evidence: CommandEvidence, text: string, seq: SessionSeq): ForgeChangeRequestsState {
+  const printed = evidence.urls === 'created' ? changeRequestUrls(text) : ownChangeRequestUrls(text)
+  const bindings = evidence.urls === null ? state.bindings : bind(state.bindings, [...evidence.named, ...printed], evidence.urls)
+  const pushes = evidence.pushes ? recordPushes(state.pushes, pushedBranches(text), seq) : state.pushes
+  return bindings === state.bindings && pushes === state.pushes ? state : { ...state, bindings, pushes }
 }
 
 function applyRecord(state: ForgeChangeRequestsState, event: SessionEvent): ForgeChangeRequestsState {
