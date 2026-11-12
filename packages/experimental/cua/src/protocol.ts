@@ -52,7 +52,7 @@ const dragTargets = [
 ] as const
 
 const systemPointerOption = {
-  useSystemPointer: z.boolean().optional().describe('Omit by default, including after approval. Set true only when the task requires control of the system pointer.'),
+  useSystemPointer: z.boolean().optional().describe('Request use of the system pointer. The Host checks permission before dispatch.'),
 }
 
 function requestSchema<H extends z.ZodType, D extends z.ZodType>(hover: H, drag: D) {

@@ -1,10 +1,6 @@
 /** Shared model instructions for native application and window operations. */
 const hoverSignature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean })'
 
-const dragSignature = "drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean })"
-
-const mouseHeading = '## Simulated mouse'
-
 /** System-prompt section that carries the CUA operation guidance for one Agent. */
 export const CUA_PROMPT_SECTION_NAME = 'computer-use:dsh-cua'
 
@@ -40,13 +36,13 @@ Read getAccessibilityTree explicitly before using element ids. Selection and scr
 - setValue(elementId: string, value: JsonValue) -> ActionResult — write a control value.
 - selectText(elementId: string, text: string, options?: { prefix?: string, suffix?: string, selectionType?: 'text' | 'cursor_before' | 'cursor_after' }) -> ActionResult — select one literal occurrence or place the cursor beside it, using adjacent context to disambiguate.
 
-${mouseHeading}
+## Simulated mouse
 Use an explicit window for screenshots and pointer input. Before coordinate input, including relative coordinates, obtain a successful getAccessibilityTree observation covering that window or take its screenshot. Absolute pixel coordinates require a returned screenshot.
 - getScreenshot() -> Image — capture the selected window as a stored image with readonly attachmentId, path, width, and height. Pass selected screenshots to inspect(...values) to display them; read the window ID from window.windowId.
 - ${hoverSignature} -> { dispatched: boolean, foregroundChanged?: boolean | null, hoverRoute: 'accessibility' | 'system-pointer', systemPointerMoved: boolean } — request a mouse move to the target without pressing a button; inspect hoverRoute and systemPointerMoved, and expect no automatic pointer restoration.
 - click(target: string | [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', clickCount?: 1 | 2, modifiers?: Modifier[], holdMs?: number, relative?: boolean }) -> ActionResult — click an element id or point, or perform a left-button double-click; holdMs controls the press duration of each press.
 - scroll(options: { x: number, y: number, deltaLinesX: number, deltaLinesY: number, relative?: boolean }) -> ActionResult — scroll at a point; deltas are integers from -10 to 10 with at least one nonzero, and positive values reveal content above or left.
-- ${dragSignature} -> ActionResult — drag between two points of one window.
+- drag(from: [number, number], to: [number, number], options?: { mouseButton?: 'left' | 'right' | 'middle', modifiers?: Modifier[], relative?: boolean }) -> ActionResult — drag between two points of one window.
 
 A string target is an element id; coordinate targets are [x, y] and are pixels in the latest returned screenshot by default. With relative: true they are integer thousandths of the window width and height from 0 to 999, based on the current AX observation or screenshot. Left clicks support one or two presses; right and middle clicks support one. FOREGROUND_REQUIRED means explain the need, then explicitly activate the target and observe again; activation is never automatic. Read fresh state after actions, and treat WINDOW_CHANGED, STALE_SNAPSHOT, and SCREENSHOT_REQUIRED as requiring the stated fresh observation or capture before any retry.
 
@@ -65,12 +61,7 @@ Raw tools use { method, params }: include appHandle for app calls and windowId f
  */
 export function withSystemPointerGuidance(guidance: string): string {
   const signature = 'mouseMove(target: string | [number, number], options?: { relative?: boolean, useSystemPointer?: boolean })'
-  const systemDrag = dragSignature.replace('relative?: boolean', 'relative?: boolean, useSystemPointer?: boolean')
-  const mouseGuidance = `${mouseHeading}
-Leave useSystemPointer unset for ordinary mouseMove and drag calls, even after the user grants mouse control. Prefer an advertised accessibility action, selectText for a text range, or a window-directed drag. If the result is unclear, inspect the target before trying another gesture. Request useSystemPointer: true only when the user explicitly asks to use the system pointer or the task requires it and no pointer-free action can achieve the intended effect.
+  return `${guidance.replace(hoverSignature, signature)}
 
-win.drag(from, to, { useSystemPointer: true }) presses, moves, and releases the selected button in the unobscured foreground window. The first explicit system-pointer request interrupts the user for session permission unless approval is disabled. Moves and drags share the decision until the session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
-  return guidance.replace(mouseHeading, `${mouseGuidance}\n`)
-    .replace(hoverSignature, signature)
-    .replace(dragSignature, systemDrag)
+Only if the task cannot be completed without moving the user’s pointer, call await win.mouseMove(target, { useSystemPointer: true }). Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible. The question interrupts the user. When approval is disabled an explicit move can act immediately. Pass true on every physical move, even after approval. Omitting the option or passing false uses the default hover route without prompting. Approval or refusal lasts until this session closes or DSH restarts. A refusal sends no input. If the user dismisses the request, ask again only if they request it. Wait for an outstanding request to finish. Subagents cannot request physical movement.`
 }
