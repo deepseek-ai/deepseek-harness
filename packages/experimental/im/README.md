@@ -56,6 +56,7 @@ Each entry in `sources` is an ordered admission rule. A rule specifies a unique 
 | `maxRecords` | `10000` | Maximum retained message records per chat and maximum retained send receipts |
 | `maxInputBytes` | 256 KiB | Maximum UTF-8 byte size of one stored inbound message or delivery record |
 | `retryIntervalMs` | 5 s | Interval for re-dispatching pending messages, retrying pending deliveries, and sweeping expired records |
+| `platformTimeoutMs` | 30 s | Deadline of one platform request: the re-read of a card or a merged forward, and the text of a quoted reply |
 | `media.download` / `media.maxBytes` / `media.maxItems` / `media.timeoutMs` | `true` / 10 MiB / 9 / 30 s | Whether to download inbound images and files into attachments, the per-item and per-message limits, and the deadline of one inbound fetch |
 | `media.source.file` / `media.source.internal` | `false` / `false` | Whether a received message may make this host fetch a `file:` source, and an `http(s)` source whose host is, or resolves to, a loopback, private, link-local or multicast address |
 | `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 s | Size limit of the bytes inlined for a file of another execution world, and the per-send timeout |
@@ -146,7 +147,7 @@ Below `@deepseek-ai/dsh-im`, `@deepseek-ai/cordis-plugin-im-core` and `@deepseek
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-[`ImService`](src/index.ts) wires the per-concern modules and retains its own service context so agents created during tool calls belong to the host scope rather than the caller's scope. On startup it opens the `im_messages`, `im_sessions`, and `im_receipts` storage domains, starts recovery for pending deliveries, subscribes to `satori/receive`, `send`, and `interaction/button`, registers the `im_*` tools, runs an initial dispatch pass, and starts the periodic `retryIntervalMs` timer.
+[`ImService`](src/index.ts) wires the per-concern modules and retains its own service context so agents created during tool calls belong to the host scope rather than the caller's scope. On startup it opens the `im_messages`, `im_sessions`, and `im_receipts` storage domains, starts recovery for pending deliveries, subscribes to `satori/receive`, `send`, and `interaction/button`, registers the `im_*` tools, and starts the periodic `retryIntervalMs` timer, whose first tick dispatches the messages a previous run left pending (the plugins that listen to `im/message` mount after this service).
 
 | Module | Role |
 |---|---|

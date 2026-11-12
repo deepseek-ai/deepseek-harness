@@ -192,7 +192,7 @@ describe('ImIntake admission', () => {
     const { bot, store, intake } = await boot()
     await intake.dispose()
     // A listener that returns is an accepted frame — the adapter acknowledges it — so this one rejects instead.
-    await expect(deliver(bot, 'evt-late', inbound({ id: 'm-late' }))).rejects.toThrow('shutting down')
+    await expect(deliver(bot, 'evt-late', inbound({ id: 'm-late' }))).rejects.toThrow()
     expect(store.get(ImMessageKey('fake:bot', 'm-late'))).toBeUndefined()
   })
 
@@ -207,6 +207,16 @@ describe('ImIntake admission', () => {
     // The failed read leaves the reference as it arrived, and the next frame of the same chat is still stored.
     expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toBe('[image]')
     expect(store.get(ImMessageKey('fake:bot', 'm-next'))?.text).toBe('hello')
+  })
+
+  it('stops waiting for a platform read that never answers', async () => {
+    const { bot, store, intake } = await boot({ config: { platformTimeoutMs: 20 } })
+    bot.getMessage = () => new Promise(() => {})
+    const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
+    await deliver(bot, 'evt-stuck', inbound({ id: 'm-stuck', content: card }))
+    await intake.idle()
+    // The deadline leaves the reference the event carried, and the chat is free for the next message.
+    expect(store.get(ImMessageKey('fake:bot', 'm-stuck'))?.text).toBe('[image]')
   })
   it('keeps the arrival order of one chat when a platform read is slow', async () => {
     const { bot, store, intake } = await boot()

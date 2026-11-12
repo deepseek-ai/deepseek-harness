@@ -45,6 +45,7 @@ export const Config = z.object({
   maxRecords: z.natural().min(1).default(10000),
   maxInputBytes: z.natural().min(1).default(262144),
   retryIntervalMs: z.natural().min(1).default(5000),
+  platformTimeoutMs: z.natural().min(1).default(30000),
   media: z.object({
     download: z.boolean().default(true),
     maxBytes: z.natural().min(1).default(10485760),

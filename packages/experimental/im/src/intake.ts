@@ -306,6 +306,27 @@ export class ImIntake {
   }
 
   /**
+   * One platform read, ended at `config.platformTimeoutMs`. `bot.getMessage` takes no signal, so a request the platform
+   * never answers would hold this chat's arrival order open — and with it {@link dispose}, which waits for the reads in
+   * flight — for as long as the socket lives.
+   * @param read - the platform read to run.
+   * @returns what the platform answered.
+   */
+  private async readWithin<T>(read: Promise<T>): Promise<T> {
+    const timeout = this.config.platformTimeoutMs
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`the platform did not answer within ${timeout} ms`)), timeout)
+      timer.unref?.()
+    })
+    try {
+      return await Promise.race([read, deadline])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  /**
    * Stop receiving and pumping. Frames already accepted finish first — one may still be reading the platform, and its
    * store write needs a store that is still open — then the in-flight waterfall finishes and undispatched records stay
    * pending for the next start.
@@ -344,7 +365,7 @@ export class ImIntake {
     if (stored !== undefined) return stored.text
     if (bot.getMessage === undefined) return undefined
     try {
-      return toText((await bot.getMessage(chat, splitKey(key).id)).content)
+      return toText((await this.readWithin(bot.getMessage(chat, splitKey(key).id))).content)
     } catch (error: unknown) {
       // The reply is still a deliverable message: a quote the platform will not hand back stays an id.
       this.ctx.logger.warn('IM quoted message %s could not be read: %s', key,
@@ -394,7 +415,7 @@ export class ImIntake {
   private async reread(bot: Bot, message: InboundMessage): Promise<InboundMessage | undefined> {
     if (bot.getMessage === undefined) return undefined
     try {
-      return await bot.getMessage(message.chat, message.id)
+      return await this.readWithin(bot.getMessage(message.chat, message.id))
     } catch (error: unknown) {
       // The reference is still a deliverable message: what the platform will not hand back stays unreadable.
       this.ctx.logger.warn('IM message %s could not be re-read: %s', message.id,

@@ -287,6 +287,8 @@ export interface ImConfig {
   maxInputBytes: number
   /** Interval of the dispatch loop, delivery recovery and retention sweep, ms. */
   retryIntervalMs: number
+  /** Deadline of one platform request this service makes (a message re-read, the text of a quoted reply), ms. */
+  platformTimeoutMs: number
   /** Inbound media admission: whether admitted images and files are downloaded for the model, and their bounds. */
   media: {
     /** Download admitted images and files so the model can read them; `false` keeps only their labels. */

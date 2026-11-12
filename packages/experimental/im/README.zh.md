@@ -56,6 +56,7 @@ kind: "package-reference"
 | `maxRecords` | `10000` | 每个聊天保留的最大消息记录数，以及保留的最大发送回执数 |
 | `maxInputBytes` | 256 KiB | 单条入库消息或投递记录的最大 UTF-8 字节数 |
 | `retryIntervalMs` | 5 秒 | 重新派发待处理消息、重试待完成投递以及清理过期记录的定时间隔 |
+| `platformTimeoutMs` | 30 秒 | 单次平台请求的截止时间：卡片或合并转发的回读，以及引用回复的原文 |
 | `media.download` / `media.maxBytes` / `media.maxItems` / `media.timeoutMs` | `true` / 10 MiB / 9 / 30 秒 | 是否将入站图片与文件下载为附件、单条字节上限、单条消息下载数量上限，以及单次入站抓取的截止时间 |
 | `media.source.file` / `media.source.internal` | `false` / `false` | 收到的消息是否可让本机抓取 `file:` 源，以及是否可抓取主机为（或解析到）回环、私有、链路本地或组播地址的 `http(s)` 源 |
 | `send.maxMediaBytes` / `send.operationTimeoutMs` | 10 MiB / 30 秒 | 为另一执行世界的文件内联字节时的大小上限，以及单次发送超时时间 |
@@ -144,7 +145,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，恢复待处理投递，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，触发首次消息派发，并启动 `retryIntervalMs` 维护定时器。
+[`ImService`](src/index.ts) 负责组装各职责模块并持有独立的服务上下文，确保在工具调用期间创建的 agent 归属于宿主作用域而非调用方 agent 的作用域。启动时，它依次打开 `im_messages`、`im_sessions` 与 `im_receipts` 三个存储域，恢复待处理投递，注册 `satori/receive`、`send` 与 `interaction/button` 监听器和 `im_*` 工具，并启动 `retryIntervalMs` 维护定时器；上一次运行留下的待处理消息由该定时器的第一个周期派发（监听 `im/message` 的插件在本服务之后挂载）。
 
 | 模块 | 职责 |
 |---|---|
