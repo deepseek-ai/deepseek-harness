@@ -341,7 +341,7 @@ actor AXWorker {
                 "focusedWindowId": projection.focusedWindowID.map { .string(String($0)) } ?? .null,
                 "snapshotId": .string(id), "tree": .string(projection.tree), "elements": .array(projection.elements),
                 "windows": .array(observedWindows.map(\.json)), "truncated": .bool(projection.truncated)]
-            if projection.incomplete { state["incomplete"] = .bool(true) }
+            if projection.hasUnreadableElements { state["hasUnreadableElements"] = .bool(true) }
             return .result(.object(state))
         case "screenshot":
             trace?.mark("screen-permission.begin")

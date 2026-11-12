@@ -10,7 +10,7 @@ import Testing
         let children = AXObservedChildren.readRanges(count: nodes.count, limit: nodes.count, requests: &requests) { range in
             range.contains(17) ? .unreadable : .values(Array(nodes[range]))
         }
-        #expect(children.incomplete)
+        #expect(children.hasUnreadableElements)
         var expected = nodes.map(Optional.some)
         expected[17] = nil
         #expect(children.entries == expected)
@@ -25,7 +25,7 @@ import Testing
             return range.upperBound > 2 ? .unreadable : .values(Array(repeating: node, count: range.count))
         }
         #expect(limited.entries == [node, node])
-        #expect(limited.incomplete)
+        #expect(limited.hasUnreadableElements)
         #expect(requests == 0)
 
         let exhausted = AXObservedChildren.readRanges(count: 2, limit: 2, requests: &requests) { _ in
@@ -33,7 +33,7 @@ import Testing
             return .unreadable
         }
         #expect(exhausted.entries.isEmpty)
-        #expect(exhausted.incomplete)
+        #expect(exhausted.hasUnreadableElements)
     }
 
     @Test func aChangedRangeRetainsReadableReferencesAndOtherErrorsPropagate() {
@@ -43,7 +43,7 @@ import Testing
             if range.count == 2 { return .unreadable }
             return range.lowerBound == 0 ? .values([node]) : .positionsUnknown
         }
-        #expect(changed.incomplete)
+        #expect(changed.hasUnreadableElements)
         #expect(changed.entries == [node])
         #expect(changed.parentIncomplete)
         #expect(throws: CancellationError.self) {
@@ -56,7 +56,7 @@ import Testing
         var requests = 1
         let recovered = AXObservedChildren.readRanges(count: 1, limit: 1, requests: &requests) { _ in .values([node]) }
         #expect(recovered.entries == [node])
-        #expect(!recovered.incomplete)
+        #expect(!recovered.hasUnreadableElements)
     }
 
     @Test(arguments: [1, 5, 6])
@@ -82,13 +82,13 @@ import Testing
             Issue.record("An empty list has no ranges")
             return .unreadable
         }
-        #expect(!empty.incomplete && !empty.elementLimitReached)
+        #expect(!empty.hasUnreadableElements && !empty.elementLimitReached)
         for limit in [0, 1] {
             let limited = AXObservedChildren.readRanges(count: 3, limit: limit, requests: &requests) { range in
                 #expect(range == 0..<1)
                 return .values([node])
             }
-            #expect(limited.elementLimitReached && !limited.incomplete)
+            #expect(limited.elementLimitReached && !limited.hasUnreadableElements)
             #expect(limited.entries.count == limit)
         }
         #expect(requests == 2)
@@ -103,7 +103,7 @@ import Testing
             NativeFailure(code: "NATIVE_ERROR", message: name, accessibilityError: code.rawValue, attribute: name)
         }
         let fresh = try AXObservedChildren.observing({ [ref] }, recover: prior)
-        #expect(!fresh.incomplete)
+        #expect(!fresh.hasUnreadableElements)
         let repeated = try AXObservedChildren.observing({ throw failure("AXChildren", .failure) }, recover: prior)
         #expect(repeated.entries == [nil, ref])
         for (name, code) in [("AXRole", AXError.failure), ("AXChildren", .invalidUIElement),

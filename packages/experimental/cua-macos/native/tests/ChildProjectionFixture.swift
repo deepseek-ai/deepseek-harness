@@ -55,9 +55,9 @@ import ApplicationServices
         try check(AXUIElementCopyAttributeValue(badRoot, kAXChildrenAttribute as CFString, &whole) == .failure, "AXChildren must return -25200")
 
         let complete = try project(good)
-        try check(!complete.truncated && !complete.incomplete && complete.tree.contains("Healthy window"), "An unrelated window reported missing children")
+        try check(!complete.truncated && !complete.hasUnreadableElements && complete.tree.contains("Healthy window"), "An unrelated window reported missing children")
         let partial = try project(bad)
-        try check(!partial.truncated && partial.incomplete, "Unreadable children must only set incomplete")
+        try check(!partial.truncated && partial.hasUnreadableElements, "Unreadable children must only set hasUnreadableElements")
         let lines = partial.tree.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         let gaps = lines.indices.filter { lines[$0] == "[One child could not be read.]" }
         guard let left = lines.firstIndex(where: { $0.contains("AXButton") && $0.contains("\"Before gap\"") }),
@@ -77,15 +77,15 @@ import ApplicationServices
         while bad.pressed.count < 2 && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.01)) }
         try check(bad.pressed == ["Before gap", "After gap"], "Both buttons must receive AXPress")
         let limited = try project(bad, depth: 1)
-        try check(limited.truncated && limited.incomplete && limited.tree.contains("maxDepth=1"), "Traversal and AX failures must report both flags")
+        try check(limited.truncated && limited.hasUnreadableElements && limited.tree.contains("maxDepth=1"), "Traversal and AX failures must report both flags")
         app.setAccessibilityChildren([good])
         app.setAccessibilityWindows([good])
         app.setAccessibilityFocusedWindow(good)
         let unexposed = try project(bad)
-        try check(unexposed.tree.isEmpty && !unexposed.incomplete, "Exhaustive discovery should report an AX-less window")
+        try check(unexposed.tree.isEmpty && !unexposed.hasUnreadableElements, "Exhaustive discovery should report an AX-less window")
         good.childList = [NSNull()]
         let uncertain = try project(bad)
-        try check(uncertain.incomplete && !uncertain.truncated && uncertain.indexed.isEmpty,
+        try check(uncertain.hasUnreadableElements && !uncertain.truncated && uncertain.indexed.isEmpty,
                   "Partial window discovery must not expose controls from another window")
         print("Passed real AX range recovery, sibling actions, window scoping and independent observation flags.")
     }

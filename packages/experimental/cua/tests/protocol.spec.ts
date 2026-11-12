@@ -13,7 +13,7 @@ it('preserves opaque window IDs in requests and results', () => {
   const state = { appHandle: 'app', windowId, focusedWindowId: windowId, snapshotId: 'snapshot', tree: '', windows, truncated: false }
   expect(StateResult.parse(state)).toEqual(state)
   for (const truncated of [false, true]) {
-    const partial = { ...state, truncated, incomplete: true }
+    const partial = { ...state, truncated, hasUnreadableElements: true }
     expect(StateResult.parse(partial)).toEqual(partial)
   }
   expect(ShowResult.parse({ dispatched: true, foregroundChanged: false, windowId }).windowId).toBe(windowId)

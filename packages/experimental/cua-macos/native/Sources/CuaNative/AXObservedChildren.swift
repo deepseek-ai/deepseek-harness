@@ -6,7 +6,7 @@ struct AXObservedChildren {
     var parentIncomplete = false
     var elementLimitReached = false
 
-    var incomplete: Bool { parentIncomplete || entries.contains(nil) }
+    var hasUnreadableElements: Bool { parentIncomplete || entries.contains(nil) }
     static var unavailable: Self { Self(parentIncomplete: true) }
 
     enum RangeRead {

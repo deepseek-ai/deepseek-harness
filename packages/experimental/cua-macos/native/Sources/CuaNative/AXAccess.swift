@@ -11,7 +11,7 @@ struct AXProjection {
     let indexed: [Int: AXUIElement]
     let focusedWindowID: UInt32?
     let truncated: Bool
-    let incomplete: Bool
+    let hasUnreadableElements: Bool
 }
 
 struct AXNodeObservation {
@@ -621,13 +621,13 @@ final class AXAccess {
             }
             if matches.isEmpty {
                 _ = try NativePlatform.ownedWindow(identity.pid, requested)
-                let incomplete = discovery.values.contains(where: \.incomplete)
+                let hasUnreadableElements = discovery.values.contains(where: \.hasUnreadableElements)
                 let limited = discovery.values.contains(where: \.elementLimitReached)
                 var lines: [String] = []
-                if incomplete { lines.append(AXTextFormatter.incompleteDiscovery) }
+                if hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
                 if limited { lines.append(AXTextFormatter.truncation(maxElements: maxElements, maxDepth: nil)) }
                 return AXProjection(tree: lines.joined(separator: "\n"), elements: [], indexed: [:], focusedWindowID: focusedID,
-                                    truncated: limited, incomplete: incomplete)
+                                    truncated: limited, hasUnreadableElements: hasUnreadableElements)
             }
             let dialog = try matches.contains { root in
                 let role = try string(root, "AXRole")
@@ -646,7 +646,7 @@ final class AXAccess {
         var count = 0
         var elementLimitReached = appChildren.elementLimitReached
         var depthLimitReached = false
-        var childrenMissing = appChildren.incomplete
+        var childrenMissing = appChildren.hasUnreadableElements
         var menusCollapsed = false
         var lines = ["AX scope=\(requested == nil ? "application" : "window") offsets=UTF-16\(details ? " bounds=global-points" : "")"]
         var elements: [JSONValue] = []
@@ -657,12 +657,12 @@ final class AXAccess {
             if appChildren.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: 0, positioned: false)) }
         } else {
             rootEntries = roots
-            if appChildren.incomplete { lines.append(AXTextFormatter.incompleteDiscovery) }
+            if appChildren.hasUnreadableElements { lines.append(AXTextFormatter.incompleteDiscovery) }
         }
         var pending = rootEntries.reversed().map { (element: $0, level: 0, depth: 0) }
         func enqueueChildren(_ parent: AXUIElement, observation: AXNodeObservation, level: Int, depth: Int) throws {
             let children = try observedChildren(parent, observation.attribute("AXChildren"))
-            if children.incomplete { childrenMissing = true }
+            if children.hasUnreadableElements { childrenMissing = true }
             if children.elementLimitReached { elementLimitReached = true }
             if children.parentIncomplete { lines.append(AXTextFormatter.unreadableChildLine(level: level, positioned: false)) }
             for child in children.entries.reversed() { pending.append((child, level, depth)) }
@@ -741,7 +741,7 @@ final class AXAccess {
         if menusCollapsed { lines.append("Menu contents omitted; request includeMenus=true to expand.") }
         let truncated = elementLimitReached || depthLimitReached
         if truncated { lines.append(AXTextFormatter.truncation(maxElements: elementLimitReached ? maxElements : nil, maxDepth: depthLimitReached ? maxDepth : nil)) }
-        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated, incomplete: childrenMissing)
+        return AXProjection(tree: lines.joined(separator: "\n"), elements: elements, indexed: indexed, focusedWindowID: focusedID, truncated: truncated, hasUnreadableElements: childrenMissing)
     }
 
     func enclosingWindow(_ element: AXUIElement) throws -> (element: AXUIElement, id: UInt32) {
