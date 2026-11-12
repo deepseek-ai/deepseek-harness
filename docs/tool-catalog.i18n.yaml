@@ -9,14 +9,17 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 2596663d8d5f4464
-  zh: 3753aa02ac0f890d
+  en: e3df651dded21158
+  zh: c71596152e901130
 /tool-schema-catalog/deepseek-ai-dsh-im:
   en: 707c35f0d3451baa
   zh: 707c35f0d3451baa
 /tool-schema-catalog/deepseek-ai-dsh-im/im-history:
   en: 6c1227a2696fab49
   zh: 6c1227a2696fab49
+/tool-schema-catalog/deepseek-ai-dsh-im/im-members:
+  en: 14319a20e2afa545
+  zh: 14319a20e2afa545
 /tool-schema-catalog/deepseek-ai-dsh-im/im-read:
   en: 7f4765144673fc36
   zh: 7f4765144673fc36
