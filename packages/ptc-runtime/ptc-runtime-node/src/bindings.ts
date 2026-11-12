@@ -1,17 +1,20 @@
 /** Validate and capture the binding names available to one program. */
 import { PtcImage, RESERVED_BINDING_WORDS, PtcRuntimeError, RESERVED_BINDING_GLOBALS, RESERVED_ERROR_MEMBERS } from '@deepseek-ai/dsh-ptc-runtime'
-import type { PtcBindingFunction, PtcBindingNamespace, PtcJsonValue, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcBindingFunction, PtcBindingNamespace, PtcJsonValue, PtcProgramFormat, PtcRunRequest } from '@deepseek-ai/dsh-ptc-runtime'
 import { snapshotPtcJsonValue, encodePtcJsonWire, type PtcJsonWire, type PtcImageWire } from './json-wire.ts'
+import { RESERVED_PREFIX } from './evaluators/scoped-repl-names.ts'
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/
 /**
  * Reject unusable namespaces before starting a process.
  * @param request - Host-owned binding declarations.
+ * @param programFormat - Evaluator syntax whose internal identifiers must remain reserved.
  * @returns Namespaces keyed by their declared global.
  */
-export function validateBindings(request: PtcRunRequest): Map<string, PtcBindingNamespace> {
+export function validateBindings(request: PtcRunRequest, programFormat: PtcProgramFormat): Map<string, PtcBindingNamespace> {
   const bindings = new Map<string, PtcBindingNamespace>()
   for (const namespace of request.bindings) {
-    if (!IDENTIFIER.test(namespace.global) || RESERVED_BINDING_WORDS.has(namespace.global)) {
+    if (!IDENTIFIER.test(namespace.global) || RESERVED_BINDING_WORDS.has(namespace.global)
+      || (programFormat === 'scoped-repl' && namespace.global.includes(RESERVED_PREFIX))) {
       throw new PtcRuntimeError(`dsh-ptc-runtime-node: binding global ${JSON.stringify(namespace.global)} is not a usable identifier`, 'PTC_RUNTIME_INVALID_ARGUMENT')
     }
     if (RESERVED_BINDING_GLOBALS.has(namespace.global)) {
@@ -27,7 +30,8 @@ export function validateBindings(request: PtcRunRequest): Map<string, PtcBinding
   for (const namespace of request.bindings) {
     const descriptor = namespace.errorClass
     if (!descriptor) continue
-    if (!IDENTIFIER.test(descriptor.name) || RESERVED_BINDING_WORDS.has(descriptor.name)) {
+    if (!IDENTIFIER.test(descriptor.name) || RESERVED_BINDING_WORDS.has(descriptor.name)
+      || (programFormat === 'scoped-repl' && descriptor.name.includes(RESERVED_PREFIX))) {
       throw new PtcRuntimeError(`dsh-ptc-runtime-node: binding error class ${JSON.stringify(descriptor.name)} is not a usable identifier`, 'PTC_RUNTIME_INVALID_ARGUMENT')
     }
     if (RESERVED_BINDING_GLOBALS.has(descriptor.name)) {

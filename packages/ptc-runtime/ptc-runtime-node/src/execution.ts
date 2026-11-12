@@ -86,7 +86,7 @@ class NodeExecution {
   async run(spec: PtcRunSpec, initialization: string | undefined): Promise<PtcRunResult> {
     if (spec.sandboxPolicy === undefined) throw new PtcRuntimeError('ptc-runtime-node: run requires a resolved sandbox policy', 'PTC_RUNTIME_INVALID_ARGUMENT')
     if (!isAbsolute(spec.cwd) || (spec.timeoutMs !== null && (!Number.isFinite(spec.timeoutMs) || spec.timeoutMs <= 0 || spec.timeoutMs > this.config.maxTimeoutMs))) throw new PtcRuntimeError('ptc-runtime-node: run requires resolved cwd and timeout', 'PTC_RUNTIME_INVALID_ARGUMENT')
-    const bindings = validateBindings(spec)
+    const bindings = validateBindings(spec, this.mode.format)
     const owner = this.mode.retainsState ? spec.stateOwner : undefined
     let worker = owner === undefined ? undefined : this.owners.get(owner)
     worker?.assertIdle()
