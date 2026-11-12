@@ -449,9 +449,10 @@ actor AXWorker {
                 let dy = params.contains("deltaLinesY") ? try params.integer("deltaLinesY", in: -10...10) : 0
                 try inputs().1.scroll(in: route, at: params.point(), deltaLinesX: Int32(dx), deltaLinesY: Int32(dy))
             } else {
-                try inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
+                try await inputs().1.drag(in: route, from: params.point("fromX", "fromY"), to: params.point("toX", "toY"),
                     durationMs: params.integer("durationMs", in: 1...5000), steps: params.integer("steps", in: 1...240),
-                                      button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers())
+                    button: params.optionalString("mouseButton") ?? "left", modifiers: params.modifiers(),
+                    useSystemPointer: params.optionalBoolean("useSystemPointer") ?? false)
             }
         default: throw NativeFailure(code: "UNSUPPORTED", message: method)
         }

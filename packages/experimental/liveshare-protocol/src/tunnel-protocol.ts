@@ -37,6 +37,18 @@ export const LIVESHARE_CAPABILITIES = [
 export type LiveshareCapability = typeof LIVESHARE_CAPABILITIES[number]
 
 /**
+ * Operating systems an owner may report at registration.
+ *
+ * A fixed enum rather than free text: the Relay matches three names instead of normalising spellings
+ * that drift between peers, the picker renders an icon and a label from the same table, and the value
+ * names a display class rather than a kernel, distribution, or architecture.
+ */
+export const LIVESHARE_OWNER_PLATFORMS = ['macos', 'windows', 'linux'] as const
+
+/** One operating-system class an owner may report; absent means the owner reported none. */
+export type LiveshareOwnerPlatform = typeof LIVESHARE_OWNER_PLATFORMS[number]
+
+/**
  * The permission facts a share publishes.
  *
  * The owner asks for them in {@link TunnelShareSpec}; the Relay commits them in
@@ -67,6 +79,13 @@ export interface TunnelShareSpec extends SharePermissions {
   readonly ownerDisplayName: string
   /** Display-only: the owner's DSH version shown on the Relay share picker. */
   readonly dshVersion?: string
+  /**
+   * Display-only: the operating system this owner runs on, shown beside the share title.
+   *
+   * Absent means this owner reports no platform: the build runs on one outside
+   * {@link LIVESHARE_OWNER_PLATFORMS}, and the Relay shows no platform rather than guessing.
+   */
+  readonly platform?: LiveshareOwnerPlatform
   /**
    * Stable id of the owner DSH instance that published this share. Not display-only: the Relay groups
    * shares of the same owner instance by it.
@@ -534,6 +553,7 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && (value.ownerProviderId === undefined || typeof value.ownerProviderId === 'string')
     && (value.ownerTenantId === undefined || typeof value.ownerTenantId === 'string')
     && (value.dshVersion === undefined || typeof value.dshVersion === 'string')
+    && isOwnerPlatform(value.platform)
     && (value.ownerInstanceId === undefined || typeof value.ownerInstanceId === 'string')
     && (value.allowsFork === undefined || typeof value.allowsFork === 'boolean')
     && (mode === undefined || mode === 'view' || mode === 'write')
@@ -544,6 +564,16 @@ function isTunnelShareSpec(value: unknown): value is TunnelShareSpec {
     && value.allowedSubjectIds.every(subject => typeof subject === 'string' && subject !== '')
     && (value.expiresAt === undefined
       || (typeof value.expiresAt === 'string' && Number.isFinite(Date.parse(value.expiresAt))))
+}
+
+/**
+ * Validate a reported owner platform at the IPC parser.
+ * @param value Candidate field.
+ * @returns True when it is absent or names one of {@link LIVESHARE_OWNER_PLATFORMS}.
+ */
+function isOwnerPlatform(value: unknown): value is LiveshareOwnerPlatform | undefined {
+  return value === undefined
+    || LIVESHARE_OWNER_PLATFORMS.some(platform => platform === value)
 }
 
 /**

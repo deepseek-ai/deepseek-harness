@@ -156,6 +156,15 @@ describe('Liveshare gateway worker IPC', () => {
     expect(worker.events.at(-1)).toEqual({ type: 'share-connected', registrationToken: token, shareId: 'share' })
   })
 
+  it('registers the platform this owner reports and nothing when it reports none', () => {
+    worker = startWorker()
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec({ platform: 'linux' }) })
+    expect(latest().url.searchParams.get('platform')).toBe('linux')
+
+    worker.command({ type: 'add-share', registrationToken: registrationToken(), share: shareSpec() })
+    expect(latest().url.searchParams.has('platform')).toBe(false)
+  })
+
   it('omits an absent owner credential and treats an identical registration as a no-op', () => {
     worker = startWorker()
     const token = registrationToken()

@@ -87,6 +87,10 @@ export class FsSandboxController {
    *   unsandboxed backend.
    */
   async resolvePolicy(toolName: string, args: FsEscalationArgs, exec: ToolExecution): Promise<SandboxExecutionPolicy | undefined> {
+    // The schema omits both fields without a sandboxing filesystem; reject them before pairing checks.
+    if (this.escalationModes.length === 0 && (args.sandbox_permissions !== undefined || (args.justification ?? '').trim() !== '')) {
+      throw new ToolArgsError(['sandbox_permissions and justification are not available in this composition (no sandboxing filesystem to escalate)'])
+    }
     const standingPolicy = this.policy?.resolve({ ...exec.agent ? { session: exec.agent.session } : {} })
     if (args.sandbox_permissions !== undefined && args.sandbox_permissions === standingPolicy?.mode) return standingPolicy
     const justification = args.sandbox_permissions === undefined && args.justification?.trim() === ''
@@ -95,9 +99,6 @@ export class FsSandboxController {
     validateEscalationArgs(args.sandbox_permissions, justification)
     if (args.sandbox_permissions === undefined || args.justification === undefined) {
       return standingPolicy
-    }
-    if (this.escalationModes.length === 0) {
-      throw new ToolArgsError(['sandbox_permissions is not available in this composition (no sandboxing filesystem to escalate)'])
     }
     const policy = standingPolicy as SandboxExecutionPolicy
     const approvedMode = await approveEscalation(

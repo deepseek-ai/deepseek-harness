@@ -15,11 +15,13 @@ export function renderNativeProtocol(): { json: string; swift: string } {
     maxElements: z.number().int().min(1).max(AX_TRAVERSAL_MAX.maxElements),
     maxDepth: z.number().int().min(1).max(AX_TRAVERSAL_MAX.maxDepth),
   }
+  const systemPointer = { useSystemPointer: z.boolean().optional() }
   const { fields, enums, json } = nativeProtocol({
     getState: NativeResourceParameters.getState.extend(traversal),
     paste: NativeResourceParameters.paste.extend(traversal),
     sendKeyEvent: z.object({ runId: z.string().min(1) }),
-    mouseMove: z.object({ useSystemPointer: z.boolean().optional() }),
+    mouseMove: z.object(systemPointer),
+    drag: NativeResourceParameters.drag.extend(systemPointer),
     requestPermission: PermissionGuideParameters, openPermissionSettings: PermissionSettingsParameters,
   }, [z.object({
     method: z.literal('releaseHeldKeys'), params: z.object({ runId: z.string().min(1) }).strict(),

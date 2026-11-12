@@ -230,10 +230,10 @@ describe('pointer buttons and modifiers', () => {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', x: 10, y: 20,
       mouseButton: 'left', clickCount: 1, modifiers: ['command'],
     } })
-    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'] })
+    await window.drag([10, 20], [30, 40], { mouseButton: 'middle', modifiers: ['shift', 'option'], useSystemPointer: true })
     expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'drag', params: {
       appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-2', fromX: 10, fromY: 20, toX: 30, toY: 40,
-      mouseButton: 'middle', modifiers: ['shift', 'option'],
+      useSystemPointer: true, mouseButton: 'middle', modifiers: ['shift', 'option'],
     } })
     const count = f.dispatch.mock.calls.length
     await expect(window.click(element('0'), { mouseButton: 'middle', clickCount: 2 })).rejects.toThrow('Only left double-click')
@@ -1046,6 +1046,23 @@ it('forwards provider options while retaining the selected target and coordinate
   expect(f.dispatch).toHaveBeenLastCalledWith({ method: 'mouseMove', params: {
     appHandle: 'app-17', snapshotId: 'snapshot-1', windowId: '23', x: 250, y: 750, relative: true, trackingMode: 'coarse',
   } })
+})
+
+it('keeps ordinary Windows drags portable and rejects explicit system-pointer options before dispatch', async () => {
+  const f = fixture()
+  f.setCapabilities({ ...capabilities, platform: 'windows', systemPointer: false, appLevelAccessibility: false, keyboard: ['window'] })
+  const win = await (await f.api.getApp('Editor')).getWindow('23')
+  await win.getAccessibilityTree()
+  f.dispatch.mockClear()
+  for (const useSystemPointer of [true, false]) {
+    await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
+  }
+  expect(f.dispatch).not.toHaveBeenCalled()
+  await win.drag([10, 20], [30, 40], { mouseButton: 'right', modifiers: ['win'] })
+  expect(f.dispatch.mock.calls).toEqual([[{ method: 'drag', params: {
+    appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', fromX: 10, fromY: 20, toX: 30, toY: 40,
+    mouseButton: 'right', modifiers: ['win'],
+  } }]])
 })
 
 it('forwards bounded traversal limits on a window-only provider', async () => {

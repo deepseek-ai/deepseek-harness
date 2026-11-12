@@ -1,7 +1,7 @@
 /** Model-facing guidance enumerates the full available object API without unavailable operations. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
@@ -32,6 +32,18 @@ it('prefixes concise platform guidance before the shared catalog', () => {
   expect(PLATFORM_GUIDANCE).not.toContain('##')
 })
 
+it.each([GUIDANCE, PROGRAM_GUIDANCE])('explains when macOS mouse input needs a system-pointer prompt', (catalog) => {
+  const instructions = withSystemPointerGuidance(catalog)
+  expect(catalog.split('- mouseMove(')[0]).toContain('Leave useSystemPointer unset')
+  expect(instructions).toContain('Prefer an advertised accessibility action, a click on a visible control, or browser tools when possible.')
+  expect(instructions).toContain('The question interrupts the user.')
+  expect(instructions).toContain('Omitting the option or passing false uses the default hover route without prompting.')
+  const drag = catalog.split('\n').find(line => line.startsWith('- drag('))
+  expect(drag).toContain('useSystemPointer?: boolean')
+  expect(drag).toContain('Omitting useSystemPointer or passing false directs the drag to the window without asking for mouse control.')
+  expect(COMMON_GUIDANCE).not.toContain('window-directed drag')
+})
+
 it('states the macOS accessibility, keyboard, and mouse levels', () => {
   expect(PLATFORM_GUIDANCE).toContain('accessibility tree operations are available at app or window level')
   expect(PLATFORM_GUIDANCE).toContain('Simulated keyboard input is available at app level')
@@ -39,7 +51,9 @@ it('states the macOS accessibility, keyboard, and mouse levels', () => {
   const pressKey = GUIDANCE.split('\n').find(line => line.startsWith('- pressKey('))
   expect(GUIDANCE).toContain("sendKeyEvent(key: string, direction: 'down' | 'up')")
   expect(GUIDANCE).toContain('returns, throws, or the user pauses')
-  expect(COMMON_GUIDANCE).not.toContain('sendKeyEvent(')
+  const sharedKeyEvent = COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))
+  expect(sharedKeyEvent).toBeDefined()
+  expect(GUIDANCE.split('\n').find(line => line.startsWith('- sendKeyEvent('))).toContain(sharedKeyEvent)
   expect(pressKey).toBe(COMMON_GUIDANCE.split('\n').find(line => line.startsWith('- pressKey(')))
   expect(GUIDANCE).toContain('W down, D down, D up, W up')
   const hover = GUIDANCE.split('\n').find(line => line.startsWith('- mouseMove('))
@@ -60,13 +74,13 @@ it('enumerates every available method once in its catalog entry', () => {
     'app.show(', 'window.show(',
     ...accessibilityNames.map(name => `${name}(`),
     ...windowNames.filter(name => name !== 'windowId').map(name => `${name}(`),
-    ...['typeText', 'paste', 'pressKey'].map(name => `${name}(`),
+    ...['typeText', 'paste', 'pressKey', 'sendKeyEvent'].map(name => `${name}(`),
   ]
-  for (const catalog of [COMMON_GUIDANCE, GUIDANCE]) {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(24)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(23)
+  expect(signatures).toHaveLength(25)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(24)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })

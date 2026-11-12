@@ -403,6 +403,10 @@ export function createRunCodeTransport(
       }
       const runtime = getRuntime()
       const run = async (callSignal: AbortSignal): Promise<RunCodeOutput> => {
+        // The schema omits both fields without runtime confinement; reject them before pairing checks.
+        if (runtime.sandboxMode === undefined && (args.sandbox_permissions !== undefined || args.justification !== undefined)) {
+          throw new ToolArgsError(['sandbox_permissions and justification are not available for this PTC runtime'])
+        }
         validateEscalationArgs(args.sandbox_permissions, args.justification)
         if (args.timeoutMs !== undefined && runtime.timeout === undefined) {
           throw new ToolArgsError(['timeoutMs is not available for this PTC runtime'])
@@ -413,17 +417,17 @@ export function createRunCodeTransport(
         const standingPolicy = runtime.sandboxMode === undefined ? undefined : resolveSandboxPolicy(ctx, exec)
         let policy = standingPolicy
         if (args.sandbox_permissions !== undefined && args.justification !== undefined) {
-          if (standingPolicy === undefined) throw new ToolArgsError(['sandbox_permissions is not available for this PTC runtime'])
+          const confined = standingPolicy as SandboxExecutionPolicy
           const approvedMode = await approveEscalation({
             requestedMode: args.sandbox_permissions,
             justification: args.justification,
-            effectiveMode: standingPolicy.mode,
+            effectiveMode: confined.mode,
             subject: 'program',
           }, {
             approver: ctx.get('approval'), agent: exec.agent, callId: exec.callId,
             toolName, signal: callSignal,
           })
-          policy = { ...standingPolicy, mode: approvedMode }
+          policy = { ...confined, mode: approvedMode }
         }
         const cwd = await resolveWorkingDirectory(ctx, { ...exec, signal: callSignal })
         callSignal.throwIfAborted()

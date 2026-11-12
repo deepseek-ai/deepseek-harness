@@ -2124,6 +2124,39 @@
         "index": 0,
         "block": {
           "type": "tool-call",
+          "id": "cua-system-drag",
+          "name": "cua",
+          "arguments": "{\"method\":\"drag\",\"params\":{\"appHandle\":\"fixture-app\",\"windowId\":\"7\",\"fromX\":150,\"fromY\":200,\"toX\":600,\"toY\":650,\"relative\":true,\"useSystemPointer\":true}}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 3,
+          "outputTokens": 3
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
           "id": "cua-partial-arm",
           "name": "cua",
           "arguments": "{\"method\":\"pressKey\",\"params\":{\"appHandle\":\"fixture-app\",\"key\":\"F4\"}}"

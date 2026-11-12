@@ -2430,11 +2430,14 @@ describe('ChangesTab review threads', () => {
     expect(scrolled.mock.contexts).toContain(card(m, 'notes'))
   })
 
-  it('reads the threads and the viewed marks again when the host announces a review change', async () => {
+  it.each(['before', 'after'] as const)('keeps context arriving %s a review refresh of the same diff', async (order) => {
     const m = mount({ source, setup: reviewed() })
     await settle()
     const reviews = m.faces.changeRequestReview.mock.calls.length
-    const marks = m.faces.changeRequestViewed.mock.calls.length
+    const marks = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestViewed>>>()
+    const text = Promise.withResolvers<Awaited<ReturnType<typeof m.faces.changeRequestText>>>()
+    m.faces.changeRequestViewed.mockReturnValueOnce(marks.promise)
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
     const current = m.panel.getSnapshot()
     const state = current?.state
     if (current === undefined || state === undefined || state === null) throw new Error('the panel has no state')
@@ -2442,7 +2445,40 @@ describe('ChangesTab review threads', () => {
     act(() => { m.panel.set({ ...current, state: { ...state, changeRequests: announced } }) })
     await settle()
     expect(m.faces.changeRequestReview).toHaveBeenCalledTimes(reviews + 1)
-    expect(m.faces.changeRequestViewed).toHaveBeenCalledTimes(marks + 1)
+    expect(m.faces.changeRequestViewed.mock.results.at(-1)?.value).toBe(marks.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    if (order === 'before') {
+      text.resolve(ok(APP_TEXT))
+      await settle()
+      expect(rowTexts(section)).toContain(APP_LINES[0])
+    }
+    marks.resolve(ok(null))
+    await settle()
+    if (order === 'after') text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).toContain(APP_LINES[0])
+    expect(m.faces.changeRequestText).toHaveBeenCalledOnce()
+  })
+
+  it.each(['head', 'patch'] as const)('drops pending context when the change request %s changes', async (changed) => {
+    const m = mount({ source })
+    await settle()
+    const text = Promise.withResolvers<RemoteResult<string>>()
+    m.faces.changeRequestText.mockReturnValueOnce(text.promise)
+    const section = m.section('src/app.ts')
+    fireEvent.click(within(section).getByRole('button', { name: '2 unchanged lines' }))
+    const next = changed === 'head' ? { ...CHANGE, headSha: OLD } : {
+      ...CHANGE, files: CHANGE.files.map(file => file.path === APP.path
+        ? { ...file, digest: 'changed-base-patch', hunks: file.hunks.slice(0, 1) } : file),
+    }
+    m.faces.changeRequestDiff.mockResolvedValueOnce(ok(next))
+    fireEvent.click(m.view.getByRole('button', { name: en['diff.refresh'] }))
+    await settle()
+    text.resolve(ok(APP_TEXT))
+    await settle()
+    expect(rowTexts(section)).not.toContain(APP_LINES[0])
+    expect(within(section).getByRole('button', { name: '2 unchanged lines' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('clears a filter lens that hides the file of a thread the reader opens from the thread list', async () => {
