@@ -67,6 +67,7 @@ jobs:
     outputs:
       route: ${{ steps.local.outputs.route }}
       preset: ${{ steps.local.outputs.preset }}
+      rollout-requested: ${{ steps.check.outputs.rollout-requested }}
       approval: ${{ steps.check.outputs.approval }}
       website-approval: ${{ steps.check.outputs.website-approval }}
       website-destination: ${{ steps.check.outputs.website-destination }}
@@ -109,9 +110,9 @@ jobs:
         run: node --import tsx src/publish-desktop-rollout-ci.ts check
 
   publish:
-    if: inputs.rollout_percentage != ''
     name: Approve ${{ needs.prepare.outputs.label }}
     needs: [route, prepare]
+    if: needs.prepare.outputs.rollout-requested == 'true'
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: ${{ needs.prepare.outputs.preset == 'production' && 'desktop-production' || 'desktop-test' }}
     concurrency:
@@ -162,8 +163,9 @@ jobs:
           retention-days: 30
 
   upload-website-installer:
+    name: Website ${{ needs.prepare.outputs.label }}
     needs: [route, prepare, publish]
-    if: ${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && inputs.rollout_percentage == '')) }}
+    if: ${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.prepare.outputs.rollout-requested == 'false')) }}
     runs-on: [self-hosted, '${{ needs.route.outputs.runner }}']
     environment: desktop-production
     timeout-minutes: 60
