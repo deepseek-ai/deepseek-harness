@@ -97,6 +97,8 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
   '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
+  // Error classes have instance identity; CUA and Liveshare throw the registry's own copy so `instanceof` against it matches.
+  '@deepseek-ai/dsh-tools': ['ToolArgsError', 'ToolContextUnavailableError'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
   '@deepseek-ai/dsh-timeout': ['deadline', 'timeoutOf'],
 } as const satisfies HostDependencyExports

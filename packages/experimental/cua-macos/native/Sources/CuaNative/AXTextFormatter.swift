@@ -111,6 +111,12 @@ enum AXTextFormatter {
         return line
     }
 
+    static let incompleteDiscovery = "Window discovery incomplete. Some children could not be read."
+
+    static func unreadableChildLine(level: Int, positioned: Bool) -> String {
+        String(repeating: "  ", count: level) + (positioned ? "[One child could not be read.]" : "[Child list incomplete.]")
+    }
+
     static func truncation(maxElements: Int?, maxDepth: Int?) -> String {
         var limits: [String] = []
         if let maxElements { limits.append("maxElements=\(maxElements)") }

@@ -39,13 +39,13 @@ kind: "package-reference"
 
 `cua` 在创建环境时安装一次。不要覆盖这个全局对象。需要重建损坏的环境时，在 `cua_run_code` 中执行 `process.exit(0)`；该次工具调用会因进程退出而返回失败。下一次调用启动新环境并恢复 `cua`。请重新创建其他变量，并重新选择应用和窗口。
 
-使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。
+使用 `cua.getApp(selector)` 选择应用；它会获取授权、按需在后台启动已停止的应用，不读取辅助功能树。在 macOS 上，`cua.listApps()` 和 `cua.getState().apps` 返回每个运行进程的数字 `pid`。应用 ID 优先使用 bundle ID，没有 bundle ID 时使用 PID 字符串。遇到同名或相同 bundle ID 的多个进程，把 `String(row.pid)` 传给 `cua.getApp()` 即可选中对应进程。`cua.findApps(query)` 的运行中匹配项带有 PID，并保留安装应用的 ID 和路径。Windows 返回提供方给出的应用 ID，不提供 PID。`app.activate()`、`app.getWindows()` 和 `app.getWindow(windowId)` 操作选定的应用；`getWindow` 返回对象时不发送原生请求；窗口操作会拒绝已关闭或属于其他应用的窗口。进行任何截图或指针输入前，必须选择应用及其一个窗口。元素操作前须显式读取 `app.getAccessibilityTree()` 或 `window.getAccessibilityTree()`。AX 读取失败时仍可截图。读取应用或窗口时，可以单独传入 `maxElements` 或 `maxDepth`。省略的参数使用当前平台配置。在单个 API 实例内，门面按应用句柄保存一份当前辅助功能快照，该句柄的所有应用对象和窗口对象共享它，包括重复选择；每次新读取都会使上一份快照失效。元素操作使用最新快照 ID，因此调用方应使用最新树中的元素 ID，不应假定旧 ID 仍指向同一控件。元素 ID 是不透明字符串。macOS 和 Windows 共用的原始 `getState` 结果可返回 `hasUnreadableElements: true`，表示本次树中有未能读到的元素。其他情况下可省略该字段。节点数或深度达到上限时，由 `truncated` 单独标记。
 
 键盘方法可在 provider 声明的作用域中使用；每个作用域内的输入投递由 provider 负责。连接丢失会使其句柄和坐标失效。清理失败会被报告，该连接不再复用；应重新选择应用并读取新状态，因为先前的输入可能已部分执行。截图图像错误会保留失败阶段和附件错误码。请求参数校验失败时，在分派前返回包含方法、参数和要求的可读消息。
 
 通过 `connectCua(() => tools.cua)` 连接 PTC，或将自定义分派器传给 `createCuaApi(dispatch)`。观察方法返回结果供程序使用。需要展示时，调用 `inspect(await app.getWindows())` 或传入筛选后的值。`window.getScreenshot()` 返回 `Image`，其 `path` 指向程序可读取的附件文件，`width` 和 `height` 是图片的像素尺寸。使用 `inspect("操作前", before, "操作后", after)` 展示选中的截图，从 `window.windowId` 读取窗口 ID。
 
-`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。
+`tools.cua` 的截图操作在 TypeScript 程序中返回 `Image`。宿主侧的规范化截图结果包含编码图像数据与持久的 `attachment` 引用；原生渲染器将坐标元数据和图片投影为模型内容。截图前要求附件服务可用，且已配置 `screenshotTarget` 或当前模型路由声明图片输入。图片接入或保存失败会拒绝调用。 失败调用带有结构化标识：原生与 Host 拒绝使用 `NativeError` 及原生或 Host code，例如 `APP_ACCESS_DENIED`、`NATIVE_TIMEOUT`，模型不支持图片输入时为 `MODEL_DOES_NOT_SUPPORT_IMAGES`，它仍属于 `NativeError`，因为这是本包唯一的错误类，其 message 也与所有 `NativeError` 一样带 `CODE: ` 前缀；缺少 Agent、附件服务或模型路由时使用 `ToolContextUnavailableError`；参数 schema 无法检查的参数错误使用 `ToolArgsError`；调用方取消后的原生取消记录为 `AbortError` 与 `ABORTED`。对象桥接保留截图字节和已校验的元数据，不重复上传或输出同一张图片。
 
 应用授权发生在启动、观察、截图和输入之前。会话许可按对话和应用身份持久化，重启 DSH 或关闭 Computer Use 后仍可复用，其他对话需要单独授权。长期许可要求平台提供可复用的应用身份。拒绝或撤销会关闭受影响的 Agent 连接，因此旧对象必须重新选择目标。取消、超时或重新连接后均不重放输入。
 

@@ -65,7 +65,7 @@ Check this table before writing a control in a feature package. A plugin cannot 
 | `RiskConfirmation` | Sensitive action gated behind an explicit checkbox, using the shared warning-title layout. |
 | `Tooltip` | Hover and keyboard-focus text anchored to a cloned child; optional `delayMs` controls hover delay and `focusDelayMs` controls keyboard-focus delay, both defaulting to 0 ms. Optional `portal` rendering escapes clipping containers and ancestor stacking contexts that cap the bubble's z-index. |
 | `HoverCard`, `HoverCardGroup` | Readable, optionally copyable hover preview; a physical list can opt cards into shared first-display dwell and exclusive display. |
-| `useTitleMarquee`, `titleMarqueeClass` | Scrolls a one-line clipped title to its far edge while its row is hovered and fades its clipping edges; the Session list and the forge review list share it. |
+| `useTitleMarquee`, `titleMarqueeClass` | Scrolls a one-line clipped title to its far edge while its row is hovered and fades its clipping edges; the Session list uses it. |
 | `DraggableImage` | Original-image gestures with explicit transfer and feedback callbacks. |
 | `ImageLightbox` | Shared image modal with focus restoration and Escape dismissal. |
 | `usePointerGrace` | Cancelable dismissal delay that lets the pointer cross the gap between a trigger and its card; pending timers are cleared on unmount. |

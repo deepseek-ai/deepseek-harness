@@ -3,13 +3,22 @@
  *
  * It is registered on one child's context, so it speaks for that child alone: it refuses anything the
  * ceiling does not permit, and it decides paths through the host's real filesystem authorization
- * rather than by comparing strings or trusting a tool name. The return value is the reason string the
- * tool runtime expects, and a refusal is monotonic — nothing downstream can turn it back into an
- * allow.
+ * rather than by comparing strings or trusting a tool name. A refusal is a `ToolGuard` denial: the
+ * model-facing reason with the structured error identity the tool runtime records, and it is
+ * monotonic — nothing downstream can turn it back into an allow.
  */
 
-import { forkToolDecision, type ForkToolDecision } from './fork-ceiling.ts'
+import { forkToolDecision, type ForkToolDecision, type ForkToolRefusal } from './fork-ceiling.ts'
+import { forkToolDenial, outsideWorkspaceDenial, type ForkToolDenial, type LiveshareForkDeniedCode } from './fork-errors.ts'
 import type { ForkCeiling } from './fork-policy.ts'
+
+/** The recorded code for each grant refusal a fork tool decision names; a path outside the workspace is a filesystem refusal. */
+const REFUSAL_CODES: Readonly<Record<Exclude<ForkToolRefusal, 'fork-path-outside-workspace'>, LiveshareForkDeniedCode>> = {
+  'fork-ceiling-uninstalled': 'FORK_LIMITS_UNINSTALLED',
+  'fork-tool-not-permitted': 'FORK_TOOL_NOT_PERMITTED',
+  'fork-child-mismatch': 'FORK_CHILD_MISMATCH',
+  'fork-paths-unknown': 'FORK_PATHS_UNKNOWN',
+}
 
 /** One tool execution as the runtime presents it to a guard. */
 export interface ForkToolExecution {
@@ -137,7 +146,7 @@ export function decideForkToolUse(
 /**
  * Build the guard one child's tool runtime registers.
  *
- * The returned function matches `ToolGuard` structurally — a reason string or undefined — so the host
+ * The returned function matches `ToolGuard` structurally — a denial with its error identity or undefined — so the host
  * registers it with `tools.guard(...)` on the child's own context without this package depending on the
  * tool runtime.
  * @param ports Host services the guard cannot decide for itself.
@@ -150,14 +159,14 @@ export function forkToolGuard(
   ports: ForkToolGuardPorts,
   ceilingOf: (childSessionId: string) => ForkCeiling | undefined,
   describe: (execution: ForkToolExecution) => { readonly paths: readonly string[] | undefined; readonly noFileEffect: boolean },
-): (execution: ForkToolExecution) => string | undefined {
+): (execution: ForkToolExecution) => ForkToolDenial | undefined {
   return (execution) => {
     const childSessionId = ports.childOf(execution)
     // An execution this guard cannot attribute to a child is refused: the guard speaks for children,
     // and an unattributed call is not one it can vouch for.
-    if (childSessionId === undefined) return 'a fork may not act without a child session'
+    if (childSessionId === undefined) return forkToolDenial('a fork may not act without a child session', 'FORK_CHILD_UNKNOWN')
     if (!ports.enforcementInstalled(childSessionId)) {
-      return 'read-only execution limits are not installed for this fork'
+      return forkToolDenial('read-only execution limits are not installed for this fork', 'FORK_LIMITS_UNINSTALLED')
     }
     const decision = decideForkToolUse(ceilingOf(childSessionId), {
       childSessionId,
@@ -165,7 +174,10 @@ export function forkToolGuard(
       ...describe(execution),
       ...(execution.token === undefined ? {} : { token: execution.token }),
     }, ports)
-    return decision.ok ? undefined : decision.message
+    if (decision.ok) return undefined
+    return decision.code === 'fork-path-outside-workspace'
+      ? outsideWorkspaceDenial(decision.message)
+      : forkToolDenial(decision.message, REFUSAL_CODES[decision.code])
   }
 }
 
@@ -181,7 +193,7 @@ export interface ChildEnforcementPorts<Context> {
    */
   readonly registerGuard: (
     context: Context,
-    guard: (execution: ForkToolExecution) => string | undefined,
+    guard: (execution: ForkToolExecution) => ForkToolDenial | undefined,
   ) => (() => void) | undefined
   /** Record that this child's limit is installed; false when this host never recorded that child. */
   readonly recordEnforcement: (childSessionId: string, ceiling: ForkCeiling) => boolean
@@ -202,7 +214,7 @@ export interface ChildEnforcementPorts<Context> {
 /** One context owns the persistent guard and its replaceable enforcement installation. */
 interface ChildGuardOwner {
   installation?: {
-    readonly guard: (execution: ForkToolExecution) => string | undefined
+    readonly guard: (execution: ForkToolExecution) => ForkToolDenial | undefined
     readonly dispose: () => void
   }
 }
@@ -225,7 +237,7 @@ export function installChildEnforcement<Context>(
   input: {
     readonly childSessionId: string
     readonly ceiling: ForkCeiling
-    readonly guard: (execution: ForkToolExecution) => string | undefined
+    readonly guard: (execution: ForkToolExecution) => ForkToolDenial | undefined
     readonly verdictSource: (execution: ForkToolExecution) => Promise<void>
   },
   ports: ChildEnforcementPorts<Context>,
@@ -240,7 +252,7 @@ export function installChildEnforcement<Context>(
   if (owner === undefined) {
     const created: ChildGuardOwner = {}
     if (ports.registerGuard(context, execution => created.installation === undefined
-      ? 'read-only execution limits are not installed for this fork'
+      ? forkToolDenial('read-only execution limits are not installed for this fork', 'FORK_LIMITS_UNINSTALLED')
       : created.installation.guard(execution)) === undefined) {
       disposeVerdicts()
       return undefined

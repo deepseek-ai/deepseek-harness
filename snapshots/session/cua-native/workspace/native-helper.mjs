@@ -181,8 +181,8 @@ function createApplicationState(socket, record, application, captureBroker, conn
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
-        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
-        elements: [], windows: windows(), truncated: false,
+        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  [One child could not be read.]\n  - AXStaticText "Floating count: ${application.panelCount}"`,
+        elements: [], windows: windows(), truncated: false, hasUnreadableElements: true,
       }
       if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }

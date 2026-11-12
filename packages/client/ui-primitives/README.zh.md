@@ -65,7 +65,7 @@ kind: "package-library"
 | `RiskConfirmation` | 以显式复选框把关的敏感操作确认，采用共用的警告标题布局。 |
 | `Tooltip` | 锚定在克隆子元素上的悬停与键盘聚焦提示；可选的 `delayMs` 控制悬停延迟，`focusDelayMs` 控制键盘聚焦延迟，均默认为 0 毫秒。可通过 `portal` 渲染到外层，避免被容器裁剪，或受祖先层叠上下文限制其 z-index。 |
 | `HoverCard`、`HoverCardGroup` | 可阅读、可选带复制按钮的悬停预览；物理列表可选择让卡片共享首次显示等待，并互斥显示。 |
-| `useTitleMarquee`、`titleMarqueeClass` | 行被悬停时把被截断的单行标题滚动到末尾，并淡化截断边缘；会话列表与 forge 评审列表共用。 |
+| `useTitleMarquee`、`titleMarqueeClass` | 行被悬停时把被截断的单行标题滚动到末尾，并淡化截断边缘；会话列表使用它。 |
 | `DraggableImage` | 通过显式传递与反馈回调提供原图拖放。 |
 | `ImageLightbox` | 共享图片浮层，支持焦点恢复与 Esc 关闭。 |
 | `usePointerGrace` | 可取消的延迟关闭，让指针能够跨越触发控件与卡片间的空隙；卸载时清除待执行定时器。 |
