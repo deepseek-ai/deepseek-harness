@@ -10,3 +10,12 @@ import type {} from './contract/slots.ts'
 export function PanelIcon({ id, size, active, renderSlot }: FactoryComponentPropsOf<'sidebar.panel.icon'>) {
   return renderSlot('sidebar.panellist', { size, active }, { only: id })
 }
+
+/**
+ * Render the trailing content registered for one panel in its navigation row.
+ * @param props - Panel identity, row state, and the authorized child renderer.
+ * @returns The matching trailing content, or nothing without a registration.
+ */
+export function PanelTrailing({ id, wide, active, renderSlot }: FactoryComponentPropsOf<'sidebar.panel.trailing'>) {
+  return renderSlot('sidebar.panellist.trailing', { wide, active }, { only: id })
+}

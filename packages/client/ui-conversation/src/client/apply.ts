@@ -124,6 +124,7 @@ interface WorkspaceNavigation {
     workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0],
     beforeOpen: (sessionId: SessionId) => void,
   ): Promise<void>
+  connectWorkspace(workspaceId: Parameters<ConversationInjected['selectWorkspace']>[0]): Promise<SessionId>
 }
 
 /** Action registration used by the composer without importing its command-UI consumer. */
@@ -368,32 +369,40 @@ export function apply(ctx: Context, config: Config = Config({})): void {
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
       },
-      selectWorkspace: workspaceId => workspaceNavigation.openWorkspace(workspaceId, (nextId) => {
-        if (sessionId !== undefined && nextId !== sessionId) {
-          const from = inputHub.shell(sessionId)
-          // A draft with a submission in flight stays with the Session that is admitting it.
-          if (from.snapshot.phase !== 'plain' && from.snapshot.phase !== 'claimed') return
-          const draft = from.draftSnapshot
-          const attachmentIds = from.snapshot.attachmentIds
-          const next = inputHub.shell(nextId)
-          if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
-            const binding = sessions.binding(nextId)
-            if (binding === undefined) {
-              throw new Error(`ui-conversation: session "${nextId}" resolved no binding`)
-            }
-            // The same rule as intake: only an ordinary Session stages image uploads.
-            const ordinary = binding.session.getSnapshot().subagent === null
-            concreteConversation(ctx).rebindDraftFiles(nextId, attachmentIds, ordinary)
-            if (draft.text !== '') {
-              next.setDraft(draft)
-              from.setDraft('')
-            }
-            if (attachmentIds.length > 0) {
-              for (const id of attachmentIds) from.removeAttachment(id)
+      selectWorkspace: (workspaceId, report) => {
+        const moveDraft = (nextId: SessionId): void => {
+          if (sessionId !== undefined && nextId !== sessionId) {
+            const from = inputHub.shell(sessionId)
+            // A draft with a submission in flight stays with the Session that is admitting it.
+            if (from.snapshot.phase !== 'plain' && from.snapshot.phase !== 'claimed') return
+            const draft = from.draftSnapshot
+            const attachmentIds = from.snapshot.attachmentIds
+            const next = inputHub.shell(nextId)
+            if (attachmentIds.length === 0 || next.addAttachments(attachmentIds)) {
+              const binding = sessions.binding(nextId)
+              if (binding === undefined) {
+                throw new Error(`ui-conversation: session "${nextId}" resolved no binding`)
+              }
+              // The same rule as intake: only an ordinary Session stages image uploads.
+              const ordinary = binding.session.getSnapshot().subagent === null
+              concreteConversation(ctx).rebindDraftFiles(nextId, attachmentIds, ordinary)
+              if (draft.text !== '') {
+                next.setDraft(draft)
+                from.setDraft('')
+              }
+              if (attachmentIds.length > 0) {
+                for (const id of attachmentIds) from.removeAttachment(id)
+              }
             }
           }
         }
-      }),
+        if (report === undefined) return workspaceNavigation.openWorkspace(workspaceId, moveDraft)
+        // The receiver retains the Session before it returns, which the draft move needs.
+        return workspaceNavigation.connectWorkspace(workspaceId).then((nextId) => {
+          report(nextId)
+          moveDraft(nextId)
+        })
+      },
     }),
   }, ConversationContent)
 

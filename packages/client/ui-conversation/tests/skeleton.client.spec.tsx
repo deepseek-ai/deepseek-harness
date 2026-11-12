@@ -437,6 +437,13 @@ describe('Hero chrome', () => {
     expect(brandMarkOwner.className).toBeTypeOf('string')
     expect(renderSlot.mock.calls[0]?.[2]?.fallback).toBeTruthy()
   })
+
+  it('shows an owner headline instead of the default headline and preview badge', () => {
+    const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={(() => null) as never} headline="Review demo #42" />)
+    expect(view.getByText('Review demo #42')).toBeTruthy()
+    expect(view.queryByText('Into the Unknown')).toBeNull()
+    expect(view.queryByText('Preview')).toBeNull()
+  })
 })
 
 describe('ConversationRoot resident composer', () => {
@@ -611,7 +618,7 @@ describe('ConversationRoot resident composer', () => {
     const owner = b.pickerOwner() as { open: boolean; onPick(id: WorkspaceId): void }
     expect(owner.open).toBe(true)
     act(() => { owner.onPick(wid('second')) })
-    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'))
+    expect(b.retargetWorkspace).toHaveBeenCalledWith(wid('second'), undefined)
     expect(b.view.getByText('Selected Folder')).toBeTruthy()
   })
 
@@ -904,7 +911,7 @@ describe('ConversationRoot resident composer', () => {
     fireEvent.click(b.view.getByRole('button', { name: '选择工作区' }))
     const owner = b.pickerOwner() as { onPick(id: WorkspaceId): void }
     await act(async () => { owner.onPick(wid('second')); await Promise.resolve() })
-    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'))
+    expect(selectWorkspace).toHaveBeenCalledWith(wid('second'), undefined)
     expect(b.view.queryByText('Selected Folder')).toBeNull()
     expect(b.view.getByText('one')).toBeTruthy()
   })

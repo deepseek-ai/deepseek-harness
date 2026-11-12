@@ -25,6 +25,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       props: SidebarPanelIconOwnerProps & { readonly id: string }
       children: { 'sidebar.panellist': { kind: 'list'; scope: 'root' } }
     }
+    /** Render a panel's trailing content in its navigation row. */
+    'sidebar.panel.trailing': {
+      scope: 'root'
+      props: SidebarPanelTrailingOwnerProps & { readonly id: string }
+      children: { 'sidebar.panellist.trailing': { kind: 'list'; scope: 'root' } }
+    }
   }
   interface SlotMap {
     /** Non-interactive notification inside the collapsed sidebar expand button. */
@@ -45,6 +51,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * the sidebar owns the button and resolves its label from list metadata.
      */
     'sidebar.panellist': { kind: 'list'; scope: 'root'; owner: SidebarPanelIconOwnerProps }
+    /**
+     * Non-interactive content at the end of a panel's navigation row, registered with the panel's id, such as a count.
+     * The expanded row shows it at its trailing edge and hides it while the row's unpin action shows; the collapsed rail
+     * shows it over the icon's top trailing corner. Its text describes the row's button for assistive technology, so
+     * decorative parts are `aria-hidden`.
+     */
+    'sidebar.panellist.trailing': { kind: 'list'; scope: 'root'; owner: SidebarPanelTrailingOwnerProps }
     /** Rows of the panel list's More menu; the sidebar shows More only while this list has registrations. */
     'sidebar.panellist.actions': { kind: 'list'; scope: 'root'; owner: SidebarPanelActionsOwnerProps }
     /**
@@ -92,6 +105,14 @@ export interface SidebarBrandNameOwnerProps {
 export interface SidebarPanelIconOwnerProps {
   /** Requested square edge in pixels. */
   size: number
+  /** Whether this panel is selected in the main column. */
+  active: boolean
+}
+
+/** Row state supplied to a panel's trailing content. */
+export interface SidebarPanelTrailingOwnerProps {
+  /** Whether the sidebar is expanded; the collapsed rail leaves room for a mark of a few pixels only. */
+  wide: boolean
   /** Whether this panel is selected in the main column. */
   active: boolean
 }

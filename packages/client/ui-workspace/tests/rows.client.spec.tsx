@@ -7,7 +7,7 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/clie
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { allowAllAccess, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
-import { HoverCardGroup, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { HoverCardGroup, titleMarqueeClass, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
@@ -412,6 +412,8 @@ describe('workspace browser rows', () => {
       )
       const row = screen.getByRole('treeitem')
       const title = screen.getByText(node.title)
+      // The shared marquee class fades the title's clipping edges mid-travel.
+      expect(title.classList.contains(titleMarqueeClass)).toBe(true)
       // jsdom lays out nothing: the title's clipped geometry is stated outright.
       const geometry = (scrollWidth: number, clientWidth: number): void => {
         Object.defineProperty(title, 'scrollWidth', { value: scrollWidth, configurable: true })

@@ -123,7 +123,7 @@ export function ConversationContent(props: ConversationContentProps) {
         onPick: (workspaceId) => {
           setPickerOpen(false)
           setPendingWorkspaceId(workspaceId)
-          void selectWorkspace(workspaceId).catch(() => {
+          void selectWorkspace(workspaceId, props.onWorkspaceSession).catch(() => {
             setPendingWorkspaceId(current => current === workspaceId ? undefined : current)
           })
         },
@@ -164,7 +164,7 @@ export function ConversationContent(props: ConversationContentProps) {
 
   const composerBar = (
     <div className={clsx(css.composerStack, hero && css.composerHero)}>
-      {hero && <HeroShell t={t} renderSlot={renderSlot} />}
+      {hero && <HeroShell t={t} renderSlot={renderSlot} headline={props.headline} />}
       {hero && heroWorkspaceRow}
       {zone !== undefined && renderSlot('conversation.input.dock', zone)}
       {inputBar}

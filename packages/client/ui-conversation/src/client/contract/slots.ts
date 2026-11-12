@@ -468,8 +468,11 @@ export type ConvViewProps = PropsRuntime<'conversation.view'>
 
 /** Business callbacks injected into the resident Conversation shell. */
 export interface ConversationInjected {
-  /** Connect and open a blank Session in the selected Workspace. */
-  selectWorkspace: (workspaceId: WorkspaceId) => Promise<void>
+  /**
+   * Connect a blank Session in the selected Workspace and move the draft to it; it opens as the main Session unless
+   * `report` receives it, which retains it before the draft moves.
+   */
+  selectWorkspace: (workspaceId: WorkspaceId, report?: (sessionId: SessionId) => void) => Promise<void>
   /** Session-addressed composer block source, or the stable absent source. */
   hooks: { composerBlock: ObservableSnapshot<ComposerBlock | undefined> }
 }
@@ -683,6 +686,14 @@ export interface ConversationContentInputProps {
   variant: 'main' | 'embedded'
   phase: 'settling' | 'hero' | 'active'
   hero: boolean
+  /**
+   * Receives the blank Session of a Workspace the Hero's picker chose instead of that blank opening as the main
+   * Session; an embedded occurrence that sets it shows the reported Session itself. It must retain the Session before
+   * it returns: the draft then moves to it.
+   */
+  onWorkspaceSession?: ((sessionId: SessionId) => void) | undefined
+  /** Text the blank-session Hero shows instead of its default headline and preview badge. */
+  headline?: string | undefined
 }
 
 /** Values passed from shared content to its occurrence-selected width controls. */
