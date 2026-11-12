@@ -1031,6 +1031,23 @@ it('forwards provider options while retaining the selected target and coordinate
   } })
 })
 
+it('keeps ordinary Windows drags portable and rejects explicit system-pointer options before dispatch', async () => {
+  const f = fixture()
+  f.setCapabilities({ ...capabilities, platform: 'windows', systemPointer: false, appLevelAccessibility: false, keyboard: ['window'] })
+  const win = await (await f.api.getApp('Editor')).getWindow('23')
+  await win.getAccessibilityTree()
+  f.dispatch.mockClear()
+  for (const useSystemPointer of [true, false]) {
+    await expect(win.drag([10, 20], [30, 40], { useSystemPointer })).rejects.toThrow('drag useSystemPointer: not accepted')
+  }
+  expect(f.dispatch).not.toHaveBeenCalled()
+  await win.drag([10, 20], [30, 40], { mouseButton: 'right', modifiers: ['win'] })
+  expect(f.dispatch.mock.calls).toEqual([[{ method: 'drag', params: {
+    appHandle: 'app-17', windowId: '23', snapshotId: 'snapshot-1', fromX: 10, fromY: 20, toX: 30, toY: 40,
+    mouseButton: 'right', modifiers: ['win'],
+  } }]])
+})
+
 it('forwards bounded traversal limits on a window-only provider', async () => {
   const f = fixture()
   f.setCapabilities({ ...capabilities, platform: 'windows', appLevelAccessibility: false })

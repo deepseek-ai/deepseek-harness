@@ -208,7 +208,7 @@ export interface CuaWindow extends CuaSurface {
    * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting screenshot-local point or integer ratio.
    * @param to - destination in the same coordinate mode.
-   * @param options - button, modifiers, coordinate mode, and optional system-pointer control on supported providers.
+   * @param options - button, modifiers and coordinate mode. Only providers reporting systemPointer accept useSystemPointer.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>
