@@ -3,10 +3,9 @@
  * with native `web_search_20250305`. A search initiated by a Session whose latest model request used
  * a route that publishes an account credential through `ctx.llm.routeCredential()` authenticates with
  * that credential when the search endpoint has the origin of that route's base URL and the
- * credential's owner allows the endpoint; every other search reuses
- * `DEEPSEEK_API_KEY`. The provider does not reuse `DEEPSEEK_BASE_URL`; auxiliary search has its own
- * endpoint configuration. The provider reports itself not ready for a model request whose search
- * would have no credential.
+ * credential's owner allows the endpoint; every other search reuses `DEEPSEEK_API_KEY`. The provider
+ * does not reuse `DEEPSEEK_BASE_URL`; auxiliary search has its own endpoint configuration. The
+ * provider reports itself not ready for a model request whose search would have no credential.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
 import type { Volatile } from '@deepseek-ai/cordis'
