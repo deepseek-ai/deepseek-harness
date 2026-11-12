@@ -19,6 +19,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  publisher-isolated:
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        os: [linux, macos]
+    runs-on: >-
+      ${{ matrix.os == 'macos' && 'macos-latest'
+          || vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-4vcpu-ubuntu-2404'
+          || vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          path: publisher-isolated
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Check preflights before dependency installation
+        working-directory: publisher-isolated
+        run: node apps/desktop-publisher/tests/preinstall.mjs
+      - uses: pnpm/action-setup@v5.0.0
+        with:
+          package_json_file: publisher-isolated/package.json
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Install only publisher production dependencies
+        working-directory: publisher-isolated
+        run: pnpm --filter @deepseek-ai/dsh-desktop-publisher --fail-if-no-match install --prod --frozen-lockfile --ignore-scripts
+      - name: Load publisher without Desktop or root development dependencies
+        working-directory: publisher-isolated/apps/desktop-publisher
+        run: node --import tsx tests/isolated-install.mjs
+
 
   # Three enterprise jobs isolate coverage, static analysis, and the
   # build-backed consumer tail. The consumer job owns the only Linux build so
@@ -179,6 +215,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -191,6 +237,16 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
+
+      # The save step is skipped on a hit. A restored archive whose digest fails
+      # is re-downloaded but not re-saved (the key already exists), so a tampered
+      # entry survives until eviction; that needs deliberate cache poisoning.
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run exhaustive coverage
         run: pnpm run check:ci:coverage
@@ -406,6 +462,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Install dependencies and prepare bubblewrap
         run: |
           pnpm install --frozen-lockfile &
@@ -418,6 +484,13 @@ jobs:
           wait "$sandbox_pid" || sandbox_status=$?
           if (( install_status != 0 )); then exit "$install_status"; fi
           exit "$sandbox_status"
+
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       # Blacksmith's Ubuntu HTTP archive endpoints can be unreachable while HTTPS works.
       - name: Use HTTPS for Ubuntu archives on Blacksmith
@@ -459,6 +532,7 @@ jobs:
 
 
   node-compat:
+    needs: publisher-isolated
     if: github.event_name == 'pull_request'
     # Under the selfhosted leg this job admits only repository-owned PR code
     # to the persistent shared VM; the blacksmith branch targets ephemeral
@@ -532,8 +606,25 @@ jobs:
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
 
+      # The persistent self-hosted pool keeps ~/.cache between jobs on its own
+      # layout, so the archive cache follows the hosted-only pnpm store guard.
+      - name: Restore verified bubblewrap archive
+        id: bubblewrap-cache
+        if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: actions/cache/restore@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
+
       - name: Prepare bubblewrap (unrestrict userns)
         run: bash scripts/prepare-ci-bubblewrap.sh
+
+      - name: Save verified bubblewrap archive
+        if: (vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]') && steps.bubblewrap-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6.1.0
+        with:
+          path: ~/.cache/dsh-ci/bubblewrap
+          key: bubblewrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/prepare-ci-bubblewrap.sh') }}
 
       - name: Run compatibility smokes
         env:
@@ -572,7 +663,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-consumers, node-compat]
+    needs: [publisher-isolated, node-24, node-24-coverage, node-24-lint, node-24-bench, node-24-consumers, node-compat]
     if: ${{ !cancelled() && github.event_name == 'pull_request' }}
     steps:
       - name: Fail if any needed job did not succeed

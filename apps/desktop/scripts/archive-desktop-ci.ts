@@ -2,9 +2,9 @@
 import { execFileSync } from 'node:child_process'
 import { appendFile, mkdtemp } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { desktopPublicationFailure } from './desktop-publication-failure.ts'
+import { desktopPublicationFailure } from '@deepseek-ai/dsh-desktop-publisher/desktop-publication-failure.ts'
 import { desktopReleasesRoot } from './retain-desktop-ci.ts'
-import { retainedDesktopPath, verifyRetainedDesktopRelease } from './desktop-release-store.ts'
+import { retainedDesktopPath, verifyRetainedDesktopRelease } from '@deepseek-ai/dsh-desktop-publisher/desktop-release-store.ts'
 
 /**
  * Verify an original build without interpreting the archive job's attempt as a new build.

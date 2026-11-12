@@ -49,8 +49,8 @@ it('renders nothing when no disable request exists', () => {
 it('shows the localized title, two paragraphs, and actions without a checkbox', () => {
   const input = props()
   render(<TeamDisableConfirmation {...input.props} />)
-  const dialog = within(screen.getByRole('dialog', { name: '确认停用智能体团队协作？' }))
-  expect(dialog.getByRole('heading', { name: '确认停用智能体团队协作？' })).toBeTruthy()
+  const dialog = within(screen.getByRole('dialog', { name: '确认关闭智能体团队协作？' }))
+  expect(dialog.getByRole('heading', { name: '确认关闭智能体团队协作？' })).toBeTruthy()
   expect(dialog.getByText(zh['disable.description'], { selector: 'p' })).toBeTruthy()
   expect(dialog.getByText(zh['disable.warning'], { selector: 'p' })).toBeTruthy()
   expect(dialog.getAllByRole('paragraph')).toHaveLength(2)

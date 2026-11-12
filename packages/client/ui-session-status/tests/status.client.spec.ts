@@ -4,9 +4,10 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { SessionReadSnapshot } from '../src/client/model.ts'
 import { apply } from '../src/client/index.ts'
 import { UiSessionStatus } from '../src/client/status.ts'
-import { apply as nodeApply } from '../src/index.ts'
+import type { SessionReadState } from '../src/types.ts'
 
 const sessionId = (value: string): SessionId => value as SessionId
 const pendingQuestion = (id: SessionId) => ({ key: 'question:1', kind: 'question', sessionId: id }) as SessionPendingInteraction
@@ -21,16 +22,33 @@ function bench() {
   const ctx = new Context()
   roots.push(ctx)
   let statusListener: ((id: SessionId, running: boolean) => void) | undefined
+  const remoteMark = vi.fn(async () => ({ ok: true as const, value: undefined }))
   ctx.provide('remote', {
     $on: (_event: string, listener: (id: SessionId, running: boolean) => void) => {
       statusListener = listener
       return () => { if (statusListener === listener) statusListener = undefined }
     },
+    sessionStatus: { mark: remoteMark },
   } as never)
   const list = createSnapshotStore<SessionListState>({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
-  const sessions: Pick<ISessions, 'list'> = { list }
+  const sessions: Pick<ISessions, 'list' | 'binding'> = { list, binding: () => undefined }
   const pending = createSnapshotStore<ReadonlyMap<SessionId, SessionPendingInteraction>>(new Map())
-  const status = () => new UiSessionStatus(ctx, sessions, pending)
+  // The status table owns its reading model; this facade drives the most recently created one with a ready baseline.
+  let latest: UiSessionStatus | undefined
+  const model = () => {
+    if (latest === undefined) throw new Error('no status table was created')
+    return latest.reading.state
+  }
+  const reading = {
+    set: (value: SessionReadSnapshot) => { model().set(value) },
+    getSnapshot: () => model().getSnapshot(),
+  }
+  const create = (scope: Context = ctx, catalog: Pick<ISessions, 'list' | 'binding'> = sessions) => {
+    latest = new UiSessionStatus(scope, catalog, pending)
+    latest.reading.replace([])
+    return latest
+  }
+  const status = () => create()
   const row = (id: SessionId) => {
     list.update((draft) => {
       if (!draft.ids.includes(id)) draft.ids.push(id)
@@ -46,10 +64,16 @@ function bench() {
     if (statusListener === undefined) throw new Error('api-session/status is not subscribed')
     statusListener(id, running)
   }
-  return { ctx, list, pending, status, row, setMainView, emitStatus, subscribed: () => statusListener !== undefined }
+  const record = (id: SessionId, value: Partial<SessionReadState>): SessionReadState => ({
+    sessionId: id, completedTurn: 0, failed: false, readTurn: 0, manualUnread: false, ...value,
+  })
+  return {
+    ctx, list, pending, reading, remoteMark, create, status, row, setMainView, emitStatus, record,
+    subscribed: () => statusListener !== undefined,
+  }
 }
 
-describe('Session running status and completion reminders', () => {
+describe('Session running status', () => {
   it('keeps synthetic-row status unknown until an event or Host baseline establishes it', () => {
     const b = bench()
     const id = sessionId('catalog-only')
@@ -58,19 +82,17 @@ describe('Session running status and completion reminders', () => {
     })
     const service = b.status()
     expect(service.getSnapshot().get(id)?.running).toBeUndefined()
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
 
     b.emitStatus(id, true)
     b.list.update((draft) => { draft.byId[id]!.displayTitle = 'Renamed child' })
     expect(service.getSnapshot().get(id)?.running).toBe(true)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
 
     b.list.update((draft) => { draft.ids.push(id) })
     expect(service.getSnapshot().get(id)?.running).toBe(false)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
   })
 
-  it('records non-main completions and lets main-view activity acknowledge them', () => {
+  it('publishes running changes from list rows and status events, and skips unchanged status', () => {
     const b = bench()
     const id = sessionId('s1')
     b.row(id)
@@ -79,41 +101,20 @@ describe('Session running status and completion reminders', () => {
     const off = service.subscribe(changed)
 
     expect(service.getSnapshot().get(id)).toEqual({
-      running: false,
-      pendingInteraction: undefined,
-      completionUnread: false,
+      running: false, pendingInteraction: undefined, completionUnread: false, completionFailed: false,
     })
     b.list.update((draft) => { draft.byId[id]!.running = true })
     expect(service.getSnapshot().get(id)?.running).toBe(true)
-    b.list.update((draft) => { draft.byId[id]!.running = false })
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
-    b.setMainView(id, 1)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
-    b.setMainView(id, 0)
-
-    b.emitStatus(id, true)
     b.emitStatus(id, false)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
-
-    b.setMainView(id, 1)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
-    b.emitStatus(id, true)
-    b.emitStatus(id, false)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
-
-    b.setMainView(id, 0)
-    b.emitStatus(id, false)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
-    b.emitStatus(id, true)
-    b.emitStatus(id, false)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
-    b.emitStatus(id, true)
-    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
+    expect(service.getSnapshot().get(id)?.running).toBe(false)
     expect(changed).toHaveBeenCalled()
+    const calls = changed.mock.calls.length
+    b.emitStatus(id, false)
+    expect(changed).toHaveBeenCalledTimes(calls)
     off()
   })
 
-  it('records an idle event before the initial catalog baseline and retires absent status later', () => {
+  it('records an event before the initial catalog baseline and retires absent status later', () => {
     const b = bench()
     const id = sessionId('early')
     b.list.update((draft) => { draft.phase = 'pending' })
@@ -121,9 +122,7 @@ describe('Session running status and completion reminders', () => {
 
     b.emitStatus(id, false)
     expect(service.getSnapshot().get(id)).toEqual({
-      running: false,
-      pendingInteraction: undefined,
-      completionUnread: true,
+      running: false, pendingInteraction: undefined, completionUnread: false, completionFailed: false,
     })
     b.list.update((draft) => { draft.phase = 'ready' })
     expect(service.getSnapshot().has(id)).toBe(false)
@@ -148,6 +147,69 @@ describe('Session running status and completion reminders', () => {
   })
 })
 
+describe('Session reading reminders', () => {
+  it('derives unread and failed reminders from Host reading records', () => {
+    const b = bench()
+    const id = sessionId('s1')
+    b.row(id)
+    const service = b.status()
+    b.emitStatus(id, true)
+    b.emitStatus(id, false)
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 1, failed: true }) } })
+    expect(service.getSnapshot().get(id)).toMatchObject({ completionUnread: true, completionFailed: true })
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 2 }) } })
+    expect(service.getSnapshot().get(id)).toMatchObject({ completionUnread: true, completionFailed: false })
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 2, readTurn: 2, failed: true }) } })
+    expect(service.getSnapshot().get(id)).toMatchObject({ completionUnread: false, completionFailed: false })
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 2, readTurn: 2, manualUnread: true }) } })
+    expect(service.getSnapshot().get(id)).toMatchObject({ completionUnread: true, completionFailed: false })
+  })
+
+  it('preserves a Host reminder through main view selection and running changes', () => {
+    const b = bench()
+    const id = sessionId('s1')
+    b.row(id)
+    const service = b.status()
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 1 }) } })
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
+    b.setMainView(id, 1)
+    b.emitStatus(id, true)
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 1, readTurn: 1, manualUnread: true }) } })
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(true)
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 1, readTurn: 1 }) } })
+    expect(service.getSnapshot().get(id)?.completionUnread).toBe(false)
+  })
+
+  it('retains a shared reminder for a Session that left the catalog', () => {
+    const b = bench()
+    const id = sessionId('evicted')
+    const service = b.status()
+    b.emitStatus(id, true)
+    b.reading.set({ ready: true, items: { [id]: b.record(id, { completedTurn: 1 }) } })
+    b.list.set({ ids: [], byId: {}, phase: 'ready', projectionsBySession: {} })
+    expect(service.getSnapshot().get(id)).toMatchObject({ running: undefined, completionUnread: true })
+  })
+
+  it('reports reading readiness and forwards explicit marks', async () => {
+    const b = bench()
+    const service = b.status()
+    const ready = vi.fn()
+    const off = service.readingReady.subscribe(ready)
+    expect(service.readingReady.getSnapshot()).toBe(true)
+    b.reading.set({ ...b.reading.getSnapshot(), ready: false })
+    expect(service.readingReady.getSnapshot()).toBe(false)
+    expect(ready).toHaveBeenCalled()
+    off()
+    b.reading.set({ ...b.reading.getSnapshot(), ready: true })
+    const mark = vi.spyOn(service.reading, 'mark')
+    await service.mark(sessionId('s1'), true)
+    expect(mark).toHaveBeenCalledExactlyOnceWith(sessionId('s1'), true)
+    expect(b.remoteMark).toHaveBeenCalledExactlyOnceWith(sessionId('s1'), { type: 'unread' })
+  })
+})
+
 describe('Session status pending interactions', () => {
   it('carries the exact effective request object and adds Sessions known only by their request', () => {
     const b = bench()
@@ -161,10 +223,12 @@ describe('Session status pending interactions', () => {
     const question = { key: 'question:1', kind: 'question', sessionId: unlisted } as SessionPendingInteraction
 
     b.pending.set(new Map([[listed, approval], [unlisted, question]]))
-    expect(service.getSnapshot().get(listed)).toEqual({ running: false, pendingInteraction: approval, completionUnread: false })
+    expect(service.getSnapshot().get(listed)).toEqual({
+      running: false, pendingInteraction: approval, completionUnread: false, completionFailed: false,
+    })
     expect(service.getSnapshot().get(listed)?.pendingInteraction).toBe(approval)
     expect(service.getSnapshot().get(unlisted)).toEqual({
-      running: undefined, pendingInteraction: question, completionUnread: false,
+      running: undefined, pendingInteraction: question, completionUnread: false, completionFailed: false,
     })
     expect(changed).toHaveBeenCalledOnce()
 
@@ -196,7 +260,7 @@ describe('Session status pending interactions', () => {
     let service: UiSessionStatus | undefined
     const fiber = b.ctx.plugin({
       apply(scope: Context) {
-        service = new UiSessionStatus(scope, { list: b.list }, b.pending)
+        service = b.create(scope)
       },
     })
     await fiber.await()
@@ -209,6 +273,7 @@ describe('Session status pending interactions', () => {
     expect(b.subscribed()).toBe(false)
     b.row(sessionId('later'))
     b.pending.set(new Map([[sessionId('later'), pendingQuestion(sessionId('later'))]]))
+    b.reading.set({ ready: true, items: { [sessionId('later')]: b.record(sessionId('later'), { completedTurn: 1 }) } })
     expect(service.getSnapshot()).toBe(before)
   })
 })
@@ -217,9 +282,10 @@ describe('session-status apply', () => {
   it('provides the status service under ctx.uiSession and publishes it as the root useSessionStatus source', () => {
     const b = bench()
     const provideRoot = vi.fn()
-    b.ctx.provide('sessions', { list: b.list } as never)
     b.ctx.provide('slots', { provideRoot } as never)
     b.ctx.provide('uiSession', { pendingInteractions: b.pending } as never)
+    b.ctx.provide('sessions', { list: b.list, binding: () => undefined } as never)
+    b.ctx.provide('remoteAccess', { whenAccess: () => () => {} } as never)
 
     apply(b.ctx)
 
@@ -227,13 +293,8 @@ describe('session-status apply', () => {
     const root = provideRoot.mock.calls[0]![0] as { hooks: { sessionStatus: UiSessionStatus } }
     expect(Object.keys(root)).toEqual(['hooks'])
     expect(Object.keys(root.hooks)).toEqual(['sessionStatus'])
-    expect(root.hooks.sessionStatus).toBeInstanceOf(UiSessionStatus)
     const provided: unknown = b.ctx.get('uiSession.sessionStatus')
     if (!(provided instanceof UiSessionStatus)) throw new Error('uiSession.sessionStatus is not provided')
-    expect(provided.getSnapshot()).toBe(root.hooks.sessionStatus.getSnapshot())
-  })
-
-  it('keeps the Host loader half inert', () => {
-    expect(() => { nodeApply() }).not.toThrow()
+    expect(root.hooks.sessionStatus.getSnapshot()).toBe(provided.getSnapshot())
   })
 })

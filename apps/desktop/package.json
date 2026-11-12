@@ -91,6 +91,7 @@
     "zod": "4.6.6",
     "@deepseek-ai/dsh-util-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-file-actions": "workspace:*",
-    "tencentcloud-sdk-nodejs-teo": "4.1.330"
+    "tencentcloud-sdk-nodejs-teo": "4.1.330",
+    "@deepseek-ai/dsh-desktop-publisher": "workspace:*"
   }
 }

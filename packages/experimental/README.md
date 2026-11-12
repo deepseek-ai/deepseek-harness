@@ -80,6 +80,7 @@ Promotion requires a named product role, documented public behavior and limitati
 | [macOS CUA](cua-macos/README.md) | Swift native execution and platform preparation. | `ctx.computerUse` |
 | [Windows CUA](cua-windows/README.md) | Native application and window operations through Windows UI Automation. | `ctx.computerUse` |
 | [`cua-bundle`](cua-bundle/README.md) | Optional Computer Use switch for PTC sessions | — |
+| [`cua-mcp`](cua-mcp/README.md) | Computer Use as an MCP stdio server for external agent harnesses, served by the `cua-mcp` profile | — |
 | [`computer-use-cua-driver-mcp`](computer-use-cua-driver-mcp/README.md) | Use an installed Cua Driver through MCP | `ctx.computerUse` |
 | [`computer-use-cua-driver-native`](computer-use-cua-driver-native/README.md) | Embed the Cua Driver native npm runtime | `ctx.computerUse` |
 | [`browser-use-playwright-mcp`](browser-use-playwright-mcp/README.md) | Playwright browser tools over MCP | `ctx.browserUse` |

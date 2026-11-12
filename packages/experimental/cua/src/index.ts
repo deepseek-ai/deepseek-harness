@@ -8,7 +8,7 @@ import Schema from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ComputerUseProviderName } from '@deepseek-ai/dsh-computer-use/types'
 import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { ImageAttachmentRef, ImageRequestTarget } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
@@ -20,8 +20,8 @@ import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
 import type { CuaAppHandle, CuaOperation, CuaStartupCapabilities } from './types.ts'
 import { ApplicationIcon, AppResult, NativeScreenshotResult, Request, SystemPointerRequest, ScreenshotResult } from './protocol.ts'
-import { CuaConfigFields, type CuaStandaloneRunCodeConfig } from './config.ts'
-import { installCuaTools } from './tool-registration.ts'
+import { CuaConfigFields, type CuaScreenshotTargetConfig, type CuaStandaloneRunCodeConfig } from './config.ts'
+import { fixedScreenshotTarget, installCuaTools } from './tool-registration.ts'
 import { CuaCoordinates } from './coordinates.ts'
 import { observeNativeWindows } from './native-observation.ts'
 import { ToolArgsError, ToolContextUnavailableError, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
@@ -33,6 +33,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 
 export { CuaAccess } from './access.ts'
 export type { CuaStartupCapabilities } from './types.ts'
+export type { CuaPrograms } from './tool-registration.ts'
 
 /** Native executable and per-operation resource bounds. */
 export interface CuaConfig {
@@ -42,6 +43,11 @@ export interface CuaConfig {
   agentPreset: string | false
   /** Dedicated persistent program limits, independent of the profile's PTC runtime. */
   standaloneRunCode: CuaStandaloneRunCodeConfig
+  /**
+   * Fixed request-image target for screenshots. Omission resolves the target from the Agent's model
+   * route and refuses capture when that route declares no image input.
+   */
+  screenshotTarget?: CuaScreenshotTargetConfig | undefined
   /** Legacy grants imported once into profile-scoped storage; later edits are ignored. */
   allowedApps: Array<Omit<CuaApplicationGrant, 'id'> & {
     /** Unbranded digest at the profile configuration boundary; admitted by the Config schema. */
@@ -141,10 +147,13 @@ function renderResult(args: unknown, value: JsonValue): ContentBlock[] {
   return [{ type: 'text', text: JSON.stringify(metadata) }, { type: 'image', attachment }]
 }
 
-/** Resolve the exact calling model and attachment store before requesting a screenshot. */
-async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>) {
+/** Resolve the attachment store and the request-image target before requesting a screenshot. */
+async function screenshotStore(ctx: Context, execution: Readonly<CuaExecution>, configured: CuaScreenshotTargetConfig | undefined) {
   const attachments = ctx.get('attachments')
   if (!attachments) throw new ToolContextUnavailableError('CUA screenshots require an attachment store')
+  if (configured !== undefined) {
+    return { attachments, target: (image: ImageAttachmentRef): ImageRequestTarget => fixedScreenshotTarget(configured, image) }
+  }
   const agent = execution.agent
   const routed = agent.session.requestHeader()?.config
   const provider = routed?.provider ?? agent.options.provider
@@ -283,7 +292,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
               : params
       const requestNative = () => client.request(method, nativeParams, signal, execution.callId)
       if (method === 'screenshot') {
-        const { attachments, target } = await screenshotStore(ctx, execution)
+        const { attachments, target } = await screenshotStore(ctx, execution, config.screenshotTarget)
         const screenshot = NativeScreenshotResult.parse(await requestNative())
         if (screenshot.windowId !== parsedParams.windowId) throw new NativeError('NATIVE_PROTOCOL', 'Native screenshot belongs to another window')
         signal.throwIfAborted()

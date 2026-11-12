@@ -977,6 +977,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'cuaPrograms',
+    summary: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    description: 'Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`.',
+    methods: [
+      {
+        signature: 'release(agent: Agent): Promise<void>',
+        description: 'Release one Agent\'s retained program environment with the dedicated runtime\'s owner release. The program process exits, a program of that Agent that is still running fails as aborted, and the next `cua_run_code` call starts a fresh process that re-creates the `cua` global. The Agent, its application grants and native connection, and the desktop applications themselves are unaffected. The runtime rejects that Agent\'s programs until the release settles, so the caller holds them back; after a failed release it rejects them until a later release succeeds. Resolves when no environment exists.',
+        parameters: [{ name: 'agent', description: 'Agent whose `cua_run_code` state owner is released.' }],
+        returns: 'Completion after the process has exited and its output has drained.',
+        throws: ['When the process cleanup fails.'],
+      },
+      {
+        signature: 'screenshotRequestTarget(image: ImageAttachmentRef): ImageRequestTarget | undefined',
+        description: 'Request-image target the provider delivered for a stored screenshot when `screenshotTarget` is configured. A host that forwards screenshots outside a model request reads the same request version with it, so the image a caller sees matches the coordinate space the provider mapped.',
+        parameters: [{ name: 'image', description: 'Durable screenshot attachment from a `cua` result.' }],
+        returns: 'The fixed target, or undefined when the Agent\'s model route selects the delivered version.',
+      },
+    ],
+  },
+  {
     key: 'deepseekAccount',
     summary: 'Account login, credentials, and client-safe Remote operations.',
     description: 'Account login, credentials, and client-safe Remote operations.',
@@ -3486,6 +3506,26 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'Session identity whose cwd and preset select the catalog view.' }, { name: 'signal', description: 'caller lifetime carried by the Remote transport; admitted catalog reads retain their existing completion semantics.' }],
         returns: 'user-invocable skill metadata without loading skill bodies.',
         throws: ['RemoteError when the Session cannot be inspected or no registry can serve it.'],
+      },
+    ],
+  },
+  {
+    key: 'sessionStatus',
+    summary: 'Shared owner reading records; no reading operation changes model history.',
+    description: 'Shared owner reading records; no reading operation changes model history.',
+    methods: [
+      {
+        signature: '@Remote async mark(sessionId: SessionId, action: SessionReadAction): Promise<void>',
+        description: 'Update one Session; read positions advance only through Client-observed completions.',
+        parameters: [{ name: 'sessionId', description: 'Session identity.' }, { name: 'action', description: 'Explicit reminder change or automatic read-position acknowledgement.' }],
+        throws: ['RemoteError when closing, the Session is missing, or its metadata cannot be read.'],
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *follow(signal: AbortSignal): AsyncIterable<SessionReadFrame>',
+        description: 'Follow accessible reading records; every connection starts with a complete baseline.',
+        parameters: [{ name: 'signal', description: 'generation cancellation.' }],
+        returns: 'the baseline and whole-record changes, filtered by Session access.',
+        throws: ['RemoteError when the service is closing.'],
       },
     ],
   },
@@ -9287,6 +9327,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionQueuedItem',
     declaration: 'export interface SessionQueuedItem {\n    readonly id: MessageId;\n    readonly placement: \'queued\' | \'steering\' | \'context\';\n    readonly rpcId?: SessionRequestId;\n    readonly content: readonly JsonValue[];\n}',
+  },
+  {
+    name: 'SessionReadAction',
+    declaration: 'export type SessionReadAction = {\n    readonly type: \'unread\';\n} | {\n    readonly type: \'read\' | \'acknowledge\';\n    readonly throughTurn: number;\n};',
+  },
+  {
+    name: 'SessionReadFrame',
+    declaration: 'export type SessionReadFrame = {\n    readonly type: \'baseline\';\n    readonly items: readonly SessionReadState[];\n} | {\n    readonly type: \'changed\';\n    readonly state: SessionReadState;\n};',
+  },
+  {
+    name: 'SessionReadState',
+    declaration: 'export interface SessionReadState {\n    readonly sessionId: SessionId;\n    readonly completedTurn: number;\n    readonly failed: boolean;\n    readonly readTurn: number;\n    readonly manualUnread: boolean;\n}',
   },
   {
     name: 'SessionRecord',

@@ -9,6 +9,7 @@ export const EXPERIMENTAL_PACKAGE_NAME_EXCEPTIONS: Readonly<Record<string, strin
   'packages/experimental/cua': '@deepseek-ai/dsh-cua',
   'packages/experimental/cua-bundle': '@deepseek-ai/dsh-cua-bundle',
   'packages/experimental/cua-macos': '@deepseek-ai/dsh-cua-macos',
+  'packages/experimental/cua-mcp': '@deepseek-ai/dsh-cua-mcp',
   'packages/experimental/cua-windows': '@deepseek-ai/dsh-cua-windows',
   'packages/experimental/tool-session-query': '@deepseek-ai/dsh-tool-session-query',
   'packages/experimental/session-title-all-prompts-llm': '@deepseek-ai/dsh-session-title-all-prompts-llm',

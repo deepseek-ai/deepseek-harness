@@ -297,7 +297,9 @@ it('clears notifications and stops polling when the account carrier fails', asyn
   const open = c.ctx.remote.$stream.bind(c.ctx.remote)
   let fail: (() => void) | undefined
   vi.spyOn(c.ctx.remote, '$stream').mockImplementation((options) => {
-    if (options.name === 'account') fail = () => { options.carrierFailed?.(new Error('connection lost')) }
+    if (options.name === 'account') fail = () => {
+      options.carrierFailed?.(Object.assign(new Error('connection lost'), { code: 'gateway/carrier-lost' as const }))
+    }
     return open(options)
   })
   await c.reload(SELF)
