@@ -27,6 +27,7 @@
     "tests/sidebar-drawer.e2e.ts",
     "tests/creation-recommendations.e2e.ts",
     "tests/plugin-recommendations.e2e.ts",
+    "tests/deepseek-chat-import.e2e.ts",
     "tests/japanese-plugin-metadata.e2e.ts",
     "tests/context-menus.e2e.ts",
     "tests/additional-locales.e2e.ts",
