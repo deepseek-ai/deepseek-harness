@@ -76,7 +76,7 @@ export function apply(ctx: Context): void {
         scope.effect(function* () {
           yield scope.on('schedule/resolve-agent', (sessionId, next) => sessionId === agent.id ? Promise.resolve(agent) : next())
           const combined = new CombinedSamples(left, right)
-          const receiver = scope.inject(['schedule'], (target) => {
+          const receiver = scope.inject([], (target) => {
             target.schedule.input(id).connect(combined.output)
           })
           yield receiver.dispose

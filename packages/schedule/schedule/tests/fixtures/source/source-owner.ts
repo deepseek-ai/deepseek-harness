@@ -1,7 +1,7 @@
 /** Loader-owned subscriptions connecting two borrowed source instances to a stored automation task. */
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Fiber } from '@deepseek-ai/cordis'
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
-import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
+import type { AutomationCandidate, ScheduleId, SourceOutput } from '@deepseek-ai/dsh-schedule'
 import type { ObservationSource } from './world.ts'
 
 class CombinedObservation extends AutomationSource<AutomationCandidate> {
@@ -29,6 +29,21 @@ class CombinedObservation extends AutomationSource<AutomationCandidate> {
   }
 }
 
+/**
+ * Bind a task input in a child whose disposal the composer orders after its source drains.
+ * @param ctx - Composer context that already declares the required Schedule dependency.
+ * @param id - Stored task receiving candidate text.
+ * @param output - Composite output, kept usable until its accepted inputs settle.
+ * @returns The native child; its original disposer transfers into the composer's ordered effect.
+ */
+export function bindTaskInput(
+  ctx: Context, id: ScheduleId, output: SourceOutput<AutomationCandidate>,
+): Fiber & PromiseLike<Fiber> {
+  return ctx.inject([], (scope) => {
+    scope.schedule.input(id).connect(output)
+  })
+}
+
 /** Test composition name. */
 export const name = 'source-composition-owner'
 /** Schedule and borrowed producer instances must exist before connecting. */
@@ -42,9 +57,7 @@ export function apply(ctx: Context): void {
   const world = ctx.sourceComposition
   ctx.effect(function* () {
     const composite = new CombinedObservation(world.left, world.right)
-    const receiver = ctx.inject(['schedule'], (scope) => {
-      scope.schedule.input(world.task.id).connect(composite.output)
-    })
+    const receiver = bindTaskInput(ctx, world.task.id, composite.output)
     yield receiver.dispose
     yield () => composite.dispose()
   }, 'source-composition.subscriptions()')

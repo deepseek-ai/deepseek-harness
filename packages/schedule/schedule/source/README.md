@@ -86,14 +86,14 @@ Input and output endpoints track accepted calls even after a connection detaches
 
 A receiver must not await its own connection, input, Source, or current emitter's disposal from inside an accepted call: that cleanup waits for the call to return. Connection and endpoint disposal wait for settlement; delivery errors belong to the original send or broadcast.
 
-A composite that can emit while draining must finish before its task input closes. The task input's caller-owned Cordis effect is separate from its public disposer; yielding a wrapper around `input.dispose()` or `connection.dispose()` does not transfer that effect's ownership. Put the task consumer in an explicitly owned injection child, then yield the exact child disposer before the composite cleanup in one synchronous generator effect. Reverse cleanup order drains the composite first and disposes the consumer child afterward.
+A composite that can emit while draining must finish before its task input closes. The composing plugin must declare `schedule`; its explicitly owned consumer child inherits that binding with `ctx.inject([])`. Repeating `schedule` in the child's injections lets provider deactivation unload it independently, before the composite drains. The task input's caller-owned Cordis effect is separate from its public disposer: yielding a wrapper around `input.dispose()` or `connection.dispose()` does not transfer that effect's ownership. Yield the exact child disposer before composite cleanup in one synchronous generator effect. Reverse cleanup order drains the composite first and disposes the consumer child afterward.
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
 import type { AutomationCandidate, AutomationSource, ScheduleId } from '@deepseek-ai/dsh-schedule'
 
 export function ownComposite(ctx: Context, id: ScheduleId, composite: AutomationSource<AutomationCandidate>): void {
-  const consumer = ctx.inject(['schedule'], scope => {
+  const consumer = ctx.inject([], scope => {
     scope.schedule.input(id).connect(composite.output)
   })
   ctx.effect(function* () {

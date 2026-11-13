@@ -86,14 +86,14 @@ Schedule runtime 使用由 `SourceInput<number>` 实现的 `runtime.connect(time
 
 接收者不得在已接受调用内部等待自身连接、输入、Source 或当前发起输出者的销毁：这些清理会等待该调用返回。连接与端点的销毁等待调用结束；投递错误由原始发送或广播负责报告。
 
-排空期间可能发出数据的复合 Source 必须先于任务输入完成清理。任务输入由调用方拥有的 Cordis effect 与其公共 disposer 分开；yield 包装 `input.dispose()` 或 `connection.dispose()` 的函数不会转移该 effect 的所有权。将任务消费者放入显式拥有的注入子作用域，再在同一个同步 generator effect 中先 yield 原始子作用域 disposer，后 yield 复合 Source 清理。逆序清理先排空复合 Source，再销毁消费者子作用域。
+排空期间可能发出数据的复合 Source 必须先于任务输入完成清理。组合插件必须声明 `schedule`；其显式拥有的消费者子作用域通过 `ctx.inject([])` 继承该绑定。在子作用域的注入中重复声明 `schedule`，会让 provider 失活时独立卸载它，先于复合 Source 排空。任务输入由调用方拥有的 Cordis effect 与其公共 disposer 分开：yield 包装 `input.dispose()` 或 `connection.dispose()` 的函数不会转移该 effect 的所有权。在同一个同步 generator effect 中先 yield 原始子作用域 disposer，后 yield 复合 Source 清理。逆序清理先排空复合 Source，再销毁消费者子作用域。
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
 import type { AutomationCandidate, AutomationSource, ScheduleId } from '@deepseek-ai/dsh-schedule'
 
 export function ownComposite(ctx: Context, id: ScheduleId, composite: AutomationSource<AutomationCandidate>): void {
-  const consumer = ctx.inject(['schedule'], scope => {
+  const consumer = ctx.inject([], scope => {
     scope.schedule.input(id).connect(composite.output)
   })
   ctx.effect(function* () {
