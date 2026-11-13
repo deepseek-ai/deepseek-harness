@@ -21,8 +21,8 @@
   en: 6850d08bc091ad23
   zh: 2906e6cf1dfed6ce
 /deepseek-ai-dsh-llm-deepseek/use-this-package/minimal-configuration:
-  en: 6a15f2e0efec4c37
-  zh: 7fb5f1e4a92b01ad
+  en: ad01714ddbd0a791
+  zh: f936398331d6fb85
 /deepseek-ai-dsh-llm-deepseek/use-this-package/endpoint-and-wire-format:
   en: 2a634ead5b47fe97
   zh: 46f199ee79a8c5dc
@@ -30,8 +30,8 @@
   en: d3f232309f4963ef
   zh: 2e0ccd028de26f3e
 /deepseek-ai-dsh-llm-deepseek/use-this-package/streaming-with-thinking-and-images:
-  en: 81bf213499f015ba
-  zh: e9107ef322213e56
+  en: f880b79feebb9e63
+  zh: 0dbbb2378e6f9af3
 /deepseek-ai-dsh-llm-deepseek/use-this-package/dynamic-configuration:
   en: 49290fc5647136b4
   zh: 96fa9ce0f9e83c13
@@ -63,14 +63,14 @@
   en: 1dc50052999253c6
   zh: 7abf968fc18bffcd
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-request/what-the-model-sees:
-  en: fd508ab91893e9dc
-  zh: c653e55a47353d08
+  en: 183ffdbbfd511182
+  zh: 0f15e0da9c4489c7
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-request/token-effect:
-  en: 67f4bfa42cbee911
-  zh: 5e9dc9bc07253686
+  en: 840b31f506916dcb
+  zh: 6083c2bbbd85b4cb
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-request/kv-cache-effect:
-  en: 87ac92776176ee15
-  zh: bb49edf3a68dda07
+  en: d5829c148a2a7f36
+  zh: faaa3db1411f3c7c
 /deepseek-ai-dsh-llm-deepseek/model-experience/deepseek-response:
   en: 957d6665495e5ca5
   zh: 0aa72b2c2dc07167
@@ -84,8 +84,8 @@
   en: ddfbea043596878d
   zh: 4fbf5864a684c053
 /deepseek-ai-dsh-llm-deepseek/known-limitations-and-deferred-work:
-  en: 05fe57d81d8d8202
-  zh: 61e85a6f610842dd
+  en: 232b09e9f33d9b1a
+  zh: bf838648f8ba4e62
 /deepseek-ai-dsh-llm-deepseek/known-limitations-and-deferred-work/dev-note:
   en: 267aab8281b59242
   zh: 491b454fe920a17e

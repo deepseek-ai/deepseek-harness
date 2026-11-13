@@ -21,4 +21,4 @@ export const DEFAULT_FILE_REFRESH_MARGIN_SECONDS = 60 * 60
 /** Default number of oldest harness-owned files removed on quota recovery. */
 export const DEFAULT_FILE_QUOTA_CLEANUP_BATCH = 100
 /** Default deadline for resolving one request image through the Files API. */
-export const DEFAULT_FILES_API_TIMEOUT_MS = 60_000
+export const DEFAULT_FILES_API_TIMEOUT_MS = 20_000
