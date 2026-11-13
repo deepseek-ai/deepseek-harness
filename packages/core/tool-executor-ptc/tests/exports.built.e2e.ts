@@ -43,11 +43,9 @@ try {
   }
   await assert.rejects(definition.execute({ code: 'probe', description: 'Check shared error identity' }, execution),
     error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_RUN_FAILED')
-  runtime.run = async () => ({ output: [], error: { kind: 'output-limit', message: 'probe output exceeded its budget' } })
-  await assert.rejects(definition.execute({ code: 'probe', description: 'Check output-limit recovery guidance' }, execution),
-    error => error instanceof ptc.CodeRunFailedError && error.code === 'CODE_OUTPUT_LIMIT'
-      && error.message.includes('Program completion is not confirmed')
-      && error.message.includes('Inspect current state before any retry'))
+  runtime.run = async () => ({ output: [], outputTruncated: true })
+  assert.deepEqual(await definition.execute({ code: 'probe', description: 'Check successful truncated output' }, execution),
+    { logs: [], outputTruncated: true })
   runtime.run = async (spec) => {
     assert.deepEqual(Object.keys(spec.bindings[0].functions), ['private_probe'])
     assert.equal(spec.discardCompletion, true)

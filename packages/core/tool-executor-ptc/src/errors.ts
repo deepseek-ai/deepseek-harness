@@ -25,9 +25,8 @@ export class ToolCallLimitExceededError extends Error {
  * Every {@link CodeRunFailedError} code:
  * - `CODE_RUN_FAILED`: the program run failed, or the runtime rejected it without its own error code.
  * - `CODE_RUN_UNAVAILABLE`: the executor was disposed before the run started.
- * - `CODE_OUTPUT_LIMIT`: output exceeded its budget; execution may be partial and earlier actions remain applied.
  */
-export const CODE_RUN_ERROR_CODES = ['CODE_RUN_FAILED', 'CODE_RUN_UNAVAILABLE', 'CODE_OUTPUT_LIMIT'] as const
+export const CODE_RUN_ERROR_CODES = ['CODE_RUN_FAILED', 'CODE_RUN_UNAVAILABLE'] as const
 
 /** One {@link CodeRunFailedError} code. */
 export type CodeRunErrorCode = typeof CODE_RUN_ERROR_CODES[number]
@@ -35,7 +34,7 @@ export type CodeRunErrorCode = typeof CODE_RUN_ERROR_CODES[number]
 /**
  * Thrown by `run_code` when the program run itself failed — a program
  * exception, a budget expiry, a runtime-local abort, or substrate death — or
- * could not start, or output exceeded its budget. Caller cancellation uses the shared `AbortError` /
+ * could not start. Caller cancellation uses the shared `AbortError` /
  * `ABORTED` tool outcome. Extends {@link HarnessError} with a code from
  * {@link CODE_RUN_ERROR_CODES}; the registry's execution pipeline converts it
  * into a structured `isError` result with the failure kind. Captured text and

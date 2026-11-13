@@ -1,20 +1,23 @@
 ---
 kind: upgrade-guide
-description: "PTC output overflow uses CODE_OUTPUT_LIMIT instead of CODE_RUN_FAILED."
+description: "PTC display-output overflow truncates output while execution continues."
 ---
 
-# PTC output-limit error code
+# PTC output truncation
 
 English | [中文](guide.zh.md)
 
 ## Change
 
-`run_code` and program tools created by `createRunCodeTool` report runtime `output-limit` failures as `CodeRunFailedError` / `CODE_OUTPUT_LIMIT`, instead of `CODE_RUN_FAILED`. They remain failed tool results. Other failure codes and historical Session records are unchanged.
+The Node PTC runtime discards subsequent display output after `maxOutputBytes` is exhausted and continues execution under the original timeout and cancellation rules. Truncation alone no longer terminates the process or clears retained variables. This also applies to environment initialization.
 
-Inspected output or logs can overflow during execution, so this error does not confirm program completion. Earlier actions are not rolled back; retained output and settled subcall records remain available. The diagnostic directs callers to observe current state before retrying and reduce output without repeating completed actions.
+`PtcRunResult.outputTruncated` marks truncated captured output or diagnostics independently of `error`. A later exception, timeout or cancellation keeps its actual failure kind. Required JSON completion values take priority over captured output and remain lossless; a completion that cannot fit still fails with `output-limit`.
+
+`run_code` and tools created by `createRunCodeTool` return success when the program completes normally, with `outputTruncated: true` and a visible truncation notice. Failed runs retain their usual error codes and mention truncation. Historical Session records remain unchanged.
 
 ## Migration
 
-1. Update consumers that match `tool/result.error.code` to recognize `CODE_OUTPUT_LIMIT`. Do not infer that earlier actions failed or can safely be repeated.
-2. Observe current application state before any retry. Reduce values passed to `inspect(...)` or the amount of logged text without replaying completed actions. To display a CUA screenshot, use `inspect(await window.getScreenshot())`.
-3. Verify a program that dispatches an action and then exceeds its output budget reports `CODE_OUTPUT_LIMIT`, preserves its settled subcall record, and leaves the action applied exactly once. Verify the diagnostic does not claim program completion.
+1. Treat truncation as incomplete output, not evidence that execution stopped. Read current state for missing information; do not repeat completed actions merely to recover logs.
+2. Update runtime consumers to inspect `outputTruncated` separately from `error`. A successful required completion value remains complete even if captured output was truncated.
+3. Update custom Node bootstrap deployments together with the host: the private protocol revision is 4 and includes output suppression without cancellation.
+4. Verify actions before and after output overflow both complete, retained variables survive, and later exceptions, timeouts and cancellation still report their original outcomes. To display a CUA screenshot, use `inspect(await window.getScreenshot())`.

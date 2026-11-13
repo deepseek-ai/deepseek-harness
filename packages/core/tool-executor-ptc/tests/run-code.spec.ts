@@ -205,17 +205,17 @@ describe('registered program tool factory', () => {
     const { runtime, execute } = await setup(privateTool(vi.fn(async () => 'private result')))
     runtime.behavior = async () => ({
       output: [{ type: 'text', text: 'before image' }, image],
-      ...overflow ? { error: { kind: 'output-limit', message: 'output exceeded its budget' } } : {},
+      ...overflow ? { outputTruncated: true } : {},
     })
 
     const result = (await execute()).results[0]!.result
 
-    expect(result.isError).toBe(overflow)
-    expect(result.content.slice(overflow ? 1 : 0)).toEqual([{ type: 'text', text: 'before image' }, image])
+    expect(result.isError).toBe(false)
+    expect(result.content.slice(0, 2)).toEqual([{ type: 'text', text: 'before image' }, image])
     if (overflow) {
-      expect(result.error?.info).toEqual({ name: 'CodeRunFailedError', code: 'CODE_OUTPUT_LIMIT' })
-      expect(result.content[0]).toMatchObject({
-        type: 'text', text: expect.stringContaining('Inspect current state before any retry.') as string,
+      expect(result.value).toMatchObject({ outputTruncated: true })
+      expect(result.content[2]).toMatchObject({
+        type: 'text', text: expect.stringContaining('Program completed. Output was truncated;') as string,
       })
     }
   })

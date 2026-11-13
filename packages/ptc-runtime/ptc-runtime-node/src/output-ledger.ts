@@ -12,15 +12,24 @@ function entryBytes(entry: PtcOutput, available: number): number | undefined {
 export class OutputLedger {
   private bytes = 2 // JSON serialization of the empty output array: []
   private entries = 0
+  truncated = false
 
-  constructor(private readonly maxBytes: number, private readonly overflowMessage?: string) {}
+  constructor(private readonly maxBytes: number) {}
 
   /** Admit one ordered text or image entry against the combined output budget. */
   admit(entry: PtcOutput, sink: PtcOutput[]): boolean {
+    if (this.truncated) return false
     const separatorBytes = this.entries > 0 ? 1 : 0
     const remaining = this.maxBytes - this.bytes - separatorBytes
     const bytes = entryBytes(entry, remaining)
-    if (bytes === undefined) return false
+    if (bytes === undefined) {
+      this.truncated = true
+      if (entry.type === 'text') {
+        const prefix = truncateJsonStringBytes(entry.text, remaining)
+        if (prefix.length > 0) sink.push({ type: 'text', text: prefix })
+      }
+      return false
+    }
     this.bytes += bytes + separatorBytes
     this.entries += 1
     sink.push(entry)
@@ -29,24 +38,23 @@ export class OutputLedger {
 
   /** Finalize a successful absent-or-JSON completion against the combined cap. */
   success(output: PtcOutput[], value?: PtcJsonValue): PtcRunResult {
-    if (value !== undefined && jsonValueBytesUpTo(value, this.maxBytes - this.bytes) === undefined) return this.limit(output)
-    return { output, ...value !== undefined ? { value } : {} }
+    const valueBytes = value === undefined ? 0 : jsonValueBytesUpTo(value, this.maxBytes - 2)
+    if (valueBytes === undefined) return this.failure(output, { kind: 'output-limit', message: `completion value exceeded ${this.maxBytes} bytes` })
+    return { ...this.retain(output, valueBytes), ...value !== undefined ? { value } : {} }
   }
 
-  /** Finalize a failure diagnostic, with output-limit taking precedence when combined bytes exceed the cap. */
+  /** Prioritize the terminal diagnostic without changing its failure kind. */
   failure(output: PtcOutput[], error: PtcRunFailure): PtcRunResult {
-    if (jsonStringBytesUpTo(error.message, this.maxBytes - this.bytes) === undefined) return this.limit(output)
-    return { output, error }
+    const message = truncateJsonStringBytes(error.message, this.maxBytes - 2)
+    if (message !== error.message) this.truncated = true
+    return { ...this.retain(output, Buffer.byteLength(JSON.stringify(message))), error: { ...error, message } }
   }
 
-  /** Build the explicit output-limit failure while retaining a fitting ordered output prefix. */
-  limit(output: PtcOutput[]): PtcRunResult {
-    const fullMessage = this.overflowMessage ?? `outer output exceeded ${this.maxBytes} bytes`
-    // The fixed diagnostic is ASCII, so every character is one byte plus the quotes.
-    const messageBytes = fullMessage.length + 2
+  /** Keep an ordered prefix after reserving bytes for the completion or diagnostic. */
+  private retain(output: PtcOutput[], terminalBytes: number): Pick<PtcRunResult, 'output' | 'outputTruncated'> {
     const retained: PtcOutput[] = []
     let retainedBytes = 2
-    const logBudget = this.maxBytes - messageBytes
+    const logBudget = this.maxBytes - terminalBytes
     for (const entry of output) {
       const separatorBytes = retained.length > 0 ? 1 : 0
       const availableBytes = logBudget - retainedBytes - separatorBytes
@@ -56,6 +64,7 @@ export class OutputLedger {
         retainedBytes += bytes + separatorBytes
         continue
       }
+      this.truncated = true
       if (entry.type === 'image') break
       const prefix = truncateJsonStringBytes(entry.text, availableBytes)
       if (prefix.length > 0) {
@@ -67,8 +76,6 @@ export class OutputLedger {
       }
       break
     }
-    const availableMessageBytes = this.maxBytes - retainedBytes
-    const message = truncateJsonStringBytes(fullMessage, availableMessageBytes)
-    return { output: retained, error: { kind: 'output-limit', message } }
+    return { output: retained, ...this.truncated ? { outputTruncated: true } : {} }
   }
 }

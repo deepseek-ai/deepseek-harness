@@ -33,6 +33,7 @@ interface Evaluation {
   pending: number
   pendingBytes: number
   admit(text: string): void
+  truncateOutput(): void
   image(attachment: PtcImage['attachment']): void
   finish(error?: PtcRunFailure, value?: PtcJsonValue, discard?: boolean): void
 }
@@ -105,8 +106,7 @@ export class ProgramWorker {
   }
 
   private output(): OutputLedger {
-    return new OutputLedger(this.config.maxOutputBytes, this.retainsState
-      ? `retained variables were cleared; outer output exceeded ${this.config.maxOutputBytes} bytes` : undefined)
+    return new OutputLedger(this.config.maxOutputBytes)
   }
 
   private message(message: string): string {
@@ -127,7 +127,6 @@ export class ProgramWorker {
     this.stderr = ''
     const ledger = this.output()
     const output: PtcOutput[] = []
-    let overflowed = false
     const result = Promise.withResolvers<PtcRunResult>()
     const timer = spec.timeoutMs === null ? undefined : setTimeout(() => {
       const phase = evaluation.completion !== undefined ? 'during execution' : 'before code started'
@@ -151,21 +150,17 @@ export class ProgramWorker {
       },
       spec, bindings, pending: 0, pendingBytes: 0,
       invoke: AsyncLocalStorage.bind((binding, args) => invokeBinding(binding, args, image => this.registerImage(image))),
+      truncateOutput: () => {
+        ledger.truncated = true
+        void this.channel?.discardOutput()
+      },
       admit: (text) => {
-        if (overflowed) return
-        if (!ledger.admit({ type: 'text', text }, output)) {
-          overflowed = true
-          output.push({ type: 'text', text })
-          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
-        }
+        if (ledger.truncated) return
+        if (!ledger.admit({ type: 'text', text }, output)) evaluation.truncateOutput()
       },
       image: (attachment) => {
-        if (overflowed || evaluation.settled) return
-        if (!ledger.admit({ type: 'image', attachment }, output)) {
-          overflowed = true
-          evaluation.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
-          return
-        }
+        if (ledger.truncated || evaluation.settled) return
+        if (!ledger.admit({ type: 'image', attachment }, output)) evaluation.truncateOutput()
       },
       finish: (error, value, discard = false) => {
         if (evaluation.settled) return
@@ -174,12 +169,10 @@ export class ProgramWorker {
         spec.signal?.removeEventListener('abort', onAbort)
         const initializationIncomplete = this.pendingInitialization !== undefined
         if (initializationIncomplete && error?.kind === 'exception') error = { ...error, message: this.message(error.message) }
-        const complete = (): PtcRunResult => overflowed || error?.kind === 'output-limit' ? ledger.limit(output)
-          : error ? ledger.failure(output, error) : ledger.success(output, value)
-        const outcome = complete()
+        const complete = (): PtcRunResult => error ? ledger.failure(output, error) : ledger.success(output, value)
         const cleanup = async (): Promise<PtcRunResult> => {
           const interrupted = error?.kind === 'timeout' || error?.kind === 'abort'
-          let preserved = this.retainsState && !initializationIncomplete && !discard && outcome.error?.kind !== 'output-limit'
+          let preserved = this.retainsState && !initializationIncomplete && !discard
           if (preserved && interrupted) preserved = await this.interruptEvaluation(evaluation)
           let drained = true
           if (!preserved) drained = await this.terminate()
@@ -187,8 +180,6 @@ export class ProgramWorker {
             error = { ...error, message: `${error.message}; retained variables were ${preserved ? 'preserved' : 'cleared'}` }
           }
           const completed = complete()
-          // The final interruption diagnostic also consumes output budget.
-          if (completed.error?.kind === 'output-limit' && preserved) drained = await this.terminate()
           return drained ? completed : ledger.failure(output, { kind: 'worker-exit', message: 'managed process exited but its output did not drain cleanly' })
         }
         void cleanup().then((completed) => {
@@ -281,12 +272,13 @@ export class ProgramWorker {
   private dispatch(evaluation: Evaluation): void {
     const completion = this.channel?.run(evaluation.spec.cwd, evaluation.data).then(readProgramResult)
     evaluation.completion = completion
-    void completion?.then(({ error, value }) => {
+    void completion?.then(({ error, value, outputTruncated }) => {
       if (evaluation.settled) return
       if (this.pendingInitialization !== undefined && error === undefined) {
         this.fail('protocol', 'environment initialization completed without Host acceptance')
         return
       }
+      if (outputTruncated) evaluation.truncateOutput()
       // Raw stdio can be queued beside the RPC result on separate pipes.
       setImmediate(() => { evaluation.finish(error, value) })
     }).catch((error: unknown) => {
@@ -371,7 +363,7 @@ export class ProgramWorker {
       },
       outputLimit: () => {
         if (!this.ready || !this.active) { this.fail('protocol', 'idle PTC output limit'); return }
-        this.active.finish({ kind: 'output-limit', message: 'output limit exceeded' }, undefined, true)
+        this.active.truncateOutput()
       },
       invoke: async (global, name, wire) => {
         const evaluation = this.active
@@ -404,7 +396,7 @@ export class ProgramWorker {
         if (evaluation.settled) throw new Error('PTC evaluation ended before the binding completed')
         return value
       },
-    }, ['revoke'], (error, kind) => {
+    }, ['revoke', 'discardOutput'], (error, kind) => {
       if (kind === 'protocol') this.fail('protocol', error.message)
       else {
         if (kind === 'io') this.controlFailure = error.message

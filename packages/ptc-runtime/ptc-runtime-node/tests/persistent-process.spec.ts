@@ -81,15 +81,15 @@ it('does not adopt a REPL completion Promise without explicit await', async () =
   expect(decodePtcJsonWire((await h.run('await Promise.resolve(42)')).value)).toBe(42)
 })
 
-it('prevents the program after initialization exceptions and output overflow', async () => {
+it('prevents the program after initialization exceptions but continues after output truncation', async () => {
   const h = await setup()
   await h.run('var entered = 0;')
   expect((await h.run('entered++', [], 4096, 'const =')).error?.kind).toBe('exception')
   const failed = await h.run('entered++', [], 1024, 'throw "initialization failed"')
   expect(failed.error?.kind).toBe('exception')
   expect(failed.error?.message).toContain('initialization failed')
-  expect((await h.run('entered++', [], 64, 'inspect("x".repeat(100))')).error?.kind).toBe('output-limit')
-  expect(decodePtcJsonWire((await h.run('entered')).value)).toBe(0)
+  expect((await h.run('entered++', [], 64, 'inspect("x".repeat(100))')).error).toBeUndefined()
+  expect(decodePtcJsonWire((await h.run('entered')).value)).toBe(1)
 })
 
 it('does not resume the program after initialization reports an asynchronous failure', async () => {

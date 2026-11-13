@@ -154,20 +154,22 @@ describe('Node environment initialization', () => {
     }
   })
 
-  it('shares output accounting and initializes again after output overflow', async () => {
+  it('shares output accounting while preserving initialized state after truncation', async () => {
     const { run } = await setup({ maxOutputBytes: 256 }, 'globalThis.resource = 42; inspect("x".repeat(120))')
     const result = await run('inspect("y".repeat(120)); "z".repeat(50)')
-    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error).toBeUndefined()
+    expect(result.outputTruncated).toBe(true)
     expect(result.output[0]?.type === 'text' ? result.output[0].text : undefined).toBe('x'.repeat(120) + '\n')
-    expect(result.error?.message).toContain('retained variables were cleared')
-    expect((await run('resource')).value).toBe(42)
+    expect(result.value).toBe('z'.repeat(50))
+    expect(await run('resource')).toMatchObject({ value: 42, output: [] })
   })
 
-  it('does not start the program after initialization exhausts captured output', async () => {
+  it('starts the program after initialization exhausts captured output', async () => {
     const { run, cwd } = await setup({ maxOutputBytes: 256 }, 'var fs = await import("node:fs"); inspect("x".repeat(1000))')
-    const result = await run('fs.writeFileSync("program-started", "unexpected")')
-    expect(result.error?.kind).toBe('output-limit')
-    await expect(access(join(cwd, 'program-started'))).rejects.toMatchObject({ code: 'ENOENT' })
+    const result = await run('fs.writeFileSync("program-started", "completed")')
+    expect(result.error).toBeUndefined()
+    expect(result.outputTruncated).toBe(true)
+    await expect(access(join(cwd, 'program-started'))).resolves.toBeUndefined()
   })
 
   it.each([

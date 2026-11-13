@@ -379,7 +379,7 @@ describe('Node runtime host failures', () => {
     expect(result.error).toEqual({ kind: 'protocol', message: 'control output exceeds 256 queued bytes' })
   })
 
-  it('keeps an output overflow delivered beside the program result', async () => {
+  it('keeps the actual failure and sandbox denial when output overflows beside the result', async () => {
     const h = await setup({ maxOutputBytes: 64 }, 'read-only')
     vi.spyOn(h.ctx.sandbox, 'confine').mockImplementation(async argv => confinement([...argv]))
     h.receive((message) => {
@@ -390,8 +390,9 @@ describe('Node runtime host failures', () => {
       h.control.push(Buffer.from(`${JSON.stringify(result)}\n${JSON.stringify(log)}\n`))
     })
     const result = await h.start()
-    expect(result.error?.kind).toBe('output-limit')
-    expect(result.sandbox?.denied).toBe(false)
+    expect(result.error?.kind).toBe('exception')
+    expect(result.outputTruncated).toBe(true)
+    expect(result.sandbox?.denied).toBe(true)
   })
 
   it('retains admitted logs when the program reports its own output limit', async () => {
@@ -447,9 +448,10 @@ describe('Node runtime host failures', () => {
       h.stdout.end()
       h.direct.resolve({ exitCode: 0, signal: null })
     })
-    h.onBoot(() => { h.stdout.write('x'.repeat(1024)) })
+    h.onBoot(() => { h.stdout.write('x'.repeat(1024)); h.complete({}) })
     const result = await h.start()
-    expect(result.error?.kind).toBe('output-limit')
+    expect(result.error).toBeUndefined()
+    expect(result.outputTruncated).toBe(true)
     expect(result.output.filter(block => block.type === 'text').map(block => block.text).join('')).toMatch(/^x+$/)
     expect(Buffer.byteLength(JSON.stringify(result.output.filter(block => block.type === 'text').map(block => block.text)))).toBeLessThanOrEqual(256)
   })
