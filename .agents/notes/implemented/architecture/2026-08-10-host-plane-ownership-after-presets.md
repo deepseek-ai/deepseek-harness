@@ -40,4 +40,4 @@ Projection key presence is not a per-session capability signal ([session project
 
 The context meter is a per-session fact independent of mount history. Presets resolve the host meter for token accounting while selecting their own compaction backend; `minimal` supports both automatic compaction and the human `/compact` command.
 
-Production entry points must compose Agents explicitly; installing the registry alone does not bind them. An unjoined Agent receives no tools, prompt sections, or skills and reports no error.
+Production entry points must compose Agents explicitly; installing the registry alone does not bind them. An unjoined Agent receives none of the tools, prompt sections, or skills that presets own, and the missing join reports no error. The CUA provider registers outside the presets: it gives an unjoined Agent `cua_run_code` with its guidance and rejects that Agent's creation while the tool's program services are unavailable ([CUA program tool for Agents without a preset](2026-11-12-cua-program-tool-without-presets.md)).

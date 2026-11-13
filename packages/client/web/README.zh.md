@@ -25,13 +25,13 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-组装浏览器应用时使用它：`apps/web` 的 Vite 入口对挂载点运行 `new AppWebEntry(container).run()`，启动页会在激活过程中向用户展示进度。普通浏览器调用方不传任何选项。默认使用预注入的页面传输，除非提供 `seams` 覆盖：当 `globalThis.__DSH_TRANSPORT__` 携带 `loadBundle` 时，模块阶段将其采纳为 bundle 传输并跳过 `immediately` 层级的 HTTP 预取；携带 `resolveAsset` 时，模块阶段将其采纳为解析器，把每个 `require.asset` 包资源引用映射为页面可加载的 URL；而显式 `seams` 仍然优先（例如外部 `<script>` 执行无法到达页面上下文的 jsdom 测试）。
+组装浏览器应用时使用它：`apps/web` 的 Vite 入口对挂载点运行 `new AppWebEntry(container).run()`，启动页会在激活过程中向用户展示进度。普通浏览器调用方不传任何选项。默认使用预注入的页面传输，除非提供 `seams` 覆盖：当 `globalThis.__DSH_TRANSPORT__` 携带 `loadBundle` 时，模块阶段将其采纳为 bundle 传输，`immediately` 层级仍通过该载体预取；携带 `resolveAsset` 时，模块阶段将其采纳为解析器，把每个 `require.asset` 包资源引用映射为页面可加载的 URL；而显式 `seams` 仍然优先（例如外部 `<script>` 执行无法到达页面上下文的 jsdom 测试）。
 
-静态应用页面在入口运行前安装 `__DSH_BOOT_READY__`。`run()` 等待期间会立即显示启动页；页面所有者通过 `applyIndexInjections`（也从 `./injections` 导出）应用 Host 注入项，并在所有脚本完成后兑现延迟对象。延迟对象拒绝时显示启动失败；若调用方提供 `run(onFailure)`，则由外部呈现错误并保留加载页。Desktop 使用该回调请求原生恢复。Desktop 与 WebWorker 共享注入解释器；服务端 `tapIndex` HTML 转换仅适用于服务端提供的文档。
+静态应用页面在入口运行前安装 `__DSH_BOOT_READY__`。`run()` 等待期间会立即显示启动页；页面所有者通过 `applyIndexInjections`应用 Host 注入项，并在所有脚本完成后兑现延迟对象。延迟对象拒绝时显示启动失败；若调用方提供 `run(onFailure)`，则由外部呈现错误并保留加载页。Desktop 使用该回调请求原生恢复。Desktop 与 WebWorker 共享注入解释器；服务端 `tapIndex` HTML 转换仅适用于服务端提供的文档。
 
 外壳基础样式会在移动浏览器旋转或展开屏幕时保持页面设定的字号，浏览器缩放和外观字号设置仍可使用。它还会在支持的浏览器中为普通内容自动添加中西文间距。语义化代码以及终端、diff、读取和搜索输出容器会保留源码中的原始间距和列对齐；不支持 `text-autospace` 的浏览器会忽略这两项声明。
 
-Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../apps/web/katex-fonts.ts)以 WOFF2 保留全部 KaTeX 字体样式，并排除 WOFF/TTF 后备格式；任一字体样式缺少 WOFF2 都会使构建失败。字体的字形、字重、样式和布局规则保持不变。
+静态 Client 库保留第三方 ESM import 和动态 import，交给最终 Web 构建。其样式元信息通过普通 URL import 引用第三方字体资源；包级构建不复制这些字体，也不生成语言库 chunk。
 
 ### 启动过程是怎样的
 
@@ -47,6 +47,8 @@ Web 和 Desktop 的数学公式渲染要求支持 WOFF2。[Web 构建](../../../
 `PLATFORM_MODULES`（位于 `src/platform.ts`）列出外壳预置的共享模块——React、Cordis、Zod（`zod`）、TanStack Virtual（`@tanstack/react-virtual`）与静态 UI 库——并与 `PRELOADED_CLIENT_EXTERNALS`（parser 预载的运行时行）一起定义每个动态 bundle 解析所依据的隐式 external 基座。`dsh.client.external` 只添加基座之外的精确请求；参见[共享模块与模块图](../AGENTS.md#shared-modules-and-the-module-graph)。
 
 同一页面中的内置浏览器插件和已安装的浏览器插件获得相同的模块实例。外壳提供本包 `package.json` 声明的依赖版本，模块表不会为每个插件协商版本。使用这些模块的外部插件必须以提供所需模块标识符和 API 的宿主为目标，并在构建客户端 bundle 时将相应导入保留为 external。内联依赖仍归各自 bundle 私有；Host 代码与 Worker 单独解析其依赖。
+
+工作区静态库交付普通 ESM 的 `lib/index.js`，只多一个导出 `__$dsh_client_module_manifest`。外壳登记这份 manifest；其 factory 返回库自身的导出，不含 manifest，因此经模块加载器的业务 import 与原生 import 取得相同的值。`clientShell()` 将本启动包构建为普通 ESM，因此启动代码与加载页 CSS 不依赖模块 renderer。
 
 ### 配置
 

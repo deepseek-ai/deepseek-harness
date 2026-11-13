@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Desktop 認証",
+    "description": "親プロセスと Host プロセスで共有する非公開の認証情報を使って、Desktop のリクエストを認証します。"
+  }
+}

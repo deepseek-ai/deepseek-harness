@@ -99,11 +99,19 @@ int Offset(string name) => int.Parse(header.Split('\n').Single(line => line.Star
 Check(Encoding.UTF8.GetString(html, Offset("StartFragment"), Offset("EndFragment") - Offset("StartFragment")) == "<b>你好😀</b>", "CF_HTML byte offsets preserve Unicode");
 Check(Offset("EndHTML") == html.Length - 1, "CF_HTML excludes the terminating NUL");
 
-Check(KeyChord.Parse("ctrl++", []).Key == "+", "Plus key remains a key after chord parsing");
-Check(KeyChord.Parse("+", []).Modifiers.Length == 0, "Bare plus has no modifier");
-Check(KeyChord.Parse("Control+a", ["ctrl"]).Modifiers.SequenceEqual(["control"]), "Equivalent modifiers deduplicate");
-Refuses(() => KeyChord.Parse("ctrl+", []), "INVALID_ARGUMENT");
-Refuses(() => KeyChord.Parse("fn+a", []), "UNSUPPORTED");
+Check(KeyChord.ModifiersForPress("+", []).Length == 0, "Bare plus has no modifier");
+Check(KeyChord.ModifiersForPress("a", ["SHIFT", "Control", "ctrl", "ALT"]).SequenceEqual(["shift", "ctrl", "alt"]),
+    "Application shortcuts normalize aliases and preserve modifier order");
+Check(KeyChord.NormalizeModifier("win") == "win", "Pointer gestures accept the Win modifier");
+foreach (var key in new[] { "r", "l", "d", "a" })
+    Refuses(() => KeyChord.ModifiersForPress(key, ["shift", "WIN"]), "UNSUPPORTED");
+Refuses(() => KeyChord.ModifiersForPress("Tab", ["alt"]), "UNSUPPORTED");
+Refuses(() => KeyChord.ModifiersForPress("Esc", ["control"]), "UNSUPPORTED");
+Refuses(() => KeyChord.ModifiersForPress("Delete", ["ctrl", "alt"]), "UNSUPPORTED");
+Refuses(() => KeyChord.ModifiersForPress("PrintScreen", []), "UNSUPPORTED");
+Refuses(() => KeyChord.ModifiersForPress("a", ["fn"]), "UNSUPPORTED");
+foreach (var modifier in new[] { "option", "command", "unknown" })
+    Refuses(() => KeyChord.ModifiersForPress("a", [modifier]), "INVALID_ARGUMENT");
 
 var button = new AccessibilityNode { ControlType = "Button", Name = "保存", HelpText = "保存当前文档", AutomationId = "saveButton" };
 foreach (var details in new[] { false, true })

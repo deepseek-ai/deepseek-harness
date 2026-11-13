@@ -45,7 +45,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What PTC mode requires
 
-Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) whose language has a registered SDK renderer — the TypeScript runtime ships via [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md), and both the TypeScript and Python SDK renderers are built into `dsh-tool-executor-ptc`. Before the runtime first becomes available, this compatibility selector leaves the inherited executor active. Mount `dsh-tool-executor-ptc` directly when preset activation must reject a missing runtime.
+Selecting `ptc` needs a composed PTC runtime (`ctx.ptcRuntime`) reporting `language: 'typescript'`; [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.md) supplies the shipped provider. Once a runtime is available, the PTC child remains selected and rejects unsupported languages during prompt assembly and execution; it does not fall back to the inherited executor. Before the runtime first becomes available, this compatibility selector leaves the inherited executor active. Mount `dsh-tool-executor-ptc` directly when preset activation must reject a missing runtime.
 
 ### One presentation per agent
 

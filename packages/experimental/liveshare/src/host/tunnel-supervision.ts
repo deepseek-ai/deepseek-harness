@@ -12,7 +12,12 @@ import { base64Url } from './base64-url.ts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
-import type { IdentityActor, TunnelShareSpec, TunnelWorkerEvent } from '@deepseek-ai/dsh-experimental-liveshare-protocol'
+import type {
+  IdentityActor,
+  LiveshareOwnerPlatform,
+  TunnelShareSpec,
+  TunnelWorkerEvent,
+} from '@deepseek-ai/dsh-experimental-liveshare-protocol'
 import type {
   ClaimOutcome,
   OwnerIdentityStatus,
@@ -118,7 +123,7 @@ export interface TunnelSupervisionDeps {
   readonly viewerRead: () => ViewerReadService
   /** Tell remote access that reader answers may have changed. */
   readonly accessChanged: () => void
-  /** Stop whatever turn one share's Session is running. */
+  /** Stop the turn that admitted share-viewer input for one share's Session. */
   readonly cancelShareTurn: (shareId: string) => void
   /** Reconcile one Session's sandbox after a share stopped or expired. */
   readonly reconcileSourceAccess: (sessionId: string) => void
@@ -276,6 +281,23 @@ function bundleVersion(): string | undefined {
   }
   /* v8 ignore next -- the package manifest ships beside both entries this reads it from. */
   return undefined
+}
+
+/**
+ * Map this owner's runtime platform onto the wire enum.
+ *
+ * The enum names a display class, not a kernel: a system outside it reports nothing, so the Relay
+ * shows no platform instead of receiving a name neither peer agreed on.
+ * @param platform - Runtime platform to map, defaulting to the one this process reports.
+ * @returns The matching enum value, or undefined when the system is outside the enum.
+ */
+export function ownerPlatform(platform: NodeJS.Platform = process.platform): LiveshareOwnerPlatform | undefined {
+  switch (platform) {
+    case 'darwin': return 'macos'
+    case 'win32': return 'windows'
+    case 'linux': return 'linux'
+    default: return undefined
+  }
 }
 
 /**
@@ -595,13 +617,17 @@ export function createTunnelSupervision(deps: TunnelSupervisionDeps): TunnelSupe
    * the shares this profile reconnected with, and a reader's admission is derived from these fields
    * either way, so both sites build the row here instead of keeping two copies in step by hand.
    */
-  const ownerIdentityRow = (relay: string, credential: StoredOwnerCredential | undefined) => ({
-    ...deps.ownerContext,
-    ownerDisplayName: readerFacingOwnerName(relay, credential),
-    /* v8 ignore next -- the version is read from the package manifest beside this module. */
-    ...(dshVersion === undefined ? {} : { dshVersion }),
-    ownerInstanceId: deps.instanceId,
-  })
+  const ownerIdentityRow = (relay: string, credential: StoredOwnerCredential | undefined) => {
+    const platform = ownerPlatform()
+    return {
+      ...deps.ownerContext,
+      ownerDisplayName: readerFacingOwnerName(relay, credential),
+      /* v8 ignore next -- the version is read from the package manifest beside this module. */
+      ...(dshVersion === undefined ? {} : { dshVersion }),
+      ...(platform === undefined ? {} : { platform }),
+      ownerInstanceId: deps.instanceId,
+    }
+  }
 
   const shareSpec = (share: ShareRegistrationSource, credential: StoredOwnerCredential | undefined): TunnelShareSpec => {
     const ownerCredential = registrableCredentialForRelay(share.relay, credential)

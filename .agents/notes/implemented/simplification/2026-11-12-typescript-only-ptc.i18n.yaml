@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-11-12-typescript-only-ptc.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-11-12-typescript-only-ptc.md
+/agent-note-typescript-only-ptc-tool-execution:
+  en: c5baba9480713efd
+  zh: 3bb75334bbb9d309
+/agent-note-typescript-only-ptc-tool-execution/problem:
+  en: 388bf7cd25221f5c
+  zh: 67fd11e0db13b0d9
+/agent-note-typescript-only-ptc-tool-execution/decision:
+  en: ecff3310debb44fc
+  zh: 7a6de9ba0d00fc8b
+/agent-note-typescript-only-ptc-tool-execution/alternatives-considered:
+  en: ca76cf68b304f98e
+  zh: 45b7dfbd7a05b3de
+/agent-note-typescript-only-ptc-tool-execution/consequences:
+  en: c368f6deb55bec91
+  zh: 870b34771af91c70

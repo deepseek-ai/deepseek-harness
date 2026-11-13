@@ -198,9 +198,7 @@ export const EXISTING_PLUGIN_ENTRY_EXPORTS = {
   '@deepseek-ai/dsh-terminal-panel': ['GUIDANCE'],
   '@deepseek-ai/dsh-tool-call-timeout-policy': ['TOOL_TIMEOUT'],
   '@deepseek-ai/dsh-tool-executor-native': ['NativeToolExecutor'],
-  '@deepseek-ai/dsh-tool-executor-ptc': [
-    'PtcExecutor', 'jsonSchemaToPy', 'jsonSchemaToTs', 'renderToolsSdk', 'renderToolsSdkPy',
-  ],
+  '@deepseek-ai/dsh-tool-executor-ptc': ['PtcExecutor', 'jsonSchemaToTs', 'renderToolsSdk'],
   '@deepseek-ai/dsh-tool-fs-search': [
     'GLOB_MAX_RESULTS', 'GLOB_VCS_EXCLUDES', 'GREP_MAX_LINE_BYTES', 'GREP_MAX_MATCHES', 'RAW_OUTPUT_MAX_BYTES',
     'SEARCH_GRACE_MS', 'SEARCH_META_MAX_BYTES', 'SEARCH_STDERR_MAX_BYTES', 'SEARCH_TIMEOUT_MS', 'applyGlobTool',

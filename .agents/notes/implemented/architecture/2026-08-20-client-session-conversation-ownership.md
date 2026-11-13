@@ -81,7 +81,7 @@ Adding a target does not add a branch to the renderer or Session Controller. The
 | `api/session-controller/client` | Session objects, catalog, references, source counts, commands, projections, event windows, and Agent Contexts | Navigation, completion reminders, Conversation targets, React, Slots, Workspace |
 | `api/workspace-controller/client` | Workspace objects, ordering, archive state, commands, and snapshots | React, Session navigation policy, directory UI |
 | `client/ui-session` | Explicit Session scope, standard sources, `SessionProvider`, and effective pending interactions | Session transport, reference ownership, Conversation assembly, Approval/Question results, unified UI status |
-| `client/ui-session-status` | Unified UI status: running state, effective pending request, and completion reminders | Pending-interaction registration, Session transport, React |
+| `client/ui-session-status` | Unified UI status: running state, effective pending request, and completion reminders; Host reading records and their Client copy; main-view reading acknowledgement | Pending-interaction registration, Session transport, React |
 | `client/ui-workspace` | Workspace hook, browser UI, main-area reference, and cross-Controller navigation policy | Workspace transport, copies of Session data |
 | `client/ui-conversation` | Conversation core, registries, bindings, shell, input, composer, queue, and View navigation | Session transport, Chat/Trajectory snapshots |
 | `client/ui-chat` | Chat target, Node definitions, renderers, selection, details, and locale | Session lifecycle, generic View navigation, Trajectory, historical-image cache |

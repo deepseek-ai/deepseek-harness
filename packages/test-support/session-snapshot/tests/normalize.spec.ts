@@ -1227,6 +1227,23 @@ describe('scrubSessionSnapshot', () => {
     expect(scrubSessionSnapshot(output)).toBe(output)
   })
 
+  it('normalizes Timeline task clocks and receipts without changing descriptions', () => {
+    const records = [
+      { type: 'session', id: 's' },
+      { type: 'plugin:timeline/tree', data: { tree: {
+        createdAt: 12, lastTaskUpdate: 15, tasks: [{ title: 'Keep 12', createdAt: 12, updatedAt: 15 }],
+      }, receipt: { at: 15, previousAt: null } } },
+      { type: 'plugin:timeline/tree', data: {} },
+      { type: 'tool/result', data: { meta: { timeline: { at: 15, previousAt: 12 }, createdAt: 12 } } },
+    ]
+    const input = records.map(record => JSON.stringify(record)).join('\n')
+    const output = scrubSessionSnapshot(input)
+    expect(output).toContain('"createdAt":0,"lastTaskUpdate":0,"tasks":[{"title":"Keep 12","createdAt":0,"updatedAt":0}]')
+    expect(output).toContain('"receipt":{"at":0,"previousAt":null}')
+    expect(output).toContain('"timeline":{"at":0,"previousAt":0},"createdAt":12')
+    expect(scrubSessionSnapshot(output)).toBe(output)
+  })
+
   it('preserves the header while projecting and scrubbing each body record', () => {
     const header = '  {"type":"session","version":0,"id":"s","createdAt":7}  '
     const system = systemMessageEvent('secret', 0)

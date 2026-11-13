@@ -68,4 +68,4 @@ Status: implemented
 - `{{model}}` 在组装时反映 `AgentOptions.model`。如果一个插件在 `agent/request` waterfall 中切换模型，提示词对该步骤的声明就会过时；如果一个插件在那里提供模型（options.model 未设置——循环文档中记载的回退路径），变量在渲染时无值，包含 `{{model}}` 的 persona 会在 waterfall 运行前失败。两者的补救方式相同，就是归属规则本身：拥有延迟绑定模型事实的插件在 `system-prompt/assemble` waterfall 上提前声明它（`assembly.variables['model'] = …`）——一个归属方，两处声明；一个循环测试端到端固定了 supply 路径。已接受。
 - 当一个已绑定的提供方不存在时（尚未激活、已卸载、HMR（热模块替换）重载中），subagent 工具不存在，该窗口内的模型请求中不会包含它。这是诚实的状态——替代方案是注册一个 description 或执行都不可信的工具。
 - 严格插值在模型请求之前拒绝缺失或无值的变量。该轮次以 `error` 结束，循环仍可服务后续轮次；引用 `{{model}}` 的 persona 要求组合它的运行时提供该值。
-- 插值文本仍不支持行内转义；字面文本段无需转义。PTC 单元测试覆盖两种模式和运行时语言，录制的 `ptc-turn` 场景在模型可见的提示词中保留工具模板示例。
+- 插值文本仍不支持行内转义；字面文本段无需转义。单元测试覆盖 native 呈现与字面 TypeScript SDK 段，录制的 `ptc-turn` 场景在模型可见的提示词中保留工具模板示例。

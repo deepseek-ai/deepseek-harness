@@ -12,6 +12,11 @@ it('preserves opaque window IDs in requests and results', () => {
   expect(WindowsResult.parse(windows)).toEqual(windows)
   const state = { appHandle: 'app', windowId, focusedWindowId: windowId, snapshotId: 'snapshot', tree: '', windows, truncated: false }
   expect(StateResult.parse(state)).toEqual(state)
+  for (const truncated of [false, true]) {
+    const partial = { ...state, truncated, hasUnreadableElements: true }
+    expect(StateResult.parse(partial)).toEqual(partial)
+  }
+  expect(() => StateResult.parse({ ...state, hasUnreadableElements: 'true' })).toThrow()
   expect(ShowResult.parse({ dispatched: true, foregroundChanged: false, windowId }).windowId).toBe(windowId)
   const nativeImage = { mimeType: 'image/png', data: 'AQ==', pixelWidth: 1, pixelHeight: 1,
     windowId, bounds: windows[0]!.bounds, coordinateSpace: 'window-pixels' }
@@ -45,6 +50,15 @@ const rejectedRequests: Array<{ reason: string; request: JsonValue }> = [
 
 it.each(rejectedRequests)('rejects $reason at operation admission', ({ request }) => {
   expect(Request.safeParse(request).success).toBe(false)
+})
+
+it.each([
+  { method: 'click', params: { appHandle: 'app', windowId: '1', x: 1, y: 2 } },
+  { method: 'drag', params: { appHandle: 'app', windowId: '1', fromX: 1, fromY: 2, toX: 3, toY: 4 } },
+])('admits shared pointer modifiers for $method and rejects keyboard-only aliases', ({ method, params }) => {
+  const request = (modifiers: string[]) => ({ method, params: { ...params, modifiers } })
+  expect(Request.parse(request(['ctrl', 'alt', 'win']))).toEqual(request(['ctrl', 'alt', 'win']))
+  for (const name of ['cmd', 'unknown']) expect(Request.safeParse(request([name])).success).toBe(false)
 })
 
 it('admits arbitrary provider-defined pressKey modifier names', () => {
@@ -242,9 +256,13 @@ it('requires keyboard scopes', () => {
   expect(CapabilitiesResult.safeParse(capabilities).success).toBe(false)
 })
 
-it('admits the pointer option only in the system-pointer model schema and only as a boolean', () => {
-  const target = { appHandle: 'app', windowId: '1', x: 0, y: 0 }
-  const request = { method: 'mouseMove', params: { ...target, useSystemPointer: true } }
+it.each<[string, Record<string, number | boolean>]>([
+  ['mouseMove', { x: 0, y: 0 }],
+  ['drag', { fromX: 1, fromY: 2, toX: 3, toY: 4 }],
+  ['drag', { relative: true, fromX: 1, fromY: 2, toX: 3, toY: 4 }],
+])('admits %s system-pointer control only for supporting providers', (method, points) => {
+  const target = { appHandle: 'app', windowId: '1', ...points }
+  const request = { method, params: { ...target, useSystemPointer: true } }
   expect(Request.safeParse(request).success).toBe(false)
   expect(SystemPointerRequest.safeParse(request).success).toBe(true)
   expect(SystemPointerRequest.safeParse({ ...request, params: { ...target, useSystemPointer: 'true' } }).success).toBe(false)

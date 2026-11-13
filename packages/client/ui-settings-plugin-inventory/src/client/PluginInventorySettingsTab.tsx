@@ -12,6 +12,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState, TagTone } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { localizedValues, TextSearchIndex, type SearchKeys } from '@deepseek-ai/dsh-util-text-search'
 import type { PluginInventoryLocaleKey } from './locales.ts'
 import css from './PluginInventorySettingsTab.module.css'
 
@@ -99,12 +100,12 @@ function pluginText(row: PluginInventoryEntry | AgentPresetRow, resolveText: Plu
   }
 }
 
-/** Match translated text alongside the row's technical module and entry identities. */
-function matches(row: PluginInventoryEntry | AgentPresetRow, normalizedQuery: string, resolveText: PluginInventorySettingsTabInjected['resolveText']): boolean {
-  if (normalizedQuery.length === 0) return true
-  const { title, description } = pluginText(row, resolveText)
-  return [row.moduleName, row.entryId, title, description]
-    .some(value => value?.toLocaleLowerCase().includes(normalizedQuery))
+/** Search text of one row: its module and entry identities and every language of its title and description. */
+function searchKeys(row: PluginInventoryEntry | AgentPresetRow): SearchKeys {
+  return {
+    fuzzy: [row.moduleName, row.entryId ?? undefined, ...localizedValues(row.meta?.title)],
+    substring: localizedValues(row.meta?.description),
+  }
 }
 
 /** The roster row shown when the preset switcher has no explicit choice. */
@@ -272,8 +273,7 @@ export function PluginInventorySettingsTab(
     return () => { current = false }
   }, [list, request])
 
-  const normalizedQuery = query.trim().toLocaleLowerCase()
-  const searching = normalizedQuery.length > 0
+  const searching = query.trim().length > 0
   const snapshot = state.status === 'ready' ? state.snapshot : undefined
   const presets = snapshot?.agentPresets ?? []
   const selected = presets.find(preset => preset.id === chosenPreset) ?? fallbackPreset(presets)
@@ -293,24 +293,30 @@ export function PluginInventorySettingsTab(
   }, [presets])
 
   const entries = snapshot?.entries ?? []
-  const failedEntries: PluginInventoryEntry[] = []
-  const regularEntries: PluginInventoryEntry[] = []
-  for (const entry of entries) {
-    if (entry.fiberPhase === 'failed') failedEntries.push(entry)
-    else regularEntries.push(entry)
-  }
-
-  const entryMatch = (entry: PluginInventoryEntry): boolean => matches(entry, normalizedQuery, resolveText)
-  const rowMatch = (row: AgentPresetRow): boolean => matches(row, normalizedQuery, resolveText)
-  const filteredFailed = failedEntries.filter(entryMatch)
-  const filteredRegular = regularEntries.filter(entryMatch)
+  // One index per list, built when the snapshot changes; typing only searches them.
+  const indexes = useMemo(() => {
+    const failed: PluginInventoryEntry[] = []
+    const regular: PluginInventoryEntry[] = []
+    for (const entry of snapshot?.entries ?? []) {
+      if (entry.fiberPhase === 'failed') failed.push(entry)
+      else regular.push(entry)
+    }
+    return {
+      failed: new TextSearchIndex(failed, searchKeys),
+      regular: new TextSearchIndex(regular, searchKeys),
+      presets: (snapshot?.agentPresets ?? []).map(preset => ({ preset, index: new TextSearchIndex(preset.rows, searchKeys) })),
+    }
+  }, [snapshot])
+  const filteredFailed = indexes.failed.search(query)
+  const filteredRegular = indexes.regular.search(query)
   const globalCount = filteredFailed.length + filteredRegular.length
-  const selectedRows = selected === undefined ? [] : selected.rows.filter(rowMatch)
-  const otherPresetMatches = searching
-    ? presets.filter(preset => preset !== selected && preset.rows.some(rowMatch))
+  const selectedRows = indexes.presets.find(({ preset }) => preset === selected)?.index.search(query) ?? []
+  const otherMatches = searching
+    ? indexes.presets.flatMap(({ preset, index }) => preset === selected ? [] : [{ preset, count: index.search(query).length }])
+      .filter(match => match.count > 0)
     : []
-  const otherMatchCount = otherPresetMatches
-    .reduce((total, preset) => total + preset.rows.filter(rowMatch).length, 0)
+  const otherPresetMatches = otherMatches.map(match => match.preset)
+  const otherMatchCount = otherMatches.reduce((total, match) => total + match.count, 0)
 
   // The preset group starts open and the larger global plane folded; a search opens both for as long as it lasts.
   const presetEffectiveOpen = searching || (presetOpen ?? true)

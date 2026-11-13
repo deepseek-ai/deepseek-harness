@@ -1,0 +1,18 @@
+- paragraph:
+  - text: 针对
+  - strong: “当键盘已经进入深睡眠（彻底断连）时的重连速度”
+  - text: ，我核对了
+  - code: bluetoothd
+  - text: 的日志：唤醒后第一次扫描没有命中。
+- paragraph:
+  - text: 这导致了
+  - strong: “Wi-Fi 下收不到推送”
+  - text: 的现象，以及包含
+  - strong: （内容）
+  - text: 的列表都刷不出来。
+- paragraph:
+  - text: 换句话说，问题出在
+  - strong: 「深睡眠」
+  - text: 阶段，而不是
+  - strong: “配对流程”
+  - text: 本身。

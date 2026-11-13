@@ -103,7 +103,12 @@ describe('worktree tool through real Loader composition', () => {
     })
     expect(failure.isError).toBe(true)
     expect(failure.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('requires a calling agent')
-    expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({ card: 'generic', title: 'create_worktree', rawInput: { name: 'named' } })
+    expect(failure.isError && failure.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    const existing = await invoke('new-checkout')
+    expect(existing.isError && existing.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_ALREADY_EXISTS' })
+    expect(context.tools.get('create_worktree')!.presentCall!({ name: 'named' })).toEqual({
+      card: 'generic', title: 'create_worktree', rawInput: { name: 'named' },
+    })
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')
     await entry!.fiber!.dispose()
     expect(context.tools.schemas().some(tool => tool.name === 'create_worktree')).toBe(false)

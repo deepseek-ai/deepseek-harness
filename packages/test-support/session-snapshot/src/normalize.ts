@@ -413,6 +413,7 @@ export function normalizeSessionLog(
       if ('durationMs' in data) data.durationMs = 0
     }
     normalizeFeedbackClocks(record)
+    normalizeTimelineClocks(record)
     if ((record.type === 'job/registered' || record.type === 'job/settled')
       && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
@@ -605,6 +606,7 @@ export function scrubSessionSnapshot(rawLog: string): string {
       record.sourceEventSeqs = decodeSeqRanges(record.sourceEventSeqs)
     }
     normalizeFeedbackClocks(record)
+    normalizeTimelineClocks(record)
     return JSON.stringify(record)
   }).join('\n')
 }
@@ -617,6 +619,28 @@ function normalizeFeedbackClocks(record: Record<string, unknown>): void {
   const clocks = item as Record<string, unknown>
   if ('createdAt' in clocks) clocks.createdAt = 0
   if ('updatedAt' in clocks) clocks.updatedAt = 0
+}
+
+/** Normalize only Timeline-owned task clocks and their card receipts. */
+function normalizeTimelineClocks(record: Record<string, unknown>): void {
+  const data = record.data as Record<string, unknown> | undefined
+  if (data === undefined) return
+  const zero = (value: unknown, keys: readonly string[]): void => {
+    if (value === null || typeof value !== 'object') return
+    const fields = value as Record<string, unknown>
+    for (const key of keys) {
+      if (typeof fields[key] === 'number') fields[key] = 0
+    }
+  }
+  if (record.type === 'plugin:timeline/tree') {
+    const tree = data.tree as { tasks?: unknown[] } | undefined
+    zero(tree, ['createdAt', 'lastTaskUpdate'])
+    for (const task of tree?.tasks ?? []) zero(task, ['createdAt', 'updatedAt'])
+    zero(data.receipt, ['at', 'previousAt'])
+  } else if (record.type === 'tool/result') {
+    const meta = data.meta as { timeline?: unknown } | undefined
+    zero(meta?.timeline, ['at', 'previousAt'])
+  }
 }
 
 /** Which independent model-request payloads a scrubber replaces. */

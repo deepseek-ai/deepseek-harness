@@ -119,9 +119,9 @@ export class DeepSeekUploadIndex {
     this.path = path
   }
 
-  private async load(): Promise<StoredIndex> {
+  private async load(signal?: AbortSignal): Promise<StoredIndex> {
     try {
-      return parseIndex(await readFile(this.path, 'utf8'))
+      return parseIndex(await readFile(this.path, { encoding: 'utf8', signal }))
     } catch (error: unknown) {
       if (absent(error) || error instanceof InvalidUploadIndexError) {
         return { formatVersion: 3, records: [] }
@@ -143,6 +143,7 @@ export class DeepSeekUploadIndex {
    * @param variantId - complete request-image transformation identity.
    * @param now - current Unix time in milliseconds.
    * @param refreshMarginMs - remaining lifetime below which a mapping is not reused.
+   * @param signal - cancellation of the index read.
    * @returns the mapping when it has enough lifetime remaining.
    */
   async get(
@@ -150,8 +151,9 @@ export class DeepSeekUploadIndex {
     variantId: ImageVariantIdType,
     now: number,
     refreshMarginMs: number,
+    signal?: AbortSignal,
   ): Promise<DeepSeekUploadRecord | undefined> {
-    const record = (await this.load()).records.find(candidate => (
+    const record = (await this.load(signal)).records.find(candidate => (
       candidate.scope === scope && candidate.variantId === variantId
     ))
     return record !== undefined && reusable(record, now, refreshMarginMs) ? record : undefined

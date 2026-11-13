@@ -493,7 +493,7 @@ export function TabPanel({ state, pane, callbacks }: TabPanelProps): ReactNode {
       }}
     >
       <TabStrip state={state} pane={pane} callbacks={callbacks} />
-      <div className={css.paneBody}>
+      <div className={css.paneBody} data-dockkit-pane-body="">
         {active === undefined
           ? <p className={css.empty}>{callbacks.labels.emptyPane}</p>
           : <TabBody tab={active} renderTab={callbacks.renderTab} />}

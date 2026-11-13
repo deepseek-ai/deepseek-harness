@@ -25,6 +25,10 @@ export {
 import { collectSourceFileUses } from './source-parse-uses.ts'
 const GATE = 'verify-client-packages'
 const CLIENT_MANIFEST_GLOB = 'packages/client/*/package.json'
+/** Manifest prefix of Client feature packages, which may request only infrastructure rows at runtime. */
+const CLIENT_FEATURE_PREFIX = 'packages/client/'
+/** Manifest prefix of the Remote API group, whose dynamic rows are infrastructure a Client feature may request. */
+const INFRASTRUCTURE_PREFIX = 'packages/api/'
 const MANIFEST_GLOBS = ['packages/*/*/package.json', 'apps/*/package.json', 'vendor/*/package.json']
 const CONFIG_GLOB = 'packages/*/*/tsdown.config.ts'
 const PLATFORM_SOURCE = 'packages/client/web/src/platform.ts'
@@ -355,10 +359,14 @@ function collectModuleViolations(facts: ClientPackageFacts): string[] {
       if (supplier === pkg.name) {
         violations.push(pkg.manifest + ': dsh.client.external names its own row ' + JSON.stringify(specifier))
       } else if (supplier !== undefined) {
-        if (pkg.manifest.startsWith('packages/client/')) {
+        // The iframe provider shares the registry's Realm error identity; this is an infrastructure edge, not UI composition.
+        const realmProvider = pkg.name === '@deepseek-ai/dsh-client-script-realm-iframe'
+          && specifier === '@deepseek-ai/dsh-client-script-realm/client'
+        if (pkg.manifest.startsWith(CLIENT_FEATURE_PREFIX) && !isInfrastructureRow(byName.get(supplier)) && !realmProvider) {
           violations.push(
             pkg.manifest + ': client feature package requests runtime external ' + JSON.stringify(specifier)
-            + '; import shared types only or call an injected Cordis service',
+            + '; request only rows under ' + INFRASTRUCTURE_PREFIX + ', import shared types only,'
+            + ' or call an injected Cordis service',
           )
           continue
         }
@@ -385,6 +393,15 @@ function collectModuleViolations(facts: ClientPackageFacts): string[] {
 
   violations.push(...collectModuleCycles(edges, byName))
   return violations
+}
+
+/**
+ * Whether a supplier row belongs to the Remote API infrastructure group.
+ * @param supplier - declaration that answers the requested specifier.
+ * @returns true for a package whose manifest lies under `packages/api/`.
+ */
+function isInfrastructureRow(supplier: ClientDeclaration | undefined): boolean {
+  return supplier !== undefined && supplier.manifest.startsWith(INFRASTRUCTURE_PREFIX)
 }
 
 function collectModuleCycles(

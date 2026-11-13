@@ -121,9 +121,11 @@ describe('fixture helpers', () => {
     }
   })
 
-  it('rejects an upload until a suite replaces the default stub', async () => {
+  it('rejects uploads and reading marks until a suite replaces their default stubs', async () => {
     const runtime = await SlotTestRuntime.create()
+    expect(runtime.ctx.uiSession.sessionStatus.readingReady.getSnapshot()).toBe(true)
     await expect(runtime.fileUpload.upload('fixture-session' as SessionId)).rejects.toThrow('file upload is not stubbed')
+    await expect(runtime.ctx.uiSession.sessionStatus.mark('fixture-session' as SessionId, true)).rejects.toThrow('reading mark is not stubbed')
     await expect(runtime.fileUpload.uploadImage('fixture-session' as SessionId)).rejects.toThrow('image upload is not stubbed')
     await runtime.dispose()
   })

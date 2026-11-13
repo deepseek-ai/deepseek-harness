@@ -71,7 +71,7 @@ export type CuaMouseButton = NonNullable<CuaParameters<'click'>['mouseButton']>
  */
 export type CuaClickOptions = Pick<CuaParameters<'click'>, 'mouseButton' | 'clickCount' | 'modifiers' | 'holdMs'> & CuaCoordinateOptions
 /** One same-window drag; omitted button is left and omitted modifiers are empty. */
-export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers'> & CuaCoordinateOptions
+export type CuaDragOptions = Pick<CuaParameters<'drag'>, 'mouseButton' | 'modifiers' | 'useSystemPointer'> & CuaCoordinateOptions
 /** Clipboard representation delivered through the application's Paste command. */
 export type CuaPasteOptions = Pick<CuaParameters<'paste'>, 'format'>
 /** Adjacent literal context disambiguates repeated text; cursor modes collapse the matched range. */
@@ -89,8 +89,9 @@ export interface CuaSurface {
    */
   show(): Promise<CuaShowResult>
   /**
-   * Read the full accessibility tree, with menu contents collapsed by default.
+   * Read the accessibility tree, with menu contents collapsed by default.
    * The returned tree becomes the application's current snapshot; use element ids from its latest successful read.
+   * Providers may mark unavailable branches whose contents are unknown and have no element ids.
    * @param options - Traversal limits, menu expansion and field detail options.
    * @returns Accessibility tree text with element ids, up to the limits for this read.
    */
@@ -151,7 +152,7 @@ export interface CuaSurface {
    * Press and release one key at the current input focus.
    * Rejects when the provider does not support keyboard input at this scope.
    * @param key - Provider-defined key name to press and release; not a chord.
-   * @param modifiers - Platform- or provider-defined modifier names held for this keystroke; omitted means none.
+   * @param modifiers - Modifier names held for this keystroke. The provider validates the names; omitted means none.
    * @returns Whether the provider successfully executed the requested operation.
    */
   pressKey(key: string, modifiers?: string[]): Promise<CuaActionResult>
@@ -208,7 +209,7 @@ export interface CuaWindow extends CuaSurface {
    * Drag between points in one window while holding the selected button and modifiers.
    * @param from - starting screenshot-local point or integer ratio.
    * @param to - destination in the same coordinate mode.
-   * @param options - button, modifiers and coordinate mode for the complete gesture.
+   * @param options - button, modifiers and coordinate mode. Only providers reporting systemPointer accept useSystemPointer.
    * @returns dispatch evidence.
    */
   drag(from: readonly [number, number], to: readonly [number, number], options?: CuaDragOptions): Promise<CuaActionResult>

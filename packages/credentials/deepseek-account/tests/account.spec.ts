@@ -5,8 +5,9 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { createServer as createTcpServer, connect, Socket } from 'node:net'
 import { join } from 'node:path'
-import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+import { createServer, request as httpRequest, IncomingMessage, ServerResponse } from 'node:http'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
+import * as Connection from '@deepseek-ai/dsh-client-connection'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
 import type { AccountClientMetadata } from '@deepseek-ai/dsh-deepseek-account'
 import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
@@ -193,6 +194,66 @@ async function fixture(
     fail: (value: number) => { businessCode = value },
     init: () => init, count: () => count, callback: (state = init.state) => `${init.redirect_uri}?code=test&state=${state}` }
 }
+
+it('accepts the cross-site OAuth return without relaxing other anonymous routes', async () => {
+  const f = await fixture()
+  const connection = f.ctx.plugin(Connection)
+  await connection.await()
+  cleanups.push(async () => { await connection.dispose() })
+  const stop = f.ctx.webServer.register({ kind: 'exact', path: '/public', auth: 'anonymous', handler: (_req, res) => { res.end('public') } })
+  cleanups.push(async () => { stop() })
+  const headers = { 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
+  await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
+  await f.wait('waiting-browser')
+  expect((await fetch(`${f.callbackOrigin}/public`, { headers })).status).toBe(403)
+  expect((await fetch(f.callback('wrong'), { headers })).status).toBe(400)
+  expect(f.count()).toBe(0)
+  const response = await fetch(f.callback(), { headers, redirect: 'manual' })
+  expect(response.status).toBe(302)
+  expect(response.headers.get('cache-control')).toBe('no-store')
+  expect(f.count()).toBe(1)
+  expect((await f.account.getState()).status).toBe('credential-stored')
+})
+
+it('leaves the attempt unconsumed on a different Host or HTTP listener', async () => {
+  const f = await fixture()
+  const connection = f.ctx.plugin(Connection)
+  await connection.await()
+  cleanups.push(async () => { await connection.dispose() })
+  const isolated = f.ctx.isolate('webServer')
+  const other = isolated.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+  await other.await()
+  cleanups.push(async () => { await other.dispose() })
+  const handled = vi.fn()
+  const remove = isolated.webServer.register({ kind: 'exact', path: '/oauth/callback', auth: 'anonymous', handler: (_req, res) => {
+    handled()
+    res.writeHead(204).end()
+  } })
+  cleanups.push(async () => { remove() })
+  await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
+  await f.wait('waiting-browser')
+  const callback = new URL(f.callback())
+  const crossSite = { 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate', 'sec-fetch-dest': 'document' }
+  const requestStatus = (url: URL, headers: Record<string, string>): Promise<number | undefined> => new Promise((resolve, reject) => {
+    const request = httpRequest(url, { headers }, (response) => {
+      response.on('error', reject)
+      response.once('end', () => { resolve(response.statusCode) })
+      response.resume()
+    })
+    request.on('error', reject)
+    request.end()
+  })
+  expect(await requestStatus(callback, { ...crossSite, host: 'untrusted.invalid' })).toBe(404)
+  expect(await requestStatus(new URL(callback.pathname + callback.search, isolated.webServer.getOrigin()), {
+    host: callback.host,
+  })).toBe(204)
+  expect(handled).toHaveBeenCalledOnce()
+  expect(f.count()).toBe(0)
+  expect((await f.account.getState()).attempt?.phase).toBe('waiting-browser')
+  const accepted = await fetch(f.callback(), { headers: crossSite, redirect: 'manual' })
+  expect(accepted.status).toBe(302)
+  expect(f.count()).toBe(1)
+})
 
 it.each([
   { serverTtl: 600, expectedRemaining: 480_000 },
@@ -595,7 +656,7 @@ it('does not forward deployment cookies through a Platform redirect', async () =
 
 it('closes the failed Web authorization tab without redirecting and keeps the shared HTTP server alive', async () => {
   const f = await fixture()
-  const dispose = f.ctx.webServer.register({ kind: 'exact', path: '/health', handler: (_req, res) => { res.end('alive') } })
+  const dispose = f.ctx.webServer.register({ kind: 'exact', path: '/health', auth: 'anonymous', handler: (_req, res) => { res.end('alive') } })
   cleanups.push(async () => { dispose() })
   await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
   await f.wait('waiting-browser')
@@ -1343,27 +1404,37 @@ it('rejects unsupported interaction and projects unexpected authorization failur
   } finally { begin.mockRestore() }
 })
 
-it('rejects callback requests whose raw URL is absent or malformed', async () => {
+it('delegates other callback authorities and paths, and rejects malformed callback URLs', async () => {
   const f = await fixture()
-  const register = vi.spyOn(f.ctx.webServer, 'register')
-  try {
-    await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
-    await f.wait('waiting-browser')
-    const route = register.mock.calls.find(([route]) => route.path === '/oauth/callback')?.[0]
-    if (route === undefined || !('handler' in route)) throw new Error('missing callback route')
-    for (const url of [undefined, 'http://[']) {
-      const socket = new Socket()
-      const req = new IncomingMessage(socket)
-      req.method = 'GET'
-      req.url = url
-      const res = new ServerResponse(req)
-      try {
-        await route.handler(req, res)
+  await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
+  await f.wait('waiting-browser')
+  for (const input of [
+    { url: f.callback(), host: undefined },
+    { url: f.callback(), host: '[' },
+    { url: 'http://untrusted.invalid/oauth/callback?code=test' },
+    { url: undefined },
+    { url: 'http://[' },
+  ]) {
+    const socket = new Socket()
+    const req = new IncomingMessage(socket)
+    req.method = 'GET'
+    req.url = input.url
+    req.headers.host = 'host' in input ? input.host : new URL(f.callbackOrigin).host
+    const res = new ServerResponse(req)
+    const next = vi.fn(async () => {})
+    try {
+      await f.ctx.waterfall(f.ctx.webServer, 'webserver/request', req, res, next)
+      if (input.url === 'http://[') {
         expect(res.statusCode).toBe(400)
         expect(res.writableEnded).toBe(true)
-      } finally { res.destroy(); socket.destroy() }
-    }
-  } finally { register.mockRestore() }
+        expect(next).not.toHaveBeenCalled()
+      } else {
+        expect(next).toHaveBeenCalledOnce()
+        expect(res.writableEnded).toBe(false)
+      }
+      expect(f.count()).toBe(0)
+    } finally { res.destroy(); socket.destroy() }
+  }
 })
 
 it('settles an attempt after its browser callback connection closes during exchange', async () => {
@@ -1371,22 +1442,19 @@ it('settles an attempt after its browser callback connection closes during excha
   f.hold()
   const response = Promise.withResolvers<ServerResponse>()
   const serverClosed = Promise.withResolvers<undefined>()
-  const original = f.ctx.webServer.register.bind(f.ctx.webServer)
-  const register = vi.spyOn(f.ctx.webServer, 'register').mockImplementation(route => 'resource' in route ? original(route) : original({
-    ...route, handler: (req, res) => {
-      response.resolve(res)
-      res.once('error', () => undefined)
-      res.once('close', () => { serverClosed.resolve(undefined) })
-      return route.handler(req, res)
-    },
-  }))
+  const remove = f.ctx.on('webserver/request', async (_req, res, next) => {
+    response.resolve(res)
+    res.once('error', () => undefined)
+    res.once('close', () => { serverClosed.resolve(undefined) })
+    await next()
+  })
   await f.account.startSignIn(clientMetadata(), f.callbackOrigin, 'web')
   await f.wait('waiting-browser')
   const socket = connect(Number(new URL(f.callbackOrigin).port), '127.0.0.1')
   const closed = new Promise<void>(resolve => socket.once('close', () => { resolve() }))
   try {
     await new Promise<void>(resolve => socket.once('connect', resolve))
-    socket.write(`GET ${new URL(f.callback()).pathname}${new URL(f.callback()).search} HTTP/1.1\r\nHost: localhost\r\n\r\n`)
+    socket.write(`GET ${new URL(f.callback()).pathname}${new URL(f.callback()).search} HTTP/1.1\r\nHost: ${new URL(f.callbackOrigin).host}\r\n\r\n`)
     await f.exchanged.promise
     const callbackResponse = await response.promise
     vi.spyOn(callbackResponse, 'end').mockImplementation(() => callbackResponse)
@@ -1397,7 +1465,7 @@ it('settles an attempt after its browser callback connection closes during excha
     f.release.resolve(undefined)
     await f.wait('succeeded')
     expect((await f.account.signOut(clientMetadata())).status).toBe('signed-out')
-  } finally { socket.destroy(); f.release.resolve(undefined); await closed; register.mockRestore() }
+  } finally { socket.destroy(); f.release.resolve(undefined); await closed; remove() }
 })
 
 it('invalidates account reads before the shared grant lookup returns to its caller', async () => {
