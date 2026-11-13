@@ -1,0 +1,8 @@
+version: 1
+scenario: deepseek-chat-import
+profile: web
+composition: web-deepseek-chat-import
+recording: live
+header:
+  class: web-deepseek-chat-import
+  pin: true

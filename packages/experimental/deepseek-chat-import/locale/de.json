@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek-Chatimport",
+    "description": "Laden Sie über die Schaltfläche neben „Neue Sitzung“ einen Chatexport (ZIP) der DeepSeek-Website hoch; jede Unterhaltung wird zu einer Sitzung im gewählten Arbeitsbereich.",
+    "detail": "docs/DETAIL.md"
+  }
+}

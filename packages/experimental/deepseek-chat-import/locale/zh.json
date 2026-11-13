@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek 会话导入",
+    "description": "点击“新建会话”旁的按钮上传 DeepSeek 官网导出的 ZIP 文件，每段对话都会成为所选工作区中的一个会话。",
+    "detail": "docs/DETAIL.zh.md"
+  }
+}

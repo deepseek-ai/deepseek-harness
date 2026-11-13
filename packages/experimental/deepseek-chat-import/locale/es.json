@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Importación de chats de DeepSeek",
+    "description": "Sube un ZIP de exportación de chats del sitio web de DeepSeek con el botón junto a Nueva sesión; cada conversación se convierte en una sesión del espacio de trabajo que elijas.",
+    "detail": "docs/DETAIL.md"
+  }
+}
