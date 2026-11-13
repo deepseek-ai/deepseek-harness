@@ -815,7 +815,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       dependencies[SCAFFOLD_DEFAULTS_BUNDLE] = `file:${fixtureDir}`
       initProfile(profileDir, bundles)
       // Process-specific rows load like a `--patch` file, so profile reads see the launcher's overlay layer.
-      await writeFile(overlayPath, yaml.dump(processOverlays, { schema: entryListSchema }))
+      await writeFile(overlayPath, stringifyEntryYaml(processOverlays))
       const manifest = readProfileManifest('dsh', profileDir)
       manifest.dependencies = dependencies
       await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n')
