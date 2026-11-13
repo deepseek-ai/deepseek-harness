@@ -99,17 +99,15 @@ export class OpenInAppController {
 
   private async run(): Promise<void> {
     let apps: readonly string[] = []
+    let payload: OpenInAppAppsPayload | undefined
     try {
-      const response = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, {
+      payload = await this.fetcher(OPEN_IN_APP_APPS_ROUTE, {
         headers: { accept: 'application/json' },
-      })
-      if (response.ok) {
-        const payload = await response.json() as OpenInAppAppsPayload
-        if (Array.isArray(payload.apps)) apps = payload.apps.filter(id => typeof id === 'string')
-      }
-    } catch (_error) {
-      // An unreachable Host supplies no directory openers in menus or controls.
+      }).then(response => response.ok ? response.json() as Promise<OpenInAppAppsPayload> : undefined)
+    } catch (_appsUnavailable) {
+      // An unreachable Host or an unreadable reply supplies no directory openers in menus or controls.
     }
+    if (Array.isArray(payload?.apps)) apps = payload.apps.filter(id => typeof id === 'string')
     this.apps.set(apps)
   }
 }

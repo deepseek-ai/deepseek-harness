@@ -6,7 +6,7 @@
  * interrupted command never leaves a damaged clone behind.
  */
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
+import { existsSync, type Dirent } from 'node:fs'
 import { mkdir, mkdtemp, readdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { execa } from 'execa'
@@ -341,17 +341,14 @@ export class RepositoryCache {
     const now = Date.now()
     const entries: { path: string; size: number; used: number }[] = []
     for (const entry of await readdir(this.options.dir, { withFileTypes: true })) {
-      const path = join(this.options.dir, entry.name)
+      let measured: { path: string; size: number; used: number } | undefined
       try {
-        const used = (await stat(path)).mtimeMs
-        if (entry.name.startsWith(STAGING_PREFIX)) {
-          if (now - used > this.options.timeoutMs) await rm(path, { recursive: true, force: true })
-        } else if (entry.isDirectory()) {
-          entries.push({ path, size: await sizeOf(path), used })
-        }
-      } catch (_removed) {
-        // Another operation deleted the directory while it was measured; it no longer counts.
+        measured = await this.measure(join(this.options.dir, entry.name), entry, now)
+      } catch (_unmeasurable) {
+        // Usually another operation deleted the entry while it was measured. An entry that cannot be measured or
+        // removed stays out of this pass, which leaves it on disk for the next eviction to retry.
       }
+      if (measured !== undefined) entries.push(measured)
     }
     let total = entries.reduce((sum, entry) => sum + entry.size, 0)
     // The repository in use goes last: it is deleted only when it alone exceeds the cache, after its operation ends.
@@ -362,6 +359,19 @@ export class RepositoryCache {
         after the next fetch */ (_unremovable: unknown) => {})
       total -= entry.size
     }
+  }
+
+  /**
+   * Measure one cache entry for eviction, deleting a staging directory older than the Git deadline.
+   * @returns the repository's size and last use, or `undefined` for a staging directory or a non-directory.
+   */
+  private async measure(path: string, entry: Dirent, now: number): Promise<{ path: string; size: number; used: number } | undefined> {
+    const used = (await stat(path)).mtimeMs
+    if (entry.name.startsWith(STAGING_PREFIX)) {
+      if (now - used > this.options.timeoutMs) await rm(path, { recursive: true, force: true })
+      return undefined
+    }
+    return entry.isDirectory() ? { path, size: await sizeOf(path), used } : undefined
   }
 
   /**

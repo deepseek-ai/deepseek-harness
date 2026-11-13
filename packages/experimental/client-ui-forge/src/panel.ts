@@ -294,9 +294,9 @@ export class SessionPanel {
     }
     let missing: ForgeMissingWorktree | null = null
     try {
-      const state = this.worktreeStates.stateOf(this.session)
-      missing = await missingWorktree(this.ctx, this.config, this.session, state, directory, this.lifetime.signal)
-    } catch (_error) {
+      missing = await missingWorktree(
+        this.ctx, this.config, this.session, this.worktreeStates.stateOf(this.session), directory, this.lifetime.signal)
+    } catch (_worktreeUnreadable) {
       // Without an answer from the filesystem or Git the panel offers no restoration.
     }
     if (this.lifetime.signal.aborted || this.current.directory !== directory) return

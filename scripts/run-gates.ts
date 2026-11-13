@@ -1255,7 +1255,7 @@ export async function runGate(gate: Gate, signal?: AbortSignal): Promise<GateRes
       for (const descendantPid of descendants) {
         try {
           process.kill(descendantPid, signalToSend)
-        } catch {
+        } catch (_descendantExited) {
           // The descendant exited between the enumeration and the signal.
         }
       }
@@ -1516,12 +1516,15 @@ function groupAlive(pid: number | undefined): boolean {
     try {
       for (const entry of readdirSync('/proc')) {
         if (!/^\d+$/.test(entry)) continue
+        let stat: string
         try {
-          const parsed = procStatFields(readFileSync(`/proc/${entry}/stat`, 'utf8'))
-          if (parsed !== undefined && parsed.pgrp === pid && parsed.state !== 'Z') return true
-        } catch {
+          stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
+        } catch (_exitedMidScan) {
           // The process exited mid-scan; it is not a live member.
+          continue
         }
+        const parsed = procStatFields(stat)
+        if (parsed !== undefined && parsed.pgrp === pid && parsed.state !== 'Z') return true
       }
       return false
     } catch {
@@ -1555,12 +1558,15 @@ function descendantPids(root: number): number[] {
     try {
       for (const entry of readdirSync('/proc')) {
         if (!/^\d+$/.test(entry)) continue
+        let stat: string
         try {
-          const parsed = procStatFields(readFileSync(`/proc/${entry}/stat`, 'utf8'))
-          if (parsed !== undefined) rows.push([Number(entry), parsed.ppid])
-        } catch {
+          stat = readFileSync(`/proc/${entry}/stat`, 'utf8')
+        } catch (_exitedMidScan) {
           // The process exited mid-scan; skip it.
+          continue
         }
+        const parsed = procStatFields(stat)
+        if (parsed !== undefined) rows.push([Number(entry), parsed.ppid])
       }
     } catch {
       return []

@@ -45,13 +45,14 @@ interface PiAiReplayState {
 
 /** Parse tool-call argument JSON; tolerate model malformations with {}. */
 function parseArguments(raw: string): ToolCall['arguments'] {
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as ToolCall['arguments']
-    }
-  } catch {
-    // fall through
+    parsed = JSON.parse(raw)
+  } catch (_malformedArguments) {
+    // Malformed model JSON leaves `parsed` undefined, which replays as `{}` below.
+  }
+  if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+    return parsed as ToolCall['arguments']
   }
   return {}
 }

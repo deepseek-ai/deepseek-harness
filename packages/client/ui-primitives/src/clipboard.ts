@@ -17,9 +17,8 @@ export async function writeClipboard(text: string): Promise<boolean> {
   /* oxlint-disable-next-line typescript/no-unnecessary-condition */
   if (navigator.clipboard?.writeText) {
     try {
-      await navigator.clipboard.writeText(text)
-      return true
-    } catch (_error) {
+      return await navigator.clipboard.writeText(text).then(() => true)
+    } catch (_asyncWriteRefused) {
       // A denied permission can block the async API while execCommand still works; try it below.
     }
   }
