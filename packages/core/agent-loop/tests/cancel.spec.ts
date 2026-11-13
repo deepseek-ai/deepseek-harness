@@ -17,7 +17,7 @@ import SessionStore, { Session, type SessionId, SessionLogOffset, TurnEndReason 
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { TOOL_ABORTED_BEFORE_DISPATCH } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tool-testkit'
-import AgentRegistry, { AgentInputClosedError, type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type AgentCancelCause } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from './mock-adapter.ts'
@@ -311,7 +311,7 @@ describe('Agent.cancel()', () => {
     expect(agent.inbox.nextTurn).toHaveLength(0)
   })
 
-  it('rejects input while disposal drains the active turn', async () => {
+  it('does not latch a wake landing after disposal begins', async () => {
     const adapter = new MockAdapter(['hang-slow', textResponse('late reply')])
     const ctx = await harness(adapter)
     const handle = await ctx.agents.create({
@@ -325,46 +325,14 @@ describe('Agent.cancel()', () => {
     send(agent, 'active')
     await streaming.promise
     const disposal = handle.dispose()
-    const events = agent.session.snapshotEvents()
-    expect(() => { send(agent, 'late wake') }).toThrow(AgentInputClosedError)
-    expect(agent.session.snapshotEvents()).toEqual(events)
+    send(agent, 'late wake')
     await disposal
 
     expect(adapter.requests).toHaveLength(1)
     expect(userTexts(agent)).toEqual(['active'])
   })
 
-  it('does not wake an Agent disposed by its accepted input notification', async () => {
-    const adapter = new MockAdapter([textResponse('must not run')])
-    const ctx = await harness(adapter)
-    try {
-      const handle = await ctx.agents.create({
-        sessionId: brandString<SessionId>('dispose-on-acceptance'),
-        agentOptions: { provider: 'mock', model: 'mock' },
-      })
-      const { agent } = handle
-      const message = createUserMessage({ content: [{ type: 'text', text: 'accepted before disposal' }], source: { kind: 'user' } })
-      let disposal: Promise<void> | undefined
-      ctx.on('agent/inbox/inserted', ({ agent: subject }) => {
-        if (subject === agent) disposal = handle.dispose()
-      })
-
-      expect(() => { agent.steer(message) }).not.toThrow()
-      expect(disposal).toBeDefined()
-      await disposal
-
-      const events = agent.session.snapshotEvents()
-      expect(events.some(event => event.type === 'agent/inbox/spliced'
-        && event.data.inserted.some(input => input.id === message.id))).toBe(true)
-      expect(events.filter(event => event.type === 'turn/start')).toHaveLength(0)
-      expect(adapter.requests).toHaveLength(0)
-      expect(ctx.agents.get(agent.id)).toBeUndefined()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it.each(['before scope cleanup', 'during scope cleanup'])('rejects idle Agent input %s after disposal begins', async (window) => {
+  it.each(['before scope cleanup', 'during scope cleanup'])('does not start an idle Agent after disposal begins %s', async (window) => {
     const adapter = new MockAdapter([textResponse('late reply')])
     const ctx = await harness(adapter)
     const cleanupStarted = Promise.withResolvers<undefined>()
@@ -382,14 +350,7 @@ describe('Agent.cancel()', () => {
       })
       disposal = handle.dispose()
       if (window === 'during scope cleanup') await cleanupStarted.promise
-      const events = agent.session.snapshotEvents()
-      for (const method of ['followup', 'steer', 'inject'] as const) {
-        const message = createUserMessage({ content: [{ type: 'text', text: 'late input' }], source: { kind: 'user' } })
-        expect(() => { agent[method](message) }).toThrow(expect.objectContaining({
-          name: 'AgentInputClosedError', code: 'AGENT_INPUT_CLOSED',
-        }))
-      }
-      expect(agent.session.snapshotEvents()).toEqual(events)
+      send(agent, 'late wake')
       await agent.whenIdle()
 
       expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(0)

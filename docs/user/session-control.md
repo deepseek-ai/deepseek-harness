@@ -56,7 +56,7 @@ Give the Agent the target Session id and the message to send. For example, ask i
 
 Replace the placeholder with a real Session id other than the caller's own. The message must contain non-whitespace text. The recipient records the calling Session as the sender; the tool does not accept a sender override.
 
-A successful result contains `message_id`. It confirms inbox acceptance, without waiting for a reply or completion. A running recipient receives steering input at its next input opportunity; an idle recipient starts a turn; an inactive recipient resumes its conversation before accepting the message and then stays loaded, like a Session opened in the Web UI.
+A successful result contains `message_id`. It confirms inbox insertion, without waiting for a reply or completion. Target cancellation or disposal can leave the message unprocessed. A running recipient receives steering input at its next input opportunity; an idle recipient starts a turn; an inactive recipient resumes its conversation before accepting the message and then stays loaded, like a Session opened in the Web UI.
 
 <a id="delivery-limits"></a>
 ## Delivery limits

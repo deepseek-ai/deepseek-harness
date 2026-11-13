@@ -48,7 +48,7 @@ async function setup() {
   ctx.provide('sessionController', { resolveAgent } as never)
   ctx.provide('workspaceRegistry', { archivedSessionIds } as never)
   const fiber = await ctx.plugin(ToolSessionControl)
-  return { ctx, caller, target, archivedSessionIds, resolveAgent, fiber, options }
+  return { ctx, caller, target, archivedSessionIds, resolveAgent, fiber }
 }
 
 function call(ctx: Context, args: unknown, caller?: Agent, signal = new AbortController().signal) {
@@ -163,31 +163,13 @@ describe('Session message tool', () => {
     expect(agentMessages(target)).toEqual([])
   })
 
-  it('rejects a target whose lifecycle disposal has begun', async () => {
-    const { ctx, caller, options, resolveAgent } = await setup()
-    const closing = await ctx.agents.create({
-      sessionId: brandString<SessionId>('closing'), agentOptions: options, meta: { cwd: '/elsewhere/closing' },
-    })
-    resolveAgent.mockImplementationOnce(async () => {
-      const disposal = closing.dispose()
-      void disposal.catch(() => undefined)
-      return { agent: closing.agent }
-    })
-    expect(await call(ctx, { session_id: 'closing', message: 'Hello' }, caller)).toMatchObject({
-      isError: true,
-      error: { info: { name: 'SessionMessageError', code: 'SESSION_MESSAGE_INPUT_CLOSED' } },
-    })
-    expect(agentMessages(closing.agent)).toEqual([])
-  })
-
-  it('reports an inbox write failure without converting it to a closing target', async () => {
+  it('reports an inbox write failure', async () => {
     const { ctx, caller, target, resolveAgent } = await setup()
     const failure = new Error('inbox write failed')
     vi.spyOn(target, 'steer').mockImplementation(() => { throw failure })
     resolveAgent.mockResolvedValueOnce({ agent: target })
     const result = await call(ctx, { session_id: target.id, message: 'Hello' }, caller)
     expect(result).toMatchObject({ isError: true, error: { message: 'inbox write failed' } })
-    expect(result.error?.info?.code).not.toBe('SESSION_MESSAGE_INPUT_CLOSED')
   })
 
   it('reports cancellation after acceptance without retracting the delivered message', async () => {

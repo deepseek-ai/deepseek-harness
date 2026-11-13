@@ -4,7 +4,6 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { AgentInputClosedError } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { HarnessError } from '@deepseek-ai/dsh-error'
@@ -24,7 +23,6 @@ export type SessionMessageErrorCode =
   | 'SESSION_MESSAGE_SELF'
   | 'SESSION_MESSAGE_ARCHIVED'
   | 'SESSION_MESSAGE_SUBAGENT_OWNED'
-  | 'SESSION_MESSAGE_INPUT_CLOSED'
 
 /** Rejection before the target inbox accepted the message; a retry repeats no accepted delivery. */
 export class SessionMessageError extends HarnessError {
@@ -124,16 +122,7 @@ export function apply(ctx: Context): void {
         content: [{ type: 'text', text: `Agent ${caller.id} sent a message: ` }, { type: 'text', text: args.message }],
         source: { kind: 'agent-message', form: 'relay', senderSessionId: caller.id },
       })
-      try {
-        found.agent.steer(message)
-      } catch (error: unknown) {
-        if (!(error instanceof AgentInputClosedError)) throw error
-        throw new SessionMessageError(
-          `session "${id}" is closing; the message was not accepted`,
-          'SESSION_MESSAGE_INPUT_CLOSED',
-          { cause: error },
-        )
-      }
+      found.agent.steer(message)
       return { message_id: message.id }
     },
   }))

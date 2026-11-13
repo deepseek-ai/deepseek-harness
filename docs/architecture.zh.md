@@ -111,7 +111,7 @@ turn/end
 
 `turn/*`、`step/*`、`system/message`、`user/message`、`assistant/message`、`assistant/attempt` 和 `tool/*` 是持久会话事件；其余是分属三个事件域的实时扩展点。`agent/assistant-stream` 发布进程本地 start、瞬态 chunk 与 end frame。loop 会在 committed end frame 前把完整紧凑 stream 提交为一个 message 或仅日志 attempt；Web Session-follow adapter 是该 live event 唯一的远程消费方。`agent/pre-step`、`agent/request`、`llm/stream` 和三个 `tools/*` 事件是 waterfall（瀑布式事件），其监听器必须调用 `next()` 才能委托下去；`agent/turn-stopping` 是 serial 事件，没有 `next()`。
 
-工厂 setup 在 Session 进入 SessionStore 并完成 `session/created` 之后、`agent/created` 之前运行。生命周期释放在排空驱动器前关闭输入准入；收尾事件在移除之前提交。
+工厂 setup 在 Session 进入 SessionStore 并完成 `session/created` 之后、`agent/created` 之前运行；收尾事件在移除之前提交。
 
 输入通过同一个 inbox 到达驱动器；注入的上下文等待一条唤醒消息。AgentLoop 的持久 `inbox` 投影使待处理输入在没有活跃 Agent 时仍可读取。
 

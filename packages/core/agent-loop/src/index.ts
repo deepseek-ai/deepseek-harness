@@ -504,7 +504,9 @@ export class AgentLoop extends Service implements AgentFactory {
       try {
         // Creation listeners retain the session and scope through their awaits.
         if (publication !== undefined) await publication.promise
-        // Lifetime cancellation closes input before disposal drains admitted work.
+        // Disposal IS a disposed-cause cancel followed by quiescence. New work
+        // sent after this point is the sender's bug — the registries are about
+        // to drop the agent, so nothing should still hold it.
         /* v8 ignore next -- Cordis effect teardown waits for synchronous setup before observing the machine slot. */
         if (machine === undefined) await machineReady.promise
         /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */

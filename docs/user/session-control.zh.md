@@ -56,7 +56,7 @@ pnpm dsh --profile web --patch apps/cli/config/examples/session-control.overlay.
 
 将占位符替换为调用方自身之外的真实 Session id。消息必须包含非空白文本。接收方记录的发送者是调用方 Session；工具不接受发送者覆盖参数。
 
-成功结果包含 `message_id`。它确认收件箱已接收消息，不等待回复或任务完成。运行中的接收方在下一次可接收输入时获得 steer 输入；空闲接收方开始一轮；不在线的接收方先恢复对话再接收消息，之后像在 Web UI 中打开的 Session 一样保持加载。
+成功结果包含 `message_id`。它确认消息已进入收件箱，不等待回复或任务完成。目标取消或释放可能使消息未被处理。运行中的接收方在下一次可接收输入时获得 steer 输入；空闲接收方开始一轮；不在线的接收方先恢复对话再接收消息，之后像在 Web UI 中打开的 Session 一样保持加载。
 
 <a id="delivery-limits"></a>
 ## 投递限制

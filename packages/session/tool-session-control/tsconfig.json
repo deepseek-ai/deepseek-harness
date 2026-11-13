@@ -15,9 +15,6 @@
       "path": "../../api/session-controller/tsconfig.host.json"
     },
     {
-      "path": "../../core/agent"
-    },
-    {
       "path": "../../core/session"
     },
     {

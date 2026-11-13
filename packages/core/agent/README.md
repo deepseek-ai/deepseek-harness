@@ -55,7 +55,7 @@ For scoped switch notices, call `installModelSelection(agentCtx)` from `dsh-agen
 
 ### Drive an agent's conversation
 
-The handle's methods route identified user-role messages into the agent's inbox. `followup()` queues an ordinary next-turn prompt and wakes the driver; `steer()` submits next-step input and wakes it; `inject()` adds model-facing context without waking the driver, so it lands in the next admitted step. `cancel(cause)` aborts the active activity and, unless `keepInbox` is set, clears pending work; `whenIdle()` resolves after the whole agent reaches quiescence. A queue-write failure during cancellation still aborts active work and propagates to the caller. Once owner or factory disposal begins, all input methods reject with `AgentInputClosedError` (`AGENT_INPUT_CLOSED`) before changing the inbox. Calling `cancel({ kind: 'disposed' })` alone cancels the current activity without ending the Agent lifetime.
+The handle's methods route identified user-role messages into the agent's inbox. `followup()` queues an ordinary next-turn prompt and wakes the driver; `steer()` submits next-step input and wakes it; `inject()` adds model-facing context without waking the driver, so it lands in the next admitted step. `cancel(cause)` aborts the active activity and, unless `keepInbox` is set, clears pending work; `whenIdle()` resolves after the whole agent reaches quiescence. A queue-write failure during cancellation still aborts active work and propagates to the caller.
 
 ```text
 handle.agent.followup({
