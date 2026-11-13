@@ -172,6 +172,8 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 
 ### 调度与生命周期
 
+runtime 将数值输入连接到 `TimeSource.output`，并在管理 FIFO 内等待到期求值。TimeSource 拥有一个分段定时器并合并请求；runtime 任务策略计算其下一个截止时间。[Source 参考](source/README.zh.md)拥有共享输入协议与时间 API。
+
 七种类型使用正常求值器。共享的 [`Cron` 和 `RRule`](../../util/time/README.zh.md) 拥有纯解析和有界重复计算；Schedule 将拒绝原因映射到输入错误，并拥有任务策略、目标和最小投递间隔。已有 Cron 的表达式和时区保持权威性。读取和元数据编辑保留已提交 UTC 发生时点及存储的时区别名。
 
 管理和投递写入共用一个宿主 FIFO。修改在持久化前重新检查取消信号和版本；启用任务时在队列内重查 Session 目标可用性。提交发出 `schedule/changed`、重算定时器，并独立排入通知。投递在创建前保存 `new` 目标预留，排入 `schedule` 消息，等待 Session flush，然后保存回执、已存指令快照及下一个发生时点或结束状态。独立提交可能在崩溃后重复投递。复用目标持有执行槽直到 Agent 空闲；每次新建的目标可以并发运行。立即执行使用同一准入，不移动下一个发生时点。
@@ -185,13 +187,13 @@ v2 写入后，v1 程序会拒绝该存储。无效或有歧义的回执会被�
 <a id="source-delivery"></a>
 ### Source 投递
 
-插件声明 `schedule` 依赖，并调用 `ctx.schedule.connectSource(source, id)`，将来自 `@deepseek-ai/dsh-schedule/source` 的 [`AutomationSource`](source/README.zh.md) 实例连接到已有活动任务。这个同步、同进程 API 在 Schedule 就绪时即可使用，不是 Remote 方法。它返回归调用方 context 所有的原生 Cordis disposer，因此卸载消费者会断开订阅并排空已接受调用，但不销毁 source。[source 实例参考](source/README.zh.md)拥有 source class、订阅以及 disposer 首次调用与重复调用的契约。Schedule 在与管理操作相同的 FIFO 内检查状态和准入，再使用既有目标解析、Session flush 和回执提交。已存储的指令、时间规则和活动状态保持不变；source 输入不是定时发生时点，不推进或结束任务。
+插件声明 `schedule` 依赖，并调用 `ctx.schedule.input(id).connect(source.output)`，将类型化候选文本投递给已有活动任务。`input(id)` 同步返回归调用方 context 所有的 `SourceInput<AutomationCandidate>`，不是 Remote 方法。Source 与 runtime 输入共用由接收方发起的 `connect`、定向 `send`、广播及可排空连接协议。消费者卸载或 runtime 停止会关闭任务输入，不销毁借用的 Source。[source 参考](source/README.zh.md)拥有连接语义与复合 Source 的有序清理。Schedule 在管理 FIFO 内检查准入，再解析目标、等待 Session flush 并提交回执。Source 输入保留已存指令、时间规则与活动状态，不消耗定时发生时点。
 
 source、手动与定时投递共用单任务准入：复用目标共用执行槽，所有目标共用各自的最小投递间隔。因此，source 投递可能延迟后续到期投递，但不改变任务存储的 `scheduledAt`。`new_once` 目标的首次 source 投递可以在原定时发生时点之前创建预留 Session；确认后，后续投递复用该 Session。`new` 目标每次 source 投递创建一个 Session，创建时间也可能早于原定时发生时点。准入没有公平性上界：持续以最小间隔发布的 source 可以无限推迟定时发生时点，而任务存储的 `scheduledAt` 保持不变。source 生产者必须限制输出速率，并为定时投递留出机会。
 
-任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次 source 候选以 `SOURCE_TASK_BUSY` 拒绝。该任务不会消费本次候选，source fan-out 以 `SOURCE_DELIVERY_FAILED` 报告该拒绝，恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
+任务缺失时以 `SOURCE_TASK_UNAVAILABLE` 拒绝，已暂停或结束时以 `SOURCE_TASK_INACTIVE` 拒绝；任务正在执行、处于每目标最小投递间隔内，或正在恢复上一条未完成的收件箱投递时，本次候选以 `SOURCE_TASK_BUSY` 拒绝。任务不会消费该候选；直接 `connection.send()` 保留任务错误，广播则将其聚合为 `SOURCE_DELIVERY_FAILED`。恢复持有的是 `lastDelivery` 中的上一条消息，而不是被拒绝的候选。
 
-创建连接时，已销毁 source 的 `SOURCE_CLOSED` 和失活调用方 context 的 Cordis `INACTIVE_EFFECT` 原样传播；Schedule 未就绪或正在停止时抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。运行时停止后保留的连接在投递时以同一错误码拒绝。声明 `schedule` 依赖，等待就绪，并在该 runtime 停止后针对有效 runtime 重新连接；已停止的连接不会被复用。
+获取输入时，不活动的调用方 context 保留 Cordis `INACTIVE_EFFECT`；Schedule 尚未就绪或正在停止时抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。连接已关闭的输入或输出会抛出 `SOURCE_CLOSED`。runtime 停止会关闭其输入与连接；后续定向发送以 `SOURCE_CONNECTION_CLOSED` 拒绝。仍然打开但没有剩余连接的输出不发出数据。调用方声明 `schedule` 依赖，并在替代 runtime 就绪后连接新的输入；旧输入不会重新绑定。
 
 目标和持久化失败传播给 source。Session 和任务独立提交，因此收件箱接受输入后仍可能失败；Schedule 和 source 多接收者投递都不自动重试。Schedule 在关闭存储之前停止接受新工作，并排空已接受的投递。连接和中间 source 状态不存入任务记录。
 

@@ -311,8 +311,7 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
   AutomationCandidate: 'schedule.md',
-  AutomationSource: 'schedule.md',
-  SourceReceiver: 'schedule.md',
+  SourceInput: 'schedule.md',
   Principal: 'typert.md',
   PrincipalMap: 'typert.md',
   RemoteAccessResource: 'typert.md',

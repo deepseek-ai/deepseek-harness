@@ -7,7 +7,7 @@ import type { AutomationCandidate } from '../src/source-types.ts'
 import { AutomationSource } from '../src/source.ts'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { createAfterScheduleRecord, ScheduleId } from '../src/domain.ts'
-import ScheduleService from '../src/index.ts'
+import ScheduleService, { SourceInput, type AutomationConnection } from '../src/index.ts'
 import { scheduleDomain, type ScheduleTask } from '../src/storage.ts'
 import {
   agentFor, boundTask, gatedScheduleBackend, harness, seededTask, seedTasks, taskTable, type HarnessAgent,
@@ -22,6 +22,7 @@ class InputSource extends AutomationSource<AutomationCandidate> {
 
 const active: Awaited<ReturnType<typeof harness>>[] = []
 const sources: InputSource[] = []
+const observations: SourceInput<AutomationCandidate>[] = []
 const beforeDispose: Array<() => Promise<void>> = []
 const ID = ScheduleId('source-task')
 const TARGET = SessionId('source-target')
@@ -31,6 +32,7 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime('2026-09-16T00:00:00Z') 
 afterEach(async () => {
   try {
     for (const cleanup of beforeDispose.splice(0)) await cleanup()
+    for (const input of observations.splice(0)) await input.dispose()
     for (const source of sources.splice(0)) await source.dispose()
     for (const test of active.splice(0)) await test.ctx.fiber.dispose()
   } finally {
@@ -56,21 +58,33 @@ async function setup(task: ScheduleTask | undefined = stored(), options: Paramet
   test.resolve.mockResolvedValue({ agent })
   const source = new InputSource()
   sources.push(source)
-  const disconnect = test.service.connectSource(source, ID)
-  return { ...test, source, agent, disconnect }
+  const target = test.service.input(ID)
+  const connection = target.connect(source.output)
+  return { ...test, source, agent, target, connection }
+}
+
+function releaseGate() {
+  const gate = Promise.withResolvers<undefined>()
+  beforeDispose.push(async () => { gate.resolve(undefined) })
+  return gate
+}
+
+function observer(receive: (value: AutomationCandidate) => Promise<void>): SourceInput<AutomationCandidate> {
+  const input = new SourceInput(receive)
+  observations.push(input)
+  return input
 }
 
 function rejected(code: string) {
   return { code: 'SOURCE_DELIVERY_FAILED', cause: { errors: [expect.objectContaining({ code })] } }
 }
 
-it('rejects source connection acquisition while the constructed service awaits its domain', async () => {
+it('rejects task input acquisition while the constructed service awaits its domain', async () => {
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   const memory = new MemoryStorageBackend(new MemoryMediaPool())
   const source = new InputSource()
   sources.push(source)
-  const subscribe = vi.spyOn(source, 'subscribe')
   let ctx: Context | undefined
   const opening = harness({
     direct: true,
@@ -92,15 +106,15 @@ it('rejects source connection acquisition while the constructed service awaits i
     await entered.promise
     expect(ctx!.schedule).toBeInstanceOf(ScheduleService)
     expect(ctx!.storageDomain.get(scheduleDomain.name)).toBeUndefined()
-    expect(() => ctx!.schedule.connectSource(source, ID)).toThrowError(
+    expect(() => ctx!.schedule.input(ID)).toThrowError(
       expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
     )
-    expect(subscribe).not.toHaveBeenCalled()
     release.resolve(undefined)
     const test = await opening
-    const disconnect = test.service.connectSource(source, ID)
-    expect(subscribe).toHaveBeenCalledOnce()
-    await disconnect()
+    const target = test.service.input(ID)
+    expect(target).toBeInstanceOf(SourceInput)
+    const connection = target.connect(source.output)
+    await connection.dispose()
   } finally {
     release.resolve(undefined)
     try { await opening } finally { await ctx?.fiber.dispose() }
@@ -112,7 +126,7 @@ it('delivers one source independently to two tasks and detaches only the selecte
   const secondId = ScheduleId('second-source-task')
   await taskTable(test.ctx).put(secondId, boundTask(TARGET,
     createAfterScheduleRecord(secondId, 'Inspect the second build', 3600, Date.now(), 'Second build')))
-  const disconnectSecond = test.service.connectSource(test.source, secondId)
+  const secondConnection = test.service.input(secondId).connect(test.source.output)
   await test.source.publish('shared observation')
   expect(test.agent.followup).toHaveBeenCalledTimes(2)
   const firstReceipt = taskTable(test.ctx).get(ID)!.lastDelivery!
@@ -122,7 +136,7 @@ it('delivers one source independently to two tasks and detaches only the selecte
     [{ type: 'text', text: expect.stringContaining('schedule_id_json: "source-task"') }],
     [{ type: 'text', text: expect.stringContaining('schedule_id_json: "second-source-task"') }],
   ])
-  await disconnectSecond()
+  await secondConnection.dispose()
   vi.setSystemTime(Date.now() + 60_000)
   await test.source.publish('still connected to the first task')
   expect(test.agent.followup).toHaveBeenCalledTimes(3)
@@ -135,7 +149,7 @@ it('shares one task admission across two sources without disconnecting the other
   const test = await setup()
   const second = new InputSource()
   sources.push(second)
-  test.service.connectSource(second, ID)
+  test.target.connect(second.output)
   await test.source.publish('first source input')
   const firstTask = taskTable(test.ctx).get(ID)
   await expect(second.publish('too early second input')).rejects.toMatchObject(rejected('SOURCE_TASK_BUSY'))
@@ -144,9 +158,9 @@ it('shares one task admission across two sources without disconnecting the other
   vi.setSystemTime(Date.now() + 60_000)
   await second.publish('accepted second input')
   expect(test.agent.followup).toHaveBeenCalledTimes(2)
-  await test.disconnect()
+  await test.connection.dispose()
   const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
-  const observation = test.source.subscribe(observed)
+  const observation = observer(observed).connect(test.source.output)
   await test.source.publish('detached first source remains usable')
   await observation.dispose()
   expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'detached first source remains usable' })
@@ -168,7 +182,7 @@ it('connects an earlier composer when Schedule becomes ready', async () => {
         name: 'source-composer-ordering',
         inject: ['schedule'],
         apply(ctx: Context) {
-          ctx.schedule.connectSource(source, ID)
+          ctx.schedule.input(ID).connect(source.output)
         },
       })
       expect(composer.state).toBe(FiberState.PENDING)
@@ -189,7 +203,7 @@ it('delivers source input beside the stored prompt and commits a receipt without
   const initial = stored()
   const test = await setup(initial)
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const work = test.source.publish(INPUT)
   let settled = false
@@ -323,7 +337,7 @@ it('recovers the last queued identity without delivering the newly refused sourc
   await test.source.publish('previously accepted source input')
   const previous = test.agent.followup.mock.calls[0]![0]
   const saved = taskTable(test.ctx).get(ID)
-  await test.disconnect()
+  await test.connection.dispose()
   await test.fiber.dispose()
   const inbox = createInboxStub()
   inbox.append('next-step', previous)
@@ -334,7 +348,7 @@ it('recovers the last queued identity without delivering the newly refused sourc
   vi.setSystemTime(Date.now() + 60_000)
   try {
     await test.ctx.plugin(ScheduleService)
-    const disconnect = test.ctx.schedule.connectSource(test.source, ID)
+    const connection = test.ctx.schedule.input(ID).connect(test.source.output)
     await expect(test.source.publish('current candidate must not be delivered')).rejects.toMatchObject(
       rejected('SOURCE_TASK_BUSY'),
     )
@@ -344,7 +358,7 @@ it('recovers the last queued identity without delivering the newly refused sourc
     expect(inbox.nextTurn).toEqual([previous])
     expect(taskTable(test.ctx).get(ID)).toEqual(saved)
     expect(test.flush).toHaveBeenCalledTimes(2)
-    await disconnect()
+    await connection.dispose()
   } finally {
     idle.resolve(undefined)
   }
@@ -366,7 +380,7 @@ it('keeps the execution slot while the target Agent is busy beyond the minimum i
 
 it.each(['paused', 'deleted'] as const)('observes a %s task after waiting behind its management write', async (change) => {
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   let blocking = false
   const trap = async () => {
     if (blocking) { entered.resolve(undefined); await release.promise }
@@ -397,7 +411,7 @@ it.each(['paused', 'deleted'] as const)('observes a %s task after waiting behind
 it('honors cancellation of a management edit queued behind an accepted source delivery', async () => {
   const test = await setup()
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const work = test.source.publish(INPUT)
   try {
@@ -479,7 +493,7 @@ it('reports a failed receipt commit after inbox acknowledgement without claiming
 it('deletes a task only after an accepted source delivery commits its receipt', async () => {
   const test = await setup()
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const work = test.source.publish(INPUT)
   try {
@@ -497,96 +511,88 @@ it('deletes a task only after an accepted source delivery commits its receipt', 
   }
 })
 
-it('returns a one-shot task disconnection whose first call and owner disposal drain accepted input', async () => {
+it('joins repeated connection disposal and receiver-owner shutdown until the accepted receipt settles', async () => {
   const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
   active.push(test)
   const agent = agentFor(test.ctx, TARGET)
   test.resolve.mockResolvedValue({ agent })
   const source = new InputSource()
   sources.push(source)
-  let disconnect: ReturnType<ScheduleService['connectSource']> | undefined
+  let target: SourceInput<AutomationCandidate> | undefined
   const consumer = await test.ctx.plugin({
     inject: ['schedule'],
-    apply(ctx: Context) { disconnect = ctx.schedule.connectSource(source, ID) },
+    apply(ctx: Context) { target = ctx.schedule.input(ID) },
   })
+  const connection = target!.connect(source.output)
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
+  const pending: Promise<unknown>[] = []
+  beforeDispose.push(async () => {
+    release.resolve(undefined)
+    await Promise.allSettled(pending)
+    await consumer.dispose()
+  })
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const work = source.publish(INPUT)
-  let first: void | Promise<void> = undefined
-  let closing: Promise<void> | undefined
-  try {
-    await entered.promise
-    first = disconnect!()
-    expect(first).toBeInstanceOf(Promise)
-    let drained = false
-    void Promise.resolve(first).then(() => { drained = true }, () => {})
-    const repeated = disconnect!()
-    expect(repeated).toBeUndefined()
-    closing = Promise.resolve(consumer.dispose()).then(() => {
-      expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
-    })
-    await repeated
-    expect(drained).toBe(false)
-    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
-    release.resolve(undefined)
-    await first
-    await work
-    await closing
-    expect(drained).toBe(true)
-    const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
-    const subscription = source.subscribe(observed)
-    await source.publish('after disconnection')
-    await subscription.dispose()
-    expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'after disconnection' })
-    expect(agent.followup).toHaveBeenCalledOnce()
-  } finally {
-    release.resolve(undefined)
-    await work
-    await first
-    await closing
-    await consumer.dispose()
-  }
+  pending.push(Promise.allSettled([work]))
+  await entered.promise
+  let firstDrained = false
+  let repeatedDrained = false
+  let ownerDrained = false
+  const first = connection.dispose().then(() => { firstDrained = true })
+  const repeated = connection.dispose().then(() => { repeatedDrained = true })
+  const closing = Promise.resolve(consumer.dispose()).then(() => {
+    ownerDrained = true
+    expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
+  })
+  pending.push(Promise.allSettled([first, repeated, closing]))
+  await expect(connection.send({ text: 'after disconnection' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+  expect(firstDrained).toBe(false)
+  expect(repeatedDrained).toBe(false)
+  expect(ownerDrained).toBe(false)
+  expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeUndefined()
+  release.resolve(undefined)
+  await Promise.all([work, first, repeated, closing])
+  expect([firstDrained, repeatedDrained, ownerDrained]).toEqual([true, true, true])
+  expect(() => target!.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+  const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
+  observer(observed).connect(source.output)
+  await source.publish('source remains open')
+  expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'source remains open' })
+  expect(agent.followup).toHaveBeenCalledOnce()
 })
 
-it('orders the native task disconnection after a later yielded cleanup', async () => {
-  const test = await harness({ beforeService: async (_ctx, facility) => { await seedTasks(facility, [stored()]) } })
-  active.push(test)
-  const agent = agentFor(test.ctx, TARGET)
-  test.resolve.mockResolvedValue({ agent })
-  const source = new InputSource()
-  sources.push(source)
-  const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
-  const consumer = await test.ctx.plugin({
-    inject: ['schedule'],
-    apply(ctx: Context) {
-      ctx.effect(function* () {
-        const disconnect = ctx.schedule.connectSource(source, ID)
-        yield disconnect
-        yield async () => { entered.resolve(undefined); await release.promise }
-      })
-    },
+it('sends directly to one task connection without broadcasting to other receivers', async () => {
+  const test = await setup()
+  const secondId = ScheduleId('direct-send-other-task')
+  await taskTable(test.ctx).put(secondId, boundTask(TARGET,
+    createAfterScheduleRecord(secondId, 'Another task', 3600, Date.now(), 'Another task')))
+  test.service.input(secondId).connect(test.source.output)
+  const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
+  observer(observed).connect(test.source.output)
+  await test.connection.send({ text: INPUT })
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  expect(observed).not.toHaveBeenCalled()
+  expect(taskTable(test.ctx).get(ID)?.lastDelivery).toMatchObject({
+    messageId: test.agent.followup.mock.calls[0]![0].id,
   })
-  const closing = consumer.dispose()
-  try {
-    await entered.promise
-    await source.publish(INPUT)
-    expect(agent.followup).toHaveBeenCalledOnce()
-    release.resolve(undefined)
-    await closing
-    await source.publish('after ordered cleanup')
-    expect(agent.followup).toHaveBeenCalledOnce()
-  } finally {
-    release.resolve(undefined)
-    await closing
-  }
+  expect(taskTable(test.ctx).get(secondId)?.lastDelivery).toBeUndefined()
+  expect(test.agent.followup.mock.calls[0]![0].content).toEqual([
+    { type: 'text', text: expect.stringContaining('source_input_json: "Build failed\\n\\"master\\" needs inspection"') },
+  ])
+  await expect(test.connection.send({ text: 'too early' })).rejects.toMatchObject({ code: 'SOURCE_TASK_BUSY' })
+  expect(test.agent.followup).toHaveBeenCalledOnce()
+  vi.setSystemTime(Date.now() + 60_000)
+  await test.source.publish('broadcast')
+  expect(test.agent.followup).toHaveBeenCalledTimes(3)
+  expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'broadcast' })
+  expect(taskTable(test.ctx).get(secondId)?.lastDelivery).toBeDefined()
 })
 
 it('preserves the closed source error when acquiring a task subscription', async () => {
   const test = await setup()
   await test.source.dispose()
-  expect(() => test.service.connectSource(test.source, ID)).toThrowError(
+  expect(() => test.service.input(ID).connect(test.source.output)).toThrowError(
     expect.objectContaining({ code: 'SOURCE_CLOSED' }),
   )
   expect(test.agent.followup).not.toHaveBeenCalled()
@@ -599,16 +605,23 @@ it('automatically detaches and drains a connection owned by an unloading consume
   test.resolve.mockResolvedValue({ agent })
   const source = new InputSource()
   sources.push(source)
+  const second = new InputSource()
+  sources.push(second)
+  let secondConnection: AutomationConnection<AutomationCandidate> | undefined
   let scoped: ScheduleService | undefined
+  let target: SourceInput<AutomationCandidate> | undefined
+  let connection: AutomationConnection<AutomationCandidate> | undefined
   const consumer = await test.ctx.plugin({
     inject: ['schedule'],
     apply(ctx: Context) {
       scoped = ctx.schedule
-      scoped.connectSource(source, ID)
+      target = scoped.input(ID)
+      connection = target.connect(source.output)
+      secondConnection = target.connect(second.output)
     },
   })
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const work = source.publish(INPUT)
   let closing: Promise<void> | undefined
@@ -618,11 +631,15 @@ it('automatically detaches and drains a connection owned by an unloading consume
     release.resolve(undefined)
     await work
     await closing
-    expect(() => scoped!.connectSource(source, ID)).toThrowError(
+    expect(() => scoped!.input(ID)).toThrowError(
       expect.objectContaining({ code: 'INACTIVE_EFFECT' }),
     )
+    await expect(connection!.send({ text: 'after consumer unload' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+    await expect(secondConnection!.send({ text: 'other source after unload' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+    await second.publish('unsubscribed output')
+    expect(() => target!.connect(source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
     const observed = vi.fn(async (_candidate: AutomationCandidate) => {})
-    const observation = source.subscribe(observed)
+    const observation = observer(observed).connect(source.output)
     await source.publish('after consumer unload')
     await observation.dispose()
     expect(observed).toHaveBeenCalledExactlyOnceWith({ text: 'after consumer unload' })
@@ -639,22 +656,25 @@ it('keeps an old source connection bound to its stopped runtime after Schedule i
   const test = await setup()
   await test.fiber.dispose()
   await test.ctx.plugin(ScheduleService)
-  await expect(test.source.publish(INPUT)).rejects.toMatchObject(rejected('SOURCE_TASK_RECEIVER_UNAVAILABLE'))
-  expect(() => test.service.connectSource(test.source, ID)).toThrowError(
+  await expect(test.connection.send({ text: INPUT })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+  await test.source.publish(INPUT)
+  expect(test.agent.followup).not.toHaveBeenCalled()
+  expect(() => test.target.connect(test.source.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+  expect(() => test.service.input(ID).connect(test.source.output)).toThrowError(
     expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }),
   )
   const replacementSource = new InputSource()
   sources.push(replacementSource)
-  const disconnect = test.ctx.schedule.connectSource(replacementSource, ID)
+  const connection = test.ctx.schedule.input(ID).connect(replacementSource.output)
   await replacementSource.publish(INPUT)
-  await disconnect()
+  await connection.dispose()
   expect(test.agent.followup).toHaveBeenCalledOnce()
   expect(taskTable(test.ctx).get(ID)?.lastDelivery).toBeDefined()
 })
 
 it('unloads an unused provider before releasing an unrelated FIFO write or its queued source input', async () => {
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   const queued = Promise.withResolvers<undefined>()
   const pending: Promise<unknown>[] = []
   beforeDispose.push(async () => {
@@ -672,7 +692,7 @@ it('unloads an unused provider before releasing an unrelated FIFO write or its q
   const provider = await test.ctx.plugin({
     apply(ctx: Context) { ctx.provide('sessionController', { resolveAgent: test.resolve, create: test.createSession } as never) },
   })
-  test.source.subscribe(async () => { queued.resolve(undefined) })
+  observer(async () => { queued.resolve(undefined) }).connect(test.source.output)
   blocking = true
   const editing = test.service.edit({ id: ID, action: 'update', patch: { title: 'Pending edit' } })
   pending.push(editing)
@@ -708,9 +728,9 @@ it.each([
 ] as const)(
   'holds a borrowed %s provider through %s and receipt settlement without waiting for the FIFO tail', async (kind, stage) => {
     const entered = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
+    const release = releaseGate()
     const tailEntered = Promise.withResolvers<undefined>()
-    const tailRelease = Promise.withResolvers<undefined>()
+    const tailRelease = releaseGate()
     const queued = Promise.withResolvers<undefined>()
     const pending: Promise<unknown>[] = []
     beforeDispose.push(async () => {
@@ -763,8 +783,8 @@ it.each([
     })
     const tailSource = new InputSource()
     sources.push(tailSource)
-    test.service.connectSource(tailSource, tailId)
-    tailSource.subscribe(async () => { queued.resolve(undefined) })
+    test.service.input(tailId).connect(tailSource.output)
+    observer(async () => { queued.resolve(undefined) }).connect(tailSource.output)
     expect(taskTable(test.ctx).get(ID)?.pendingDelivery).toBeUndefined()
     const work = test.source.publish(INPUT)
     pending.push(work)
@@ -819,11 +839,11 @@ it('finishes source deliveries already queued behind another delivery before sto
     createAfterScheduleRecord(secondId, 'Second task', 3600, Date.now(), 'Second task')))
   const second = new InputSource()
   sources.push(second)
-  test.service.connectSource(second, secondId)
+  test.service.input(secondId).connect(second.output)
   const queued = Promise.withResolvers<undefined>()
-  second.subscribe(async () => { queued.resolve(undefined) })
+  observer(async () => { queued.resolve(undefined) }).connect(second.output)
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const firstWork = test.source.publish(INPUT)
   let secondWork: Promise<void> | undefined
@@ -849,7 +869,7 @@ it('finishes source deliveries already queued behind another delivery before sto
 it('drains accepted source work before Schedule closes storage', async () => {
   const test = await setup()
   const entered = Promise.withResolvers<undefined>()
-  const release = Promise.withResolvers<undefined>()
+  const release = releaseGate()
   test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await release.promise })
   const domain = test.ctx.storageDomain.get(scheduleDomain.name)!
   const close = vi.spyOn(domain, 'close')
@@ -865,7 +885,9 @@ it('drains accepted source work before Schedule closes storage', async () => {
     release.resolve(undefined)
     await work
     await closing
-    await expect(test.source.publish('after unload')).rejects.toMatchObject(rejected('SOURCE_TASK_RECEIVER_UNAVAILABLE'))
+    await expect(test.connection.send({ text: 'after unload' })).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+    await test.source.publish('after unload')
+    expect(test.agent.followup).toHaveBeenCalledOnce()
     expect(close).toHaveBeenCalledOnce()
   } finally {
     release.resolve(undefined)

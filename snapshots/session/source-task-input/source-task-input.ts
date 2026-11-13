@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import ScheduleService, { ScheduleId, scheduleDomain } from '@deepseek-ai/dsh-schedule'
-import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-schedule'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
 
 class SampleSource extends AutomationSource<string> {
@@ -16,24 +16,25 @@ class SampleSource extends AutomationSource<string> {
 class CombinedSamples extends AutomationSource<AutomationCandidate> {
   private left: string | undefined
   private right: string | undefined
-  private readonly inputs: SourceConnection[]
+  readonly connectLeft = this.createInput<string>(async (value) => {
+    this.left = value
+    await this.publish()
+  }).connect
+
+  readonly connectRight = this.createInput<string>(async (value) => {
+    this.right = value
+    await this.publish()
+  }).connect
 
   constructor(left: SampleSource, right: SampleSource) {
     super()
-    this.inputs = [
-      left.subscribe(async value => { this.left = value; await this.publish() }),
-      right.subscribe(async value => { this.right = value; await this.publish() }),
-    ]
+    this.connectLeft(left.output)
+    this.connectRight(right.output)
   }
 
   private async publish(): Promise<void> {
     if (this.left === undefined || this.right === undefined) return
     await this.emit({ text: `Left: ${this.left}\nRight: ${this.right}` })
-  }
-
-  override async dispose(): Promise<void> {
-    await Promise.all(this.inputs.map(input => input.dispose()))
-    await super.dispose()
   }
 }
 
@@ -75,8 +76,10 @@ export function apply(ctx: Context): void {
         scope.effect(function* () {
           yield scope.on('schedule/resolve-agent', (sessionId, next) => sessionId === agent.id ? Promise.resolve(agent) : next())
           const combined = new CombinedSamples(left, right)
-          const disconnect = scope.schedule.connectSource(combined, id)
-          yield disconnect
+          const receiver = scope.inject(['schedule'], (target) => {
+            target.schedule.input(id).connect(combined.output)
+          })
+          yield receiver.dispose
           yield () => combined.dispose()
           yield async () => { await Promise.all([left.dispose(), right.dispose()]) }
         }, 'source-snapshot.connections()')

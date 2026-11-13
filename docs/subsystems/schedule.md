@@ -7,9 +7,11 @@ Schedule stores Host tasks independently of Session activation. One management A
 <a id="source-instances"></a>
 ## Source instances
 
-`@deepseek-ai/dsh-schedule/source` defines `AutomationSource<T>` and its subscription, composition, and task-connection types. The [source instance reference](../../packages/schedule/schedule/source/README.md) owns the source class, independent instances, source-to-source composition, native one-shot disposer semantics, `SourceError` identity, and Model Experience. Each class instance owns its observations and emits typed values through awaited subscriptions; intermediate output is process-local, not model input. Producers own timers, input serialization, condition evaluation, and any durable observation state.
+`SourceInput<T>` accepts an asynchronous `SourceReceiver<T>` callback; a receiving Source exposes its input's bound `connect` as `sourceB.connect(sourceA.output)`. The returned `AutomationConnection` preserves the upstream output's value type, sends to that receiver with `send(value)`, and detaches with `dispose()`; both methods return `Promise<void>`. `SourceOutput<T>.emit(value)` broadcasts through the same directed delivery operation. The [Source reference](../../packages/schedule/schedule/source/README.md) owns input/output types, sharing, acceptance, errors, cleanup, and publication identity. `AutomationSource<TOut>` owns its output and any typed inputs created by its subclass. Intermediate observations remain process-local, not model input.
 
-`ScheduleService.connectSource(source, id)` connects `AutomationSource<AutomationCandidate>` output directly to a `ScheduleId`. Schedule checks active status and delivery admission inside its mutation FIFO, delivers the stored instruction with the extra source data, and commits its receipt after Session persistence; it preserves the task's timing and status. The [Schedule package source delivery](../../packages/schedule/schedule/README.md#source-delivery) owns connection cleanup, failure codes, and message framing; the source reference owns the connection and disposer contract.
+`ScheduleService.input(id)` returns a caller-context-owned `SourceInput<AutomationCandidate>`, used as `ctx.schedule.input(id).connect(source.output)`. It accepts text for an existing task through the same protocol as other Source inputs. Schedule checks admission inside its mutation FIFO and commits the receipt after Session persistence, preserving stored timing and status. Runtime shutdown closes inputs without rebinding them. The [Schedule package](../../packages/schedule/schedule/README.md#source-delivery) owns task errors, admission limits, and message framing.
+
+`TimeSource` emits actual wall-clock milliseconds through `SourceOutput<number>`. `ScheduleRuntime.connect(time.output)` uses a numeric input whose acknowledgement includes the serialized due scan. TimeSource owns a segmented timer and coalesced requests; runtime policy owns computed deadlines, recurrence evaluation, batching, floors, and persistence. Numeric time input and candidate-text task input share connection semantics, not a payload type.
 
 <a id="durable-tasks"></a>
 ## Durable tasks
@@ -162,18 +164,15 @@ Shared management service; reads and management writes never activate a Session,
 
 ```ts cordis-catalog
 /**
- * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
- * @param source - Source of observed data accompanying the task's stored instruction.
+ * Create a task input that connects to typed upstream outputs through the common Source protocol.
  * @param id - Task identity rechecked on every delivery inside the management FIFO.
- * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
- * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
- * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
- * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
- * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
- * output after its runtime stops and never rebinds to a replacement Schedule service.
+ * @returns A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`.
+ * Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream
+ * Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT
+ * if the calling context is inactive. Task availability and admission failures are reported when a value is sent.
  */
-connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>
+input(id: ScheduleId): SourceInput<AutomationCandidate>
 
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.

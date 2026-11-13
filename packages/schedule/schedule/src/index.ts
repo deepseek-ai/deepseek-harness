@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import z from '@deepseek-ai/schemastery'
-import { Context, Service, type Disposable } from '@deepseek-ai/cordis'
+import { Context, Service } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
 import type { AutomationCandidate } from './source-types.ts'
-import type { AutomationSource } from './source.ts'
+import type { SourceInput } from './source-protocol.ts'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { RemoteError, TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -30,6 +30,8 @@ import type {
 } from './types.ts'
 export type * from './client.ts'
 export { SourceError } from './source-error.ts'
+export { SourceInput, SourceOutput } from './source-protocol.ts'
+export { TimeSource } from './time-source.ts'
 export type * from './source-types.ts'
 export type { AutomationSource } from './source.ts'
 export { scheduleDomain } from './storage.ts'
@@ -364,32 +366,28 @@ export class ScheduleService extends TypertRemoteService {
   }
 
   /**
-   * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
-   * @param source - Source of observed data accompanying the task's stored instruction.
+   * Create a task input that connects to typed upstream outputs through the common Source protocol.
    * @param id - Task identity rechecked on every delivery inside the management FIFO.
-   * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
-   * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
-   * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
-   * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
-   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
-   * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
-   * output after its runtime stops and never rebinds to a replacement Schedule service.
+   * @returns A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`.
+   * Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream
+   * Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.
+   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT
+   * if the calling context is inactive. Task availability and admission failures are reported when a value is sent.
    */
-  connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>> {
+  input(id: ScheduleId): SourceInput<AutomationCandidate> {
     const runtime = this.runtime
     if (this.stopping || runtime === undefined) {
       throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
     }
-    return this.ctx.effect(() => {
-      const connection = source.subscribe((candidate) => {
-        if (this.stopping) {
-          return Promise.reject(new SourceError('The connected Schedule runtime has stopped. Recreate the source connection.',
-            'SOURCE_TASK_RECEIVER_UNAVAILABLE'))
-        }
-        return runtime.deliverSource(id, candidate)
-      })
-      return () => connection.dispose()
-    })
+    const input = runtime.input(id)
+    try {
+      this.ctx.effect(() => () => input.dispose())
+    } catch (error: unknown) {
+      // No connection has escaped when effect acquisition fails; release the unconnected input.
+      void input.dispose()
+      throw error
+    }
+    return input
   }
 
   /** Read effective delivery limits without loading or activating a task.

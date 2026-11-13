@@ -2810,11 +2810,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Shared management service; reads and management writes never activate a Session, and only delivery creates or resumes one.\n\n`sessionPersistence` supplies header-only target validation and the `session/flush` listener that acknowledges durable inbox delivery through `ctx.sessions.flush()`.',
     methods: [
       {
-        signature: 'connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>',
-        description: 'Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.',
-        parameters: [{ name: 'source', description: 'Source of observed data accompanying the task\'s stored instruction.' }, { name: 'id', description: 'Task identity rechecked on every delivery inside the management FIFO.' }],
-        returns: 'The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining accepted calls; repeated calls return void, even while draining. Await the first result or the owner\'s disposal to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.',
-        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects output after its runtime stops and never rebinds to a replacement Schedule service.'],
+        signature: 'input(id: ScheduleId): SourceInput<AutomationCandidate>',
+        description: 'Create a task input that connects to typed upstream outputs through the common Source protocol.',
+        parameters: [{ name: 'id', description: 'Task identity rechecked on every delivery inside the management FIFO.' }],
+        returns: 'A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`. Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.',
+        throws: ['SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT if the calling context is inactive. Task availability and admission failures are reported when a value is sent.'],
       },
       {
         signature: '@Remote(\'deliveryLimits\') deliveryLimits(): { readonly newSessionIntervalSeconds: number }',
@@ -6085,8 +6085,8 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AutomationCandidate {\n    readonly text: string;\n}',
   },
   {
-    name: 'AutomationSource',
-    declaration: 'export abstract class AutomationSource<T> {\n    subscribe(receive: SourceReceiver<T>): SourceConnection;\n    dispose(): Promise<void>;\n}',
+    name: 'AutomationConnection',
+    declaration: 'export interface AutomationConnection<in T> {\n    send(value: T): Promise<void>;\n    dispose(): Promise<void>;\n}',
   },
   {
     name: 'BackendRegistry',
@@ -9611,6 +9611,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SkillViewOptions',
     declaration: 'export interface SkillViewOptions extends SkillLookupOptions {\n    readonly scope?: ScopeKey | undefined;\n}',
+  },
+  {
+    name: 'SourceInput',
+    declaration: 'export class SourceInput<T> extends SourceEndpoint<never> {\n    constructor(private readonly receive: SourceReceiver<T>);\n    override dispose(): Promise<void>;\n    readonly connect: <Value extends T>(output: SourceOutput<Value>) => AutomationConnection<Value>;\n}',
+  },
+  {
+    name: 'SourceOutput',
+    declaration: 'export class SourceOutput<in out T> extends SourceEndpoint<T> {\n    override dispose(): Promise<void>;\n    async emit(value: T): Promise<void>;\n}',
   },
   {
     name: 'SourceReceiver',

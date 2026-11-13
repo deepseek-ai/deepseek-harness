@@ -1,40 +1,31 @@
 /** Loader-owned subscriptions connecting two borrowed source instances to a stored automation task. */
 import type { Context } from '@deepseek-ai/cordis'
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
-import type { AutomationCandidate, SourceConnection } from '@deepseek-ai/dsh-schedule'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 import type { ObservationSource } from './world.ts'
 
 class CombinedObservation extends AutomationSource<AutomationCandidate> {
   private left: string | undefined
   private right: string | undefined
-  private readonly inputs: SourceConnection[]
+  readonly connectLeft = this.createInput<string>(async (value) => {
+    this.left = value
+    await this.publishPair()
+  }).connect
+
+  readonly connectRight = this.createInput<string>(async (value) => {
+    this.right = value
+    await this.publishPair()
+  }).connect
 
   constructor(left: ObservationSource, right: ObservationSource) {
     super()
-    this.inputs = [
-      left.subscribe(value => this.observeLeft(value)),
-      right.subscribe(value => this.observeRight(value)),
-    ]
-  }
-
-  async observeLeft(value: string): Promise<void> {
-    this.left = value
-    await this.publishPair()
-  }
-
-  async observeRight(value: string): Promise<void> {
-    this.right = value
-    await this.publishPair()
+    this.connectLeft(left.output)
+    this.connectRight(right.output)
   }
 
   private async publishPair(): Promise<void> {
     if (this.left === undefined || this.right === undefined) return
     await this.emit({ text: `Left: ${this.left}\nRight: ${this.right}` })
-  }
-
-  override async dispose(): Promise<void> {
-    await Promise.all(this.inputs.map(input => input.dispose()))
-    await super.dispose()
   }
 }
 
@@ -51,8 +42,10 @@ export function apply(ctx: Context): void {
   const world = ctx.sourceComposition
   ctx.effect(function* () {
     const composite = new CombinedObservation(world.left, world.right)
-    const disconnect = ctx.schedule.connectSource(composite, world.task.id)
-    yield disconnect
+    const receiver = ctx.inject(['schedule'], (scope) => {
+      scope.schedule.input(world.task.id).connect(composite.output)
+    })
+    yield receiver.dispose
     yield () => composite.dispose()
   }, 'source-composition.subscriptions()')
 }

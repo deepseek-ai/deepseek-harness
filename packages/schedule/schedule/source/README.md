@@ -1,5 +1,5 @@
 ---
-description: "Compose typed source instances and connect their output to existing Schedule tasks; open this reference for the source class, subscription and disposer semantics, error identity, and model-visible effects."
+description: "Connect typed Source outputs to receiving Sources and Schedule inputs; this reference covers directed delivery, broadcast, cleanup, TimeSource, and shared constructor identity."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-schedule/source` is the typed source entry of the Schedule package. Compose independent source instances in plugins and pass typed observations between them. Source-to-source data uses each source's own type and is not constrained to task text. A source class can have multiple instances, accept input from several other sources, and deliver output to several consumers. Connect final text output to stored automation tasks when it is ready to become model input. Delivery is asynchronous, and disconnecting waits for accepted work rather than dropping it.
+Compose independent Source instances and connect each receiver to an upstream output. Send a value through one connection or broadcast to all connected receivers. Intermediate values keep their own types; final text can accompany an existing automation task's instruction. Several Sources can feed one input, and one output can feed several inputs. Connections wait for accepted work when closed. Instances and intermediate state remain process-local.
 
 ## Table of Contents
 
@@ -24,10 +24,11 @@ English | [中文](README.zh.md)
 <a id="use-this-entry"></a>
 ## Use this entry
 
-Extend `AutomationSource<T>` for each source class. Each instance owns its state, observations, and any timers. Its input methods keep their own types; subscribing to an upstream instance does not require a kind registry, a handler, or a task binding.
+Extend `AutomationSource<TOut>` to own output and any inputs created with `createInput<TIn>(receive)`. A composite exposes the input's bound `connect` function: `sourceB.connect(sourceA.output)` establishes delivery from A to B. A class with distinct input types can expose `connectLeft` and `connectRight`. A pure producer needs only its output and production methods.
 
 ```ts
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 
 class StatusSource extends AutomationSource<string> {
   publish(status: string): Promise<void> {
@@ -35,22 +36,41 @@ class StatusSource extends AutomationSource<string> {
   }
 }
 
+class StatusText extends AutomationSource<AutomationCandidate> {
+  readonly connect = this.createInput<string>(async status => {
+    await this.emit({ text: status })
+  }).connect
+}
+
 const first = new StatusSource()
-const second = new StatusSource()
-const connection = first.subscribe(status => second.publish(status))
+const second = new StatusText()
+const connection = second.connect(first.output)
 await first.publish('changed')
+await connection.send('direct observation')
 await connection.dispose()
-await first.dispose()
 await second.dispose()
+await first.dispose()
 ```
 
-For task delivery, a composing plugin injects `schedule` and calls `ctx.schedule.connectSource(source, taskId)` for an `AutomationSource<AutomationCandidate>` and an existing `ScheduleId`. This entry is not a Loader plugin and has no `apply` or default export; mount the Schedule package normally and import the class from this subpath. Schedule's readiness includes the connection operation; no separate receiver registration is needed. One source can connect to several tasks, and several sources can connect to the same task. Calling `connectSource` before Schedule is ready or while Schedule is stopping throws `SOURCE_TASK_RECEIVER_UNAVAILABLE`; declare the `schedule` dependency and retry after readiness. Schedule does not retry automatically.
+`SourceInput<T>` accepts a `SourceReceiver<T>` callback returning `Promise<void>`. Resolution acknowledges that input operation, not every future output it might produce. A receiver can update state and wait for another input before emitting; a receiver that awaits derived output includes that delivery in its acknowledgement. `SourceOutput<T>` and `SourceInput<T>` are also available directly from the Schedule root entry. This subpath is not a Loader plugin and has no `apply` or default export; mount the Schedule package normally.
 
-The composing plugin owns its sources through `ctx.effect()`; Schedule automatically owns each task connection in the calling context. `connectSource` synchronously returns the exact Cordis disposer function, not a `SourceConnection` object. A direct `source.subscribe` returns a `SourceConnection` whose `dispose()` awaits the same accepted work on every call; the task connection's first call returns a Promise that drains accepted work; await that result or the owning plugin's disposal, and later calls are no-ops that do not join an in-progress drain. A generator effect yields that `disconnect` function directly, without wrapping it, to order cleanup with its sources.
+### Directed delivery and broadcast
 
-Stop and drain producers before releasing a source or task storage that depends on them. A composite source disposes only its own upstream subscriptions, not borrowed upstream instances. A receiver must not await its own connection's `dispose()` or the current emitter source's `dispose()` from inside an accepted call; either waits for that call to return and self-deadlocks.
+`connection.send(value)` delivers only to that connection's receiver. Sharing the connection shares its direction, pending calls, and closed state: any holder can send or close it. `emit(value)` broadcasts through a snapshot of the output's current connections. Both paths record accepted work before deferred receiver callbacks run. Receivers must not mutate shared values. Concurrent sends and broadcasts can overlap; the protocol supplies no FIFO.
 
-Output waits for every receiver, even when one fails. Receivers may run concurrently, and consecutive outputs can overlap unless the producer serializes them. A `SOURCE_DELIVERY_FAILED` error preserves every receiver failure in the aggregate cause. Some receivers may already have committed; neither the source nor Schedule retries the whole output. A task connection captures one Schedule runtime; it rejects delivery after that runtime stops and never switches to a replacement. The source fan-out surfaces that rejection as `SOURCE_DELIVERY_FAILED`. Recreate the connection against a valid runtime after declaring the `schedule` dependency; Schedule does not retry or rebind automatically.
+A directed send preserves the receiver's rejection. Broadcast waits for every receiver and reports failures as `SOURCE_DELIVERY_FAILED` with an aggregate cause. Other receivers may already have committed: delivery is not atomic, and the protocol does not retry or replay. An output without connections completes without delivery.
+
+### Connect a task input
+
+A composing plugin declares a `schedule` dependency and uses `ctx.schedule.input(taskId).connect(source.output)` for output containing `AutomationCandidate.text`. Schedule owns the returned `SourceInput<AutomationCandidate>` in the caller's context and closes it when its runtime stops. Each connection is an ordinary `AutomationConnection<AutomationCandidate>` with `send()` and `dispose()`; repeated disposal joins accepted work. The [Schedule package](../README.md#source-delivery) owns task admission, persistence acknowledgement, and message framing.
+
+`input(taskId)` requires a ready, running Schedule service; otherwise it throws `SOURCE_TASK_RECEIVER_UNAVAILABLE`. A stopped runtime closes its inputs and connections without rebinding them. Sending through a closed connection rejects with `SOURCE_CONNECTION_CLOSED`; broadcasting from an otherwise open output with no remaining connections produces no delivery. Reconnect to a new input after the replacement service becomes ready.
+
+### Time input
+
+`TimeSource` outputs actual `Date.now()` samples as numbers. Its constructor takes a failure-reporting callback that must not throw. `request()` cancels the timer and requests a sample; requests during a pending broadcast coalesce into one next sample. `arm(next)` sets one bounded timer segment toward a finite epoch-millisecond deadline; `arm(undefined)` cancels it. Each long-wait segment emits a sample, and the receiver rearms from its computed deadline. Disposal stops requests and waits for accepted output.
+
+The Schedule runtime uses `runtime.connect(time.output)`, backed by `SourceInput<number>`. Its receiver directly awaits the due scan inside the mutation FIFO rather than requesting another time signal. Runtime task policy computes the next deadline and owns recurrence evaluation, batching, delivery floors, and stored occurrences. `TimeSource` does not parse timing rules. Its numeric output cannot connect directly to a text task input; common connection semantics do not remove payload type constraints.
 
 -----
 
@@ -60,11 +80,34 @@ Output waits for every receiver, even when one fails. Receivers may run concurre
 <details>
 <summary>Implementation details — click to expand</summary>
 
-Sources communicate through instance-owned subscription sets and typed callbacks. `SourceReceiver<T>` is an asynchronous callback; `SourceConnection.dispose()` stops new calls and joins the same accepted work on every call; `AutomationCandidate.text` carries the extra input without truncation. The base class records accepted calls before invoking a receiver, so both disconnecting and disposing the source wait for those calls. The base class owns no polling frequency, recurrence evaluator, source factory, or dependency-graph interpreter. A subclass stops external producers and drains input before it disposes output subscriptions.
+### Cleanup ownership
 
-`SourceError` is declared in [`src/source-error.ts`](../src/source-error.ts). The Schedule root bundle contains its single constructor: the package entry runtime-exports `SourceError` and type-exports `AutomationSource`, while the [`./source`](../src/source.ts) leaf imports `SourceError` from the root package specifier. The root entry does not runtime-import the leaf, so this import creates no runtime cycle. A relative leaf import would load the tsc-emitted `source-error.js` copy, producing a second constructor and breaking `instanceof` and error identity between the leaf and the root bundle.
+Input and output endpoints track accepted calls even after a connection detaches. Closing either endpoint rejects new connections and closes its existing connections; closing a connection rejects new sends. Repeated disposal joins the same drain. `AutomationSource.dispose()` closes and drains its owned inputs while output remains usable, then closes and drains output. Subclasses stop external producers before calling it. Borrowed upstream Sources remain owned by their creators.
 
-Sources communicate directly with other sources. Schedule connects final source output to existing tasks and owns task lookup, active-status checks, delivery admission, target Session activation, and persistence acknowledgement. See [`src/source.ts`](../src/source.ts) for subscriptions and [`src/source-types.ts`](../src/source-types.ts) for receiver, connection, candidate, and error-code types; the [Schedule package](../README.md#source-delivery) owns task connection and delivery framing.
+A receiver must not await its own connection, input, Source, or current emitter's disposal from inside an accepted call: that cleanup waits for the call to return. Connection and endpoint disposal wait for settlement; delivery errors belong to the original send or broadcast.
+
+A composite that can emit while draining must finish before its task input closes. The task input's caller-owned Cordis effect is separate from its public disposer; yielding a wrapper around `input.dispose()` or `connection.dispose()` does not transfer that effect's ownership. Put the task consumer in an explicitly owned injection child, then yield the exact child disposer before the composite cleanup in one synchronous generator effect. Reverse cleanup order drains the composite first and disposes the consumer child afterward.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { AutomationCandidate, AutomationSource, ScheduleId } from '@deepseek-ai/dsh-schedule'
+
+export function ownComposite(ctx: Context, id: ScheduleId, composite: AutomationSource<AutomationCandidate>): void {
+  const consumer = ctx.inject(['schedule'], scope => {
+    scope.schedule.input(id).connect(composite.output)
+  })
+  ctx.effect(function* () {
+    yield consumer.dispose
+    yield () => composite.dispose()
+  })
+}
+```
+
+### Publication and implementation owners
+
+The root entry owns the runtime constructors for `SourceError`, `SourceInput`, `SourceOutput`, and `TimeSource`. The leaf imports those constructors from `@deepseek-ai/dsh-schedule` and re-exports the input, output, and time classes. Root and leaf consumers therefore share constructor identity. The root only type-exports `AutomationSource`, with no runtime import of the leaf. The root-owned protocol imports its error relatively; the emitted leaf must not import separate relative copies of root-owned classes.
+
+[`source-protocol.ts`](../src/source-protocol.ts) owns inputs, outputs, and directed connections; [`source.ts`](../src/source.ts) owns composite input-before-output cleanup; [`time-source.ts`](../src/time-source.ts) owns clock requests and the segmented timer. [`source-types.ts`](../src/source-types.ts) defines receiver, connection, candidate, and error-code types. Schedule retains task lookup, activation, admission, and persistence responsibilities.
 
 </details>
 
@@ -86,7 +129,7 @@ Sources communicate directly with other sources. Schedule connects final source 
 
 #### What the model sees
 
-Source-to-source observations are not model input. A task connection submits the candidate's text to the Schedule task service; the [Schedule source observations section](../README.md#source-observations-in-the-target-session) owns the logged user message and framing. This entry adds no tools or prompt sections.
+Source-to-source observations and TimeSource samples are not model input. A text task input submits the candidate's text to Schedule; the [Schedule source observations section](../README.md#source-observations-in-the-target-session) owns the logged user message and framing. This entry adds no tools or prompt sections.
 
 #### Token effect
 
@@ -94,12 +137,13 @@ Intermediate observations add no model tokens. Accepted task deliveries add the 
 
 #### KV Cache effect
 
-Source subscriptions do not change request prefixes. Task delivery appends input through the Schedule service; that service owns replay and request construction.
+Source connections do not change request prefixes. Task delivery appends input through the Schedule service; that service owns replay and request construction.
 
 <a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 - Source instances, connections, and intermediate state are process-local. A plugin must explicitly own any durable observation state and reconstruct its composition after restart.
-- Composition is programmatic. This entry supplies no source editor, persisted dependency graph, built-in observation provider, or generic polling/retry policy.
+- Composition is programmatic, without a Source editor, persisted dependency graph, handler layer, or generic polling/retry policy. TimeSource accepts computed deadlines; it does not add a task kind or configuration format.
 - Source owners bound observation size and output rate before publishing. This API preserves candidate text without truncation or an entry-level size limit. A producer that continuously publishes at the shared interval can postpone timed delivery indefinitely; it must leave capacity for timed work.
-- Schedule's source connection accepts active existing tasks and preserves their timing. This connection does not replace the stored timing model or create event-only tasks. An executing task, a task inside its minimum delivery interval, or a task recovering an outstanding delivery rejects the current candidate delivery with `SOURCE_TASK_BUSY`; the source fan-out surfaces that rejection as `SOURCE_DELIVERY_FAILED`. The task does not store or queue the candidate, and recovery holds the previous inbox delivery. The producer owns retry and rate limiting.
+- Text task input preserves existing task timing. An executing task, a task inside its minimum delivery interval, or a task recovering an outstanding delivery rejects the current candidate with `SOURCE_TASK_BUSY`. Direct send preserves that error; broadcast aggregates it. The task does not store or queue the candidate, and recovery holds the previous inbox delivery. The producer owns retry and rate limiting.
+- Source delivery adds no event-only task schema or durable connection graph. Connection sharing does not transfer exclusive ownership or provide caller-specific access control.

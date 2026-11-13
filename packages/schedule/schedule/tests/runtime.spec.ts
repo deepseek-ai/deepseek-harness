@@ -3,7 +3,9 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { ScheduleRuntime, MAX_TIMER_DELAY_MS } from '../src/runtime.ts'
+import { ScheduleRuntime } from '../src/runtime.ts'
+import { MAX_TIMER_DELAY_MS, TimeSource } from '../src/time-source.ts'
+import { SourceInput } from '../src/source-protocol.ts'
 import {
   createAfterScheduleRecord, createAtScheduleRecord, createDailyScheduleRecord, createEveryScheduleRecord, ScheduleId,
 } from '../src/domain.ts'
@@ -14,13 +16,19 @@ import { agentFor, boundTask, harness } from './harness.ts'
 
 const tests: Awaited<ReturnType<typeof harness>>[] = []
 const runtimes: ScheduleRuntime[] = []
+const beforeDispose: Array<() => Promise<void>> = []
 const ORIGINAL = SessionId('original')
 const LIMITS = { retention: { days: 30, records: 200 }, newSessionIntervalMs: 3_600_000 }
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-09-16T00:00:00Z')) })
 afterEach(async () => {
-  await Promise.all(runtimes.splice(0).map(runtime => runtime.dispose()))
-  await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
-  vi.useRealTimers()
+  try {
+    for (const cleanup of beforeDispose.splice(0)) await cleanup()
+    await Promise.all(runtimes.splice(0).map(runtime => runtime.dispose()))
+    await Promise.all(tests.splice(0).map(test => test.ctx.fiber.dispose()))
+  } finally {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  }
 })
 async function setup(tasks: ScheduleTask[], options: Parameters<typeof harness>[0] = {}) {
   const test = await harness(options); tests.push(test)
@@ -589,6 +597,69 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     expect(test.followup).toHaveBeenCalledTimes(1)
   })
 
+  it.each(['flush', 'receipt'] as const)('acknowledges a public time source only after %s completes', async (stage) => {
+    const record = createAfterScheduleRecord(ScheduleId('source-time'), 'Time input', 1, Date.now() - 2000, 'Time input')
+    const records = [task(record)]
+    const test = await setup(records)
+    const entered = Promise.withResolvers<undefined>()
+    const released = Promise.withResolvers<undefined>()
+    const firstObserved = Promise.withResolvers<undefined>()
+    const secondObserved = Promise.withResolvers<undefined>()
+    const receipts: boolean[] = []
+    const reportFailure = vi.fn<(error: unknown) => void>()
+    const clock = new TimeSource(reportFailure)
+    const observer = new SourceInput<number>(async () => {
+      receipts.push(records[0]?.lastDelivery !== undefined)
+      if (receipts.length === 1) firstObserved.resolve(undefined)
+      if (receipts.length === 2) secondObserved.resolve(undefined)
+    })
+    beforeDispose.push(async () => {
+      released.resolve(undefined)
+      await Promise.allSettled([clock.dispose(), observer.dispose()])
+    })
+    const connection = test.runtime.connect(clock.output)
+    observer.connect(clock.output)
+    if (stage === 'flush') {
+      test.flush.mockImplementationOnce(async () => { entered.resolve(undefined); await released.promise })
+    } else {
+      test.commit.mockImplementationOnce(async (value) => {
+        entered.resolve(undefined)
+        await released.promise
+        records[0] = value
+      })
+    }
+    clock.request()
+    await entered.promise
+    await firstObserved.promise
+    clock.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receipts).toEqual([false])
+    expect(records[0]?.lastDelivery).toBeUndefined()
+    released.resolve(undefined)
+    await secondObserved.promise
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receipts).toEqual([false, true])
+    expect(test.followup).toHaveBeenCalledOnce()
+    expect(test.commit).toHaveBeenCalledOnce()
+    expect(records[0]).toMatchObject({ status: 'ended', lastDelivery: { targetSessionId: ORIGINAL } })
+    await connection.dispose()
+    await expect(connection.send(Date.now())).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+    clock.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receipts).toEqual([false, true, true])
+    expect(test.commit).toHaveBeenCalledOnce()
+    const retained = test.runtime.connect(clock.output)
+    await test.runtime.dispose()
+    await expect(retained.send(Date.now())).rejects.toMatchObject({ code: 'SOURCE_CONNECTION_CLOSED' })
+    expect(() => test.runtime.connect(clock.output)).toThrowError(expect.objectContaining({ code: 'SOURCE_CLOSED' }))
+    expect(() => test.runtime.input(record.id)).toThrowError(expect.objectContaining({ code: 'SOURCE_TASK_RECEIVER_UNAVAILABLE' }))
+    clock.request()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(receipts).toEqual([false, true, true, true])
+    expect(reportFailure).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   describe.each(['every', 'daily'] as const)('%s timer ownership', (kind) => {
     it.each(['resolution', 'flush'] as const)('keeps one timer after wakes during %s and none after disposal', async (stage) => {
       const record = kind === 'every'
@@ -688,27 +759,40 @@ describe('Schedule dispatch failures and concurrent changes', () => {
     test.ctx.effect(() => () => runtime.dispose())
     const stop = vi.spyOn(runtime, 'dispose')
     const admission = vi.spyOn(test.ctx.agents, 'withoutInitiator')
-    const warning = vi.spyOn(test.ctx.logger, 'warn')
+    const reportFailure = vi.fn<(error: unknown) => void>()
+    const clock = new TimeSource(reportFailure)
+    runtime.connect(clock.output)
     let unloading: Promise<void> | undefined
+    let retired: Promise<void> | undefined
+    const cleanup = async (): Promise<void> => {
+      released.resolve(undefined)
+      await Promise.allSettled([retired, clock.dispose()])
+      await Promise.allSettled([unloading])
+    }
+    beforeDispose.push(cleanup)
     try {
       runtime.requestDrive()
+      await entered.promise
       const result = admission.mock.results[0]
       if (result?.type !== 'return') throw new Error('Drive was not admitted')
-      // The loop has retired; its catch has queued finally before this observer queues cleanup.
-      const retired = (result.value as Promise<void>).then(() => {
-        runtime.requestDrive()
+      retired = (result.value as Promise<void>).then(() => {
+        clock.request()
         unloading = test.ctx.fiber.dispose()
         expect(stop).not.toHaveBeenCalled()
       })
-      await entered.promise
       expect(vi.getTimerCount()).toBe(1)
       released.resolve(undefined)
       await retired
       await unloading
-      await vi.advanceTimersByTimeAsync(0)
+      await clock.dispose()
       expect(admission).toHaveBeenCalledTimes(2)
       expect(admission.mock.results[1]).toMatchObject({ type: 'throw' })
-      expect(warning).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('agent initiator scope is disposed'))
+      expect(reportFailure).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+        code: 'SOURCE_DELIVERY_FAILED',
+        cause: expect.objectContaining({ errors: [expect.objectContaining({
+          message: expect.stringContaining('agent initiator scope is disposed'),
+        })] }),
+      }))
       expect(transaction).toHaveBeenCalledTimes(1)
       expect(stop).toHaveBeenCalledTimes(1)
       expect(vi.getTimerCount()).toBe(0)
@@ -716,11 +800,9 @@ describe('Schedule dispatch failures and concurrent changes', () => {
       expect(admission).toHaveBeenCalledTimes(2)
       expect(transaction).toHaveBeenCalledTimes(1)
     } finally {
-      released.resolve(undefined)
-      await unloading
+      await cleanup()
       stop.mockRestore()
       admission.mockRestore()
-      warning.mockRestore()
     }
   })
 

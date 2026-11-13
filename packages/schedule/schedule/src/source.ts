@@ -1,87 +1,47 @@
-/** Typed output subscriptions shared by independently owned source instances. */
-import { SourceError } from '@deepseek-ai/dsh-schedule'
-import type { SourceConnection, SourceReceiver } from './source-types.ts'
+/** Independently owned Sources compose through typed inputs and outputs. */
+import { SourceError, SourceInput, SourceOutput } from '@deepseek-ai/dsh-schedule'
+import type { SourceReceiver } from './source-types.ts'
 
-interface Subscription<T> {
-  readonly receive: SourceReceiver<T>
-  readonly pending: Set<Promise<void>>
-  readonly connection: SourceConnection
-}
+export { SourceInput, SourceOutput, TimeSource } from '@deepseek-ai/dsh-schedule'
 
-/**
- * One source instance. Subclasses own observation, timing, input methods, and output policy.
- * Upstream dependencies are typed object references, not source kinds or task bindings.
- */
+/** One source instance; subclasses own their producers, input processing, and output policy. */
 export abstract class AutomationSource<T> {
-  private readonly subscriptions = new Set<Subscription<T>>()
-  private readonly pending = new Set<Promise<void>>()
+  /** Output connected by downstream Sources or runtimes. */
+  readonly output: SourceOutput<T> = new SourceOutput<T>()
+  private readonly inputs: Array<{ dispose(): Promise<void> }> = []
   private closing: Promise<void> | undefined
 
   /**
-   * Subscribe to future output from this instance. Each connection is independent, including duplicate receivers.
-   * @param receive - Receiver awaited for each accepted output; concurrent outputs may overlap.
-   * @returns A connection whose disposal prevents new calls and drains accepted calls without disposing this source.
-   * @throws SourceError with SOURCE_CLOSED after disposal starts.
+   * Create an input owned by this Source; a composite can expose its bound connect function directly.
+   * @param receive - Accepts typed upstream values, possibly emitting derived output before it settles.
+   * @returns The receiving endpoint, automatically drained before this Source closes its output.
+   * @throws SourceError with SOURCE_CLOSED after this Source starts disposal.
    */
-  subscribe(receive: SourceReceiver<T>): SourceConnection {
-    this.assertOpen()
-    const pending = new Set<Promise<void>>()
-    const subscription: Subscription<T> = {
-      receive,
-      pending,
-      connection: {
-        dispose: async () => {
-          this.subscriptions.delete(subscription)
-          await Promise.allSettled([...pending])
-        },
-      },
-    }
-    this.subscriptions.add(subscription)
-    return subscription.connection
+  protected createInput<Input>(receive: SourceReceiver<Input>): SourceInput<Input> {
+    if (this.closing !== undefined) throw new SourceError('This source has been disposed.', 'SOURCE_CLOSED')
+    const input = new SourceInput(receive)
+    this.inputs.push(input)
+    return input
   }
 
   /**
-   * Stop accepting subscriptions and output immediately, then drain all accepted receiver calls.
-   * Subclasses stop their producers and drain accepted inputs before calling this method. Borrowed upstream
-   * instances remain owned by their creator; a consumer disposes only its own subscriptions.
+   * Stop input admission and drain accepted inputs while output remains usable, then close and drain output.
+   * Subclasses stop their producers before calling this method. Borrowed upstream Sources are not disposed.
+   * A receiver must not await this Source's disposal from its own accepted call; cleanup waits for that call.
    */
   dispose(): Promise<void> {
     if (this.closing === undefined) {
-      this.subscriptions.clear()
-      this.closing = Promise.allSettled([...this.pending]).then(() => {})
+      this.closing = this.inputs.length === 0
+        ? this.output.dispose()
+        : Promise.all(this.inputs.map(input => input.dispose())).then(() => this.output.dispose())
     }
     return this.closing
   }
 
   /**
-   * Deliver to a snapshot of the current subscriptions and await every receiver, including after another fails.
-   * @param value - Typed output; receivers must not mutate shared values.
-   * @returns Resolves when every receiver accepts the output; no subscribers means no delivery.
-   * @throws SourceError with SOURCE_CLOSED after disposal starts, or SOURCE_DELIVERY_FAILED after all receivers
-   * settle if any failed. Fan-out is not atomic: other receivers may have committed, so do not retry the fan-out.
+   * Broadcast through the output's directed connections; overlapping calls are not serialized.
+   * @param value - Shared typed output; receivers must not mutate it.
+   * @returns Resolves after every receiver accepts, or rejects with the output's aggregate failure.
    */
-  protected async emit(value: T): Promise<void> {
-    this.assertOpen()
-    const results = await Promise.allSettled([...this.subscriptions].map((subscription) => {
-      // Record accepted work before invoking user code, including synchronous callbacks that detach themselves.
-      const work = Promise.resolve().then(() => subscription.receive(value))
-      subscription.pending.add(work)
-      this.pending.add(work)
-      const settled = (): void => {
-        subscription.pending.delete(work)
-        this.pending.delete(work)
-      }
-      void work.then(settled, settled)
-      return work
-    }))
-    const failures = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
-    if (failures.length > 0) {
-      throw new SourceError('Some source receivers failed; other receivers may already have committed. Do not retry the entire output.',
-        'SOURCE_DELIVERY_FAILED', { cause: new AggregateError(failures) })
-    }
-  }
-
-  private assertOpen(): void {
-    if (this.closing !== undefined) throw new SourceError('This source has been disposed.', 'SOURCE_CLOSED')
-  }
+  protected emit(value: T): Promise<void> { return this.output.emit(value) }
 }

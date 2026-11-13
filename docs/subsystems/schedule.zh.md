@@ -7,9 +7,11 @@ Schedule 独立于 Session 的激活状态存储宿主任务。同一管理 API 
 <a id="source-instances"></a>
 ## Source 实例
 
-`@deepseek-ai/dsh-schedule/source` 定义 `AutomationSource<T>` 及其订阅、组合与任务连接类型。[source 实例参考](../../packages/schedule/schedule/source/README.zh.md)拥有 source class、独立实例、source 间组合、原生一次性 disposer 语义、`SourceError` 身份与模型体验。每个 class 实例拥有自己的观测，通过可等待的订阅发出具有类型约束的值；中间输出仅存在于进程内，不是模型输入。生产者拥有定时器、输入串行化、条件求值和需要持久化的观测状态。
+`SourceInput<T>` 接受异步 `SourceReceiver<T>` 回调；接收方 Source 暴露其输入已绑定的 `connect`，使用方式为 `sourceB.connect(sourceA.output)`。返回的 `AutomationConnection` 保留上游输出的值类型，通过 `send(value)` 向该接收者发送，通过 `dispose()` 断开；两个方法均返回 `Promise<void>`。`SourceOutput<T>.emit(value)` 通过同一定向投递操作广播。[Source 参考](../../packages/schedule/schedule/source/README.zh.md)拥有输入／输出类型、共享、接受确认、错误、清理与发布身份。`AutomationSource<TOut>` 拥有其输出及子类创建的类型化输入。中间观测仅存在于进程内，不是模型输入。
 
-`ScheduleService.connectSource(source, id)` 将 `AutomationSource<AutomationCandidate>` 的输出直接连接到 `ScheduleId`。Schedule 在修改 FIFO 内检查活动状态和投递准入，将已存储指令与额外 source 数据一起投递，并在 Session 持久化后提交回执；它保留任务的时间规则和状态。[Schedule 包 source 投递](../../packages/schedule/schedule/README.zh.md#source-delivery)定义连接清理、失败码和消息格式；连接与 disposer 契约由 source 参考拥有。
+`ScheduleService.input(id)` 返回归调用方 context 所有的 `SourceInput<AutomationCandidate>`，使用方式为 `ctx.schedule.input(id).connect(source.output)`。它通过与其他 Source 输入相同的协议，为已有任务接受文本。Schedule 在修改 FIFO 内检查准入，并在 Session 持久化后提交回执，保留已存时间规则和状态。runtime 停止会关闭输入，不重新绑定。[Schedule 包](../../packages/schedule/schedule/README.zh.md#source-delivery)拥有任务错误、准入限制与消息格式。
+
+`TimeSource` 通过 `SourceOutput<number>` 发出实际墙钟毫秒值。`ScheduleRuntime.connect(time.output)` 使用数值输入，其确认包含串行化的到期扫描。TimeSource 拥有分段定时器和合并请求；runtime 策略拥有计算出的截止时间、重复求值、批量投递、最小间隔与持久化。数值时间输入和候选文本任务输入共享连接语义，不共享载荷类型。
 
 <a id="durable-tasks"></a>
 ## 持久任务
@@ -162,18 +164,15 @@ Shared management service; reads and management writes never activate a Session,
 
 ```ts cordis-catalog
 /**
- * Connect one source instance to a task through this initialized Schedule runtime; this is an in-process API.
- * @param source - Source of observed data accompanying the task's stored instruction.
+ * Create a task input that connects to typed upstream outputs through the common Source protocol.
  * @param id - Task identity rechecked on every delivery inside the management FIFO.
- * @returns The caller-context-owned native Cordis disposer. Its first call detaches and returns a Promise draining
- * accepted calls; repeated calls return void, even while draining. Await the first result or the owner's disposal
- * to join cleanup. A generator effect may yield this exact function to transfer its ownership. The source is not
- * disposed. Consumers declare a Schedule dependency; their plugin unload disconnects automatically.
- * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable, or SOURCE_CLOSED if
- * the source is disposed; Cordis INACTIVE_EFFECT if the calling context is inactive. A retained connection rejects
- * output after its runtime stops and never rebinds to a replacement Schedule service.
+ * @returns A caller-context-owned input; connect upstream outputs with `input.connect(source.output)`.
+ * Consumer unload or runtime shutdown closes its connections and drains accepted calls without disposing upstream
+ * Sources. An input captures this runtime and never rebinds to a replacement. Declare a Schedule dependency.
+ * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE if this runtime is unavailable; Cordis INACTIVE_EFFECT
+ * if the calling context is inactive. Task availability and admission failures are reported when a value is sent.
  */
-connectSource(source: AutomationSource<AutomationCandidate>, id: ScheduleId): Disposable<void | Promise<void>>
+input(id: ScheduleId): SourceInput<AutomationCandidate>
 
 /** Read effective delivery limits without loading or activating a task.
  * @returns The configured minimum spacing between deliveries that each create a Session, in seconds.

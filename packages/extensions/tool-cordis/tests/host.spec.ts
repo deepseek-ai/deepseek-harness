@@ -6,6 +6,7 @@ import ToolRegistry from '@deepseek-ai/dsh-tools'
 import { describe, expect, it } from 'vitest'
 import * as CordisInspectProviders from '../src/host.ts'
 import * as CordisInspectTools from '../src/index.ts'
+import { queryServiceApi, TYPE_API } from '../src/api-catalog.ts'
 
 /**
  * The Host inspect providers are one process-global set: the host entry
@@ -25,6 +26,27 @@ async function host(): Promise<Context> {
 }
 
 describe('the cordis-inspect-providers host entry', () => {
+  it('exposes the complete Schedule connection and endpoint disposal APIs', () => {
+    const input = TYPE_API.find(type => type.name === 'SourceInput')
+    const connectionName = input?.declaration.match(/\bconnect:[^;]*=>\s*(\w+)\s*</)?.[1]
+    expect(connectionName).toBeDefined()
+    const result = queryServiceApi('schedule')
+    expect.soft(result).toMatchObject({
+      referencedTypes: expect.arrayContaining([expect.objectContaining({
+        name: connectionName,
+        declaration: expect.stringMatching(/\bsend\(value:[^)]*\):\s*Promise<void>;[\s\S]*\bdispose\(\):\s*Promise<void>;/),
+      })]),
+    })
+    for (const name of ['SourceInput', 'SourceOutput']) {
+      expect.soft(result).toMatchObject({
+        referencedTypes: expect.arrayContaining([expect.objectContaining({
+          name,
+          declaration: expect.stringMatching(/\bdispose\(\):\s*Promise<void>;/),
+        })]),
+      })
+    }
+  })
+
   it('registers the first-party Host providers and withdraws them on disposal', async () => {
     const ctx = await host()
     const fiber = ctx.plugin(CordisInspectProviders)

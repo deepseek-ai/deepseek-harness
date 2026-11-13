@@ -1,5 +1,6 @@
-/** Host timer over standalone tasks; target Session activation is a delivery operation. */
+/** Schedule task delivery driven by typed source inputs; activation is a delivery operation. */
 import { randomUUID } from 'node:crypto'
+import { inspect } from 'node:util'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextFormed } from '@deepseek-ai/dsh-llm'
 declare module '@deepseek-ai/dsh-llm' {
@@ -12,6 +13,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SourceError } from './source-error.ts'
 import type { AutomationCandidate } from './source-types.ts'
+import { SourceInput } from './source-protocol.ts'
+import { TimeSource } from './time-source.ts'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type {} from '@deepseek-ai/dsh-api-session-controller'
@@ -25,9 +28,6 @@ import { formatScheduleLocalTime } from './domain.ts'
 import { appendDelivery } from './delivery-history.ts'
 import type { ScheduleTask } from './storage.ts'
 import type { DeliveryRetentionBounds, ScheduleDeliveryReceipt, ScheduleId, ScheduleSessionCreateSpec } from './types.ts'
-
-/** Largest delay Node timers represent without clamping. */
-export const MAX_TIMER_DELAY_MS = 2_147_483_647
 
 /** Fixed per-task delivery floor interval, timed or manual, of a target other than `new`; it matches the shortest recurrence spacing. */
 export const MIN_DELIVERY_INTERVAL_MS = MIN_EVERY_INTERVAL_SECONDS * 1_000
@@ -65,13 +65,15 @@ function batchSessionOf(task: ScheduleTask): SessionIdType | undefined {
     : undefined
 }
 
-/** Owns at most one timer across recomputations; delivery and management share the serialized operation. */
+/** Receives time and task inputs; delivery and management share the serialized operation. */
 export class ScheduleRuntime {
-  private timer: ReturnType<typeof setTimeout> | undefined
-  private running: Promise<void> | undefined
+  private readonly time: TimeSource
+  private readonly timeInput: SourceInput<number>
+  /** Connect time signals to this runtime; each accepted signal awaits a serialized due-task scan. */
+  readonly connect: SourceInput<number>['connect']
+  private readonly inputs = new Set<SourceInput<AutomationCandidate>>()
   private readonly executing = new Set<ScheduleId>()
   private stopping = false
-  private requested = false
 
   /**
    * @param ctx - Host services used to resume and enqueue.
@@ -92,47 +94,45 @@ export class ScheduleRuntime {
     private readonly limits: ScheduleRuntimeLimits,
     private readonly resolveAgent: (sessionId: SessionIdType) => Promise<Agent>,
     private readonly sessionController: () => Context['sessionController'] | undefined,
-  ) {}
-
-  /**
-   * Recompute the nearest obligation after startup or a durable change.
-   * Dispatch failures are logged; refused admission does not retry automatically.
-   */
-  requestDrive(): void {
-    if (this.stopping) return
-    this.requested = true
-    this.clearTimer()
-    if (this.running !== undefined) return
-    let run: Promise<void>
-    try {
-      run = this.ctx.agents.withoutInitiator(async () => {
-        while (this.requested && !this.stopping) {
-          this.requested = false
-          await this.transact(async () => { await this.drive() })
-        }
-      })
-    } catch (error: unknown) {
-      // Ancestor unloading closes initiator admission before runtime cleanup runs.
-      this.requested = false
-      this.ctx.logger.warn(`schedule: dispatch stopped: ${String(error)}`)
-      return
-    }
-    this.running = run
-    void run.catch((error: unknown) => {
-      this.ctx.logger.warn(`schedule: dispatch stopped: ${String(error)}`)
-    }).finally(() => {
-      this.running = undefined
-      /* v8 ignore next -- a request can arrive in the microtask gap between the drive loop and this finalizer. */
-      if (this.requested && !this.stopping) this.requestDrive()
+  ) {
+    this.time = new TimeSource((error) => {
+      this.ctx.logger.warn(`schedule: dispatch stopped: ${inspect(error)}`)
     })
+    this.timeInput = new SourceInput(async () => {
+      await this.ctx.agents.withoutInitiator(() => this.transact(async () => { await this.drive() }))
+    })
+    this.connect = this.timeInput.connect
+    this.connect(this.time.output)
   }
 
-  /** Stop the timer and drain an accepted delivery before storage closes. */
+  /** Request a time input after startup or a durable change; failures are reported without automatic retry. */
+  requestDrive(): void { this.time.request() }
+
+  /**
+   * Create an input for one task; every connection uses this runtime's ordinary source admission.
+   * @param id - Task identity checked again for each received candidate.
+   * @returns An independently disposable receiver, closed with this runtime and never rebound to a replacement.
+   * @throws SourceError with SOURCE_TASK_RECEIVER_UNAVAILABLE after runtime disposal starts.
+   */
+  input(id: ScheduleId): SourceInput<AutomationCandidate> {
+    if (this.stopping) throw new SourceError('The Schedule runtime is unavailable.', 'SOURCE_TASK_RECEIVER_UNAVAILABLE')
+    const inputs = this.inputs
+    const input = new class extends SourceInput<AutomationCandidate> {
+      override dispose(): Promise<void> {
+        const closed = super.dispose()
+        void closed.then(() => { inputs.delete(this) })
+        return closed
+      }
+    }(candidate => this.deliverSource(id, candidate))
+    inputs.add(input)
+    return input
+  }
+
+  /** Stop time production, close receiving endpoints, and drain their accepted calls before storage closes. */
   async dispose(): Promise<void> {
     this.stopping = true
-    this.clearTimer()
-    // requestDrive reports execution failures; teardown only waits for quiescence.
-    await this.running?.catch(() => undefined)
+    const closing = [...this.inputs].map(input => input.dispose())
+    await Promise.all([this.time.dispose(), this.timeInput.dispose(), ...closing])
   }
 
   /**
@@ -225,13 +225,8 @@ export class ScheduleRuntime {
     return end > Date.now() ? end : undefined
   }
 
-  private clearTimer(): void {
-    if (this.timer !== undefined) clearTimeout(this.timer)
-    this.timer = undefined
-  }
-
   private async drive(): Promise<void> {
-    this.clearTimer()
+    this.time.arm(undefined)
     const failed = new Set<ScheduleId>()
     const handled = new Set<ScheduleId>()
     const scanNow = Date.now()
@@ -254,11 +249,7 @@ export class ScheduleRuntime {
         const target = Math.max(Date.parse(task.record.scheduledAt), this.nextAdmissionAt(task))
         return at === undefined ? target : Math.min(at, target)
       }, undefined)
-    if (next !== undefined) {
-      this.timer = setTimeout(() => { this.timer = undefined; this.requestDrive() },
-        Math.max(0, Math.min(next - Date.now(), MAX_TIMER_DELAY_MS)))
-      this.timer.unref()
-    }
+    this.time.arm(next)
   }
 
   /**

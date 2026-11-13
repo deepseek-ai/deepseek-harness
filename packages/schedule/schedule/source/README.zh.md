@@ -1,5 +1,5 @@
 ---
-description: "组合具有类型约束的 source 实例，并把其输出连接到已有 Schedule 任务；本参考涵盖 source class、订阅与 disposer 语义、错误身份与模型可见效果。"
+description: "把类型化 Source 输出连接到接收方 Source 和 Schedule 输入；本参考涵盖定向投递、广播、清理、TimeSource 与共享构造器身份。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`@deepseek-ai/dsh-schedule/source` 是 Schedule 包的类型化 source 入口。在插件中组合独立的 source 实例，并在实例之间传递具有类型约束的观测值。source 之间的数据使用各自的类型，不受任务文本格式约束。一个 source class 可以有多个实例，可以接收多个其他 source 的输入，也可以把输出交给多个消费者。最终文本准备好作为模型输入时，再把它连接到已存储的自动化任务。投递是异步的，断开连接会等待已接收的工作，而不是丢弃它。
+组合独立的 Source 实例，让每个接收者连接上游输出。可以通过一条连接发送值，也可以广播给全部已连接的接收者。中间值保留各自的类型；最终文本可以伴随已有自动化任务的指令投递。多个 Source 可以连接同一输入，一个输出也可以连接多个输入。连接关闭时等待已接受的工作。实例与中间状态仅存在于进程内。
 
 ## 目录
 
@@ -24,10 +24,11 @@ kind: "package-reference"
 <a id="use-this-entry"></a>
 ## 使用本入口
 
-每个 source class 继承 `AutomationSource<T>`。每个实例拥有自己的状态、观测和所需定时器。它的输入方法保留各自的类型；订阅上游实例不需要 kind 注册表、handler 或任务绑定。
+继承 `AutomationSource<TOut>`，拥有输出及通过 `createInput<TIn>(receive)` 创建的输入。复合 Source 暴露输入已绑定的 `connect` 函数：`sourceB.connect(sourceA.output)` 建立从 A 到 B 的投递。具有不同输入类型的 class 可以暴露 `connectLeft` 和 `connectRight`。纯生产者只需要输出及其生产方法。
 
 ```ts
 import { AutomationSource } from '@deepseek-ai/dsh-schedule/source'
+import type { AutomationCandidate } from '@deepseek-ai/dsh-schedule'
 
 class StatusSource extends AutomationSource<string> {
   publish(status: string): Promise<void> {
@@ -35,22 +36,41 @@ class StatusSource extends AutomationSource<string> {
   }
 }
 
+class StatusText extends AutomationSource<AutomationCandidate> {
+  readonly connect = this.createInput<string>(async status => {
+    await this.emit({ text: status })
+  }).connect
+}
+
 const first = new StatusSource()
-const second = new StatusSource()
-const connection = first.subscribe(status => second.publish(status))
+const second = new StatusText()
+const connection = second.connect(first.output)
 await first.publish('changed')
+await connection.send('direct observation')
 await connection.dispose()
-await first.dispose()
 await second.dispose()
+await first.dispose()
 ```
 
-需要投递到任务时，组合插件注入 `schedule`，针对 `AutomationSource<AutomationCandidate>` 和已有 `ScheduleId` 调用 `ctx.schedule.connectSource(source, taskId)`。本入口不是 Loader 插件，没有 `apply` 或默认导出；正常挂载 Schedule 包，并从该子路径导入 class。Schedule 就绪即表示可以建立连接，不需要另外注册接收者。一个 source 可以连接多个任务，多个 source 也可以连接同一个任务。在 Schedule 就绪前或停止期间调用 `connectSource` 会抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`；调用方必须声明 `schedule` 依赖，并在就绪后重试。Schedule 不自动重试。
+`SourceInput<T>` 接受返回 `Promise<void>` 的 `SourceReceiver<T>` 回调。成功返回确认本次输入操作，而不是它将来可能产生的全部输出。接收者可以更新状态，等待另一个输入后再发出数据；接收者若等待派生输出，则其确认包含该次投递。Schedule 根入口也直接提供 `SourceOutput<T>` 和 `SourceInput<T>`。本子路径不是 Loader 插件，没有 `apply` 或默认导出；正常挂载 Schedule 包即可。
 
-组合插件通过 `ctx.effect()` 拥有 source；Schedule 自动在调用方 context 中拥有任务连接。`connectSource` 同步返回原始 Cordis disposer 函数，而不是 `SourceConnection` 对象。直接 `source.subscribe` 返回 `SourceConnection`，其 `dispose()` 每次调用都会等待同一批已接受工作；任务连接的首次调用返回排空已接受工作的 Promise；等待该结果或所属插件的销毁，后续调用不执行操作，也不会加入正在进行的排空。generator effect 直接 yield 该 `disconnect` 函数，不要包装它，以安排它与自有 source 的清理顺序。
+### 定向投递与广播
 
-在释放依赖它们的 source 或任务存储之前，先停止并排空生产者。复合 source 只断开自己持有的上游订阅，不销毁借用的上游实例。接收回调不能在自身内部等待自己连接的 `dispose()` 或当前发起 emit 的 source 的 `dispose()`；两者都会等待这次调用返回并自等死锁。
+`connection.send(value)` 只投递给该连接的接收者。共享连接即共享方向、在途调用和关闭状态：任何持有者都可以发送或关闭它。`emit(value)` 通过输出当前连接的快照广播。两条路径都在延后的接收回调运行前登记已接受工作。接收者不得修改共享值。并发发送和广播可以重叠；协议不提供 FIFO。
 
-输出会等待所有接收者，即使其中一个失败。接收者可以并发运行；除非生产者主动串行化，连续输出也可以重叠。`SOURCE_DELIVERY_FAILED` 错误在聚合 cause 中保留所有接收失败。有些接收者可能已经提交；source 和 Schedule 都不会重试整次输出。任务连接捕获一个 Schedule runtime，其卸载后会拒绝投递，不会自动切换到替代实例。source fan-out 以 `SOURCE_DELIVERY_FAILED` 报告该拒绝。声明 `schedule` 依赖，并在有效 runtime 上重新创建连接；Schedule 不自动重试或重新绑定。
+定向发送保留接收者的原始拒绝。广播等待每个接收者结束，并以 `SOURCE_DELIVERY_FAILED` 和聚合 cause 报告失败。其他接收者可能已经提交：投递不具备原子性，协议不重试或重放。没有连接的输出直接完成，不执行投递。
+
+### 连接任务输入
+
+组合插件声明 `schedule` 依赖，对包含 `AutomationCandidate.text` 的输出使用 `ctx.schedule.input(taskId).connect(source.output)`。Schedule 在调用方 context 中拥有返回的 `SourceInput<AutomationCandidate>`，并在其 runtime 停止时关闭该输入。每条连接都是提供 `send()` 和 `dispose()` 的普通 `AutomationConnection<AutomationCandidate>`；重复销毁也会等待已接受工作。[Schedule 包](../README.zh.md#source-delivery)拥有任务准入、持久化确认与消息格式。
+
+`input(taskId)` 要求 Schedule 服务已就绪且正在运行，否则抛出 `SOURCE_TASK_RECEIVER_UNAVAILABLE`。停止的 runtime 关闭其输入与连接，不重新绑定。通过已关闭连接发送会以 `SOURCE_CONNECTION_CLOSED` 拒绝；仍然打开但已没有连接的输出在广播时不执行投递。替代服务就绪后，再连接新的输入。
+
+### 时间输入
+
+`TimeSource` 输出数值形式的实际 `Date.now()` 采样。其构造器接收一个不得抛错的失败报告回调。`request()` 取消定时器并请求采样；广播尚未结束时的请求合并为下一次采样。`arm(next)` 向有限的 Unix 纪元毫秒截止时间设置一个有界定时器分段；`arm(undefined)` 取消它。长等待的每个分段都发出采样，由接收者根据计算出的截止时间重新设置定时器。销毁停止请求，并等待已接受的输出。
+
+Schedule runtime 使用由 `SourceInput<number>` 实现的 `runtime.connect(time.output)`。其接收者直接在修改 FIFO 内等待到期扫描，而不是请求另一个时间信号。runtime 任务策略计算下一个截止时间，并拥有重复规则求值、批量投递、最小投递间隔及已存发生时点。`TimeSource` 不解析时间规则。其数值输出不能直接连接文本任务输入；共同的连接语义不取消载荷类型约束。
 
 -----
 
@@ -60,11 +80,34 @@ await second.dispose()
 <details>
 <summary>实现细节——点击展开</summary>
 
-source 通过实例拥有的订阅集合和具有类型约束的回调通信。`SourceReceiver<T>` 是异步回调；`SourceConnection.dispose()` 停止新调用，并在每次调用时等待同一批已接受工作；`AutomationCandidate.text` 承载额外输入，不做截断。基类在调用接收者之前记录已接收的调用，因此断开连接和销毁 source 都能等待这些调用。基类不拥有轮询频率、重复规则求值器、source 工厂或依赖图解释器。子类先停止外部生产者并排空输入，再销毁输出订阅。
+### 清理所有权
 
-`SourceError` 声明在 [`src/source-error.ts`](../src/source-error.ts)。Schedule 根 bundle 包含它的唯一构造器：包入口在运行时导出 `SourceError`，仅以类型导出 `AutomationSource`；[`./source`](../src/source.ts) leaf 通过根包 specifier 导入 `SourceError`。根入口不在运行时导入 leaf，因此该导入不产生运行时循环。若 leaf 使用相对导入，会加载 tsc 生成的 `source-error.js` 副本，产生第二个构造器，并破坏 leaf 与根 bundle 之间的 `instanceof` 与错误身份。
+即使连接已经断开，输入端与输出端仍跟踪已接受调用。关闭任一端点会拒绝新连接并关闭其已有连接；关闭连接会拒绝新发送。重复销毁会等待同一次排空。`AutomationSource.dispose()` 先关闭并排空自有输入，此时输出仍可使用，再关闭并排空输出。子类在调用它之前停止外部生产者。借用的上游 Source 仍由其创建者拥有。
 
-source 直接与其他 source 通信。Schedule 把最终 source 输出连接到已有任务，并拥有任务查找、活动状态检查、投递准入、目标 Session 激活和持久化确认。订阅见 [`src/source.ts`](../src/source.ts)，接收者、连接、候选值和错误码类型见 [`src/source-types.ts`](../src/source-types.ts)；[Schedule 包](../README.zh.md#source-delivery)拥有任务连接与投递格式。
+接收者不得在已接受调用内部等待自身连接、输入、Source 或当前发起输出者的销毁：这些清理会等待该调用返回。连接与端点的销毁等待调用结束；投递错误由原始发送或广播负责报告。
+
+排空期间可能发出数据的复合 Source 必须先于任务输入完成清理。任务输入由调用方拥有的 Cordis effect 与其公共 disposer 分开；yield 包装 `input.dispose()` 或 `connection.dispose()` 的函数不会转移该 effect 的所有权。将任务消费者放入显式拥有的注入子作用域，再在同一个同步 generator effect 中先 yield 原始子作用域 disposer，后 yield 复合 Source 清理。逆序清理先排空复合 Source，再销毁消费者子作用域。
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import type { AutomationCandidate, AutomationSource, ScheduleId } from '@deepseek-ai/dsh-schedule'
+
+export function ownComposite(ctx: Context, id: ScheduleId, composite: AutomationSource<AutomationCandidate>): void {
+  const consumer = ctx.inject(['schedule'], scope => {
+    scope.schedule.input(id).connect(composite.output)
+  })
+  ctx.effect(function* () {
+    yield consumer.dispose
+    yield () => composite.dispose()
+  })
+}
+```
+
+### 发布与实现归属
+
+根入口拥有 `SourceError`、`SourceInput`、`SourceOutput` 与 `TimeSource` 的运行时构造器。leaf 从 `@deepseek-ai/dsh-schedule` 导入这些构造器，并重新导出输入、输出和时间 class。因此根入口与 leaf 的消费者共享构造器身份。根入口只以类型导出 `AutomationSource`，不在运行时导入 leaf。根入口拥有的协议通过相对路径导入其错误；编译后的 leaf 不得通过相对路径导入根入口所拥有 class 的独立副本。
+
+[`source-protocol.ts`](../src/source-protocol.ts) 拥有输入、输出与定向连接；[`source.ts`](../src/source.ts) 拥有复合 Source 输入先于输出的清理；[`time-source.ts`](../src/time-source.ts) 拥有时钟请求与分段定时器。[`source-types.ts`](../src/source-types.ts) 定义接收者、连接、候选值和错误码类型。Schedule 保留任务查找、激活、准入与持久化职责。
 
 </details>
 
@@ -82,11 +125,11 @@ source 直接与其他 source 通信。Schedule 把最终 source 输出连接到
 <a id="model-experience"></a>
 ## 模型体验
 
-### source 生成的任务输入
+### Source 生成的任务输入
 
 #### 模型看到什么
 
-source 之间的观测值不是模型输入。任务连接把候选文本提交给 Schedule 任务服务；[Schedule 的 source 观测章节](../README.zh.md#source-observations-in-the-target-session)定义最终记录的用户消息与格式。本入口不添加工具或提示词段落。
+Source 之间的观测与 TimeSource 采样不是模型输入。文本任务输入将候选文本提交给 Schedule；[Schedule 的 source 观测章节](../README.zh.md#source-observations-in-the-target-session)定义最终记录的用户消息与格式。本入口不添加工具或提示词段落。
 
 #### Token 影响
 
@@ -94,12 +137,13 @@ source 之间的观测值不是模型输入。任务连接把候选文本提交�
 
 #### KV Cache 影响
 
-source 订阅不会改变请求前缀。任务投递通过 Schedule 服务追加输入；回放与请求构造由该服务负责。
+Source 连接不会改变请求前缀。任务投递通过 Schedule 服务追加输入；回放与请求构造由该服务负责。
 
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与后续工作
 
-- source 实例、连接和中间状态仅存在于进程内。插件必须明确拥有需要持久化的观测状态，并在重启后重建组合。
-- 组合通过代码完成。本入口不提供 source 编辑器、持久化依赖图、内置观测实现或通用轮询与重试策略。
-- source 的所有者在发布之前限制观测大小与输出速率。本 API 完整保留候选文本，不做截断，也不设置入口级大小上限。持续以共享间隔发布的 source 可以无限推迟定时投递；它必须为定时工作留出容量。
-- Schedule 的 source 连接只接受已存在的活动任务，并保留其时间规则。这种连接不替换已存储的时间模型，也不创建纯事件任务。正在执行、处于最小间隔内或正在恢复未完成投递的任务会以 `SOURCE_TASK_BUSY` 拒绝本次候选投递；source fan-out 以 `SOURCE_DELIVERY_FAILED` 报告该拒绝。任务不会存储或排队该候选，恢复持有的是上一条收件箱投递。生产者负责重试与限速。
+- Source 实例、连接和中间状态仅存在于进程内。插件必须明确拥有需要持久化的观测状态，并在重启后重建组合。
+- 组合通过代码完成，不提供 Source 编辑器、持久化依赖图、handler 层或通用轮询与重试策略。TimeSource 接受已计算的截止时间，不增加任务类型或配置格式。
+- Source 的所有者在发布之前限制观测大小与输出速率。本 API 完整保留候选文本，不做截断，也不设置入口级大小上限。持续以共享间隔发布的 Source 可以无限推迟定时投递；它必须为定时工作留出容量。
+- 文本任务输入保留已有任务时间规则。正在执行、处于最小间隔内或正在恢复未完成投递的任务会以 `SOURCE_TASK_BUSY` 拒绝本次候选。直接发送保留该错误；广播聚合该错误。任务不会存储或排队该候选，恢复持有的是上一条收件箱投递。生产者负责重试与限速。
+- Source 投递不增加纯事件任务 schema 或持久化连接图。共享连接不转移排他所有权，也不提供按调用者区分的访问控制。
