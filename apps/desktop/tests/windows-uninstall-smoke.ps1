@@ -138,13 +138,14 @@ try {
                 [void][InstallerCapture]::SendMessage($filename, 0xC, [IntPtr]::Zero, $savedReport)
                 if ([InstallerCapture]::ControlText($filename) -ne $savedReport) { throw 'Save filename was not set' }
                 [InstallerCapture]::Click([InstallerCapture]::GetDlgItem($picker, 1))
+                # The native picker briefly creates a probe file; the returning report dialog signals the real write is finished.
+                $save = Wait-Text $strings.INSTALLER_UNINSTALL_SAVE
                 $timer = [Diagnostics.Stopwatch]::StartNew()
                 while (-not (Test-Path -LiteralPath $savedReport)) {
                     if ($timer.Elapsed.TotalSeconds -gt 20) { throw "Save report did not create file: $([InstallerCapture]::VisibleText($process.Id))" }
                     Start-Sleep -Milliseconds 50
                 }
                 if (-not ([IO.File]::ReadAllText($savedReport).Contains($environmentKey))) { throw 'Saved report omitted registry key' }
-                $save = Wait-Text $strings.INSTALLER_UNINSTALL_SAVE
                 [void][InstallerCapture]::PostMessage([InstallerCapture]::TopLevel($save), 0x10, [IntPtr]::Zero, [IntPtr]::Zero)
             }
             $finishedText = $copy.finished
@@ -217,6 +218,14 @@ try {
     if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -ne $newCommand) { throw 'Stale uninstaller changed B command owner' }
     if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Stale uninstaller changed B PATH' }
     if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Stale uninstaller changed B protocol' }
+    New-Item -ItemType Directory -Force -Path $userDataPath | Out-Null
+    $replacementData = Join-Path $userDataPath 'replacement-state.txt'
+    [IO.File]::WriteAllText($replacementData, 'replacement installation data')
+    $replacementLinks = @{}
+    foreach ($folder in @([Environment]::GetFolderPath('DesktopDirectory'), [Environment]::GetFolderPath('Programs'))) {
+        $link = Join-Path $folder ($ProductName + '.lnk')
+        if (Test-Path -LiteralPath $link) { $replacementLinks[$link] = [Convert]::ToBase64String([IO.File]::ReadAllBytes($link)) }
+    }
     Copy-Item -LiteralPath $newPath -Destination $installPath -Recurse
     $process = Start-Process $uninstaller -ArgumentList ('/currentuser _?=' + $installPath) -PassThru
     $welcome = Wait-Text $copy.welcome
@@ -233,6 +242,11 @@ try {
     if ($entry.InstallLocation.TrimEnd('\') -ne $newPath) { throw 'Directory-only removal deleted B registration' }
     if ((Get-ItemProperty ('HKCU:\' + $environmentKey)).Path -ne ($newCommand + ';C:\Windows')) { throw 'Directory-only removal changed B PATH' }
     if ((Get-Item ('HKCU:\' + $protocolKey + '\shell\open\command')).GetValue('') -ne $newProtocol) { throw 'Directory-only removal changed B protocol' }
+    if ([IO.File]::ReadAllText($replacementData) -ne 'replacement installation data') { throw 'Directory-only removal changed shared user data' }
+    foreach ($link in $replacementLinks.Keys) {
+        if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($link)) -ne $replacementLinks[$link]) { throw 'Directory-only removal changed replacement shortcut' }
+    }
+    if ((Get-ItemProperty ('HKCU:\' + $ownerKey)).Directory -ne $newCommand) { throw 'Directory-only removal changed B command owner' }
     $installPath = $newPath
     Copy-Item -LiteralPath (Join-Path $installPath ('Uninstall ' + $ProductName + '.exe')) -Destination $uninstaller -Force
     $process = Start-Process $uninstaller -ArgumentList ('/S _?=' + $installPath) -PassThru -WindowStyle Hidden
