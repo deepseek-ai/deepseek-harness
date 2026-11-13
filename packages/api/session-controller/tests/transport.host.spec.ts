@@ -86,7 +86,7 @@ function controllers(
   history: HistoryController
   web: WebController
 } {
-  roots.add(ctx.root)
+  roots.add(ctx[Context.root])
   installSessionReadTestServices(ctx)
   const history = new HistoryController(ctx)
   return { history, web: new WebController(ctx, history, promote) }

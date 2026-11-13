@@ -88,7 +88,6 @@
     "@deepseek-ai/dsh-attachment": "workspace:*",
     "@deepseek-ai/dsh-fs-local": "workspace:*",
     "@deepseek-ai/dsh-ptc-runtime-node": "workspace:*",
-    "@modelcontextprotocol/client": "2.2.0",
-    "js-yaml": "^4.3.2"
+    "@modelcontextprotocol/client": "2.2.0"
   }
 }
