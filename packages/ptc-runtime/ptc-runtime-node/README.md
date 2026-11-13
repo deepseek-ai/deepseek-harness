@@ -80,6 +80,8 @@ For other values, `inspect(...values)` renders strings directly and uses Node's 
 
 All execution modes provide the complete native Node console, whose stdout and stderr writes enter the captured output. Model instructions say: "Use inspect(...values) to display output. Do not use console."
 
+Model instructions also restrict raw template literals (`String.raw`) to short text whose backslashes must stay exactly as written, such as regular expressions. Other text, including file contents and commands, is requested as ordinary strings, and file contents as an array of quoted line strings joined with newlines.
+
 `run_code` sets `discardCompletion: true`: function return values and final expression values are omitted without JSON serialization, while inspected output remains visible. Direct runtime consumers receive the usual lossless-JSON completion unless they set this option.
 
 Direct filesystem, network and subprocess operations remain Node operations, subject to the selected OS sandbox. Nested host bindings cross the control channel; PTC tool calls retain the registry's visibility, ordering, logging and approval rules. Running a program does not change the Session's standing policy or automatically replay it after a denial.

@@ -80,6 +80,8 @@ profile 编辑器可从 `@deepseek-ai/dsh-ptc-runtime-node/configuration` 导入
 
 所有执行模式都提供完整的 Node 原生 console，其 stdout 和 stderr 写入会进入捕获输出。模型指引要求：“使用 inspect(...values) 展示输出，不要使用 console。”
 
+模型指引还要求：raw 模板字面量（`String.raw`）只用于反斜杠必须原样保留的短文本，例如正则表达式。其他文本，包括文件内容和命令，用普通字符串书写；文件内容写成逐行引号字符串组成的数组，再用换行符拼接。
+
 `run_code` 设置 `discardCompletion: true`：函数返回值和末尾表达式的值不经过 JSON 序列化，也不出现在结果中，显式 inspect 的输出仍然可见。直接调用运行时的消费方在未设置此选项时，仍可取得原有的无损 JSON 完成值。
 
 直接文件系统、网络与子进程操作仍是 Node 操作，受所选 OS 沙箱约束。嵌套 Host 绑定通过控制通道调用；PTC 工具调用保留注册表的可见性、排序、日志和审批规则。运行程序不会改变 Session 的常设策略，也不会在拒绝后自动重放程序。
