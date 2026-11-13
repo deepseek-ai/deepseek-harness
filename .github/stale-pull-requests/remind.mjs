@@ -7,8 +7,10 @@
  * comments once per stage and mentions the author. Activity starts a new cycle. Pull requests labelled `DO_NOT_CLOSE`
  * and pull requests opened by bots receive no reminders. The workflow never closes pull requests.
  *
- * Each run posts at most `MAX_COMMENTS_PER_RUN` reminders, least recently updated pull requests first, so a backlog
- * spreads over several days within GitHub's content-creation limits. A failed pull request is reported and skipped.
+ * Each run reads the timeline of every open pull request that is neither exempt nor bot-authored, because `updated_at`
+ * also changes on events that are not activity. Each run posts at most `MAX_COMMENTS_PER_RUN` reminders, least recently
+ * updated pull requests first, so a backlog spreads over several days within GitHub's content-creation limits. A failed
+ * pull request is reported and skipped.
  */
 
 /** Label that exempts a pull request from reminders. */
@@ -80,7 +82,7 @@ export function dueReminder({ createdAt, timeline, now }) {
 export function reminderBody(author, days) {
   return [
     `<!-- stale-pr-reminder:${days} -->`,
-    `@${author} This pull request has had no activity for ${days} days. Please update it, reply to keep it open, or close it if it is no longer needed. Add the \`${EXEMPT_LABEL}\` label to stop these reminders.`,
+    `@${author} This pull request has had no activity for ${days} days. Please update it, reply to keep it open, or close it if it is no longer needed. Add the \`${EXEMPT_LABEL}\` label, or ask a maintainer to add it, to stop these reminders.`,
   ].join('\n')
 }
 
@@ -97,14 +99,11 @@ export function reminderBody(author, days) {
 export async function remindStalePullRequests({ github, context, core, now = new Date(), sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   const { owner, repo } = context.repo
   const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', sort: 'updated', direction: 'asc', per_page: 100 })
-  // Pull requests updated within the last six days skip the timeline read: a reminder becomes due at least seven days
-  // after the last activity, and the day margin covers the time a run takes to reach a pull request.
-  const cutoff = now.getTime() - (REMINDER_DAYS[0] - 1) * DAY_MS
   let posted = 0
   let failed = 0
   for (const pull of pulls) {
     if (posted >= MAX_COMMENTS_PER_RUN) break
-    if (isBot(pull.user) || Date.parse(pull.updated_at) > cutoff) continue
+    if (isBot(pull.user)) continue
     if (pull.labels.some(label => label.name === EXEMPT_LABEL)) continue
     try {
       const timeline = await github.paginate(github.rest.issues.listEventsForTimeline, { owner, repo, issue_number: pull.number, per_page: 100 })

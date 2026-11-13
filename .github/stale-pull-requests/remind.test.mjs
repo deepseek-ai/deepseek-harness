@@ -41,12 +41,13 @@ test('mentions, labels and cross references are not activity', () => {
   assert.equal(dueReminder({ createdAt: daysAgo(20), timeline: [at('labeled', 1), at('cross-referenced', 1), at('review_requested', 1)], now }), 14)
 })
 
-test('reminders mention the author and skip exempt, bot-authored and recently updated pull requests', async () => {
+test('reminders mention the author and skip exempt and bot-authored pull requests', async () => {
   const pull = (number, overrides = {}) => ({ number, user: human, labels: [], created_at: daysAgo(20), updated_at: daysAgo(20), ...overrides })
   const pulls = [
     pull(1),
     pull(2, { labels: [{ name: 'DO_NOT_CLOSE' }] }),
     pull(3, { user: { login: 'dependabot[bot]', type: 'Bot' } }),
+    // A bot comment or label refreshes `updated_at` without being activity.
     pull(4, { updated_at: daysAgo(1) }),
     pull(6),
     pull(5),
@@ -75,12 +76,12 @@ test('reminders mention the author and skip exempt, bot-authored and recently up
   const failures = []
   const core = { info() {}, warning: message => warnings.push(message), setFailed: message => failures.push(message) }
   await remindStalePullRequests({ github, context: { repo: { owner: 'o', repo: 'r' } }, core, now, sleep: async ms => sleeps.push(ms) })
-  assert.deepEqual(timelines, [1, 6, 5])
+  assert.deepEqual(timelines, [1, 4, 6, 5])
   assert.deepEqual(warnings, ['#6: locked'])
   assert.equal(failures.length, 1)
-  assert.deepEqual(comments.map(({ issue_number }) => issue_number), [1, 5])
+  assert.deepEqual(comments.map(({ issue_number }) => issue_number), [1, 4, 5])
   assert.match(comments[0].body, /^<!-- stale-pr-reminder:14 -->\n@author This pull request has had no activity for 14 days\./)
-  assert.deepEqual(sleeps, [1000, 1000])
+  assert.deepEqual(sleeps, [1000, 1000, 1000])
 })
 
 test('a run posts at most 100 reminders', async () => {
