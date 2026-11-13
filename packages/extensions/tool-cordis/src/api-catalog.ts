@@ -7194,7 +7194,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ImSender',
-    declaration: 'export class ImSender {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult>;\n    async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream>;\n    target(chat: ImChatKey, options: Pick<ImSendOptions, \'thread\' | \'quote\'> = {}): Target;\n    referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined): unknown;\n    sessionOf(message: ImMessageKey): SessionId | undefined;\n}',
+    declaration: 'export class ImSender {\n    constructor(readonly ctx: Context, readonly config: ImConfig, readonly deps: ImSenderDeps);\n    async start(): Promise<void>;\n    async dispose(): Promise<void>;\n    send(chat: ImChatKey, content: Fragment, options: ImSendOptions = {}): Promise<ImSendResult>;\n    async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream>;\n    target(chat: ImChatKey, options: Pick<ImSendOptions, \'thread\' | \'quote\'> = {}): Target;\n    referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined, thread?: boolean | string): unknown;\n    sessionOf(message: ImMessageKey): SessionId | undefined;\n}',
   },
   {
     name: 'ImSenderDeps',

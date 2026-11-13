@@ -149,66 +149,80 @@ export class ImService extends Service implements ImApi {
       await receiveReady
       await this.intake.receive(session)
     })
-    try {
-      await this.store.start()
-      await this.sessions.start()
-      await this.sender.start()
-    } catch (error) {
-      offReceive()
-      failReceive(error)
-      // A load that fails halfway releases what it already opened, newest first: the domain facility keeps a handle
-      // until its owner closes it, so an unfinished load would make every later reload fail with `already-open
-      // im_messages`. The hosted agents are released first because `sessions.start()` opens them, and a secondary
-      // failure is reported rather than masking the first one.
-      const releases: [string, () => Promise<void>][] = [
-        ['the hosted agents', () => this.agentHost.disposeAll()],
-        ['the sender', () => this.sender.dispose()],
-        ['the session records', () => this.sessions.dispose()],
-        ['the message store', () => this.store.dispose()],
-      ]
-      for (const [what, release] of releases) {
-        try {
-          await release()
-        } catch (failure: unknown) {
-          ctx.logger.warn('IM shutdown after a failed load left %s open: %s', what, String(failure))
-        }
-      }
-      throw error
-    }
-    openReceive()
-    ctx.on('send', (bot, result) => {
-      void this.intake.outbound(bot, result).catch((error: unknown) => {
-        ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
-      })
-    })
-    this.activity.start()
-    this.outputs.start()
-    ctx.inject(['tools', 'systemPrompt'], (scoped) => { applyTools(scoped, this, this.config) })
-    const dispatcher = this.dispatcher
-    if (dispatcher !== undefined) {
-      ctx.inject(['systemPrompt'], (scoped) => {
-        const { prompt } = dispatcher.config
-        scoped.systemPrompt.section({
-          name: prompt.name, order: prompt.order, interpolate: false, text: ({ agent }) => dispatcher.guidance(agent),
-        })
-      })
-    }
     let closing = false
     let releaseTimer: ReturnType<typeof setTimeout> | undefined
     let warnTimer: ReturnType<typeof setTimeout> | undefined
-    yield async () => {
+    const checkActive = (): void => {
+      if (closing || ctx.fiber.uid === null) {
+        throw new Error('The IM service was disposed before startup finished.')
+      }
+    }
+    const startup = (async () => {
+      await this.store.start()
+      checkActive()
+      await this.sessions.start()
+      checkActive()
+      await this.sender.start()
+      checkActive()
+      ctx.on('send', (bot, result) => {
+        void this.intake.outbound(bot, result).catch((error: unknown) => {
+          ctx.logger.warn('IM outbound message of bot %s was not stored: %s', bot.id, String(error))
+        })
+      })
+      this.activity.start()
+      this.outputs.start()
+      ctx.inject(['tools', 'systemPrompt'], (scoped) => { applyTools(scoped, this, this.config) })
+      const dispatcher = this.dispatcher
+      if (dispatcher !== undefined) {
+        ctx.inject(['systemPrompt'], (scoped) => {
+          const { prompt } = dispatcher.config
+          scoped.systemPrompt.section({
+            name: prompt.name, order: prompt.order, interpolate: false, text: ({ agent }) => dispatcher.guidance(agent),
+          })
+        })
+      }
+      openReceive()
+    })()
+    let teardownTask: Promise<void> | undefined
+    const teardown = (reason?: unknown): Promise<void> => {
       closing = true
       this.sessions.hold()
+      offReceive()
+      failReceive(reason)
       clearTimeout(releaseTimer)
       clearTimeout(warnTimer)
       clearInterval(this.timer)
-      await this.intake.dispose()
-      await this.outputs.dispose()
-      await this.agentHost.disposeAll()
-      await this.sender.dispose()
-      await this.sessions.dispose()
-      await this.store.dispose()
+      teardownTask ??= (async () => {
+        await startup.catch(() => {})
+        // Order matters: `intake` stops dispatching first, `sessions` drains any in-flight recovery or admission that
+        // could still open an agent handle before `agentHost.disposeAll()` closes every live handle, and `outputs`
+        // closes open turn streams before `sender` and `store` close their storage domains.
+        const releases: [string, () => Promise<void>][] = [
+          ['the intake', () => this.intake.dispose()],
+          ['the session records', () => this.sessions.dispose()],
+          ['the hosted agents', () => this.agentHost.disposeAll()],
+          ['the turn outputs', () => this.outputs.dispose()],
+          ['the sender', () => this.sender.dispose()],
+          ['the message store', () => this.store.dispose()],
+        ]
+        for (const [what, release] of releases) {
+          try {
+            await release()
+          } catch (failure: unknown) {
+            ctx.logger.warn('IM shutdown left %s open: %s', what, String(failure))
+          }
+        }
+      })()
+      return teardownTask
     }
+    ctx.effect(() => () => teardown(new Error('The IM service was disposed before startup finished.')))
+    try {
+      await startup
+    } catch (error) {
+      await teardown(error)
+      throw error
+    }
+    yield () => teardown()
     // Schedule release on a macrotask once the composition settles so nested `ctx.inject` registrations (such as
     // `im_read_file` inside `applyTools`) finish before any recovered turn or inbound dispatch runs.
     const release = (): void => {

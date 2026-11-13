@@ -11,7 +11,7 @@ import { ImChatKey, ImMessageKey, ImSourceId } from '@deepseek-ai/dsh-im/src/api
 import { BY } from '../src/commands.ts'
 import { Config } from '../src/config.ts'
 import * as sessionCommandsPlugin from '../src/index.ts'
-import { COMPOSITION, delivery } from '../../im/tests/support/sessions-harness.ts'
+import { boot, COMPOSITION, delivery } from '../../im/tests/support/sessions-harness.ts'
 import {
   bootCommands, cleanAll, inbound, CHAT, THREAD, type CommandsHarness,
 } from './support/harness.ts'
@@ -682,6 +682,40 @@ describe('lifecycle', () => {
     rejectOpen(new Error('receipt db offline'))
     await expect(mounting).rejects.toThrow(/receipt db offline/)
     await expect(earlyDispatch).rejects.toThrow(/receipt db offline/)
+    await ctx.fiber.dispose()
+  })
+
+  it('closes the receipt domain and allows clean remount when unloaded while storageDomain.open is pending', async () => {
+    const base = await boot({ withoutStart: true })
+    const ctx = base.ctx
+    ctx.provide('im', { sessions: { forChat: () => [] } })
+    ctx.provide('commands', { list: () => [] })
+
+    const realOpen = ctx.storageDomain.open.bind(ctx.storageDomain)
+    let enteredOpen!: () => void
+    const openEntered = new Promise<void>((resolve) => { enteredOpen = resolve })
+    let releaseOpen!: () => void
+    const openGate = new Promise<void>((resolve) => { releaseOpen = resolve })
+    let pauseFirstOpen = true
+    vi.spyOn(ctx.storageDomain, 'open').mockImplementation(async (spec) => {
+      const opened = await realOpen(spec)
+      if (pauseFirstOpen) {
+        pauseFirstOpen = false
+        enteredOpen()
+        await openGate
+      }
+      return opened
+    })
+
+    const sub = ctx.plugin(sessionCommandsPlugin, Config({}))
+    await openEntered
+    const disposing = sub.dispose()
+    releaseOpen()
+    await disposing
+
+    // The domain opened during the cancelled startup was closed, so mounting again succeeds without `already-open`.
+    const remounted = await ctx.plugin(sessionCommandsPlugin, Config({}))
+    await remounted.dispose()
     await ctx.fiber.dispose()
   })
 })

@@ -575,4 +575,96 @@ describe('ImService facade', () => {
     await taken.close()
     released.mockRestore()
   })
+
+  it('drains in-flight session admissions before disposing hosted agents on shutdown and warns on secondary release errors', async () => {
+    const base = await boot({ withoutStart: true, config: { sources: SOURCES } })
+    const ctx = base.ctx
+    await ctx.plugin(Satori)
+    await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    ctx.provide('attachments', { saveImages: async () => [] } as never)
+    const imFiber = await ctx.plugin(ImService, Config({ sources: SOURCES }))
+    const service = ctx.im
+    const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+
+    await deliver(bot, inbound('m-drain'))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+    const msg = service.history.get(ImMessageKey('fake:bot', 'm-drain'))!
+    const record = await service.sessions.ensure({
+      key: 'drain-test',
+      owner: 'test',
+      composition: COMPOSITION,
+      bindings: [{ chat: CHAT, writable: true }],
+    })
+
+    let enteredCreate!: () => void
+    const createEntered = new Promise<void>((resolve) => { enteredCreate = resolve })
+    let releaseCreate!: () => void
+    const createGate = new Promise<void>((resolve) => { releaseCreate = resolve })
+    const realCreate = ctx.agents.create.bind(ctx.agents)
+    vi.spyOn(ctx.agents, 'create').mockImplementationOnce(async (opts) => {
+      const handle = await realCreate(opts)
+      enteredCreate()
+      await createGate
+      return handle
+    })
+
+    const warnings: string[] = []
+    vi.spyOn(ctx.logger, 'warn').mockImplementation((fmt: unknown) => { warnings.push(String(fmt)) })
+    vi.spyOn(service.outputs, 'dispose').mockRejectedValueOnce(new Error('outputs close glitch'))
+
+    const delivering = service.sessions.deliver(record.sessionId, { id: 'del-drain', mode: 'followup', content: [msg] })
+    await createEntered
+    expect(ctx.agents.get(record.sessionId)).toBeDefined()
+
+    const disposing = imFiber.dispose()
+    releaseCreate()
+    await Promise.allSettled([delivering, disposing])
+
+    // `sessions.dispose()` drained `deliver` before `agentHost.disposeAll()` ran, so the newly created agent was closed.
+    expect(ctx.agents.get(record.sessionId)).toBeUndefined()
+    expect(warnings.some(line => line.includes('IM shutdown left'))).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
+  it('closes opened domains and rejects buffered satori/receive frames when unloaded while startup is still awaiting storage', async () => {
+    const base = await boot({ withoutStart: true, config: { sources: SOURCES } })
+    const ctx = base.ctx
+    await ctx.plugin(Satori)
+    await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    ctx.provide('attachments', { saveImages: async () => [] } as never)
+    const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+
+    const realOpen = ctx.storageDomain.open.bind(ctx.storageDomain)
+    let enteredReceiptsOpen!: () => void
+    const receiptsOpenEntered = new Promise<void>((resolve) => { enteredReceiptsOpen = resolve })
+    let releaseReceiptsOpen!: () => void
+    const receiptsOpenGate = new Promise<void>((resolve) => { releaseReceiptsOpen = resolve })
+    let blockReceiptsOnce = true
+    vi.spyOn(ctx.storageDomain, 'open').mockImplementation(async (spec) => {
+      const opened = await realOpen(spec)
+      if (blockReceiptsOnce && spec.name === 'im_receipts') {
+        blockReceiptsOnce = false
+        enteredReceiptsOpen()
+        await receiptsOpenGate
+      }
+      return opened
+    })
+
+    const sub = ctx.plugin(ImService, Config({ sources: SOURCES }))
+    await receiptsOpenEntered
+    const earlyReceive = deliver(bot, inbound('m-during-cancel'))
+    const earlyRejected = expect(earlyReceive).rejects.toMatchObject({
+      errors: [expect.objectContaining({ message: 'The IM service was disposed before startup finished.' })],
+    })
+
+    const disposing = sub.dispose()
+    releaseReceiptsOpen()
+    await Promise.all([disposing, earlyRejected])
+
+    // Every domain opened before cancellation (`im_messages`, `im_sessions`, `im_receipts`) was closed cleanly.
+    const remounted = await ctx.plugin(ImService, Config({ sources: SOURCES }))
+    expect(ctx.im).toBeDefined()
+    await remounted.dispose()
+    await ctx.fiber.dispose()
+  })
 })

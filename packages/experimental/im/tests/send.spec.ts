@@ -618,6 +618,72 @@ describe('ImSender referrers', () => {
     expect(bot.operations.at(-1)?.target?.referrer).toEqual(REFERRER)
     expect(result.handle.parts).toHaveLength(1)
   })
+
+  it('attaches a stored thread message referrer when thread is a string and quote is omitted', async () => {
+    const threadReferrer = {
+      event_id: 'evt-thread', receivedAt: 1000, chatType: 'topic', chatId: 'chat', messageId: 'm-thread-1',
+      threadId: 'omt_1', rootId: 'om_root_1',
+    }
+    const { bot, sender, store } = await boot()
+    await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-no-ref'), undefined),
+      thread: { id: 'omt_1', root: 'om_root_1' },
+    }, 'none')
+    await store.put({
+      ...inboundDraft(ImMessageKey('fake:bot', 'm-thread-1'), threadReferrer),
+      thread: { id: 'omt_1', root: 'om_root_1' },
+    }, 'none')
+
+    await sender.send(CHAT, h.text('by thread id'), { thread: 'omt_1' })
+    expect(bot.operations.at(-1)?.target).toEqual({
+      chat: { id: 'chat', type: 'group' },
+      thread: 'omt_1',
+      referrer: threadReferrer,
+    })
+
+    await sender.send(CHAT, h.text('by root id'), { thread: 'om_root_1' })
+    expect(bot.operations.at(-1)?.target?.referrer).toEqual(threadReferrer)
+
+    // Blank or unmatched thread ids carry no referrer from other messages.
+    expect(sender.target(CHAT, { thread: '   ' })).not.toHaveProperty('referrer')
+    expect(sender.target(CHAT, { thread: 'omt_unknown' })).not.toHaveProperty('referrer')
+  })
+})
+
+describe('concurrent receipt capacity reservation', () => {
+  it('enforces maxRecords atomically across concurrent distinct operationIds for both send and stream', async () => {
+    const { bot, stub, sender, pool } = await boot({ config: { maxRecords: 1 } })
+    let releaseStubSend!: () => void
+    const stubGate = new Promise<void>((resolve) => { releaseStubSend = resolve })
+    stub.answer = async (call) => {
+      await stubGate
+      return stubResult(call.target, call.content, ['stub-1'])
+    }
+
+    const first = sender.send(STUB_CHAT, h.text('first'), { operationId: 'op-cap-1' })
+    const second = sender.send(STUB_CHAT, h.text('second'), { operationId: 'op-cap-2' })
+    const streamAttempt = sender.stream(CHAT, { operationId: 'op-cap-stream' })
+
+    await expect(second).rejects.toMatchObject({ code: 'capacity' })
+    await expect(streamAttempt).rejects.toMatchObject({ code: 'capacity' })
+    expect(stub.sends).toHaveLength(1)
+    expect(bot.operations).toHaveLength(0)
+    expect(receiptsOf(pool).size).toBe(1)
+
+    releaseStubSend()
+    await expect(first).resolves.toMatchObject({ status: 'confirmed' })
+    expect(receiptsOf(pool).size).toBe(1)
+  })
+
+  it('settles the reserved receipt as failed when opening a platform stream throws synchronously', async () => {
+    const { sender, pool } = await boot({ config: { maxRecords: 1 } })
+    await expect(sender.stream(STUB_CHAT, { operationId: 'op-sync-throw' }))
+      .rejects.toThrow(/does not stream/)
+    expect(receiptsOf(pool).get('op-sync-throw')).toMatchObject({
+      status: 'failed',
+      error: 'the stub bot does not stream',
+    })
+  })
 })
 
 describe('operationId', () => {

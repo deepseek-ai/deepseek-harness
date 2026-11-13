@@ -83,6 +83,7 @@ export class SessionCommands {
   private readonly ready: Promise<ImSessionCommandsDomain>
   private openReady!: (domain: ImSessionCommandsDomain) => void
   private failReady!: (error: unknown) => void
+  private starting: Promise<void> | undefined
   private domain: ImSessionCommandsDomain | undefined
 
   constructor(readonly ctx: Context, readonly config: SessionCommandsConfig) {
@@ -97,22 +98,34 @@ export class SessionCommands {
   }
 
   /** Open the durable receipt store and prune expired command receipts. */
-  async start(): Promise<void> {
+  start(): Promise<void> {
+    const task = this.open()
+    this.starting = task
+    return task
+  }
+
+  private async open(): Promise<void> {
     try {
       const domain = await this.ctx.storageDomain.open(imSessionCommandsDomain)
       this.domain = domain
+      if (this.shutdown.signal.aborted || this.ctx.fiber.uid === null) {
+        throw new Error('The IM session-commands plugin was disposed before startup finished.')
+      }
       await this.prune(domain, Date.now())
       this.openReady(domain)
     } catch (error) {
+      const domain = this.domain
+      this.domain = undefined
+      await domain?.close()
       this.failReady(error)
       throw error
     }
   }
 
-  /** Abort in-flight passthrough commands and close the receipt store. */
+  /** Abort in-flight passthrough commands, wait for startup and dispatches, and close the receipt store. */
   async dispose(): Promise<void> {
     this.shutdown.abort()
-    await Promise.allSettled([...this.chains.values()])
+    await Promise.allSettled([this.starting, ...this.chains.values()])
     const domain = this.domain
     this.domain = undefined
     await domain?.close()

@@ -162,7 +162,7 @@ export class ImSender {
     const quoted = withQuote(content, options.quote)
     const id = options.operationId
     if (id === undefined) {
-      const result = await this.dispatch(chat, target, quoted, options)
+      const result = await this.dispatch(this.botOf(chat), target, quoted, options)
       if (result.status !== 'confirmed') {
         this.ctx.logger.warn('IM publication to %s of session %s was not confirmed (%s): %s',
           chat, options.session ?? '-', result.status, result.error ?? 'no error reported')
@@ -183,24 +183,30 @@ export class ImSender {
   async stream(chat: ImChatKey, options: ImSendOptions & StreamOptions = {}): Promise<MessageStream> {
     this.grant(chat, options.session)
     const target = this.target(chat, options)
+    const bot = this.botOf(chat)
     const id = options.operationId
     if (id === undefined) {
-      return this.watched(this.quoted(this.botOf(chat).stream(target, options), options.quote), chat)
+      return this.watched(this.quoted(bot.stream(target, options), options.quote), chat)
     }
     return await this.serial(id, async () => {
       const previous = this.receipts.get(id)
       if (previous !== undefined) {
         throw new ImError('conflict', `IM operation ${id} already opened a stream (${previous.status}).`)
       }
-      await this.reserve()
-      // The platform stream is opened only once the receipt is reserved: a refusal (a conflict, a full store) must
-      // not leave a platform stream nobody closes.
-      const stream = this.botOf(chat).stream(target, { ...options, idempotencyKey: options.idempotencyKey ?? id })
       const pending: StoredReceipt = {
         chat, ...options.session === undefined ? {} : { session: options.session },
         digest: fingerprint(undefined, options), status: 'pending', createdAt: Date.now(),
       }
-      await this.put(id, pending)
+      await this.reservePending(id, pending)
+      // The platform stream is opened only once its pending receipt holds a reserved slot: a refusal (a conflict, a
+      // full store) never opens a platform stream, and a synchronous open failure settles that receipt.
+      let stream: MessageStream
+      try {
+        stream = bot.stream(target, { ...options, idempotencyKey: options.idempotencyKey ?? id })
+      } catch (error) {
+        await this.settle(id, pending, { status: 'failed', error: messageOf(error) })
+        throw error
+      }
       void stream.done.then(
         async (result) => {
           await this.settle(id, pending, await this.confirmed(result))
@@ -228,7 +234,8 @@ export class ImSender {
 
   /**
    * Core target of one publication: the chat ref of an admitted chat, the caller's thread wish and — when the
-   * publication answers a stored message of this chat — that message's adapter referrer (see {@link referrerOf}).
+   * publication answers a stored message or stored thread of this chat — that message's adapter referrer
+   * (see {@link referrerOf}).
    * @param chat - chat key.
    * @param options - `thread` and `quote`; a `quote` is applied to the content (see {@link send}).
    * @returns the target handed to `bot.send` / `bot.stream`.
@@ -237,7 +244,7 @@ export class ImSender {
     const known = this.deps.store.chat(chat)
     if (known === undefined) throw new ImError('access', `Chat ${chat} is not admitted to IM.`)
     const thread = options.thread
-    const referrer = this.referrerOf(chat, options.quote)
+    const referrer = this.referrerOf(chat, options.quote, thread)
     return {
       chat: { ...known.ref },
       ...thread === undefined ? {} : { thread },
@@ -246,18 +253,32 @@ export class ImSender {
   }
 
   /**
-   * Adapter-private reply context of the message a publication answers (`Target.referrer`): the stored `referrer` of
-   * the quoted message, so a QQ group bot can reply passively and a Lark publication keeps its thread.
+   * Adapter-private reply context of the message or thread a publication answers (`Target.referrer`): the stored
+   * `referrer` of the quoted message (or, when no quote is given, a stored message of the requested thread in the same
+   * chat), so a QQ group bot can reply passively and a Lark publication keeps its thread without an extra lookup.
    * @param chat - chat the publication goes to.
    * @param quote - the message being answered, if any.
-   * @returns the referrer, when the quote names a stored message of the same chat.
+   * @param thread - explicit thread request, if any.
+   * @returns the referrer, when the quote or thread names a stored message of the same chat.
    */
-  referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined): unknown {
-    if (quote === undefined) return undefined
-    const quoted = this.deps.store.get(quote)
-    // A quote outside the chat it is sent to cannot be that chat's passive context; the adapter would send it wrong.
-    if (quoted === undefined || quoted.chat.key !== chat) return undefined
-    return quoted.referrer
+  referrerOf(chat: ImChatKey, quote: ImMessageKey | undefined, thread?: boolean | string): unknown {
+    if (quote !== undefined) {
+      const quoted = this.deps.store.get(quote)
+      // A quote outside the chat it is sent to cannot be that chat's passive context; the adapter would send it wrong.
+      if (quoted === undefined || quoted.chat.key !== chat) return undefined
+      return quoted.referrer
+    }
+    if (typeof thread === 'string') {
+      const id = thread.trim()
+      if (id.length === 0) return undefined
+      return this.deps.store.before(
+        chat,
+        Number.MAX_SAFE_INTEGER,
+        1,
+        message => (message.thread?.id === id || message.thread?.root === id) && message.referrer !== undefined,
+      )[0]?.referrer
+    }
+    return undefined
   }
 
   /**
@@ -291,13 +312,13 @@ export class ImSender {
       }
       return this.receiptResult(previous)
     }
-    await this.reserve()
+    const bot = this.botOf(chat)
     const pending: StoredReceipt = {
       chat, ...options.session === undefined ? {} : { session: options.session },
       digest, status: 'pending', createdAt: Date.now(),
     }
-    await this.put(id, pending)
-    const result = await this.dispatch(chat, target, content, options)
+    await this.reservePending(id, pending)
+    const result = await this.dispatch(bot, target, content, options)
     try {
       await this.settle(id, pending, result)
     } catch (error) {
@@ -310,16 +331,15 @@ export class ImSender {
 
   /**
    * One platform publication; failures become the receipt status they justify (never a claim of delivery).
-   * @param chat - admitted chat key.
+   * @param bot - mounted bot of the target chat.
    * @param target - resolved target.
    * @param content - content to publish.
    * @param options - caller options.
    * @returns the outcome of this dispatch.
    */
   private async dispatch(
-    chat: ImChatKey, target: Target, content: Fragment, options: ImSendOptions,
+    bot: Bot, target: Target, content: Fragment, options: ImSendOptions,
   ): Promise<ImSendResult> {
-    const bot = this.botOf(chat)
     const deadline = this.deadline(options.signal)
     try {
       if (deadline.signal.aborted) return { status: 'failed', error: CANCELLED }
@@ -465,22 +485,28 @@ export class ImSender {
   }
 
   /**
-   * Keep the receipt table bounded: settled records are dropped oldest-first, unresolved ones never are.
+   * Atomically bound the receipt table and persist `pending` inside one serialized write step: settled records are
+   * dropped oldest-first, unresolved ones never are, and concurrent operations with distinct ids cannot both pass the
+   * last slot before writing.
    * @throws ImError `capacity` when every record is still pending.
    */
-  private async reserve(): Promise<void> {
-    const table = this.domainOf().table('receipts')
-    while (table.size >= this.config.maxRecords) {
-      const victim = [...table.entries()]
-        .filter(([, receipt]) => receipt.status !== 'pending')
-        .sort(([, left], [, right]) => left.createdAt - right.createdAt)[0]
-      if (victim === undefined) {
-        throw new ImError('capacity', 'IM receipts are full of unresolved operations; inspect the chats before '
-          + 'sending again.')
+  private reservePending(id: string, pending: StoredReceipt): Promise<void> {
+    return this.writes.run(async () => {
+      const table = this.domainOf().table('receipts')
+      while (table.size >= this.config.maxRecords) {
+        const victim = [...table.entries()]
+          .filter(([, receipt]) => receipt.status !== 'pending')
+          .sort(([, left], [, right]) => left.createdAt - right.createdAt)[0]
+        if (victim === undefined) {
+          throw new ImError('capacity', 'IM receipts are full of unresolved operations; inspect the chats before '
+            + 'sending again.')
+        }
+        await table.delete(victim[0])
+        this.forget(victim[0])
       }
-      await table.delete(victim[0])
-      this.forget(victim[0])
-    }
+      await table.put(id, pending)
+      this.index(id, pending)
+    })
   }
 
   private index(id: string, receipt: StoredReceipt): void {
