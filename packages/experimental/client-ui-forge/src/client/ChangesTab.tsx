@@ -805,6 +805,8 @@ export function ChangesTab({
   const [expansion, setExpansion] = useState<Expansion>({ source: null, texts: {}, open: {} })
   const current = expansion.source === expansionSource ? expansion : { source: expansionSource, texts: {}, open: {} }
   const latest = useRef(expansionSource)
+  // Files whose new side was read ahead for highlighting in this comparison, each read at most once.
+  const contextReads = useRef<{ readonly source: typeof expansionSource; readonly paths: Set<string> }>({ source: null, paths: new Set() })
   useLayoutEffect(() => { latest.current = expansionSource }, [expansionSource])
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set())
   // The line budget counts the files not marked viewed when the diff loads, so later marks leave it unchanged. A file stays
@@ -895,6 +897,23 @@ export function ChangesTab({
         const { [path]: _open, ...open } = value.open
         return { ...value, texts, open }
       })
+    })
+  }
+  /**
+   * Read a local file's new side ahead of any expansion, once per comparison, so its rows can be highlighted with the
+   * lines before them. A change request's files are not read for this, since each read costs a request to the code host.
+   */
+  const readContext = (owner: ChangesData, file: ForgeDiffFile): void => {
+    const path = file.path
+    if (owner.kind !== 'local') return
+    if (contextReads.current.source !== expansionSource) contextReads.current = { source: expansionSource, paths: new Set() }
+    if (contextReads.current.paths.has(path)) return
+    contextReads.current.paths.add(path)
+    void localText(owner.scope, path).then((result) => {
+      const lines = result.ok ? textLines(result.value) : undefined
+      // A read that fails or no longer matches leaves the file as it is, and an expansion reads it again and says why.
+      if (lines === undefined || !matchesHunks(lines, file.hunks)) return
+      update(value => value.texts[path] !== undefined ? value : { ...value, texts: { ...value.texts, [path]: lines } })
     })
   }
   const fileActions = (owner: ChangesData, file: ForgeDiffFile): DiffFileAction[] => {
@@ -1112,8 +1131,8 @@ export function ChangesTab({
   // an effect would hand them the previous diff's links. A render React discards leaves values derived from the same
   // props and state, which the retried render assigns again.
   const callbacks = {
-    data, expandedByDefault, expand, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread, lensTitle,
-    renderSlot, kept, t,
+    data, expandedByDefault, expand, readContext, markViewed, fileActions, publishReview, writeReview, addPending, report, nextThread,
+    lensTitle, renderSlot, kept, t,
   }
   const live = useRef(callbacks)
   live.current = callbacks
@@ -1127,6 +1146,11 @@ export function ChangesTab({
       const { data: owner, expand: open } = live.current
       /* v8 ignore next -- sections render only while changes are loaded */
       if (owner !== null) open(owner, file, index, expansion)
+    },
+    readContext: (file) => {
+      const { data: owner, readContext: read } = live.current
+      /* v8 ignore next -- sections render only while changes are loaded */
+      if (owner !== null) read(owner, file)
     },
     view: (file, viewed) => {
       const { data: owner, markViewed: mark } = live.current

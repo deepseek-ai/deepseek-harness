@@ -33,6 +33,7 @@ import type { ForgePanelKey, NS } from './locales.ts'
 import type { ViewedState } from './viewed-files.ts'
 import type { SectionReach } from './section-reach.ts'
 import type { SourcedAnnotation } from './annotations.ts'
+import { oldSideLines, runKey, sideRun, useContextHighlight, type FileSides, type SideRun } from './highlight-context.ts'
 import css from './ChangesTab.module.css'
 
 type Translate = PropsLocale<typeof NS>['t']
@@ -59,6 +60,8 @@ export interface DiffFileHandlers {
   readonly reveal: (path: string) => void
   /** Show more of one gap of a file. */
   readonly expand: (file: ForgeDiffFile, index: number, expansion: GapExpansion) => void
+  /** Read a file's new side ahead of any expansion, for highlighting rows after its collapsed lines; a source may ignore it. */
+  readonly readContext: (file: ForgeDiffFile) => void
   /** Mark a file viewed, which also collapses it, or clear the mark. */
   readonly view: (file: ForgeDiffFile, viewed: boolean) => void
   /** Rows of a file's menu, read whenever the menu draws. */
@@ -148,23 +151,33 @@ const SIGN: Record<DiffRow['kind'], string> = { add: '+', del: '-', context: '' 
 /** Highlighted tokens of one side's lines by line number, or undefined while the grammar is unavailable. */
 type SideSpans = ReadonlyMap<number, readonly HighlightSpan[]> | undefined
 
-/** A segment ready to draw: collapsed lines, or rows with the tokens of each side. */
+/** A segment ready to draw: collapsed lines, or rows with the tokens of each side and the lines each side numbers. */
 type Prepared =
   | Extract<DiffSegment, { kind: 'gap' | 'folded' }>
-  | { readonly kind: 'rows'; readonly rows: readonly DiffRow[]; readonly old: SideSpans; readonly new: SideSpans }
-
-/** Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. */
-function sideSpans(rows: readonly DiffRow[], side: 'old' | 'new', highlighter: CodeHighlighter): SideSpans {
-  const numbered: { readonly no: number; readonly text: string }[] = []
-  for (const row of rows) {
-    const no = row[side]
-    if (no !== null) numbered.push({ no, text: row.text })
+  | {
+    readonly kind: 'rows'
+    readonly rows: readonly DiffRow[]
+    readonly old: SideSpans
+    readonly new: SideSpans
+    readonly oldRun: SideRun | undefined
+    readonly newRun: SideRun | undefined
   }
-  if (numbered.length === 0) return new Map()
-  const highlighted = highlighter(numbered.map(line => line.text).join('\n'))
+
+/**
+ * Highlight one side of a run of rows as one fragment, so tokens spanning lines keep their state. The tokens are kept by
+ * the run's lines in `kept`, which the caller replaces with the file or the highlighter.
+ */
+function sideSpans(run: SideRun | undefined, highlighter: CodeHighlighter, kept: Map<string, SideSpans>): SideSpans {
+  if (run === undefined) return new Map()
+  const key = runKey(run)
+  const known = kept.get(key)
+  if (known !== undefined) return known
+  const highlighted = highlighter(run.texts.join('\n'))
   if (highlighted === undefined) return undefined
   // Shiki omits a final empty token row, so a final empty line gets no tokens.
-  return new Map(numbered.map((line, index) => [line.no, highlighted[index] ?? []]))
+  const spans = new Map(run.texts.map((_text, index) => [run.first + index, highlighted[index] ?? []]))
+  kept.set(key, spans)
+  return spans
 }
 
 function Code({ text, spans, old, next }: {
@@ -350,10 +363,26 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
         && inHunks(file, [index], thread.selection.comment.side, thread.selection.comment.endLine)))
     return new Set([...folded.hunks].filter(index => !holds(index)))
   }, [folded, editors, review, comments.threads, file])
-  const prepared = useMemo(() => segmentsOf(file, lines, open, foldHunks).map((segment): Prepared => segment.kind !== 'rows'
-    ? segment
-    : { ...segment, old: sideSpans(segment.rows, 'old', highlighter), new: sideSpans(segment.rows, 'new', highlighter) }),
-  [file, lines, open, foldHunks, highlighter])
+  // Runs whose lines stay the same keep their tokens when the file's text arrives or another gap expands.
+  const kept = useMemo(() => new Map<string, SideSpans>(), [file, highlighter])
+  const prepared = useMemo(() => segmentsOf(file, lines, open, foldHunks).map((segment): Prepared => {
+    if (segment.kind !== 'rows') return segment
+    const oldRun = sideRun(segment.rows, 'old')
+    const newRun = sideRun(segment.rows, 'new')
+    return { ...segment, old: sideSpans(oldRun, highlighter, kept), new: sideSpans(newRun, highlighter, kept), oldRun, newRun }
+  }), [file, lines, open, foldHunks, highlighter, kept])
+  // Rows drawn after collapsed lines take the colors of the lines before them once the whole file is known, after they draw.
+  const runs = useMemo(() => prepared.flatMap(segment => segment.kind !== 'rows' ? []
+    : [segment.oldRun, segment.newRun].filter((run): run is SideRun => run !== undefined)), [prepared])
+  const sides = useMemo((): FileSides | undefined => lines === undefined ? undefined
+    : { new: lines, old: oldSideLines(lines, file.hunks) }, [lines, file.hunks])
+  const corrected = useContextHighlight(runs, sides, highlighter, root, selecting)
+  const spansOf = (spans: SideSpans, run: SideRun | undefined): SideSpans => run === undefined ? spans : corrected.get(runKey(run)) ?? spans
+  const collapsed = prepared.some(segment => segment.kind === 'gap')
+  const grammar = languageForPath(file.path) !== undefined
+  useEffect(() => {
+    if (text === undefined && collapsed && grammar) handlers.readContext(file)
+  }, [text, collapsed, grammar, file, handlers])
   // Returns whether the range was accepted; a range across hunks or outside them keeps the previous selection.
   const choose = (side: 'L' | 'R', line: number, extend: boolean): boolean => {
     /* v8 ignore next -- the line buttons and hover pluses that choose a range draw only with review actions */
@@ -530,6 +559,8 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
     </div>
   }
   for (const [at, segment] of prepared.entries()) {
+    const oldSpans = segment.kind === 'rows' ? spansOf(segment.old, segment.oldRun) : undefined
+    const newSpans = segment.kind === 'rows' ? spansOf(segment.new, segment.newRun) : undefined
     if (segment.kind === 'gap') {
       rows.push(gapRow(segment))
       for (const item of unplaced) {
@@ -565,7 +596,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
       for (const [index, pair] of splitRows(segment.rows).entries()) {
         rows.push(<div key={`${at}-${index}`} className={css.pair} data-diff-pair={pairKind(pair)}
           onPointerEnter={(event) => { extendAdd(event.buttons, pair.left?.no ?? null, pair.right?.no ?? null) }}>
-          {cell(pair.left, segment.old, 'L')}{cell(pair.right, segment.new, 'R')}
+          {cell(pair.left, oldSpans, 'L')}{cell(pair.right, newSpans, 'R')}
         </div>)
         notes(`notes-${at}-${index}`, pair)
       }
@@ -576,7 +607,7 @@ function Lines({ file, text, open, handlers, split, wrap, review, visible, comme
         rows.push(<div key={`${at}-${index}`} className={clsx(css.line, css[row.kind], (marked('L', row.old) || marked('R', row.new)) && reviewCss.selected)} data-diff-line={row.kind}
           onPointerEnter={(event) => { extendAdd(event.buttons, row.old, row.new) }}>
           {singleSide !== 'R' && number('L', row.old, row.kind === 'del' && !labeled)}{singleSide !== 'L' && number('R', row.new, row.kind !== 'del' && !labeled)}<span className={css.sign}>{SIGN[row.kind]}</span>
-          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? segment.old?.get(row.old) : segment.new?.get(row.new)} />
+          <Code text={row.text} old={row.old} next={row.new} spans={row.kind === 'del' ? oldSpans?.get(row.old) : newSpans?.get(row.new)} />
         </div>)
         rows.push(...commentsAt('L', row.old), ...commentsAt('R', row.new))
       }
