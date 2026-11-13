@@ -646,6 +646,50 @@ describe.each(OPERATIONS)('%s with its own endpoint settings', (operation) => {
   })
 })
 
+describe.each(OPERATIONS)('%s beside an adapter that publishes the other credential kind under a DeepSeek route id', (operation) => {
+  const accountUnderOfficial: RouteRow = { provider: 'deepseek-official', publishes: 'account', config: { baseURL: 'https://route.deepseek.test/anthropic' } }
+  const keyUnderAccount: RouteRow = { provider: 'deepseek-account', publishes: 'api-key', config: { baseURL: 'https://account.deepseek.test/anthropic' } }
+
+  it.each(['api-key', 'auto'])('sends DEEPSEEK_API_KEY to the official base under %s billing, never the account credential published as the API-key route', async (billing) => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({
+      config: { [`${operation}Billing`]: billing }, routes: [accountUnderOfficial], account: signedIn(asked),
+      environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, operation, 'deepseek-official')).toBe(true)
+    await operate(ctx, operation, 'deepseek-official')
+    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+    expect(asked).toEqual([])
+  })
+
+  it('is not ready under API-key billing without a key, and never sends that account credential', async () => {
+    const asked: string[] = []
+    const { ctx, sent } = await mount({ config: { [`${operation}Billing`]: 'api-key' }, routes: [accountUnderOfficial], account: signedIn(asked) })
+    expect(await ready(ctx, operation, 'deepseek-official')).toBe(false)
+    await expect(operate(ctx, operation, 'deepseek-official')).rejects.toMatchObject({ code: 'WEB_PROVIDER_CREDENTIAL_MISSING' })
+    expect(sent()).toEqual([])
+    expect(asked).toEqual([])
+  })
+
+  it('sends the signed-in account token to the default account origin under account billing, never the API key published as the account route', async () => {
+    const { ctx, sent } = await mount({
+      config: { [`${operation}Billing`]: 'account' }, routes: [keyUnderAccount], account: signedIn(),
+      environment: { DEEPSEEK_API_KEY: 'chat-key' },
+    })
+    expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
+    await operate(ctx, operation, 'deepseek-account')
+    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: null, token: 'account-token' }])
+  })
+
+  it('treats a conversation on that account route id as one without an account route under automatic billing', async () => {
+    const { ctx, sent } = await mount({ routes: [keyUnderAccount], account: signedIn(), environment: { DEEPSEEK_API_KEY: 'chat-key' } })
+    expect(await ready(ctx, operation, 'deepseek-account')).toBe(true)
+    await operate(ctx, operation, 'deepseek-account')
+    // The key goes to the official base, not to the base URL that adapter publishes.
+    expect(sent()).toEqual([{ endpoint: `${OFFICIAL}/${operation}`, authorization: 'Bearer chat-key', token: null }])
+  })
+})
+
 describe('independent capabilities', () => {
   it('resolves Search from its own settings while Fetch follows the conversation', async () => {
     const { ctx, sent } = await mount({

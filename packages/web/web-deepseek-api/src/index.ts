@@ -22,7 +22,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import { credentialRef, credentialRefConfigured, resolveCredentialRef, type CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type {} from '@deepseek-ai/dsh-deepseek-account'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
-import { assertUsableApiKey } from '@deepseek-ai/dsh-llm'
+import { assertUsableApiKey, type LlmCredentialKind } from '@deepseek-ai/dsh-llm'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-web'
 import { DeepSeekFetchApiProvider } from './fetch.ts'
@@ -126,6 +126,15 @@ const OFFICIAL_PROVIDER = 'deepseek-official'
 
 /** Model route whose published credential an operation can send. */
 type RouteName = typeof ACCOUNT_PROVIDER | typeof OFFICIAL_PROVIDER
+
+/**
+ * Credential kind each DeepSeek model route publishes. Billing chooses between the two kinds by route id, so an
+ * adapter registered under one of these ids that publishes the other kind is not that route.
+ */
+const ROUTE_CREDENTIAL_KIND = {
+  [ACCOUNT_PROVIDER]: 'account',
+  [OFFICIAL_PROVIDER]: 'api-key',
+} as const satisfies Record<RouteName, LlmCredentialKind>
 
 /**
  * Launch-environment variable naming the DeepSeek deployment the model routes default to. Without the account route,
@@ -257,13 +266,14 @@ function ruleSources(ctx: Context, capability: Capability, rule: Rule): DeepSeek
  * @param ctx - context with the optional model service.
  * @param capability - the capability whose diagnostics a misconfigured source names.
  * @param provider - the route.
- * @returns the source; undefined when no mounted route publishes a credential as `provider`; a misconfigured source
- *   when the route's settings do not resolve or its published base URL does not parse.
+ * @returns the source; undefined when no mounted route publishes a credential of that route's kind as `provider`; a
+ *   misconfigured source when the route's settings do not resolve or its published base URL does not parse.
  */
 function routeSource(ctx: Context, capability: Capability, provider: RouteName): DeepSeekWebAuthSource | undefined {
   try {
     const credential = ctx.get('llm')?.routeCredential(provider)
-    return credential === undefined ? undefined : { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
+    if (credential === undefined || credential.kind !== ROUTE_CREDENTIAL_KIND[provider]) return undefined
+    return { kind: 'route', baseURL: toolsBase(credential.baseURL), credential }
   } catch (error: unknown) {
     return misconfigured(capability, provider, error)
   }

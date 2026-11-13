@@ -132,7 +132,7 @@ Search API 接收 `query`、`count`（配置的结果数，或请求中更小的
 - 查询和 URL 约束由远端服务执行。2026-10-16 抓取无法解析的目标域名时返回 HTTP 500，而非文档所述的 404，其失败信息与端点失败附带相同的端点指引。Fetch 既不暴露目标状态，也不暴露最终重定向 URL，因此结果报告 HTTP 200 和请求 URL；提供者丢弃 API 返回的页面标题。
 - `available()` 无法查询异步凭据存储；`ready()` 可以，因此凭据存储缺少密钥时，模型步骤会撤下这两个工具。直接调用 `ctx.web.search()` 或 `ctx.web.fetch()` 仍可能因凭据缺失失败。
 - Search 限速只约束单个插件实例内的发送时间。同一账号下的其他进程和客户端共享账号级 5 QPS 限制，彼此不协调，网络抖动也可能使请求集中到达；HTTP 429 会使该次搜索失败，随后 `dsh-tool-web` 会使整个多查询调用失败。Fetch 不限速，因此并行的 `web_fetch` 调用可能超过 Fetch 限制。
-- 路由端点与凭据只认以 `deepseek-official` 或 `deepseek-account` 注册的适配器通过 `ctx.llm.routeCredential` 发布的内容；不发布凭据的适配器（例如测试回放适配器）视为没有路由，其会话使用 `DEEPSEEK_API_KEY` 与官方基础地址。
+- 路由端点与凭据只认以 `deepseek-official` 或 `deepseek-account` 注册的适配器通过 `ctx.llm.routeCredential` 发布的内容。不发布凭据的适配器（例如测试回放适配器），或发布另一种凭据的适配器（以 `deepseek-official` 发布账号凭据，或以 `deepseek-account` 发布 API 密钥），都视为没有路由：其会话使用 `DEEPSEEK_API_KEY` 与官方基础地址，`account` 计费则像没有账号路由时一样询问账号服务。
 
 <a id="dev-note"></a>
 ### 开发备注

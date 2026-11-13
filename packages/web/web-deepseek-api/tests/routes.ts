@@ -25,12 +25,14 @@ export interface RouteRow {
   throws?: unknown
   /** Base URL published in place of the resolved one, as a route publishing an unparsable base would. */
   publishedBaseURL?: string
+  /** Credential kind published under this id, as another adapter registered under it can; defaults to the route's own kind. */
+  publishes?: 'api-key' | 'account'
 }
 
 /** The credential `route` publishes, resolved from its config as the route plugin resolves it on each call. */
 function credentialOf(ctx: Context, route: RouteRow): RouteCredential {
   const environment = launchEnvironmentOf(ctx)
-  if (route.provider === 'deepseek-official') {
+  if ((route.publishes ?? (route.provider === 'deepseek-official' ? 'api-key' : 'account')) === 'api-key') {
     const resolved = resolveAdapterOptions(plainOptions(OfficialConfig(route.config ?? {})), environment)
     const ref = resolved.apiKeyEnv
     return {
