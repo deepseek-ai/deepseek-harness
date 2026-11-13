@@ -100,7 +100,7 @@ export class DeepSeekAdapter<C extends Connection = Connection> extends LlmAdapt
       const files = new RequestFiles(this.files, {
         baseURL: connection.baseURL, headers: auth.headers,
       },
-      connection.filePolicy, connection.filesApiTimeoutMs, signal, activity)
+      connection.filePolicy, signal, activity)
       let inline = false
       while (true) {
         signal.throwIfAborted()
