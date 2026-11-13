@@ -1,0 +1,11 @@
+version: 1
+scenario: web-fetch-transport-failure
+profile: headless
+composition: web-fetch-transport-failure
+recording: authored
+permission: workspace-write
+header:
+  class: web-fetch-transport-failure
+  pin: true
+  systemPromptSource: web-fetch
+  toolSchemasSource: web-fetch

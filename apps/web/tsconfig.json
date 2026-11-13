@@ -246,6 +246,7 @@
     "tests/auto-review-approval.e2e.ts",
     "tests/auto-review-denial.e2e.ts",
     "tests/bash-abort-row.e2e.ts",
+    "tests/web-fetch-failure-row.e2e.ts",
     "tests/interrupted-turn.e2e.ts",
     "tests/skill-tool-row.e2e.ts",
     "tests/tool-details.e2e.ts",
