@@ -669,3 +669,38 @@ def test_resumed_permission_survives_different_launch_defaults(tmp_path: Path) -
         _assert_request_permission(request, "read-only", "ask")
         assert resumed.harness.config.env["DSH_PERMISSION_MODE"] == "danger-full-access"
     assert _permission_facts(_read_events(resumed.logs)) == saved
+
+
+def test_resume_permission_override_applies_before_tools_and_survives_restart(tmp_path: Path) -> None:
+    with _runtime(tmp_path, [], initial_permission="workspace-write") as original:
+        session = original.harness.start_session(_SESSION_ID)
+        assert _permission_command(original, session, "workspace-write").result.kind == "success"
+    saved = _permission_facts(_read_events(original.logs))
+    target = tmp_path / "resumed-write.txt"
+    completions = [
+        _Completion("", tool_call=("write", {"file_path": str(target), "content": "resumed with full access"})),
+        _Completion("OVERRIDE_APPLIED"),
+    ]
+    with _runtime(tmp_path, completions, initial_permission="workspace-write") as resumed:
+        session = resumed.call(
+            resumed.harness.resume_session, _SESSION_ID, {"permission_mode": "danger-full-access"},
+        )
+        assert resumed.model.captured() == [], "resume must not send new model input"
+        result = resumed.call(session.run, "Write the marker, then finish.")
+        assert result.final_response == "OVERRIDE_APPLIED"
+        assert target.read_text(encoding="utf-8") == "resumed with full access"
+        for request in resumed.model.captured():
+            _assert_request_permission(request, "danger-full-access", "never")
+        assert resumed.harness.config.env["DSH_PERMISSION_MODE"] == "workspace-write"
+    facts = _permission_facts(_read_events(resumed.logs))
+    assert facts[:len(saved)] == saved
+    assert facts[len(saved):] == [
+        {"type": "permission/preset", "data": {"preset": "danger-full-access"}},
+        {"type": "sandbox/mode", "data": {"mode": "danger-full-access"}},
+        {"type": "approval/policy", "data": {"policy": "never"}},
+    ]
+    with _runtime(tmp_path, [_Completion("STILL_FULL")], initial_permission="workspace-write") as again:
+        session = again.call(again.harness.resume_session, _SESSION_ID)
+        assert again.call(session.run, "Continue without tools.").final_response == "STILL_FULL"
+        _assert_request_permission(again.model.captured()[0], "danger-full-access", "never")
+    assert _permission_facts(_read_events(again.logs)) == facts
