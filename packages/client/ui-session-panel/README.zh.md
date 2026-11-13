@@ -44,7 +44,18 @@ kind: "package-reference"
 
 面板隐藏时也要可见的标记（例如需要处理的红点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。
 
-插件把面板的行作为 Component Factory `conversation.session.panel.row` 提供。各包的分栏与环境行都用 `renderFactorySlot('conversation.session.panel.row', props)` 渲染自己的行，使不同分栏的图标、文字与尾部区域对齐。每行有一个沿用行文字颜色的 16px 装饰图标、单行内容（溢出时以省略号截断），以及可选的尾部数值或控件。`menu` 放在尾部区域之后的行操作（例如「更多」按钮），位于 16px 宽的一列，中心距行末端 14px；其中的普通 `button` 有 24px 点击区和三级文字色图标，悬停时图标变深、没有底色，因此不需要自己的 tooltip。鼠标悬停在行上、焦点在行内或其菜单打开时显示，没有悬停能力的设备上始终显示。传入 `onActivate` 时整行成为一个按钮，尾部区域与 `menu` 仍是各自独立的控件；带操作或行操作的行在悬停时以及菜单打开期间整行填充。`className` 追加到行的类名上，`attributes`（例如 `role`、`data-*` 标记与右键菜单触发属性）落在行元素上，其余属性被忽略。
+各行共享同一外观，但不共享组件。分栏的组件或「环境」分栏的行条目自己写行的标记并标出各个部分，由面板的样式表统一排版，因此不同包的图标、文字与尾部区域对齐，而行里放什么由各包自己决定。
+
+| 标记 | 部分 |
+|---|---|
+| `data-session-panel-row` | 行：占 28px 一行。带操作或菜单的行在悬停时以及其菜单打开期间整行高亮。 |
+| `data-row-part="body"` | 图标与文字。用 `<button>` 作为 body 时，它就是这一行的操作，点击区域覆盖整行；尾部区域与菜单仍是位于其上的独立控件。 |
+| `data-row-part="icon"` | body 内的 16px 装饰图标，沿用行文字颜色；需标记 `aria-hidden`。 |
+| `data-row-part="content"` | body 内的单行文字，溢出时以省略号截断。 |
+| `data-row-part="trailing"` | body 之后的数值或控件。 |
+| `data-row-part="menu"` | 行操作（例如「更多」按钮），位于 16px 宽的一列，中心距行末端 14px。其中的普通 `button` 有 24px 点击区和三级文字色图标，悬停时图标变深、没有底色，因此不需要自己的 tooltip。鼠标悬停在行上、焦点在行内或其菜单打开时显示，没有悬停能力的设备上始终显示。 |
+
+行没有的部分就不要写：有 `<button>` body 或菜单部分的行才会高亮。没有渲染任何内容的菜单部分（例如目标没有菜单项时的共享菜单按钮）视同不存在：不占位置，行也不会因它高亮。每条针对某个部分的规则只有一个类的优先级，因此行自己的类可以调整它。
 
 -----
 
@@ -60,13 +71,13 @@ kind: "package-reference"
 
 | 文件 | 作用 |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | 字典、行 Factory、开关、面板、「环境」分栏与项目行 |
+| [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
 | [`src/client/visibility.ts`](src/client/visibility.ts) | 呈现方式、共享可见性状态、停靠探针与每个会话的停靠空间 |
 | [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、停靠探针、分栏标题与 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
-| [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | `conversation.session.panel.row` Factory 渲染的面板行 |
+| [`src/client/SessionPanel.module.css`](src/client/SessionPanel.module.css) | 面板的几何、停靠探针，以及带标记的行的样式规则 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
 
 </details>

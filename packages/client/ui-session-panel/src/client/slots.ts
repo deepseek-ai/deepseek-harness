@@ -10,21 +10,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-context-menu/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type { NS } from './locales.ts'
-import type { PanelRowProps } from './PanelRow.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface SlotFactoryMap {
-    /**
-     * One icon-led fact row of the Session panel, for the rows that sections
-     * and Environment row entries render: a 16px decorative icon, single-line
-     * content that clips with an ellipsis, an optional trailing area, row
-     * actions that show on hover and focus, and an optional whole-row action.
-     * Rows from every package render through it, so they share one geometry
-     * and the columns the panel aligns to.
-     */
-    'conversation.session.panel.row': { scope: 'root'; props: PanelRowProps }
-  }
-
   interface SlotMap {
     /**
      * Sections of the Session panel. `id` addresses the section, `order` sorts
