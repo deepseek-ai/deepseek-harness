@@ -73,15 +73,17 @@ function compiledClientStyle(
   fileId: string,
   expression: string,
 ): CompiledClientStyle {
-  const path = relative(packageDir, fileId).split(sep).join('/').replace(/^lib\/types\//, 'src/')
+  // Rolldown canonicalizes module ids through symbolic links; the package directory arrives as the caller wrote it.
+  const file = realpathSync(fileId)
+  const path = relative(realpathSync(packageDir), file).split(sep).join('/').replace(/^lib\/types\//, 'src/')
   if (!path.startsWith('../')) return { path, expression }
-  let directory = dirname(fileId)
+  let directory = dirname(file)
   while (dirname(directory) !== directory) {
     const manifestPath = join(directory, 'package.json')
     if (existsSync(manifestPath)) {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string }
       if (typeof manifest.name === 'string') {
-        return { path: `node_modules/${manifest.name}/${relative(directory, fileId).split(sep).join('/')}`, expression }
+        return { path: `node_modules/${manifest.name}/${relative(directory, file).split(sep).join('/')}`, expression }
       }
     }
     directory = dirname(directory)

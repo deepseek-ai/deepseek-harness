@@ -2,7 +2,7 @@
  * Pins shared client-bundle preset rules: build modes, module-edge purity,
  * source-map chaining, and physical watch dependencies hidden behind virtual CSS Modules.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -297,6 +297,25 @@ describe('static Client dependency delivery', () => {
       .toContain(`.${exports.classes.panel}{display:flex}`)
     expect(stylesheets!['src/global.css']!.text(require))
       .toContain('.overlay{position:fixed}')
+  })
+
+  it('names local styles below the package when the package directory is a symbolic link', async () => {
+    const outer = mkdtempSync(join(tmpdir(), 'dsh-static-symlink-'))
+    onTestFinished(() => { rmSync(outer, { recursive: true, force: true }) })
+    const real = join(outer, 'package')
+    mkdirSync(join(real, 'lib/types'), { recursive: true })
+    mkdirSync(join(real, 'src'), { recursive: true })
+    writeFileSync(join(real, 'package.json'), JSON.stringify({ name: REQUESTING_PACKAGE, type: 'module' }))
+    writeFileSync(join(real, 'lib/types/index.js'), 'import classes from "./Panel.module.css"\nexport { classes }\n')
+    writeFileSync(join(real, 'src/Panel.module.css'), '.panel { display: flex; }\n')
+    const linked = join(outer, 'linked')
+    symlinkSync(real, linked, 'dir')
+
+    const output = await clientChunkOutput(linked, config(linked), 'index.js')
+    const artifact = await import(`data:text/javascript,${encodeURIComponent(output)}`) as StaticArtifact
+    const meta = artifact[STATIC_MODULE_MANIFEST_EXPORT].meta
+    if (meta === undefined) throw new Error('static CSS metadata missing')
+    expect(Object.keys(meta().stylesheets ?? {})).toEqual(['src/Panel.module.css'])
   })
 })
 
