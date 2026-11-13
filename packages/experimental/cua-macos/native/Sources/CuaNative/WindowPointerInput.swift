@@ -32,7 +32,7 @@ final class WindowPointerInput {
     @MainActor static func mouseMove(in route: WindowRoute, at point: WindowPoint, checkCancellation: @Sendable () throws -> Void) throws {
         try checkCancellation()
         try Self.validate(point, in: route)
-        try validateSystemWindow(route)
+        try validateWindow(route)
         let screen = screenPoint(point, in: route)
         try checkSystemHit(route, at: screen)
         guard let event = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
@@ -45,12 +45,12 @@ final class WindowPointerInput {
         try checkCancellation()
     }
 
-    private static func validateSystemWindow(_ route: WindowRoute) throws {
+    private static func validateWindow(_ route: WindowRoute) throws {
         try NativePlatform.verify(route.owner)
         try NativePlatform.requireUnlocked(NativePlatform.sessionLocked())
         let current = try NativePlatform.ownedWindow(route.owner.pid, route.windowID)
         guard current.bounds == route.bounds else {
-            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before system-pointer input; read fresh state")
+            throw NativeFailure(code: "WINDOW_CHANGED", message: "Window moved or resized before pointer input; read fresh state")
         }
     }
 
@@ -61,24 +61,23 @@ final class WindowPointerInput {
     /// Input-transparent windows do not obscure a target; AppKit owns mouse hit testing.
     static func requireSystemPointerTarget(_ route: WindowRoute, frontPID: Int32?, hitWindowID: Int) throws {
         guard frontPID == route.owner.pid, hitWindowID == Int(route.windowID) else {
-            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "System-pointer input requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
+            throw NativeFailure(code: "FOREGROUND_REQUIRED", message: "Pointer input requires foreground PID \(route.owner.pid) and mouse-hit window \(route.windowID); observed foreground PID \(frontPID.map(String.init) ?? "unknown") and mouse-hit window \(hitWindowID). Call app.activate() or use performAction with an advertised AXRaise, then observe again")
         }
     }
 
     /// Send one window-directed transition at the current cursor. A release can be outside the window.
     func toggleMouse(in route: WindowRoute, button: String, isDown: Bool,
-                     isolation: isolated (any Actor)? = #isolation, validatePressGeometry: () throws -> Void) async throws {
+                     isolation: isolated (any Actor)? = #isolation) async throws {
         let selected = try Self.button(button)
+        try Self.validateWindow(route)
         guard let screen = CGEvent(source: nil)?.location else {
             throw NativeFailure(code: "NATIVE_ERROR", message: "Could not read the current pointer position")
         }
         let point = WindowPoint(x: screen.x - route.bounds.x, y: screen.y - route.bounds.y)
         if isDown {
             try await Self.checkSystemHit(route, at: screen)
-            try validatePressGeometry()
             try Self.validate(point, in: route)
         }
-        try Self.validateSystemWindow(route)
         let event = try mouseEvent(source: Self.source(), route: route, screen: screen, local: point,
                                    type: isDown ? Self.down(selected) : Self.up(selected),
                                    button: selected, clickState: 1, subtype: 3, group: Self.clickGroup())
@@ -222,7 +221,7 @@ final class WindowPointerInput {
             previous = local
         }
         if useSystemPointer {
-            try Self.validateSystemWindow(route)
+            try Self.validateWindow(route)
             try await Self.checkSystemHit(route, at: down.location)
             try Self.requireReleasedButtons()
             try checkCancellation()
