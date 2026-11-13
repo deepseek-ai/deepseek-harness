@@ -7,11 +7,11 @@ import type { SessionPanelDockable, SessionPanelPresentation, SessionPanelVisibi
 export const PINNED_STORAGE_KEY = 'dsh.sessionPanel.pinned'
 
 /**
- * Smallest end gutter that holds the docked panel, in CSS px: 48px clear of
+ * Smallest end gutter that holds the docked panel, in CSS px: 40px clear of
  * the transcript column (past the width handle's 24px offset and 10px strip),
- * the panel's 280px minimum width, and a 16px edge margin.
+ * the panel's 300px minimum width, and an 8px edge margin.
  */
-export const DOCK_MIN_GUTTER = 344
+export const DOCK_MIN_GUTTER = 348
 
 const NO_ENTRIES: SessionPanelDockable = new Map()
 
