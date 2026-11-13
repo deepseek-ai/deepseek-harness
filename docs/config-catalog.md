@@ -931,6 +931,29 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-account -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-deepseek-chat-import -->
+<a id="deepseek-aidsh-deepseek-chat-import"></a>
+
+## `@deepseek-ai/dsh-deepseek-chat-import`
+
+- `inject`: `typert` · `connection` · `sessionPersistence` · `workspaceRegistry`
+- `source`: [`packages/experimental/deepseek-chat-import/src/index.ts:36`](../packages/experimental/deepseek-chat-import/src/index.ts)
+
+```ts config-catalog
+/** Deployment limits of the importer. */
+export interface Config {
+  /** Most Sessions one import writes, choosing the conversations the export index lists as most recently updated. */
+  maxSessions: number
+  /** Largest export archive, in bytes, one upload may carry; the whole archive is held in memory while it is imported. */
+  maxUploadBytes: number
+  /** Largest declared uncompressed size, in bytes, of one archive entry; larger entries are not decompressed. */
+  maxEntryBytes: number
+  /** Largest UTF-8 size, in bytes, of an imported title, matching the session-title service's limit of the composition. */
+  maxTitleBytes: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-deepseek-chat-import -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-api-speech-to-text -->
 <a id="deepseek-aidsh-experimental-api-speech-to-text"></a>
 

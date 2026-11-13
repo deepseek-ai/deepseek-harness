@@ -73,6 +73,7 @@ describe('release families', () => {
       '@deepseek-ai/dsh-cua-bundle',
       '@deepseek-ai/dsh-experimental-cua-macos',
       '@deepseek-ai/dsh-cua',
+      '@deepseek-ai/dsh-deepseek-chat-import',
       '@deepseek-ai/dsh-experimental-forge-bundle',
       '@deepseek-ai/dsh-experimental-forge-github',
       '@deepseek-ai/dsh-experimental-forge-session',

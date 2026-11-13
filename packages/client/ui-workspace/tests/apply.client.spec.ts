@@ -894,6 +894,26 @@ describe('ui-workspace apply', () => {
     unsubscribe()
   })
 
+  it('registers the reusable picker Factory and its own directory-flow hole without an outside declaration', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(b.slots.snapshot('factory:workspace.picker')).toMatchObject([{
+      type: 'factory',
+      name: 'workspace.picker',
+      scope: 'root',
+      children: [{ type: 'slot', name: 'workspace.picker.directoryFlow', kind: 'single', scope: 'root', occupants: [] }],
+    }])
+    expect(b.slots.spec('workspace.picker.directoryFlow')).toEqual({ kind: 'single', scope: 'root' })
+    // The hole is independent of the hero and sidebar declarations, which stay absent here.
+    expect(b.slots.spec('conversation.hero.workspace.directoryFlow')).toBeUndefined()
+    expect(b.slots.spec('sidebar.workspaces.directoryFlow')).toBeUndefined()
+    // Registry-contribution disposal proof: the definition and its hole leave with the fiber.
+    await fiber.dispose()
+    expect(b.slots.snapshot('factory:workspace.picker')).toEqual([])
+    expect(b.slots.spec('workspace.picker.directoryFlow')).toBeUndefined()
+  })
+
   it('rejects the browser search callback on a Session Controller business error', async () => {
     const b = await bench()
     b.search.mockImplementationOnce(async () => ({
@@ -926,6 +946,7 @@ describe('ui-workspace apply', () => {
     expect(b.slots.entries('shell.overlay')).toHaveLength(0)
     expect(b.slots.entries('workspace.toast')).toHaveLength(0)
     expect(b.slots.snapshot('factory:workspace.toast.content')).toEqual([])
+    expect(b.slots.snapshot('factory:workspace.picker')).toEqual([])
   })
 })
 

@@ -882,6 +882,7 @@ describe('web e2e: plugin manager', () => {
       ['@deepseek-ai/dsh-experimental-cot-translation-bundle', 1],
       ['@deepseek-ai/dsh-experimental-session-titles-bundle', 1],
       ['@deepseek-ai/dsh-experimental-badge-skill-bundle', 1],
+      ['@deepseek-ai/dsh-deepseek-chat-import', 1],
       ['@deepseek-ai/dsh-subagent-codex', 0],
       ['@deepseek-ai/dsh-subagent-claude-code', 0],
     ])

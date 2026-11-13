@@ -155,6 +155,7 @@
     { "path": "./packages/client/ui-settings-web-search" },
     { "path": "./packages/client/ui-user-questions" },
     { "path": "./packages/client/ui-trajectory/tsconfig.client.json" },
+    { "path": "./packages/experimental/deepseek-chat-import/tsconfig.client.json" },
     { "path": "./packages/session-query/session-log-export/tsconfig.client.json" },
     { "path": "./packages/client/ui-open-in-app" },
     { "path": "./packages/client/ui-theme/tsconfig.client.json" },

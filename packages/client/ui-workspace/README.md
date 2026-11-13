@@ -117,7 +117,41 @@ Client callers can pass `prompt`, `whenDraftExists`, and `clearPreviousDraft` in
 
 ### The directory-flow hole
 
-Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`) that the composed picker package's client half fills with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. The sidebar Add workspace action preserves an existing blank Session and its draft. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+Each registration declares a **directory-flow child hole** (`single` kind: `conversation.hero.workspace.directoryFlow` / `sidebar.workspaces.directoryFlow`), and the `workspace.picker` Factory declares `workspace.picker.directoryFlow`; the composed picker package's client half fills all three with its picking interaction — the `-native` backend's renderless OS-chooser driver, an in-app browsing dialog under a `-browse` composition. The flat **Add workspace...** action renders only while the surface's hole is occupied; an empty hole means the composition has no picking affordance. The sidebar Add workspace action preserves an existing blank Session and its draft. This package owns the trigger and the adoption: the occupant reports one picked path per open through the hole's owner conversation (`open`/`busy`/`onPicked`/`onCancel`/`onError`), and the owner adopts it through the object layer, selecting the committed Workspace only after its list projection has refreshed.
+
+### The reusable Workspace picker
+
+Another plugin renders the hero's Workspace picker through the root-scoped `workspace.picker` Component Factory instead of importing this package's component. Its caller input, the type `WorkspacePickerInput` from `ui-workspace/client`, is the hero's owner props: `open`, `anchorRef`, `selectedId`, `onPick`, and `onClose`. The caller owns the anchor control, the open state, and what a pick means, and closes the menu in `onPick`. An occurrence lists the existing Workspaces and, while a directory-picker package occupies `workspace.picker.directoryFlow`, **Add workspace...**, which runs that flow, calls `workspaces.create({ path })`, and passes the new Workspace id to `onPick`; adoption failures stay in this package's folder-error dialog. The definition and its hole are registered directly in `apply`, because they depend on no other declaration, and leave with this plugin.
+
+A caller needs only the standard `renderFactorySlot` prop that every registered component receives and the type-only `ui-workspace/client` import that loads the Factory declaration; its own registration declares nothing for the call. Without ui-workspace the call renders its optional `fallback`. The menu portals to the document body and positions against `anchorRef`, above a primitives `Modal`, so an occurrence may render inside the caller's dialog.
+
+```tsx
+import { useRef, useState } from 'react'
+import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { PropsRenderFactories } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-workspace/client'
+
+function WorkspaceField({ label, renderFactorySlot }: PropsRenderFactories & { label: string }) {
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  const [workspaceId, setWorkspaceId] = useState<WorkspaceId | undefined>(undefined)
+  return (
+    <>
+      <button ref={anchorRef} type="button" onClick={() => { setOpen(value => !value) }}>{label}</button>
+      {renderFactorySlot('workspace.picker', {
+        open,
+        anchorRef,
+        selectedId: workspaceId,
+        onPick: (picked) => {
+          setOpen(false)
+          setWorkspaceId(picked)
+        },
+        onClose: () => { setOpen(false) },
+      })}
+    </>
+  )
+}
+```
 
 ### Session row actions
 

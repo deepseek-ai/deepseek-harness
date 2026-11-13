@@ -253,7 +253,8 @@ describe('package dependency scope', () => {
       .toEqual(['generatedWorktreeName', 'CREATED_RECORD', 'createdWorktreeSchema'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-fs']).toEqual(['FsError'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session'])
-      .toEqual(['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'])
+      .toEqual(['SESSION_FORMAT_VERSION', 'Session', 'SessionLogOffset', 'SessionSeq', 'appendPluginRecord', 'pluginRecordOf'])
+    expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-session-title']).toEqual(['normalizeSessionTitle'])
     expect(PACKAGE_DEPENDENCY_POLICY.peerRequiredHostExports['@deepseek-ai/dsh-timeout']).toEqual(['deadline'])
   })
 

@@ -92,11 +92,18 @@ const PEER_REQUIRED_HOST_EXPORTS = {
   // The forge panel matches ctx.fs failures with `instanceof FsError`.
   '@deepseek-ai/dsh-fs': ['FsError'],
   '@deepseek-ai/dsh-scope': ['carrierKeyOf', 'createScope', 'scopeOf', 'scopeTarget'],
+  // Imported message and tool-call ids use the installed runtime's brands.
+  '@deepseek-ai/dsh-llm': ['MessageId', 'ToolCallId'],
   // appendPluginRecord writes through the Session class's private log; pluginRecordOf is stateless.
-  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'appendPluginRecord', 'pluginRecordOf'],
+  // The DeepSeek chat importer validates its seed with the installed Session class before storing it.
+  '@deepseek-ai/dsh-session': ['SESSION_FORMAT_VERSION', 'Session', 'SessionLogOffset', 'SessionSeq', 'appendPluginRecord', 'pluginRecordOf'],
   '@deepseek-ai/dsh-session-persistence': ['SessionPersistenceNotFoundError'],
+  // Imported titles follow the installed title service's normalization.
+  '@deepseek-ai/dsh-session-title': ['normalizeSessionTitle'],
   // Readers recognize a deadline's TimeoutReason only by `instanceof` against their own copy.
   '@deepseek-ai/dsh-timeout': ['deadline'],
+  // Imported web tool results must render exactly like the installed web tools' results and cards.
+  '@deepseek-ai/dsh-tool-web': ['fetchMetaFromValue', 'formatFetchOutput', 'formatSearchOutput', 'searchMetaFromValue'],
 } as const satisfies HostDependencyExports
 
 /** Exact import specifier to reviewed runtime exports. */
