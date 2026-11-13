@@ -174,15 +174,31 @@ it('keeps rollout approval and website recovery separate without tag creation or
   const workflow = load(text) as {
     name: string
     on: { workflow_dispatch: { inputs: Record<string, { required?: boolean; default?: unknown }> } }
-    jobs: Record<string, { environment?: unknown; env?: Record<string, string>; needs?: string[] }>
+    jobs: Record<string, {
+      name?: string
+      outputs?: Record<string, string>
+      if?: string
+      environment?: unknown
+      env?: Record<string, string>
+      needs?: string[]
+    }>
   }
   expect(workflow.name).toBe('Publish Desktop · Rollout & Website')
   expect(workflow.on.workflow_dispatch.inputs.package_run_attempt!.required).toBe(true)
   expect(workflow.on.workflow_dispatch.inputs.upload_website!.default).toBe(false)
   expect(workflow.on.workflow_dispatch.inputs.rollout_percentage!.default).toBe('')
   expect(workflow.jobs.publish!.environment).toContain('desktop-production')
-  expect(workflow.jobs['upload-website-installer']!.needs).toContain('publish')
-  expect(workflow.jobs['purge-website-installer']!.needs).toContain('upload-website-installer')
+  expect(workflow.jobs.publish!.if).toBe("needs.prepare.outputs.rollout-requested == 'true'")
+  const upload = workflow.jobs['upload-website-installer']!
+  const purge = workflow.jobs['purge-website-installer']!
+  expect(workflow.jobs.prepare!.outputs!['rollout-requested']).toBe('${{ steps.check.outputs.rollout-requested }}')
+  expect(upload.name).toBe('Website ${{ needs.prepare.outputs.label }}')
+  expect(upload.environment).toBe('desktop-production')
+  expect(upload.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.result == 'success' && needs.prepare.outputs.preset != 'test' && (needs.publish.result == 'success' || (needs.publish.result == 'skipped' && needs.prepare.outputs.rollout-requested == 'false')) }}")
+  expect(purge.environment).toBeUndefined()
+  expect(purge.if).toBe("${{ !cancelled() && inputs.upload_website && needs.prepare.outputs.preset != 'test' && needs.upload-website-installer.result == 'success' }}")
+  expect(purge.needs).toEqual(['route', 'prepare', 'upload-website-installer'])
+  expect(upload.needs).toEqual(['route', 'prepare', 'publish'])
   expect(text).not.toMatch(/create-github-app-token|publish-desktop-ci.ts|resolve-retained-desktop-publish-ci.ts/u)
   expect(text).toContain('publish-desktop-rollout-ci.ts route')
   expect(workflow.jobs.publish!.env!.DESKTOP_UPLOAD_WEBSITE).toBe('${{ inputs.upload_website }}')
@@ -207,11 +223,12 @@ it.each(['apply', 'changed-approval', 'replaced-feed', 'website'] as const)('che
     await record.record({ type: 'feeds-complete' })
     const env = { RUNNER_NAME: 'runner', GITHUB_REPOSITORY: 'owner/repo', DSH_PACKAGING_CONFIG_DIR: config,
       DESKTOP_PUBLISH_ROUTE: JSON.stringify({ ...f.manifest.source, runnerLabel: 'dsh-runner' }),
-      DESKTOP_ROLLOUT_PERCENTAGE: scenario === 'website' ? '' : '30', DESKTOP_UPLOAD_WEBSITE: scenario === 'website' ? 'true' : 'false',
+      DESKTOP_ROLLOUT_PERCENTAGE: scenario === 'website' ? '   ' : '30', DESKTOP_UPLOAD_WEBSITE: scenario === 'website' ? 'true' : 'false',
       GITHUB_OUTPUT: join(f.root, 'output'), GITHUB_STEP_SUMMARY: join(f.root, 'summary') }
     const context = await prepareDesktopRolloutCi(env)
     await publishDesktopRolloutCi('check', env)
     expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`approval=${context.approval}`)
+    expect(await readFile(env.GITHUB_OUTPUT, 'utf8')).toContain(`rollout-requested=${scenario !== 'website'}\n`)
     if (scenario === 'website') {
       const summary = await readFile(env.GITHUB_STEP_SUMMARY, 'utf8')
       expect(summary).toContain('官网安装包面向所有下载用户，不受自动更新放量比例限制')

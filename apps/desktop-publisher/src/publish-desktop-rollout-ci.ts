@@ -85,7 +85,7 @@ export async function publishDesktopRolloutCi(mode: 'check' | 'apply' | 'website
   const { route, root, recordsRoot, config, manifest, plan, target, website, destination, approval } = context
   if (mode === 'check') {
     if (env.GITHUB_OUTPUT) await appendFile(env.GITHUB_OUTPUT,
-      `approval=${approval}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\nwebsite-destination=${createHash('sha256').update(`${config.bucket}/${route.target}`).digest('hex')}\nlabel=${manifest.source.version} / ${route.channel} / ${route.target} → ${target === undefined ? 'website only' : `${target}%`}\n`)
+      `rollout-requested=${target !== undefined}\napproval=${approval}\nwebsite-approval=${websiteApproval(manifest, config.bucket)}\nwebsite-destination=${createHash('sha256').update(`${config.bucket}/${route.target}`).digest('hex')}\nlabel=${manifest.source.version} / ${route.channel} / ${route.target} → ${target === undefined ? 'website only' : `${target}%`}\n`)
     if (env.GITHUB_STEP_SUMMARY && !env.DESKTOP_ROLLOUT_APPROVAL) await appendFile(env.GITHUB_STEP_SUMMARY,
       `## 桌面放量与官网发布确认\n\n打包运行：${route.runId} / 第 ${route.attempt} 次；版本：${manifest.source.version}；平台：${route.target}；环境 / 渠道：${route.preset} / ${route.channel}。\n\n目标放量比例：${target === undefined ? '保持当前比例' : `${target}%`}。执行时从 COS 核对当前比例，不允许降低比例。\n\n官网：${website ? desktopWebsiteInstallerUrl(route.target) + '（上传安装包并刷新缓存）' : '不变'}。${website ? '官网安装包面向所有下载用户，不受自动更新放量比例限制，也不要求放量达到 100%。固定下载地址无防降级保护，发布较早版本会替换较新安装包。' : ''}\n\n已确认首次 COS 发布记录；不重新计算全部安装包哈希或校验签名。\n`)
     return
