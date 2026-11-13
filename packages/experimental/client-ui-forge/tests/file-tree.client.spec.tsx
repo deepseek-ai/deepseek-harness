@@ -199,6 +199,19 @@ it('bounds pointer and keyboard resizing, retains hidden width, and stops cancel
   } finally { vi.unstubAllGlobals() }
 })
 
+it('keeps the width the cell above the tree needs as its least width', () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 1000)
+  const props = { files: [file('a.ts')], state: { query: '', collapsed: {}, selected: null }, t: makeTranslate(en), filter: vi.fn(), toggle: vi.fn(), jump: vi.fn(), id: 'tree', onWidth: vi.fn() }
+  const view = render(<FileTreePane {...props} position="left" least={276} />)
+  const handle = view.getByRole('separator')
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['276', '276'])
+  expect(props.onWidth).toHaveBeenLastCalledWith(276)
+  fireEvent.keyDown(handle, { key: 'Home' })
+  expect(handle.getAttribute('aria-valuenow')).toBe('276')
+  view.rerender(<FileTreePane {...props} position="left" least={150} />)
+  expect([handle.getAttribute('aria-valuemin'), handle.getAttribute('aria-valuenow')]).toEqual(['200', '276'])
+})
+
 it('can mount into a detached fragment without measuring a nonexistent parent element', () => {
   const observe = vi.spyOn(ResizeObserver.prototype, 'observe')
   const view = render(<FileTreePane files={[]} state={{ query: '', collapsed: {}, selected: null }} t={makeTranslate(en)}

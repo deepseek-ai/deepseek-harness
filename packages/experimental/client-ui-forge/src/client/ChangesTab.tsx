@@ -619,6 +619,8 @@ export function ChangesTab({
   const [treeState, setTreeState] = useState<ChangedFilesState>({ query: '', collapsed: {}, selected: null })
   const [treePosition, setTreePosition] = useState<FileTreePosition>('left')
   const [treeWidth, setTreeWidth] = useState(0)
+  // The lens's labels set the least width of the tree they sit above.
+  const [lensWidth, setLensWidth] = useState(0)
   const treeId = useId()
   const [chosen, setChosen] = useState<Readonly<Record<string, boolean>>>({})
   // Each navigation applies once; its file, if it names one, opens and scrolls into view.
@@ -1321,7 +1323,7 @@ export function ChangesTab({
       {!reviewOpen && reviewError !== null && reviewState.uncertain === null && <Notice>{reviewError}</Notice>}
       <div className={css.toolbar} data-tree={treeShown ? treePosition : 'hidden'} style={toolbarStyle}>
         {/* Above the file tree, the lens spans the tree's width; elsewhere a menu in the toolbar takes its place. */}
-        {treeShown && <div className={css.lensCell}><LensControl {...lensProps} /></div>}
+        {treeShown && <div className={css.lensCell}><LensControl {...lensProps} need={setLensWidth} /></div>}
         <div ref={toolbarRow} className={css.toolbarMain}>
           {tab.visible && source.kind === 'local' && <ScopeMenu scope={scope} choose={(next) => { actions.scoped(tab.id, next) }} t={t} />}
           {tab.visible && <span className={css.filesSlot}><ChangedFilesMenu {...navigator} visible /></span>}
@@ -1429,7 +1431,9 @@ export function ChangesTab({
       {reviewForm}
       <div className={css.body}>
         {body}
-        {allFiles.length > 0 && <FileTreePane {...navigator} id={treeId} position={treePosition} onWidth={setTreeWidth} />}
+        {allFiles.length > 0 && (
+          <FileTreePane {...navigator} id={treeId} position={treePosition} least={lensWidth} onWidth={setTreeWidth} />
+        )}
         {review !== null && data?.kind === 'change' && threadList.open && (
           <ThreadList entries={placed.entries} files={allFiles} truncated={review.truncated} url={data.url}
             filter={threadList.filter} choose={(filter) => { setThreadList(value => ({ ...value, filter })) }}
