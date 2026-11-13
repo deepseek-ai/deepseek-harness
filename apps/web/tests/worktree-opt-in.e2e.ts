@@ -84,6 +84,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
   expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
   expect(tools()).not.toContain('create_worktree')
+  expect(tools()).not.toContain('enter_worktree')
   expect(tools()).not.toContain('exit_worktree')
 
   await toggle.click()
@@ -91,6 +92,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: PLUGIN_TOGGLE_SETTLE_MS }).toBe('true')
   expect(await selectedBundles()).toContain(BUNDLE)
   expect(tools()).toContain('create_worktree')
+  expect(tools()).toContain('enter_worktree')
   expect(tools()).toContain('exit_worktree')
   expect(scaffold.ctx.get('forgePanel')).toBeDefined()
   const created = { path: join(repository, '.agents/worktrees/gui-opt-in'), baseCommit: (await git('rev-parse', 'HEAD')).stdout.trim() }
@@ -116,6 +118,7 @@ it('persists the unified review and worktree switch and retains checkouts after 
   expect(scaffold.ctx.get('worktrees')).toBeUndefined()
   expect(scaffold.ctx.get('forgePanel')).toBeUndefined()
   expect(tools()).not.toContain('create_worktree')
+  expect(tools()).not.toContain('enter_worktree')
   expect(tools()).not.toContain('exit_worktree')
   expect(await readFile(join(created.path, 'retained.txt'), 'utf8')).toBe('retained checkout\n')
   expect((await git('show-ref', '--verify', 'refs/heads/gui-opt-in')).stdout).toContain(created.baseCommit)

@@ -5062,8 +5062,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'worktrees',
-    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
-    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, records each creation in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    summary: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
+    description: 'Creates retained Git worktrees under the mounted filesystem and sandbox providers, moves Sessions into and out of them, records each creation and entry in the Session log, and reclaims a clean, unreferenced checkout when the Session that created it is archived.',
     methods: [
       {
         signature: 'async create( agent: Agent, request: CreateWorktreeRequest = {}, signal?: AbortSignal, onPhase?: (phase: CreateWorktreePhase) => void, ): Promise<CreatedWorktree>',
@@ -5080,8 +5080,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['{WorktreeError} for an invalid request, an existing path, a locked registration, or a failed, oversized, or timed-out command; a failure after allocation keeps its `name` and `code` and adds retained-artifact context.'],
       },
       {
-        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree>',
-        description: 'Return the calling Session from the worktree it works in to the source checkout that worktree was created from. The worktree is the recorded creation, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
+        signature: 'async enter(agent: Agent, request: EnterWorktreeRequest, signal?: AbortSignal): Promise<EnteredWorktree>',
+        description: 'Move the calling Session into an existing worktree in the pool of the checkout it works in. The directory `name` selects must lie inside that pool and be a registered worktree of the repository; neither Git state nor files change. The Session\'s log records the entry, so exit returns it to the checkout it entered from. Archiving the Session never removes a checkout it only entered.',
+        parameters: [{ name: 'agent', description: 'caller whose current directory selects the checkout and its pool.' }, { name: 'request', description: 'name of the worktree inside the pool.' }, { name: 'signal', description: 'cancellation of lookup and of the working-directory change.' }],
+        returns: 'the entered checkout, its branch, and the checkout the Session entered from.',
+        throws: ['{WorktreeError} `WORKTREE_INVALID_ARGUMENT` for a name that is not a relative path inside the pool, `WORKTREE_NOT_FOUND` when the pool holds no registered worktree of that name, a command failure, and `WORKTREE_UNAVAILABLE` after service disposal; or the working-directory service\'s error when the registered directory no longer exists.'],
+      },
+      {
+        signature: 'async exit(agent: Agent, signal?: AbortSignal): Promise<CreatedWorktree | EnteredWorktree>',
+        description: 'Return the calling Session from the worktree it works in to the checkout it entered that worktree from: the source checkout of a creation, or the checkout whose pool holds an entered worktree. The worktree is the recorded creation or entry, the Session\'s own or fork-inherited, with the longest directory containing the Session\'s current directory. Its checkout and branch remain.',
         parameters: [{ name: 'agent', description: 'caller whose current directory lies in a recorded worktree.' }, { name: 'signal', description: 'cancellation of directory validation and of the working-directory change.' }],
         returns: 'the worktree the Session left; the Session now works in its `repositoryRoot`.',
         throws: ['{WorktreeError} `WORKTREE_NOT_ENTERED` when no recorded worktree contains the current directory and `WORKTREE_UNAVAILABLE` after service disposal, or the working-directory service\'s error when the source checkout no longer exists.'],
@@ -6861,6 +6868,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'EncodedImageAttachment',
     declaration: 'export interface EncodedImageAttachment {\n    mediaType: ImageMediaType;\n    data: string;\n    name?: string;\n}',
+  },
+  {
+    name: 'EnteredWorktree',
+    declaration: 'export interface EnteredWorktree {\n    path: string;\n    branch?: string;\n    repositoryRoot: string;\n}',
+  },
+  {
+    name: 'EnterWorktreeRequest',
+    declaration: 'export interface EnterWorktreeRequest {\n    name: string;\n}',
   },
   {
     name: 'EpochHeader',

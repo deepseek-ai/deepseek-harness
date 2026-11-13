@@ -3,23 +3,23 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/tool-worktree/README.md
 /:
-  en: 7c7c8316f315eee0
-  zh: dfd3abcef256029e
+  en: 09a4b4d95b664d1c
+  zh: c229106b16e9ecd9
 /deepseek-ai-dsh-experimental-tool-worktree:
   en: db61f6b6ad671f45
   zh: 9f3083d7f5605cbb
 /deepseek-ai-dsh-experimental-tool-worktree/summary:
-  en: 106bccb04bd14134
-  zh: 579b316a56bebbb8
+  en: c978e8e0be90d5f8
+  zh: 75c20376f2e9d45f
 /deepseek-ai-dsh-experimental-tool-worktree/table-of-contents:
   en: d152484eb41ac6b4
   zh: 2f8a621b991260a1
 /deepseek-ai-dsh-experimental-tool-worktree/use-this-package:
-  en: 3da61bef9ee229bf
-  zh: 3a83507f3365fe38
+  en: 59068f72c326c780
+  zh: 0c0f3687d971063c
 /deepseek-ai-dsh-experimental-tool-worktree/understand-the-implementation:
-  en: c03f875211ab69a8
-  zh: 8f49b82f90a60223
+  en: 20d2b29ce103e6f0
+  zh: 4e705758734ddb97
 /deepseek-ai-dsh-experimental-tool-worktree/further-exploration:
   en: 6ec5bb0f5bfbbaa4
   zh: 45009dd139621d0e
@@ -30,8 +30,8 @@
   en: 4062fcaa4794bed7
   zh: b56d35fc675fc430
 /deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool/what-the-model-sees:
-  en: 07fc4bda6b786621
-  zh: 149a7c5474b709b3
+  en: 6e1fdb5ed5494542
+  zh: 2ed8dcf7777f9ee9
 /deepseek-ai-dsh-experimental-tool-worktree/model-experience/creation-tool/token-effect:
   en: 6c3f73ba01233a36
   zh: d64d87a425db4fbd
@@ -39,8 +39,8 @@
   en: 365f8ccedfa61bbb
   zh: aa328044ba2528b8
 /deepseek-ai-dsh-experimental-tool-worktree/known-limitations-and-deferred-work:
-  en: 7cfc071dfc3f9c83
-  zh: f36ae822e801db12
+  en: f0e0c0f36b6252a2
+  zh: b2cd1fdcad570ce9
 /deepseek-ai-dsh-experimental-tool-worktree/known-limitations-and-deferred-work/dev-note:
   en: e67f633dc6fe7773
   zh: 3bb0c20c93f16f98

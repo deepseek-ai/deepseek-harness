@@ -74,6 +74,24 @@ describe.skipIf(!sandboxUsable)('worktree standing sandbox policy', () => {
     expect(confine.mock.calls.every(call => call[1].mode === 'workspace-write' && call[1].workspaceRoot === root)).toBe(true)
   })
 
+  it('enters an existing worktree under read-only policy with confined read commands, and the boundary follows', async () => {
+    root = await repository(process.cwd())
+    const checkout = join(root, '.agents', 'worktrees', 'existing')
+    await git(root, 'worktree', 'add', '-b', 'existing', checkout)
+    const before = await git(root, 'worktree', 'list', '--porcelain')
+    ctx = await harness(root, {}, 'read-only')
+    const agent = testAgent(ctx, root)
+    const confine = vi.spyOn(ctx.sandbox, 'confine')
+
+    await expect(ctx.worktrees.enter(agent, { name: 'existing' })).resolves.toEqual({ path: checkout, branch: 'existing', repositoryRoot: root })
+    expect(confine.mock.calls.length).toBeGreaterThan(0)
+    expect(confine.mock.calls.every(call => call[1].mode === 'read-only' && call[1].workspaceRoot === root)).toBe(true)
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(checkout)
+    expect(await git(root, 'worktree', 'list', '--porcelain')).toBe(before)
+    await expect(ctx.worktrees.exit(agent)).resolves.toMatchObject({ path: checkout })
+    expect(ctx.sandboxPolicy.resolve({ session: agent.session }).workspaceRoot).toBe(root)
+  })
+
   it('creates from a linked checkout once the policy grants its shared Git administration directory', async () => {
     root = await repository(process.cwd())
     const administration = join(root, '.git')

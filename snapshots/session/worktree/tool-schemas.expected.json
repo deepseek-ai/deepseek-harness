@@ -95,7 +95,7 @@
     },
     {
       "name": "create_worktree",
-      "description": "Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail. exit_worktree returns to the source checkout.",
+      "description": "Create a new Git branch and worktree from a local commit, branch, or tag, then change this session's working directory to it. Uncommitted files stay in the source checkout. Existing names fail; enter_worktree enters an existing worktree. exit_worktree returns to the source checkout.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -153,8 +153,24 @@
       }
     },
     {
+      "name": "enter_worktree",
+      "description": "Change this session's working directory to an existing worktree that was created from the checkout this session is in. Branches and files stay as they are. exit_worktree returns to that checkout.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name the worktree was created with."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
       "name": "exit_worktree",
-      "description": "Change this session's working directory from the worktree it is in back to the checkout that worktree was created from, and report the worktree left. The worktree and its branch remain.",
+      "description": "Change this session's working directory from the worktree it is in back to the checkout it entered that worktree from, and report the worktree left. The worktree and its branch remain.",
       "parameters": {
         "type": "object",
         "properties": {}

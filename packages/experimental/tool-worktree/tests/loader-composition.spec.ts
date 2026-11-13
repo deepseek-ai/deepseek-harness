@@ -38,7 +38,7 @@ afterEach(async () => {
 })
 
 describe('worktree tool through real Loader composition', () => {
-  it('creates and enters a new checkout, exits it to the source checkout, reports canonical fields, and unregisters on disposal', async () => {
+  it('creates and enters a new checkout, exits it to the source checkout, enters it again by name, reports canonical fields, and unregisters on disposal', async () => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'dsh-worktree-loader-')))
     const repository = join(root, 'repo')
     await mkdir(repository)
@@ -126,8 +126,28 @@ describe('worktree tool through real Loader composition', () => {
     expect(agentless.isError && agentless.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
     expect(context.tools.get('exit_worktree')!.presentCall!({})).toEqual({ card: 'generic', title: 'exit_worktree', rawInput: {} })
 
+    const enter = (name: string, agentValue?: typeof agent) => executeToolFixture(context!, {
+      name: 'enter_worktree', callId: brandString<ToolCallId>(`enter-${name}`), arguments: { name }, signal: new AbortController().signal,
+      ...agentValue === undefined ? {} : { agent: agentValue },
+    })
+    const entered = await enter('new-checkout', agent)
+    expect(entered.isError).not.toBe(true)
+    expect(entered.value).toEqual({ path, branch: 'new-checkout', repositoryRoot: repository })
+    expect(entered.content).toEqual([{ type: 'text', text: JSON.stringify(entered.value) }])
+    expect(context.workingDirectory.get(agent.session)).toBe(path)
+    expect((await exit(agent)).value).toEqual(result.value)
+    const missing = await enter('absent', agent)
+    expect(missing.isError && missing.error.info).toEqual({ name: 'WorktreeError', code: 'WORKTREE_NOT_FOUND' })
+    expect(missing.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')).toContain('holds no registered worktree of that name')
+    expect(context.workingDirectory.get(agent.session)).toBe(repository)
+    const unowned = await enter('new-checkout')
+    expect(unowned.isError && unowned.error.info).toEqual({ name: 'ToolContextUnavailableError', code: 'TOOL_CONTEXT_UNAVAILABLE' })
+    expect(context.tools.get('enter_worktree')!.presentCall!({ name: 'named' })).toEqual({
+      card: 'generic', title: 'enter_worktree', rawInput: { name: 'named' },
+    })
+
     const entry = [...context.loader.entries()].find(candidate => candidate.options.name === 'cordis:@deepseek-ai/dsh-experimental-tool-worktree')
     await entry!.fiber!.dispose()
-    expect(context.tools.schemas().some(tool => tool.name === 'create_worktree' || tool.name === 'exit_worktree')).toBe(false)
+    expect(context.tools.schemas().some(tool => tool.name.endsWith('_worktree'))).toBe(false)
   })
 })

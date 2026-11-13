@@ -916,12 +916,15 @@ async function verifyWorktree(log: string, cwd: string): Promise<void> {
   expect(snapshotGit(cwd, ['rev-parse', '--verify', 'refs/heads/doomed'])).toBe(snapshotGit(cwd, ['rev-parse', 'HEAD']))
   const events = records(log)
   expect(events.filter(event => event.type === 'workspace-root/change').map(event => event.data))
-    .toEqual([checkout, cwd, removed, cwd].map(directory => ({ cwd: directory })))
+    .toEqual([checkout, cwd, checkout, cwd, removed, cwd].map(directory => ({ cwd: directory })))
   expect(events.filter(event => event.type === 'system/message')).toHaveLength(1)
   const notices = events.filter(event => event.type === 'user/message').map(event => event.data as JsonObject)
     .filter(message => (message.source as JsonObject).kind === 'working-directory')
     .map(message => (message.content as JsonObject[]).map(block => block.text).join(''))
   expect(notices).toEqual([
+    `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(checkout)}.`,
+    `The working directory changed from ${JSON.stringify(checkout)} to ${JSON.stringify(cwd)}.`,
+    // enter_worktree returns the Session to the first worktree, and exit_worktree leaves it again.
     `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(checkout)}.`,
     `The working directory changed from ${JSON.stringify(checkout)} to ${JSON.stringify(cwd)}.`,
     `The working directory changed from ${JSON.stringify(cwd)} to ${JSON.stringify(removed)}.`,
