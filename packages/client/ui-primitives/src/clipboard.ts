@@ -3,6 +3,21 @@
 // leaves focus where it found it.
 
 /**
+ * Attempt the async Clipboard API write.
+ * @param text - the exact text to place on the clipboard.
+ * @returns true only when the host accepted the write.
+ */
+async function writeWithClipboardApi(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch (_error) {
+    // A denied permission can block the async API while execCommand still works; the caller tries it below.
+    return false
+  }
+  return true
+}
+
+/**
  * Write text to the host clipboard, preferring the async Clipboard API and
  * falling back to `execCommand('copy')` when that API is missing (jsdom,
  * insecure contexts) or refuses the write (for example, a denied clipboard
@@ -15,13 +30,8 @@ export async function writeClipboard(text: string): Promise<boolean> {
   // lib.dom types clipboard non-optional, but insecure contexts omit it —
   // that runtime gap is exactly what this guard detects.
   /* oxlint-disable-next-line typescript/no-unnecessary-condition */
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text)
-      return true
-    } catch (_error) {
-      // A denied permission can block the async API while execCommand still works; try it below.
-    }
+  if (typeof navigator.clipboard?.writeText === 'function') {
+    if (await writeWithClipboardApi(text)) return true
   }
   // execCommand('copy') is the only clipboard fallback where the async API
   // is missing or refused; deprecated but deliberately retained.
