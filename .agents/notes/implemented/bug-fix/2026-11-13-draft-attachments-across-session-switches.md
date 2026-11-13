@@ -6,7 +6,7 @@ English | [中文](2026-11-13-draft-attachments-across-session-switches.zh.md)
 
 ## Problem
 
-Switching to another Session and back emptied the composer's attachment rail while its text survived ([#5070](https://github.com/deepseek-harness/deepseek-harness/issues/5070)). The Session scope disposer released every attachment the retiring composer held and revoked image previews, and nothing could rebuild them.
+Switching to another Session and back emptied the composer's attachment rail while its text survived (issue #5070). The Session scope disposer released every attachment the retiring composer held and revoked image previews, and nothing could rebuild them.
 
 ## Decision
 
