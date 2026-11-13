@@ -117,7 +117,10 @@ export function inboundDraft(referrer: unknown): ImMessageDraft {
 }
 
 /** One `interaction/button` session of the fake bot. */
-export function click(id: string, patch: { message?: string; data?: string; chat?: string } = {}): Session {
+export function click(
+  id: string,
+  patch: { message?: string; data?: string; chat?: string; values?: Record<string, unknown> } = {},
+): Session {
   const chat = chatOf(patch.chat).ref
   const button = {
     bot: BOT,
@@ -128,6 +131,7 @@ export function click(id: string, patch: { message?: string; data?: string; chat
     chat,
     ...patch.message === undefined ? {} : { message: { id: patch.message, chat } },
     ...patch.data === undefined ? {} : { data: patch.data },
+    ...patch.values === undefined ? {} : { values: patch.values },
   }
   return { button, bot: BOT, timestamp: 1000 } as Session
 }

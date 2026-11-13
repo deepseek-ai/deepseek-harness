@@ -182,6 +182,15 @@ describe('ImService facade', () => {
     const { service, bot } = await mount()
     await deliver(bot, inbound('m1', { content: h('message', h('forward', { id: 'm1' })) }))
     await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+    // Still unread, failing with Error, or failing with a raw value all leave the stored placeholder readable.
+    bot.getMessage = async () => inbound('m1', { content: h('message', h('forward', { id: 'm1' })) })
+    expect((await service.readMessage(CHAT, 'm1')).content).toEqual(h('message', h('forward', { id: 'm1' })))
+    bot.getMessage = async () => { throw new Error('platform timeout') }
+    expect((await service.readMessage(CHAT, 'm1')).seq).toBe(1)
+    // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error rejection exercises String(error).
+    bot.getMessage = () => Promise.reject('raw expand failure')
+    expect((await service.readMessage(CHAT, 'm1')).seq).toBe(1)
+
     // The store keeps the reference the event carried; the read is what brings its contents.
     bot.getMessage = async () => inbound('m1', {
       content: h('message', h('forward', { id: 'm1' }, h.text('user-1: 原文'))),
@@ -189,6 +198,39 @@ describe('ImService facade', () => {
     const message = await service.readMessage(CHAT, 'm1')
     expect(message.text).toBe('user-1: 原文')
     expect(message.seq).toBe(1)
+  })
+
+  it('enforces admission and adapter capability on readMessage and members', async () => {
+    const base = await boot({
+      withoutStart: true,
+      config: { sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all', users: ['allowed'] }] },
+    })
+    const ctx = base.ctx
+    await ctx.plugin(Satori)
+    await ctx.plugin(FakeAdapter, { modes: { text: createTextMode() }, selfId: 'bot-user' })
+    ctx.provide('attachments', { saveImages: async () => [] } as never)
+    await ctx.plugin(ImService, Config({
+      sources: [{ id: 'team', bot: 'fake:bot', writable: true, store: 'all', users: ['allowed'] }],
+      retryIntervalMs: 60_000,
+    }))
+    const bot = ctx.bots.find(candidate => candidate instanceof FakeAdapter) as FakeAdapter
+    const service = ctx.im
+    booted.push({ base, service, bot })
+
+    const unadmitted = ImChatKey('fake:bot', 'unadmitted')
+    await expect(service.readMessage(unadmitted, 'm-none')).rejects.toThrow(/was never admitted/)
+    await expect(service.members(unadmitted)).rejects.toThrow(/was never admitted/)
+
+    await deliver(bot, inbound('m1', { sender: { id: 'allowed', name: 'Allowed' } }))
+    await vi.waitFor(() => { expect(service.chat(CHAT)).toBeDefined() })
+
+    await expect(service.readMessage(CHAT, 'm-missing')).rejects.toThrow(/cannot read one message/)
+    bot.getMessage = async () => inbound('m-denied', { sender: { id: 'stranger', name: 'Stranger' } })
+    await expect(service.readMessage(CHAT, 'm-denied')).rejects.toThrow(/admitted by no source/)
+
+    await expect(service.members(CHAT)).rejects.toThrow(/cannot list the members/)
+    bot.members = async (_ref, next, size) => ({ data: [{ id: 'allowed', name: `${next ?? 'first'}:${size ?? 0}` }] })
+    await expect(service.members(CHAT, 'p2', 5)).resolves.toEqual({ data: [{ id: 'allowed', name: 'p2:5' }] })
   })
 
   it('publishes and streams through the send funnel of its sender', async () => {
@@ -281,15 +323,28 @@ describe('ImService facade', () => {
   })
 
   it('keeps intake, recovery and retention running on its retry interval', async () => {
-    const { service } = await mount({ retryIntervalMs: 20 })
+    const { base, service, bot } = await mount({ retryIntervalMs: 20 })
+    const warnings: string[] = []
+    vi.spyOn(base.ctx.logger, 'warn').mockImplementation((fmt: unknown) => { warnings.push(String(fmt)) })
     const sweeps: number[] = []
     const sweep = service.store.sweep.bind(service.store)
+    let failedSweep = false
     vi.spyOn(service.store, 'sweep').mockImplementation(async (now) => {
       sweeps.push(now)
+      if (!failedSweep) {
+        failedSweep = true
+        throw new Error('sweep glitch')
+      }
       return sweep(now)
     })
-    // One maintenance tick re-pumps the intake, retries deliveries and sweeps expired records.
-    await vi.waitFor(() => { expect(sweeps.length).toBeGreaterThan(0) })
+    // One maintenance tick re-pumps the intake, retries deliveries and logs a failed sweep without crashing.
+    await vi.waitFor(() => { expect(sweeps.length).toBeGreaterThan(1) })
+    expect(warnings.some(msg => msg.includes('IM store sweep failed'))).toBe(true)
+
+    vi.spyOn(service.intake, 'outbound').mockRejectedValueOnce(new Error('outbound glitch'))
+    await service.send(CHAT, h('message', h.text('probe'))).catch(() => {})
+    base.ctx.emit('send', bot, await bot.send({ chat: { id: 'chat', type: 'group' } }, h('message', h.text('probe'))))
+    await vi.waitFor(() => { expect(warnings.some(msg => msg.includes('IM outbound message of bot'))).toBe(true) })
   })
 
   it('dispatches a stored message only after every routing plugin is mounted', async () => {

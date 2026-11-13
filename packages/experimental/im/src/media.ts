@@ -15,7 +15,7 @@ import { createResourceFetcher, ResourceTooLargeError, type Element, type Prepar
 import { AttachmentId, type AttachmentStore, type ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { FileBlock, ImageBlock } from '@deepseek-ai/dsh-llm'
 import { z } from 'zod'
-import { splitKey, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
+import { splitKey, type ImApi, type ImChatKey, type ImConfig, type ImMessage, type ImMessageKey } from './api.ts'
 import { ImError } from './error.ts'
 import { hasUnreadForward } from './intake.ts'
 import { admitMediaSource, systemHostResolver, type HostResolver } from './media-source.ts'
@@ -307,17 +307,20 @@ export class ImMediaStore {
    */
   private async expanded(chat: ImChatKey, message: ImMessage): Promise<ImMessage> {
     if (!hasUnreadForward(message.content)) return message
-    const im = this.ctx.get('im')
-    if (im === undefined) return message
-    return await im.readMessage(chat, splitKey(message.key).id)
+    return await this.imOf().readMessage(chat, splitKey(message.key).id)
   }
 
   /** Stored message with exactly this per-chat seq. */
   private messageAt(chat: ImChatKey, seq: number): ImMessage | undefined {
-    const history = this.ctx.get('im')?.history
-    if (!history) throw new ImError('unavailable', 'The im service is not available for media reads.')
-    const [message] = history.after(chat, seq - 1, 1)
+    const [message] = this.imOf().history.after(chat, seq - 1, 1)
     return message?.seq === seq ? message : undefined
+  }
+
+  /** The mounted IM service, required when resolving stored message ids. */
+  private imOf(): ImApi {
+    const im = this.ctx.get('im')
+    if (!im) throw new ImError('unavailable', 'The im service is not available for media reads.')
+    return im
   }
 
   /**

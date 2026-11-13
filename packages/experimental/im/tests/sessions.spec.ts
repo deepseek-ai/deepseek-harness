@@ -742,6 +742,21 @@ describe('agent hosting', () => {
       expect(warn.mock.calls.some(([format]) => String(format).includes('could not be disposed'))).toBe(true)
     })
   })
+
+  it('discards an unadmitted delivery queued against a generation that reset retired concurrently', async () => {
+    const harness = await booted()
+    const record = await harness.host.ensure(spec())
+    let delivering: Promise<void> | undefined
+    vi.spyOn(harness.pool, 'consumeInjectedFailure').mockImplementationOnce(() => {
+      delivering = harness.host.deliver(record.key, delivery('followup', 'late', 'evt-late'))
+    })
+
+    const replaced = await harness.host.reset(record.key, 'clear')
+    expect(replaced).toBe(record.sessionId)
+    await expect(delivering).rejects.toThrow(/no longer hosted/)
+    expect(harness.host.pendingDeliveries()).toBe(0)
+    expect(storedDeliveryIds(harness.pool)).toEqual([])
+  })
 })
 
 describe('service wiring', () => {

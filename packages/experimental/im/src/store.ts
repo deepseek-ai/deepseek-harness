@@ -267,9 +267,9 @@ export class ImStore implements ImHistory {
     const start = firstIndexAfter(messages, seq)
     if (keep === undefined) return messages.slice(start, start + limit)
     const out: ImMessage[] = []
-    for (let index = start; index < messages.length && out.length < limit; index += 1) {
-      const message = messages[index]
-      if (message !== undefined && keep(message)) out.push(message)
+    for (const message of messages.slice(start)) {
+      if (keep(message)) out.push(message)
+      if (out.length === limit) break
     }
     return out
   }
@@ -280,9 +280,9 @@ export class ImStore implements ImHistory {
     const end = firstIndexAfter(messages, seq - 1)
     if (keep === undefined) return messages.slice(Math.max(0, end - limit), end)
     const out: ImMessage[] = []
-    for (let index = end - 1; index >= 0 && out.length < limit; index -= 1) {
-      const message = messages[index]
-      if (message !== undefined && keep(message)) out.unshift(message)
+    for (const message of messages.slice(0, end).reverse()) {
+      if (keep(message)) out.unshift(message)
+      if (out.length === limit) break
     }
     return out
   }

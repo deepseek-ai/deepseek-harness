@@ -242,12 +242,30 @@ describe('ImMediaStore.admit', () => {
   it('admits a satori: resource only under the route of the bot that serves the chat', async () => {
     const im = { bot: () => ({ platform: 'lark', selfId: 'ou_bot' }) }
     const store = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving(), im }), config())
+    const satoriOwn = imageRef(1, 'satori:lark/ou_bot/messages/om_1/resources/img_1?type=image')
     const [own, other] = await store.admit([
-      imageRef(1, 'satori:lark/ou_bot/messages/om_1/resources/img_1?type=image'),
+      satoriOwn,
       imageRef(2, 'satori:lark/ou_other/messages/om_1/resources/img_1?type=image'),
     ])
     expect(own?.image?.attachment).toMatchObject({ mediaType: 'image/png' })
     expect(other?.skipped).toContain('not a resource of the bot that received')
+
+    const withoutIm = mediaStore(fakeContext({ http: httpServing(PNG_BYTES), attachments: attachmentsSaving() }), config())
+    expect((await withoutIm.admit([satoriOwn]))[0]?.skipped).toContain('not a resource of the bot that received')
+
+    const unmounted = mediaStore(fakeContext({
+      http: httpServing(PNG_BYTES),
+      attachments: attachmentsSaving(),
+      im: { bot: () => { throw new ImError('unavailable', 'no bot') } },
+    }), config())
+    expect((await unmounted.admit([satoriOwn]))[0]?.skipped).toContain('not a resource of the bot that received')
+
+    const faulty = mediaStore(fakeContext({
+      http: httpServing(PNG_BYTES),
+      attachments: attachmentsSaving(),
+      im: { bot: () => { throw new TypeError('broken lookup') } },
+    }), config())
+    expect((await faulty.admit([satoriOwn]))[0]?.skipped).toBe('broken lookup')
   })
 
   it('skips a source a received message may not make this host fetch', async () => {
@@ -312,6 +330,18 @@ describe('ImMediaStore.admit', () => {
       config({ maxBytes: 4 }),
     )
     expect(await store.admit([imageRef()])).toEqual([{ ref: imageRef(), bytes: 11, skipped: 'too-large' }])
+
+    const declaredOversized: FakeHttp = {
+      get: async () => ({
+        headers: { get: (name: string) => (name === 'content-length' ? '999999' : 'image/png') },
+        arrayBuffer: async () => PNG_BYTES.slice().buffer,
+      }),
+    }
+    const abortedEarly = mediaStore(
+      fakeContext({ http: declaredOversized, attachments: attachmentsSaving() }),
+      config({ maxBytes: 4 }),
+    )
+    expect(await abortedEarly.admit([imageRef()])).toEqual([{ ref: imageRef(), skipped: 'too-large' }])
   })
 
   it('skips an oversized file and one the attachment service cannot keep', async () => {

@@ -165,7 +165,7 @@ export class ImSender {
       const result = await this.dispatch(this.botOf(chat), target, quoted, options)
       if (result.status !== 'confirmed') {
         this.ctx.logger.warn('IM publication to %s of session %s was not confirmed (%s): %s',
-          chat, options.session ?? '-', result.status, result.error ?? 'no error reported')
+          chat, options.session ?? '-', result.status, result.error)
       }
       return result
     }
@@ -227,7 +227,7 @@ export class ImSender {
    */
   private watched(stream: MessageStream, chat: ImChatKey): MessageStream {
     void stream.done.catch((error: unknown) => {
-      this.ctx.logger.warn('IM stream to %s failed: %s', chat, error instanceof Error ? error.message : String(error))
+      this.ctx.logger.warn('IM stream to %s failed: %s', chat, messageOf(error))
     })
     return stream
   }

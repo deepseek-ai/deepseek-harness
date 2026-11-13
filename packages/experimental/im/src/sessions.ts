@@ -476,14 +476,8 @@ export class ImSessionHost implements ImSessions {
       const admitted: StoredDelivery = { ...stored, admitted: true }
       await this.write(async () => {
         // Re-read inside the write: admission awaited the agent, and a concurrent ensure()/bind() may have committed a
-        // newer record (another chat's binding) meanwhile. Writing the record read before that await would drop it,
-        // and a record that a reset replaced must never be written back — that is what rolled a generation back.
-        const current = this.hosted(sessionId)
-        if (!current) {
-          await this.domainOf().table('deliveries').delete(id)
-          this.deliveries.delete(id)
-          throw new ImError('unavailable', `IM session ${sessionId} was reset while delivery ${id} was admitted.`)
-        }
+        // newer record (another chat's binding) meanwhile; reset() waits on this.serial(sessionId).
+        const current = this.resolve(sessionId)
         await this.domainOf().table('deliveries').put(id, admitted)
         this.deliveries.set(id, admitted)
         await this.save({ ...current, lastActiveAt: Date.now() })

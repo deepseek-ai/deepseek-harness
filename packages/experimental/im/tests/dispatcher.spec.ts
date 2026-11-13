@@ -105,13 +105,13 @@ describe('default dispatcher', () => {
   })
 
   it('hands addressed messages of every chat to one session that accumulates its bindings', async () => {
-    const { base, service, bot } = await mount({ ...DISPATCHER, output: 'probe' })
+    const { base, service, bot } = await mount({ ...DISPATCHER, output: 'probe', restrict: { allow: ['im_send'] } })
     await deliver(bot, inbound('m1'))
     const first = await outcomeOf(service, 'm1')
     const record = service.sessions.get(DISPATCHER_KEY)!
     expect(record.owner).toBe(DISPATCHER_OWNER)
     expect(record.output).toBe('probe')
-    expect(record.composition).toEqual(COMPOSITION)
+    expect(record.composition).toEqual({ ...COMPOSITION, restrict: { allow: ['im_send'], deny: [] } })
     expect(first).toEqual({ kind: 'handled', by: DISPATCHER_OWNER, sessions: [record.sessionId] })
     expect(record.bindings).toEqual([{ chat: GROUP, writable: true, home: true }])
 

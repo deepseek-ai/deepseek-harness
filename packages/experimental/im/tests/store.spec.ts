@@ -77,6 +77,8 @@ describe('ImStore history', () => {
     expect(store.latest(ImChatKey('fake:bot', 'nope'))).toBeUndefined()
 
     expect(store.after(CHAT.key, 0, 10).map(message => message.seq)).toEqual([1, 2])
+    expect(store.after(CHAT.key, 0, 10, message => message.text === 'two').map(message => message.seq)).toEqual([2])
+    expect(store.after(CHAT.key, 0, 1, message => message.seq >= 1).map(message => message.seq)).toEqual([1])
     expect(store.after(CHAT.key, 1, 10).map(message => message.seq)).toEqual([2])
     expect(store.after(CHAT.key, 2, 10)).toEqual([])
     expect(store.before(CHAT.key, 3, 10).map(message => message.seq)).toEqual([1, 2])
@@ -209,7 +211,7 @@ describe('ImStore write rules', () => {
 
   it('refreshes a chat identity only when it changed', async () => {
     const { store } = await boot()
-    await store.touchChat(CHAT)
+    await Promise.all([store.touchChat(CHAT), store.touchChat(CHAT)])
     await store.touchChat(CHAT)
     expect(store.chat(CHAT.key)).toEqual(CHAT)
     await store.touchChat({ ...CHAT, ref: { id: 'chat', type: 'topic' } })

@@ -1,5 +1,5 @@
 /** Output renderer registry: begin/update/end lifecycle, eligibility, io attribution and button routing. */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createTextMode, mountFakeAdapter } from '@deepseek-ai/cordis-plugin-im-core/src/testing.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -156,6 +156,20 @@ describe('ImOutputRegistry lifecycle', () => {
     harness.ctx.emit('im/activity', activity(hosted, { status: 'done' }), 'end')
     await flush()
     expect(probe.calls).toEqual(['begin:1', 'end:done'])
+
+    const stringFail: ImOutputRenderer = {
+      id: 'string-fail',
+      begin: () => ({
+        update: () => {},
+        // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error rejection exercises String(error).
+        end: () => Promise.reject('raw end failure'),
+      }),
+    }
+    harness.registry.register(stringFail)
+    const hostedRaw = harness.host({ sessionId: SessionId('im-3'), key: 'conv:3', output: 'string-fail' })
+    harness.ctx.emit('im/activity', activity(hostedRaw), 'start')
+    harness.ctx.emit('im/activity', activity(hostedRaw, { status: 'done' }), 'end')
+    await flush()
   })
 
   it('reports a renderer that fails an update and keeps the turn open', async () => {
@@ -274,12 +288,13 @@ describe('ImOutputRegistry buttons', () => {
     harness.sender.owners.set(message.key, hosted.sessionId)
 
     // The registry subscribes `interaction/button` itself.
-    harness.ctx.emit('interaction/button', click('dsh:more', { message: 'm1', data: 'payload' }))
+    harness.ctx.emit('interaction/button', click('dsh:more', { message: 'm1', data: 'payload', values: { field: 'v' } }))
     await flush()
     expect(harness.buttons).toHaveLength(1)
     expect(harness.buttons[0]).toMatchObject({
       id: 'dsh:more',
       data: 'payload',
+      values: { field: 'v' },
       chat: chatOf(),
       user: { id: 'user-1' },
       bot: BOT,
@@ -288,6 +303,21 @@ describe('ImOutputRegistry buttons', () => {
       time: 1000,
     })
     expect(harness.stopped).toEqual([])
+  })
+
+  it('catches and logs a thrown listener failure from interaction/button and interaction/select', async () => {
+    const harness = booted()
+    harness.host({ output: 'probe' })
+    const warn = vi.spyOn(harness.ctx.logger, 'warn').mockImplementation(() => {})
+    harness.ctx.on('im/button', () => { throw new Error('button listener boom') })
+    harness.ctx.on('im/select', () => { throw new Error('select listener boom') })
+
+    harness.ctx.emit('interaction/button', click('dsh:plain'))
+    harness.ctx.emit('interaction/select', pick('sel-size', ['l']))
+    await flush()
+    expect(warn.mock.calls.some(([fmt]) => String(fmt).includes('IM button click was not handled'))).toBe(true)
+    expect(warn.mock.calls.some(([fmt]) => String(fmt).includes('IM %s was not handled'))).toBe(true)
+    warn.mockRestore()
   })
 
   it('ignores a click from a sender the admitting source does not allow', async () => {

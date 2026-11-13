@@ -127,7 +127,7 @@ describe('ImIntake admission', () => {
 
   it('treats a redelivery of the same event as a no-op', async () => {
     const { bot, store, intake, dispatched } = await boot()
-    await deliver(bot, 'evt-1', inbound())
+    await Promise.all([deliver(bot, 'evt-1', inbound()), deliver(bot, 'evt-1', inbound())])
     await deliver(bot, 'evt-1', inbound())
     await intake.idle()
     expect(dispatched).toHaveLength(1)
@@ -201,15 +201,53 @@ describe('ImIntake admission', () => {
 
   it('keeps reading a chat after a platform read failed', async () => {
     const { bot, store, intake } = await boot()
-    bot.getMessage = async () => { throw new Error('the platform is gone') }
+    let calls = 0
+    bot.getMessage = async () => {
+      calls += 1
+      if (calls === 1) throw new Error('the platform is gone')
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error rejection exercises String(error).
+      return Promise.reject('raw reread failure')
+    }
     const card = h('message', h('raw', { platform: 'lark', type: 'interactive', data: {} }, h.text('[image]')))
     const first = deliver(bot, 'evt-card', inbound({ id: 'm-card', content: card }))
-    const second = deliver(bot, 'evt-next', inbound({ id: 'm-next' }))
-    await Promise.all([first, second])
+    const second = deliver(bot, 'evt-card-2', inbound({ id: 'm-card-2', content: card }))
+    const third = deliver(bot, 'evt-next', inbound({ id: 'm-next' }))
+    await Promise.all([first, second, third])
     await intake.idle()
-    // The failed read leaves the reference as it arrived, and the next frame of the same chat is still stored.
+    // The failed reads leave the references as they arrived, and the next frame of the same chat is still stored.
     expect(store.get(ImMessageKey('fake:bot', 'm-card'))?.text).toBe('[image]')
+    expect(store.get(ImMessageKey('fake:bot', 'm-card-2'))?.text).toBe('[image]')
     expect(store.get(ImMessageKey('fake:bot', 'm-next'))?.text).toBe('hello')
+  })
+
+  it('fills quoted reply text from the store or platform and tolerates missing or failing quote reads', async () => {
+    const { bot, store, intake } = await boot()
+    intake.release()
+    await deliver(bot, 'evt-base', inbound({ id: 'm-base', content: h('message', h.text('stored original')) }))
+    await deliver(bot, 'evt-inline', inbound({
+      id: 'm-inline',
+      quote: { id: 'q-inline', content: h('message', h.text('inline original')) },
+    }))
+    await deliver(bot, 'evt-from-store', inbound({ id: 'm-from-store', quote: { id: 'm-base' } }))
+    await deliver(bot, 'evt-no-reader', inbound({ id: 'm-no-reader', quote: { id: 'q-missing' } }))
+
+    bot.getMessage = async (_chat, id) => {
+      if (id === 'q-remote') return inbound({ id, content: h('message', h.text('remote original')) })
+      if (id === 'q-error') throw new Error('quote vanished')
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- non-Error rejection exercises String(error).
+      return Promise.reject('raw quote failure')
+    }
+    await deliver(bot, 'evt-remote', inbound({ id: 'm-remote', quote: { id: 'q-remote' } }))
+    await deliver(bot, 'evt-err', inbound({ id: 'm-err', quote: { id: 'q-error' } }))
+    await deliver(bot, 'evt-raw', inbound({ id: 'm-raw', quote: { id: 'q-raw' } }))
+    await intake.idle()
+
+    expect(store.get(ImMessageKey('fake:bot', 'm-inline'))?.quote?.text).toBe('inline original')
+    expect(store.get(ImMessageKey('fake:bot', 'm-from-store'))?.quote?.text).toBe('stored original')
+    expect(store.get(ImMessageKey('fake:bot', 'm-no-reader'))?.quote?.text).toBeUndefined()
+    expect(store.get(ImMessageKey('fake:bot', 'm-remote'))?.quote?.text).toBe('remote original')
+    expect(store.get(ImMessageKey('fake:bot', 'm-err'))?.quote?.text).toBeUndefined()
+    expect(store.get(ImMessageKey('fake:bot', 'm-raw'))?.quote?.text).toBeUndefined()
   })
 
   it('stops waiting for a platform read that never answers', async () => {
@@ -518,6 +556,16 @@ describe('ImIntake pump', () => {
     // the chat at the first failure, so `small` never got an event at all).
     expect(store.state(ImMessageKey('fake:bot', 'huge'))?.dispatch).toBe('done')
     expect(dispatched.map(message => message.text)).toEqual(['huge', 'small'])
+
+    // If settling the dropped message itself fails, the chat stops and leaves it pending for retry.
+    const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => {})
+    vi.spyOn(store, 'settle').mockRejectedValueOnce(new Error('storage offline'))
+    await record(harness, inbound({ id: 'huge-2', content: h('message', h.text('huge')) }))
+    intake.pump()
+    await intake.idle()
+    expect(store.state(ImMessageKey('fake:bot', 'huge-2'))?.dispatch).toBe('pending')
+    expect(logged).toHaveBeenCalled()
+    logged.mockRestore()
   })
 
   it('stops draining a chat whose first message failed and resumes in order', async () => {
@@ -634,7 +682,13 @@ describe('ImIntake outbound', () => {
     const { bot, store, intake, dispatched } = await boot()
     bot.user = { id: 'bot-user', name: 'Bot' }
     const result = await bot.send(target, content)
-    const message = await intake.outbound(bot, result)
+    const key = ImMessageKey(bot.id, result.handle.parts[0]!.id)
+    expect(await intake.announced(ImMessageKey('fake:bot', 'never-sent'))).toBeUndefined()
+    const first = intake.outbound(bot, result)
+    const second = intake.outbound(bot, result)
+    const viaAnnounced = intake.announced(key)
+    const [message] = await Promise.all([first, second, viaAnnounced])
+    expect(await viaAnnounced).toBe(message)
     expect(message?.via).toBe('self')
     expect(message?.text).toBe('published')
     expect(message?.seq).toBe(1)
@@ -681,9 +735,16 @@ describe('ImIntake outbound', () => {
     expect(long?.text.length).toBeGreaterThan(0)
     expect(Buffer.byteLength(JSON.stringify(long))).toBeLessThanOrEqual(4096)
 
-    // JSON escapes part of that body ('\n' is two bytes), so the cut is measured again on the stored record.
+    // JSON escapes part of that body ('\n' is two bytes, '\u0001' is six), so the cut is measured again and shrunk.
     const escaped = await intake.outbound(bot, await bot.send(target, h('message', h.text('\n'.repeat(6000)))))
     expect(Buffer.byteLength(JSON.stringify(escaped))).toBeLessThanOrEqual(4096)
+    const control = await intake.outbound(bot, await bot.send(target, h('message', h.text('\u0001'.repeat(2000)))))
+    expect(Buffer.byteLength(JSON.stringify(control))).toBeLessThanOrEqual(4096)
+
+    // Even when maxInputBytes is smaller than the envelope itself, room stops shrinking at 1 character.
+    const tiny = await boot({ config: { maxInputBytes: 64 } })
+    const clamped = await tiny.intake.outbound(tiny.bot, await tiny.bot.send(target, h('message', h.text('abcdef'))))
+    expect(clamped?.text.length).toBe(1)
   })
 
   it('ignores chats no source admits and empty handles', async () => {

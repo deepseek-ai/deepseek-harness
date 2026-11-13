@@ -124,7 +124,7 @@ function embeddedIPv4(address: string): string | undefined {
  * @returns the groups, most significant first.
  */
 function ipv6Groups(address: string): number[] {
-  let text = address.split('%', 1)[0] ?? address
+  let text = address
   const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text)
   if (dotted) {
     const [a, b, c, d] = dotted.slice(1).map(Number) as [number, number, number, number]

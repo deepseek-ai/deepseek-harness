@@ -188,7 +188,13 @@ function fakeAgent(sessionId: SessionId): Agent {
 
 /** A filesystem double: one file kind per path, or the failure a scenario needs. */
 function fakeFs(
-  options: { kind?: 'file' | 'directory' | 'absent'; bytes?: number; failure?: Error; remote?: boolean } = {},
+  options: {
+    kind?: 'file' | 'directory' | 'absent'
+    bytes?: number
+    omitSize?: boolean
+    failure?: Error
+    remote?: boolean
+  } = {},
 ) {
   const writes: { key: string; data: Uint8Array }[] = []
   return {
@@ -203,7 +209,9 @@ function fakeFs(
     processPathFromHostPath: (hostPath: string) => options.remote === true ? undefined : hostPath,
     fileUrl: (target: { targetKey: string }) => `file://${target.targetKey}`,
     stat: async () => (options.failure === undefined
-      ? options.kind === 'absent' ? undefined : { type: options.kind ?? 'file', size: 4, version: 'v1' }
+      ? options.kind === 'absent'
+        ? undefined
+        : { type: options.kind ?? 'file', ...options.omitSize === true ? {} : { size: 4 }, version: 'v1' }
       : (() => { throw options.failure })()),
     readBytes: async () => new Uint8Array(options.bytes ?? 4).fill(0x41),
     writeBytes: async (target: { targetKey: string }, data: Uint8Array) => {
@@ -286,6 +294,7 @@ describe('im tool registration', () => {
     const mounted = await mount()
     expect(mounted.mode('im_read', { message: '1' })).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_history', {})).toEqual({ kind: 'parallel' })
+    expect(mounted.mode('im_members', {})).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_read_image', { id: '1.1' })).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_read_file', { id: '1.2' })).toEqual({ kind: 'parallel' })
     expect(mounted.mode('im_send', { text: 'hi' })).toEqual({ kind: 'exclusive' })
@@ -501,9 +510,14 @@ describe('im_read and im_history', () => {
 
   it('falls back to the sender id when a message names no sender', async () => {
     const mounted = await mount()
-    mounted.im.history.messages.push(message(5, { sender: { id: 'user-9', self: false } }))
+    mounted.im.history.messages.push(message(5, {
+      sender: { id: 'user-9', self: false },
+      mentions: { self: false, all: false, users: [{ id: 'user-nameless' }, { id: 'user-named', name: '李四' }] },
+    }))
     const read = value(await mounted.call('im_read', { message: '5' }))
     expect((read.message as { sender: string }).sender).toBe('user-9')
+    expect((read.message as { mentions: unknown[] }).mentions)
+      .toEqual([{ id: 'user-nameless' }, { id: 'user-named', name: '李四' }])
   })
 
   it('pages history backward, forward and by default within the configured bound', async () => {
@@ -614,6 +628,11 @@ describe('im_send, im_reply and im_send_file', () => {
     expect(first.children[0]?.attrs.src).toBe('file:///work/notes.md')
     expect(mounted.im.sends[0]?.options.quote).toBe(ImMessageKey('fake:bot', 'm1'))
     expect(mounted.im.sends[1]?.options.quote).toBeUndefined()
+
+    const sizeless = await mount({ fs: fakeFs({ omitSize: true }) })
+    expect((await sizeless.call('im_send_file', { path: 'notes.md' })).isError).toBe(false)
+    const sizelessAttrs = (sizeless.im.sends[0]?.content as { children: { attrs: Record<string, unknown> }[] }).children[0]?.attrs
+    expect(sizelessAttrs).toEqual({ src: 'file:///work/notes.md', name: 'notes.md' })
   })
 
   it('inlines the bytes of a file another execution world holds', async () => {
