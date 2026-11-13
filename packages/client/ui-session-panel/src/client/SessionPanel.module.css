@@ -1,16 +1,30 @@
 /* The panel floats in the Chat View's aside layer, a zero-height box across
    the top of the Chat frame that passes pointer events through. The layer
    inherits the scrollport's --dsh-conversation-viewport-height and
-   --dsh-composer-height, and the transcript width --dsh-chat-content-width,
-   so the end gutter is half the layer width the transcript leaves. */
+   --dsh-composer-height and publishes --dsh-chat-aside-gutter, the inline
+   space between the transcript column and the frame's end edge. */
+
+/* The docked panel's inline metrics: 40px clear of the transcript column,
+   past its width handle, 8px from the end edge, and at least 300px wide. The
+   panel's width and the dock probe both derive from them, so the gutter that
+   docks the panel is exactly the one that holds its minimum width. */
+.panel,
+.dockProbe {
+  --panel-clear: 40px;
+  --panel-edge: 8px;
+  --panel-min-width: 300px;
+}
+
 .panel {
   position: absolute;
   top: 12px;
-  right: 8px;
+  right: var(--panel-edge);
   box-sizing: border-box;
-  /* The docked width keeps 40px clear of the transcript column, past its width handle,
-     and 8px from the end edge, from the same gutter the back-to-bottom control computes. */
-  width: clamp(300px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2 - 48px), 360px);
+  width: clamp(
+    var(--panel-min-width),
+    calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge)),
+    360px
+  );
   /* Stops above the composer stack, whose seat fades and takes presses across the body's full width. */
   max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   overflow-y: auto;
@@ -38,8 +52,25 @@
 /* Over the transcript the panel is narrower than docked, so it covers less of
    the transcript, and takes the prominent elevation. */
 .panel[data-session-panel='overlay'] {
-  width: min(280px, calc(100% - 16px));
+  width: min(280px, calc(100% - 2 * var(--panel-edge)));
   box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* The dock probe tells the plugin whether the gutter holds the docked panel
+   without a pixel measurement: it is 1px wide from the gutter that fits the
+   panel's minimum width and 0 below it, a width under 0 being used as 0. A
+   size observer on it therefore reports only when the docking decision
+   flips, not while the window resizes on one side of it or the transcript
+   grows. It has no height and takes no pointer events. */
+.dockProbe {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: calc(var(--dsh-chat-aside-gutter, 0px) - var(--panel-clear) - var(--panel-edge) - var(--panel-min-width) + 1px);
+  max-width: 1px;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .section {

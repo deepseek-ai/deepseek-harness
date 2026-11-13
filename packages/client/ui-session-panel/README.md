@@ -54,7 +54,7 @@ The plugin offers its row as the `conversation.session.panel.row` Component Fact
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership), so it renders only in Chat Views. The toggle and the panel are separate Slot entries that share one plugin-owned state: the persisted docking preference, the Session whose overlay is open, and whether each Session has room to dock. Each mounted panel registers the `endGutter` source of its Chat View with that state, and stops when it unmounts or its Chat View moves to another Session; a Session has room while any of its sources holds the docked panel, and a Session without a source shows no Chat View. The panel decides its presentation from its own source, and both decide with the same pure function, so the toggle's state never disagrees with the panel. The panel and the toggle subscribe only to whether the gutter holds the docked panel, so a resize renders them again only when it crosses the 348px threshold, and opening, closing, or docking the panel renders nothing in the Chat View. The aside layer inherits the scrollport's composer and viewport heights and the transcript width `--dsh-chat-content-width`, from which CSS sizes the docked panel.
+The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership), so it renders only in Chat Views. The toggle and the panel are separate Slot entries that share one plugin-owned state: the persisted docking preference, the Session whose overlay is open, and whether each mounted panel and each Session has room to dock. The stylesheet decides that room. The aside layer publishes its end gutter as `--dsh-chat-aside-gutter`; the docked width and a zero-height dock probe derive from it and from one set of metrics (40px clear, 8px edge, 300px minimum width), so the probe is 1px wide exactly from the 348px gutter that holds the panel at its minimum width and 0 below it. The panel always renders the probe and attaches it through the injected `createProbeRef`, and the plugin observes only that element with a `ResizeObserver`: it hears the docking decision flip and nothing while the window resizes on one side of it, the transcript width is dragged, or the transcript grows. A probe has room from 1px of width, a Session has room while any of its probes does, and a Session without a probe shows no Chat View. The panel reads its own probe and the toggle its Session, and both decide the presentation with the same pure function, so the toggle's state never disagrees with the panel; opening, closing, or docking the panel renders nothing in the Chat View. Without `ResizeObserver` no probe gains room, and the panel shows only as an overlay. The aside layer also inherits the scrollport's composer and viewport heights.
 
 The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows, recomputed only when the ledger version or the locale revision changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
 
@@ -62,9 +62,9 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the row Factory, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
-| [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, the shared visibility state, and each Session's room to dock |
+| [`src/client/visibility.ts`](src/client/visibility.ts) | Presentation, the shared visibility state, the dock probes, and each Session's room to dock |
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
-| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its section titles, and Escape handling |
+| [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its dock probe, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
 | [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | The panel row behind the `conversation.session.panel.row` Factory |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | The working folder row |
@@ -77,7 +77,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 ## Further Exploration
 
 - [Web Client Slots](../../../docs/subsystems/slots.md) — list, keyed, and owner-prop semantics the sections rely on.
-- [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its end gutter source.
+- [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its `--dsh-chat-aside-gutter` property.
 - [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the Session header utilities.
 - [`dsh-client-ui-primitives`](../ui-primitives/README.md#component-catalog) — `Button`, `Tooltip`, the icons, and the modal and composition guards.
 

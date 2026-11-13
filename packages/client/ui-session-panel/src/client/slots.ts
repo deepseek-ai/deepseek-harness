@@ -102,6 +102,12 @@ export interface SessionPanelVisibility {
  */
 export type SessionPanelDockable = ReadonlyMap<SessionId, boolean>
 
+/**
+ * Whether the end gutter of each mounted panel's Chat View holds the docked
+ * panel, by the id the panel gave its dock probe.
+ */
+export type SessionPanelProbes = ReadonlyMap<string, boolean>
+
 /** Business face of the header toggle. */
 export interface SessionPanelToggleInjected {
   /** Shared visibility and each Session's room to dock; the renderer binds them as `useVisibility` and `useDockable`. */
@@ -120,19 +126,25 @@ export interface SessionPanelToggleInjected {
 
 /** Business face of the panel. */
 export interface SessionPanelInjected {
-  /** Shared visibility and the projected section roster. */
+  /**
+   * Shared visibility, the projected section roster, and each dock probe's
+   * room; the renderer binds them as `useVisibility`, `useSections`, and `useProbes`.
+   */
   readonly hooks: {
     readonly visibility: ObservableSnapshot<SessionPanelVisibility>
     readonly sections: ObservableSnapshot<readonly SessionPanelSectionEntry[]>
+    readonly probes: ObservableSnapshot<SessionPanelProbes>
   }
   /**
-   * Follow a mounted panel's Chat View gutter for the Session's room to dock,
-   * which the toggle reads, until the returned disposer runs.
+   * Create the ref of one mounted panel's dock probe, the element whose
+   * stylesheet width says whether the Chat View's end gutter holds the docked
+   * panel. The plugin observes the element while it is attached and records
+   * the probe's room under `probe`, and the Session's for the toggle.
    * @param sessionId - Session the panel's Chat View shows.
-   * @param endGutter - the Chat View's end gutter source.
-   * @returns stops following the source.
+   * @param probe - identity of the panel within the page.
+   * @returns the ref callback for the probe element; detaching withdraws the probe.
    */
-  readonly track: (sessionId: SessionId, endGutter: ObservableSnapshot<number>) => () => void
+  readonly createProbeRef: (sessionId: SessionId, probe: string) => (element: HTMLElement | null) => void
   /**
    * Close the Session's overlay.
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.

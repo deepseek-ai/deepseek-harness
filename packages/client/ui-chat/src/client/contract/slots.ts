@@ -387,20 +387,6 @@ export type ChatFlowSlotProps =
   & InjectFace<ChatFlowDataInjected>
   & PropsLocale<'chat'>
 
-/** Geometry the Chat View gives its aside occupant. */
-export interface ChatAsideOwnerProps {
-  /**
-   * Inline space in CSS px between the transcript column's end edge and the
-   * Chat frame's end edge, followed whenever the frame or the column resizes;
-   * zero before the first measurement. The source keeps its identity for the
-   * layer's lifetime and publishes changes without re-rendering the layer, so
-   * an occupant subscribes for the decisions it derives from the gutter and
-   * sizes itself in CSS, where the gutter is
-   * `(100% - var(--dsh-chat-content-width)) / 2` of the layer.
-   */
-  readonly endGutter: ObservableSnapshot<number>
-}
-
 /** Full Chat view props. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
@@ -452,9 +438,13 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * scrolls and inherits the shared scrollport's composer and viewport
      * heights. The layer passes pointer events through; the occupant
      * positions itself in it, enables its own pointer events, and keeps
-     * within the end gutter to stay clear of the transcript column.
+     * within the end gutter to stay clear of the transcript column. The
+     * layer publishes that gutter, the inline space between the transcript
+     * column and the frame's end edge, as the `--dsh-chat-aside-gutter`
+     * custom property; its percentage resolves in the inline sizes of an
+     * element whose containing block is the layer.
      */
-    'conversation.chat.aside': { kind: 'single'; scope: 'session'; owner: ChatAsideOwnerProps }
+    'conversation.chat.aside': { kind: 'single'; scope: 'session' }
 
     /** Ordered Chat rows and local echoes with viewport-bound visibility hooks. */
     'conversation.chat.flow': {

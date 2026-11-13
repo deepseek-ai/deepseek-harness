@@ -1,39 +1,69 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import {
-  DOCK_MIN_GUTTER, PINNED_STORAGE_KEY, SessionPanelState, fitsGutter, presentationOf,
-} from '../src/client/visibility.ts'
+import { PINNED_STORAGE_KEY, SessionPanelState, presentationOf } from '../src/client/visibility.ts'
 
 const A = 'session-a' as SessionId
 const B = 'session-b' as SessionId
-const NARROW = 200
-const WIDE = DOCK_MIN_GUTTER
 
-/** A Chat View whose panel the state tracks: its gutter source and the disposer of that registration. */
-function chatView(state: SessionPanelState, sessionId: SessionId, gutter: number) {
-  const source = createSnapshotStore(gutter)
-  const stop = state.track(sessionId, source)
-  return { source, stop }
+/** What the stubbed ResizeObserver holds for each observed probe element. */
+interface Observation {
+  /** Deliver one size report for the element. */
+  readonly report: (width: number) => void
+  /** Whether the observer was disconnected. */
+  disconnected: boolean
 }
 
-/** A state whose Chat Views show `A` and `B` with narrow gutters. */
-function newState() {
-  const state = new SessionPanelState()
-  return { state, a: chatView(state, A, NARROW), b: chatView(state, B, NARROW) }
-}
+const observations = new Map<Element, Observation>()
+let nextProbe = 0
 
-beforeEach(() => { localStorage.clear() })
-afterEach(() => { localStorage.clear() })
+beforeEach(() => {
+  localStorage.clear()
+  observations.clear()
+  vi.stubGlobal('ResizeObserver', class {
+    private readonly callback: ResizeObserverCallback
+    private readonly targets: Observation[] = []
+    constructor(callback: ResizeObserverCallback) { this.callback = callback }
+    observe(element: Element): void {
+      const observation: Observation = {
+        report: (width) => { this.callback([{ target: element, contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver) },
+        disconnected: false,
+      }
+      this.targets.push(observation)
+      observations.set(element, observation)
+    }
 
-describe('fitsGutter', () => {
-  it('docks only from the minimum gutter up', () => {
-    expect(fitsGutter(DOCK_MIN_GUTTER - 1)).toBe(false)
-    expect(fitsGutter(DOCK_MIN_GUTTER)).toBe(true)
-    expect(fitsGutter(0)).toBe(false)
+    unobserve(): void {}
+    disconnect(): void { for (const observation of this.targets) observation.disconnected = true }
   })
 })
+
+afterEach(() => {
+  localStorage.clear()
+  vi.unstubAllGlobals()
+})
+
+/**
+ * One mounted panel's dock probe: its id, a size report for its element, and
+ * its detachment, as the panel's ref drives them.
+ */
+function probeOf(state: SessionPanelState, sessionId: SessionId, width = 0) {
+  nextProbe += 1
+  const id = `probe-${nextProbe}`
+  const element = document.createElement('span')
+  const ref = state.createProbeRef(sessionId, id)
+  ref(element)
+  const observation = observations.get(element)
+  if (observation === undefined) throw new Error('the probe element is not observed')
+  if (width > 0) observation.report(width)
+  return { id, element, observation, resize: observation.report, detach: () => { ref(null) } }
+}
+
+/** A state whose Chat Views show `A` and `B` without room to dock. */
+function newState() {
+  const state = new SessionPanelState()
+  return { state, a: probeOf(state, A), b: probeOf(state, B) }
+}
 
 describe('presentationOf', () => {
   it.each([
@@ -51,39 +81,88 @@ describe('presentationOf', () => {
   })
 })
 
-describe('SessionPanelState room to dock', () => {
-  it('gives a Session room while any of its Chat Views has it, and drops the Session once its last panel stops', () => {
+describe('SessionPanelState dock probes', () => {
+  it('enters an attached probe without room and gives it room from 1px of width', () => {
     const state = new SessionPanelState()
-    expect(state.dockable.getSnapshot().size).toBe(0)
-    const main = chatView(state, A, 420)
-    const embedded = chatView(state, A, 16)
-    expect(state.dockable.getSnapshot().get(A)).toBe(true)
-    main.stop()
+    expect(state.probes.getSnapshot().size).toBe(0)
+    const probe = probeOf(state, A)
+    expect(state.probes.getSnapshot().get(probe.id)).toBe(false)
     expect(state.dockable.getSnapshot().get(A)).toBe(false)
-    embedded.source.set(WIDE)
+    // Within a pixel below the gutter that docks the panel the probe is narrower than 1px.
+    probe.resize(0.5)
+    expect(state.probes.getSnapshot().get(probe.id)).toBe(false)
+    probe.resize(1)
+    expect(state.probes.getSnapshot().get(probe.id)).toBe(true)
     expect(state.dockable.getSnapshot().get(A)).toBe(true)
-    embedded.stop()
+    probe.resize(0)
+    expect(state.probes.getSnapshot().get(probe.id)).toBe(false)
+    expect(state.dockable.getSnapshot().get(A)).toBe(false)
+  })
+
+  it('gives a Session room while any of its probes has it, and drops the Session once its last probe detaches', () => {
+    const state = new SessionPanelState()
+    const main = probeOf(state, A, 1)
+    const embedded = probeOf(state, A)
+    expect(state.probes.getSnapshot()).toEqual(new Map([[main.id, true], [embedded.id, false]]))
+    expect(state.dockable.getSnapshot().get(A)).toBe(true)
+    main.detach()
+    expect(main.observation.disconnected).toBe(true)
+    expect(state.probes.getSnapshot()).toEqual(new Map([[embedded.id, false]]))
+    expect(state.dockable.getSnapshot().get(A)).toBe(false)
+    embedded.resize(1)
+    expect(state.dockable.getSnapshot().get(A)).toBe(true)
+    embedded.detach()
     expect(state.dockable.getSnapshot().has(A)).toBe(false)
-    // A stopped source publishes nothing.
+    expect(state.probes.getSnapshot().size).toBe(0)
+    // A second detachment of the same element withdraws nothing more.
     const before = state.dockable.getSnapshot()
-    embedded.source.set(NARROW)
+    embedded.detach()
     expect(state.dockable.getSnapshot()).toBe(before)
   })
 
-  it('publishes only when a Session crosses the docking threshold', () => {
+  it('publishes only when a probe flips or a Session changes its room', () => {
     const state = new SessionPanelState()
-    const view = chatView(state, A, 420)
-    const first = state.dockable.getSnapshot()
-    let calls = 0
-    const off = state.dockable.subscribe(() => { calls += 1 })
-    view.source.set(400)
-    view.source.set(WIDE)
-    chatView(state, A, 16)
-    expect(state.dockable.getSnapshot()).toBe(first)
-    expect(calls).toBe(0)
-    view.source.set(WIDE - 1)
-    expect(calls).toBe(1)
-    off()
+    const main = probeOf(state, A, 1)
+    const probes = state.probes.getSnapshot()
+    const dockable = state.dockable.getSnapshot()
+    let probeCalls = 0
+    let sessionCalls = 0
+    const offProbes = state.probes.subscribe(() => { probeCalls += 1 })
+    const offSessions = state.dockable.subscribe(() => { sessionCalls += 1 })
+    main.resize(1)
+    expect(state.probes.getSnapshot()).toBe(probes)
+    expect(state.dockable.getSnapshot()).toBe(dockable)
+    // A second Chat View without room changes the probes, not the Session's room.
+    const embedded = probeOf(state, A)
+    expect([probeCalls, sessionCalls]).toEqual([1, 0])
+    main.resize(0)
+    expect([probeCalls, sessionCalls]).toEqual([2, 1])
+    embedded.detach()
+    expect([probeCalls, sessionCalls]).toEqual([3, 1])
+    offProbes()
+    offSessions()
+  })
+
+  it('keeps a probe without room where ResizeObserver is missing', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    const state = new SessionPanelState()
+    const ref = state.createProbeRef(A, 'unobserved')
+    ref(document.createElement('span'))
+    expect(state.probes.getSnapshot().get('unobserved')).toBe(false)
+    expect(state.dockable.getSnapshot().get(A)).toBe(false)
+    ref(null)
+    expect(state.dockable.getSnapshot().has(A)).toBe(false)
+  })
+
+  it('stops observing every attached probe on dispose, after which a detachment withdraws nothing', () => {
+    const { state, a, b } = newState()
+    state.dispose()
+    expect([a.observation.disconnected, b.observation.disconnected]).toEqual([true, true])
+    expect(state.probes.getSnapshot().size).toBe(0)
+    expect(state.dockable.getSnapshot().size).toBe(0)
+    const before = state.probes.getSnapshot()
+    a.detach()
+    expect(state.probes.getSnapshot()).toBe(before)
   })
 })
 
@@ -99,7 +178,7 @@ describe('SessionPanelState visibility', () => {
     const { state, a } = newState()
     state.toggle(A)
     expect(state.visibility.getSnapshot().overlay).toBe(A)
-    a.source.set(WIDE)
+    a.resize(1)
     expect(state.visibility.getSnapshot().overlay).toBeNull()
     state.toggle(A)
     expect(state.visibility.getSnapshot()).toEqual({ pinned: false, overlay: null })
@@ -140,7 +219,7 @@ describe('SessionPanelState visibility', () => {
     let calls = 0
     const off = state.visibility.subscribe(() => { calls += 1 })
     state.toggle(A)
-    a.source.set(WIDE)
+    a.resize(1)
     state.toggle(A)
     const seen = calls
     expect(seen).toBeGreaterThanOrEqual(2)
@@ -152,32 +231,33 @@ describe('SessionPanelState visibility', () => {
   it('closes an overlay once its gutter can dock the panel, without reopening it when the gutter narrows again', () => {
     const { state, a } = newState()
     state.toggle(A)
-    a.source.set(300)
+    a.resize(0.5)
     expect(state.visibility.getSnapshot().overlay).toBe(A)
-    a.source.set(WIDE)
+    a.resize(1)
     expect(state.visibility.getSnapshot()).toEqual({ pinned: true, overlay: null })
-    a.source.set(NARROW)
+    a.resize(0)
     expect(presentationOf(false, state.visibility.getSnapshot(), A)).toBe('hidden')
   })
 
   it('closes an overlay once no Chat View shows its Session, so returning to it shows no overlay', () => {
     const { state, a } = newState()
     state.toggle(A)
-    a.stop()
+    a.detach()
     expect(state.visibility.getSnapshot().overlay).toBeNull()
-    chatView(state, A, NARROW)
+    probeOf(state, A)
     expect(presentationOf(false, state.visibility.getSnapshot(), A)).toBe('hidden')
   })
 
   it('follows only the open overlay, and nothing after dispose', () => {
-    const { state, a, b } = newState()
+    const { state, a } = newState()
     state.toggle(A)
     state.toggle(B)
     // A's Chat View no longer matters once B holds the overlay.
-    a.stop()
+    a.detach()
     expect(state.visibility.getSnapshot().overlay).toBe(B)
+    // Dispose withdraws B's probe too, but nothing follows the overlay any longer.
     state.dispose()
-    b.stop()
+    expect(state.dockable.getSnapshot().has(B)).toBe(false)
     expect(state.visibility.getSnapshot().overlay).toBe(B)
   })
 })

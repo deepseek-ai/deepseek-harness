@@ -12,7 +12,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { useEffect, useMemo } from 'react'
 import { useMarkdownDelegate, type MarkdownDelegateFenceInfo, type MarkdownMenuTarget } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
-  AssistantMessageNode, ChatAsideOwnerProps, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
+  AssistantMessageNode, ChatFlowHookContext, ChatFlowOwnerProps, ChatFlowSlotProps,
   ChatNode, ChatNodeHookContext, ChatNodeOwnerProps, ChatSnapshot, UserBeforeOwnerProps,
   ChatViewSlotProps, CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, StartedToolCall, SteeringMessageNode,
@@ -500,18 +500,17 @@ function makeHarness(
     return renderUserContent(owner as UserContentInput, renderImages, props.t)
   }
   const fenceCalls: { owner: MarkdownDelegateFenceInfo; entryKey: string | undefined }[] = []
-  const asideOwners: ChatAsideOwnerProps[] = []
+  const asideRenders = { count: 0 }
   const renderSlot = (
     key: string,
-    owner: ChatFlowOwnerProps | MarkdownDelegateFenceInfo | ChatAsideOwnerProps,
+    owner: ChatFlowOwnerProps | MarkdownDelegateFenceInfo,
     opts: Parameters<FlowRenderer>[2] & { entryKey?: string; children?: React.ReactNode },
   ) => {
     if (key === 'conversation.chat.text-interaction') return null
-    if (key === 'conversation.chat.aside' && 'endGutter' in owner) {
-      asideOwners.push(owner)
+    if (key === 'conversation.chat.aside') {
+      asideRenders.count += 1
       return <span data-chat-aside-probe="" />
     }
-    if ('endGutter' in owner) throw new Error(`Undeclared ChatView child: ${key}`)
     if (key === 'conversation.chat.markdown.fence' && 'lang' in owner) {
       fenceCalls.push({ owner, entryKey: opts.entryKey })
       return opts.children ?? null
@@ -614,7 +613,7 @@ function makeHarness(
     setConnection: (state: ConnectionState) => { connection.set(state) },
     openFile, openUserFile, loadOlder, consumeOlder, prepareOlder, loadThrough, openView,
     setOutline: (value: unknown) => { outlineValue = value },
-    chatScroll, forkAt, toolOwners, fenceCalls, asideOwners,
+    chatScroll, forkAt, toolOwners, fenceCalls, asideRenders,
     setPerformanceUsage: (mode: 'compact' | 'detailed') => { performanceUsage.set(mode) },
     setGrouped: (value: ConversationGroupedView<ProcessGroupData> | undefined) => {
       grouped = value
@@ -869,57 +868,24 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
-  it('gives the aside a gutter source that follows half the width the frame leaves around the transcript column, rendering the aside once', () => {
-    const observers: { callback: ResizeObserverCallback; targets: Element[] }[] = []
+  it('renders the aside once in a layer at the top of the Chat frame, which observes no sizes', () => {
+    const observed: Element[] = []
     vi.stubGlobal('ResizeObserver', class {
-      readonly targets: Element[] = []
-      constructor(callback: ResizeObserverCallback) { observers.push({ callback, targets: this.targets }) }
-      observe(target: Element): void { this.targets.push(target) }
+      observe(target: Element): void { observed.push(target) }
       unobserve(): void {}
       disconnect(): void {}
     })
-    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     const h = makeHarness({}, {}, chatSnapshotFixture({ nodes: [user(1, 'hello')] }))
     const view = render(<h.ChatView {...h.props} />)
     const frame = view.container.firstElementChild as HTMLElement
     const layer = frame.querySelector('[data-chat-aside]') as HTMLElement
-    const column = frame.querySelector('[data-chat-flow]') as HTMLElement
     expect(layer.parentElement).toBe(frame)
     expect(layer.querySelector('[data-chat-aside-probe]')).not.toBeNull()
-    const gutter = observers.find(observer => observer.targets.includes(layer))
-    expect(gutter?.targets).toEqual([layer, column])
-    const deliver = (...sizes: [Element, number][]): void => {
-      const entries = sizes.map(([target, width]) => ({ target, contentRect: { width } }) as ResizeObserverEntry)
-      act(() => { gutter?.callback(entries, {} as ResizeObserver) })
-    }
-    expect(h.asideOwners).toHaveLength(1)
-    const source = (h.asideOwners[0] as ChatAsideOwnerProps).endGutter
-    const published: number[] = []
-    const off = source.subscribe(() => { published.push(source.getSnapshot()) })
-    // Nothing is known until both widths arrive.
-    deliver([layer, 1600.4])
-    expect(source.getSnapshot()).toBe(0)
-    deliver([column, 760])
-    expect(source.getSnapshot()).toBe(420)
-    deliver([column, 880])
-    expect(source.getSnapshot()).toBe(360)
-    // Height-only growth reports the same widths and publishes nothing.
-    deliver([column, 880])
-    deliver([layer, 700])
-    expect(source.getSnapshot()).toBe(0)
-    expect(published).toEqual([420, 360, 0])
-    off()
-    expect(rect).not.toHaveBeenCalled()
-    // Neither resizes nor transcript updates re-render the aside.
+    // The layer's stylesheet publishes the gutter; the layer itself measures nothing.
+    expect(observed).not.toContain(layer)
+    // Transcript updates do not re-render the aside.
     act(() => { h.setSession({ running: true }) })
-    expect(h.asideOwners).toHaveLength(1)
-  })
-
-  it('keeps the aside gutter at zero without ResizeObserver', () => {
-    vi.stubGlobal('ResizeObserver', undefined)
-    const h = makeHarness({}, {}, chatSnapshotFixture({ nodes: [user(1, 'hello')] }))
-    render(<h.ChatView {...h.props} />)
-    expect((h.asideOwners.at(-1) as ChatAsideOwnerProps).endGutter.getSnapshot()).toBe(0)
+    expect(h.asideRenders.count).toBe(1)
   })
 
   it('renders only referenced Nodes without deleting unreferenced Node data', () => {
@@ -4583,15 +4549,13 @@ describe('ChatView', () => {
 
   it('one ResizeObserver owns pinned dynamic-height follow and ignores growth while away', () => {
     let notify: (() => void) | undefined
-    let followed: Element[] = []
+    const observe = vi.fn<(element: Element) => void>()
     class ResizeObserverStub {
-      private readonly targets: Element[] = []
       constructor(callback: ResizeObserverCallback) {
-        followed = this.targets
         notify = () => { callback([], this as unknown as ResizeObserver) }
       }
 
-      observe = (element: Element): void => { this.targets.push(element) }
+      observe = observe
       disconnect = vi.fn()
     }
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
@@ -4610,8 +4574,9 @@ describe('ChatView', () => {
     Object.defineProperty(scroller, 'scrollHeight', { value: 1_400, writable: true })
     act(() => { notify?.() })
     expect(scroller.scrollTop).toBe(200)
-    // The follow observer is the last one the view creates; the aside layer measures with its own.
-    expect(followed).toEqual([view.container.querySelector('[data-chat-flow]'), scroller])
+    expect(observe.mock.calls.map(([element]) => element)).toEqual([
+      view.container.querySelector('[data-chat-flow]'), scroller,
+    ])
   })
 
   it('pinned dynamic-height updates select the latest Turn without reading row geometry', async () => {

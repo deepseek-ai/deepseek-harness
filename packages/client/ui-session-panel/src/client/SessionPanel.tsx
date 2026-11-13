@@ -1,11 +1,9 @@
 /** Floating Session panel in the Chat View's aside: section titles drawn from the section roster, bodies from the section slot. */
-import {
-  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type FocusEvent, type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FocusEvent, type ReactNode } from 'react'
 import { isBehindModal, observeComposition } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelProps, SessionPanelSectionOwnerProps } from './slots.ts'
-import { fitsGutter, presentationOf } from './visibility.ts'
+import { presentationOf } from './visibility.ts'
 import css from './SessionPanel.module.css'
 
 /**
@@ -76,22 +74,23 @@ function useFocusReturn(hidden: boolean, toggleId: string): {
 }
 
 /**
- * Render the panel while it docks or shows as an overlay. Each section keeps
- * its title row and body; CSS hides a section whose body rendered nothing.
- * The overlay closes on Escape and on an outside pointerdown. CSS sizes the
- * docked panel from the transcript width; the gutter source decides only
- * whether it can dock, so a resize re-renders the panel only when it crosses
- * the docking threshold.
- * @param props - Session values, the Chat View's end gutter source, shared visibility, sections, the gutter tracking, and copy.
- * @returns the panel, or null while it is hidden.
+ * Render the panel while it docks or shows as an overlay, and always its
+ * dock probe. Each section keeps its title row and body; CSS hides a section
+ * whose body rendered nothing. The overlay closes on Escape and on an
+ * outside pointerdown. CSS sizes the docked panel from the Chat View's end
+ * gutter and makes the probe 1px wide while that gutter holds the panel; the
+ * plugin observes the probe, so the panel renders again only when the
+ * docking decision flips.
+ * @param props - Session values, shared visibility, sections, the dock probes and their ref factory, and copy.
+ * @returns the dock probe and, unless hidden, the panel.
  */
 export function SessionPanel({
-  sessionId, endGutter, useVisibility, useSections, track, closeOverlay, renderSlot, t,
+  sessionId, useVisibility, useSections, useProbes, createProbeRef, closeOverlay, renderSlot, t,
 }: SessionPanelProps): ReactNode {
-  // Registered before paint, so a Chat View remount keeps the header toggle available instead of flashing unavailable.
-  useLayoutEffect(() => track(sessionId, endGutter), [track, sessionId, endGutter])
-  const followGutter = useCallback((listener: () => void) => endGutter.subscribe(listener), [endGutter])
-  const fits = useSyncExternalStore(followGutter, () => fitsGutter(endGutter.getSnapshot()))
+  const probe = useId()
+  // One ref lifecycle for this mounted panel: the entry remounts with its Session, so the Session is fixed.
+  const [probeRef] = useState(() => createProbeRef(sessionId, probe))
+  const fits = useProbes(probes => probes.get(probe) === true)
   const presentation = useVisibility(visibility => presentationOf(fits, visibility, sessionId))
   const sections = useSections(entries => entries)
   const panel = useRef<HTMLElement>(null)
@@ -102,33 +101,37 @@ export function SessionPanel({
   [presentation, dismissOverlay])
   useOverlayDismissal(panel, presentation === 'overlay', toggleElementId(sessionId), dismissOverlay)
   const focus = useFocusReturn(owner === undefined, toggleElementId(sessionId))
-  if (owner === undefined) return null
   return (
-    <aside
-      id={panelElementId(sessionId)}
-      className={css.panel}
-      aria-label={t('panel.name')}
-      ref={panel}
-      onFocus={focus.onFocus}
-      onBlur={focus.onBlur}
-      data-session-panel={owner.presentation}
-    >
-      {sections.map((section) => {
-        const titleId = `${panelElementId(sessionId)}-${section.id}`
-        return (
-          <section key={section.id} className={css.section} aria-labelledby={titleId} data-session-panel-section={section.id}>
-            <div className={css.head}>
-              <h2 id={titleId} className={css.title}>{section.label}</h2>
-              <div className={css.actions}>
-                {renderSlot('conversation.session.panel.section.actions', {}, { entryKey: section.id })}
-              </div>
-            </div>
-            <div className={css.body}>
-              {renderSlot('conversation.session.panel.section', owner, { only: section.id })}
-            </div>
-          </section>
-        )
-      })}
-    </aside>
+    <>
+      <span ref={probeRef} className={css.dockProbe} data-session-panel-probe="" />
+      {owner !== undefined && (
+        <aside
+          id={panelElementId(sessionId)}
+          className={css.panel}
+          aria-label={t('panel.name')}
+          ref={panel}
+          onFocus={focus.onFocus}
+          onBlur={focus.onBlur}
+          data-session-panel={owner.presentation}
+        >
+          {sections.map((section) => {
+            const titleId = `${panelElementId(sessionId)}-${section.id}`
+            return (
+              <section key={section.id} className={css.section} aria-labelledby={titleId} data-session-panel-section={section.id}>
+                <div className={css.head}>
+                  <h2 id={titleId} className={css.title}>{section.label}</h2>
+                  <div className={css.actions}>
+                    {renderSlot('conversation.session.panel.section.actions', {}, { entryKey: section.id })}
+                  </div>
+                </div>
+                <div className={css.body}>
+                  {renderSlot('conversation.session.panel.section', owner, { only: section.id })}
+                </div>
+              </section>
+            )
+          })}
+        </aside>
+      )}
+    </>
   )
 }
