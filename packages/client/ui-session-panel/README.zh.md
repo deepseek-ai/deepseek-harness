@@ -44,7 +44,7 @@ kind: "package-reference"
 
 面板隐藏时也要可见的标记（例如提示需要处理的圆点）放进 `conversation.session.panel.indicator` 列表。每个占位是一个元素：开关把它定为图标角上的 6px 圆点，占位负责设置 `background`，并带有说明自身的文字，这些文字会成为开关无障碍名称的一部分。占位会重叠，`order` 高的画在低的上方。owner 属性 `panelShown` 让只是重复面板内容的标记在面板显示时不渲染。「子智能体」与「后台任务」在任务运行且面板未显示时显示蓝点（order 10 和 20）；forge 套件的红色提醒点（order 100）画在它们上方，面板显示时也保留。
 
-各包的摘要行都使用 `PanelRow` 原语，使不同分栏的图标、文字与尾部区域对齐；行的「更多」按钮放进它的 `menu`，各行就以同样的方式整行高亮并显示操作。
+插件把面板的行作为 Component Factory `conversation.session.panel.row` 提供。各包的分栏与环境行都用 `renderFactorySlot('conversation.session.panel.row', props)` 渲染自己的行，使不同分栏的图标、文字与尾部区域对齐。每行有一个沿用行文字颜色的 16px 装饰图标、单行内容（溢出时以省略号截断），以及可选的尾部数值或控件。`menu` 放在尾部区域之后的行操作（例如「更多」按钮），位于 16px 宽的一列，中心距行末端 14px；其中的普通 `button` 有 24px 点击区和三级文字色图标，悬停时图标变深、没有底色，因此不需要自己的 tooltip。鼠标悬停在行上、焦点在行内或其菜单打开时显示，没有悬停能力的设备上始终显示。传入 `onActivate` 时整行成为一个按钮，尾部区域与 `menu` 仍是各自独立的控件，内容不足以说明操作时用 `actionLabel` 为该按钮命名，并以可见文字开头；带操作或行操作的行在悬停时以及菜单打开期间整行填充。`detail` 在内容下方加一行更小的浅灰文字，溢出时以省略号截断，例如某个状态的后果或要运行的命令；图标留在第一行旁边，尾部区域和菜单在整行中垂直居中。`className` 追加到行的类名上，`attributes`（例如 `role`、`data-*` 标记与右键菜单触发属性）落在行元素上，其余属性被忽略。
 
 -----
 
@@ -54,18 +54,19 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-面板是 [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership) 中 `conversation.chat.aside` 的占位组件，因此只渲染在 Chat 视图中。开关与面板是两个独立的 Slot 条目，共享一份插件持有的状态：持久化的停靠偏好、打开了浮层的会话，以及每个已挂载面板从 owner 属性 `endGutter` 上报的末端留白。面板卸载或其 Chat 视图换到另一个会话时撤回上报。面板根据自己的留白决定呈现方式；开关读取该会话最宽的留白，没有留白的会话表示没有 Chat 视图在显示它。两者用同一个纯函数决定，因此开关状态始终与面板一致。侧边层从滚动容器继承输入框区域与视口高度，停靠宽度通过 `--dsh-session-panel-gutter` 跟随留白。
+面板是 [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership) 中 `conversation.chat.aside` 的占位组件，因此只渲染在 Chat 视图中。开关与面板是两个独立的 Slot 条目，共享一份插件持有的状态：持久化的停靠偏好、打开了浮层的会话，以及每个会话是否有停靠空间。每个已挂载的面板把所在 Chat 视图的 `endGutter` 数据源登记到这份状态里，面板卸载或其 Chat 视图换到另一个会话时取消登记；会话的任一数据源能容纳停靠面板时，该会话就有停靠空间，没有数据源的会话表示没有 Chat 视图在显示它。面板根据自己的数据源决定呈现方式，两者用同一个纯函数决定，因此开关状态始终与面板一致。面板与开关只订阅留白能否容纳停靠面板，因此尺寸变化只在跨过 344px 阈值时才让它们重新渲染；打开、关闭或停靠面板也不会让 Chat 视图重新渲染。侧边层从滚动容器继承输入框区域与视口高度，以及正文宽度 `--dsh-chat-content-width`，停靠宽度由 CSS 据此算出。
 
 面板把分栏列表的实时注册（`entriesOfSlot`，因此同 `id` 且优先级更高的注册会替换已发布的分栏）投影为 `{ id, label }` 行，只在台账版本或语言版本变化时重新计算。它在各分栏自己的标题和正文容器里用 `renderSlot(..., { only: id })` 渲染内容；CSS `:has()` 规则隐藏正文出口为空的分栏，也包括行出口为空的共享分栏。
 
 | 文件 | 作用 |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | 字典、开关、面板、「环境」分栏与项目行 |
+| [`src/client/index.ts`](src/client/index.ts) | 字典、行 Factory、开关、面板、「环境」分栏与项目行 |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot 声明与组件 props |
-| [`src/client/visibility.ts`](src/client/visibility.ts) | 停靠阈值、呈现方式、共享可见性状态与上报的留白 |
+| [`src/client/visibility.ts`](src/client/visibility.ts) | 停靠阈值、呈现方式、共享可见性状态与每个会话的停靠空间 |
 | [`src/client/sections.ts`](src/client/sections.ts) | 分栏名单投影 |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | 面板、分栏标题与 Esc 处理 |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | 标题栏开关及其角标 |
+| [`src/client/PanelRow.tsx`](src/client/PanelRow.tsx) | `conversation.session.panel.row` Factory 渲染的面板行 |
 | [`src/client/ProjectRow.tsx`](src/client/ProjectRow.tsx) | 工作目录行 |
 
 </details>
@@ -76,9 +77,9 @@ kind: "package-reference"
 ## 进一步探索
 
 - [Web Client Slots](../../../docs/subsystems/slots.zh.md)——分栏依赖的 list、keyed 与 owner props 语义。
-- [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership)——`conversation.chat.aside` 图层及其末端留白。
+- [`dsh-client-ui-chat`](../ui-chat/README.zh.md#scroll-ownership)——`conversation.chat.aside` 图层及其末端留白数据源。
 - [`dsh-client-ui-conversation`](../ui-conversation/README.zh.md)——会话标题栏工具区。
-- [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md#component-catalog)——`PanelRow` 与 `PathLabel`。
+- [`dsh-client-ui-primitives`](../ui-primitives/README.zh.md#component-catalog)——`Button`、`Tooltip`、图标，以及模态层与输入法组合的判断。
 
 -----
 

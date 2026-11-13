@@ -24,6 +24,7 @@ import type { PanelSnapshot } from '../src/client/source.ts'
 import type { ForgePanelChangeRequest, ForgePanelState } from '../src/types.ts'
 import { createChangeRequestsSectionStore } from '../src/client/change-requests-store.ts'
 import { created, entry, ready, removed, snapshot, worktree } from './client-fixtures.client.ts'
+import { renderPanelRows } from './panel-row-factory.client.tsx'
 
 afterEach(cleanup)
 
@@ -52,6 +53,7 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     dismissOverlay: vi.fn<() => void>(),
     // Plugins' card actions: a marker naming the change request it was drawn for.
     renderSlot: vi.fn((_name: string, owner: { url: string }) => <span data-plugin-action={owner.url} />),
+    renderFactorySlot: renderPanelRows(),
   }
   const props = {
     sessionId: SESSION,
@@ -64,7 +66,8 @@ function section(state: ForgePanelState | null, options: { disconnected?: boolea
     t,
   } as Pick<ChangeRequestsSectionProps,
     'sessionId' | 'presentation' | 'usePanel' | 'useLocale' | 'useStore' | 'actions' | 'dismissOverlay' | 'refresh'
-    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 't'> as ChangeRequestsSectionProps
+    | 'remove' | 'markReady' | 'merge' | 'readChecks' | 'openLink' | 'copyText' | 'viewChanges' | 'renderSlot' | 'renderFactorySlot'
+    | 't'> as ChangeRequestsSectionProps
   const view = render(<ChangeRequestsSection {...props} />)
   return { view, panel, store, ...handlers }
 }
@@ -282,7 +285,7 @@ describe('CheckoutRow', () => {
     const restore = vi.fn<() => void>()
     const refreshIfStale = vi.fn<() => void>()
     const opened: ContextMenuTarget[] = []
-    const renderFactorySlot = vi.fn((_name: string, input: { label: string }) => <button type="button">{input.label}</button>)
+    const renderFactorySlot = renderPanelRows((_name, input: { label: string }) => <button type="button">{input.label}</button>)
     const props = {
       sessionId: SESSION,
       usePanel: bindSnapshotSelector(panel),
@@ -349,7 +352,7 @@ describe('CheckoutRow', () => {
     // A press shows it too, for touch screens that cannot hover.
     fireEvent.click(reason)
     expect(b.view.getByRole('tooltip').textContent).toBe('sandbox runner unavailable')
-    expect(b.renderFactorySlot).not.toHaveBeenCalled()
+    expect(b.renderFactorySlot).not.toHaveBeenCalledWith('contextMenu.button', expect.anything())
     fireEvent.contextMenu(element)
     expect(b.opened).toEqual([])
   })
@@ -418,7 +421,7 @@ describe('CheckoutRow', () => {
     expect(element.hasAttribute('data-missing')).toBe(true)
     expect(within(element).getByText('dsh/0a1b2c3d')).toBeTruthy()
     expect(within(element).getByText(en['missing.title'])).toBeTruthy()
-    expect(b.renderFactorySlot).not.toHaveBeenCalled()
+    expect(b.renderFactorySlot).not.toHaveBeenCalledWith('contextMenu.button', expect.anything())
     fireEvent.click(within(element).getByRole('button', { name: en['checkout.restore'] }))
     expect(b.restore).toHaveBeenCalledOnce()
   })
@@ -435,8 +438,8 @@ describe('ConnectionRow', () => {
   function row(state: ForgePanelState | null, disconnected: boolean) {
     const panel = panelStore(state, disconnected)
     const reconnect = vi.fn<() => void>()
-    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), reconnect, t } as
-      Pick<ConnectionRowProps, 'sessionId' | 'usePanel' | 'reconnect' | 't'> as ConnectionRowProps
+    const props = { sessionId: SESSION, usePanel: bindSnapshotSelector(panel), reconnect, renderFactorySlot: renderPanelRows(), t } as
+      Pick<ConnectionRowProps, 'sessionId' | 'usePanel' | 'reconnect' | 'renderFactorySlot' | 't'> as ConnectionRowProps
     return { view: render(<ConnectionRow {...props} />), panel, reconnect }
   }
 
@@ -472,8 +475,10 @@ describe('LocalChangesRow', () => {
     const createChangeRequest = vi.fn<() => void>()
     const dismissOverlay = vi.fn<() => void>()
     const props = {
-      sessionId: SESSION, usePanel: bindSnapshotSelector(panel), dismissOverlay, viewLocalChanges, createChangeRequest, t,
-    } as Pick<LocalChangesRowProps, 'sessionId' | 'usePanel' | 'dismissOverlay' | 'viewLocalChanges' | 'createChangeRequest' | 't'> as LocalChangesRowProps
+      sessionId: SESSION, usePanel: bindSnapshotSelector(panel), dismissOverlay, viewLocalChanges, createChangeRequest,
+      renderFactorySlot: renderPanelRows(), t,
+    } as Pick<LocalChangesRowProps,
+      'sessionId' | 'usePanel' | 'dismissOverlay' | 'viewLocalChanges' | 'createChangeRequest' | 'renderFactorySlot' | 't'> as LocalChangesRowProps
     const view = render(<LocalChangesRow {...props} />)
     return { view, viewLocalChanges, createChangeRequest, dismissOverlay }
   }

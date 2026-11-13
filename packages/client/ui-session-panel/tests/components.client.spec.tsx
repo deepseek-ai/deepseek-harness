@@ -5,12 +5,13 @@ import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
 import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
 import type {
-  EnvironmentSectionProps, ProjectRowProps, SessionPanelGutters, SessionPanelProps, SessionPanelSectionEntry,
+  EnvironmentSectionProps, ProjectRowProps, SessionPanelDockable, SessionPanelProps, SessionPanelSectionEntry,
   SessionPanelSectionOwnerProps, SessionPanelToggleProps, SessionPanelVisibility,
 } from '../src/client/slots.ts'
 import { DOCK_MIN_GUTTER } from '../src/client/visibility.ts'
@@ -52,17 +53,17 @@ function tooltipAfterHover(anchor: Element): { readonly early: boolean; readonly
 }
 
 describe('SessionPanelToggle', () => {
-  function toggleProps(gutter: number | undefined, visibility: SessionPanelVisibility, toggle = vi.fn()) {
+  function toggleProps(dockable: boolean | undefined, visibility: SessionPanelVisibility, toggle = vi.fn()) {
     const renderSlot = vi.fn(() => <span>需要处理</span>)
-    const gutters: SessionPanelGutters = new Map(gutter === undefined ? [] : [[SID, gutter]])
+    const entries: SessionPanelDockable = new Map(dockable === undefined ? [] : [[SID, dockable]])
     const props = {
-      sessionId: SID, useGutters: selectorOf(gutters), useVisibility: selectorOf(visibility), toggle, renderSlot, t,
+      sessionId: SID, useDockable: selectorOf(entries), useVisibility: selectorOf(visibility), toggle, renderSlot, t,
     } as SessionPanelToggleProps
     return { props, toggle, renderSlot }
   }
 
   it('names the panel together with its indicators and reports the docked panel as expanded', () => {
-    const { props, renderSlot } = toggleProps(WIDE, DOCKED)
+    const { props, renderSlot } = toggleProps(true, DOCKED)
     render(<SessionPanelToggle {...props} />)
     const button = screen.getByRole('button', { name: '会话面板 需要处理' })
     expect(button.getAttribute('aria-expanded')).toBe('true')
@@ -71,12 +72,12 @@ describe('SessionPanelToggle', () => {
   })
 
   it('flips docking with room to dock and opens the overlay without it', () => {
-    const wide = toggleProps(WIDE, DOCKED)
+    const wide = toggleProps(true, DOCKED)
     render(<SessionPanelToggle {...wide.props} />)
     fireEvent.click(screen.getByRole('button'))
     expect(wide.toggle).toHaveBeenCalledWith(SID)
     cleanup()
-    const narrow = toggleProps(NARROW, DOCKED)
+    const narrow = toggleProps(false, DOCKED)
     render(<SessionPanelToggle {...narrow.props} />)
     const button = screen.getByRole('button')
     expect(button.getAttribute('aria-expanded')).toBe('false')
@@ -86,19 +87,19 @@ describe('SessionPanelToggle', () => {
   })
 
   it('reports an open overlay as expanded', () => {
-    const { props } = toggleProps(NARROW, { pinned: false, overlay: SID })
+    const { props } = toggleProps(false, { pinned: false, overlay: SID })
     render(<SessionPanelToggle {...props} />)
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true')
   })
 
   it('tells its indicators whether the panel shows', () => {
-    const { props, renderSlot } = toggleProps(NARROW, DOCKED)
+    const { props, renderSlot } = toggleProps(false, DOCKED)
     render(<SessionPanelToggle {...props} />)
     expect(renderSlot).toHaveBeenCalledWith('conversation.session.panel.indicator', { panelShown: false })
   })
 
   it('shows its tooltip after 500ms of hover', () => {
-    const { props } = toggleProps(WIDE, DOCKED)
+    const { props } = toggleProps(true, DOCKED)
     render(<SessionPanelToggle {...props} />)
     expect(tooltipAfterHover(screen.getByRole('button'))).toEqual({ early: false, at500: true })
   })
@@ -122,7 +123,8 @@ describe('SessionPanel', () => {
     { id: 'change-requests', label: '变更请求' },
   ]
 
-  function panelProps(endGutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), measure = vi.fn()) {
+  function panelProps(gutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), track = vi.fn(() => () => {})) {
+    const endGutter = createSnapshotStore(gutter)
     const owners: SessionPanelSectionOwnerProps[] = []
     const renderSlot = ((key: string, owner: object, opts?: { only?: string; entryKey?: string }): ReactNode => {
       if (key === 'conversation.session.panel.section.actions') {
@@ -136,28 +138,49 @@ describe('SessionPanel', () => {
       endGutter,
       useVisibility: selectorOf(visibility),
       useSections: selectorOf(SECTIONS),
-      measure,
+      track,
       closeOverlay,
       renderSlot,
       t,
     } as SessionPanelProps
-    return { props, owners, closeOverlay, measure }
+    return { props, owners, closeOverlay, track, endGutter }
   }
 
-  it('reports its Chat View gutter while mounted, replacing it on change and withdrawing it on a Session change and unmount', () => {
-    const measure = vi.fn()
-    const view = render(<SessionPanel {...panelProps(420, DOCKED, vi.fn(), measure).props} />)
-    expect(measure.mock.calls).toEqual([[SID, expect.any(String), 420]])
-    const instance = measure.mock.calls[0]?.[1] as string
-    expect(screen.getByRole('complementary').style.getPropertyValue('--dsh-session-panel-gutter')).toBe('420px')
-    view.rerender(<SessionPanel {...panelProps(400, DOCKED, vi.fn(), measure).props} />)
-    expect(measure.mock.calls.at(-1)).toEqual([SID, instance, 400])
-    expect(measure.mock.calls.some(call => call[2] === null)).toBe(false)
+  it('tracks its Chat View gutter source while mounted, moving with a Session change and stopping on unmount', () => {
+    const stops: string[] = []
+    const track = vi.fn((sessionId: SessionId) => () => { stops.push(sessionId) })
+    const first = panelProps(420, DOCKED, vi.fn(), track)
+    const view = render(<SessionPanel {...first.props} />)
+    expect(track.mock.calls).toEqual([[SID, first.endGutter]])
+    // A gutter change publishes through the source; the registration stays.
+    act(() => { first.endGutter.set(400) })
+    expect(track).toHaveBeenCalledTimes(1)
     const other = 'session-2' as SessionId
-    view.rerender(<SessionPanel {...{ ...panelProps(400, DOCKED, vi.fn(), measure).props, sessionId: other }} />)
-    expect(measure.mock.calls.slice(-2)).toEqual([[SID, instance, null], [other, instance, 400]])
+    view.rerender(<SessionPanel {...{ ...first.props, sessionId: other }} />)
+    expect(stops).toEqual([SID])
+    expect(track.mock.calls.at(-1)).toEqual([other, first.endGutter])
     view.unmount()
-    expect(measure.mock.calls.at(-1)).toEqual([other, instance, null])
+    expect(stops).toEqual([SID, other])
+    // CSS sizes the docked panel; no measured width reaches its style.
+    render(<SessionPanel {...panelProps(420, DOCKED).props} />)
+    expect(screen.getByRole('complementary').getAttribute('style')).toBeNull()
+  })
+
+  it('renders again only when its gutter crosses the docking threshold', () => {
+    const { props, owners, endGutter } = panelProps(WIDE + 100, DOCKED)
+    render(<SessionPanel {...props} />)
+    const renders = (): number => owners.length
+    const settled = renders()
+    act(() => { endGutter.set(WIDE + 40) })
+    act(() => { endGutter.set(WIDE) })
+    expect(renders()).toBe(settled)
+    expect(screen.getByRole('complementary').getAttribute('data-session-panel')).toBe('docked')
+    act(() => { endGutter.set(NARROW) })
+    expect(screen.queryByRole('complementary')).toBeNull()
+    act(() => { endGutter.set(NARROW - 200) })
+    act(() => { endGutter.set(WIDE + 10) })
+    expect(screen.getByRole('complementary').getAttribute('data-session-panel')).toBe('docked')
+    expect(renders()).toBe(settled * 2)
   })
 
   it('renders nothing while hidden', () => {

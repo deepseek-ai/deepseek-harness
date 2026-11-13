@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+/** The Session panel row the `conversation.session.panel.row` Factory renders. */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PanelRow } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PanelRow } from '../src/client/PanelRow.tsx'
 
 afterEach(cleanup)
 
@@ -62,13 +63,23 @@ describe('PanelRow', () => {
     expect(row.className).not.toBe(plain.className)
   })
 
-  it('forwards attributes such as context-menu handlers to the outer element', () => {
+  it('puts its attributes, such as context-menu handlers and markers, and its class on the row element', () => {
     const onContextMenu = vi.fn()
-    const view = render(<PanelRow icon={<svg />} className="placed" onContextMenu={onContextMenu} tabIndex={0}>Row</PanelRow>)
+    const view = render(
+      <PanelRow icon={<svg />} className="placed" attributes={{ onContextMenu, tabIndex: 0, 'data-marker': 'on' }}>Row</PanelRow>,
+    )
     const row = view.container.querySelector('[data-panel-row]') as HTMLElement
     expect(row.className).toContain('placed')
     expect(row.tabIndex).toBe(0)
+    expect(row.getAttribute('data-marker')).toBe('on')
     fireEvent.contextMenu(row)
     expect(onContextMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves props outside its own, such as a Factory occurrence adds, off the row element', () => {
+    const extra = { renderFactorySlot: vi.fn(), useFactorySlot: vi.fn(), useWorkspaces: vi.fn() }
+    const view = render(<PanelRow {...{ icon: <svg />, children: 'Row', ...extra }} />)
+    const row = view.container.querySelector('[data-panel-row]') as HTMLElement
+    expect(row.getAttributeNames().sort()).toEqual(['class', 'data-panel-row'])
   })
 })

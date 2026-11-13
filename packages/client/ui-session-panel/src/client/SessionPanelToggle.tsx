@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { Button, IconFlatListOutlineRegular, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { panelElementId, toggleElementId } from './element-ids.ts'
 import type { SessionPanelToggleProps } from './slots.ts'
-import { fitsGutter, presentationOf } from './visibility.ts'
+import { presentationOf } from './visibility.ts'
 import css from './SessionPanelToggle.module.css'
 
 /**
@@ -11,16 +11,15 @@ import css from './SessionPanelToggle.module.css'
  * text of any indicator; the expanded state says whether the panel shows.
  * While no Chat View shows the Session, as in the trajectory View, the panel
  * has no place to show: the toggle is unavailable and its tooltip says so.
- * @param props - Session values, the Chat View gutters, shared visibility, the toggle action, and copy.
+ * @param props - Session values, the room to dock, shared visibility, the toggle action, and copy.
  * @returns the header entry.
  */
 export function SessionPanelToggle({
-  sessionId, useGutters, useVisibility, toggle, renderSlot, t,
+  sessionId, useDockable, useVisibility, toggle, renderSlot, t,
 }: SessionPanelToggleProps): ReactNode {
-  const gutter = useGutters(gutters => gutters.get(sessionId))
-  const fits = gutter !== undefined && fitsGutter(gutter)
-  const shown = useVisibility(visibility => presentationOf(fits, visibility, sessionId) !== 'hidden')
-  const available = gutter !== undefined
+  const dockable = useDockable(entries => entries.get(sessionId))
+  const shown = useVisibility(visibility => presentationOf(dockable === true, visibility, sessionId) !== 'hidden')
+  const available = dockable !== undefined
   const open = available && shown
   const label = available ? t(open ? 'toggle.hide' : 'toggle.show') : t('toggle.unavailable')
   return (

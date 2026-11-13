@@ -869,7 +869,7 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
-  it('renders the aside with half the width the frame leaves around the transcript column, following resizes', () => {
+  it('gives the aside a gutter source that follows half the width the frame leaves around the transcript column, rendering the aside once', () => {
     const observers: { callback: ResizeObserverCallback; targets: Element[] }[] = []
     vi.stubGlobal('ResizeObserver', class {
       readonly targets: Element[] = []
@@ -892,31 +892,34 @@ describe('ChatView', () => {
       const entries = sizes.map(([target, width]) => ({ target, contentRect: { width } }) as ResizeObserverEntry)
       act(() => { gutter?.callback(entries, {} as ResizeObserver) })
     }
+    expect(h.asideOwners).toHaveLength(1)
+    const source = (h.asideOwners[0] as ChatAsideOwnerProps).endGutter
+    const published: number[] = []
+    const off = source.subscribe(() => { published.push(source.getSnapshot()) })
     // Nothing is known until both widths arrive.
     deliver([layer, 1600.4])
-    expect(h.asideOwners.at(-1)).toEqual({ endGutter: 0 })
+    expect(source.getSnapshot()).toBe(0)
     deliver([column, 760])
-    expect(h.asideOwners.at(-1)).toEqual({ endGutter: 420 })
+    expect(source.getSnapshot()).toBe(420)
     deliver([column, 880])
-    expect(h.asideOwners.at(-1)).toEqual({ endGutter: 360 })
-    // Height-only growth reports the same widths and keeps the owner identity.
-    const owner = h.asideOwners.at(-1)
+    expect(source.getSnapshot()).toBe(360)
+    // Height-only growth reports the same widths and publishes nothing.
     deliver([column, 880])
-    expect(h.asideOwners.at(-1)).toBe(owner)
     deliver([layer, 700])
-    expect(h.asideOwners.at(-1)).toEqual({ endGutter: 0 })
+    expect(source.getSnapshot()).toBe(0)
+    expect(published).toEqual([420, 360, 0])
+    off()
     expect(rect).not.toHaveBeenCalled()
-    // Transcript updates do not re-render the aside.
-    const settled = h.asideOwners.length
+    // Neither resizes nor transcript updates re-render the aside.
     act(() => { h.setSession({ running: true }) })
-    expect(h.asideOwners).toHaveLength(settled)
+    expect(h.asideOwners).toHaveLength(1)
   })
 
   it('keeps the aside gutter at zero without ResizeObserver', () => {
     vi.stubGlobal('ResizeObserver', undefined)
     const h = makeHarness({}, {}, chatSnapshotFixture({ nodes: [user(1, 'hello')] }))
     render(<h.ChatView {...h.props} />)
-    expect(h.asideOwners.at(-1)).toEqual({ endGutter: 0 })
+    expect((h.asideOwners.at(-1) as ChatAsideOwnerProps).endGutter.getSnapshot()).toBe(0)
   })
 
   it('renders only referenced Nodes without deleting unreferenced Node data', () => {
