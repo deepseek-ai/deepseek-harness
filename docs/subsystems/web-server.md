@@ -192,7 +192,7 @@ Source: [`packages/client/connection/src/authentication.ts`](../../packages/clie
 
 ### `ctx.remoteConnection` — `RemoteConnection`
 
-One outstanding invitation, issued by an owner and consumed by a new browser.
+Owner-authorized browser login through QR codes, private links, or pairing requests.
 
 ```ts cordis-catalog
 /**
@@ -220,6 +220,22 @@ One outstanding invitation, issued by an owner and consumed by a new browser.
  * @returns the invitation's final state, including used when a redemption won the race.
  */
 @Remote cancel(id: RemoteLoginId): RemoteLoginState
+
+/**
+ * Read pending requests without the credentials used to collect their sessions.
+ * @param signal - current Remote call's cancellation.
+ * @returns pending codes and the deployment's refresh interval.
+ */
+@Remote pairingRequests(signal: AbortSignal): PairingRequestsValue
+
+/**
+ * Approve or deny one displayed code; the first decision is retained across retries.
+ * @param id - request selected after comparing its code with the applicant's screen.
+ * @param decision - allow or deny full owner access for the requesting browser.
+ * @param signal - current Remote call's cancellation before the decision commits.
+ * @returns committed decision, or unavailable after cancellation, expiry, or collection.
+ */
+@Remote decidePairing(id: PairingRequestId, decision: PairingDecision, signal: AbortSignal): PairingDecisionResult
 ```
 
 Source: [`packages/client/remote-connection/src/index.ts`](../../packages/client/remote-connection/src/index.ts)

@@ -6,7 +6,8 @@
     "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
   },
   "include": [
-    "src/*.ts"
+    "src/*.ts",
+    "src/anonymous"
   ],
   "references": [
     {
@@ -35,6 +36,9 @@
     },
     {
       "path": "../../util/error"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.host.json"
     }
   ]
 }

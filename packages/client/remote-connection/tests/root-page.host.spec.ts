@@ -168,6 +168,20 @@ it('serves QR mode from the root even to a browser already authenticated through
   expect(service.status(ticket.id).ticket).toBe('used')
 })
 
+it('keeps Token sign-in and pairing available after a QR invitation is rejected', async () => {
+  const { send, renderedPeers } = await mounted(true)
+  const rejected = await send('/?login=qr', 'POST', { 'content-type': 'text/plain' }, 'a'.repeat(43))
+  expect(rejected.status).toBe(410)
+  expect(rejected.headers['set-cookie']).toBeUndefined()
+  const page = await send('/?login=qr')
+  expect(page.status).toBe(200)
+  expect(page.body).toContain('id="token-form"')
+  expect(page.body).toContain('<dsh-device-pairing>')
+  expect(page.body).toContain('./pairing/client.js')
+  expect(page.body).not.toContain('PRIVATE_APPLICATION')
+  expect(renderedPeers).toHaveLength(0)
+})
+
 it('keeps source refusals outside the root page and invitation exchange', async () => {
   const { ctx, publicUrl, send, service, renderedPeers } = await mounted()
   const ticket = service.create()

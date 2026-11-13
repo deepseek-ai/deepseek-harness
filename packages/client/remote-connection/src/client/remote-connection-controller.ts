@@ -49,7 +49,7 @@ export class RemoteConnectionController {
   private live = true
 
   /** @param remote - Generated owner-authenticated service methods. */
-  constructor(private readonly remote: RemoteConnectionApi) {}
+  constructor(private readonly remote: Pick<RemoteConnectionApi, 'status' | 'create' | 'cancel'>) {}
 
   /**
    * Bind stable actions and the private snapshot to the slot renderer.

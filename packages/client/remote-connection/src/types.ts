@@ -1,6 +1,8 @@
 /** Browser login invitations and deployment availability. */
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
+export type * from './pairing-types.ts'
+
 /** Identifier used to inspect or cancel an invitation; it cannot authorize login. */
 export type RemoteLoginId = Branded<'remote-login-id'>
 

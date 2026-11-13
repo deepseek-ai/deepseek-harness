@@ -12,6 +12,7 @@ import type { LoginLinkState } from '../src/client/login-link-controller.ts'
 import type { RemoteLoginId } from '../src/types.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type {} from '../src/client/index.ts'
+import { PairingApproval } from '../src/client/pairing-approval.ts'
 
 afterEach(cleanup)
 
@@ -21,7 +22,7 @@ const ready: RemoteConnectionState = {
 }
 const ticket = { id: 'code-a' as RemoteLoginId, url: 'https://host.example/app/?login=qr#token=private', lifetimeMs: 120_000 }
 
-function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 'zh' = 'en', linkOverrides: Partial<LoginLinkState> = {}) {
+function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 'zh' = 'en', linkOverrides: Partial<LoginLinkState> = {}, pairingAvailable = false) {
   const state = createSnapshotStore({ ...ready, ...overrides })
   const linkState = createSnapshotStore<LoginLinkState>({ url: 'https://host.example/app/?token=private-login-token', phase: 'ready', copied: false, notice: null, sequence: 0, ...linkOverrides })
   const actions = { create: vi.fn(), cancel: vi.fn(), reload: vi.fn(), copyLink: vi.fn(), reloadLink: vi.fn(), dismissCopyNotice: vi.fn() }
@@ -31,11 +32,16 @@ function panel(overrides: Partial<RemoteConnectionState> = {}, language: 'en' | 
   locale.register('remoteConnection', { en, zh })
   locale.setLocale(language)
   const t = locale.bind('remoteConnection')
+  const approval = new PairingApproval({ decidePairing: vi.fn() }, async () => {})
+  if (pairingAvailable) approval.activate()
+  onTestFinished(() => { approval.dispose() })
+  const useResource = vi.fn(() => ({ status: 'live', value: { requests: [], pollIntervalMs: 1000 }, failure: undefined }))
   const props = {
     ...actions, t, useRemoteConnection: bindSnapshotSelector(state), useLoginLink: bindSnapshotSelector(linkState),
+    useApproval: bindSnapshotSelector(approval.state), useResource, decide: vi.fn(), dismiss: vi.fn(),
   } as RemoteConnectionSectionProps
   render(<RemoteConnectionSection {...props} />)
-  return { ...actions, state, linkState }
+  return { ...actions, state, linkState, useResource }
 }
 
 describe('Remote connection section', () => {

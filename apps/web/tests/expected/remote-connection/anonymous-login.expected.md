@@ -7,3 +7,7 @@
       - /placeholder: {{application-url}}?token=xxx
     - paragraph: 在已登录设备的「设置 → 远程连接」中复制链接，粘贴到此处
     - button "继续"
+    - region "配对此设备":
+      - heading "配对此设备" [level=2]
+      - paragraph: 申请后，在另一台已登录设备的“设置 → 远程连接”核对配对码并批准，此设备将自动登录。
+      - button "申请配对"

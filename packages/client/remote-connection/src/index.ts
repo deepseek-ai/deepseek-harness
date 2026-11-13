@@ -8,23 +8,28 @@ import type {} from '@deepseek-ai/dsh-web-app'
 import type {} from '@deepseek-ai/dsh-credentials'
 import type { PeerScope } from '@deepseek-ai/dsh-client-connection'
 import type { WebEntryUrl } from '@deepseek-ai/dsh-host-webserver'
+import { HarnessError } from '@deepseek-ai/dsh-error'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { LoginTickets } from './login-tickets.ts'
 import { handleLogin, isQrLogin } from './host-route.ts'
 import { RemoteBrowserAuth } from './remote-auth.ts'
 import { renderAuthenticationPage } from './login-page.ts'
+import { PairingRequests } from './pairing-requests.ts'
+import { registerPairingRoutes } from './pairing-routes.ts'
+import { registerAnonymousPairing } from './anonymous-assets.ts'
 import type { RemoteConnectionStatus, RemoteLoginId, RemoteLoginState, RemoteLoginTicket } from './types.ts'
+import type { PairingDecision, PairingDecisionResult, PairingRequestId, PairingRequestsValue } from './pairing-types.ts'
 
 export type * from './types.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Short-lived QR login invitations. */
+    /** QR invitations, private login links, and owner-approved browser pairing. */
     remoteConnection: RemoteConnection
   }
 }
 
-/** Deployment timing for QR login and its settings status. */
+/** Deployment timing and limits for remote browser login. */
 export interface Config {
   /** Absolute lifetime in days for Remote browser credentials; default 30. */
   cookieMaxAgeDays: number
@@ -32,18 +37,45 @@ export interface Config {
   ticketLifetimeMs: number
   /** Interval in milliseconds between the settings panel's status reads. */
   pollIntervalMs: number
+  /** Limits for anonymous requests and approval delivery. */
+  pairing: {
+    /** Lifetime in milliseconds, including retries of approved delivery. Default: 300000. */
+    requestTtlMs: number
+    /** Maximum retained requests, including terminal requests until expiry. Default: 32. */
+    maxRequests: number
+    /** Minimum interval between anonymous creations across this process. Default: 1000. */
+    requestIntervalMs: number
+    /** Minimum applicant polling interval and periodic approval-list refresh interval. Default: 2000. */
+    pollIntervalMs: number
+    /** Complete anonymous HTTP request timeout in milliseconds. Default: 10000. */
+    requestTimeoutMs: number
+    /** Additional attempts after network, timeout, rate-limit, or server failures. Default: 3. */
+    maxRetries: number
+    /** Maximum exponential retry delay in milliseconds; at least pollIntervalMs. Default: 10000. */
+    retryMaxDelayMs: number
+  }
 }
 
-/** One outstanding invitation, issued by an owner and consumed by a new browser. */
+/** Owner-authorized browser login through QR codes, private links, or pairing requests. */
 export default class RemoteConnection extends TypertRemoteService {
   static inject = ['connection', 'connection.authentication', 'credentials', 'webServer', 'webApp']
-  static Config: z<Partial<Config>, Config> = z.object({
+  static Config: z<Partial<Omit<Config, 'pairing'>> & { pairing?: Partial<Config['pairing']> }, Config> = z.object({
     cookieMaxAgeDays: z.natural().min(1).default(30),
     ticketLifetimeMs: z.natural().min(1).max(2_147_483_647).default(120_000),
     pollIntervalMs: z.natural().min(100).max(2_147_483_647).default(1000),
+    pairing: z.object({
+      requestTtlMs: z.natural().min(1).max(2_147_483_647).default(300_000),
+      maxRequests: z.natural().min(1).default(32),
+      requestIntervalMs: z.natural().min(1).default(1_000),
+      pollIntervalMs: z.natural().min(1).max(2_147_483_647).default(2_000),
+      requestTimeoutMs: z.natural().min(1).max(2_147_483_647).default(10_000),
+      maxRetries: z.natural().default(3),
+      retryMaxDelayMs: z.natural().min(1).max(2_147_483_647).default(10_000),
+    }),
   })
 
   private readonly tickets = new LoginTickets()
+  private readonly pairing: PairingRequests
   private readonly owner: Context
   private readonly lifetime = new AbortController()
   private readonly pending = new Set<Promise<unknown>>()
@@ -51,12 +83,19 @@ export default class RemoteConnection extends TypertRemoteService {
   private disposed = false
 
   /**
-   * Register the anonymous exchange independently of the authenticated application page.
-   * @param ctx - Host containing the existing browser authentication and advertised URL.
-   * @param config - validated deployment timing.
+   * Register anonymous login routes independently of the authenticated application page.
+   * @param ctx - Host containing browser authentication, anonymous pages, and the advertised URL.
+   * @param config - validated deployment limits; pairing lifetime must exceed its polling interval.
    */
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx, 'remoteConnection')
+    if (config.pairing.requestTtlMs <= config.pairing.pollIntervalMs) {
+      throw new HarnessError('remote-connection: pairing.requestTtlMs must exceed pairing.pollIntervalMs', 'REMOTE_PAIRING_INVALID_CONFIG')
+    }
+    if (config.pairing.retryMaxDelayMs < config.pairing.pollIntervalMs) {
+      throw new HarnessError('remote-connection: pairing.retryMaxDelayMs must be at least pairing.pollIntervalMs', 'REMOTE_PAIRING_INVALID_CONFIG')
+    }
+    this.pairing = new PairingRequests(config.pairing)
     this.owner = ctx
   }
 
@@ -105,6 +144,8 @@ export default class RemoteConnection extends TypertRemoteService {
           response.off('close', onClose)
         }
       })
+      registerAnonymousPairing(ctx, this.config.pairing)
+      yield registerPairingRoutes(ctx, this.pairing, this.lifetime, request => auth.createSessionCookie(request, ctx.webServer.protocol === 'https:'))
       yield ctx.webServer.register({
         kind: 'exact', path: '/', auth: 'anonymous',
         resource: async (request, admitted) => {
@@ -138,7 +179,7 @@ export default class RemoteConnection extends TypertRemoteService {
       const headers = {
         'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer',
         'x-content-type-options': 'nosniff',
-        'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
+        'content-security-policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'self'; frame-ancestors 'none'",
       }
       if ('rejection' in admission && admission.rejection !== 401) return new Response('authentication unavailable', { status: admission.rejection, headers })
       const html = renderAuthenticationPage({
@@ -208,9 +249,35 @@ export default class RemoteConnection extends TypertRemoteService {
     return this.tickets.state(id)
   }
 
+  /**
+   * Read pending requests without the credentials used to collect their sessions.
+   * @param signal - current Remote call's cancellation.
+   * @returns pending codes and the deployment's refresh interval.
+   */
+  @Remote
+  pairingRequests(signal: AbortSignal): PairingRequestsValue {
+    signal.throwIfAborted()
+    this.requireOwner()
+    return { requests: this.pairing.list(), pollIntervalMs: this.config.pairing.pollIntervalMs }
+  }
+
+  /**
+   * Approve or deny one displayed code; the first decision is retained across retries.
+   * @param id - request selected after comparing its code with the applicant's screen.
+   * @param decision - allow or deny full owner access for the requesting browser.
+   * @param signal - current Remote call's cancellation before the decision commits.
+   * @returns committed decision, or unavailable after cancellation, expiry, or collection.
+   */
+  @Remote
+  decidePairing(id: PairingRequestId, decision: PairingDecision, signal: AbortSignal): PairingDecisionResult {
+    signal.throwIfAborted()
+    this.requireOwner()
+    return this.pairing.decide(id, decision)
+  }
+
   private requireOwner(): void {
     if (this.ctx.invocation?.peer.principal.kind !== 'owner') {
-      throw new RemoteError('remote-connection/owner-required', 'Only an authenticated owner can manage login codes.', {})
+      throw new RemoteError('remote-connection/owner-required', 'Only an authenticated owner can authorize browser access.', {})
     }
     if (this.stopped) throw new RemoteError('remote-connection/disposed', 'Remote login is no longer available.', {})
   }

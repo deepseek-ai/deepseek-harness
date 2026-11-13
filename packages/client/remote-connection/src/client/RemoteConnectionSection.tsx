@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Button, IconWarningOutlineMedium, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { RemoteConnectionContentProps } from './slots.ts'
+import { PairingRequests } from './PairingRequests.tsx'
 import css from './RemoteConnectionSection.module.css'
 
 /** Renderer-derived section data, localized copy, and actions. */
@@ -17,7 +18,10 @@ export function RemoteConnectionSection(props: RemoteConnectionSectionProps) {
   const { t, useRemoteConnection } = props
   const available = useRemoteConnection(state => state.deployment?.availability === 'available')
   const loading = useRemoteConnection(state => state.phase === 'loading' && state.deployment === null)
-  if (loading) return <div className={css.loading} role="status" aria-label={t('loading')}><StateDot state="ongoing" size={20} /></div>
+  if (loading) return <section className={css.section} aria-label={t('title')}>
+    {pairingAvailable && <PairingRequests {...props} />}
+    <div className={css.loading} role="status" aria-label={t('loading')}><StateDot state="ongoing" size={20} /></div>
+  </section>
   return <section className={css.section} aria-label={t('title')}>
     <h2 className={css.title}>{t('title')}</h2>
     <ConnectionNotice {...props} />

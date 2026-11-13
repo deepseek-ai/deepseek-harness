@@ -592,7 +592,7 @@ export interface Config {
 - `source`: [`packages/client/remote-connection/src/index.ts:28`](../packages/client/remote-connection/src/index.ts)
 
 ```ts config-catalog
-/** Deployment timing for QR login and its settings status. */
+/** Deployment timing and limits for remote browser login. */
 export interface Config {
   /** Absolute lifetime in days for Remote browser credentials; default 30. */
   cookieMaxAgeDays: number
@@ -600,6 +600,23 @@ export interface Config {
   ticketLifetimeMs: number
   /** Interval in milliseconds between the settings panel's status reads. */
   pollIntervalMs: number
+  /** Limits for anonymous requests and approval delivery. */
+  pairing: {
+    /** Lifetime in milliseconds, including retries of approved delivery. Default: 300000. */
+    requestTtlMs: number
+    /** Maximum retained requests, including terminal requests until expiry. Default: 32. */
+    maxRequests: number
+    /** Minimum interval between anonymous creations across this process. Default: 1000. */
+    requestIntervalMs: number
+    /** Minimum applicant polling interval and periodic approval-list refresh interval. Default: 2000. */
+    pollIntervalMs: number
+    /** Complete anonymous HTTP request timeout in milliseconds. Default: 10000. */
+    requestTimeoutMs: number
+    /** Additional attempts after network, timeout, rate-limit, or server failures. Default: 3. */
+    maxRetries: number
+    /** Maximum exponential retry delay in milliseconds; at least pollIntervalMs. Default: 10000. */
+    retryMaxDelayMs: number
+  }
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-remote-connection -->

@@ -3,8 +3,8 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/remote-connection/README.md
 /:
-  en: 747fceec0b2fd3df
-  zh: 1f806c1a71af1fba
+  en: da9b40b15dbf1306
+  zh: 67fcfed98a961f88
 /deepseek-ai-dsh-client-remote-connection:
   en: 9bbd5b81d7f513ef
   zh: ba7d27a7b0f22dc9

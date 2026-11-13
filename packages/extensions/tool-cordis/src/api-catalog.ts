@@ -3183,8 +3183,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   },
   {
     key: 'remoteConnection',
-    summary: 'One outstanding invitation, issued by an owner and consumed by a new browser.',
-    description: 'One outstanding invitation, issued by an owner and consumed by a new browser.',
+    summary: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
+    description: 'Owner-authorized browser login through QR codes, private links, or pairing requests.',
     methods: [
       {
         signature: '@Remote status(id: RemoteLoginId | null): RemoteConnectionStatus',
@@ -3209,6 +3209,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Cancel an unused invitation; this never revokes a browser session already issued.',
         parameters: [{ name: 'id', description: 'invitation being cancelled; an older ID cannot cancel a replacement.' }],
         returns: 'the invitation\'s final state, including used when a redemption won the race.',
+      },
+      {
+        signature: '@Remote pairingRequests(signal: AbortSignal): PairingRequestsValue',
+        description: 'Read pending requests without the credentials used to collect their sessions.',
+        parameters: [{ name: 'signal', description: 'current Remote call\'s cancellation.' }],
+        returns: 'pending codes and the deployment\'s refresh interval.',
+      },
+      {
+        signature: '@Remote decidePairing(id: PairingRequestId, decision: PairingDecision, signal: AbortSignal): PairingDecisionResult',
+        description: 'Approve or deny one displayed code; the first decision is retained across retries.',
+        parameters: [{ name: 'id', description: 'request selected after comparing its code with the applicant\'s screen.' }, { name: 'decision', description: 'allow or deny full owner access for the requesting browser.' }, { name: 'signal', description: 'current Remote call\'s cancellation before the decision commits.' }],
+        returns: 'committed decision, or unavailable after cancellation, expiry, or collection.',
       },
     ],
   },
@@ -8915,6 +8927,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface PaidTranslationSpec extends TranslationSpecFields {\n    readonly provider: PaidTranslationProvider;\n    readonly sessionId: SessionId;\n}',
   },
   {
+    name: 'PairingDecision',
+    declaration: 'export type PairingDecision = \'allow\' | \'deny\';',
+  },
+  {
+    name: 'PairingDecisionResult',
+    declaration: 'export type PairingDecisionResult = \'approved\' | \'denied\' | \'unavailable\';',
+  },
+  {
+    name: 'PairingRequestId',
+    declaration: 'export type PairingRequestId = Branded<\'PairingRequestId\'>;',
+  },
+  {
+    name: 'PairingRequestsValue',
+    declaration: 'export interface PairingRequestsValue {\n    readonly requests: readonly PendingPairingRequest[];\n    readonly pollIntervalMs: number;\n}',
+  },
+  {
     name: 'PaneOpenArgs',
     declaration: 'export interface PaneOpenArgs {\n    id: string;\n    title?: string;\n    focus?: true;\n    closeOnEscape?: true;\n    holdToasts?: true;\n    rows?: number;\n    columns?: number;\n}',
   },
@@ -8941,6 +8969,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PendingModule',
     declaration: 'export interface PendingModule {\n    url: string;\n    reason: \'host-module\' | \'unmanaged-plugin\' | \'module-comparison\';\n}',
+  },
+  {
+    name: 'PendingPairingRequest',
+    declaration: 'export interface PendingPairingRequest {\n    readonly id: PairingRequestId;\n    readonly code: string;\n    readonly authority: string;\n    readonly sourceIp: string | null;\n    readonly expiresInMs: number;\n}',
   },
   {
     name: 'PendingRemoteEventInfo',

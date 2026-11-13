@@ -1247,6 +1247,7 @@ describe('web e2e: one-use QR browser login', () => {
       expect(await custom.getByRole('status', { name: '邀请编号' }).textContent()).toBe(invitationId)
       scaffold.ctx.loader.remove(replacement)
       await svg.waitFor()
+      await section.getByRole('region', { name: '配对申请', exact: true }).waitFor()
       expect(await nav.count()).toBe(1)
       expect(await custom.count()).toBe(0)
       expect(await svg.innerHTML()).toBe(initialSvg)

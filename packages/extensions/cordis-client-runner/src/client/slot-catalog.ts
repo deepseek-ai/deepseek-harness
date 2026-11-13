@@ -4424,8 +4424,8 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'settings.remoteConnection.content',
     kind: 'single',
     scope: 'root',
-    summary: 'Complete Remote connection panel with shared invitation state and actions.',
-    doc: 'Complete Remote connection panel with shared invitation state and actions.\nReceives invitation and login-link selectors, their actions, and close().\nUnloading a replacement restores the default panel with the current invitation.',
+    summary: 'Complete Remote connection panel with QR, login-link, and pairing approval state.',
+    doc: 'Complete Remote connection panel with QR, login-link, and pairing approval state.\nReceives invitation and login-link selectors, their actions, and close().\nuseApproval(selector) exposes owner-access availability and decision outcomes; decide() and dismiss() manage them.\nReplacing this panel hides all default sections; unloading restores their current state.',
     registerOptions: [],
     ownerProps: [
       '/**\n * Owner share of a settings section entry. The shell owns modal visibility\n * and navigation; a section\'s data arrives through its own inject faces and\n * stores. `close` is the one shell affordance a section receives, for flows\n * that leave settings altogether (starting a session from a section) — the\n * onboarding coordinator\'s `openSection`/`complete` precedent, inverted.\n */\nexport interface SettingsSectionOwnerProps {\n  /** Leave the page: close the settings panel, or on the Plugins page return to the view the page was opened from. */\n  close: () => void\n}',
@@ -4445,14 +4445,14 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     keyDomain: '',
     hookContext: '',
-    slotInject: 'RemoteConnectionFace & LoginLinkFace',
+    slotInject: 'RemoteConnectionFace & LoginLinkFace & PairingInjected',
     declaredBy: 'an entry in \'settings.section\' (client-remote-connection), so it exists while that entry is mounted',
     occupants: [
       'client-remote-connection RemoteConnectionSection',
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'settings.remoteConnection.content\', () => ctx.slots.register(\n      { name: \'settings.remoteConnection.content\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/remote-connection/src/client/slots.ts:14',
+    source: 'packages/client/remote-connection/src/client/slots.ts:16',
   },
   {
     key: 'settings.remoteConnection.extensions',
@@ -4758,6 +4758,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'root\' (client-ui-layout), so it exists while that entry is mounted',
     occupants: [
       'client-remote-connection LoginLinkToast id \'remote-connection-copy\'',
+      'client-remote-connection PairingToast id \'remote-connection-pairing-notice\'',
       'client-ui-agent-team TeamDisableConfirmation id \'agent-team.disable\'',
       'client-ui-chat QuotaNoticeHost id \'chat.quota-notice\'',
       'client-ui-connector-account ConnectorAccountToastEntry id \'connector-account.notice\'',

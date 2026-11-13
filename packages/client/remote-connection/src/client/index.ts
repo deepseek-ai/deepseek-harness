@@ -2,6 +2,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import remoteConnectionRemote from '@deepseek-ai/dsh-client-remote-connection/remote'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-remote-access/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -12,6 +13,9 @@ import { LoginLinkController } from './login-link-controller.ts'
 import { LoginLinkToast } from './LoginLinkToast.tsx'
 import { RemoteConnectionSection } from './RemoteConnectionSection.tsx'
 import { RemoteConnectionSettings } from './RemoteConnectionSettings.tsx'
+import { PairingApproval } from './pairing-approval.ts'
+import { requestsResource } from './pairing-resource.ts'
+import { PairingToast, type PairingInjected } from './PairingRequests.tsx'
 import { en, zh, ja, es, fr, de, ru, pt, type RemoteConnectionLocaleKey } from './locales.ts'
 
 export type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from './slots.ts'
@@ -25,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Services consumed by the settings registration. */
-export const inject = ['slots', 'locale', 'remote']
+export const inject = ['slots', 'locale', 'remote', 'remoteAccess', 'resources']
 
 /**
  * Register the section and own its polling until plugin disposal.
@@ -43,7 +47,11 @@ export async function apply(ctx: Context): Promise<void> {
       () => controller.store.getSnapshot().deployment?.availability === 'available')
     const invitationFace = controller.inject()
     const linkFace = link.inject()
-    const face = { ...invitationFace, ...linkFace, hooks: { ...invitationFace.hooks, ...linkFace.hooks } }
+    const approvalFace = pairingFace()
+    const face = {
+      ...invitationFace, ...linkFace, ...approvalFace,
+      hooks: { ...invitationFace.hooks, ...linkFace.hooks, ...approvalFace.hooks },
+    }
     scope.effect(() => () => controller.dispose(), 'remote-connection: invitation lifetime')
     scope.effect(() => () => link.dispose(), 'remote-connection: login link')
     let linkAvailable = false
@@ -72,6 +80,14 @@ export async function apply(ctx: Context): Promise<void> {
     scope.slots.inject('shell.overlay', () => scope.slots.register({
       name: 'shell.overlay', id: 'remote-connection-copy', locale: 'remoteConnection', inject: () => linkFace,
     }, LoginLinkToast))
+    scope.remoteAccess.whenAccess('remoteConnection/pairingRequests', function* () {
+      approval.activate()
+      yield () => { approval.dispose() }
+      yield scope.resources.register(pairing.provider)
+      yield scope.slots.inject('shell.overlay', () => scope.slots.register({
+        name: 'shell.overlay', id: 'remote-connection-pairing-notice', locale: 'remoteConnection', inject: pairingFace,
+      }, PairingToast))
+    })
     void controller.load()
   })
 }

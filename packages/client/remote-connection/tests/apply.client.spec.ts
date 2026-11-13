@@ -5,16 +5,21 @@ import { createElement, Fragment, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { createSlotRenderer } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSlotRenderer, StaticRemoteAccess } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { resolveSlotLabel, type PropsRenderSlots, type StandardSourceBinding } from '@deepseek-ai/dsh-client-ui-slots'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { apply as gatewayApply, inject as gatewayInject } from '@deepseek-ai/dsh-api-gateway/client'
+import { apply as resourcesApply, inject as resourcesInject } from '@deepseek-ai/dsh-client-resources/client'
+import type { PairingRequestId } from '../src/types.ts'
+import type { PairingInjected } from '../src/client/PairingRequests.tsx'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { RemoteConnectionContentProps, RemoteConnectionExtensionProps } from '@deepseek-ai/dsh-client-remote-connection/client'
 import { en, zh } from '../src/client/locales.ts'
 import { apply, inject } from '../src/client/index.ts'
+
+vi.mock('@deepseek-ai/dsh-client-remote-connection/remote', async () => import('./remote-fixture.ts'))
 
 afterEach(cleanup)
 
@@ -86,6 +91,8 @@ async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: 
   } satisfies ConnectionHandle)
   await ctx.plugin({ inject: [...gatewayInject], apply: gatewayApply }).await()
   await ctx.plugin(SlotRegistry).await()
+  await ctx.plugin({ inject: [...resourcesInject], apply: resourcesApply }).await()
+  new StaticRemoteAccess(ctx, () => allowed)
   const slots = ctx.get('slots') as SlotRegistry
   slots.install(createSlotRenderer())
   const absentSession = createSnapshotStore<StandardSourceBinding>({ key: undefined, hooks: {}, keyedHooks: {}, props: {} })
@@ -108,6 +115,37 @@ async function bench(call: ConnectionHandle['rpc']['call'], beforeMount?: (ctx: 
 }
 
 describe('remote connection settings registration', () => {
+  it('keeps one navigation entry and replaces QR, link login, and pairing approvals together', async () => {
+    const status = { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 }
+    const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 1000 }
+        : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private' : status,
+    }))
+    const { ctx, slots, fiber } = await bench(call)
+    render(createElement(Fragment, null, slots.renderSlot('root', {})))
+    await screen.findByRole('button', { name: '生成二维码' })
+    await screen.findByText('暂无待审批的申请')
+    expect(screen.getByRole('region', { name: '配对申请' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: zh.qrTitle })).toBeTruthy()
+    expect(screen.getByRole('region', { name: zh.linkTitle })).toBeTruthy()
+    expect(slots.entries('settings.section')).toHaveLength(1)
+    const replacement = ctx.plugin(replacementPlugin)
+    await act(async () => { await replacement.await() })
+    expect(screen.queryByRole('region', { name: '配对申请' })).toBeNull()
+    expect(screen.queryByRole('region', { name: zh.linkTitle })).toBeNull()
+    expect(screen.queryByRole('button', { name: '生成二维码' })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Custom connection' })).toBeTruthy()
+    expect(slots.entries('settings.section')).toHaveLength(1)
+    await act(async () => { await replacement.dispose() })
+    await screen.findByText('暂无待审批的申请')
+    expect(screen.getByRole('region', { name: '配对申请' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '生成二维码' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: zh.linkTitle })).toBeTruthy()
+    await act(async () => { await fiber.dispose() })
+    expect(slots.entries('settings.remoteConnection.content')).toEqual([])
+    expect(slots.entries('shell.overlay')).toEqual([])
+  })
+
   it('registers localized content and removes the section and generated namespace when unloaded', async () => {
     const status = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({ ok: true, value: endpoint === 'remoteConnection/loginUrl'
       ? 'https://host.example/?token=private' : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 } }))
@@ -121,6 +159,7 @@ describe('remote connection settings registration', () => {
     expect(typeof face?.reload).toBe('function')
     expect(typeof face?.copyLink).toBe('function')
     expect(typeof face?.reloadLink).toBe('function')
+    expect(typeof face?.decide).toBe('function')
     expect(face?.hooks).toBeDefined()
     expect(slots.spec('settings.remoteConnection.extensions')?.inject).toBe(face)
     for (const [language, title] of Object.entries({
@@ -134,7 +173,7 @@ describe('remote connection settings registration', () => {
       expect(resolveSlotLabel(entry.options.label)).toBe(title)
     }
     expect(ctx.get('remote.remoteConnection')).toBeDefined()
-    expect(slots.entries('shell.overlay')).toHaveLength(1)
+    expect(slots.entries('shell.overlay')).toHaveLength(2)
     await fiber.dispose()
     expect(slots.entries('settings.section')).toEqual([])
     expect(slots.entries('settings.remoteConnection.content')).toEqual([])
@@ -249,6 +288,7 @@ describe('remote connection settings registration', () => {
     onTestFinished(() => { clock.mockRestore() })
     const status = { url: 'https://host.example/', availability: 'available', ticket: 'pending', pollIntervalMs: 60_000 }
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/pairingRequests') return { ok: true, value: { requests: [], pollIntervalMs: 60_000 } }
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
       if (endpoint === 'remoteConnection/create') {
         return { ok: true, value: { id: 'invitation-a', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
@@ -290,6 +330,7 @@ describe('remote connection settings registration', () => {
 
   it('activates early replacement registrations with the owner and delegates creation and cancellation', async () => {
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => {
+      if (endpoint === 'remoteConnection/pairingRequests') return { ok: true, value: { requests: [], pollIntervalMs: 60_000 } }
       if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
       if (endpoint === 'remoteConnection/create') {
         return { ok: true, value: { id: 'invitation-b', url: 'https://host.example/?login=qr#private', lifetimeMs: 120_000 } }
@@ -340,8 +381,9 @@ describe('remote connection settings registration', () => {
     })
     const url = 'https://host.example/?token=private-login-token'
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
-      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? url
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : endpoint === 'remoteConnection/loginUrl' ? url
+          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { ctx, slots } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -365,8 +407,9 @@ describe('remote connection settings registration', () => {
     await screen.findByText(zh.linkWarning)
     expect(screen.getByRole('alert').textContent).toBe(zh.linkCopied)
     call.mockImplementation(async (_channel, endpoint) => ({
-      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? `${url}-new`
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : endpoint === 'remoteConnection/loginUrl' ? `${url}-new`
+          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
     }))
     act(() => { ctx.emit('connection/reset') })
     await screen.findByText(`${url}-new`)
@@ -429,8 +472,9 @@ describe('remote connection settings registration', () => {
     })
     let available = false
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
-      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-        : { url: 'https://host.example/', availability: available ? 'available' : 'untrusted-host', ticket: 'none', pollIntervalMs: 1000 },
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+          : { url: 'https://host.example/', availability: available ? 'available' : 'untrusted-host', ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { ctx, slots } = await bench(call)
     await vi.waitFor(() => { expect(call).toHaveBeenCalledOnce() })
@@ -513,8 +557,9 @@ describe('remote connection settings registration', () => {
       else Object.defineProperty(navigator, 'clipboard', descriptor)
     })
     const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
-      ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
-        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+      ok: true, value: endpoint === 'remoteConnection/pairingRequests' ? { requests: [], pollIntervalMs: 60_000 }
+        : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+          : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
     }))
     const { slots, fiber } = await bench(call)
     render(slots.renderSlot('root', {}))
@@ -535,4 +580,73 @@ describe('remote connection settings registration', () => {
       finish()
     }
   })
+})
+
+function approvalFace(slots: SlotRegistry): PairingInjected {
+  const face = slots.spec('settings.remoteConnection.content')?.inject
+  if (face === undefined) throw new Error('Missing connection settings injection')
+  return face
+}
+
+it('submits approval through the shared namespace and keeps its notice outside Settings', async () => {
+  const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
+    ok: true, value: endpoint === 'remoteConnection/decidePairing' ? 'approved'
+      : endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+        : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+  }))
+  const { slots, fiber } = await bench(call)
+  const face = approvalFace(slots)
+  await face.decide('request-one' as PairingRequestId, 'allow')
+  expect(call).toHaveBeenCalledWith('/api', 'remoteConnection/decidePairing', { args: { id: 'request-one', decision: 'allow' } }, expect.any(AbortSignal))
+  expect(face.hooks.approval.getSnapshot().notice).toBe('approved')
+  expect(slots.entries('shell.overlay')).toHaveLength(2)
+  face.dismiss()
+  expect(face.hooks.approval.getSnapshot().notice).toBeNull()
+  await fiber.dispose()
+  expect(face.hooks.approval.getSnapshot().available).toBe(false)
+})
+
+it('preserves QR navigation while refusing pairing controls and reads without owner access', async () => {
+  const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint) => ({
+    ok: true, value: endpoint === 'remoteConnection/loginUrl' ? 'https://host.example/?token=private'
+      : { url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000 },
+  }))
+  const { slots, fiber } = await bench(call, undefined, false)
+  render(createElement(Fragment, null, slots.renderSlot('root', {})))
+  await screen.findByRole('button', { name: '生成二维码' })
+  expect(slots.entries('settings.section')).toHaveLength(1)
+  expect(slots.entries('shell.overlay').map(entry => entry.options.id)).toEqual(['remote-connection-copy'])
+  expect(screen.queryByRole('region', { name: '配对申请' })).toBeNull()
+  await approvalFace(slots).decide('request-one' as PairingRequestId, 'allow')
+  await vi.waitFor(() => { expect(call).toHaveBeenCalledTimes(2) })
+  expect(call.mock.calls.map(([, endpoint]) => endpoint)).toEqual(['remoteConnection/status', 'remoteConnection/loginUrl'])
+  await act(async () => { await fiber.dispose() })
+})
+
+it('aborts a pending pairing read and decision when the shared plugin unloads', async () => {
+  const signals: AbortSignal[] = []
+  const call = vi.fn<ConnectionHandle['rpc']['call']>().mockImplementation(async (_channel, endpoint, _args, signal) => {
+    if (endpoint === 'remoteConnection/status') return { ok: true, value: {
+      url: 'https://host.example/', availability: 'available', ticket: 'none', pollIntervalMs: 1000,
+    } }
+    if (endpoint === 'remoteConnection/loginUrl') return { ok: true, value: 'https://host.example/?token=private' }
+    if (signal === undefined) throw new Error('Missing lifetime signal')
+    signals.push(signal)
+    return new Promise<never>((_resolve, reject) => {
+      signal.addEventListener('abort', () => { reject(new Error('aborted')) }, { once: true })
+    })
+  })
+  const { ctx, slots, fiber } = await bench(call)
+  const pin = new AbortController()
+  onTestFinished(() => { pin.abort() })
+  ctx.resources.pin('dsh-resource://device-pairing/requests', pin.signal)
+  const face = approvalFace(slots)
+  const decision = face.decide('request-one' as PairingRequestId, 'deny')
+  await vi.waitFor(() => { expect(signals).toHaveLength(2) })
+  await fiber.dispose()
+  await decision
+  expect(signals.every(signal => signal.aborted)).toBe(true)
+  expect(slots.entries('settings.section')).toEqual([])
+  expect(slots.entries('shell.overlay')).toEqual([])
+  expect(face.hooks.approval.getSnapshot()).toMatchObject({ available: false, busy: false, notice: null })
 })

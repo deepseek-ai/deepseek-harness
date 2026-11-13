@@ -11,7 +11,9 @@ const pageStyle = `
 :root{color-scheme:light dark;font-family:var(--dsw-font-family,-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Helvetica,Arial,sans-serif);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;background:light-dark(#fafafa,#171717);color:light-dark(#222,#eee)}
 body{margin:0;min-height:100dvh}
 .page{display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:100dvh;padding:max(24px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
-.card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;min-width:0;width:100%;max-width:360px;padding:24px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:16px;background:light-dark(#fff,#232324)}
+.card{display:flex;flex-direction:column;gap:12px;box-sizing:border-box;min-width:0;width:100%;max-width:360px}
+.methods{display:grid;gap:24px}
+.card:not(:has(.methods)),.methods>*{box-sizing:border-box;min-width:0;padding:24px;border:.5px solid color-mix(in srgb,currentColor 16%,transparent);border-radius:var(--dsw-radius-lg,12px);background:light-dark(#fff,#232324)}
 h1{margin:0;font-size:20px;line-height:1.3;font-weight:500}
 p{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .description,.hint,label{color:color-mix(in srgb,currentColor 72%,transparent)}
@@ -42,9 +44,9 @@ function scriptJson(value: typeof loginLocales): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c')
 }
 
-function documentHtml(title: string, content: string, script: string): string {
+function documentHtml(title: string, content: string, script: string, pairingEnabled = false): string {
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>${title}</title><style>${pageStyle}</style></head><body><main class="page"><section class="card" aria-labelledby="title">${content}</section></main><script>${script}</script></body></html>`
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>${title}</title><style>${pageStyle}</style></head><body><main class="page"><section class="card" aria-labelledby="title">${content}</section></main><script>${script}</script>${pairingEnabled ? '<script defer src="./pairing/client.js"></script>' : ''}</body></html>`
 }
 
 /**
@@ -65,7 +67,8 @@ export function enterAuthenticationPage(
   title.textContent = t.authenticationTitle
   const form = document.getElementById('token-form') as HTMLFormElement | null
   const description = document.getElementById('description') as HTMLElement
-  description.textContent = form === null ? t.authenticationUnavailable : t.authenticationDescription
+  description.textContent = form === null && document.querySelector('dsh-device-pairing') === null
+    ? t.authenticationUnavailable : t.authenticationDescription
   const clean = new URL(location.href)
   clean.searchParams.delete('token')
   history.replaceState(null, '', clean)

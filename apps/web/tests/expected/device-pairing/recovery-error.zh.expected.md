@@ -1,0 +1,14 @@
+- main:
+  - region "连接到此 Host":
+    - heading "连接到此 Host" [level=1]
+    - paragraph: 登录以继续
+    - text: 登录令牌或链接
+    - textbox "登录令牌或链接"
+    - paragraph: 登录令牌位于此 Host 启动时输出的 URL 中
+    - button "继续"
+    - region "配对此设备":
+      - heading "配对此设备" [level=2]
+      - paragraph: 申请后，在另一台已登录设备的“设置 → 远程连接”核对配对码并批准，此设备将自动登录。
+      - code: {{pairing-code}}
+      - button "重新申请"
+      - alert: 无法完成配对，请检查网络后重新申请

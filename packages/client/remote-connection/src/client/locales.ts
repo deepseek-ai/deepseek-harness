@@ -1,7 +1,9 @@
 /** Copy for the Remote connection settings section. */
+import * as pairing from './pairing-locales.ts'
 
 /** English dictionary and key authority. */
 export const en = {
+  ...pairing.en,
   title: 'Remote connection',
   qrTitle: 'QR code login',
   addressTitle: 'Access address',
@@ -39,6 +41,7 @@ export type RemoteConnectionLocaleKey = keyof typeof en
 
 /** Simplified Chinese dictionary. */
 export const zh: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.zh,
   title: '远程连接',
   qrTitle: '二维码登录',
   addressTitle: '访问地址',
@@ -73,6 +76,7 @@ export const zh: Record<RemoteConnectionLocaleKey, string> = {
 
 /** Japanese dictionary. */
 export const ja: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.ja,
   title: 'リモート接続',
   qrTitle: 'QRコードでログイン',
   addressTitle: 'アクセスアドレス',
@@ -107,6 +111,7 @@ export const ja: Record<RemoteConnectionLocaleKey, string> = {
 
 /** Spanish dictionary. */
 export const es: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.es,
   title: 'Conexión remota',
   qrTitle: 'Inicio de sesión con QR',
   addressTitle: 'Dirección de acceso',
@@ -141,6 +146,7 @@ export const es: Record<RemoteConnectionLocaleKey, string> = {
 
 /** French dictionary. */
 export const fr: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.fr,
   title: 'Connexion à distance',
   qrTitle: 'Connexion par code QR',
   addressTitle: 'Adresse d’accès',
@@ -175,6 +181,7 @@ export const fr: Record<RemoteConnectionLocaleKey, string> = {
 
 /** German dictionary. */
 export const de: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.de,
   title: 'Fernverbindung',
   qrTitle: 'Anmeldung per QR-Code',
   addressTitle: 'Zugriffsadresse',
@@ -209,6 +216,7 @@ export const de: Record<RemoteConnectionLocaleKey, string> = {
 
 /** Russian dictionary. */
 export const ru: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.ru,
   title: 'Удалённое подключение',
   qrTitle: 'Вход по QR-коду',
   addressTitle: 'Адрес доступа',
@@ -243,6 +251,7 @@ export const ru: Record<RemoteConnectionLocaleKey, string> = {
 
 /** Portuguese dictionary. */
 export const pt: Record<RemoteConnectionLocaleKey, string> = {
+  ...pairing.pt,
   title: 'Conexão remota',
   qrTitle: 'Login por código QR',
   addressTitle: 'Endereço de acesso',

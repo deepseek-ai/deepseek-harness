@@ -112,7 +112,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'client-remote-connection',
     title: 'Remote browser login',
     mode: 'service',
-    note: 'Owns one-use QR invitations, Remote browser credentials and the anonymous login document; its Client provides QR login and an independent Token-link shortcut.',
+    note: 'Owns QR invitations, approved pairing requests, Remote browser credentials and the anonymous login document; its Client provides approval controls and an independent Token-link shortcut.',
   },
   {
     key: 'actionCards',

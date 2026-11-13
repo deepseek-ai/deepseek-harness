@@ -1,6 +1,6 @@
 /** In-memory login link and clipboard outcomes, independent of the QR invitation. */
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { RemoteConnectionApi } from './remote-connection-controller.ts'
+import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Link readiness and clipboard feedback; credentials must never be persisted or logged. */
 export interface LoginLinkState {

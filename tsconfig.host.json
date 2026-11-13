@@ -8,6 +8,9 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/web/tests/device-pairing.e2e.ts",
+    "apps/web/tests/pairing-completion.e2e.ts",
+    "apps/web/tests/pairing-recovery.e2e.ts",
     "snapshots/session/headless.snapshot.ts",
     "apps/web/tests/remote-connection.e2e.ts",
     "apps/web/tests/remote-connection-fixture.ts",

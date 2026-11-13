@@ -51,6 +51,7 @@ export async function launchRemoteConnectionFixture(secure: boolean, ticketLifet
       '- id: web-runtime',
       '  inject: [webStartup, webServer]',
       '  config:',
+      '    openBrowser: false',
       "    publicUrl: !!js ctx.webServer.getOrigin().replace('127.0.0.1', 'qr-login.test')",
       '- id: workspace-controller',
       '  config:',

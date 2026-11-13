@@ -1,0 +1,14 @@
+- main:
+  - region "Connect to this Host":
+    - heading "Connect to this Host" [level=1]
+    - paragraph: Sign in to continue.
+    - text: Login token or link
+    - textbox "Login token or link"
+    - paragraph: Find the token in the URL printed when this Host started.
+    - button "Continue"
+    - region "Pair this device":
+      - heading "Pair this device" [level=2]
+      - paragraph: After requesting, open Settings → Remote connection on another signed-in device. Match the pairing code and approve to sign in here automatically.
+      - code: {{pairing-code}}
+      - button "Request again"
+      - alert: Could not complete pairing. Check your connection, then request again.

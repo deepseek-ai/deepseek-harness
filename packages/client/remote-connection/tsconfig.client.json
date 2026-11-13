@@ -7,10 +7,12 @@
   },
   "include": [
     "src/client",
+    "src/anonymous",
     "src/login-page.ts",
     "src/login-locales.ts",
     "src/types.ts",
-    "src/css-modules.d.ts"
+    "src/css-modules.d.ts",
+    "src/pairing-types.ts"
   ],
   "references": [
     {
@@ -45,6 +47,12 @@
     },
     {
       "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/remote-access/tsconfig.client.json"
+    },
+    {
+      "path": "../resources"
     }
   ]
 }

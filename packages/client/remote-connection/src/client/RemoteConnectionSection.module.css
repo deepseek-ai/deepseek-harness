@@ -120,7 +120,7 @@
   visibility: hidden;
 }
 
-.qrActions {
+.cardActions {
   display: flex;
   justify-content: flex-end;
   flex-wrap: wrap;
@@ -246,14 +246,14 @@
     gap: 8px;
   }
 
-  .qrActions {
+  .cardActions {
     flex-direction: column;
     align-items: stretch;
     width: 100%;
     margin-inline-start: 0;
   }
 
-  .qrActions > button {
+  .cardActions > button {
     width: 100%;
   }
 

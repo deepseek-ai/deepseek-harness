@@ -1,5 +1,5 @@
 ---
-description: "通过一次性二维码或带私密 token 的链接远程登录。"
+description: "二维码登录、私密登录链接和 owner 审批的浏览器配对。"
 kind: "package-reference"
 ---
 
@@ -26,7 +26,7 @@ kind: "package-reference"
 
 Web bundle 挂载此插件。Host 端依赖 `connection`、`connection.authentication`、`credentials`、`webServer` 和 `webApp`，Client 端通过 `settings.section` 提供面板。移除插件会移除页面、端点、待使用的邀请和 Remote Peer。已签发的 Remote cookie 需要该提供者处于活动状态；插件使用同一凭据记录重新加载后，有效 cookie 可以继续使用。设置面板支持产品提供的全部八种界面语言；匿名登录页支持英文和中文。两张卡片的标题均位于边框内。页面标题和说明文字采用与模型设置页一致的字体和间距。宽卡片中的二维码操作与标题同行，窄卡片中则在标题下方纵向排列并占满宽度。面板使用标准小号按钮。链接框与复制按钮同为 28px 高，地址文字垂直居中。窄卡片中的复制按钮位于链接框下方，占满卡片内容宽度。复制按钮保持固定文案，仅在写入剪贴板时禁用。过期 banner 位于二维码卡片标题栏下方，占满卡片内容宽度。倒计时居中位于二维码下方，并在凭据告警上方增加 16px 下边距。重新生成正在显示的二维码时，仅用加载状态替换二维码图像；倒计时、告警和链接操作保持原位。取消后直接收起二维码预览，按钮恢复为**生成二维码**，不显示成功提示。
 
-公布的应用 URL 支持 HTTP 和 HTTPS，必须指向手机可访问的非回环地址，并通过 Connection 的可信 Host 检查。通过现有 [Web 应用](../../bundle/web-app/README.zh.md) 配置设置监听器、可选证书或反向代理、`publicUrl` 和可信 Host。此插件不会更改监听接口或发现网络地址。反向代理必须保留外部 Host、移除配置的路径前缀，并保护上游连接。普通 HTTP 监听器为 HTTP 公布地址签发的 cookie 不带 `Secure`；HTTPS 监听器以及终止 TLS 的代理后的 HTTPS 公布地址仍使用 `Secure`。HTTPS 代理必须对外部源强制使用 HTTPS。设置面板允许 HTTP 登录，并提醒用户 HTTP 会明文传输登录凭据。
+二维码登录使用公布的应用 URL，该地址支持 HTTP 和 HTTPS，必须指向手机可访问的非回环地址，并通过 Connection 的可信 Host 检查。通过现有 [Web 应用](../../bundle/web-app/README.zh.md) 配置设置监听器、可选证书或反向代理、`publicUrl` 和可信 Host。此插件不会更改监听接口或发现网络地址。反向代理必须保留外部 Host、移除配置的路径前缀，并保护上游连接。普通 HTTP 监听器为 HTTP 公布地址签发的 cookie 不带 `Secure`；HTTPS 监听器以及终止 TLS 的代理后的 HTTPS 公布地址仍使用 `Secure`。HTTPS 代理必须对外部源强制使用 HTTPS。设置面板允许 HTTP 登录，并提醒用户 HTTP 会明文传输登录凭据。
 
 面板在卡片上方以共用提示说明尚未满足的地址前提。地址不可达或不受信任时，访问地址卡片保留可复制的干净 URL，不显示凭据告警，并隐藏二维码登录。二维码登录不可用时，部署信息的读取错误和重试操作保留在访问地址卡片中。重连后会重新检查地址前提。
 
