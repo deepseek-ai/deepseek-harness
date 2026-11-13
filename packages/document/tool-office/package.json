@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-office",
   "description": "Model-facing Office tools for rendering, converting, and recalculating documents",
-  "version": "0.2.2-rc.2",
+  "version": "0.2.2-rc.3",
   "publishConfig": {
     "access": "public"
   },
