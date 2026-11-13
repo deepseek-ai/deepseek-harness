@@ -176,6 +176,7 @@ export class DeepSeekFileStore {
     const scope = fileScope(connection)
     const marginMs = policy.refreshMarginSeconds * 1_000
     const cached = await this.index.get(scope, version.variantId, this.now(), marginMs, signal)
+      .catch((error: unknown) => { throw uploadFailure(error) })
     signal?.throwIfAborted()
     if (cached) return { record: cached, uploaded: false }
     const backoff = this.backoffs.get(scope)
