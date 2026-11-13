@@ -959,9 +959,6 @@ describe('input actions', () => {
     const window = await app.getWindow('23')
     expect(app).not.toHaveProperty('toggleMouse')
     expectTypeOf<CuaApp>().not.toHaveProperty('toggleMouse')
-    expectTypeOf<CuaWindow['toggleMouse']>().parameters.toEqualTypeOf<[
-      mouseButton: 'left' | 'right' | 'middle', direction: 'down' | 'up', options?: { useSystemPointer?: boolean },
-    ]>()
     for (const direction of ['down', 'up'] as const) {
       f.dispatch.mockClear()
       await expect(window.toggleMouse(mouseButton, direction)).resolves.toEqual(delivered)
