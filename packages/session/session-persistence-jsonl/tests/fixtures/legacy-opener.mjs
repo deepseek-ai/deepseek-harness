@@ -20,6 +20,21 @@ if (pause === 'pause') {
     return prepare(...args)
   }
 }
+if (pause === 'wait') {
+  const sqlite = Reflect.get(ctx.sessionPersistence, 'sqlite')
+  const acquire = sqlite.acquireSessionLease.bind(sqlite)
+  let reported = false
+  sqlite.acquireSessionLease = async (...args) => {
+    try { return await acquire(...args) }
+    catch (error) {
+      if (!reported && error.name === 'SessionAlreadyOwnedError') {
+        reported = true
+        process.stdout.write('contended\n')
+      }
+      throw error
+    }
+  }
+}
 try {
   const handle = await ctx.sessionPersistence.open(id, access)
   process.stdout.write('opened\n')

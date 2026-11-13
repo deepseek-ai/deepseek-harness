@@ -911,7 +911,7 @@ export class SqliteTrace implements SessionHandle {
   prime(events: SessionEvent[]): void { this.primed = events }
 
   /**
-   * Admit one live event into the bounded batching window.
+   * Admit one live event into the bounded batching window, including while close drains the routed producer.
    * @param event - newly emitted event, copied before asynchronous persistence.
    * @returns admission completion; durability requires flush.
    */
@@ -919,7 +919,6 @@ export class SqliteTrace implements SessionHandle {
     // Provider failures retain their identity across Session event admission.
     try { this.checkStorage() } catch (error: unknown) { return Promise.reject(asError(error)) }
     try {
-      this.check()
       this.primed = undefined
       const batch = materializeAppendBatch([event])
       this.buffer.append(batch, (error) => { this.logs.reportFailure(this.id, error) })

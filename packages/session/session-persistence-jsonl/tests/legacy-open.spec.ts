@@ -109,16 +109,43 @@ it('hands migration ownership to the first writer and excludes a second writer w
   await using _resumed = await b.ctx.sessionPersistence.open(b.header.id, 'write')
 })
 
-it('refuses import while a legacy writer owns the artifact and succeeds after release', async () => {
+it('waits for a legacy writer to release before importing for read', async () => {
   const b = await fixture()
   const lease = await SessionWriteLease.acquire(sessionDir(b.root, b.header.cwd, b.header.id), b.header.id)
-  try { await expect(b.ctx.sessionPersistence.open(b.header.id, 'read')).rejects.toBeInstanceOf(SessionAlreadyOwnedError) }
-  finally { await lease.release() }
+  const contended = Promise.withResolvers<undefined>()
+  const acquire = SqliteLogs.prototype.acquireSessionLease
+  vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementation(async function (this: SqliteLogs, header) {
+    try { return await acquire.call(this, header) }
+    catch (error) { contended.resolve(undefined); throw error }
+  })
+  const pending = b.ctx.sessionPersistence.open(b.header.id, 'read')
+  await contended.promise
+  await lease.release()
+  await using read = await pending
+  expect((await read.read()).events).toEqual(b.events)
+})
+
+it('cancels a read waiting for legacy ownership without importing', async () => {
+  const b = await fixture(), controller = new AbortController()
+  const lease = await SessionWriteLease.acquire(sessionDir(b.root, b.header.cwd, b.header.id), b.header.id)
+  const contended = Promise.withResolvers<undefined>()
+  const acquire = SqliteLogs.prototype.acquireSessionLease
+  vi.spyOn(SqliteLogs.prototype, 'acquireSessionLease').mockImplementation(async function (this: SqliteLogs, header) {
+    try { return await acquire.call(this, header) }
+    catch (error) { contended.resolve(undefined); throw error }
+  })
+  const pending = b.ctx.sessionPersistence.open(b.header.id, 'read', { signal: controller.signal })
+  const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+  try {
+    await contended.promise
+    controller.abort()
+    await rejected
+  } finally { await lease.release() }
   await using read = await b.ctx.sessionPersistence.open(b.header.id, 'read')
   expect((await read.read()).events).toEqual(b.events)
 })
 
-it('excludes another provider during import, then serves the committed Session without reimporting', async () => {
+it('waits for another provider to import, then reads while its writer remains open', async () => {
   const b = await fixture(), other = await b.mount()
   const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
   const legacy = Reflect.get(b.ctx.sessionPersistence, 'jsonl') as JsonlBackend
@@ -127,13 +154,14 @@ it('excludes another provider during import, then serves the committed Session w
     entered.resolve(undefined); await release.promise
     return prepare(...args)
   })
-  const opening = b.ctx.sessionPersistence.open(b.header.id, 'read')
-  try {
-    await entered.promise
-    await expect(other.sessionPersistence.open(b.header.id, 'read')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
-  } finally { release.resolve(undefined) }
-  await (await opening).close(); spy.mockRestore()
-  await using again = await other.sessionPersistence.open(b.header.id, 'read')
+  const opening = b.ctx.sessionPersistence.open(b.header.id, 'write')
+  await entered.promise
+  const pending = other.sessionPersistence.open(b.header.id, 'read')
+  release.resolve(undefined)
+  await using writer = await opening
+  expect(writer.access).toBe('write')
+  spy.mockRestore()
+  await using again = await pending
   expect((await again.read()).events).toEqual(b.events)
 })
 

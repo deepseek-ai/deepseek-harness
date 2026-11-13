@@ -65,15 +65,16 @@ it('initializes one database while two processes first open different Sessions',
   }
 }, 30_000)
 
-it.each(['read', 'write'])('excludes another process during migration and hands off %s access', async (access) => {
+it.each(['read', 'write'])('waits for another process to migrate and hands off %s access', async (access) => {
   const b = await fixture()
   const first = b.launch(access, 'pause')
   expect(await first.status()).toBe('reading')
-  const competing = b.launch()
-  expect(await competing.status()).toBe('SessionAlreadyOwnedError')
-  await competing.exited
+  const competing = b.launch('read', 'wait')
+  expect(await competing.status()).toBe('contended')
   first.child.stdin.write('continue\n')
   expect(await first.status()).toBe('opened')
+  expect(await competing.status()).toBe('opened')
+  competing.child.stdin.end('close\n'); await competing.exited
   const currentReader = b.launch()
   expect(await currentReader.status()).toBe('opened')
   currentReader.child.stdin.end('close\n'); await currentReader.exited

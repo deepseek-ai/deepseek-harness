@@ -45,8 +45,11 @@ Choose this backend when consumers benefit from one artifact per session — nav
 | Field | Default | Meaning |
 |---|---|---|
 | `root` | required | Root directory for all session files |
+| `storage` | `'sqlite'` | New Session storage; browser Workers use `'jsonl'` with `compression: 'none'` |
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
 | `listConcurrency` | `3` | Maximum directory, header, and stat reads in flight, shared by every concurrent listing of this backend |
+
+With `storage: 'sqlite'`, opening a legacy Session imports its history before returning a handle. Concurrent readers wait for that import and then read SQLite while its writer remains active. An active legacy writer must release ownership before import; cancellation stops a waiting reader.
 
 Live-event write batching is not configuration: the batching window is the seam's internal scheduling policy inside each write handle.
 

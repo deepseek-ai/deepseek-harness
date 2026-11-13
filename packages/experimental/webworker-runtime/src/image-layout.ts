@@ -33,7 +33,7 @@ export const IMAGE_HOME_DIRECTORY = 'home'
  * logs stay plaintext.
  */
 export const PLATFORM_ENTRY_CONFIG: Readonly<Record<string, Readonly<Record<string, unknown>>>> = {
-  'session-persistence-jsonl': { compression: 'none' },
+  'session-persistence-jsonl': { storage: 'jsonl', compression: 'none' },
 }
 
 /** Working directories the host tree expects to exist, empty. */

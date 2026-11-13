@@ -1,6 +1,8 @@
 /** Exclusive legacy Session import with same-provider open sequencing. @module */
 import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
+import { setTimeout } from 'node:timers/promises'
+import { SessionAlreadyOwnedError } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionAccess, SessionHandle, SessionPersistence, SessionPersistenceListOptions, SessionPersistenceOpenOptions, SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import type { SqliteLogs } from './sqlite.ts'
 
@@ -36,11 +38,12 @@ export interface JsonlBackend extends Pick<SessionPersistence, 'stat'> {
 export class LegacySessionMigration {
   private readonly pending = new Map<SessionId, Promise<unknown>>()
   private closing = false
+  private readonly stopped = new AbortController()
   constructor(private readonly jsonl: JsonlBackend, private readonly sqlite: SqliteLogs,
     private readonly selected: (id: SessionId) => Promise<boolean>, private readonly publish: (id: SessionId) => Promise<void>) {}
 
   /**
-   * Serialize legacy opens within this provider; another provider contending for ownership receives an ownership error.
+   * Serialize legacy opens within this provider. Readers wait for another provider's import; writers reject contention.
    * @param id - legacy Session identity.
    * @param access - requested access after import.
    * @param options - optional cancellation checked when the queued open starts.
@@ -67,7 +70,20 @@ export class LegacySessionMigration {
       await this.jsonl.prepare(id, signal)
       throw new HarnessError('Legacy Session has no readable metadata', 'SESSION_STORAGE_CORRUPT')
     }
-    let lease: Awaited<ReturnType<SqliteLogs['acquireSessionLease']>> | undefined = await this.sqlite.acquireSessionLease(metadata.header)
+    let lease: Awaited<ReturnType<SqliteLogs['acquireSessionLease']>> | undefined
+    const waitingSignal = signal === undefined ? this.stopped.signal : AbortSignal.any([signal, this.stopped.signal])
+    for (;;) {
+      waitingSignal.throwIfAborted()
+      if (await this.selected(id)) return this.sqlite.open(id, access, signal)
+      try {
+        lease = await this.sqlite.acquireSessionLease(metadata.header)
+        break
+      } catch (error: unknown) {
+        if (access !== 'read' || !(error instanceof SessionAlreadyOwnedError)) throw error
+        // Kernel leases have no completion notification; observe the committed row between acquisition attempts.
+        await setTimeout(50, undefined, { signal: waitingSignal })
+      }
+    }
     let handle: SessionHandle | undefined
     try {
       signal?.throwIfAborted()
@@ -95,6 +111,7 @@ export class LegacySessionMigration {
   /** Stop admission and settle accepted imports before SQLite closes. @returns settled cleanup. */
   async close(): Promise<void> {
     this.closing = true
+    this.stopped.abort(new HarnessError('Session migration is closing', 'SESSION_STORAGE_CLOSED'))
     await Promise.allSettled([...this.pending.values()])
   }
 }

@@ -45,8 +45,11 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `root` | 必填 | 所有会话文件的根目录 |
+| `storage` | `'sqlite'` | 新 Session 的存储后端；浏览器 Worker 使用 `'jsonl'` 和 `compression: 'none'` |
 | `compression` | `'zstd'` | 物理编码：`'zstd'` 带校验和帧，或 `'none'` 换行分隔 UTF-8 文本 |
 | `listConcurrency` | `3` | 同时进行的目录、header 与 stat 读取上限，由该后端所有并发的列举共用 |
+
+使用 `storage: 'sqlite'` 时，打开历史 Session 会先导入，再返回句柄。并发读者等待导入完成，随后可在 SQLite 写者仍活动时读取。历史写者必须释放所有权后才能导入；取消会停止等待读者。
 
 实时事件的写入批处理不是配置：批处理窗口是该 seam 在每个写句柄内部的调度策略。
 

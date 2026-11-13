@@ -98,6 +98,8 @@ const DEFAULT_LIST_CONCURRENCY = 3
 
 /** Plugin config for the JSONL backend's root, physical encoding, and listing concurrency. */
 export interface Config {
+  /** Storage for new Sessions; browser Workers select JSONL because node:sqlite is unavailable. */
+  storage?: 'sqlite' | 'jsonl'
   /**
    * Root directory for all session files. Required (no default): a default of
    * `process.cwd()` would scatter session files as the process's cwd changes
@@ -316,6 +318,8 @@ function waitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<
  * flush, and never existed if the process crashes before that.
  */
 class JsonlSessionPersistence implements JsonlBackend {
+  /** Process-local identity used by persistence observation caches. */
+  readonly identity: symbol = Symbol('sessionPersistence')
   /** Backend label for diagnostics and effects. */
   readonly name = 'session-persistence-jsonl'
 
@@ -1888,6 +1892,7 @@ export const name = 'session-persistence-jsonl'
 
 /** Loader schema for the backend's root, physical encoding, and listing concurrency. */
 export const Config: z<Config> = z.object({
+  storage: z.union([z.const('sqlite'), z.const('jsonl')]).default('sqlite'),
   root: z.string().required(),
   compression: JsonlCompressionSchema,
   listConcurrency: z.natural().min(1).default(DEFAULT_LIST_CONCURRENCY),
@@ -1912,6 +1917,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       name: 'session-persistence-jsonl-service',
       async apply(serviceCtx: Context) {
         const legacy = new JsonlSessionPersistence(serviceCtx, config, tracker)
+        if (config.storage === 'jsonl') {
+          tracker.install(segments.ctx)
+          serviceCtx.provide('sessionPersistence', legacy)
+          return
+        }
         const instance = new TracePersistence(serviceCtx, segments.ctx, config.root, legacy)
         await instance.start()
       },

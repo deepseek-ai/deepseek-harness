@@ -21,6 +21,29 @@ async function fixture(_sqlite: boolean) {
   return { ctx, root }
 }
 
+it('persists live events arriving while close drains an earlier batch', async () => {
+  const { ctx } = await fixture(true)
+  const session = ctx.sessions.create(SessionId('close-live-events'))
+  const writer = await ctx.sessionPersistence.create(session.header)
+  const entered = Promise.withResolvers<undefined>(), release = Promise.withResolvers<undefined>()
+  const acquire = SessionWriteLease.acquire
+  const spy = vi.spyOn(SessionWriteLease, 'acquire').mockImplementationOnce(async (dir, id) => {
+    entered.resolve(undefined)
+    await release.promise
+    return acquire(dir, id)
+  })
+  onTestFinished(() => { release.resolve(undefined); spy.mockRestore() })
+  session.append('turn/start', { turn: 1 })
+  const closing = writer.close()
+  try {
+    await entered.promise
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+  } finally { release.resolve(undefined) }
+  await closing
+  await using reader = await ctx.sessionPersistence.open(session.id, 'read')
+  expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
+})
+
 it.each([false, true])('retains a published event when its first lease fails, SQLite=%s', async (sqlite) => {
   const { ctx } = await fixture(sqlite)
   const reported = Promise.withResolvers<undefined>()
