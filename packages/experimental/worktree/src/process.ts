@@ -6,7 +6,8 @@ import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
 import type {
   SubprocessCollect, SubprocessCollectedOutputs, SubprocessHandle, SubprocessOutcome, SubprocessOutputReader,
 } from '@deepseek-ai/dsh-subprocess'
-import { deadline } from '@deepseek-ai/dsh-timeout'
+import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { WorktreeError } from './error.ts'
 
 /** Resolved process resource limits owned by the worktree service. */
 export interface ProcessConfig {
@@ -37,6 +38,8 @@ const GIT_ENV: NodeJS.ProcessEnv = Object.fromEntries([
  * @param allowedExitCodes - command-specific successful statuses.
  * @param env - command-local environment overrides, applied after Git selector removal.
  * @returns complete bounded stdout and the exit code.
+ * @throws {WorktreeError} `WORKTREE_COMMAND_FAILED`, `WORKTREE_OUTPUT_TOO_LARGE`, or `WORKTREE_TIMEOUT`;
+ *   caller cancellation propagates its reason.
  */
 export async function runCommand(
   ctx: Context,
@@ -49,20 +52,22 @@ export async function runCommand(
   env: NodeJS.ProcessEnv = {},
 ): Promise<{ stdout: string; exitCode: number }> {
   using timeout = deadline(signal, config.timeoutMs, 'WORKTREE_TIMEOUT')
-  const child = await spawnCommand(ctx, config, policy, cwd, argv, timeout.signal, env, { maxBytes: config.maxOutputBytes })
-  try {
-    const outcome = await child.done
-    timeout.signal.throwIfAborted()
-    // The spawn spec above collects both streams.
-    const captured = child.collected as Required<SubprocessCollectedOutputs>
-    const exitCode = allowedExitCode(outcome, captured.stderr, allowedExitCodes)
-    const stdout = captured.stdout.readFrom(0)
-    if (stdout.lossy) throw new Error('worktree command output exceeds maxOutputBytes')
-    return { stdout: stdout.text, exitCode }
-  } finally {
-    child.terminate()
-    await child.waitForExit()
-  }
+  return await classifyTimeout(config, timeout.signal, async () => {
+    const child = await spawnCommand(ctx, config, policy, cwd, argv, timeout.signal, env, { maxBytes: config.maxOutputBytes })
+    try {
+      const outcome = await child.done
+      timeout.signal.throwIfAborted()
+      // The spawn spec above collects both streams.
+      const captured = child.collected as Required<SubprocessCollectedOutputs>
+      const exitCode = allowedExitCode(outcome, captured.stderr, allowedExitCodes)
+      const stdout = captured.stdout.readFrom(0)
+      if (stdout.lossy) throw new WorktreeError('worktree command output exceeds maxOutputBytes', 'WORKTREE_OUTPUT_TOO_LARGE')
+      return { stdout: stdout.text, exitCode }
+    } finally {
+      child.terminate()
+      await child.waitForExit()
+    }
+  })
 }
 
 /**
@@ -81,6 +86,7 @@ export async function runCommand(
  * @param signal - operation cancellation.
  * @param onField - synchronous consumer of each field in order; false ends the command.
  * @returns true when `onField` ended the command, false when it exited successfully first.
+ * @throws {WorktreeError} `WORKTREE_COMMAND_FAILED` or `WORKTREE_TIMEOUT`; caller cancellation propagates its reason.
  */
 export async function scanCommand(
   ctx: Context,
@@ -92,36 +98,38 @@ export async function scanCommand(
   onField: (field: string) => boolean,
 ): Promise<boolean> {
   using timeout = deadline(signal, config.timeoutMs, 'WORKTREE_TIMEOUT')
-  const child = await spawnCommand(ctx, config, policy, cwd, argv, timeout.signal, {}, 'pipe')
-  try {
-    // The spawn spec above pipes stdout and collects stderr.
-    const stdout = child.stdout as Readable
-    stdout.setEncoding('utf8')
-    let pending = ''
-    let stopped = false
-    for await (const chunk of stdout as AsyncIterable<string>) {
-      const fields = (pending + chunk).split('\0')
-      pending = fields.splice(-1).join('')
-      if (!fields.every(field => onField(field))) {
-        stopped = true
-        break
+  return await classifyTimeout(config, timeout.signal, async () => {
+    const child = await spawnCommand(ctx, config, policy, cwd, argv, timeout.signal, {}, 'pipe')
+    try {
+      // The spawn spec above pipes stdout and collects stderr.
+      const stdout = child.stdout as Readable
+      stdout.setEncoding('utf8')
+      let pending = ''
+      let stopped = false
+      for await (const chunk of stdout as AsyncIterable<string>) {
+        const fields = (pending + chunk).split('\0')
+        pending = fields.splice(-1).join('')
+        if (!fields.every(field => onField(field))) {
+          stopped = true
+          break
+        }
       }
-    }
-    if (stopped) {
+      if (stopped) {
+        child.terminate()
+        await Promise.allSettled([child.done])
+        timeout.signal.throwIfAborted()
+        return true
+      }
+      const outcome = await child.done
+      timeout.signal.throwIfAborted()
+      allowedExitCode(outcome, child.collected.stderr as SubprocessOutputReader, [0])
+      return false
+    } finally {
       child.terminate()
       await Promise.allSettled([child.done])
-      timeout.signal.throwIfAborted()
-      return true
+      await child.waitForExit()
     }
-    const outcome = await child.done
-    timeout.signal.throwIfAborted()
-    allowedExitCode(outcome, child.collected.stderr as SubprocessOutputReader, [0])
-    return false
-  } finally {
-    child.terminate()
-    await Promise.allSettled([child.done])
-    await child.waitForExit()
-  }
+  })
 }
 
 /** Resolve, confine, and start one command whose stderr is collected within `maxOutputBytes`. */
@@ -154,11 +162,21 @@ async function spawnCommand(
 
 /**
  * The exit code of a command that exited with an allowed status.
- * @throws when the command was signalled or exited with another status, quoting its stderr.
+ * @throws {WorktreeError} `WORKTREE_COMMAND_FAILED` when the command was signalled or exited with another status, quoting its stderr.
  */
 function allowedExitCode(outcome: SubprocessOutcome, stderr: SubprocessOutputReader, allowedExitCodes: readonly number[]): number {
   if (outcome.exitCode === null || !allowedExitCodes.includes(outcome.exitCode)) {
-    throw new Error(`worktree command failed (${outcome.signal ?? outcome.exitCode}): ${stderr.readFrom(0).text.trim()}`)
+    throw new WorktreeError(`worktree command failed (${outcome.signal ?? outcome.exitCode}): ${stderr.readFrom(0).text.trim()}`, 'WORKTREE_COMMAND_FAILED')
   }
   return outcome.exitCode
+}
+
+/** Run one command under a deadline, converting its elapsed deadline into `WORKTREE_TIMEOUT`. */
+async function classifyTimeout<T>(config: ProcessConfig, signal: AbortSignal, body: () => Promise<T>): Promise<T> {
+  try {
+    return await body()
+  } catch (error) {
+    if (timeoutOf(signal, 'WORKTREE_TIMEOUT') === undefined) throw error
+    throw new WorktreeError(`worktree command exceeded ${config.timeoutMs}ms; inspect the repository before retrying`, 'WORKTREE_TIMEOUT', { cause: error })
+  }
 }

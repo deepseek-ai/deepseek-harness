@@ -1,13 +1,18 @@
 /** Test package using the published registration protocol, locale and slots. */
 window.__ModuleLoader__.load({
   id: '@fixture/live-client',
+  meta() {
+    return {
+      stylesheets: {
+        'style.css': {
+          text: () => '[data-live-client] { color: rgb(12, 34, 56); position: absolute; bottom: 20px; right: 20px; }',
+        },
+      },
+    }
+  },
   factory(require) {
     const React = require('react')
     const { IconFolderCloseRegular, IconNewChatOutlineRegular, MenuItemButton } = require('@deepseek-ai/dsh-client-ui-primitives')
-    const style = document.createElement('style')
-    style.dataset.plugin = '@fixture/live-client'
-    style.textContent = '[data-live-client] { color: rgb(12, 34, 56); position: absolute; bottom: 20px; right: 20px; }'
-    document.head.append(style)
     return {
       inject: ['slots', 'locale'],
       apply(ctx) {

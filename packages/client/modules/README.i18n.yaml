@@ -21,13 +21,13 @@
   en: cc0eb2c35a7a0998
   zh: 0e1df23869410c7a
 /deepseek-ai-dsh-client-modules/use-this-package/package-assets:
-  en: 529af1eb8bf1acf2
-  zh: 7d891a5dfa90c625
+  en: bc77e9c5d74134b0
+  zh: cd99a246d43472ea
 /deepseek-ai-dsh-client-modules/use-this-package/what-the-browser-loads:
   en: 1383d68472b3c057
   zh: 94dd7d9abbdbccf3
 /deepseek-ai-dsh-client-modules/use-this-package/live-plugin-composition:
-  en: 45740a56e931d094
+  en: 252613c45e5e46f5
   zh: fa44cf77c86019af
 /deepseek-ai-dsh-client-modules/use-this-package/host-release-changes:
   en: 5c0aa6f1d8df8e1c
@@ -45,8 +45,11 @@
   en: 49dcadc166c2d06e
   zh: bbf67c6dc47f4ead
 /deepseek-ai-dsh-client-modules/understand-the-implementation/lazy-cjs-model:
-  en: 6d16b74acb333e3b
-  zh: fcb3a20cc8c39e4a
+  en: 49b1c7274a67945c
+  zh: 6ec2fdf6f6af7d21
+/deepseek-ai-dsh-client-modules/understand-the-implementation/main-execution-environment:
+  en: bd0b82f672dc99b4
+  zh: 7d33af671aab0939
 /deepseek-ai-dsh-client-modules/understand-the-implementation/incremental-composition:
   en: 99483432e6390ca4
   zh: f92c018273aa07e4
@@ -54,11 +57,11 @@
   en: 253d9f265cd83ed0
   zh: 9d0f8df84d9d3ac9
 /deepseek-ai-dsh-client-modules/understand-the-implementation/entry-ownership:
-  en: 608a25c52159629f
-  zh: c5ef242899cb32c1
+  en: a0d8dbb15e079ec0
+  zh: 7d215cb85fa8b2c7
 /deepseek-ai-dsh-client-modules/understand-the-implementation/source-map:
-  en: d8b5407a0279a3f9
-  zh: 27af3437fad78672
+  en: ece84808fa9f61f8
+  zh: 95a65a7adfca9146
 /deepseek-ai-dsh-client-modules/further-exploration:
   en: 7e5b283efe4f1d16
   zh: 79472b64a0d759fe

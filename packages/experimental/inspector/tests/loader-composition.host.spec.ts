@@ -1,6 +1,7 @@
 /** Host Loader composition behavior. */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { request as httpRequest, type IncomingHttpHeaders } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -8,9 +9,8 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
-import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
+import { ConnectionAuthentication, HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import { composeEntries, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
-import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser-auth.ts'
 import open from 'open'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Inspector from '../src/index.ts'
@@ -28,6 +28,24 @@ afterEach(async () => {
   root = undefined
   vi.clearAllMocks()
 })
+
+/** Collect an upgrade refusal after its response and socket have closed. */
+async function refusedUpgrade(url: string, origin: string): Promise<{ statusCode: number | undefined; headers: IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, { agent: false, headers: { origin, connection: 'Upgrade', upgrade: 'websocket' } })
+    request.once('response', (response) => {
+      response.once('error', reject)
+      response.resume()
+      request.once('close', () => { resolve({ statusCode: response.statusCode, headers: response.headers }) })
+    })
+    request.once('upgrade', (_response, socket) => {
+      socket.destroy()
+      reject(new Error('Inspector upgrade unexpectedly admitted'))
+    })
+    request.once('error', reject)
+    request.end()
+  })
+}
 
 describe('experimental Inspector through a real Loader composition', () => {
   it.each([false, true])('starts inspection with --inspect=%s and opens Chrome only when requested', async (flag) => {
@@ -57,7 +75,7 @@ describe('experimental Inspector through a real Loader composition', () => {
     context.loader.builtins.include = Include
     const modules = new Map<string, unknown>([
       ['@deepseek-ai/dsh-host-webserver', WebServer],
-      ['fixture:connection', (ctx: Context) => { new HostConnectionService(ctx, [], {} as BrowserAuth) }],
+      ['fixture:connection', (ctx: Context) => { new ConnectionAuthentication(ctx); new HostConnectionService(ctx, []) }],
       ['@deepseek-ai/dsh-experimental-inspector', Inspector],
     ])
     context.loader.internal = {
@@ -91,6 +109,17 @@ describe('experimental Inspector through a real Loader composition', () => {
     })
     const bootstrap = await api.fetch(new Request(`http://localhost${INSPECTOR_BOOTSTRAP_PATH}`), connection.browserPeer)
     expect(await bootstrap.json()).toHaveProperty('endpoint', expect.stringContaining('/ingest'))
+
+    const origin = context.webServer.getOrigin()
+    for (const [requestOrigin, status] of [[origin, 401], ['http://untrusted.invalid', 403]] as const) {
+      const page = await fetch(`${origin}/inspector/devtools/devtools_app.html`, { headers: { origin: requestOrigin } })
+      expect(page.status).toBe(status)
+      expect(page.headers.get('cache-control')).toBe('no-store')
+      await page.text()
+      const upgraded = await refusedUpgrade(`${origin}/inspector/devtools/cdp`, requestOrigin)
+      expect(upgraded.statusCode).toBe(status)
+      expect(upgraded.headers['cache-control']).toBe('no-store')
+    }
 
     await inspectorEntry!.fiber!.dispose()
     expect(context.get('inspector')).toBeUndefined()

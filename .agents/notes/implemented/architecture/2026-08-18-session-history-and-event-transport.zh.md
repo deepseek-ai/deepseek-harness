@@ -101,7 +101,7 @@ RemoteStream<Item>
 
 每个 item 携带单调 generation、该 generation 的 `AbortSignal` 与 `accept()`。领域 consumer 只有在验证 opening cursor 或 baseline 后才调用 `accept()`。
 
-只有 `RemoteStreamCarrierError` 可触发重试。Host 仍可用时允许一次独立重开；否则等待新的 Connection generation。业务错误、协议错误和 opening 失败直接终止。
+只有 `code` 为 `gateway/carrier-lost` 的失败可触发重试；`RemoteStreamCarrierError` 带有该 code，领域的 `ended` 回调也可以返回带该 code 的普通 `Error`。Host 仍可用时允许一次独立重开；否则等待新的 Connection generation。业务错误、协议错误和 opening 失败直接终止。
 
 `restart()` 只淘汰当前物理 generation，保留 logical stream；`dispose()` 永久结束 logical stream、pending retry 与 iterator，并等待 quiescence。
 

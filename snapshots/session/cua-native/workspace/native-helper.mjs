@@ -124,7 +124,10 @@ function createApplicationState(socket, record, application, captureBroker, conn
   let acquired = false
   let generation = 0
   let observationChanged = false
+  let partialObservation = false
+  let communicationFailure = false
   let malformedScreenshot = false
+  let incompleteInputTargets = false
   function refuse(code, message) { throw Object.assign(new Error(message), { code }) }
   function call(requestId, method, params) {
     record('call', { requestId, method, params })
@@ -172,17 +175,33 @@ function createApplicationState(socket, record, application, captureBroker, conn
       if (existsSync(new URL('./fixture-ax-failure', import.meta.url))) refuse('NATIVE_ERROR', 'Fixture accessibility read failed')
       if (observationChanged) {
         observationChanged = false
-        refuse('STALE_SNAPSHOT', 'Accessibility tree changed during observation; read fresh getAccessibilityTree')
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXRole failed with error -25202. Read fresh state or use a screenshot; do not repeat input automatically')
+      }
+      if (communicationFailure) {
+        communicationFailure = false
+        refuse('AX_OBSERVATION_UNAVAILABLE', 'Accessibility observation failed: Accessibility read AXChildren failed with error -25204. Read fresh state or use a screenshot; do not repeat input automatically')
       }
       for (const id of params.windowId === undefined ? windows().map(window => window.windowId) : [params.windowId]) observedWindows.add(id)
       generation++
       const axless = params.windowId === '8'
       const snapshotId = `${scope}-snapshot-${generation}`
       snapshots.set(params.windowId ?? null, { snapshotId, windowId: params.windowId ?? null, axless })
+      if (partialObservation) {
+        partialObservation = false
+        const appScope = params.windowId === undefined
+        return { appHandle: app.appHandle, windowId: params.windowId ?? null, snapshotId,
+          tree: appScope
+            ? 'AX scope=application offsets=UTF-16\n[One child could not be read.]\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"'
+            : 'AX scope=window offsets=UTF-16\n- AXWindow "Fixture"\n  - [0] AXButton "Increment"\n  [One child could not be read.]\n  - AXStaticText "Readable sibling"',
+          elements: [{ elementId: '0', role: 'AXButton', title: 'Increment', value: null, description: null,
+            identifier: null, bounds: [60, 80, 100, 20], actions: ['AXPress'], enabled: true }],
+          focusedWindowId: appScope ? null : window.windowId,
+          windows: windows(), truncated: false, hasUnreadableElements: true }
+      }
       if (params.windowId === panel.windowId && application.panelVisibility !== 'closed') return {
         appHandle: app.appHandle, windowId: panel.windowId, snapshotId, focusedWindowId: window.windowId,
-        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  - AXStaticText "Floating count: ${application.panelCount}"`,
-        elements: [], windows: windows(), truncated: false,
+        tree: `AX scope=window offsets=UTF-16\n- AXWindow "Floating panel"\n  [One child could not be read.]\n  - AXStaticText "Floating count: ${application.panelCount}"`,
+        elements: [], windows: windows(), truncated: false, hasUnreadableElements: true,
       }
       if (axless) return { appHandle: app.appHandle, windowId: '8', snapshotId,
         tree: '', elements: [], windows: windows(), truncated: false }
@@ -242,7 +261,11 @@ function createApplicationState(socket, record, application, captureBroker, conn
       return { dispatched: true, ...method === 'mouseMove' ? { hoverRoute: systemPointerMoved ? 'system-pointer' : 'accessibility', systemPointerMoved } : {} }
     }
     if (method === 'pressKey' && params.key === 'Return') observationChanged = true
+    if (method === 'pressKey' && params.key === 'F4') partialObservation = true
+    if (method === 'pressKey' && params.key === 'F3') communicationFailure = true
     // Fixture-only keys simulate a pending system callback and its eventual completion.
+    if (method === 'pressKey' && params.key === 'F6') incompleteInputTargets = true
+    if (incompleteInputTargets && method === 'typeText') refuse('PANEL_NOT_READY', 'File panel recipient discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
     if (method === 'pressKey' && params.key === 'F8') application.panelVisibility = 'visible'
     if (method === 'pressKey' && params.key === 'F7' && application.panelVisibility !== 'closed') application.panelVisibility = 'hidden'
     if (method === 'pressKey' && params.key === 'F11') captureBroker.pendingCapture = true
@@ -250,6 +273,7 @@ function createApplicationState(socket, record, application, captureBroker, conn
     if (method === 'pressKey' && params.key === 'F12') malformedScreenshot = true
     if (method === 'pressKey' && params.key === 'F9') { application.frontPid = 42; application.frontWindowId = '99' }
     if (method === 'paste') {
+      if (incompleteInputTargets) refuse('UNSUPPORTED', 'Paste menu discovery is incomplete. No input was dispatched. Read fresh state before retrying.')
       if (application.frontPid !== app.pid) refuse('PASTE_NOT_CONSUMED', 'Paste command was dispatched, but clipboard data was not requested within the read deadline. Bring the target app to the foreground and focus its text input. Inspect the contents before deciding whether to retry; a delayed paste may still run.')
       application.value += params.text
       return { dispatched: true }

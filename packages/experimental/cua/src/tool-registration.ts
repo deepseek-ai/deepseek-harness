@@ -61,11 +61,12 @@ export function fixedScreenshotTarget(configured: CuaScreenshotTargetConfig, ima
 }
 
 /**
- * Register raw CUA for its configured PTC preset and a persistent program tool for other presets.
+ * Register raw CUA for Agents on the configured preset and a persistent program tool for every other Agent,
+ * including Agents without a preset and compositions without a preset registry.
  * @param ctx Provider context owning native calls and registrations.
  * @param config Validated preset selection and dedicated runtime bounds.
- * @param tool Internal native tool; non-PTC Agents can reach it only through the program.
- * @param guidance Raw-tool operation instructions for the configured PTC preset.
+ * @param tool Internal native tool; Agents off the configured preset can reach it only through the program.
+ * @param guidance Raw-tool operation instructions for the configured preset.
  * @param programGuidance Operation instructions available inside cua_run_code.
  * @returns Exact registration disposer, draining programs before native resources can close.
  */
@@ -97,18 +98,17 @@ var cua = connectCua(() => tools.cua);
     return () => { try { removePrompt() } finally { removeTool() } }
   }
   if (config.agentPreset === false) return register(ctx, tool, rawPrompt)
-  return ctx.inject(['agentPresets', 'tools', 'agents', 'systemPrompt'], (base) => {
+  return ctx.inject(['tools', 'agents', 'systemPrompt'], (base) => {
     const scopes = new Map<Agent, { scope: Scope; current?: { definition: ToolDefinition; remove: () => void } }>()
     let program: ToolDefinition | undefined
     let programs: Fiber | undefined
     let closing = false
-    const modeOf = (agent: Agent): 'raw' | 'program' | undefined => {
-      const preset = base.agentPresets.composedPreset(agent.ctx)
-      return preset === undefined ? undefined : preset === config.agentPreset ? 'raw' : 'program'
-    }
+    // The preset registry is optional; while none is mounted no Agent runs the configured preset.
+    const modeOf = (agent: Agent): 'raw' | 'program' =>
+      base.get('agentPresets')?.composedPreset(agent.ctx) === config.agentPreset ? 'raw' : 'program'
     const sync = (agent: Agent): void => {
       const mode = modeOf(agent)
-      const definition = mode === 'raw' ? tool : mode === 'program' ? program : undefined
+      const definition = mode === 'raw' ? tool : program
       let entry = scopes.get(agent)
       if (entry?.current?.definition === definition) return
       if (entry?.current !== undefined) { entry.current.remove(); delete entry.current }
@@ -124,6 +124,11 @@ var cua = connectCua(() => tools.cua);
       entry.current = { definition, remove }
     }
     const syncAll = (): void => { for (const agent of base.agents.list()) sync(agent) }
+    // A preset or registry change updates each Agent separately, so one failed registration leaves the others current.
+    const resync = (agent: Agent): void => {
+      try { sync(agent) } catch (error) { base.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
+    }
+    const resyncAll = (): void => { for (const agent of base.agents.list()) resync(agent) }
     base.effect(function* () {
       yield async () => { await Promise.all([...scopes.values()].map(({ scope }) => scope.dispose())) }
       const runtimeCtx = base.isolate('ptcRuntime')
@@ -185,9 +190,12 @@ var cua = connectCua(() => tools.cua);
       })
       yield base.on('agent-preset/selected', (id) => {
         const agent = base.agents.get(id)
-        if (agent === undefined) return
-        try { sync(agent) } catch (error) { base.logger.warn(`CUA tool scope update failed: ${String(error)}`) }
+        if (agent !== undefined) resync(agent)
       })
+      yield base.inject(['agentPresets'], (registry) => {
+        registry.effect(() => () => { if (!closing) resyncAll() }, 'cua.preset-registry')
+        resyncAll()
+      }).dispose
       yield () => {
         closing = true
         program = undefined
