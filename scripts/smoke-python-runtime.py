@@ -1463,7 +1463,9 @@ def smoke_sdk_minimal(
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patches = (str(write_profile_patch(root, "persistence.patch.yml", sessions, [])),)
+        storage_patch = root / "persistence.patch.yml"
+        storage_patch.write_text(json.dumps([{"id": "sessions", "config": {"storage": "jsonl"}}]))
+        patches = (str(storage_patch),)
         if in_history:
             patch = root / "in-history.patch.yml"
             patch.write_text(json.dumps([
