@@ -29,7 +29,7 @@ describe('gen-tool-catalog collectToolCatalog', () => {
     expect(names).toEqual([
       'apply_patch', 'ask_user_question', 'bash', 'bash', 'cordis_inspect_list',
       'cordis_inspect_query',
-      'create_goal', 'create_worktree', 'edit', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
+      'create_goal', 'create_worktree', 'edit', 'enter_worktree', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep',
       'interrupt_agent', 'job_kill', 'job_list', 'job_output',
       'list_agents', 'list_mcp_resource_templates', 'list_mcp_resources',
       'list_subagent_models', 'load_workspace_dependencies', 'lsp', 'office_convert', 'office_recalculate', 'office_render', 'plugin_manager', 'plugin_market', 'present', 'propose_action', 'pwsh', 'pwsh', 'ralph',
