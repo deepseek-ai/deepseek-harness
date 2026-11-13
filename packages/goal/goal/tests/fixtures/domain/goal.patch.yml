@@ -21,6 +21,7 @@
 - id: session-persistence-jsonl
   config:
     root: './.sessions'
+    storage: jsonl
     compression: none
 
 - insert:

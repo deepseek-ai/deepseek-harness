@@ -100,6 +100,7 @@ describe('three-mode acceptance: real-profile base', () => {
         '- id: session-persistence-jsonl',
         '  config:',
         `    root: '${sessions}'`,
+        '    storage: jsonl',
         '    compression: none',
         '- insert:',
         '    - id: base-fixture-llm',

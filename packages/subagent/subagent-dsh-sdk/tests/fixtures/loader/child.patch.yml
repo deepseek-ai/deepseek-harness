@@ -22,6 +22,7 @@
   name: '@deepseek-ai/dsh-session-persistence-jsonl'
   config:
     root: !!js dshHomePath('sessions')
+    storage: jsonl
     compression: none
 
 - insert:

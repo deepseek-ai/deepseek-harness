@@ -93,7 +93,7 @@ export function registerVisualIntentCases(selected: readonly DocumentFormat[]): 
             ...officeToolPatches(),
             { insert: [{ id: 'workspace-dependencies', name: '@deepseek-ai/dsh-tool-workspace-dependencies', config: { source: runtime! } }] },
             ...officeModelPatches(),
-            { id: 'session-persistence-jsonl', config: { root: sessionRoot, compression: 'none' } },
+            { id: 'session-persistence-jsonl', config: { root: sessionRoot, storage: 'jsonl', compression: 'none' } },
           ]))
         },
         async inspect(cwd) {

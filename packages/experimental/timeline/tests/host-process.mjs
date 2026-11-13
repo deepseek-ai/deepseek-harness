@@ -14,7 +14,7 @@ import * as Timeline from '@deepseek-ai/dsh-timeline'
 const [mode, root, id] = process.argv.slice(2)
 const ctx = new Context()
 await mountAgentLoopTestDependencies(ctx)
-await ctx.plugin(Jsonl, { root, compression: 'none' })
+await ctx.plugin(Jsonl, { root, storage: 'jsonl', compression: 'none' })
 try {
   if (mode === 'compete') {
     try {

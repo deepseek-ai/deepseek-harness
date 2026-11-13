@@ -43,6 +43,7 @@ describe('dsh run with Agent Teams enabled', () => {
         '- id: session-persistence-jsonl',
         '  config:',
         `    root: '${sessions}'`,
+        '    storage: jsonl',
         '    compression: none',
         '- insert:',
         '    - id: team-fixture-llm',
