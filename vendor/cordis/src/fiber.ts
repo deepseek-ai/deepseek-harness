@@ -24,14 +24,44 @@ export class ValidationError extends TypeError {
    *
    * @param issues — the standard-schema issues, one message line each.
    */
-  constructor(issues: readonly StandardSchemaV1.Issue[]) {
+  constructor(public issues: readonly StandardSchemaV1.Issue[]) {
     super(`invalid config:\n` + issues.map(issue => {
-      if (issue.path) {
-        return `  - ${issue.message} (at ${issue.path.join('.')})`
+      if (issue.path?.length) {
+        return `  - ${issue.message} (at ${ValidationError.formatPath(issue.path)})`
       } else {
         return `  - ${issue.message}`
       }
     }).join('\n'))
+  }
+
+  /**
+   * Test whether a value is a config `ValidationError`, including one from another copy of Cordis.
+   *
+   * @param error — the value to test.
+   * @returns `true` if `error` carries the global validation-error brand.
+   */
+  static is(error: unknown): error is ValidationError {
+    return !!error?.[kValidationError]
+  }
+
+  /**
+   * Convert an issue path to plain property keys.
+   *
+   * @param path — the standard-schema issue path; segments may be `{ key }` objects.
+   * @returns the property keys, or an empty array when the issue has no path.
+   */
+  static normalizePath(path: StandardSchemaV1.Issue['path'] = []) {
+    return path.map(segment => typeof segment === 'object' ? segment.key : segment)
+  }
+
+  /**
+   * Format an issue path as a dotted string.
+   *
+   * @param path — the standard-schema issue path.
+   * @returns the keys joined with `.`.
+   */
+  static formatPath(path: StandardSchemaV1.Issue['path']) {
+    return ValidationError.normalizePath(path).map(String).join('.')
   }
 }
 
@@ -239,15 +269,6 @@ export class Fiber {
       this.uid = parent.registry.counter
       this.ctx = this.context = parent.extend({ fiber: this })
 
-      const injectEntries = Object.entries(this.inject)
-      if (injectEntries.length) {
-        this.ctx[Context.intercept] = Object.create(parent[Context.intercept])
-        for (const [name, config] of injectEntries) {
-          if (isNullable(config)) continue
-          this.ctx[Context.intercept][name] = config
-        }
-      }
-
       this._runner = {
         epoch: INACTIVE,
         getOuterStack,
@@ -290,15 +311,16 @@ export class Fiber {
               return FiberState.UNLOADING
             })
           }
-          // `this.inertia` itself should never reject — both `_reload` and
-          // `_unload` swallow their own work errors via `ctx.logger.error`.
-          // If it *does* reject, the only remaining cause is the logger
-          // itself failing, which we can't recover from in this exact spot
-          // (calling the logger again is what just failed). Let the
-          // rejection propagate; process-level crash is the honest outcome.
+          // `inertia` never rejects: `_reload` and `_unload` both log their
+          // own work errors. A rejection here would mean the logger itself
+          // failed, so let it propagate.
           while (this.inertia) {
             await this.inertia
           }
+          // `_setEpoch()` above returns early for a fiber that was not ACTIVE,
+          // so the cached state is not refreshed. Re-derive it now that
+          // `uid` is null; the empty callback falls through to `_getState()`.
+          this._updateState(() => {})
         }
       }, 'ctx.plugin()')
 

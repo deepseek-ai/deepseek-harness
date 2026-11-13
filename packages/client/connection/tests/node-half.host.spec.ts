@@ -160,7 +160,7 @@ async function mounted(
 
 /** Read the test root's token implementation without a production URL service. */
 async function loginUrl(ctx: Context, base: string): Promise<URL> {
-  const auth = await BrowserAuth.create(ctx.root, ctx.credentials, 30)
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
   return new URL(auth.authenticatedUrl(base))
 }
 
@@ -287,7 +287,7 @@ describe('connection node half', () => {
     try {
       await fiber.await()
       const connection = ctx.get('connection') as HostConnectionHandle
-      const auth = await BrowserAuth.create(ctx.root, ctx.credentials, 30)
+      const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
       const exchange = fakeResponse()
       auth.authorizeIndex(fakeRequest({ host: 'localhost' }, auth.authenticatedUrl('http://localhost/')), exchange.response)
       const cookie = exchange.state.headers?.['set-cookie']?.split(';', 1)[0]

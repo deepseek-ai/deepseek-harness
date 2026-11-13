@@ -59,7 +59,7 @@ async function mounted(secure = false, before?: (ctx: Context) => void) {
     },
   })
   await fiber.await()
-  const auth = await BrowserAuth.create(ctx.root, ctx.credentials, 30)
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
   return { ctx, fiber, providers, routes, createPeer, auth }
 }
 function response() {

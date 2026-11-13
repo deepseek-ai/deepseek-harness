@@ -1,6 +1,6 @@
 /** Lifecycle-driven Cordis tree publication shared by Host and Client plugin faces. */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type { CordisTreeSnapshot } from './snapshot.ts'
 import { CordisTreeCollector, type CordisTreeLimits } from './collector.ts'
 
@@ -19,7 +19,7 @@ export function observeCordisTree(
   listener: CordisTreeSnapshotListener,
   limits: CordisTreeLimits,
 ): () => void {
-  const collector = new CordisTreeCollector(ctx.root, limits)
+  const collector = new CordisTreeCollector(ctx[Context.root], limits)
   let scheduled = false
   let closed = false
   const publish = (): void => {
