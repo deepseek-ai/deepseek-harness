@@ -349,10 +349,10 @@ it.skipIf(process.platform !== 'darwin' && process.platform !== 'win32')('shows 
     profile: { packages: [{ dir: bundle, enabled: true }] }, extraOverlayPath: patch,
   })
   if (process.platform === 'darwin') {
-    // Substitute only the enabled Windows provider in the Host response. The Client must reach the real inventory Remote.
-    const inventory = await scaffold.ctx.pluginInventory.list()
-    vi.spyOn(scaffold.ctx.pluginInventory, 'list').mockResolvedValue({ ...inventory, entries: inventory.entries.map(entry =>
-      entry.moduleName === '@deepseek-ai/dsh-cua-windows' ? { ...entry, enabled: true, fiberPhase: 'failed' } : entry) })
+    // The Host inventory reads this Loader flag; only the platform-specific input is substituted on macOS.
+    const windows = [...scaffold.ctx.loader.entries()].find(entry => entry.options.id === 'cua-windows')
+    if (!windows) throw new Error('CUA bundle has no Windows provider row')
+    vi.spyOn(windows, 'disabled', 'get').mockReturnValue(false)
   }
   const browser = resources.browser = await chromium.launch()
   const page = await newEnglishPage(browser)
