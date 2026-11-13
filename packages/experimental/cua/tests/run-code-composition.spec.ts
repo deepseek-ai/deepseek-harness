@@ -160,7 +160,7 @@ it('presents the object API, retains raw bindings and CUA objects, and preserves
   expect(model.requests[0]?.tools?.map(tool => tool.name).sort()).toEqual(['cua_run_code', 'outside_cua'])
   const description = model.requests[0]?.tools?.find(tool => tool.name === 'cua_run_code')?.description
   expect(description).toContain('The global cua object is ready to use')
-  expect(description).toContain('Call other session tools directly outside the program.')
+  expect(description).toContain('Call other session tools directly outside cua_run_code.')
   expect(description).toContain('Use inspect(...values) to display selected text and images.')
   expect(description).not.toContain('tools.cua')
   const guidance = model.requests[0]!.messages.filter(message => message.role === 'system')

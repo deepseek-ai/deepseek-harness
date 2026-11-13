@@ -16,7 +16,7 @@ import { CUA_PROMPT_SECTION_NAME } from './guidance.ts'
 
 const programDescription = 'Run a TypeScript program to observe and operate desktop applications. '
   + 'The global cua object is ready to use; retain application and window objects across calls. '
-  + 'Call other session tools directly outside the program. '
+  + 'Call other session tools directly outside cua_run_code. '
   + 'Use inspect(...values) to display selected text and images.'
 
 /** Host control over the dedicated `cua_run_code` environments; registered as `ctx.cuaPrograms`. */
