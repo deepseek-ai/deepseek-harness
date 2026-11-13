@@ -360,7 +360,11 @@
    scrollport so its occupant stays put while the transcript scrolls and
    inherits the scrollport's --dsh-composer-height and
    --dsh-conversation-viewport-height. Above the turn rail (7) and the
-   back-to-bottom control (8). */
+   back-to-bottom control (8). It publishes the end gutter, the inline space
+   between the centered transcript column and the frame's end edge, for the
+   occupant's inline sizes: the percentage resolves against the layer in an
+   element whose containing block is the layer, as it does in the
+   back-to-bottom control's padding below. */
 .asideSlot {
   position: absolute;
   top: 0;
@@ -369,6 +373,7 @@
   z-index: 9;
   height: 0;
   pointer-events: none;
+  --dsh-chat-aside-gutter: max(0px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2));
 }
 
 :global([data-conversation-scroll]) .asideSlot {

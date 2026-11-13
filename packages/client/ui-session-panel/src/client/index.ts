@@ -33,7 +33,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 export type { PanelRowAttributes, PanelRowProps } from './PanelRow.tsx'
 export type {
   EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
-  SessionPanelPresentation, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
+  SessionPanelPresentation, SessionPanelProbes, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
   SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
 
@@ -49,7 +49,7 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-session-panel: dictionaries')
   const t = ctx.locale.bind(NS)
   const state = new SessionPanelState()
-  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay gutter')
+  ctx.effect(() => () => { state.dispose() }, 'ui-session-panel: overlay follower and dock probes')
   const sections = sectionSource(ctx)
   const host: ObservableSnapshot<RemoteHostFacts> = {
     getSnapshot: () => ctx.remote.$host,
@@ -81,8 +81,8 @@ export function apply(ctx: ClientContext): void {
       'conversation.session.panel.section.actions': { kind: 'keyed', scope: 'session' },
     },
     inject: (): SessionPanelInjected => ({
-      hooks: { visibility: state.visibility, sections },
-      track: (sessionId, endGutter) => state.track(sessionId, endGutter),
+      hooks: { visibility: state.visibility, sections, probes: state.probes },
+      createProbeRef: (sessionId, probe) => state.createProbeRef(sessionId, probe),
       closeOverlay: (sessionId) => { state.closeOverlay(sessionId) },
     }),
   }, SessionPanel))

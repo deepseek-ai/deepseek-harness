@@ -1,28 +1,13 @@
-/** Session panel visibility: the persisted docking preference, the transient overlay, each Session's room to dock, and the presentation. */
+/** Session panel visibility: the persisted docking preference, the transient overlay, the dock probes, and the presentation. */
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionPanelDockable, SessionPanelPresentation, SessionPanelVisibility } from './slots.ts'
+import type { SessionPanelDockable, SessionPanelPresentation, SessionPanelProbes, SessionPanelVisibility } from './slots.ts'
 
 /** localStorage key of the docking preference. */
 export const PINNED_STORAGE_KEY = 'dsh.sessionPanel.pinned'
 
-/**
- * Smallest end gutter that holds the docked panel, in CSS px: 40px clear of
- * the transcript column (past the width handle's 24px offset and 10px strip),
- * the panel's 300px minimum width, and an 8px edge margin.
- */
-export const DOCK_MIN_GUTTER = 348
-
-const NO_ENTRIES: SessionPanelDockable = new Map()
-
-/**
- * Whether a Chat View's end gutter can hold the docked panel.
- * @param endGutter - the gutter in CSS px.
- * @returns true when the panel can dock without covering the transcript.
- */
-export function fitsGutter(endGutter: number): boolean {
-  return endGutter >= DOCK_MIN_GUTTER
-}
+const NO_SESSIONS: SessionPanelDockable = new Map()
+const NO_PROBES: SessionPanelProbes = new Map()
 
 /**
  * Decide how the panel shows for one Session.
@@ -40,18 +25,25 @@ export function presentationOf(
 
 /**
  * Visibility shared by every Session's toggle and panel, and whether each
- * Session has room to dock, derived from the end gutters of the Chat Views
- * whose panels are mounted. Docking follows one preference for all Sessions;
- * at most one Session's overlay is open, and it closes once its Session has
- * room to dock or no Chat View shows that Session any longer.
+ * mounted panel and each Session has room to dock. The panel's stylesheet
+ * decides the room: each mounted panel renders a dock probe that is 1px wide
+ * while its Chat View's end gutter holds the docked panel and 0 otherwise,
+ * and this state observes only that probe, so it hears the decision flip
+ * and nothing while the window resizes on one side of it or the transcript
+ * grows. Docking follows one preference for all Sessions; at most one
+ * Session's overlay is open, and it closes once its Session has room to dock
+ * or no Chat View shows that Session any longer.
  */
 export class SessionPanelState {
   // A stored value other than `false` keeps the default: the panel docks.
   private readonly pinned = createSnapshotStore<unknown>(true, { persist: { name: PINNED_STORAGE_KEY } })
   private readonly overlay = createSnapshotStore<SessionId | null>(null)
-  private readonly room = createSnapshotStore<SessionPanelDockable>(NO_ENTRIES)
-  /** The Chat View gutter source of every mounted panel, by Session; each registration is its own entry. */
-  private readonly sources = new Map<SessionId, Set<{ readonly gutter: ObservableSnapshot<number> }>>()
+  private readonly room = createSnapshotStore<SessionPanelDockable>(NO_SESSIONS)
+  private readonly fits = createSnapshotStore<SessionPanelProbes>(NO_PROBES)
+  /** The Session of every attached probe. */
+  private readonly owners = new Map<string, SessionId>()
+  /** Stops observing each attached probe. */
+  private readonly detachers = new Set<() => void>()
   private current: SessionPanelVisibility = { pinned: this.pinned.getSnapshot() !== false, overlay: null }
   /** Stops following the open overlay's gutter. */
   private unfollow: () => void = () => {}
@@ -75,32 +67,33 @@ export class SessionPanelState {
   }
 
   /**
-   * Whether each Session with a mounted panel has room to dock it. The
-   * snapshot keeps its identity until a Session gains or loses its entry or
-   * crosses the docking threshold, so a resize that stays on one side of the
-   * threshold publishes nothing.
+   * Whether each Session with a mounted panel has room to dock it: true while
+   * any of its probes does. The snapshot keeps its identity until a Session
+   * gains or loses its entry or its room changes.
    */
   readonly dockable: ObservableSnapshot<SessionPanelDockable> = this.room
 
   /**
-   * Follow the Chat View gutter of one mounted panel until the returned
-   * disposer runs; a Session has room to dock while any of its sources does.
-   * @param sessionId - Session the panel's Chat View shows.
-   * @param gutter - the Chat View's end gutter source.
-   * @returns stops following the source.
+   * Whether each attached probe's gutter holds the docked panel. The snapshot
+   * keeps its identity until a probe attaches, detaches, or flips.
    */
-  track(sessionId: SessionId, gutter: ObservableSnapshot<number>): () => void {
-    const entry = { gutter }
-    const sources = this.sources.get(sessionId) ?? new Set()
-    sources.add(entry)
-    this.sources.set(sessionId, sources)
-    const off = gutter.subscribe(() => { this.publish(sessionId) })
-    this.publish(sessionId)
-    return () => {
-      off()
-      sources.delete(entry)
-      if (sources.size === 0) this.sources.delete(sessionId)
-      this.publish(sessionId)
+  readonly probes: ObservableSnapshot<SessionPanelProbes> = this.fits
+
+  /**
+   * Create the element-ref lifecycle of one mounted panel's dock probe.
+   * Attaching the element enters the probe without room and observes its
+   * size; a probe at least 1px wide has room. Detaching stops the
+   * observation and withdraws the probe. Without `ResizeObserver` the probe
+   * stays without room, so the panel shows only as an overlay.
+   * @param sessionId - Session the panel's Chat View shows.
+   * @param probe - identity of the panel within the page.
+   * @returns the ref callback for the probe element.
+   */
+  createProbeRef(sessionId: SessionId, probe: string): (element: HTMLElement | null) => void {
+    let detach: (() => void) | undefined
+    return (element) => {
+      detach?.()
+      detach = element === null ? undefined : this.attach(sessionId, probe, element)
     }
   }
 
@@ -129,14 +122,19 @@ export class SessionPanelState {
     if (this.overlay.getSnapshot() === sessionId) this.setOverlay(null)
   }
 
-  /** Stop following the open overlay's gutter. */
+  /** Stop following the open overlay's Session and stop observing every attached probe. */
   dispose(): void {
+    this.stopFollowing()
+    for (const detach of [...this.detachers]) detach()
+  }
+
+  private stopFollowing(): void {
     this.unfollow()
     this.unfollow = () => {}
   }
 
   private setOverlay(sessionId: SessionId | null): void {
-    this.dispose()
+    this.stopFollowing()
     this.overlay.set(sessionId)
     if (sessionId === null) return
     const check = (): void => {
@@ -145,15 +143,46 @@ export class SessionPanelState {
     this.unfollow = this.room.subscribe(check)
   }
 
-  /** Recompute one Session's room to dock from its sources, publishing only a changed entry. */
-  private publish(sessionId: SessionId): void {
-    const sources = this.sources.get(sessionId)
-    const dockable = sources === undefined ? undefined : [...sources].some(source => fitsGutter(source.gutter.getSnapshot()))
+  private attach(sessionId: SessionId, probe: string, element: HTMLElement): () => void {
+    this.report(sessionId, probe, false)
+    const measure: ResizeObserverCallback = (entries) => {
+      for (const entry of entries) this.report(sessionId, probe, entry.contentRect.width >= 1)
+    }
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
+    observer?.observe(element)
+    const detach = (): void => {
+      // The ref callback and dispose may both detach; the first one withdraws the probe.
+      if (!this.detachers.delete(detach)) return
+      observer?.disconnect()
+      this.report(sessionId, probe, null)
+    }
+    this.detachers.add(detach)
+    return detach
+  }
+
+  /** Record one probe's room, or its withdrawal, publishing only what changed. */
+  private report(sessionId: SessionId, probe: string, dockable: boolean | null): void {
+    const fits = this.fits.getSnapshot()
+    if (fits.get(probe) !== (dockable ?? undefined)) {
+      const next = new Map(fits)
+      if (dockable === null) {
+        next.delete(probe)
+        this.owners.delete(probe)
+      } else {
+        next.set(probe, dockable)
+        this.owners.set(probe, sessionId)
+      }
+      this.fits.set(next)
+    }
+    let any: boolean | undefined
+    for (const [id, owner] of this.owners) {
+      if (owner === sessionId) any = any === true || this.fits.getSnapshot().get(id) === true
+    }
     const room = this.room.getSnapshot()
-    if (room.get(sessionId) === dockable) return
+    if (room.get(sessionId) === any) return
     const next = new Map(room)
-    if (dockable === undefined) next.delete(sessionId)
-    else next.set(sessionId, dockable)
+    if (any === undefined) next.delete(sessionId)
+    else next.set(sessionId, any)
     this.room.set(next)
   }
 }

@@ -3,24 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useRef, type ReactNode } from 'react'
 import { useModalLayer } from '@deepseek-ai/dsh-client-ui-primitives'
-import { contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector, contextMenuHook, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { EnvironmentSection } from '../src/client/EnvironmentSection.tsx'
 import { ProjectRow } from '../src/client/ProjectRow.tsx'
 import { SessionPanel } from '../src/client/SessionPanel.tsx'
 import { SessionPanelToggle } from '../src/client/SessionPanelToggle.tsx'
 import type {
-  EnvironmentSectionProps, ProjectRowProps, SessionPanelDockable, SessionPanelProps, SessionPanelSectionEntry,
+  EnvironmentSectionProps, ProjectRowProps, SessionPanelDockable, SessionPanelProbes, SessionPanelProps, SessionPanelSectionEntry,
   SessionPanelSectionOwnerProps, SessionPanelToggleProps, SessionPanelVisibility,
 } from '../src/client/slots.ts'
-import { DOCK_MIN_GUTTER } from '../src/client/visibility.ts'
+import { SessionPanelState } from '../src/client/visibility.ts'
 import { en, zh } from '../src/client/locales.ts'
 
 const SID = 'session-1' as SessionId
 const t = makeTranslate(zh) as SessionPanelToggleProps['t']
-const WIDE = DOCK_MIN_GUTTER
-const NARROW = DOCK_MIN_GUTTER - 1
 const DOCKED: SessionPanelVisibility = { pinned: true, overlay: null }
 
 function selectorOf<T>(value: T) {
@@ -123,10 +120,12 @@ describe('SessionPanel', () => {
     { id: 'change-requests', label: '变更请求' },
   ]
 
-  function panelProps(
-    gutter: number, visibility: SessionPanelVisibility, closeOverlay = vi.fn(), track: SessionPanelProps['track'] = vi.fn(() => () => {}),
-  ) {
-    const endGutter = createSnapshotStore(gutter)
+  /** Ids of the probes the rendered panels created, so a later props object answers for the mounted panel. */
+  const probeIds = new Set<string>()
+  afterEach(() => { probeIds.clear() })
+
+  /** Panel props whose dock probes all have, or all lack, room to dock. */
+  function panelProps(dockable: boolean, visibility: SessionPanelVisibility, closeOverlay = vi.fn()) {
     const owners: SessionPanelSectionOwnerProps[] = []
     const renderSlot = ((key: string, owner: object, opts?: { only?: string; entryKey?: string }): ReactNode => {
       if (key === 'conversation.session.panel.section.actions') {
@@ -135,64 +134,92 @@ describe('SessionPanel', () => {
       owners.push(owner as SessionPanelSectionOwnerProps)
       return <p>{`${opts?.only ?? ''} body`}</p>
     }) as SessionPanelProps['renderSlot']
+    const attached = vi.fn<(element: HTMLElement | null) => void>()
+    const createProbeRef = vi.fn((_sessionId: SessionId, probe: string) => {
+      probeIds.add(probe)
+      return attached
+    })
     const props = {
       sessionId: SID,
-      endGutter,
       useVisibility: selectorOf(visibility),
       useSections: selectorOf(SECTIONS),
-      track,
+      useProbes: <S,>(select: (probes: SessionPanelProbes) => S): S => select(new Map([...probeIds].map(id => [id, dockable]))),
+      createProbeRef,
       closeOverlay,
       renderSlot,
       t,
     } as SessionPanelProps
-    return { props, owners, closeOverlay, track, endGutter }
+    return { props, owners, closeOverlay, createProbeRef, attached }
   }
 
-  it('tracks its Chat View gutter source while mounted, moving with a Session change and stopping on unmount', () => {
-    const stops: string[] = []
-    const track = vi.fn((sessionId: SessionId) => () => { stops.push(sessionId) })
-    const first = panelProps(420, DOCKED, vi.fn(), track)
-    const view = render(<SessionPanel {...first.props} />)
-    expect(track.mock.calls).toEqual([[SID, first.endGutter]])
-    // A gutter change publishes through the source; the registration stays.
-    act(() => { first.endGutter.set(400) })
-    expect(track).toHaveBeenCalledTimes(1)
-    const other = 'session-2' as SessionId
-    view.rerender(<SessionPanel {...{ ...first.props, sessionId: other }} />)
-    expect(stops).toEqual([SID])
-    expect(track.mock.calls.at(-1)).toEqual([other, first.endGutter])
-    view.unmount()
-    expect(stops).toEqual([SID, other])
-    // CSS sizes the docked panel; no measured width reaches its style.
-    render(<SessionPanel {...panelProps(420, DOCKED).props} />)
-    expect(screen.getByRole('complementary').getAttribute('style')).toBeNull()
-  })
-
-  it('renders again only when its gutter crosses the docking threshold', () => {
-    const { props, owners, endGutter } = panelProps(WIDE + 100, DOCKED)
-    render(<SessionPanel {...props} />)
-    const renders = (): number => owners.length
-    const settled = renders()
-    act(() => { endGutter.set(WIDE + 40) })
-    act(() => { endGutter.set(WIDE) })
-    expect(renders()).toBe(settled)
-    expect(screen.getByRole('complementary').getAttribute('data-session-panel')).toBe('docked')
-    act(() => { endGutter.set(NARROW) })
-    expect(screen.queryByRole('complementary')).toBeNull()
-    act(() => { endGutter.set(NARROW - 200) })
-    act(() => { endGutter.set(WIDE + 10) })
-    expect(screen.getByRole('complementary').getAttribute('data-session-panel')).toBe('docked')
-    expect(renders()).toBe(settled * 2)
-  })
-
-  it('renders nothing while hidden', () => {
-    const { props } = panelProps(WIDE, { pinned: false, overlay: null })
+  it('attaches its dock probe through the injected ref once and detaches it on unmount', () => {
+    const { props, createProbeRef, attached } = panelProps(true, DOCKED)
     const view = render(<SessionPanel {...props} />)
-    expect(view.container.innerHTML).toBe('')
+    const probe = view.container.querySelector('[data-session-panel-probe]')
+    expect(probe).not.toBeNull()
+    expect(createProbeRef.mock.calls).toEqual([[SID, expect.any(String)]])
+    expect(attached.mock.calls).toEqual([[probe]])
+    // A later render keeps the ref, so the probe is neither detached nor attached again.
+    const next = panelProps(true, DOCKED)
+    view.rerender(<SessionPanel {...next.props} />)
+    expect(next.createProbeRef).not.toHaveBeenCalled()
+    expect(attached).toHaveBeenCalledTimes(1)
+    view.unmount()
+    expect(attached.mock.calls.at(-1)).toEqual([null])
+  })
+
+  it('renders again only when its dock probe flips', () => {
+    const observed: { readonly element: Element; readonly callback: ResizeObserverCallback }[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      private readonly callback: ResizeObserverCallback
+      constructor(callback: ResizeObserverCallback) { this.callback = callback }
+      observe(element: Element): void { observed.push({ element, callback: this.callback }) }
+      unobserve(): void {}
+      disconnect(): void {}
+    })
+    const state = new SessionPanelState()
+    const base = panelProps(false, DOCKED)
+    const props = {
+      ...base.props,
+      useProbes: bindSnapshotSelector(state.probes),
+      createProbeRef: (sessionId: SessionId, probe: string) => state.createProbeRef(sessionId, probe),
+    } as SessionPanelProps
+    const view = render(<SessionPanel {...props} />)
+    const resize = (width: number): void => {
+      act(() => {
+        for (const { element, callback } of observed) {
+          callback([{ target: element, contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver)
+        }
+      })
+    }
+    expect(observed.map(entry => entry.element)).toEqual([view.container.querySelector('[data-session-panel-probe]')])
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(state.dockable.getSnapshot().get(SID)).toBe(false)
+    resize(1)
+    expect(screen.getByRole('complementary').getAttribute('data-session-panel')).toBe('docked')
+    // CSS sizes the docked panel; no measured width reaches its style.
+    expect(screen.getByRole('complementary').getAttribute('style')).toBeNull()
+    const settled = base.owners.length
+    resize(1)
+    expect(base.owners).toHaveLength(settled)
+    // A probe under 1px wide sits within a pixel below the gutter that docks the panel.
+    resize(0.5)
+    expect(screen.queryByRole('complementary')).toBeNull()
+    expect(state.dockable.getSnapshot().get(SID)).toBe(false)
+    view.unmount()
+    expect(state.dockable.getSnapshot().has(SID)).toBe(false)
+  })
+
+  it('renders only its dock probe while hidden', () => {
+    const { props } = panelProps(true, { pinned: false, overlay: null })
+    const view = render(<SessionPanel {...props} />)
+    expect(view.container.querySelector('[data-session-panel]')).toBeNull()
+    expect(view.container.children).toHaveLength(1)
+    expect(view.container.firstElementChild?.hasAttribute('data-session-panel-probe')).toBe(true)
   })
 
   it('docks with one titled region per section in roster order and each section body', () => {
-    const { props, owners } = panelProps(WIDE, DOCKED)
+    const { props, owners } = panelProps(true, DOCKED)
     render(<SessionPanel {...props} />)
     const panel = screen.getByRole('complementary', { name: '会话面板' })
     expect(panel.getAttribute('data-session-panel')).toBe('docked')
@@ -208,7 +235,7 @@ describe('SessionPanel', () => {
   })
 
   it('closes the overlay on Escape from inside and returns focus to the toggle', () => {
-    const { props, owners, closeOverlay } = panelProps(NARROW, { pinned: true, overlay: SID })
+    const { props, owners, closeOverlay } = panelProps(false, { pinned: true, overlay: SID })
     const toggle = document.createElement('button')
     toggle.id = `dsh-session-panel-toggle-${SID}`
     document.body.append(toggle)
@@ -230,7 +257,7 @@ describe('SessionPanel', () => {
   })
 
   it('closes the overlay on Escape from the page without moving focus', () => {
-    const { props, closeOverlay } = panelProps(NARROW, { pinned: true, overlay: SID })
+    const { props, closeOverlay } = panelProps(false, { pinned: true, overlay: SID })
     render(<SessionPanel {...props} />)
     const outside = document.createElement('input')
     document.body.append(outside)
@@ -245,7 +272,7 @@ describe('SessionPanel', () => {
   })
 
   it('closes the overlay on an outside pointerdown but not on the panel, the toggle, or an open menu', () => {
-    const { props, closeOverlay } = panelProps(NARROW, { pinned: true, overlay: SID })
+    const { props, closeOverlay } = panelProps(false, { pinned: true, overlay: SID })
     const toggle = document.createElement('button')
     toggle.id = `dsh-session-panel-toggle-${SID}`
     const menu = document.createElement('div')
@@ -268,13 +295,13 @@ describe('SessionPanel', () => {
   })
 
   it('leaves Escape to other handlers while docked, after another handler took it, or behind a modal', () => {
-    const docked = panelProps(WIDE, DOCKED)
+    const docked = panelProps(true, DOCKED)
     render(<SessionPanel {...docked.props} />)
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.pointerDown(document.body)
     expect(docked.closeOverlay).not.toHaveBeenCalled()
     cleanup()
-    const overlay = panelProps(NARROW, { pinned: true, overlay: SID })
+    const overlay = panelProps(false, { pinned: true, overlay: SID })
     render(<SessionPanel {...overlay.props} />)
     const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
     event.preventDefault()
@@ -295,7 +322,7 @@ describe('SessionPanel', () => {
   })
 
   it('leaves Escape to an input method composing text, including the key that ends the composition', () => {
-    const { props, closeOverlay } = panelProps(NARROW, { pinned: true, overlay: SID })
+    const { props, closeOverlay } = panelProps(false, { pinned: true, overlay: SID })
     render(<SessionPanel {...props} />)
     fireEvent(document, new Event('compositionstart'))
     fireEvent.keyDown(document, { key: 'Escape', isComposing: true })
@@ -313,24 +340,24 @@ describe('SessionPanel', () => {
     const outside = document.createElement('button')
     document.body.append(toggle, outside)
     try {
-      const docked = panelProps(WIDE, DOCKED)
+      const docked = panelProps(true, DOCKED)
       const view = render(<SessionPanel {...docked.props} />)
       const control = screen.getByRole('button', { name: '刷新' })
       control.focus()
       // Moves within the panel, and blurs that name no next target, keep the keyboard inside.
       fireEvent.focusOut(control, { relatedTarget: screen.getByRole('complementary') })
       fireEvent.focusOut(control, { relatedTarget: null })
-      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      view.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
       expect(document.activeElement).toBe(toggle)
       // Focus that already left the panel stays where it went.
       view.rerender(<SessionPanel {...docked.props} />)
       screen.getByRole('button', { name: '刷新' }).focus()
       outside.focus()
-      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      view.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
       expect(document.activeElement).toBe(outside)
       // A panel that hides without having held focus moves nothing.
       view.rerender(<SessionPanel {...docked.props} />)
-      view.rerender(<SessionPanel {...panelProps(NARROW, DOCKED).props} />)
+      view.rerender(<SessionPanel {...panelProps(false, DOCKED).props} />)
       expect(document.activeElement).toBe(outside)
     } finally {
       toggle.remove()
