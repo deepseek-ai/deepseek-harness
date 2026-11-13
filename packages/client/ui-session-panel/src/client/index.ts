@@ -29,7 +29,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 export type {
-  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelGutters, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
+  EnvironmentSectionProps, ProjectRowInjected, ProjectRowProps, SessionPanelDockable, SessionPanelIndicatorOwnerProps, SessionPanelInjected,
   SessionPanelPresentation, SessionPanelProps, SessionPanelSectionEntry, SessionPanelSectionOwnerProps,
   SessionPanelToggleInjected, SessionPanelToggleProps, SessionPanelVisibility,
 } from './slots.ts'
@@ -63,7 +63,7 @@ export function apply(ctx: ClientContext): void {
       'conversation.session.panel.indicator': { kind: 'list', scope: 'session', inline: true },
     },
     inject: (): SessionPanelToggleInjected => ({
-      hooks: { visibility: state.visibility, gutters: state.gutters },
+      hooks: { visibility: state.visibility, dockable: state.dockable },
       toggle: (sessionId) => { state.toggle(sessionId) },
     }),
   }, SessionPanelToggle))
@@ -77,7 +77,7 @@ export function apply(ctx: ClientContext): void {
     },
     inject: (): SessionPanelInjected => ({
       hooks: { visibility: state.visibility, sections },
-      measure: (sessionId, instance, endGutter) => { state.measure(sessionId, instance, endGutter) },
+      track: (sessionId, endGutter) => state.track(sessionId, endGutter),
       closeOverlay: (sessionId) => { state.closeOverlay(sessionId) },
     }),
   }, SessionPanel))

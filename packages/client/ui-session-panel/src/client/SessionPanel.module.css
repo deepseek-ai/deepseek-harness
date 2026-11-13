@@ -1,15 +1,16 @@
-/* The panel floats in the Chat View's aside layer, a zero-height box at the
-   top of the Chat frame that passes pointer events through. The layer
+/* The panel floats in the Chat View's aside layer, a zero-height box across
+   the top of the Chat frame that passes pointer events through. The layer
    inherits the scrollport's --dsh-conversation-viewport-height and
-   --dsh-composer-height; the panel receives the Chat View's end gutter as
-   --dsh-session-panel-gutter. */
+   --dsh-composer-height, and the transcript width --dsh-chat-content-width,
+   so the end gutter is half the layer width the transcript leaves. */
 .panel {
   position: absolute;
   top: 12px;
   right: 16px;
   box-sizing: border-box;
-  /* The docked width keeps 48px clear of the transcript column and its width handle. */
-  width: clamp(280px, calc(var(--dsh-session-panel-gutter, 0px) - 64px), 340px);
+  /* The docked width keeps 48px clear of the transcript column and its width handle,
+     as the back-to-bottom control computes the same gutter. */
+  width: clamp(280px, calc((100% - var(--dsh-chat-content-width, 100%)) / 2 - 64px), 340px);
   /* Stops above the composer stack, whose seat fades and takes presses across the body's full width. */
   max-height: calc(var(--dsh-conversation-viewport-height, 100dvh) - var(--dsh-composer-height, 152px) - 24px);
   overflow-y: auto;

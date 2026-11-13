@@ -1,7 +1,7 @@
-/** Session panel visibility: the persisted docking preference, the transient overlay, the Chat View gutters, and their presentation. */
+/** Session panel visibility: the persisted docking preference, the transient overlay, each Session's room to dock, and the presentation. */
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionPanelGutters, SessionPanelPresentation, SessionPanelVisibility } from './slots.ts'
+import type { SessionPanelDockable, SessionPanelPresentation, SessionPanelVisibility } from './slots.ts'
 
 /** localStorage key of the docking preference. */
 export const PINNED_STORAGE_KEY = 'dsh.sessionPanel.pinned'
@@ -13,7 +13,7 @@ export const PINNED_STORAGE_KEY = 'dsh.sessionPanel.pinned'
  */
 export const DOCK_MIN_GUTTER = 344
 
-const NO_GUTTERS: SessionPanelGutters = new Map()
+const NO_ENTRIES: SessionPanelDockable = new Map()
 
 /**
  * Whether a Chat View's end gutter can hold the docked panel.
@@ -39,19 +39,19 @@ export function presentationOf(
 }
 
 /**
- * Visibility shared by every Session's toggle and panel, and the end gutter
- * each mounted panel reports from its Chat View. Docking follows one
- * preference for all Sessions; at most one Session's overlay is open, and it
- * closes once its Session's gutter can hold the docked panel or no Chat View
- * shows that Session any longer.
+ * Visibility shared by every Session's toggle and panel, and whether each
+ * Session has room to dock, derived from the end gutters of the Chat Views
+ * whose panels are mounted. Docking follows one preference for all Sessions;
+ * at most one Session's overlay is open, and it closes once its Session has
+ * room to dock or no Chat View shows that Session any longer.
  */
 export class SessionPanelState {
   // A stored value other than `false` keeps the default: the panel docks.
   private readonly pinned = createSnapshotStore<unknown>(true, { persist: { name: PINNED_STORAGE_KEY } })
   private readonly overlay = createSnapshotStore<SessionId | null>(null)
-  private readonly widest = createSnapshotStore<SessionPanelGutters>(NO_GUTTERS)
-  /** Gutter of every mounted panel, by Session and panel instance. */
-  private readonly reports = new Map<SessionId, Map<string, number>>()
+  private readonly room = createSnapshotStore<SessionPanelDockable>(NO_ENTRIES)
+  /** The Chat View gutter source of every mounted panel, by Session; each registration is its own entry. */
+  private readonly sources = new Map<SessionId, Set<{ readonly gutter: ObservableSnapshot<number> }>>()
   private current: SessionPanelVisibility = { pinned: this.pinned.getSnapshot() !== false, overlay: null }
   /** Stops following the open overlay's gutter. */
   private unfollow: () => void = () => {}
@@ -74,28 +74,34 @@ export class SessionPanelState {
     },
   }
 
-  /** The widest gutter of each Session with a mounted panel; the snapshot keeps its identity until one changes. */
-  readonly gutters: ObservableSnapshot<SessionPanelGutters> = this.widest
+  /**
+   * Whether each Session with a mounted panel has room to dock it. The
+   * snapshot keeps its identity until a Session gains or loses its entry or
+   * crosses the docking threshold, so a resize that stays on one side of the
+   * threshold publishes nothing.
+   */
+  readonly dockable: ObservableSnapshot<SessionPanelDockable> = this.room
 
   /**
-   * Record the end gutter of one mounted panel, or that it unmounted.
+   * Follow the Chat View gutter of one mounted panel until the returned
+   * disposer runs; a Session has room to dock while any of its sources does.
    * @param sessionId - Session the panel's Chat View shows.
-   * @param instance - identity of the panel within the page.
-   * @param endGutter - the gutter in CSS px, or null when the panel unmounts or leaves the Session.
+   * @param gutter - the Chat View's end gutter source.
+   * @returns stops following the source.
    */
-  measure(sessionId: SessionId, instance: string, endGutter: number | null): void {
-    const panels = this.reports.get(sessionId) ?? new Map<string, number>()
-    if (endGutter === null) panels.delete(instance)
-    else panels.set(instance, endGutter)
-    if (panels.size === 0) this.reports.delete(sessionId)
-    else this.reports.set(sessionId, panels)
-    const widest = panels.size === 0 ? undefined : Math.max(...panels.values())
-    const gutters = this.widest.getSnapshot()
-    if (gutters.get(sessionId) === widest) return
-    const next = new Map(gutters)
-    if (widest === undefined) next.delete(sessionId)
-    else next.set(sessionId, widest)
-    this.widest.set(next)
+  track(sessionId: SessionId, gutter: ObservableSnapshot<number>): () => void {
+    const entry = { gutter }
+    const sources = this.sources.get(sessionId) ?? new Set()
+    sources.add(entry)
+    this.sources.set(sessionId, sources)
+    const off = gutter.subscribe(() => { this.publish(sessionId) })
+    this.publish(sessionId)
+    return () => {
+      off()
+      sources.delete(entry)
+      if (sources.size === 0) this.sources.delete(sessionId)
+      this.publish(sessionId)
+    }
   }
 
   /**
@@ -105,9 +111,9 @@ export class SessionPanelState {
    * @param sessionId - Session whose header holds the toggle.
    */
   toggle(sessionId: SessionId): void {
-    const gutter = this.widest.getSnapshot().get(sessionId)
-    if (gutter === undefined) return
-    if (fitsGutter(gutter)) {
+    const dockable = this.room.getSnapshot().get(sessionId)
+    if (dockable === undefined) return
+    if (dockable) {
       this.pinned.set(!this.visibility.getSnapshot().pinned)
       this.setOverlay(null)
       return
@@ -134,9 +140,20 @@ export class SessionPanelState {
     this.overlay.set(sessionId)
     if (sessionId === null) return
     const check = (): void => {
-      const gutter = this.widest.getSnapshot().get(sessionId)
-      if (gutter === undefined || fitsGutter(gutter)) this.closeOverlay(sessionId)
+      if (this.room.getSnapshot().get(sessionId) !== false) this.closeOverlay(sessionId)
     }
-    this.unfollow = this.widest.subscribe(check)
+    this.unfollow = this.room.subscribe(check)
+  }
+
+  /** Recompute one Session's room to dock from its sources, publishing only a changed entry. */
+  private publish(sessionId: SessionId): void {
+    const sources = this.sources.get(sessionId)
+    const dockable = sources === undefined ? undefined : [...sources].some(source => fitsGutter(source.gutter.getSnapshot()))
+    const room = this.room.getSnapshot()
+    if (room.get(sessionId) === dockable) return
+    const next = new Map(room)
+    if (dockable === undefined) next.delete(sessionId)
+    else next.set(sessionId, dockable)
+    this.room.set(next)
   }
 }

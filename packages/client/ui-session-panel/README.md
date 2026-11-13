@@ -54,7 +54,7 @@ Summary rows from every package use the `PanelRow` primitive, so icon, text, and
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership), so it renders only in Chat Views. The toggle and the panel are separate Slot entries that share one plugin-owned state: the persisted docking preference, the Session whose overlay is open, and the end gutter each mounted panel reports from its `endGutter` owner prop. A panel withdraws its report when it unmounts or its Chat View moves to another Session. The panel decides its presentation from its own gutter; the toggle reads the widest gutter of its Session, and a Session without one shows no Chat View. Both decide with the same pure function, so the toggle's state never disagrees with the panel. The aside layer inherits the scrollport's composer and viewport heights, and the docked width follows the gutter through `--dsh-session-panel-gutter`.
+The panel is the `conversation.chat.aside` occupant of [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership), so it renders only in Chat Views. The toggle and the panel are separate Slot entries that share one plugin-owned state: the persisted docking preference, the Session whose overlay is open, and whether each Session has room to dock. Each mounted panel registers the `endGutter` source of its Chat View with that state, and stops when it unmounts or its Chat View moves to another Session; a Session has room while any of its sources holds the docked panel, and a Session without a source shows no Chat View. The panel decides its presentation from its own source, and both decide with the same pure function, so the toggle's state never disagrees with the panel. The panel and the toggle subscribe only to whether the gutter holds the docked panel, so a resize renders them again only when it crosses the 344px threshold, and opening, closing, or docking the panel renders nothing in the Chat View. The aside layer inherits the scrollport's composer and viewport heights and the transcript width `--dsh-chat-content-width`, from which CSS sizes the docked panel.
 
 The panel projects the section list's live registrations (`entriesOfSlot`, so a higher-priority registration with the same `id` replaces a shipped section) into `{ id, label }` rows, recomputed only when the ledger version or the locale revision changes. It renders each section through `renderSlot(..., { only: id })` inside its own title and body; a CSS `:has()` rule hides a section whose body outlet stayed empty, including a shared section whose row outlet stayed empty.
 
@@ -62,7 +62,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 |---|---|
 | [`src/client/index.ts`](src/client/index.ts) | Dictionaries, the toggle, the panel, the Environment section, and the project row |
 | [`src/client/slots.ts`](src/client/slots.ts) | Slot declarations and component props |
-| [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, the shared visibility state, and the reported gutters |
+| [`src/client/visibility.ts`](src/client/visibility.ts) | Docking threshold, presentation, the shared visibility state, and each Session's room to dock |
 | [`src/client/sections.ts`](src/client/sections.ts) | Section roster projection |
 | [`src/client/SessionPanel.tsx`](src/client/SessionPanel.tsx) | The panel, its section titles, and Escape handling |
 | [`src/client/SessionPanelToggle.tsx`](src/client/SessionPanelToggle.tsx) | The header toggle and its indicators |
@@ -76,7 +76,7 @@ The panel projects the section list's live registrations (`entriesOfSlot`, so a 
 ## Further Exploration
 
 - [Web Client Slots](../../../docs/subsystems/slots.md) — list, keyed, and owner-prop semantics the sections rely on.
-- [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its end gutter.
+- [`dsh-client-ui-chat`](../ui-chat/README.md#scroll-ownership) — the `conversation.chat.aside` layer and its end gutter source.
 - [`dsh-client-ui-conversation`](../ui-conversation/README.md) — the Session header utilities.
 - [`dsh-client-ui-primitives`](../ui-primitives/README.md#component-catalog) — `PanelRow` and `PathLabel`.
 

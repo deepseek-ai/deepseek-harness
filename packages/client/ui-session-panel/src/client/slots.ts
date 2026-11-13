@@ -83,18 +83,18 @@ export interface SessionPanelVisibility {
 }
 
 /**
- * End gutter of each Session whose Chat View holds a panel, in CSS px; the
- * widest one when several Chat Views show the Session. A Session without an
- * entry shows no Chat View.
+ * Whether each Session whose Chat View holds a panel has room to dock it:
+ * true when the end gutter of at least one of its Chat Views holds the docked
+ * panel. A Session without an entry shows no Chat View.
  */
-export type SessionPanelGutters = ReadonlyMap<SessionId, number>
+export type SessionPanelDockable = ReadonlyMap<SessionId, boolean>
 
 /** Business face of the header toggle. */
 export interface SessionPanelToggleInjected {
-  /** Shared visibility and the Chat View gutters; the renderer binds them as `useVisibility` and `useGutters`. */
+  /** Shared visibility and each Session's room to dock; the renderer binds them as `useVisibility` and `useDockable`. */
   readonly hooks: {
     readonly visibility: ObservableSnapshot<SessionPanelVisibility>
-    readonly gutters: ObservableSnapshot<SessionPanelGutters>
+    readonly dockable: ObservableSnapshot<SessionPanelDockable>
   }
   /**
    * Show or hide the panel. With room to dock this flips the docking
@@ -113,12 +113,13 @@ export interface SessionPanelInjected {
     readonly sections: ObservableSnapshot<readonly SessionPanelSectionEntry[]>
   }
   /**
-   * Record the end gutter of one mounted panel, or that it unmounted.
+   * Follow a mounted panel's Chat View gutter for the Session's room to dock,
+   * which the toggle reads, until the returned disposer runs.
    * @param sessionId - Session the panel's Chat View shows.
-   * @param instance - identity of the panel within the page.
-   * @param endGutter - the Chat View's end gutter in CSS px; null when the panel unmounts or leaves the Session.
+   * @param endGutter - the Chat View's end gutter source.
+   * @returns stops following the source.
    */
-  readonly measure: (sessionId: SessionId, instance: string, endGutter: number | null) => void
+  readonly track: (sessionId: SessionId, endGutter: ObservableSnapshot<number>) => () => void
   /**
    * Close the Session's overlay.
    * @param sessionId - Session whose overlay closes; another Session's overlay stays.

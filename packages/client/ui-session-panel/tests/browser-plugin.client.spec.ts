@@ -67,21 +67,21 @@ describe('ui-session-panel browser half', () => {
     expect(ctx.slots.entries('conversation.session.panel.environment.row').map(entry => entry.options.id)).toEqual(['project'])
   })
 
-  it('hands the toggle the gutters the panel reports, and both the shared visibility', async () => {
+  it('hands the toggle the room to dock the panel tracks, and both the shared visibility', async () => {
     const { ctx, fiber } = await bench()
     const toggle = faceOf(ctx, 'conversation.session.header.utilities', 'session-panel') as SessionPanelToggleInjected
     const panel = faceOf(ctx, 'conversation.chat.aside', undefined) as SessionPanelInjected
     expect(toggle.hooks.visibility).toBe(panel.hooks.visibility)
-    panel.measure(SID, 'main', 300)
-    expect(toggle.hooks.gutters.getSnapshot().get(SID)).toBe(300)
+    const stop = panel.track(SID, createSnapshotStore(300))
+    expect(toggle.hooks.dockable.getSnapshot().get(SID)).toBe(false)
     toggle.toggle(SID)
     expect(panel.hooks.visibility.getSnapshot()).toEqual({ pinned: true, overlay: SID })
     panel.closeOverlay(SID)
     expect(panel.hooks.visibility.getSnapshot().overlay).toBeNull()
     toggle.toggle(SID)
-    // Disposing the plugin stops the open overlay from following the gutters.
+    // Disposing the plugin stops the open overlay from following the room to dock.
     await fiber.dispose()
-    panel.measure(SID, 'main', null)
+    stop()
     expect(panel.hooks.visibility.getSnapshot().overlay).toBe(SID)
   })
 
