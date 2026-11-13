@@ -1463,7 +1463,7 @@ def smoke_sdk_minimal(
         root = Path(temporary).resolve()
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
-        patches = ()
+        patches = (str(write_profile_patch(root, "persistence.patch.yml", sessions, [])),)
         if in_history:
             patch = root / "in-history.patch.yml"
             patch.write_text(json.dumps([
@@ -1475,7 +1475,7 @@ def smoke_sdk_minimal(
                     "name": (Path(__file__).resolve().parent / "fixtures/python-sdk-in-history-prompt.mjs").as_uri(),
                 }]},
             ]))
-            patches = (str(patch),)
+            patches += (str(patch),)
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
