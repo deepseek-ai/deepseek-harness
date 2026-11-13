@@ -12,6 +12,7 @@ import type { ScheduleId, ScheduleCatalogEntry, ScheduleCreateRequest } from '@d
 import type { TaskCreateOutcome } from './TaskDetail.tsx'
 import type { TaskEditorStoreProps } from './editor-store.ts'
 import { taskNextRunAt, taskSessionId } from './task-record.ts'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import type { CatalogSnapshot } from './catalog-source.ts'
 import { CatalogFeedback } from './CatalogFeedback.tsx'
 import { TaskDetail, useTaskDetail, type TaskDetailInjected } from './TaskDetail.tsx'
@@ -93,16 +94,12 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
     () => records.filter(record => record.status === 'ended').length,
     [records],
   )
-  const rows = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return records.filter(record => (
-      (statusFilter === 'all' || record.status === statusFilter)
-      && (record.prompt.toLowerCase().includes(query)
-        || (taskSessionId(record) ?? '').toLowerCase().includes(query)
-        || taskName(record).toLowerCase().includes(query))
-    )).toSorted((left, right) =>
-      Date.parse(taskNextRunAt(left)) - Date.parse(taskNextRunAt(right)))
-  }, [records, search, statusFilter])
+  const rowIndex = useMemo(() => new TextSearchIndex(
+    records.filter(record => statusFilter === 'all' || record.status === statusFilter)
+      .toSorted((left, right) => Date.parse(taskNextRunAt(left)) - Date.parse(taskNextRunAt(right))),
+    record => ({ fuzzy: [taskName(record)], substring: [taskSessionId(record), record.prompt] }),
+  ), [records, statusFilter])
+  const rows = useMemo(() => rowIndex.search(search), [rowIndex, search])
 
   const emptyTitle = search.trim() !== '' ? 'list.noMatches'
     : statusFilter === 'paused' ? 'list.emptyPaused'

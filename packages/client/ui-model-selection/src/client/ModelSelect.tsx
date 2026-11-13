@@ -37,11 +37,12 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular, IconCloseFillRegular,
-  IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, rankByName, StateDot, Tag, Toast,
+  IconDataOutlineRegular, IconWarningOutlineRegular, Input, isMobileDevice, StateDot, Tag, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelLabelOwner, ModelMenuControls, ModelMenuPaneRef, ModelSelectInjected } from './slots.ts'
 import css from './ModelSelect.module.css'
+import { TextSearchIndex } from '@deepseek-ai/dsh-util-text-search'
 import { orderModelProviders } from './provider-order.ts'
 
 /** Which pane the dropdown shows: the root menu, one drilled-in list, or a plugin-owned detail pane. */
@@ -124,9 +125,12 @@ export function ModelSelect(
       } satisfies ModelSelection,
     }))), [groups])
   const showSearch = choices.length > 4
-  const filteredGroups = useMemo(() => groups.map(group => ({
-    ...group, models: rankByName(group.models, showSearch ? query.trim() : ''),
-  })).filter(group => group.models.length > 0), [groups, query, showSearch])
+  const groupIndexes = useMemo(() => groups.map(group => ({
+    group, index: new TextSearchIndex(group.models, model => ({ fuzzy: [model.name, model.id], substring: [model.description] })),
+  })), [groups])
+  const filteredGroups = useMemo(() => groupIndexes.map(({ group, index }) => ({
+    ...group, models: index.search(showSearch ? query : ''),
+  })).filter(group => group.models.length > 0), [groupIndexes, query, showSearch])
   const visibleModels = useMemo(() => filteredGroups.flatMap(group => group.models.map(model => ({
     provider: group.id, model: model.id,
   }))), [filteredGroups])
