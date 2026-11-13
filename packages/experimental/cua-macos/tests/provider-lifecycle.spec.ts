@@ -443,7 +443,7 @@ it('merges startup capabilities into runtime native fields', async () => {
     coordinateSpace: 'screenshot-pixels', methods: [
       'activate', 'click', 'drag', 'findApps', 'getApp', 'getCapabilities', 'getState', 'invoke',
       'listActions', 'listApps', 'listWindows', 'mouseMove', 'paste', 'performAction', 'pressKey', 'screenshot', 'scroll',
-      'selectText', 'sendKeyEvent', 'setValue', 'show', 'typeText',
+      'selectText', 'sendKeyEvent', 'setValue', 'show', 'toggleMouse', 'typeText',
     ] })
   expect(native.request).toHaveBeenCalledExactlyOnceWith('getCapabilities', {}, expect.any(AbortSignal), brandString<ToolCallId>('lifecycle-1'))
 })

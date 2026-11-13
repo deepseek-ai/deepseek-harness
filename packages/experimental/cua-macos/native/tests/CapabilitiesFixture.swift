@@ -141,6 +141,16 @@ final class CapabilitiesFixture: NSObject, NSApplicationDelegate, NSWindowDelega
         try! JSONSerialization.data(withJSONObject: result).write(to: URL(fileURLWithPath: statePath), options: .atomic)
     }
 }
+// The opt-in pointer test samples and restores the desktop cursor independently of the helper.
+if CommandLine.arguments.dropFirst().first == "--cursor" {
+    let coordinates = CommandLine.arguments.dropFirst(2).compactMap(Double.init)
+    if coordinates.count == 2 {
+        guard CGWarpMouseCursorPosition(CGPoint(x: coordinates[0], y: coordinates[1])) == .success else { exit(1) }
+    }
+    guard let position = CGEvent(source: nil)?.location else { exit(1) }
+    print("[\(position.x),\(position.y)]")
+    exit(0)
+}
 let statePath = CommandLine.arguments.dropFirst().first ?? Bundle.main.object(forInfoDictionaryKey: "DSHFixtureStatePath") as? String
 if let statePath {
     let application = NSApplication.shared

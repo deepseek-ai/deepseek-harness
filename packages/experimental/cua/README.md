@@ -53,6 +53,8 @@ Actions return a `dispatched` boolean; `mouseMove` also reports `hoverRoute` and
 
 On providers with system-pointer support, `win.drag(from, to, { useSystemPointer: true })` shares the session’s mouse permission with `win.mouseMove`. Request the system pointer explicitly for each gesture.
 
+To hold a button across calls, use `win.toggleMouse('left', 'down')`, then explicitly call `win.toggleMouse('left', 'up')` on the same window. Left, right, and middle are supported. Each call sends one event at the current pointer position.
+
 `click(target, { holdMs: 800 })` holds the mouse button for 800 milliseconds before release. `holdMs` applies only to `click`; it accepts nonnegative integers and applies to each press of a double-click; zero releases without an additional hold. The provider config `maxClickHoldMs` limits explicit holds and defaults to 5000 ms. Explicit holds use pointer input; omission preserves ordinary click behavior. The operation deadline includes the hold, and cancellation or timeout releases the button. Received input cannot be undone; forced helper termination cannot guarantee release.
 
 ### Permission controls

@@ -9,7 +9,7 @@ const accessibilityNames: Array<Exclude<keyof CuaSurface, 'sendKeyEvent'>> = [
   'getAccessibilityTree', 'listActions', 'invoke', 'performAction', 'setValue', 'selectText',
 ]
 const appNames: Array<keyof CuaApp> = ['appHandle', 'activate', 'getWindows', 'getWindow']
-const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'click', 'scroll', 'drag']
+const windowNames: Array<keyof CuaWindow> = ['windowId', 'getScreenshot', 'mouseMove', 'toggleMouse', 'click', 'scroll', 'drag']
 
 it('keeps file-tool instructions in PTC and limits the program guidance to available bindings', () => {
   for (const name of ['tools.write', 'tools.grep', 'tools.read']) {
@@ -79,8 +79,8 @@ it('enumerates every available method once in its catalog entry', () => {
   for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
     for (const signature of signatures) expect(catalog.split('\n').filter(line => line.startsWith(`- ${signature}`))).toHaveLength(1)
   }
-  expect(signatures).toHaveLength(25)
-  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(24)
+  expect(signatures).toHaveLength(26)
+  expect(new Set(signatures.map(signature => signature.slice(signature.indexOf('.') + 1, -1))).size).toBe(25)
   expect(COMMON_GUIDANCE).toContain('app.appHandle')
   expect(COMMON_GUIDANCE).toContain('window.windowId')
 })

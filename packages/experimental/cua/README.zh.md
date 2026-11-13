@@ -53,6 +53,8 @@ kind: "package-reference"
 
 提供方声明支持系统指针时，`win.drag(from, to, { useSystemPointer: true })` 和 `win.mouseMove` 共用本次会话的鼠标授权。每次需要移动系统指针时都要显式传入该选项。
 
+要在两次调用之间保持按下状态，可先调用 `win.toggleMouse('left', 'down')`，再对同一窗口调用 `win.toggleMouse('left', 'up')`。左键、右键和中键均可单独按下或松开。每次调用只在当前指针位置发送一个事件。
+
 `click(target, { holdMs: 800 })` 按住鼠标按钮 800 毫秒后松开。`holdMs` 仅适用于 `click`；它接受非负整数，双击时应用于每次按下；0 表示按下后立即松开，不额外等待。提供方配置 `maxClickHoldMs` 限制显式按住时长，默认 5000 毫秒。指定时长后使用鼠标事件；省略时保留普通点击行为。按住时间计入操作超时，取消或超时会松开按钮。已接收的输入无法撤销；辅助进程被强制终止时无法保证松开。
 
 ### 权限控件

@@ -55,6 +55,8 @@ Each result contains `id`, `displayName`, and `isRunning`. The ID is an AUMID, i
 4. Treat `dispatched` as dispatch evidence, not confirmation of the intended effect. Observe the result before continuing. On a changed window, stale snapshot, timeout, or cancellation, do not blindly repeat input or switch to another window.
 5. Consent applies to the application within the conversation. Respect denial and revocation; do not use another tool to bypass them. Reconnects invalidate retained handles, so select the application again before further operations.
 
+`win.toggleMouse(button, direction)` sends one system mouse button event at the current pointer. The selected window must be in the foreground for both directions. A press also requires a pointer hit on that window; a release can occur outside it.
+
 <a id="model-experience"></a>
 ## Model Experience
 
