@@ -42,6 +42,6 @@ Web 提供方消费这些发布的凭据。`web-deepseek-api` 从 `ctx.llm.route
 
 ## 后果
 
-新增凭据种类或路由凭据的消费方只触及一个路由插件或一个消费方，而不是传输层。传输层、Web 提供方和账号服务之间的交叉依赖消失，`hasRunningAccountTasks()` 依赖注册的报告而非账号服务可见的 Agent。构造 `DeepSeekRequestAuth` 的消费方需提供 `value`；被移除的辅助函数和路由插件的配置导出不复存在，[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.2/llm-route-credential/guide.zh.md)列出了替代方案。路由的配置失败通过 `routeCredential()` 以抛出错误的形式到达 Web 消费方，它们将其报告为 `WEB_PROVIDER_MISCONFIGURED`。
+新增凭据种类或路由凭据的消费方只触及一个路由插件或一个消费方，而不是传输层。传输层、Web 提供方和账号服务之间的交叉依赖消失，`hasRunningAccountTasks()` 依赖注册的报告而非账号服务可见的 Agent。构造 `DeepSeekRequestAuth` 的消费方需提供 `value`；被移除的辅助函数和路由插件的配置导出不复存在，[升级指南](../../../../docs/upgrade-guide/v0.2.2-rc.3/llm-route-credential/guide.zh.md)列出了替代方案。路由的配置失败通过 `routeCredential()` 以抛出错误的形式到达 Web 消费方，它们将其报告为 `WEB_PROVIDER_MISCONFIGURED`。
 
 退登会结束携带账号 token 的在途模型、Files、Search 与 Fetch 请求，包括不属于任何 Agent 回合的请求，例如回合之外的模型请求或按账号计费的 Web 搜索；账号列表请求仍只受自身期限约束。该信号是对[账号退登决策](2026-09-17-account-provider-signout.zh.md)中 Agent 取消链路的补充；那份决策以重复该链路为由否决了登录级信号，而该链路只能经由已挂载的监听和运行中的 Agent 回合到达请求。账号路由被停用期间，它此前启动且仍在运行的任务不会报告给退登确认，退登也只能通过在途的模型请求结束它。已被替换的账号服务释放的凭据不会被替换后服务的退登撤回；路由插件的监听仍会取消 Agent 回合。
