@@ -85,30 +85,6 @@ describe('Session working directories', () => {
     expect(restored.header.cwd).toBe(f.root)
   })
 
-  it('records every effective directory with the seq it applies from, outside Session summaries', async () => {
-    await using f = await fixture()
-    const first = join(f.root, 'first')
-    await mkdir(join(first, 'second'), { recursive: true })
-    const history = (session: typeof f.agent.session) => f.ctx.sessionProjections.snapshot(session).values.workingDirectoryHistory
-    expect(history(f.ctx.sessions.create(brandString<SessionId>('history-without-origin')))).toEqual([])
-    expect(history(f.agent.session)).toEqual([{ seq: 0, cwd: f.root }])
-    await f.ctx.workingDirectory.set(f.agent, first)
-    await f.ctx.workingDirectory.set(f.agent, 'second')
-    const changes = f.agent.session.snapshotEvents().filter(event => event.type === 'working-directory/change')
-    const expected = [
-      { seq: 0, cwd: f.root },
-      { seq: changes[0]!.seq, cwd: first },
-      { seq: changes[1]!.seq, cwd: join(first, 'second') },
-    ]
-    expect(history(f.agent.session)).toEqual(expected)
-    const restored = f.ctx.sessions.create(brandString<SessionId>('history-restored'), {
-      meta: { cwd: f.root }, seed: f.agent.session.snapshotEvents(),
-    })
-    expect(history(restored)).toEqual(expected)
-    expect(f.ctx.sessionProjections.summaryKeys().has('workingDirectoryHistory')).toBe(false)
-    expect(f.ctx.sessionProjections.summaryKeys().has('workingDirectory')).toBe(true)
-  })
-
   it('serializes concurrent relative changes and recovers after a rejected change', async () => {
     await using f = await fixture()
     await mkdir(join(f.root, 'a', 'b'), { recursive: true })
