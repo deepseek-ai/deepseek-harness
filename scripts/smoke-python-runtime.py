@@ -251,7 +251,7 @@ def write_profile_patch(
     path.write_text(json.dumps([
         {
             "id": "session-persistence-jsonl",
-            "config": {"root": str(sessions), "compression": "none"},
+            "config": {"root": str(sessions), "storage": "jsonl", "compression": "none"},
         },
         {"id": "session-telemetry-otel", "disabled": True},
         *patches,
