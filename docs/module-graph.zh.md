@@ -30,6 +30,7 @@ flowchart TD
     pkg_util_crypto["util-crypto"]
     pkg_util_file_drag["util-file-drag"]
     pkg_util_ripgrep["util-ripgrep"]
+    pkg_util_text_search["util-text-search"]
     pkg_util_time["util-time"]
     pkg_util_values["util-values"]
     pkg_util_workspace_path["util-workspace-path"]
@@ -1596,6 +1597,7 @@ flowchart TD
 | [`util-code-language`](../packages/util/code-language) | `util` | — |
 | [`util-crypto`](../packages/util/crypto) | `util` | — |
 | [`util-file-drag`](../packages/util/file-drag) | `util` | — |
+| [`util-text-search`](../packages/util/text-search) | `util` | — |
 | [`util-time`](../packages/util/time) | `util` | — |
 | [`util-values`](../packages/util/values) | `util` | — |
 | [`util-workspace-path`](../packages/util/workspace-path) | `util` | — |

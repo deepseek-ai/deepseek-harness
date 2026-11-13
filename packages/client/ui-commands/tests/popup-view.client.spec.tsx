@@ -90,7 +90,7 @@ describe('PopupSelectView', () => {
       { id: 'other', label: 'Unmatched', group: { name: 'other', label: 'Other provider' } },
     ]
     const onSelect = vi.fn()
-    const { search } = await mountOpen({ searchMode: 'fuzzy-label', options: () => Promise.resolve(options), onSelect })
+    const { search } = await mountOpen({ options: () => Promise.resolve(options), onSelect })
     expect(screen.getAllByRole('group').map(group => group.querySelector('[data-menu-group-heading]')?.textContent))
       .toEqual(['Alpha provider', 'Beta provider', 'Other provider'])
     expect(rowLabels()).toEqual(['DeepSeek Flash', 'Flash Lite', 'Flash Beta', 'Unmatched'])

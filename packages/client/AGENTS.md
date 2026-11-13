@@ -123,6 +123,18 @@ Menus use `Menu` or `MenuSurface`, including custom listboxes, except the explic
 
 Every product-visible string—including text, accessibility names, tooltips, placeholders, status/unit formatters, and primitive chrome—lives in a typed locale dictionary and reaches components through the standard `t` seat or an already-localized prop. Cordis-free primitives require complete label props and own no fallback copy. Keep user/model/wire data and code tokens verbatim; internal matching uses discriminants or stable ids, never localized text. `pnpm run verify-client-ui-i18n` enforces source ownership ([decision](../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md)).
 
+## Search and filter
+
+User search queries over a list follow one rule, so a query finds the same item in every list. Unlike internal matching above, user query matching reads localized text:
+
+- Rows display the current locale; matching covers every language the value carries. A `LocalizedText` carries all of its languages; text resolved through `t()` carries only the active one.
+- Matching covers the text a row shows or the user can copy: names, titles, labels, descriptions, and ids. A menu whose default highlight spans several sources, such as the `/` menu, matches names and labels only, so a description hit in one group cannot take Enter from the name another group matched.
+- Names, titles, labels, and readable ids match as substrings or as fuzzy subsequences that start at a word start, so `cpt` finds `compact`. Descriptions, prompts, paths, and opaque ids such as UUIDs match only as contiguous substrings. Matching ignores case, width, and diacritics, and every space-separated term must match.
+- Results rank name prefix, then name substring, then fuzzy name, then text substring; equal matches keep the list's own order.
+- Facet selections, such as status, category, or label filters, stay exact.
+
+The rule covers lists filtered in memory, including a Host search that supplies a Client list, such as `@` Session candidates; [`TextSearchIndex`](../util/text-search/README.md) implements it for both. Searches backed by their own index keep their matcher: Session content search runs literal SQLite full-text terms over Session text, and the plugin market ranks its paged index on the Host. The sidebar's title, Workspace, and id matching follows this rule; only its content results use the full-text matcher.
+
 ## Testing and coverage
 
 The GUI test structure (three tiers, lane map) is settled in the [GUI testing system reference](../../docs/testing.md); repo-wide policy in [docs/testing.md](../../docs/testing.md).
