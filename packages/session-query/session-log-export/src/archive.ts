@@ -388,19 +388,109 @@ export async function* sessionLogZipEntries(
     signal?.throwIfAborted()
     yield* collect(lineage.descendants)
   }
-  for (const ref of media.values()) {
-    signal?.throwIfAborted()
-    const stored = await deps.attachments.readImage(ref, signal)
-    signal?.throwIfAborted()
-    yield { path: mediaEntryPath(ref), data: stored.data }
-  }
-  for (const ref of files.values()) {
-    signal?.throwIfAborted()
-    yield {
-      path: fileEntryPath(ref),
-      chunks: deps.attachments.readFileStream(ref, signal),
+  const missing: string[] = []
+  const openStreams = new Set<() => Promise<void>>()
+  try {
+    for (const ref of media.values()) {
+      signal?.throwIfAborted()
+      try {
+        const stored = await deps.attachments.readImage(ref, signal)
+        signal?.throwIfAborted()
+        yield { path: mediaEntryPath(ref), data: stored.data }
+      } catch (error) {
+        if (!isUnreadableReference(error)) throw error
+        missing.push(`${mediaEntryPath(ref)}\t${error.message}`)
+      }
     }
+    for (const ref of files.values()) {
+      signal?.throwIfAborted()
+      let chunks: AsyncIterable<Uint8Array>
+      try {
+        chunks = await headOf(deps.attachments.readFileStream(ref, signal), openStreams)
+      } catch (error) {
+        if (!isUnreadableReference(error)) throw error
+        missing.push(`${fileEntryPath(ref)}\t${error.message}`)
+        continue
+      }
+      yield { path: fileEntryPath(ref), chunks }
+    }
+  } finally {
+    // A consumer that stops early leaves its entry's stream open. One close
+    // failing must not keep the others open or replace the failure in flight.
+    await Promise.allSettled([...openStreams].map(close => close()))
   }
+  if (missing.length > 0) {
+    yield { path: MISSING_ATTACHMENTS_FILENAME, content: `${missing.join('\n')}\n` }
+  }
+}
+
+/** Zip entry naming the attachment objects this export could not include. */
+const MISSING_ATTACHMENTS_FILENAME = 'attachments-missing.txt'
+
+/**
+ * Attachment codes that leave the reference nothing to read: the object was
+ * deleted or never stored, or the backend rejects the reference outright. Such
+ * a reference leaves the rest of the export intact; every other failure still
+ * fails it. The stable machine-routing codes identify them without importing
+ * the attachment package's class, which stays its owner's peer.
+ */
+const UNREADABLE_ATTACHMENT_CODES: ReadonlySet<string> = new Set([
+  'ATTACHMENT_NOT_FOUND',
+  'INVALID_ATTACHMENT_REF',
+])
+
+/**
+ * Whether an attachment read failed because the reference names nothing this
+ * backend can read.
+ * @param error - the thrown value.
+ * @returns whether it reports an unreadable reference.
+ */
+function isUnreadableReference(error: unknown): error is Error & { readonly code: string } {
+  if (!(error instanceof Error) || !('code' in error)) return false
+  const code: unknown = error.code
+  return typeof code === 'string' && UNREADABLE_ATTACHMENT_CODES.has(code)
+}
+
+/**
+ * Pull one chunk of a file stream before its ZIP entry is yielded, so an
+ * unreadable reference surfaces here instead of after part of the archive is
+ * written, and hand back the rest of the same iteration. The returned stream
+ * closes its iterator when drained or abandoned; `open` receives the same
+ * close so the entry's owner can release a stream no consumer started.
+ * @param stream - the stored file's chunks.
+ * @param open - close callbacks of the streams currently open.
+ * @returns the chunks, with the first one already read.
+ */
+async function headOf(
+  stream: AsyncIterable<Uint8Array>,
+  open: Set<() => Promise<void>>,
+): Promise<AsyncIterable<Uint8Array>> {
+  const iterator = stream[Symbol.asyncIterator]()
+  // Cancelling a stream twice is harmless: the second return reports it done.
+  const close = async (): Promise<void> => {
+    open.delete(close)
+    await iterator.return?.()
+  }
+  open.add(close)
+  let head: IteratorResult<Uint8Array>
+  try {
+    head = await iterator.next()
+  } catch (error) {
+    await close()
+    throw error
+  }
+  return (async function* (): AsyncGenerator<Uint8Array> {
+    try {
+      if (head.done !== true) yield head.value
+      for (;;) {
+        const next = await iterator.next()
+        if (next.done === true) return
+        yield next.value
+      }
+    } finally {
+      await close()
+    }
+  })()
 }
 
 /** How many code units of Session-log text one zip push carries (bounded encode memory). */

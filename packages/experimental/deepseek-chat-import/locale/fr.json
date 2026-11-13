@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Importation des discussions DeepSeek",
+    "description": "Téléversez une exportation ZIP des discussions du site DeepSeek avec le bouton à côté de Nouvelle séance ; chaque conversation devient une séance dans l’espace de travail choisi.",
+    "detail": "docs/DETAIL.md"
+  }
+}
