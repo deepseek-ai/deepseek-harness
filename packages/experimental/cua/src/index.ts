@@ -14,7 +14,7 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { z } from 'zod'
 import { NativeClient, NativeError, type NativeClientConfig, type NativeChannelFactory } from './native-client.ts'
 import { MouseControl } from './mouse-control.ts'
-import { withSystemPointerGuidance } from './guidance.ts'
+import { RAW_TOOL_GUIDANCE, withSystemPointerGuidance } from './guidance.ts'
 import { CuaPermissionStore } from './permission-store.ts'
 import { ApplicationAuthorizationResult, installCuaAccess } from './access.ts'
 import type { CuaApplicationGrant, CuaApplicationId, CuaSystemPermission } from './access-types.ts'
@@ -214,7 +214,7 @@ export function installCua(ctx: Context, config: CuaConfig, backend: CuaBackend)
     const instructions = systemPointer ? withSystemPointerGuidance(text) : text
     return `${instructions}\n\nAX read defaults: maxElements=${config.maxElements}, maxDepth=${config.maxDepth}.\n\nMaximum click holdMs: ${config.maxClickHoldMs} ms.`
   }
-  const guidance = formatGuidance(backend.getGuidance('raw'))
+  const guidance = formatGuidance(`${backend.getGuidance('raw')}\n\n${RAW_TOOL_GUIDANCE}`)
   const programGuidance = formatGuidance(backend.getGuidance('standalone'))
   const native: NativeClientConfig = {
     helperPath, cwd: process.cwd(), timeoutMs: config.timeoutMs, axTimeoutMs: config.axTimeoutMs,

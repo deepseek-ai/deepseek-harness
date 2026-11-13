@@ -1,7 +1,7 @@
 /** Model-facing guidance lists the object API with platform availability and input constraints. */
 import { expect, it } from 'vitest'
 import type { CuaApi, CuaApp, CuaSurface, CuaWindow } from '@deepseek-ai/dsh-cua/api'
-import { COMMON_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
+import { COMMON_GUIDANCE, RAW_TOOL_GUIDANCE, withSystemPointerGuidance } from '@deepseek-ai/dsh-cua/guidance'
 import { GUIDANCE, PLATFORM_GUIDANCE, PROGRAM_GUIDANCE } from '../src/guidance.ts'
 
 const apiNames: Array<keyof CuaApi> = ['getCapabilities', 'listApps', 'findApps', 'getState', 'getApp']
@@ -189,7 +189,15 @@ it('keeps consent, lock, observation, and no-replay rules', () => {
   expect(COMMON_GUIDANCE).toContain('Never replay uncertain input')
   expect(COMMON_GUIDANCE).toContain('Read fresh state after actions')
   expect(COMMON_GUIDANCE).toMatch(/element ids are opaque strings/i)
-  expect(COMMON_GUIDANCE).toContain('snapshotId')
+})
+
+it('keeps raw operation arguments outside the object API guidance', () => {
+  for (const catalog of [COMMON_GUIDANCE, GUIDANCE, PROGRAM_GUIDANCE]) {
+    expect(catalog).not.toContain('Raw tools use { method, params }')
+    expect(catalog).not.toContain('snapshotId')
+  }
+  expect(RAW_TOOL_GUIDANCE).toContain('Raw tools use { method, params }')
+  expect(RAW_TOOL_GUIDANCE).toContain('snapshotId with elementId')
 })
 
 it('prioritizes reported API availability over instruction text in the prologue', () => {
