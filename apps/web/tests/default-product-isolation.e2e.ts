@@ -83,7 +83,8 @@ it('activates the actual default Client registry without experimental packages',
               // Capture the first real root and immediately restore the registry method.
               prototype.plugin = function (...args: Parameters<RegistryService['plugin']>) {
                 prototype.plugin = plugin
-                observation.ctx = this.ctx.root
+                // This init script runs in the page, where the test's `Context` import is unavailable.
+                observation.ctx = this.ctx[Symbol.for('cordis.root') as typeof Context.root]
                 return plugin.apply(this, args)
               }
               try {

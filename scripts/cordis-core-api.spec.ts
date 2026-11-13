@@ -25,7 +25,7 @@ describe('Cordis core API generation', () => {
     expect(pages.get('docs/cordis-api/events.md')).toContain('## DispatchMode')
     expect(pages.get('docs/cordis-api/fiber.md')).toContain('## EffectMeta')
     expect(pages.get('docs/cordis-api/registry.md')).toContain('## Plugin')
-    expect(pages.get('docs/cordis-api/service.md')).toContain('### Service.resolveConfig')
+    expect(pages.get('docs/cordis-api/service.md')).toContain('### Service.resolveIntercept')
 
     const fiber = pages.get('docs/cordis-api/fiber.md') ?? ''
     expect(fiber).toContain('```\n\nRegister a cleanup-aware effect on this fiber.')

@@ -72,7 +72,7 @@ it('opens its tokenized URL only after the complete authenticated page is reacha
   })
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(config).href } })
   await ctx.loader.await()
-  await auditStartupEntries(ctx.root, 'browser-open fixture', () => {})
+  await auditStartupEntries(ctx[Context.root], 'browser-open fixture', () => {})
   const entries: WebEntryUrl[] = []
   ctx.emit(ctx.webServer, 'webserver/entry-url', ctx.webServer.getOrigin(), entries)
   expect(entries).toHaveLength(1)

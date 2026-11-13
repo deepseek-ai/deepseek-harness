@@ -4,7 +4,7 @@
  * @module subagent-send-message-fence
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-loop'
 
 /** Fixture plugin name. */
@@ -23,12 +23,12 @@ export function apply(ctx: Context): void {
   let parentMaintenance: Promise<void> | undefined
 
   ctx.effect(() => {
-    const disposeSession = ctx.root.on('session/event', (session, event) => {
+    const disposeSession = ctx[Context.root].on('session/event', (session, event) => {
       if (session.header.parentSession !== undefined || event.type !== 'turn/end' || event.data.turn !== 1) return
       hasStopped = true
       parentStopped.resolve(undefined)
     })
-    const disposeStatus = ctx.root.on('agent/status', ({ agent, status }) => {
+    const disposeStatus = ctx[Context.root].on('agent/status', ({ agent, status }) => {
       if (
         agent.session.header.parentSession === undefined &&
         status === 'idle' &&
@@ -40,7 +40,7 @@ export function apply(ctx: Context): void {
         })
       }
     })
-    const disposeInbox = ctx.root.on('agent/inbox/inserted', ({ agent, message }) => {
+    const disposeInbox = ctx[Context.root].on('agent/inbox/inserted', ({ agent, message }) => {
       if (
         agent.session.header.parentSession === undefined &&
         message.source.kind === 'subagent-settled'
@@ -48,7 +48,7 @@ export function apply(ctx: Context): void {
         childSettled.resolve(undefined)
       }
     })
-    const disposeStep = ctx.root.on('agent/pre-step', async ({ agent, turn, step }, next) => {
+    const disposeStep = ctx[Context.root].on('agent/pre-step', async ({ agent, turn, step }, next) => {
       if (agent.session.header.parentSession !== undefined) {
         childReady.resolve(undefined)
         if (!hasStopped) await parentStopped.promise

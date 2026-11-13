@@ -68,7 +68,7 @@ function withinFiber(fiber: Fiber, root: Fiber): boolean {
  */
 export function leakedServices(ctx: Context, mount: Fiber): string[] {
   const store = ctx.reflect.store
-  const rootIsolate = ctx.root[Context.isolate]
+  const rootIsolate = ctx[Context.root][Context.isolate]
   const leaked: string[] = []
   for (const key of Object.getOwnPropertySymbols(store)) {
     const impl = store[key]

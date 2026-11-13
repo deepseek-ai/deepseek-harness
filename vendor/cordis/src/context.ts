@@ -14,12 +14,12 @@ import { Fiber } from './fiber.ts'
  * be read from `ctx`.
  */
 export interface Context {
+  /** The root context of the application; every child context shares it. */
+  [symbols.root]: this
   /** Isolation map: service name → scope label. Lookups for a name resolve within its label. */
   [symbols.isolate]: Dict<symbol>
-  /** Intercept map: service name → config merged into that service's per-plugin config. */
+  /** Intercept map: service name → intercept metadata merged into that service's resolved metadata. */
   [symbols.intercept]: Dict
-  /** The root context of the application (every child context shares it). @experimental */
-  root: this
   /** Base URL used to resolve relative plugin/module specifiers, if the runtime sets one. */
   baseUrl?: string | undefined
   /** The event bus. Its methods are also mixed onto `ctx` (`ctx.on`, `ctx.emit`, ...). */
@@ -40,13 +40,15 @@ export interface Context {
  * contexts without mutating their parent.
  */
 export class Context {
+  /** Symbol key of the root context: `ctx[Context.root]` is the application's root context, shared by every child context. */
+  static readonly root: unique symbol = symbols.root
   /** Symbol key under which a disposer exposes its {@link EffectMeta} diagnostics tree. */
   static readonly effect: unique symbol = symbols.effect
   /** Symbol key for a context's listener filter, consulted on every event dispatch. */
   static readonly filter: unique symbol = symbols.filter
-  /** Symbol key of the isolation map (see the `Context[symbols.isolate]` property). */
+  /** Symbol key of the isolation map: `ctx[Context.isolate]` maps each service name to its scope label. */
   static readonly isolate: unique symbol = symbols.isolate
-  /** Symbol key of the intercept map (see the `Context[symbols.intercept]` property). */
+  /** Symbol key of the intercept map: `ctx[Context.intercept]` maps each service name to its intercept metadata. */
   static readonly intercept: unique symbol = symbols.intercept
 
   /**
@@ -72,7 +74,7 @@ export class Context {
     this[symbols.isolate] = Object.create(null)
     this[symbols.intercept] = Object.create(null)
     const self = new Proxy<this>(this, ReflectService.handler)
-    this.root = self
+    this[symbols.root] = self
     this.baseUrl = undefined
     this.fiber = new Fiber(self, {}, Object.create(null), null, () => [])
     this.reflect = new ReflectService(self)
@@ -113,6 +115,9 @@ export class Context {
    * resolve against the new label instead of the parent's, so a different
    * implementation can be provided without affecting the parent scope.
    * Passing the same `label` to two `isolate()` calls joins their scopes.
+   * The returned context and plugins started below it never fall back to the
+   * enclosing plugin's injected `name`, even when `label` equals the parent's
+   * label; until a provider in the new scope supplies `name`, reading it throws.
    *
    * @param name — the service name to isolate.
    * @param label — scope label to join; defaults to a fresh unique symbol.
@@ -125,18 +130,19 @@ export class Context {
   }
 
   /**
-   * Add service-specific intercept config for plugins started below this
+   * Add service-specific intercept metadata for plugins started below this
    * context.
    *
    * Plugins loaded under the returned context see `config` merged into the
-   * service's resolved config (ancestor entries first; see
-   * `Service[symbols.resolveConfig]`). The parent context is not affected.
+   * service's resolved intercept metadata (injected metadata first, then
+   * ancestor intercepts; see `Service[symbols.resolveIntercept]`). The parent
+   * context is not affected.
    *
-   * @param name — the service name whose config to intercept.
-   * @param config — the intercept config to merge for that service.
+   * @param name — the service name whose metadata to intercept.
+   * @param config — the intercept metadata to merge for that service.
    * @returns a child context carrying the additional intercept entry.
    */
-  intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.config]: infer T } ? T : never): this
+  intercept<K extends InjectKey>(name: K, config: Context[K] extends { [symbols.metadata]: infer T } ? T : never): this
   intercept(name: string, config: any): this
   intercept(name: string, config: any) {
     const intercept = Object.create(this[symbols.intercept])

@@ -93,7 +93,7 @@ export class ConfigEditor extends Service {
       await withFileLock(join(this.ownerContext.profileContext.dir, 'package.json'), async () => {
         if (!this.entries().includes(entry) || entry.fiber === undefined) throw new Error('Configuration entry is no longer available')
         const beforePatches = readProfilePatches('dsh', this.ownerContext.profileContext)
-        await reconcileProfilePatches(this.ownerContext.root, beforePatches, 'dsh')
+        await reconcileProfilePatches(this.ownerContext[Context.root], beforePatches, 'dsh')
         if (!this.entries().includes(entry)) throw new Error('Configuration entry changed during reload')
         const current = structuredClone((entry.options.config ?? {}) as Record<string, unknown>)
         const inherited = this.inherited(entry, loadProfileDirectory('dsh', this.ownerContext.profileContext.dir, this.ownerContext.profileContext.installAnchor))
@@ -140,10 +140,10 @@ export class ConfigEditor extends Service {
         }
         await writeFileAtomic(path, String(document), { mode: 0o600 })
         try {
-          await reconcileProfilePatches(this.ownerContext.root, patches, 'dsh', [entry.options.id])
+          await reconcileProfilePatches(this.ownerContext[Context.root], patches, 'dsh', [entry.options.id])
         } catch (error) {
           await writeFileAtomic(path, before, { mode: 0o600 })
-          await reconcileProfilePatches(this.ownerContext.root, beforePatches, 'dsh')
+          await reconcileProfilePatches(this.ownerContext[Context.root], beforePatches, 'dsh')
           throw error
         }
       })

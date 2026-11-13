@@ -293,7 +293,7 @@ describe('shipped builtins', () => {
       // implementation is stored under that symbol, so the root realm cannot
       // resolve the service and a second composition mounting the same rows
       // cannot collide with this one.
-      const rootKey = ctx.root[Context.isolate].demoRealmSvc
+      const rootKey = ctx[Context.root][Context.isolate].demoRealmSvc
       expect(rootKey).toBeDefined()
       expect(ctx.reflect.store[rootKey!]).toBeUndefined()
     } finally {

@@ -41,7 +41,7 @@ it('serves token exchanges through WebServer and keeps token-owned Peers outside
   await ctx.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(path).href } })
   await ctx.loader.await()
   const origin = `http://127.0.0.1:${ctx.webServer.port}`
-  const auth = await BrowserAuth.create(ctx.root, ctx.credentials, 30)
+  const auth = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
   const login = new URL(auth.authenticatedUrl(origin))
   expect(login.searchParams.get('token')).toMatch(/^[A-Za-z0-9_-]{43}$/)
   const exchanged = await fetch(login, { redirect: 'manual' })
@@ -110,7 +110,7 @@ it('serves token exchanges through WebServer and keeps token-owned Peers outside
   expect(admission.peer.signal.aborted).toBe(true)
   expect(ctx.connection.admit({ headers })).toEqual({ rejection: 401 })
   await ctx.plugin(Token, { cookieMaxAgeDays: 30 }).await()
-  const reloaded = await BrowserAuth.create(ctx.root, ctx.credentials, 30)
+  const reloaded = await BrowserAuth.create(ctx[Context.root], ctx.credentials, 30)
   const restarted = new URL(reloaded.authenticatedUrl(origin))
   expect(restarted.searchParams.get('token')).toBe(originalToken)
   const resumed = ctx.connection.authentication.authenticate({ headers })

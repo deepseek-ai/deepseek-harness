@@ -1471,7 +1471,7 @@ describe('cancellation and integration teardown', () => {
 
     await auto.restart()
 
-    expect(ctx.root.fiber.state).toBe(FiberState.ACTIVE)
+    expect(ctx[Context.root].fiber.state).toBe(FiberState.ACTIVE)
     expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
     expect(ctx.permissionPresets.names).toContain(AUTO_PRESET)
     expect(session.snapshotEvents().filter(event => event.type === 'approval/policy').at(-1)?.data)
@@ -1532,7 +1532,7 @@ describe('cancellation and integration teardown', () => {
       const disposal = ctx.fiber.dispose().then(() => { disposed = true })
       try {
         await cancelled.promise
-        expect(ctx.root.fiber.state).toBe(FiberState.UNLOADING)
+        expect(ctx[Context.root].fiber.state).toBe(FiberState.UNLOADING)
         expect(disposed).toBe(false)
         expect(sessions.list()).toContain(session)
         expect(events).toEqual(beforeShutdown)
